@@ -201,7 +201,7 @@ def test_eval_cases_are_named_once_and_only_in_private_config(canopy_env: Canopy
     canopy_env.append_user(case * 2)
     with pytest.raises(ConfigError, match="names x more than once"):
         load(canopy_env.root, canopy_env.user_file)
-    canopy_env.write_user(user_toml())
+    canopy_env.write_user(user_toml(canopy_env.runtime))
     # A case may name a private repository's PR, and authorizes a review of it (TRUST_MODEL T7).
     canopy_env.append_shared(case)
     with pytest.raises(ConfigError, match=r"review\.eval_cases is private and cannot be set in the workspace file"):
@@ -584,6 +584,7 @@ def test_an_agent_template_without_the_definitions_dir_prints_its_replacement(ca
     assert f"'env OPENCODE_CONFIG_DIR={{definitions_dir}} {old}'" in str(e.value)
 
 
+@pytest.mark.opencode1  # OpenCode 1's default templates
 def test_the_default_templates_name_the_definitions_dir(canopy_env: CanopyEnv) -> None:
     canopy_env.write_user(
         "\n".join(line for line in canopy_env.user_file.read_text().splitlines() if "_cmd" not in line),
@@ -607,6 +608,7 @@ def test_the_default_templates_name_the_definitions_dir(canopy_env: CanopyEnv) -
         assert " --format json --thinking " in template
 
 
+@pytest.mark.opencode1  # from OpenCode 1, the default, to 2
 def test_runtime_version_2_runs_opencode_2_and_its_default_templates(canopy_env: CanopyEnv) -> None:
     canopy_env.write_user(
         "\n".join(line for line in canopy_env.user_file.read_text().splitlines() if "_cmd" not in line),
@@ -894,7 +896,7 @@ def test_the_workspace_file_cannot_say_how_replies_go_or_what_reads_github(canop
 
 def test_a_private_file_and_no_user_file_runs(canopy_env: CanopyEnv) -> None:
     canopy_env.user_file.unlink()
-    canopy_env.write_private(user_toml())
+    canopy_env.write_private(user_toml(canopy_env.runtime))
     assert load(canopy_env.root, canopy_env.user_file).tracker.labels == ("agent-ready-tester",)
     assert main(["status"]) == 0
 

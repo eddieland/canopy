@@ -91,7 +91,8 @@ neither feedback nor a go-ahead.
 
 ### On the PR's diff
 
-The operator reads each draft under its thread, on the diff the run pushed (§8 step 5), told when the PR has moved on.
+The operator reads each draft under its thread, on the diff the run pushed, which every run keeps whatever the setting
+(§45), told when the PR has moved on.
 A draft and a thread are untrusted text and are shown as text, never Markdown, every hidden character named (§28).
 
 ### canopy's GitHub program

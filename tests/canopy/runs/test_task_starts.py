@@ -52,6 +52,7 @@ from tests.canopy.helpers import (
     json_block,
     listed,
     messages,
+    model_list,
     operator,
     pool_statuses,
     present,
@@ -352,7 +353,7 @@ def test_the_commit_trailer_names_the_private_workers_chosen_model(
             {"exit": 1, "stderr": "Error: something broke\n"},
             "model_list_failed",
             (
-                "could not look up the model provider/model-a chosen in runtime.models: `opencode models` exited 1. "
+                "could not look up the model provider/model-a chosen in runtime.models: `{list}` exited 1. "
                 "Nothing ran on another model; the work resumes once the list can be read"
             ),
         ),
@@ -381,6 +382,7 @@ def test_tasks_wait_while_the_private_workers_model_cannot_be_used(
     with in_tick(ctx.conn, ends_ok=True) as tick_id:
         assert task_starts.start_queued(ctx, tick_id, logs.for_tick(tick_id)) == []
     raised = [(d.ticket_key, d.action, d.rationale, d.decider) for d in db.decisions_for_tick(ctx.conn, tick_id)]
+    why = why.replace("{list}", model_list(canopy_env.runtime)[1])
     assert raised == [(None, f"attention:{guard}", f"queued tasks wait: {why}", Decider.HARNESS)]
     assert every_run(ctx.conn) == []
     assert set(pool_statuses(treehouse_state)) == {"available"}

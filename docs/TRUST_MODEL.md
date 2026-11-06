@@ -157,6 +157,11 @@ Controls:
   never what an agent does. A draft names a PR of its own run's units, or it is refused. Editing, dropping, sending,
   and settling a draft refuse when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, as `reply` does: an agent that could
   send a draft could post as the operator.
+- What a run changed (DESIGN §45) is a worker's text: the diffs every worker's and task's run keeps beside its log are
+  shown to the operator as text, bounded and with every control character dropped, at the terminal (`canopy show
+  --diff`) as on a page, and put in no agent's prompt or state block. Its range is the harness's own reads of commits,
+  never the agent's word; `canopy show run:ID`, which an agent may read through `show-run`, names the commits and the
+  files' paths, never a diff's text.
 - Review feedback from anyone not in `trust.trusted_reviewers` (private, empty by default) starts no run on its own
   (D089). The overseer records `untrusted_review` and keeps its `review` cursor before it until the operator answers in
   canopy, with `canopy reply` or the web UI; the `resume` worker addresses such a comment only as an operator message
@@ -700,7 +705,10 @@ Controls now:
   `commondir` is `crashed`, and no git runs in its slots until both are put back (DESIGN §8); and a slot whose run
   wrote objects is checked out detached at `origin/<base>`, without the run's own refs or reflog, before the run's
   object directory is deleted and the slot returned, by `_run` or, for a `_run` that was killed, by reconcile (DESIGN
-  §8, §15).
+  §8, §15). What a run changed (DESIGN §45) is read in those steps, of every worker's and task's run: `ls-remote`,
+  `rev-parse`, `merge-base`, and `diff` of commits the slot already holds, the reads a run under `approve` made before,
+  with no driver or textconv, and the push check's own reads for an unpushed slot. Nothing new is read from a slot,
+  and nothing there is fetched, pushed, or moved.
 - The sandbox canary (`tests/canopy_sandbox/test_sandbox_canary.py`, HOST_ISOLATION §6) runs a plain script, no model,
   through the real prefix and the shipped templates, and checks every sandbox denial above on the host, with positive controls
   so that a sandbox that refuses everything fails. CI runs it on Linux.
@@ -739,7 +747,9 @@ but must be distinguishable:
   that adds none, the commits then carry no trailer, and the branch prefix and PR mark the work. A shared file can
   neither turn it off nor rename it. The worker's environment points git at canopy's hooks also in a run with a
   checklist and no mark to add, since their `pre-push` holds the push for the list (T4, DESIGN §42); what they add to a
-  commit is the marks alone, none in such a run.
+  commit is the marks alone, none in such a run. Each run's range of commits is a row (DESIGN §45), the harness's
+  read of origin as the run ended and before any kick, kept for good, so who put which commits on a branch can be told
+  after a kick rewrites it.
 - PRs labeled `agent` where the runtime gives the worker a GitHub tool that sets labels (D084); every PR title carries
   the ticket key, and its branch the prefix.
 - `decisions` and `runs` tables are a complete local audit log of what the
@@ -1105,11 +1115,11 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   bounded from a regular file opened without following links, and drawn in the plan editor as text, its HTML and
   images kept as characters (D113).
 - It serves a PR's review threads and the drafts that answer them (DESIGN §29): what canopy's reader last read of the
-  PR, coworkers' text, and each draft, a worker's text, all rendered as text; and the diff a run under `approve` kept
-  at its pushed head beside its log, read as a review's diff is (below): bounded, from a regular file opened without
-  following links, never served as a file. Beside them it serves the PR's ticket's current feedback plan (DESIGN §32):
-  its file, read as a plan's is, each item's proposed reply, model text, and what changed since in the harness's words,
-  all rendered as text.
+  PR, coworkers' text, and each draft, a worker's text, all rendered as text; and the diff the latest run that pushed
+  kept at its pushed head beside its log, read as a review's diff is (below): bounded, from a regular file opened
+  without following links, never served as a file. Beside them it serves the PR's ticket's current feedback plan
+  (DESIGN §32): its file, read as a plan's is, each item's proposed reply, model text, and what changed since in the
+  harness's words, all rendered as text.
 - It serves canopy's reviews (DESIGN §21, M32): each review run's findings, and the diff of the commit it read, which
   `_review` writes beside the run's log. The diff is the PR's own text, by whoever wrote the PR, `review.query`'s
   other people's PRs included: as hostile as anything the loop reads. It is read bounded, from a regular file opened

@@ -4,6 +4,8 @@ import { mockReviews } from '@/api/mocks'
 import type { PullRequest, ReviewSummary } from '@/api/types'
 
 import {
+    authorOf,
+    authorsOf,
     countText,
     filterWords,
     PR_QUERY_MAX,
@@ -33,6 +35,26 @@ describe('prQueryOf', () => {
         expect(prQueryOf('  ')).toBeUndefined()
         expect(prQueryOf(88)).toBeUndefined()
         expect(prQueryOf(undefined)).toBeUndefined()
+    })
+})
+
+describe('authorOf', () => {
+    it('keeps a login, and drops a blank one, one padded with spaces, a long one, or anything not a string', () => {
+        expect(authorOf('carol')).toBe('carol')
+        expect(authorOf('dependabot[bot]')).toBe('dependabot[bot]')
+        expect(authorOf('  ')).toBeUndefined()
+        expect(authorOf(' carol')).toBeUndefined()
+        expect(authorOf('x'.repeat(101))).toBeUndefined()
+        expect(authorOf(7)).toBeUndefined()
+    })
+})
+
+describe('authorsOf', () => {
+    it('names each author a row names once, sorted, and the one chosen', () => {
+        expect(
+            authorsOf([{ author: 'op' }, { author: null }, { author: 'carol' }, { author: 'op' }], undefined),
+        ).toEqual(['carol', 'op'])
+        expect(authorsOf([{ author: 'op' }], 'dana')).toEqual(['dana', 'op'])
     })
 })
 
@@ -82,10 +104,19 @@ describe('reviewShown', () => {
         expect(reviewShown(review, { repo: 'api' })).toBe(false)
         expect(reviewShown(review, { q: 'abc-104' })).toBe(false)
     })
+
+    it('keeps a review of a PR by the author chosen, and finds it by its author too', () => {
+        expect(reviewShown({ ...review, author: 'carol' }, { author: 'carol' })).toBe(true)
+        expect(reviewShown({ ...review, author: 'carol' }, { q: 'CAROL' })).toBe(true)
+        expect(reviewShown({ ...review, author: 'carol' }, { author: 'carol', repo: 'api' })).toBe(false)
+        expect(reviewShown({ ...review, author: 'carol' }, { author: 'dana' })).toBe(false)
+        // A PR canopy has not read has no author yet, so no author's filter keeps it.
+        expect(reviewShown({ ...review, author: null }, { author: 'carol' })).toBe(false)
+    })
 })
 
 describe('requestShown', () => {
-    const request = { pr_url: 'https://github.com/acme/api/pull/12' }
+    const request = { pr_url: 'https://github.com/acme/api/pull/12', author: 'dana' }
 
     it('finds a waiting PR by its name', () => {
         expect(requestShown(request, {})).toBe(true)
@@ -96,6 +127,13 @@ describe('requestShown', () => {
     it('leaves it out under any repository, which no tick has read yet', () => {
         expect(requestShown(request, { repo: 'api' })).toBe(false)
     })
+
+    it('keeps it under its author, and finds it by them', () => {
+        expect(requestShown(request, { author: 'dana' })).toBe(true)
+        expect(requestShown(request, { q: 'dana' })).toBe(true)
+        expect(requestShown(request, { author: 'carol' })).toBe(false)
+        expect(requestShown({ ...request, author: null }, { author: 'dana' })).toBe(false)
+    })
 })
 
 describe('filterWords', () => {
@@ -104,6 +142,7 @@ describe('filterWords', () => {
         expect(filterWords({ repo: 'api' })).toBe(' in api')
         expect(filterWords({ repo: 'api', q: ' retry ' })).toBe(' in api with “retry”')
         expect(filterWords({ repo: 'api,web' })).toBe(' in api or web')
+        expect(filterWords({ repo: 'api', author: 'carol', q: 'retry' })).toBe(' in api by carol with “retry”')
     })
 })
 

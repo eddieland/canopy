@@ -40,6 +40,8 @@ SUBCOMMAND = re.compile(r"[a-z][a-z-]{0,23}")
 _OPTIONS_WITH_VALUE = frozenset({"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env"})
 #: The options canopy puts before a subcommand that take no value.
 _FLAGS = frozenset({"--no-pager", "--no-replace-objects", "--literal-pathspecs", "--no-optional-locks", "--bare"})
+#: How many characters of a child's stdout a bounded read takes at a time.
+_CHUNK = 64 * 1024
 
 
 class ProcError(Exception):
@@ -84,6 +86,7 @@ class Runner(Protocol):
         on_start: Callable[[int], None] | None = None,
         on_line: Callable[[str], None] | None = None,
         stdout_to_file: bool = False,
+        max_stdout: int | None = None,
     ) -> Result:
         """Run `args` to completion and capture its output.
 
@@ -101,6 +104,9 @@ class Runner(Protocol):
                 and propagates.
             stdout_to_file: Capture stdout through a temporary file rather than a pipe, read once the child exits, for
                 a child that loses what it has not yet written to a full pipe when it exits. Not with `on_line`.
+            max_stdout: Keep at most this many characters of stdout; the rest is read and dropped as the child writes
+                it, so the child runs to its end and canopy holds no more than this. Not with `on_line` or
+                `stdout_to_file`.
 
         Returns:
             The exit code and captured output. `timed_out` is set when `timeout` expired.
@@ -108,7 +114,7 @@ class Runner(Protocol):
         Raises:
             CommandNotFoundError: The executable is missing or not executable.
             ProcError: The process could not be started, for example because `cwd` does not exist.
-            ValueError: Both `on_line` and `stdout_to_file` were given.
+            ValueError: More than one of `on_line`, `stdout_to_file`, and `max_stdout` was given.
         """
         ...
 
@@ -157,6 +163,7 @@ class SubprocessRunner:
         on_start: Callable[[int], None] | None = None,
         on_line: Callable[[str], None] | None = None,
         stdout_to_file: bool = False,
+        max_stdout: int | None = None,
     ) -> Result:
         """Run `args` to completion and capture its output. See `Runner.run`.
 
@@ -167,10 +174,12 @@ class SubprocessRunner:
             CommandNotFoundError: The executable is missing or not executable.
             ProcError: `cwd` cannot be used as the working directory, or the arguments are too long to start.
             OSError: The process could not be started for any other reason.
-            ValueError: Both `on_line` and `stdout_to_file` were given.
+            ValueError: More than one of `on_line`, `stdout_to_file`, and `max_stdout` was given.
         """
         if on_line is not None and stdout_to_file:
             raise ValueError("on_line reads stdout from a pipe, which stdout_to_file replaces")
+        if max_stdout is not None and (on_line is not None or stdout_to_file):
+            raise ValueError("max_stdout reads stdout from a pipe of its own, which on_line and stdout_to_file replace")
         program, subcommand = named(args)
         with tracing.span(f"{program} {subcommand}" if subcommand else program) as traced:
             traced.set_standard({"process.executable.name": program})
@@ -184,6 +193,7 @@ class SubprocessRunner:
                 on_start=on_start,
                 on_line=on_line,
                 stdout_to_file=stdout_to_file,
+                max_stdout=max_stdout,
             )
             traced.set_standard({"process.exit.code": result.returncode})
             traced.set(timed_out=result.timed_out)
@@ -202,6 +212,7 @@ class SubprocessRunner:
         on_start: Callable[[int], None] | None,
         on_line: Callable[[str], None] | None,
         stdout_to_file: bool,
+        max_stdout: int | None,
     ) -> Result:
         """Run `argv` as `run` does, its stdout through a temporary file when `stdout_to_file`.
 
@@ -219,6 +230,7 @@ class SubprocessRunner:
                 on_start=on_start,
                 on_line=on_line,
                 out=out,
+                max_stdout=max_stdout,
             )
             if out is None:
                 return result
@@ -236,6 +248,7 @@ class SubprocessRunner:
         on_start: Callable[[int], None] | None,
         on_line: Callable[[str], None] | None,
         out: IO[str] | None,
+        max_stdout: int | None,
     ) -> Result:
         """Run `argv` as `run` does, its stdout to `out` when given, where the result's `stdout` is then empty.
 
@@ -262,26 +275,10 @@ class SubprocessRunner:
                 start_new_session=True,
             )
         except OSError as e:
-            # A bad cwd raises the same exception types as a bad executable; `filename` says which one failed.
-            if cwd is not None and e.filename is not None and os.fspath(e.filename) == os.fspath(cwd):
-                raise ProcError(f"cannot use working directory {cwd}: {e.strerror}") from e
-            if isinstance(e, FileNotFoundError):
-                raise CommandNotFoundError(f"command not found: {argv[0]}") from e
-            # exec reports EACCES for a missing command when some PATH directory cannot be searched, as WSL's
-            # Windows directories often cannot. Only a command that exists is "not executable".
-            if isinstance(e, PermissionError):
-                reason = "not executable" if _exists(argv[0], cwd=cwd, env=full_env) else "not found"
-                raise CommandNotFoundError(f"command {reason}: {argv[0]}") from e
-            # Linux holds one argument or variable to 128 KiB, and all of them to its ARG_MAX: a prompt placed in the
-            # argv rather than on stdin can pass the first. Both sizes are named, since either may be the cause.
-            if e.errno == errno.E2BIG:
-                longest = max(len(os.fsencode(a)) for a in argv)
-                environ = sum(len(os.fsencode(f"{k}={v}")) + 1 for k, v in (full_env or os.environ).items())
-                raise ProcError(
-                    f"arguments and environment too long to start {argv[0]}: its longest argument is {longest:,} "
-                    f"bytes, its environment {environ:,}",
-                ) from e
-            raise
+            refused = _not_started(e, argv, cwd=cwd, env=full_env)
+            if refused is None:
+                raise
+            raise refused from e
 
         # Leaving the block closes the pipes, which communicate() leaves open when a signal interrupts it.
         with proc:
@@ -290,6 +287,8 @@ class SubprocessRunner:
                     on_start(proc.pid)
                 if on_line is not None:
                     return _stream(proc, argv, stdin, timeout, on_line)
+                if max_stdout is not None:
+                    return _bounded(proc, argv, stdin, timeout, max_stdout)
                 stdout, stderr = proc.communicate(stdin, timeout=timeout)
             except subprocess.TimeoutExpired:
                 _kill_group(proc.pid)
@@ -406,6 +405,40 @@ def _child_env(
     return {name: value for name, value in merged.items() if name not in unset}
 
 
+def _not_started(
+    e: OSError,
+    argv: Sequence[str],
+    *,
+    cwd: Path | None,
+    env: Mapping[str, str] | None,
+) -> ProcError | None:
+    """Say in canopy's words why `argv` could not be started, from what starting it raised, `e`.
+
+    Returns:
+        The error to raise in its place; None for a failure to raise as it is.
+    """
+    # A bad cwd raises the same exception types as a bad executable; `filename` says which one failed.
+    if cwd is not None and e.filename is not None and os.fspath(e.filename) == os.fspath(cwd):
+        return ProcError(f"cannot use working directory {cwd}: {e.strerror}")
+    if isinstance(e, FileNotFoundError):
+        return CommandNotFoundError(f"command not found: {argv[0]}")
+    # exec reports EACCES for a missing command when some PATH directory cannot be searched, as WSL's Windows
+    # directories often cannot. Only a command that exists is "not executable".
+    if isinstance(e, PermissionError):
+        reason = "not executable" if _exists(argv[0], cwd=cwd, env=env) else "not found"
+        return CommandNotFoundError(f"command {reason}: {argv[0]}")
+    # Linux holds one argument or variable to 128 KiB, and all of them to its ARG_MAX: a prompt placed in the argv
+    # rather than on stdin can pass the first. Both sizes are named, since either may be the cause.
+    if e.errno == errno.E2BIG:
+        longest = max(len(os.fsencode(a)) for a in argv)
+        environ = sum(len(os.fsencode(f"{k}={v}")) + 1 for k, v in (env or os.environ).items())
+        return ProcError(
+            f"arguments and environment too long to start {argv[0]}: its longest argument is {longest:,} bytes, its "
+            f"environment {environ:,}",
+        )
+    return None
+
+
 def _exists(command: str, *, cwd: Path | None, env: Mapping[str, str] | None) -> bool:
     """Whether `command` names a file, looked up the way exec looks it up: as a path, or in each PATH directory.
 
@@ -481,14 +514,7 @@ def _stream(
     deadline = _Deadline(proc.pid, timeout)
     try:
         stdout = _pump(lines, on_line, deadline)
-        stderr_reader.join(deadline.left())
-        if stderr_reader.is_alive():
-            deadline.expire()
-        try:
-            proc.wait(deadline.left())
-        except subprocess.TimeoutExpired:
-            deadline.expire()
-            proc.wait()
+        _wait(proc, [stderr_reader], deadline)
     except BaseException:
         _kill_group(proc.pid)
         raise
@@ -497,6 +523,58 @@ def _stream(
         for worker in workers:
             worker.join()
     return Result(argv, proc.returncode, "".join(stdout), "".join(stderr), timed_out=deadline.expired)
+
+
+def _bounded(
+    proc: subprocess.Popen[str],
+    argv: tuple[str, ...],
+    stdin: str | None,
+    timeout: float | None,
+    limit: int,
+) -> Result:
+    """What `communicate` does, but only the first `limit` characters of stdout are kept, the rest read and dropped.
+
+    Threads read the pipes and write stdin, as `_stream`'s do, so the child never blocks on a full pipe.
+
+    Returns:
+        The exit code and captured output, `timed_out` set when `timeout` expired and the child's group was killed.
+    """
+    # `run` opened both as pipes.
+    out, err = cast("IO[str]", proc.stdout), cast("IO[str]", proc.stderr)
+    stdout: list[str] = []
+    stderr: list[str] = []
+    readers = [
+        threading.Thread(target=_read_at_most, args=(out, stdout, limit), daemon=True),
+        threading.Thread(target=_read_all, args=(err, stderr), daemon=True),
+    ]
+    workers = list(readers)
+    if stdin is not None:
+        workers.append(threading.Thread(target=_write_all, args=(proc.stdin, stdin), daemon=True))
+    for worker in workers:
+        worker.start()
+    deadline = _Deadline(proc.pid, timeout)
+    try:
+        _wait(proc, readers, deadline)
+    except BaseException:
+        _kill_group(proc.pid)
+        raise
+    finally:
+        for worker in workers:
+            worker.join()
+    return Result(argv, proc.returncode, "".join(stdout), "".join(stderr), timed_out=deadline.expired)
+
+
+def _wait(proc: subprocess.Popen[str], readers: Iterable[threading.Thread], deadline: _Deadline) -> None:
+    """Wait for `readers` to reach their pipes' end and `proc` to exit, expiring `deadline` when either outlasts it."""
+    for reader in readers:
+        reader.join(deadline.left())
+        if reader.is_alive():
+            deadline.expire()
+    try:
+        proc.wait(deadline.left())
+    except subprocess.TimeoutExpired:
+        deadline.expire()
+        proc.wait()
 
 
 class _Deadline:
@@ -539,6 +617,15 @@ def _read_lines(pipe: IO[str], lines: queue.SimpleQueue[str | None]) -> None:
 
 def _read_all(pipe: IO[str], into: list[str]) -> None:
     into.append(pipe.read())
+
+
+def _read_at_most(pipe: IO[str], into: list[str], limit: int) -> None:
+    # Read to the end, so the child is never blocked on a full pipe, and keep only the first `limit` characters.
+    kept = 0
+    while chunk := pipe.read(_CHUNK):
+        if kept < limit:
+            into.append(chunk[: limit - kept])
+            kept += len(into[-1])
 
 
 def _write_all(pipe: IO[str], text: str) -> None:

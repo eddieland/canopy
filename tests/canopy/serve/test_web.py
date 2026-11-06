@@ -38,6 +38,7 @@ from tests.canopy.helpers import (
     decides,
     in_run,
     messages,
+    model_list,
     overseer_does,
     present,
     raises,
@@ -193,11 +194,14 @@ def test_a_runs_page_names_the_model_canopy_asked_for_while_it_runs_before_its_s
     assert c.get(f"/api/runs/{ran.id}").json()["model"] is None
 
 
+@pytest.mark.parametrize("version", [1, 2])
 def test_a_transcript_names_each_calls_model_once_canopy_reads_a_session_two_models_served(
     scenario: Scenario,
     opencode_state: Path,
     ctx: Context,
+    version: int,
 ) -> None:
+    scenario.configures(runtime={"version": version})
     with_events(scenario.env, "canopy-overseer")
     # The fake overseer's two calls write replies `msg_1` and `msg_2`, which the session's record names the models of.
     served = [["anthropic", "claude-x", 0.25], ["openai", "gpt-y", 0.5]]
@@ -629,7 +633,7 @@ def test_a_model_chosen_from_the_web_is_the_tickets_override_as_canopy_model_mak
         "models": [],
         "variants": {},
         "hidden": [],
-        "error": "`opencode models --verbose` exited 1",
+        "error": f"`{model_list(ctx.config.runtime.version, variants=True)[1]}` exited 1",
     }
     assert refused(choose({"model": "acme/fake-model-1"})).startswith("model_list_failed: ")
 
@@ -871,7 +875,9 @@ def test_a_web_reload_reads_the_config_and_asks_the_loop_to_read_it_again(ctx: C
 
     reload.requested, reload.ticking = False, True
     dictation = 'dictation_cmd = "stt -f {audio}"\n'
-    canopy_env.write_user(user_toml() + "\n[capacity]\nmax_workers = 7\n\n[serve]\nport = 8766\n" + dictation)
+    canopy_env.write_user(
+        user_toml(canopy_env.runtime) + "\n[capacity]\nmax_workers = 7\n\n[serve]\nport = 8766\n" + dictation,
+    )
     found = c.post("/api/loop/reload", headers=headers).json()
     changed = ["capacity.max_workers", "serve.port", "serve.dictation_cmd"]
     # The server reads dictation's command from the config a reload gives it: only the listener's keys wait.
@@ -879,7 +885,7 @@ def test_a_web_reload_reads_the_config_and_asks_the_loop_to_read_it_again(ctx: C
     assert reload.requested
 
     reload.requested = False
-    canopy_env.write_user(user_toml() + "\n[capacity]\nmax_workers = 'many'\n")
+    canopy_env.write_user(user_toml(canopy_env.runtime) + "\n[capacity]\nmax_workers = 'many'\n")
     assert refused(c.post("/api/loop/reload", headers=headers)).startswith("config_invalid: ")
     assert "capacity.max_workers" in refused(c.post("/api/loop/reload", headers=headers))
     assert not reload.requested  # the loop is not asked to read a config that does not load
@@ -1133,7 +1139,7 @@ def test_a_running_ticks_overseers_latest_tool_call_is_sent_until_it_ends(ctx: C
 
 
 def serve_on(env: CanopyEnv, port: int, extra: str = "") -> None:
-    env.write_user(user_toml() + f"\n[serve]\nport = {port}\n{extra}")
+    env.write_user(user_toml(env.runtime) + f"\n[serve]\nport = {port}\n{extra}")
 
 
 def wait_until_up(url: str) -> None:
@@ -1355,7 +1361,7 @@ def test_canopy_secret_makes_one_prints_it_and_rotates_only_when_asked(
 
 @pytest.mark.parametrize("bind", ["0.0.0.0", "::", "8.8.8.8", "canopy.example"])  # noqa: S104
 def test_serve_bind_must_be_loopback_or_private(canopy_env: CanopyEnv, bind: str) -> None:
-    canopy_env.write_user(user_toml() + f'\n[serve]\nbind = "{bind}"\n')
+    canopy_env.write_user(user_toml(canopy_env.runtime) + f'\n[serve]\nbind = "{bind}"\n')
     with pytest.raises(config.ConfigError, match=r"serve\.bind"):
         config.load(canopy_env.root, canopy_env.user_file)
 
@@ -1367,7 +1373,7 @@ def test_serve_is_user_only(canopy_env: CanopyEnv) -> None:
 
 
 def test_a_private_bind_loads(canopy_env: CanopyEnv) -> None:
-    canopy_env.write_user(user_toml() + '\n[serve]\nbind = "10.0.0.5"\nbase_path = "/canopy"\n')
+    canopy_env.write_user(user_toml(canopy_env.runtime) + '\n[serve]\nbind = "10.0.0.5"\nbase_path = "/canopy"\n')
     loaded = config.load(canopy_env.root, canopy_env.user_file).serve
     assert (loaded.enabled, loaded.bind, loaded.port, loaded.base_path) == (True, "10.0.0.5", 8765, "/canopy")
 

@@ -51,6 +51,27 @@ def test_a_recorded_run_reads_as_its_entries_each_numbered_by_its_model_call() -
     assert (denied.status, denied.output) == ("error", "Permission denied: shell")
 
 
+def test_each_step_names_the_reply_it_wrote_as_the_sessions_record_names_it() -> None:
+    """The recorded run's calls are replies of the recorded export of the same session, by their message's id."""
+    lines = (RECORDED / "run.jsonl").read_text().splitlines()
+    steps = [e for e in transcript.read(lines, SESSION) if isinstance(e, Step)]
+    exported = json.loads((RECORDED / "export.json").read_text())["messages"]
+    replies = [m["id"] for m in exported if m["type"] == "assistant"]
+    # The last call's `step_finish` is lost to 2.1.2's race (`canopy.runtime.opencode2.events`).
+    assert [s.message for s in steps] == replies[:-1]
+
+
+def test_a_reply_id_canopy_would_not_keep_is_none() -> None:
+    finished = {"type": "step-finish", "reason": "stop", "cost": 0.5}
+    for named in ("msg 1", "x" * 101, ""):
+        [step] = transcript.read([event("step_finish", {**finished, "messageID": named})], SESSION)
+        assert isinstance(step, Step)
+        assert step.message is None, named
+    [step] = transcript.read([event("step_finish", finished)], SESSION)
+    assert isinstance(step, Step)
+    assert step.message is None
+
+
 def test_another_sessions_events_are_left_out() -> None:
     assert list(transcript.read((RECORDED / "run.jsonl").read_text().splitlines(), "ses_other")) == []
 
