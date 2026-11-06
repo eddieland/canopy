@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from canopy.core import db, plans, prompts, sql
+from canopy.core import db, epic_changes, plans, prompts, sql
 from canopy.core.vocab import PlanStatus, ReplyMode, RunKind
 from canopy.runs import feedback_plans, policy
 
@@ -93,13 +93,15 @@ def planned_refusal(
     A guard in code, whatever the overseer asks for: an `implement` waits on an approved plan when the ticket needs
     one, and an `implement` or `resume` never follows a plan whose file is no longer the text the operator approved.
     Under `policy.feedback_plan = "approve"`, a `resume` but one for `no_pr` alone waits on an approved feedback plan no
-    `resume` has spent, and follows it in place of the ticket's plan.
+    `resume` has spent, and follows it in place of the ticket's plan. A member's `implement` never follows a plan
+    approved before a change of its epic's plan reached it, while its ticket has no branch (DESIGN §43).
 
     Returns:
         The guard and reason that refuse it, or None: an `implement` for a ticket that needs a plan and has none
         approved, or a `resume` that needs a feedback plan and has none approved and unspent over its repositories
         (`unplanned`); an `implement` or `resume` whose approved plan's file is missing, unreadable, or no longer has
-        its approved hash (`plan_changed`).
+        its approved hash (`plan_changed`); an `implement` whose approved plan a change of its epic's plan reached
+        since, with no branch yet (`epic_changed`).
     """
     if kind not in (RunKind.IMPLEMENT, RunKind.RESUME):
         return None
@@ -126,7 +128,24 @@ def planned_refusal(
             f"plan {plan.id} of {key}, {path}, is no longer the text the operator approved; they approve it again, "
             f"or ask for a new one or skip it"
         )
+    if kind == RunKind.IMPLEMENT and plan is not None and approved and not (ticket is not None and ticket.branch):
+        return _epic_changed(ctx, key, plan.id)
     return None
+
+
+def _epic_changed(ctx: Context, key: str, plan_id: int) -> tuple[str, str] | None:
+    """Refuse a member's `implement` while a change of its epic's plan reached its approved plan (DESIGN §43).
+
+    Returns:
+        `epic_changed` and why, until the operator approves the plan again or asks for a new one; or None.
+    """
+    found = epic_changes.pending(ctx.conn, key)
+    if found is None:
+        return None
+    return "epic_changed", (
+        f"epic:{found.epic_id}'s plan changed {', '.join(found.ids)} since plan {plan_id} of {key} was approved; the "
+        "operator approves the plan again, or asks for a new one"
+    )
 
 
 @dataclass(frozen=True)
