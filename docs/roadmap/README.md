@@ -104,7 +104,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M65. Running agents say where they stand](M65-running-agents-say-where-they-stand.md): in progress.
 - [M66. The checklist, asked before the push](M66-the-checklist.md): in progress.
 - [M67. Epic plans, shared by many tickets](M67-epic-plans.md): in progress.
-- [M68. Messages to running workers](M68-messages-to-running-workers.md): not started.
+- [M68. Messages to running workers](M68-messages-to-running-workers.md): in progress.
 - [M69. What each run changed, kept and shown](M69-what-each-run-changed.md): not started.
 - [M70. A code outline for agents](M70-a-code-outline-for-agents.md): not started.
 
