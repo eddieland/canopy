@@ -1,11 +1,12 @@
 """Reading what a worker's or a task's run changed in each of its slots as it ends, and keeping the diffs (DESIGN §45).
 
 After the push check (`checkpoint.ensure_pushed`) and before a flaky kick rewrites the branch (§8 step 5, §23), `keep`
-reads one slot: the commit the branch is at on origin, and for a slot left unpushed the last commit the run made there
-(`checkpoint.left_work`), and the merge base of the one it diffs with the base as the slot last fetched it. It keeps
-two diffs beside the run's log: the run's own change, from the commit it started from, and the branch against its base,
-with the commit it was taken at. Each is kept then or never: the slot is returned, a kick may rewrite the branch, and
-the run's objects are deleted with it.
+reads one slot: the commit the branch is at on origin as the push check read it, not again, since someone else may
+have moved it since, and for a slot left unpushed the last commit the run made there (`checkpoint.left_work`), and the
+merge base of the one it diffs with the base as the slot last fetched it. It keeps two diffs beside the run's log: the
+run's own change, from the commit it started from, and the branch against its base, with the commit it was taken at.
+Each is kept then or never: the slot is returned, a kick may rewrite the branch, and the run's objects are deleted with
+it.
 
 Every read is of commits the slot already holds, by the harness's git with hooks, drivers, and textconv off (D107):
 nothing here fetches, pushes, or moves a ref. Best effort throughout, as a kept diff is: the run needs none of it, so a
@@ -39,36 +40,36 @@ def keep(
     base: str,
     branch: str,
     start: checkpoint.Start,
-    pushed: bool,
+    pushed: checkpoint.Pushed,
     log_path: str | Path,
     log: logs.TickAdapter,
 ) -> run_changes.Change:
     """Read what the run changed in the slot `git` runs in, and keep its two diffs beside the run's log, `log_path`.
 
-    `pushed` is whether the push check found the slot's work on origin; one that did not keeps the diffs of the last
-    commit the run made there, as work not on origin.
+    `pushed` is what the push check found: where origin's branch was, the run's end, and whether the slot's work is
+    there; a slot whose work is not keeps the diffs of the last commit the run made there, as work not on origin.
 
     Returns:
         The slot's range, which diffs were kept, and why one was not.
     """
     fields = {"repo": repo, "branch": branch}
-    found = run_changes.Change(repo, start.commit, start_on_base=not start.pushed)
+    found = run_changes.Change(repo, start.commit, start_on_base=not start.pushed, end=pushed.head or None)
     try:
-        end = checkpoint.remote_head(git, branch) or None
-        unpushed = None if pushed else checkpoint.left_work(git, branch, start)
+        unpushed = checkpoint.left_work(git, branch, start, pushed) if pushed.unpushed else None
     except checkpoint.SetupError as e:
         log.warning("run's change not read", extra={**fields, "error": str(e)})
-        return replace(found, missing=f"canopy could not read where the branch is: {_cut(str(e))}")
-    found = replace(found, end=end, unpushed=unpushed)
-    head = unpushed or end
+        return replace(found, missing=f"canopy could not read what the run left unpushed: {_cut(str(e))}")
+    found = replace(found, unpushed=unpushed)
+    head = unpushed or found.end
     if head is None:
         return replace(found, missing="the run left no branch on origin and no commit of its own in its slot")
     change = _keep(git, start.commit, head, run_changes.change_path(log_path, repo))
     if change is not None:
         log.warning("run's change not kept", extra={**fields, "error": change})
-    fork = _merge_base(git, base, head)
-    if fork is None:
-        against = f"no merge base of {head[:12]} with {base} in its slot"
+    try:
+        fork = _merge_base(git, base, head)
+    except checkpoint.SetupError as e:
+        fork, against = None, _cut(str(e))
     else:
         against = _keep(git, fork, head, review_diff.run_path_for(log_path, repo), at=head)
     if against is not None:
@@ -95,25 +96,37 @@ def recorded(kind: str) -> bool:
     return kind in RECORDED
 
 
-def _merge_base(git: checkpoint.Git, base: str, head: str) -> str | None:
-    """Return where `head` leaves `base`, as the slot last fetched it; None when git finds none or fails."""
-    try:
-        found = git.result("merge-base", f"refs/remotes/origin/{base}", head)
-    except checkpoint.SetupError:
-        return None
-    return (found.stdout.strip() or None) if found.ok else None
+def _merge_base(git: checkpoint.Git, base: str, head: str) -> str:
+    """Return where `head` leaves `base`, as the slot last fetched it.
+
+    Returns:
+        The merge base's full hash.
+
+    Raises:
+        SetupError: git found none, or could not look: what it said, so the record names the real failure.
+    """
+    found = git.result("merge-base", f"refs/remotes/origin/{base}", head)
+    fork = found.stdout.strip()
+    if found.ok and fork:
+        return fork
+    said = found.stderr.strip()
+    # git says nothing and exits 1 when the two share no history; anything else is a failure to look.
+    if found.returncode == 1 and not said:
+        raise checkpoint.SetupError(f"no merge base of {head[:12]} with {base} in its slot")
+    raise checkpoint.SetupError(f"git merge-base exited {found.returncode}: {said or fork}")
 
 
 def _keep(git: checkpoint.Git, fork: str, head: str, path: Path, *, at: str | None = None) -> str | None:
     """Keep the diff of `head` against `fork` at `path`, and the commit it was taken at, `at`, beside it when given.
 
-    The commit is written before the diff, so a diff is never kept without it.
+    The commit is written before the diff, so a diff is never kept without it. git's output is read no further than
+    the bound `review_diff.keep` writes, so a diff of any size costs canopy no more than that.
 
     Returns:
         Why it was not kept, or None once it was.
     """
     try:
-        diff = git.result(*review_diff.diff_args(fork, head))
+        diff = git.result(*review_diff.diff_args(fork, head), max_stdout=review_diff.KEPT_CHARS)
         if not diff.ok:
             return _cut(f"git diff exited {diff.returncode}: {diff.stderr.strip() or diff.stdout.strip()}")
         if at is not None:

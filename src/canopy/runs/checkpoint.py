@@ -40,6 +40,17 @@ class Start:
     pushed: str
 
 
+@dataclass(frozen=True)
+class Pushed:
+    """What the push check (`ensure_pushed`) found of a slot's work on origin."""
+
+    #: The commit origin's branch was at as the check last read it, after its own push if it made one: the run's head
+    #: there, never read again later, when someone else may have moved it. "" when origin has no such branch.
+    head: str
+    #: Why the work is not on origin; "" when it is, or when the agent committed nothing.
+    unpushed: str = ""
+
+
 class Git:
     """git in one slot, through the runner. `name` is the slot's repository, for errors, or "" to leave it unnamed."""
 
@@ -53,8 +64,12 @@ class Git:
         # Whether git here reads the run's object directory, and so must write no shared ref (DESIGN §8).
         self.reads_run = "GIT_OBJECT_DIRECTORY" in env
 
-    def result(self, *args: str) -> procs.Result:
+    def result(self, *args: str, max_stdout: int | None = None) -> procs.Result:
         """Run `git <args>` and return how it went, whatever its exit code.
+
+        Args:
+            *args: git's arguments.
+            max_stdout: Keep at most this many characters of what git prints, for output that may be large.
 
         Returns:
             git's result.
@@ -63,7 +78,13 @@ class Git:
             SetupError: git could not start, or timed out.
         """
         try:
-            result = self.runner.run(hostgit.argv(*args), cwd=self.slot, env=self.env, timeout=_GIT_TIMEOUT_SECONDS)
+            result = self.runner.run(
+                hostgit.argv(*args),
+                cwd=self.slot,
+                env=self.env,
+                timeout=_GIT_TIMEOUT_SECONDS,
+                max_stdout=max_stdout,
+            )
         except procs.ProcError as e:
             raise SetupError(f"{self.where}git {args[0]}: {e}") from e
         if result.timed_out:
@@ -124,7 +145,7 @@ def check_out(git: Git, base: str, branch: str = "") -> Start:
     return Start(commit, len(_head_log(git)), commit if target == branch else "")
 
 
-def ensure_pushed(git: Git, branch: str, start: Start, log: logs.TickAdapter, *, rebase: bool) -> str:
+def ensure_pushed(git: Git, branch: str, start: Start, log: logs.TickAdapter, *, rebase: bool) -> Pushed:
     """Check the checkpoint invariant: the branch on origin is the slot's HEAD. Push HEAD to it once if it is not.
 
     Detached, HEAD is the only thing holding the agent's commits, so an agent that moved it off them leaves them
@@ -133,7 +154,8 @@ def ensure_pushed(git: Git, branch: str, start: Start, log: logs.TickAdapter, *,
     task's run passes it False whatever `trust.rebase` says (DESIGN §36): its push only ever adds commits.
 
     Returns:
-        Why the work is not pushed, or "" if it is, or if the agent committed nothing.
+        Where origin's branch is as the check read it, and why the work is not pushed, "" if it is, or if the agent
+        committed nothing.
     """
     local = git.run("rev-parse", "HEAD")
     remote = remote_head(git, branch)
@@ -144,21 +166,23 @@ def ensure_pushed(git: Git, branch: str, start: Start, log: logs.TickAdapter, *,
         remote = remote_head(git, branch)
         if not pushed.ok or remote != local:
             detail = (pushed.stderr.strip() or pushed.stdout.strip())[:500]
-            return f"{git.where}commits on {branch} are not on origin; the push failed: {detail}"
+            return Pushed(remote, f"{git.where}commits on {branch} are not on origin; the push failed: {detail}")
     left = _left_behind(git, branch, start, remote)
     if left:
-        return (
+        return Pushed(
+            remote,
             f"{git.where}the worker moved HEAD off {len(left)} commit(s) not on origin, such as {left[0][:12]}; "
-            "nothing was pushed for them"
+            "nothing was pushed for them",
         )
-    return ""
+    return Pushed(remote)
 
 
-def left_work(git: Git, branch: str, start: Start) -> str | None:
+def left_work(git: Git, branch: str, start: Start, pushed: Pushed) -> str | None:
     """Return the last commit of the run's that `ensure_pushed` found not on origin: what a slot left unpushed holds.
 
     That is HEAD, when it holds work past the start that origin's `branch` is not at, or else the newest of the commits
-    HEAD was moved off that neither HEAD nor origin holds, found as `ensure_pushed` finds them (DESIGN §45).
+    HEAD was moved off that neither HEAD nor origin holds, found as `ensure_pushed` finds them (DESIGN §45), against
+    origin's branch where the check read it, `pushed`.
 
     Returns:
         The commit's full hash, or None when the slot holds no such commit.
@@ -167,7 +191,7 @@ def left_work(git: Git, branch: str, start: Start) -> str | None:
         SetupError: a git step failed.
     """
     local = git.run("rev-parse", "HEAD")
-    remote = remote_head(git, branch)
+    remote = pushed.head
     if remote != local and not git.ok("merge-base", "--is-ancestor", local, start.commit):
         return local
     left = _left_behind(git, branch, start, remote)

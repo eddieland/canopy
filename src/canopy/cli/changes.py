@@ -17,7 +17,7 @@ from canopy.core import review_diff, run_changes
 from canopy.infra.text import one_line
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Iterable, Sequence
 
     from canopy.core import records
 
@@ -49,6 +49,15 @@ def echo(changes: Sequence[records.RunChange], *, log_path: str, ref: str) -> No
         printed += 1
     if not printed:
         raise CliError(f"{ref} kept no diff of what it changed")
+
+
+def kept(changes: Iterable[records.RunChange], *, log_path: str) -> bool:
+    """Return whether `echo` has a diff to print of `changes`: one recorded kept whose file is still there.
+
+    Returns:
+        True when a repository's own change was kept and its file not yet removed.
+    """
+    return any(c.change_kept and run_changes.change_path(log_path, c.repo).is_file() for c in changes)
 
 
 def _span(change: records.RunChange) -> str:

@@ -6,9 +6,6 @@ design; the [README](README.md) has the map. Previous: [Messages to running agen
 
 ## 45. What a run changed
 
-The record, the kept diffs, and the CLI's view of them are built; the pages and the commits are not yet (ROADMAP M69),
-and the code does not follow those until they are.
-
 A run's result line says what its worker thinks it did; its branch on GitHub shows every commit anyone put there,
 rewritten by each flaky kick (§23). Neither says what this run changed. This section makes that a journal fact, read
 by the harness from the run's own slot as it ends and kept for the operator, who judges a run by its diff more than by

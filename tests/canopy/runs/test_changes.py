@@ -16,7 +16,7 @@ from canopy.core import db, review_diff, run_changes
 from canopy.core.vocab import ResumeReason, RunKind, RunStatus
 from canopy.infra import logs
 from canopy.loop import gc_pass
-from canopy.runs import task_starts, tasks
+from canopy.runs import changes, checkpoint, task_starts, tasks
 from tests.canopy.helpers import (
     WORKER_DONE,
     InlineRunner,
@@ -288,3 +288,100 @@ def test_the_diffs_go_with_run_files_days_and_the_rows_stay(scenario: Scenario, 
     assert (row.change_kept, row.branch_kept) == (True, True)
     shown = scenario.operator("show", f"run:{ran.id}").out
     assert f"    its change {kept[0]}, since removed\n" in shown
+
+
+def test_a_diff_is_read_no_further_than_canopy_keeps_it(scenario: Scenario, git_pool: GitPool) -> None:
+    del git_pool
+    read = checkpoint.Git.result
+    with (
+        mock.patch.object(review_diff, "MAX_BYTES", 99),
+        mock.patch.object(review_diff, "KEPT_CHARS", 100),
+        mock.patch.object(checkpoint.Git, "result", autospec=True, side_effect=read) as git_ran,
+    ):
+        ran = scenario.run(worker=worker_does(*writes("a.txt", "x" * 500), push()))
+        printed = scenario.operator("show", f"run:{ran.id}", "--diff")
+    diffs = [c for c in git_ran.call_args_list if c.args[1] == "diff" and "--find-renames" in c.args]
+    assert [c.kwargs["max_stdout"] for c in diffs] == [100, 100]
+    assert len(change_of(ran)) == 100
+    assert f"run:{ran.id}'s diff of repo is cut where canopy's bounds end" in printed.err
+
+
+def test_the_end_is_the_head_the_push_check_read_though_someone_pushes_after_it(
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    keep = changes.keep
+    other = git_pool.slots[1]
+
+    def a_coworker_pushes_first(
+        slot_git: checkpoint.Git,
+        *,
+        repo: str,
+        base: str,
+        branch: str,
+        start: checkpoint.Start,
+        pushed: checkpoint.Pushed,
+        log_path: str | Path,
+        log: logs.TickAdapter,
+    ) -> run_changes.Change:
+        git("fetch", "--quiet", "origin", cwd=other)
+        git("checkout", "--quiet", "--detach", f"origin/{BRANCH}", cwd=other)
+        git("commit", "--quiet", "--allow-empty", "-m", "a coworker", cwd=other)
+        git("push", "--quiet", "origin", f"HEAD:refs/heads/{BRANCH}", cwd=other)
+        return keep(
+            slot_git,
+            repo=repo,
+            base=base,
+            branch=branch,
+            start=start,
+            pushed=pushed,
+            log_path=log_path,
+            log=log,
+        )
+
+    with mock.patch.object(changes, "keep", autospec=True, side_effect=a_coworker_pushes_first):
+        ran = scenario.run(worker=worker_does(*writes("a.txt", "the change"), push()))
+    moved = present(git_pool.remote_head(BRANCH))
+    [row] = changed(scenario, ran)
+    assert row.end_sha == git("rev-parse", f"{moved}^", cwd=git_pool.origin)
+    assert review_diff.read_head(review_diff.run_path_for(ran.row["log_path"], "repo")) == row.end_sha
+
+
+def test_a_merge_base_git_could_not_find_is_recorded_as_git_said(scenario: Scenario, git_pool: GitPool) -> None:
+    del git_pool
+    forgets_main = ["git", "update-ref", "-d", "refs/remotes/origin/main"]
+    ran = scenario.run(worker=worker_does(*writes("a.txt", "the change"), push(), forgets_main))
+    [row] = changed(scenario, ran)
+    assert (row.change_kept, row.branch_kept) == (True, False)
+    assert present(row.missing).startswith("the branch against main: git merge-base exited 128: ")
+    assert "no merge base" not in present(row.missing)
+
+
+def test_a_tasks_diff_passes_over_a_newer_run_that_kept_none_for_the_older_one_that_did(
+    scenario: Scenario,
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+) -> None:
+    scenario.operator("task", "submit", "Find out why the build is slow, and push a fix if one is small.")
+    ctx = inline_context(canopy_env)
+    with in_tick(ctx.conn) as tick_id:
+        [first] = task_starts.start_queued(ctx, tick_id, logs.for_tick(tick_id))
+    asks: dict[str, object] = {
+        "status": "blocked",
+        "summary": "a fix",
+        "branch": TASK_BRANCH,
+        "question": "Keep going?",
+    }
+    with private_worker_does(*writes("fix.txt", "the fix"), push(TASK_BRANCH), result=asks):
+        assert main(["_task", str(first.run_id)], runner=InlineRunner()) == 0
+    scenario.operator("reply", "task:1", "Yes.")
+    with in_tick(ctx.conn) as tick_id:
+        [second] = task_starts.start_queued(ctx, tick_id, logs.for_tick(tick_id))
+    for slot in git_pool.slots:
+        git("remote", "set-url", "origin", str(git_pool.origin.parent / "gone.git"), cwd=slot)
+    main(["_task", str(second.run_id)], runner=InlineRunner())
+    [crashed] = run_changes.of_run(ctx.conn, second.run_id, table="task_runs")
+    assert crashed.missing == run_changes.CRASHED
+    printed = scenario.operator("show", "task:1", "--diff")
+    assert "+the fix\n" in printed.out
+    assert printed.err == ""

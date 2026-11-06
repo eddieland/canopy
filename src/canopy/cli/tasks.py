@@ -140,19 +140,28 @@ def show(ctx: Context, task_id: int) -> None:
 
 
 def diff(ctx: Context, task_id: int) -> None:
-    """Print the kept diff of what the newest run of task `task_id` that read its slot changed (DESIGN §45).
+    """Print the kept diff of what the newest run of task `task_id` that kept one changed (DESIGN §45).
+
+    A newer run that kept none, as one that crashed, is passed over for an older one that did; when none did, the
+    newest that recorded anything says why.
 
     Raises:
-        CliError: canopy has no such task, or none of its runs recorded what it changed.
+        CliError: canopy has no such task, or none of its runs kept a diff of what it changed.
     """
     if tasks.get(ctx.conn, task_id) is None:
         raise CliError(f"canopy has no task:{task_id}")
+    newest: tuple[records.TaskRun, list[records.RunChange]] | None = None
     for run in reversed(tasks.runs_of(ctx.conn, task_id)):
         found = run_changes.of_run(ctx.conn, run.id, table="task_runs")
-        if found:
+        if found and changes_cli.kept(found, log_path=run.log_path):
             changes_cli.echo(found, log_path=run.log_path, ref=f"task:{task_id}'s run {run.id}")
             return
-    raise CliError(f"no run of task:{task_id} recorded what it changed")
+        if found and newest is None:
+            newest = run, found
+    if newest is None:
+        raise CliError(f"no run of task:{task_id} recorded what it changed")
+    run, found = newest
+    changes_cli.echo(found, log_path=run.log_path, ref=f"task:{task_id}'s run {run.id}")
 
 
 def replied(ctx: Context, task_id: int) -> None:

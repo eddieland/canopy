@@ -341,16 +341,16 @@ def _work(ctx: Context, run: records.TaskRun, link: bytes | None, out: TextIO, l
         except tidy.GitError as e:
             raise SetupError(str(e)) from e
     # Never with force: a task's branch has no base to keep up with, and a ticket may cite its commits (DESIGN §36).
-    unpushed = checkpoint.ensure_pushed(git, run.branch, start, log, rebase=False)
-    if unpushed:
-        status, note = RunStatus.UNPUSHED, unpushed
+    pushed = checkpoint.ensure_pushed(git, run.branch, start, log, rebase=False)
+    if pushed.unpushed:
+        status, note = RunStatus.UNPUSHED, pushed.unpushed
     changed = changes.keep(
         git,
         repo=run.repo,
         base=run.base_branch,
         branch=run.branch,
         start=start,
-        pushed=not unpushed,
+        pushed=pushed,
         log_path=run.log_path,
         log=log,
     )

@@ -1060,8 +1060,8 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
         checkpoint.ensure_pushed(slot.git, branch, start, log, rebase=ctx.config.trust.rebase)
         for slot, start in zip(slots, starts, strict=True)
     ]
-    if any(checked_pushes):
-        status, note = RunStatus.UNPUSHED, "; ".join(found for found in checked_pushes if found)
+    if any(found.unpushed for found in checked_pushes):
+        status, note = RunStatus.UNPUSHED, "; ".join(found.unpushed for found in checked_pushes if found.unpushed)
     # Before a kick, which replaces the branch's commits with copies the run did not make (DESIGN §23).
     changed = _keep_changes(run, slots, starts, checked_pushes, log)
     listed = _keep_checklist_pushes(run, slots, branch, listed, log)
@@ -1179,13 +1179,13 @@ def _keep_changes(
     run: sqlite3.Row,
     slots: Sequence[_Slot],
     starts: Sequence[checkpoint.Start],
-    checked: Sequence[str],
+    checked: Sequence[checkpoint.Pushed],
     log: logs.TickAdapter,
 ) -> tuple[run_changes.Change, ...]:
     """Read what the run changed in each slot and keep its diffs, which the PR's page shows its threads on (§29, §45).
 
-    `checked` is what the push check said of each slot, "" for one whose work is on origin. Best effort, as a review's
-    diff is (§21, The diff): a failure is logged and named in the slot's record, and the run goes on.
+    `checked` is what the push check found of each slot. Best effort, as a review's diff is (§21, The diff): a failure
+    is logged and named in the slot's record, and the run goes on.
 
     Returns:
         A change per slot, in the slots' order.
@@ -1197,11 +1197,11 @@ def _keep_changes(
             base=slot.base,
             branch=str(run["branch"]),
             start=start,
-            pushed=not said,
+            pushed=found,
             log_path=str(run["log_path"]),
             log=log,
         )
-        for slot, start, said in zip(slots, starts, checked, strict=True)
+        for slot, start, found in zip(slots, starts, checked, strict=True)
     )
 
 

@@ -5,7 +5,7 @@
 `path:line` when that line is in the diff. The diff is the PR's own text: untrusted, and unbounded until it is read.
 So the file is read only if it is a regular file and not a symlink, at most `MAX_BYTES` of it; control characters
 other than tabs become spaces; and files, lines, and each line's characters are cut at a bound, with `truncated` saying
-something was. `text` reads a kept diff within the same bounds as git printed it, for a terminal.
+something was. `text` reads a kept diff within the same bounds as git printed it, for a terminal, its tabs expanded.
 """
 
 from __future__ import annotations
@@ -21,6 +21,9 @@ from canopy.infra import logs
 
 # How much of a diff is written and read: a large PR's, and little enough to read on each request.
 MAX_BYTES = 4 * 1024 * 1024
+#: How much of a diff `keep` writes, and so all of git's output a keeper need read: one character past the bound, so a
+#: cut diff reads as truncated.
+KEPT_CHARS = MAX_BYTES + 1
 # How many files and lines a diff holds, and how many characters a line keeps.
 MAX_FILES = 500
 MAX_LINES = 30_000
@@ -114,9 +117,9 @@ def names_args(fork: str, head: str) -> tuple[str, ...]:
 def keep(path: Path, diff: str) -> None:
     """Write `diff` to `path`, readable only by the operator, cut at the bound `read` reads.
 
-    It keeps one character past the bound, so a cut diff reads as truncated.
+    It keeps one character past the bound, `KEPT_CHARS`, so a cut diff reads as truncated.
     """
-    logs.write_private(path, diff[: MAX_BYTES + 1])
+    logs.write_private(path, diff[:KEPT_CHARS])
 
 
 def run_path_for(log_path: str | Path, repo: str) -> Path:
@@ -180,10 +183,12 @@ def read(path: Path) -> Diff | None:
 def text(path: Path) -> Text | None:
     """Read the diff at `path` as git printed it, for a terminal, within the bounds `read` parses it in.
 
-    Each line is made printable as `read` makes it, and the lines stop where `read`'s files or lines would.
+    Each line is made printable as `read` makes it, cut at the same length, and its tabs expanded to spaces, so the
+    terminal gets no control character; the lines stop where `read`'s files or lines would.
 
     Returns:
-        Its lines, and whether a bound cut them; None when the file cannot be opened or is not a regular file.
+        Its lines, and whether a bound cut them, a line's length included; None when the file cannot be opened or is
+        not a regular file.
     """
     found = _read_bounded(path)
     if found is None:
@@ -195,7 +200,8 @@ def text(path: Path) -> Text | None:
         if not parser.feed(line):
             truncated = True
             break
-        lines.append(_clean(line))
+        truncated = truncated or len(line) > MAX_LINE_CHARS
+        lines.append(_clean(line).expandtabs())
     return Text(tuple(lines), truncated=truncated)
 
 
