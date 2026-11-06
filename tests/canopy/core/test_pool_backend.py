@@ -42,7 +42,7 @@ from tests.conftest import CanopyEnv, git, user_toml
 def use(canopy_env: CanopyEnv, backend: str, *, slots: str = "") -> None:
     """Name `backend` in the operator's user file, and declare `slots`, lines of `[capacity.repo_slots]`, if any."""
     declared = f"\n[capacity.repo_slots]\n{slots}\n" if slots else ""
-    canopy_env.write_user(user_toml() + f'\n[pools]\nbackend = "{backend}"\n' + declared)
+    canopy_env.write_user(user_toml(canopy_env.runtime) + f'\n[pools]\nbackend = "{backend}"\n' + declared)
 
 
 def context(ws: Ws, canopy_env: CanopyEnv, conn: sqlite3.Connection) -> Context:

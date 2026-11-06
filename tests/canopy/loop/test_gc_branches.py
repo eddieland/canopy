@@ -69,7 +69,7 @@ def task_run(conn: sqlite3.Connection, branch: str, *, stopped: bool, repo: str 
     conn.execute(
         "INSERT INTO task_runs (task_id, tick_id, branch, repo, slot_path, lease_id, lease_holder, base_branch, pool, "
         "started_at, ended_at, status, log_path) "
-        "VALUES (?, ?, ?, ?, '/s', 'l', 'h', 'main', 'canopy', ?, ?, 'done', '')",
+        "VALUES (?, ?, ?, ?, '/s', 'l', 'h', 'main', 'canopy', ?, ?, 'done', '/nowhere/task-run.log')",
         (task_id, ended_tick(conn, db.now()), branch.format(id=task_id), repo, db.now(), db.now()),
     )
     assert task_id is not None

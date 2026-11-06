@@ -42,7 +42,7 @@ from tests.canopy.scenario_helpers import dispatches, sends_drafts
 if TYPE_CHECKING:
     from canopy.core.context import Context
     from tests.canopy.scenario_helpers import Scenario
-    from tests.conftest import CanopyEnv
+    from tests.conftest import CanopyEnv, GitPool
 
 PR = DRAFTS_PR
 #: KEY's run on its `work` branch, as each drafting run here is.
@@ -330,8 +330,10 @@ def test_a_diff_that_cannot_be_kept_leaves_the_run_and_its_drafts_as_they_are(
     assert not review_diff.run_path_for(str(run.row["log_path"]), "repo").exists()
 
 
-@pytest.mark.usefixtures("git_pool")
-def test_a_run_under_post_keeps_no_diff(scenario: Scenario) -> None:
+def test_a_run_under_post_keeps_its_diff_at_its_pushed_head_too(scenario: Scenario, git_pool: GitPool) -> None:
+    """Every run keeps its branch against its base (DESIGN §45), so the PR's page has it whatever the setting."""
     scenario.configures("private", trust={"review_replies": "post"})
     run = scenario.run(WORK, worker=sends_drafts([]))
-    assert not review_diff.run_path_for(str(run.row["log_path"]), "repo").exists()
+    diff = review_diff.run_path_for(str(run.row["log_path"]), "repo")
+    assert review_diff.read(diff) is not None
+    assert review_diff.read_head(diff) == git_pool.remote_head("agent/PROJ-1-work")
