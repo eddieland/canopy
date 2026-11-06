@@ -201,6 +201,8 @@ export type ChecklistRun = Schemas['ChecklistRun']
 export type ChecklistWeek = Schemas['ChecklistWeek']
 /** What a run answered of one item of its repository's checklist, with a held item's reason, on the run's page. */
 export type ChecklistAnswer = Schemas['ChecklistAnswer']
+/** What a run pushed after being shown a repository's checklist: the two commits, and the diff kept between them. */
+export type ChecklistStretch = Schemas['ChecklistStretch']
 /** A worker's answer to a checklist item: pass, fixed, held, n/a, or unanswered. */
 export type ItemAnswer = Schemas['ItemAnswer']
 /** How the last days' runs ended, the newest failures, what the guards refused, and each day's counts. */

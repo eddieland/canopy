@@ -17,8 +17,19 @@ import httpx2
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import checklist_answers, config, conversation, db, pause, records, review_runs, run_models
-from canopy.core.checklist_answers import Answer, Checked
+from canopy.core import (
+    checklist_answers,
+    config,
+    conversation,
+    db,
+    gc_passes,
+    pause,
+    records,
+    review_diff,
+    review_runs,
+    run_models,
+)
+from canopy.core.checklist_answers import Answer, Checked, Pushed
 from canopy.core.context import Context
 from canopy.core.vocab import ItemAnswer, ModelsRead, Phase, PlanSetting, RunStatus, StartStatus, TickStatus
 from canopy.infra import resources
@@ -53,6 +64,18 @@ from tests.canopy.scenario_helpers import (
 )
 from tests.canopy.web_helpers import DEFAULT_CAPACITY, ORIGIN, client, free_port, refused, signed_in_client
 from tests.conftest import SHARED_TOML, CanopyEnv, GitPool, user_toml
+
+#: A stretch's diff, as `checklist_pushes.keep` writes it: the branch's text, a control character in its last line.
+STRETCH = """\
+diff --git a/src/canopy/order.py b/src/canopy/order.py
+index 1111111..2222222 100644
+--- a/src/canopy/order.py
++++ b/src/canopy/order.py
+@@ -1,2 +1,2 @@ def main() -> None:
+ import os
+-def _helper(): ...
++def main() -> None:\x07 # moved up
+"""
 
 
 def test_a_path_shown_from_the_workspace_root_joins_metas_root_back_to_the_journals(ctx: Context) -> None:
@@ -125,6 +148,109 @@ def test_a_runs_page_carries_its_checklist_answers_by_repository_with_a_held_ite
     assert c.get(f"/api/runs/{given}").json()["checklist"] == []
     # On its page alone: the list carries none.
     assert all(r["checklist"] == [] for r in c.get("/api/runs").json())
+
+
+def test_a_runs_page_carries_each_stretch_it_pushed_after_its_list_with_the_diff_kept_beside_its_log(
+    ctx: Context,
+    tmp_path: Path,
+) -> None:
+    """In the order it was shown its lists; a diff that is missing or a link is none, said so, never an empty one."""
+    run_id = running_run(ctx, KEY, private=False)
+    db.finish_run(ctx.conn, "runs", run_id, RunStatus.DONE, None)
+    shown, pushed = ("a1" * 20, "b2" * 20), ("c3" * 20, "d4" * 20)
+    stretches = (
+        Pushed("api", shown[0], pushed[0]),
+        Pushed("web", shown[1], pushed[1]),
+        Pushed("web", "e5" * 20, "f6" * 20),
+    )
+    answers = (Answer("api", "newspaper", ItemAnswer.FIXED), Answer("web", "no-any", ItemAnswer.PASSED))
+    checklist_answers.record(ctx.conn, run_id, Checked(answers=answers, pushes=stretches))
+    log_path = present(db.get_run(ctx.conn, run_id))["log_path"]
+    kept = checklist_answers.diff_path(log_path, "api", shown[0])
+    kept.parent.mkdir(parents=True, exist_ok=True)
+    review_diff.keep(kept, STRETCH)
+    elsewhere = tmp_path / "elsewhere.diff"
+    elsewhere.write_text(STRETCH)
+    checklist_answers.diff_path(log_path, "web", shown[1]).symlink_to(elsewhere)
+    given = running_run(ctx, KEY, private=False)
+
+    c, _ = signed_in_client(ctx)
+    found = c.get(f"/api/runs/{run_id}").json()
+    assert found["checklist_stretches_left_out"] == 0
+    first, linked, missing = found["checklist_stretches"]
+    assert (first["repo"], first["shown_sha"], first["pushed_sha"]) == ("api", shown[0], pushed[0])
+    assert first["diff_removed_after_days"] is None
+    assert first["diff"] == {
+        "files": [
+            {
+                "path": "src/canopy/order.py",
+                "old_path": None,
+                "binary": False,
+                "hunks": [
+                    {
+                        "header": "def main() -> None:",
+                        "lines": [
+                            {"kind": "ctx", "old": 1, "new": 1, "text": "import os"},
+                            {"kind": "del", "old": 2, "new": None, "text": "def _helper(): ..."},
+                            # The branch's text, its control characters made spaces, as a review's diff is.
+                            {"kind": "add", "old": None, "new": 2, "text": "def main() -> None:  # moved up"},
+                        ],
+                    },
+                ],
+            },
+        ],
+        "truncated": False,
+    }
+    assert [(s["repo"], s["shown_sha"], s["diff"]) for s in (linked, missing)] == [
+        ("web", shown[1], None),
+        ("web", "e5" * 20, None),
+    ]
+    # A run never shown a list, and the list of runs, carry none.
+    assert c.get(f"/api/runs/{given}").json()["checklist_stretches"] == []
+    assert all(r["checklist_stretches"] == [] for r in c.get("/api/runs").json())
+
+
+def test_a_runs_stretches_are_read_within_a_reviews_bounds_and_the_page_is_sent_the_first_five(ctx: Context) -> None:
+    """A diff past a bound is cut and says so; a stretch past the first five is counted, not sent."""
+    run_id = running_run(ctx, KEY, private=False)
+    db.finish_run(ctx.conn, "runs", run_id, RunStatus.DONE, None)
+    shas = [f"{n:02x}" * 20 for n in range(7)]
+    pushes = tuple(Pushed("api", sha, "ff" * 20) for sha in shas)
+    checklist_answers.record(ctx.conn, run_id, Checked(answers=(Answer("api", "x", ItemAnswer.FIXED),), pushes=pushes))
+    log_path = present(db.get_run(ctx.conn, run_id))["log_path"]
+    for sha in shas:
+        kept = checklist_answers.diff_path(log_path, "api", sha)
+        kept.parent.mkdir(parents=True, exist_ok=True)
+        review_diff.keep(kept, STRETCH + STRETCH.replace("order.py", "other.py"))
+
+    c, _ = signed_in_client(ctx)
+    with mock.patch.object(review_diff, "MAX_FILES", 1):
+        found = c.get(f"/api/runs/{run_id}").json()
+    assert [s["shown_sha"] for s in found["checklist_stretches"]] == shas[:5]
+    assert found["checklist_stretches_left_out"] == 2
+    assert all(len(s["diff"]["files"]) == 1 and s["diff"]["truncated"] for s in found["checklist_stretches"])
+
+
+def test_a_stretchs_diff_retention_removed_says_after_how_many_days(ctx: Context) -> None:
+    run_id = running_run(ctx, KEY, private=False)
+    db.finish_run(ctx.conn, "runs", run_id, RunStatus.DONE, None)
+    pushes = (Pushed("api", "a1" * 20, "b2" * 20),)
+    checklist_answers.record(ctx.conn, run_id, Checked(answers=(Answer("api", "x", ItemAnswer.FIXED),), pushes=pushes))
+    gc_passes.record(
+        ctx.conn,
+        tick_id=None,
+        started_at=datetime.now(UTC),
+        run_files_days=30,
+        tick_files_days=7,
+        run_cutoff=db.format_time(datetime.now(UTC) + timedelta(days=1)),
+        tick_cutoff=None,
+        removed={},
+        failures=0,
+        error=None,
+    )
+    c, _ = signed_in_client(ctx)
+    [stretch] = c.get(f"/api/runs/{run_id}").json()["checklist_stretches"]
+    assert (stretch["diff"], stretch["diff_removed_after_days"]) == (None, 30)
 
 
 def test_a_runs_page_names_the_models_its_session_says_served_it_once_a_tick_has_read_them(ctx: Context) -> None:

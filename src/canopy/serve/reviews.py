@@ -31,16 +31,13 @@ from canopy.core import review_result as result
 from canopy.core.vocab import DismissalReason, ReviewRunStatus, SeenKind
 from canopy.reviews import review_requests
 from canopy.serve import review_draft_views
+from canopy.serve.diff_views import diff_view
 from canopy.serve.schema.review import (
-    DiffFile,
-    DiffHunk,
-    DiffLine,
     DismissalReasonName,
     FindingAnswerName,
     FindingSeverity,
     RequestedReview,
     ReviewDetail,
-    ReviewDiff,
     ReviewDraftStatusName,
     ReviewFinding,
     ReviewSummary,
@@ -291,26 +288,4 @@ def _finding(f: result.Finding, diff: review_diff.Diff | None, number: int, mark
         held=number in marks.held,
         answer=cast("FindingAnswerName", answer.answer.value) if answer is not None else None,
         answer_reason=lines(answer.reason) if answer is not None and answer.reason else None,
-    )
-
-
-def diff_view(diff: review_diff.Diff) -> ReviewDiff:
-    """Return a kept diff as the web UI reads it: a review's, or a run's at its pushed head (DESIGN §21, §29)."""
-    return ReviewDiff(
-        files=[
-            DiffFile(
-                path=f.path,
-                old_path=f.old_path,
-                binary=f.binary,
-                hunks=[
-                    DiffHunk(
-                        header=h.header,
-                        lines=[DiffLine(kind=ln.kind, old=ln.old, new=ln.new, text=ln.text) for ln in h.lines],
-                    )
-                    for h in f.hunks
-                ],
-            )
-            for f in diff.files
-        ],
-        truncated=diff.truncated,
     )

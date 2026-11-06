@@ -23,7 +23,7 @@ import { TranscriptPanel } from '@/components/transcript'
 import { WhenField } from '@/components/when-field'
 import { useTranscriptView } from '@/hooks/use-transcript-view'
 import { taskRunDescription } from '@/lib/descriptions'
-import { taskRunRef } from '@/lib/refs'
+import { taskRef, taskRunRef } from '@/lib/refs'
 import { shortSha } from '@/lib/reviews'
 import { taskTitle } from '@/lib/tasks'
 import { tickId } from '@/lib/ticks'
@@ -97,7 +97,12 @@ function Loaded({ task, run }: { task: number; run: number }) {
             <div className="stagger flex flex-col gap-6">
                 {data.run.card !== null && <ProgressPanel card={data.run.card} running={data.run.ended_at === null} />}
                 <RunPanel detail={data} transcript={transcript} onShow={view.show} />
-                <ChecklistPanel answers={data.checklist} />
+                <ChecklistPanel
+                    answers={data.checklist}
+                    stretches={data.checklist_stretches}
+                    leftOut={data.checklist_stretches_left_out}
+                    shownBy={taskRef(data.task_id)}
+                />
                 <TranscriptPanel
                     transcript={transcript}
                     running={data.run.state === 'running'}

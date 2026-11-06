@@ -5,6 +5,7 @@
 
 import type {
     ChecklistAnswer,
+    ChecklistStretch,
     ChecklistItem,
     ChecklistItemCounts,
     ChecklistList,
@@ -15,6 +16,7 @@ import type { DayBar } from '@/lib/chart'
 import { counted } from '@/lib/descriptions'
 import { inRepos } from '@/lib/repo-filter'
 import { windowName } from '@/lib/report-window'
+import { shortSha } from '@/lib/reviews'
 
 /**
  * How many days the page opens on: the two weeks M66's measurement reads. `canopy checklist` keeps the week every
@@ -376,6 +378,23 @@ export function answersByRepo(answers: readonly ChecklistAnswer[]): RepoAnswers[
         }
     }
     return groups
+}
+
+/**
+ * A stretch a run pushed after its list, as its panel's readout names it: the repository, then the commit it was shown
+ * the list at and the one it pushed after, short, as `git log` names a range: `web · 5b1e0c4..c9d24f8`.
+ */
+export function stretchRange(stretch: ChecklistStretch): string {
+    return `${stretch.repo} · ${shortSha(stretch.shown_sha)}..${shortSha(stretch.pushed_sha)}`
+}
+
+/**
+ * What a run's page says of the stretches past the ones it was sent: how many, and the command that names each one's
+ * diff, `canopy show` of the run's reference (`run:38`, `task:4`).
+ */
+export function stretchesLeftOutText(count: number, ref: string): string {
+    const what = count === 1 ? 'stretch' : 'stretches'
+    return `${count} more ${what} pushed after the list, not shown: canopy show ${ref} names each one's diff`
 }
 
 /**

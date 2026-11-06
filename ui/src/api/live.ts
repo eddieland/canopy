@@ -48,12 +48,14 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
                 if (shown === undefined) {
                     continue
                 }
-                // What only its page carries, the list sends empty: the plan it wrote, its checklist's answers, and
-                // once it ends the worktrees it worked in stay as the page read them.
+                // What only its page carries, the list sends empty: the plan it wrote, its checklist's answers and
+                // what it pushed after them, and once it ends the worktrees it worked in stay as the page read them.
                 client.setQueryData(keys.run(run.id), {
                     ...run,
                     feedback_plan: shown.feedback_plan,
                     checklist: shown.checklist,
+                    checklist_stretches: shown.checklist_stretches,
+                    checklist_stretches_left_out: shown.checklist_stretches_left_out,
                     worktrees: run.ended_at === null ? run.worktrees : shown.worktrees,
                 })
                 if (logged(shown) !== logged(run)) {

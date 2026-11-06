@@ -91,6 +91,16 @@ def test_the_mock_keeps_the_lists_its_runs_answered(backend: Backend) -> None:
     assert listed == [(row["repo"], row["item"]) for row in counted]
 
 
+def test_the_mocks_held_run_shows_what_it_pushed_after_its_list(backend: Backend) -> None:
+    """ABC-103's run, which fixed `query-keys`, keeps the stretch's diff; the mock's other runs keep none."""
+    c = client(None, backend)
+    [stretch] = c.get("/api/runs/38").json()["checklist_stretches"]
+    assert stretch["repo"] == "web"
+    assert stretch["diff"] is not None
+    assert [f["path"] for f in stretch["diff"]["files"]] == ["src/api/queries.ts", "src/billing/InvoiceLines.tsx"]
+    assert c.get("/api/runs/39").json()["checklist_stretches"] == []
+
+
 def read(env: CanopyEnv) -> dict[str, Any]:
     """What `GET /api/checklists` answers over `env`'s workspace, its config read now."""
     ctx = context(env)

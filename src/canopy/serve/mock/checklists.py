@@ -2,15 +2,16 @@
 
 `web` and `api` keep a list, in the mock's `paths.checklists`; `mobile` none. T0's ended worker runs in `web` answered
 its list, and ABC-102's, in `api`, answered that one's, so the reports' checklist view counts every answer, each item in
-its list's order. The running runs have recorded none yet.
+its list's order. The running runs have recorded none yet. ABC-103's run, held in `web`, keeps the diff of what it
+pushed after the list, the `query-keys` fix it answered, so its page shows the stretch under its answers.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from canopy.core import checklist_answers, checklists
-from canopy.core.checklist_answers import Answer, Checked
+from canopy.core import checklist_answers, checklists, records, review_diff
+from canopy.core.checklist_answers import Answer, Checked, Pushed
 from canopy.core.vocab import ItemAnswer
 
 if TYPE_CHECKING:
@@ -85,6 +86,47 @@ _ANSWERS: tuple[tuple[int, str, tuple[ItemAnswer, ...], str | None], ...] = (
     (42, "api", (_P, _H, _U, _NA), "The CSV writer sits beside the export route, as the module's other writers do."),
 )
 
+#: The run whose push was held, the commit the list was shown at, the commit it pushed next, and the diff between them.
+_HELD_RUN = 38
+_SHOWN = "5b1e0c47" + "a" * 32
+_PUSHED = "c9d24f83" + "b" * 32
+_STRETCH = """\
+diff --git a/src/api/queries.ts b/src/api/queries.ts
+index 1f0a3c2..8e4b7d5 100644
+--- a/src/api/queries.ts
++++ b/src/api/queries.ts
+@@ -40,3 +40,11 @@ export function invoicesQuery(account: string) {
+         queryFn: () => fetchInvoices(account),
+     })
+ }
++
++/** An invoice's lines, from the v2 endpoint. */
++export function invoiceLinesQuery(id: string) {
++    return queryOptions({
++        queryKey: ['invoice', id, 'lines'],
++        queryFn: () => fetchInvoiceLines(id),
++    })
++}
+diff --git a/src/billing/InvoiceLines.tsx b/src/billing/InvoiceLines.tsx
+index 3d6e9a1..a72c0f4 100644
+--- a/src/billing/InvoiceLines.tsx
++++ b/src/billing/InvoiceLines.tsx
+@@ -1,11 +1,8 @@
+ import { useQuery } from '@tanstack/react-query'
+
+-import { fetchInvoiceLines } from '@/api/billing'
++import { invoiceLinesQuery } from '@/api/queries'
+
+ export function InvoiceLines({ id }: { id: string }) {
+-    const { data } = useQuery({
+-        queryKey: ['invoice', id, 'lines'],
+-        queryFn: () => fetchInvoiceLines(id),
+-    })
++    const { data } = useQuery(invoiceLinesQuery(id))
+     return <LineTable lines={data ?? []} />
+ }
+"""
+
 
 def write(directory: Path) -> None:
     """Write each list to `directory`, the mock's `paths.checklists`, a file to a repository."""
@@ -94,10 +136,16 @@ def write(directory: Path) -> None:
 
 
 def seed(conn: sqlite3.Connection) -> None:
-    """Record each run's answers, as `_run` records them when it ends."""
+    """Record each run's answers, as `_run` records them when it ends, and the held run's stretch, with its diff."""
     for run_id, repo, answers, reason in _ANSWERS:
         given = tuple(
             Answer(repo, item, answer, reason if answer is ItemAnswer.HELD else None)
             for item, answer in zip(_ITEMS[repo], answers, strict=True)
         )
-        checklist_answers.record(conn, run_id, Checked(answers=given))
+        pushed = (Pushed(repo, _SHOWN, _PUSHED),) if run_id == _HELD_RUN else ()
+        checklist_answers.record(conn, run_id, Checked(answers=given, pushes=pushed))
+    held = records.select(records.Run).where("id = ?", _HELD_RUN).one(conn)
+    if held is not None:
+        kept = checklist_answers.diff_path(held.log_path, "web", _SHOWN)
+        kept.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        review_diff.keep(kept, _STRETCH)
