@@ -23,6 +23,7 @@ from click.testing import CliRunner, Result
 from canopy.core import db
 from canopy.infra import metrics, resources, tracing
 from canopy.infra.procs import SubprocessRunner
+from canopy.runtime.implementation import Version
 
 if TYPE_CHECKING:
     import sqlite3
@@ -54,11 +55,33 @@ HERMETIC_GIT = {
 }
 #: What `--shard` takes: the slice to run, counted from 1, and how many slices there are.
 SHARD_RE = re.compile(r"(?P<index>[1-9][0-9]*)/(?P<total>[1-9][0-9]*)")
+#: The marker of a test that tells OpenCode 1's own story, such as its commands' names or its events' shape: its
+#: workspace runs OpenCode 1 whatever `--runtime` says. Those left are what keeps OpenCode 1 from being dropped.
+OPENCODE1_MARKER = "opencode1"
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
-    """Add `--shard I/N`, which runs the I-th of N slices of the tests collected, as CI's test jobs do side by side."""
+    """Add `--shard I/N`, which runs the I-th of N slices of the tests collected, as CI's test jobs do side by side.
+
+    And `--runtime`, the `runtime.version` every workspace a test makes runs, as CI runs the suite under each.
+    """
     parser.addoption("--shard", metavar="I/N", help="run only the I-th of N slices of the tests collected")
+    parser.addoption(
+        "--runtime",
+        type=int,
+        choices=[int(v) for v in Version],
+        default=int(Version.ONE),
+        help="the runtime.version each test's workspace runs, but a test marked opencode1's",
+    )
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Register the `opencode1` marker, which strict markers otherwise refuse."""
+    config.addinivalue_line(
+        "markers",
+        f"{OPENCODE1_MARKER}: the test tells OpenCode 1's own story, so its workspace runs OpenCode 1 whatever "
+        "--runtime says",
+    )
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
@@ -253,6 +276,8 @@ class CanopyEnv:
     user_file: Path
     shared_file: Path
     journals: Journals
+    #: The runtime version its user file names (`--runtime`), which a test's expectations of the runtime follow.
+    runtime: Version = Version.ONE
 
     @property
     def state_dir(self) -> Path:
@@ -387,13 +412,15 @@ TRACKER_CMD = f"connector {TRACKER_SOURCE} --labeled agent-ready-tester"
 TRACKER_TOML = f'[connect.sources.{TRACKER_SOURCE}]\nkind = "tracker"\ncmd = "{TRACKER_CMD}"\n'
 
 
-def user_toml() -> str:
+def user_toml(runtime: Version = Version.ONE) -> str:
+    """The user file a test's workspace starts with: version 1 names no `runtime.version`, the default."""
+    version = "" if runtime == Version.ONE else f"version = {int(runtime)}\n"
     return f"""\
 [tracker]
 labels = ["agent-ready-tester"]
 
 [runtime]
-overseer_cmd = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} agent run --agent canopy-overseer {{prompt}}'
+{version}overseer_cmd = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} agent run --agent canopy-overseer {{prompt}}'
 worker_cmd = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} agent run --agent canopy-worker {{prompt}}'
 private_worker_cmd = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} agent run --agent canopy-worker-private {{prompt}}'
 plan_cmd = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} agent run --agent canopy-planner --format json {{prompt}}'
@@ -404,11 +431,20 @@ plan_cmd = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} agent run --agent canopy
 
 
 @pytest.fixture
-def canopy_env(tmp_path: Path, journals: Journals) -> Iterator[CanopyEnv]:
+def runtime(request: pytest.FixtureRequest) -> Version:
+    """The runtime version this test's workspace runs: `--runtime`'s, or 1 for a test marked `opencode1`."""
+    if request.node.get_closest_marker(OPENCODE1_MARKER) is not None:
+        return Version.ONE
+    return Version(request.config.getoption("--runtime"))
+
+
+@pytest.fixture
+def canopy_env(tmp_path: Path, journals: Journals, runtime: Version) -> Iterator[CanopyEnv]:
     """A workspace of one repository with its workspace file, and a user config that runs the fake agent.
 
-    The user config's runtime commands run the fake agent. HOME, XDG_CONFIG_HOME, and XDG_DATA_HOME point into tmp_path
-    too, so nothing reads or writes the real operator's files. CANOPY_TICK_ID is cleared.
+    The user config's runtime commands run the fake agent, on the runtime version `runtime` names. HOME,
+    XDG_CONFIG_HOME, and XDG_DATA_HOME point into tmp_path too, so nothing reads or writes the real operator's files.
+    CANOPY_TICK_ID is cleared.
     """
     home = tmp_path / "home"
     root = tmp_path / "ws"
@@ -422,9 +458,10 @@ def canopy_env(tmp_path: Path, journals: Journals) -> Iterator[CanopyEnv]:
         user_file=home / ".config" / "canopy" / "config.toml",
         shared_file=root / "canopy-workspace.toml",
         journals=journals,
+        runtime=runtime,
     )
     env.write_shared(SHARED_TOML)
-    env.write_user(user_toml())
+    env.write_user(user_toml(runtime))
     # As canopy creates it, so a journal a test opens first is in a directory canopy accepts as the operator's own.
     env.state_dir.mkdir(mode=0o700)
     variables = {

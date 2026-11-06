@@ -13,14 +13,15 @@ from typing import TYPE_CHECKING
 import click
 
 from canopy.cli import attachments as attachments_cli
+from canopy.cli import changes as changes_cli
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import REPO
-from canopy.core import cards, checklist_answers, conversation, plans
+from canopy.core import cards, checklist_answers, conversation, plans, run_changes
 from canopy.core.items import age
 from canopy.core.vocab import RunStatus
 from canopy.infra import logs
 from canopy.infra.text import one_line, printable
-from canopy.loop.readback import checklist_lines
+from canopy.loop.readback import change_lines, checklist_lines
 from canopy.loop.render import result_of, spent
 from canopy.runs import task_run, task_tickets, tasks
 
@@ -98,8 +99,8 @@ def cmd_task_list(click_ctx: click.Context) -> int:
 def show(ctx: Context, task_id: int) -> None:
     """Print task `task_id`: where it stands, its text, each run, its tickets, its conversation, and its report.
 
-    Each run is shown with its branch, the head it left on origin, and its answers to its repository's checklist (§42);
-    the newest report as its file stands (§36).
+    Each run is shown with its branch, the head it left on origin, its answers to its repository's checklist (§42), and
+    what it changed (§45); the newest report as its file stands (§36).
 
     Raises:
         CliError: canopy has no such task.
@@ -136,6 +137,31 @@ def show(ctx: Context, task_id: int) -> None:
     question = conversation.task_question(ctx.conn, task_id)
     if question is not None and task.stopped_at is None:
         click.echo(f"\nMessage {question.id} waits on your answer: `canopy reply task:{task_id} TEXT`.")
+
+
+def diff(ctx: Context, task_id: int) -> None:
+    """Print the kept diff of what the newest run of task `task_id` that kept one changed (DESIGN §45).
+
+    A newer run that kept none, as one that crashed, is passed over for an older one that did; when none did, the
+    newest that recorded anything says why.
+
+    Raises:
+        CliError: canopy has no such task, or none of its runs kept a diff of what it changed.
+    """
+    if tasks.get(ctx.conn, task_id) is None:
+        raise CliError(f"canopy has no task:{task_id}")
+    newest: tuple[records.TaskRun, list[records.RunChange]] | None = None
+    for run in reversed(tasks.runs_of(ctx.conn, task_id)):
+        found = run_changes.of_run(ctx.conn, run.id, table="task_runs")
+        if found and changes_cli.kept(found, log_path=run.log_path):
+            changes_cli.echo(found, log_path=run.log_path, ref=f"task:{task_id}'s run {run.id}")
+            return
+        if found and newest is None:
+            newest = run, found
+    if newest is None:
+        raise CliError(f"no run of task:{task_id} recorded what it changed")
+    run, found = newest
+    changes_cli.echo(found, log_path=run.log_path, ref=f"task:{task_id}'s run {run.id}")
 
 
 def replied(ctx: Context, task_id: int) -> None:
@@ -204,10 +230,12 @@ def _show_run(ctx: Context, run: records.TaskRun) -> None:
         checklist_answers.pushes_of(ctx.conn, run.id, table="task_runs"),
         log_path=run.log_path,
     )
-    if answered:
-        click.echo("    checklist:")
-    for line in answered:
-        click.echo(f"      {line}")
+    changed = change_lines(run_changes.of_run(ctx.conn, run.id, table="task_runs"), log_path=run.log_path)
+    for heading, lines in (("checklist", answered), ("changed", changed)):
+        if lines:
+            click.echo(f"    {heading}:")
+        for line in lines:
+            click.echo(f"      {line}")
     # Its worker's progress, while it runs and its last once it ends: the operator's alone, never shown inside one of
     # canopy's ticks or runs (DESIGN §41). A task's asks no question, so `ref` names no run to answer.
     running = run.status is RunStatus.RUNNING

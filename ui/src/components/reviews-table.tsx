@@ -20,17 +20,17 @@ import { NO_TICKET } from '@/lib/words'
 const NONE_REQUESTED: RequestedReview[] = []
 
 /**
- * Review runs, one row each, opening the review's page with its findings on its diff: its verdict, its id, its ticket,
- * its impact, its PR and its title, the commit it read and the persona it wrote in, cost, and when. On a PR's own page
- * (`pr={false}`) the ticket and the PR are left out, as `RunsTable` leaves out a ticket on the ticket's page. The
- * reviews page passes the PRs the operator asked to have reviewed that no review of has started yet as `requested`, a
- * row each, before the runs, or after them with `requestedLast`: what comes next is the newest end of the list. A
- * review whose result is new to the operator (src/lib/seen-reviews.ts) has a dot in the accent after its verdict, said
- * `new` on hover and to a screen reader. A review of a PR the loop does not own says where its draft stands after
- * that (`ReviewDraftChip`), so the list shows which hold a review the operator has yet to publish or submit. A request
- * the operator made in several personas has a review of each commit in each (DESIGN §31): those rows sit together
- * where the first of them is, with no rule between them, and each after the first names only its persona in the PR's
- * place, so the request reads as one entry with its reviews side by side (`requestGroups`).
+ * Review runs, one row each, opening the review's page with its findings on its diff: its verdict, its id, its ticket
+ * (or, with none, its PR's author), its impact, its PR and its title, the commit it read and the persona it wrote in,
+ * cost, and when. On a PR's own page (`pr={false}`) the ticket and the PR are left out, as `RunsTable` leaves out a
+ * ticket on the ticket's page. The reviews page passes the PRs the operator asked to have reviewed that no review of
+ * has started yet as `requested`, a row each, before the runs, or after them with `requestedLast`: what comes next is
+ * the newest end of the list. A review whose result is new to the operator (src/lib/seen-reviews.ts) has a dot in the
+ * accent after its verdict, said `new` on hover and to a screen reader. A review of a PR the loop does not own says
+ * where its draft stands after that (`ReviewDraftChip`), so the list shows which hold a review the operator has yet to
+ * publish or submit. A request the operator made in several personas has a review of each commit in each (DESIGN §31):
+ * those rows sit together where the first of them is, with no rule between them, and each after the first names only
+ * its persona in the PR's place, so the request reads as one entry with its reviews side by side (`requestGroups`).
  */
 export function ReviewsTable({
     reviews,
@@ -65,9 +65,9 @@ export function ReviewsTable({
 
 /**
  * A PR the operator asked to have reviewed, waiting on a tick to start its review: a hollow ring, as nothing runs for
- * it yet, then `requested`, its author where a ticket would be once canopy has read the PR (it has no ticket: canopy
- * only reviews it), its PR, which opens its page with **Stop**, and how long it has waited. It has no review id,
- * impact, commit, or cost until its review starts, and then the review's own row takes its place.
+ * it yet, then `requested`, its author where a ticket would be (`TicketOrAuthor`), its PR, which opens its page with
+ * **Stop**, and how long it has waited. It has no review id, impact, commit, or cost until its review starts, and then
+ * the review's own row takes its place.
  */
 function RequestedRow({ request }: { request: RequestedReview }) {
     return (
@@ -80,13 +80,7 @@ function RequestedRow({ request }: { request: RequestedReview }) {
             </span>
             <span />
             <span className="flex min-w-0">
-                {request.author === null ? (
-                    <None reason={NO_TICKET} brief className="font-mono text-xs" />
-                ) : (
-                    <Tip fact="The PR's author: canopy only reviews it, so it has no ticket">
-                        <span className="truncate font-mono text-xs text-muted-foreground">{request.author}</span>
-                    </Tip>
-                )}
+                <TicketOrAuthor ticketKey={null} author={request.author} />
             </span>
             <span />
             <span className="flex min-w-0 items-center gap-3">
@@ -177,12 +171,7 @@ function ReviewRow({
             <ReviewLink id={review.id} />
             {pr && (
                 <span className="truncate">
-                    {lead === undefined &&
-                        (review.ticket_key === null ? (
-                            <None reason={NO_TICKET} brief className="font-mono text-xs" />
-                        ) : (
-                            <TicketLink ticketKey={review.ticket_key} />
-                        ))}
+                    {lead === undefined && <TicketOrAuthor ticketKey={review.ticket_key} author={review.author} />}
                 </span>
             )}
             <span className="flex">{review.impact !== null && <Chip word={`${review.impact} impact`} />}</span>
@@ -190,5 +179,25 @@ function ReviewRow({
             <Cost usd={review.cost_usd} className="text-right text-xs text-muted-foreground" />
             <Age variant="span" started={review.started_at} ended={review.ended_at} className="text-right" />
         </ListRow>
+    )
+}
+
+/**
+ * What a review's PR is for, in the ticket's column: its ticket, else its author once canopy has read the PR (a PR
+ * with no ticket is one canopy only reviews, a coworker's or a bot's), else `none`.
+ */
+function TicketOrAuthor({ ticketKey, author }: { ticketKey: string | null; author: string | null }) {
+    if (ticketKey !== null) {
+        return <TicketLink ticketKey={ticketKey} />
+    }
+    if (author === null) {
+        return <None reason={NO_TICKET} brief className="font-mono text-xs" />
+    }
+    return (
+        <Tip fact="The PR's author: canopy only reviews it, so it has no ticket">
+            <span className="truncate font-mono text-xs text-muted-foreground" data-testid="pr-author">
+                {author}
+            </span>
+        </Tip>
     )
 }

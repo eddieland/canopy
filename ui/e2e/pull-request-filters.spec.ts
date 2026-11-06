@@ -94,7 +94,7 @@ test('a link to the pull requests list names its repositories in the URL, one or
 test('the reviews list filters by repository and by words, and a request waits out a repository', async ({ page }) => {
     await page.goto('pull-requests/reviews?q=web%2388')
     await settled(page)
-    const field = page.getByRole('searchbox', { name: 'Filter reviews by PR, ticket, or commit' })
+    const field = page.getByRole('searchbox', { name: 'Filter reviews by PR, ticket, commit, or author' })
     await expect(field).toHaveValue('web#88')
     await expect.poll(() => reviews(page)).toEqual(['review-1', 'review-4'])
 
@@ -110,4 +110,29 @@ test('the reviews list filters by repository and by words, and a request waits o
 
     await field.fill('abc-099')
     await expect(page.getByText('no reviews in api with “abc-099”')).toBeVisible()
+})
+
+test('the reviews list filters by its PRs’ authors, a request’s too, in the URL', async ({ page }) => {
+    await page.goto('pull-requests/reviews')
+    await settled(page)
+    const picker = page.getByRole('button', { name: /^Filter by author: /u })
+    await expect(picker).toHaveAccessibleName('Filter by author: every author')
+    await picker.click()
+    const authors = page.getByRole('listbox', { name: 'Authors' })
+    await expect(authors.getByRole('option')).toHaveText(['every author', 'carol', 'dana', 'op'])
+
+    // Carol's PR has its reviews in two personas; the reviews of PRs canopy has not read have no author to match.
+    await authors.getByRole('option', { name: 'carol' }).click()
+    await expect(page).toHaveURL(/[?&]author=carol/u)
+    await expect(picker).toHaveAccessibleName('Filter by author: carol')
+    await expect.poll(() => reviews(page)).toEqual(['review-5', 'review-6'])
+    await expect(page.getByTestId('review-6').getByTestId('pr-author')).toHaveText('carol')
+
+    // A PR waiting on its review is its author's too, from canopy's read of it.
+    await page.goto('pull-requests/reviews?author=dana')
+    await settled(page)
+    await expect.poll(() => reviews(page)).toEqual(['requested-https://github.com/acme/web/pull/95'])
+
+    await page.getByRole('searchbox', { name: 'Filter reviews by PR, ticket, commit, or author' }).fill('web#88')
+    await expect(page.getByText('no reviews by dana with “web#88”')).toBeVisible()
 })

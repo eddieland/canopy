@@ -1,7 +1,7 @@
 """Workers' runs on tickets.
 
-Each run, the pool slots it leased, why it ran, and what it answered of its checklist and pushed after it (DESIGN §8,
-§18, §23, §42).
+Each run, the pool slots it leased, why it ran, what it answered of its checklist and pushed after it, and what it
+changed (DESIGN §8, §18, §23, §42, §45).
 """
 
 from __future__ import annotations
@@ -201,3 +201,37 @@ class ChecklistPush(Row):
     shown_sha: str
     #: The commit of the next push the hook let through, or the one the run left on origin when it pushed none.
     pushed_sha: str
+
+
+@dataclass(frozen=True)
+class RunChange(Row):
+    """What a worker's or a task's run changed in one repository (DESIGN §45), read by the harness as the run ended.
+
+    It names one run: a worker's in `run_id`, or a task's in `task_run_id`, the other None. The commits are the
+    harness's own reads of origin and of the slot, never the agent's word; the diffs are kept beside the run's log
+    (`run_changes`). Never removed (§26).
+    """
+
+    TABLE: ClassVar[LiteralString] = "run_changes"
+
+    run_id: int | None
+    task_run_id: int | None
+    repo: str
+    #: The commit the run started from: origin's branch then, or the base's commit when origin had no branch; None for
+    #: a run that crashed before any git ran in its slot.
+    start_sha: str | None
+    #: Whether `start_sha` is the base's commit, origin having no branch when the run started.
+    start_on_base: bool
+    #: The commit the run left on origin's branch, before any flaky kick; None when origin has no branch.
+    end_sha: str | None
+    #: Where the diffed commit leaves the base, as the slot last fetched the base.
+    merge_base_sha: str | None
+    #: For a slot the run left unpushed, the last commit the run made there, whose diffs are kept as work not on
+    #: origin; None for a slot that pushed.
+    unpushed_sha: str | None
+    #: Whether the diff of the run's own change was kept.
+    change_kept: bool
+    #: Whether the diff of the branch against its base was kept.
+    branch_kept: bool
+    #: Why a diff was not kept; None when both were.
+    missing: str | None

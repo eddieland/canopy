@@ -53,6 +53,7 @@ def opencode(tmp_path: Path) -> Iterator[Path]:
         yield bin_dir
 
 
+@pytest.mark.opencode1  # the fake above plays OpenCode 1's `debug`
 @pytest.mark.usefixtures("opencode")
 def test_canopy_agents_says_what_each_agent_is_offered(
     canopy_env: CanopyEnv,
@@ -74,6 +75,7 @@ def test_canopy_agents_says_what_each_agent_is_offered(
     assert by_agent["canopy-worker"]["tools"] == ["bash", "read"]
 
 
+@pytest.mark.opencode1  # the fake above plays OpenCode 1's `debug`
 @pytest.mark.usefixtures("opencode")
 def test_canopy_agents_shows_the_commands_config_allows_an_agent(
     canopy_env: CanopyEnv,

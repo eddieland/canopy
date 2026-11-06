@@ -9,7 +9,8 @@ Each event is validated (D026), and each text cut to its bound (`canopy.runtime.
 
 OpenCode 2 titles a tool call with the tool's own name, so a call's title is made here from its input instead: the
 command a shell ran, else the path, pattern, address, or skill it was given. The last model call's cost is missing, as
-`canopy.runtime.opencode2.events` says why.
+`canopy.runtime.opencode2.events` says why. A call's `step_finish` names the reply it wrote, `messageID`, which the
+session's record names its model by (`canopy.runtime.opencode2.session_models`).
 
 `touched` says what a call did to files, from 2.1.4's tools: `read`, `edit`, and `write` name one by `path`, or by
 `filePath` in a session moved from OpenCode 1, `patch` each file its patch adds, updates, deletes, or moves to, and
@@ -31,7 +32,7 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, StrictFloat, Stric
 from canopy.runtime import entries
 from canopy.runtime.entries import MAX_INPUT, MAX_TEXT, Entry, Error, Step, Text, Tokens, ToolCall
 from canopy.runtime.opencode2 import events
-from canopy.runtime.report import MAX_COST_USD, Called, Count, Touch, shell_searches
+from canopy.runtime.report import MAX_COST_USD, MESSAGE_ID_RE, Called, Count, Touch, shell_searches
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping
@@ -96,6 +97,7 @@ class _Tokens(_Part):
 
 
 class _Step(_Part):
+    message: StrictStr | None = Field(default=None, alias="messageID")
     reason: StrictStr | None = None
     cost: Annotated[StrictFloat | StrictInt, Field(ge=0, le=MAX_COST_USD, allow_inf_nan=False)] | None = None
     tokens: _Tokens | None = None
@@ -232,7 +234,8 @@ def _entry(event: Mapping[str, object]) -> Entry | None:
         t = step.tokens
         tokens = Tokens(t.input, t.output, t.reasoning, t.cache.read, t.cache.write) if t is not None else None
         cost = float(step.cost) if step.cost is not None else None
-        return Step(at, entries.line(step.reason or "") or None, cost, tokens)
+        message = step.message if step.message is not None and MESSAGE_ID_RE.fullmatch(step.message) else None
+        return Step(at, entries.line(step.reason or "") or None, cost, tokens, message=message)
     if kind == events.ERROR:
         error = events.SessionError.model_validate(event.get("error"))
         return Error(at, entries.line(error.type or "error"), entries.cut(error.message or "", MAX_TEXT)[0])

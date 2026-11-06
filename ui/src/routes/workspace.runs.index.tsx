@@ -6,7 +6,7 @@ import { choresQuery, loopQuery, reviewsQuery, runsQuery, tasksQuery } from '@/a
 import { RUN_STATES } from '@/api/types'
 import type { RunState } from '@/api/types'
 import { CapacityLine } from '@/components/capacity-line'
-import { ModelFilter } from '@/components/model-filter'
+import { ChoiceFilter } from '@/components/choice-filter'
 import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { SubjectRunsTable } from '@/components/runs-table'
@@ -28,7 +28,7 @@ interface RunsSearch {
  * task's newest run. Running ones first, then the ones that ended last. `?state=` keeps the subjects whose latest run
  * is in that state (`inState`: `blocked` keeps a running one that asks you a question too), and `?kind=` those of one
  * kind. `?model=`, which the spend page's By model links to, keeps the
- * runs of every kind that model ran (`onModel`), each subject by its latest of them, its picker (`ModelFilter`)
+ * runs of every kind that model ran (`onModel`), each subject by its latest of them, its picker (`ChoiceFilter`)
  * offering each model the runs listed name. It is one of Workspace's pages, beside the overseer's ticks, at
  * `/workspace/ticks`, and the worktree pools, at `/workspace/worktrees`.
  */
@@ -123,8 +123,11 @@ function RunsPage() {
                         {models.length > 0 && (
                             // A picker, as the repository's is, since a gateway or two can put dozens of models in
                             // the list; it replaces the history entry, as a filter field does.
-                            <ModelFilter
-                                models={models}
+                            <ChoiceFilter
+                                noun="model"
+                                find="Find a model"
+                                label="Models"
+                                choices={models}
                                 chosen={model}
                                 onChoose={(m) => void navigate({ search: { state, kind, model: m }, replace: true })}
                             />

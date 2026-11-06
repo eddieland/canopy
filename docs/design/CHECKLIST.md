@@ -47,7 +47,8 @@ run, in the slot's own git directory, since a slot outlives its run, and a push 
 again. Each time it shows the list, and each push it lets through after a hold, it notes the branch's commit there too;
 as the run ends, the harness keeps the diff from the commit the list was shown at to the next push, or to what the run
 left on origin, beside the run's log, with its answers: what the run changed after being shown the list, with whatever
-else it did in that stretch. It is kept then or never, since a held commit may never reach origin. Near the deadline,
+else it did in that stretch, shown with its answers wherever the run is (§45, Where it shows). It is kept then or never,
+since a held commit may never reach origin. Near the deadline,
 in the clock's last stretch (§33), it holds nothing, since a held push then risks the run
 ending `unpushed`: it prints the list and lets the push through, asking for the fix pushed again, which D116 allows. So
 it does when it cannot write its marker, since a hold it could not mark would hold every push. A joint run's slots are

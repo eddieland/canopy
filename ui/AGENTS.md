@@ -29,7 +29,7 @@ memory, and do not upgrade in passing.
   demand, from `src/lib/plan-diagram.ts` and `src/hooks/use-diagram.ts`, which show what it draws only as an image
   (mermaid lays the SVG out off screen while it draws, sanitized).
 - jsdiff (`diff`) for a plan's word diff alone: only `src/lib/plan-diff.ts` imports it.
-- cmdk for the repository picker's, the model picker's, and the jump palette's searchable lists, which Radix has no
+- cmdk for the repository, model, and author pickers' and the jump palette's searchable lists, which Radix has no
   primitive for: only `src/components/ui/command.tsx` imports it, and the lint refuses it elsewhere.
 - oxlint (with the React Compiler's rules, eslint-plugin-jsdoc's, eslint-plugin-playwright's on `e2e/`, and
   type-aware rules through oxlint-tsgolint) and oxfmt, Vitest, Playwright.

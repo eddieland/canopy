@@ -2,16 +2,25 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { useState } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { ModelFilter } from './model-filter'
+import { ChoiceFilter } from './choice-filter'
 
 afterEach(cleanup)
 
 const MODELS = ['anthropic/claude-haiku-4-5', 'anthropic/claude-opus-4-1', 'openai/gpt-5', 'openai/gpt-5@high']
 
-/** A `ModelFilter` that keeps what is chosen, as the runs page's search does. */
+/** A `ChoiceFilter` of models that keeps what is chosen, as the runs page's search does. */
 function Filter({ start }: { start?: string }) {
     const [chosen, setChosen] = useState(start)
-    return <ModelFilter models={MODELS} chosen={chosen} onChoose={setChosen} />
+    return (
+        <ChoiceFilter
+            noun="model"
+            find="Find a model"
+            label="Models"
+            choices={MODELS}
+            chosen={chosen}
+            onChoose={setChosen}
+        />
+    )
 }
 
 function options(list: HTMLElement): [string | null, string | null][] {
@@ -20,7 +29,7 @@ function options(list: HTMLElement): [string | null, string | null][] {
         .map((o) => [o.textContent, o.getAttribute('aria-checked')])
 }
 
-describe('ModelFilter', () => {
+describe('ChoiceFilter', () => {
     it('says it filters nothing, and lists every model whole under the item that clears it', () => {
         render(<Filter />)
         fireEvent.click(screen.getByRole('button', { name: 'Filter by model: every model' }))

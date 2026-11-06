@@ -1,0 +1,17 @@
+# serializer version: 1
+# name: test_each_repositorys_range_and_kept_diffs_are_printed
+  '''
+  api  111111111111..222222222222, merge base 333333333333
+    its change <state>/runs/7.api.change.diff
+    against its base <state>/runs/7.api.diff
+  docs  111111111111..444444444444, from its base, merge base 333333333333; not on origin: the run left it unpushed
+    its change <state>/runs/7.docs.change.diff
+    against its base <state>/runs/7.docs.diff, since removed
+  old  nothing read: the run crashed, so canopy read nothing of its slot and kept no diff
+  web  111111111111..222222222222
+    its change <state>/runs/7.web.change.diff
+    not kept: the branch against main: no merge base
+  wiki  from 111111111111, no branch on origin
+    not kept: no branch
+  '''
+# ---

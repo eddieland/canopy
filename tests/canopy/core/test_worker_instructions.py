@@ -27,7 +27,7 @@ def instruct(canopy_env: CanopyEnv, text: str | bytes) -> Path:
         path.write_bytes(text)
     else:
         path.write_text(text)
-    canopy_env.write_user(user_toml() + f"worker_instructions = '{path}'\n")
+    canopy_env.write_user(user_toml(canopy_env.runtime) + f"worker_instructions = '{path}'\n")
     return path
 
 
