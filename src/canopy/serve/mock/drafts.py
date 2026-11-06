@@ -17,9 +17,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, override
 
-from canopy.core import db, records, review_diff, sql
+from canopy.core import db, records, review_diff, run_changes, sql
 from canopy.infra import procs
-from canopy.serve.mock.reviews import PR_88
+from canopy.serve.mock.reviews import PR_88, SHA_88
 
 if TYPE_CHECKING:
     import sqlite3
@@ -186,6 +186,18 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str], sl
     kept = review_diff.run_path_for(log_path, "web")
     review_diff.keep(kept, DIFF)
     review_diff.keep_head(kept, SHA)
+    # The PR's page shows its threads on the diff of a run that recorded it pushed (DESIGN §45). The mock keeps the
+    # branch's whole diff as the run's own change too.
+    review_diff.keep(run_changes.change_path(log_path, "web"), DIFF)
+    records.insert(
+        records.RunChange,
+        run_id=RUN,
+        repo="web",
+        start_sha=SHA_88,
+        end_sha=SHA,
+        change_kept=True,
+        branch_kept=True,
+    ).run(conn)
     _read(conn, at)
     for number, kind, comment, stance, text, edit, reaction in _DRAFTS:
         thread = next((t[0] for t in _THREADS if t[1] == comment), None)
@@ -243,6 +255,7 @@ class GitHub(procs.SubprocessRunner):
         on_start: Callable[[int], None] | None = None,
         on_line: Callable[[str], None] | None = None,
         stdout_to_file: bool = False,
+        max_stdout: int | None = None,
     ) -> procs.Result:
         """Answer for `canopy-connect-github` and `canopy-post-github`; run anything else. See `procs.Runner.run`.
 
@@ -265,6 +278,7 @@ class GitHub(procs.SubprocessRunner):
             on_start=on_start,
             on_line=on_line,
             stdout_to_file=stdout_to_file,
+            max_stdout=max_stdout,
         )
 
     def _hold_staged(self, request: Mapping[str, object], printed: str) -> None:

@@ -45,7 +45,7 @@ nothing, and that is not a failure.
 
 The loop never adopts a task's branch. A ticket uses it by naming it in its text, and that ticket's worker reads it as
 it reads any branch of the repository; so each run's pushed head commit is kept and shown, for a ticket to cite exactly
-after later replies move the branch.
+after later replies move the branch, with the range it went from and to and its diffs, as a worker run's are (§45).
 
 - It may open one PR for its branch, a draft, only when the operator's text asks for one. canopy never drives it: no
   `resume`, no CI fix, no review reply. It is the operator's PR like any other, so it is reviewed only when

@@ -95,4 +95,12 @@ real use in `MEASUREMENTS.md`: the disk the kept diffs take per run and per day,
 the operator's word on whether the run's page replaced GitHub's compare for judging a run. Stage 3, once built: the PR's
 page lists the branch's commits run by run, kicks between them, matching `git log` of the branch.
 
-Status: not started.
+Status: in progress. Stage 1 built 2026-11-06 against the fakes: `_run` and `_task` record a `run_changes` row per
+slot after the push check and before a kick, keep `<id>.<repo>.change.diff` and the branch's `<id>.<repo>.diff` with its
+head for every run, mark an unpushed slot's last commit, record a crashed run's row as having read nothing, and print
+it all in `canopy show run:ID` and `task:N`, with `--diff` for the run's own change; garbage collection takes the new
+files with the run's others, a task run's too, and a checklist's stretches, which a pass had removed as unrecorded.
+Chosen conservatively, for the operator to change: the branch's diff is still the one file §29's PR page reads, so a
+PR's page under `post` shows its threads on it from now on; a run reconcile closes, and a plan run, records nothing; a
+run that crashes after its slots were read is recorded as having read nothing, its kept files left to garbage
+collection; `task:N --diff` prints the newest of its runs that recorded one.

@@ -5,13 +5,14 @@ A PR's threads on its diff, and the operator's verbs on its drafts, which are `c
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from canopy.core import db
-from canopy.core.vocab import Reaction
+from canopy.core import db, review_diff
+from canopy.core.vocab import Reaction, ResumeReason, RunKind, RunStatus
 from canopy.infra import resources
 from canopy.runs import drafts_manage
 from tests.canopy.helpers import (
@@ -19,6 +20,7 @@ from tests.canopy.helpers import (
     DRAFTS_PR,
     KEY,
     TRACKER_POSTS,
+    WORKER_DONE,
     all_drafts,
     comment,
     context,
@@ -26,6 +28,7 @@ from tests.canopy.helpers import (
     reads,
     thread,
     waits,
+    worker_does,
 )
 from tests.canopy.scenario_helpers import dispatches, sends_drafts
 from tests.canopy.web_helpers import refused, signed_in_client
@@ -35,7 +38,7 @@ if TYPE_CHECKING:
 
     from canopy.core.context import Context
     from tests.canopy.scenario_helpers import Scenario
-    from tests.conftest import CanopyEnv
+    from tests.conftest import CanopyEnv, GitPool
 
 PR = DRAFTS_PR
 OLD = "2020-01-01T00:00:00Z"
@@ -92,6 +95,29 @@ def test_a_prs_threads_carry_the_drafts_that_answer_them_on_the_runs_diff(
     assert (second["id"], second["drafts"]) == ("PRRT_2", [])
     assert [(d["number"], d["text"]) for d in found["pr_drafts"]] == [(2, "Fixed the lint job.")]
     assert [(d["number"], d["status"]) for d in found["unplaced"]] == [(3, "refused")]
+
+
+def test_a_prs_threads_stay_on_the_diff_of_the_latest_run_that_pushed(
+    scenario: Scenario,
+    github_state: Path,
+    git_pool: GitPool,
+) -> None:
+    c, _, run_id = drafted(scenario, github_state)
+    scenario.time_passes(minutes=31)
+    git_pool.reject_pushes()
+    commits = worker_does(
+        ["sh", "-c", "printf 'not on the PR\\n' > late.txt"],
+        ["git", "add", "late.txt"],
+        ["git", "commit", "--quiet", "-m", f"{KEY}: late"],
+        result=json.dumps(json.loads(WORKER_DONE) | {"pr": PR}),
+    )
+    late = scenario.run(dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CONFLICT]), worker=commits)
+    assert late.status is RunStatus.UNPUSHED
+    # The late run kept its branch's diff, marked as work not on origin, which the PR does not have.
+    assert "late.txt" in review_diff.run_path_for(late.row["log_path"], "repo").read_text()
+    found = threads_of(c)
+    assert found["diff_run"] == run_id
+    assert found["diff"] == {"files": [], "truncated": False}
 
 
 @pytest.mark.usefixtures("git_pool")

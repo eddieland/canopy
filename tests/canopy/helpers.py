@@ -799,6 +799,7 @@ class InlineRunner:
         on_start: Callable[[int], None] | None = None,
         on_line: Callable[[str], None] | None = None,
         stdout_to_file: bool = False,
+        max_stdout: int | None = None,
     ) -> procs.Result:
         if self.timeout_agent and "agent" in args[:3]:
             # As the real runner does, each line goes to `on_line` as it is printed.
@@ -815,6 +816,7 @@ class InlineRunner:
             on_start=on_start,
             on_line=on_line,
             stdout_to_file=stdout_to_file,
+            max_stdout=max_stdout,
         )
 
     def spawn(self, args: Sequence[str], *, cwd: Path, log_path: Path) -> int:  # noqa: ARG002  (starts nothing)

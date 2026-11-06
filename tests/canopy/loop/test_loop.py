@@ -61,6 +61,7 @@ class RaisingRunner:
         on_start: Callable[[int], None] | None = None,
         on_line: Callable[[str], None] | None = None,
         stdout_to_file: bool = False,
+        max_stdout: int | None = None,
     ) -> procs.Result:
         if self.raises:
             self.raises -= 1
@@ -74,6 +75,7 @@ class RaisingRunner:
             on_start=on_start,
             on_line=on_line,
             stdout_to_file=stdout_to_file,
+            max_stdout=max_stdout,
         )
 
     def spawn(self, args: Sequence[str], *, cwd: Path, log_path: Path) -> int:
