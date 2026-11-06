@@ -378,7 +378,8 @@ test('the header pauses the loop and resumes it, as canopy pause and resume do',
     await expect(control).toHaveAttribute('data-paused', 'false')
     await control.getByRole('button', { name: 'Pause' }).click()
     await expect(control).toHaveAttribute('data-paused', 'true')
-    await expect(control).toContainText('paused · 0s')
+    // Seconds old, the pause just made, however long the click took to come back on a loaded runner.
+    await expect(control).toContainText(/paused · \d+s/u)
     await expect(control.getByText('paused')).toHaveAttribute('title', /from the web UI$/u)
 
     // The pause is the journal's: another page reads it back, as the loop does.
