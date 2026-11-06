@@ -258,6 +258,39 @@ def test_stdout_to_file_is_not_streamed_line_by_line() -> None:
         SubprocessRunner().run(["true"], on_line=print, stdout_to_file=True)
 
 
+#: A child that prints far more than a bounded read keeps, on stdout in many writes, then says on stderr it finished.
+PRINTS_MUCH = """
+import sys
+for _ in range(64):
+    sys.stdout.write("y" * 65_536)
+sys.stdout.flush()
+sys.stderr.write("finished\\n")
+"""
+
+
+def test_max_stdout_keeps_the_start_of_stdout_and_lets_the_child_run_to_its_end() -> None:
+    result = SubprocessRunner().run([sys.executable, "-c", PRINTS_MUCH], stdin="ignored", max_stdout=100_001)
+    assert result.ok
+    assert (result.stdout, result.stderr) == ("y" * 100_001, "finished\n")
+
+
+def test_max_stdout_keeps_all_of_a_short_output() -> None:
+    assert SubprocessRunner().run(["printf", "short"], max_stdout=100).stdout == "short"
+
+
+def test_max_stdout_keeps_what_was_written_before_a_timeout() -> None:
+    result = SubprocessRunner().run(["sh", "-c", "echo partial; exec sleep 30"], timeout=0.5, max_stdout=4)
+    assert result.timed_out
+    assert result.stdout == "part"
+
+
+def test_max_stdout_reads_its_own_pipe() -> None:
+    with pytest.raises(ValueError, match="max_stdout"):
+        SubprocessRunner().run(["true"], max_stdout=1, on_line=print)
+    with pytest.raises(ValueError, match="max_stdout"):
+        SubprocessRunner().run(["true"], max_stdout=1, stdout_to_file=True)
+
+
 def test_spawn_detaches_and_logs(agent_log: Path, tmp_path: Path) -> None:
     log = tmp_path / "run.log"
     with mock.patch.dict(os.environ, {"FAKE_AGENT_RESULT": "spawned result"}):

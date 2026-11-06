@@ -62,6 +62,7 @@ def test_the_snapshot_is_unwritable_by_anyone_its_owner_included(tmp_path: Path)
     assert definitions.ensure(tmp_path) == snapshot
 
 
+@pytest.mark.opencode1  # 1's snapshot beside 2's
 def test_an_opencode_2_snapshot_links_the_operators_config_and_turns_its_service_off(canopy_env: CanopyEnv) -> None:
     # OpenCode 2 reads the snapshot in place of the operator's own config directory, and 1 beside it (DESIGN §13).
     one = definitions.ensure(canopy_env.root / "one", config.load(canopy_env.root, canopy_env.user_file))

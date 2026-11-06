@@ -1,14 +1,15 @@
 """A PR's review threads and the drafts that answer them, as the API sends them (DESIGN §29, On the PR's diff).
 
 The threads are what canopy's own reader last read of the PR, never a worker's copy of them, and the diff is the one
-the latest run under `approve` kept at its pushed head. A coworker's comment and a worker's draft are both untrusted
-text, sent as the journal holds them for the UI to show as plain text.
+the latest run that pushed kept at its head. A coworker's comment and a worker's draft are both untrusted text, sent as
+the journal holds them for the UI to show as plain text.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from collections.abc import Set as AbstractSet
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -118,7 +119,10 @@ def sent(conn: sqlite3.Connection, outcome: drafts_manage.Sent) -> DraftsSent:
 
 
 def _kept_diff(conn: sqlite3.Connection, url: str) -> tuple[int, Path] | None:
-    """The latest run of the PR's unit that kept a diff, and where it is.
+    """The latest run of the PR's unit that pushed and kept its branch's diff, and where it is (DESIGN §45).
+
+    Only a run whose closing recorded the diff kept with its work on origin counts: a slot left unpushed keeps a diff
+    of work the PR does not have, and a run killed before it closed may have left a diff its record never vouched for.
 
     Returns:
         The run's id and its diff's path, or None when no run kept one.
@@ -126,21 +130,30 @@ def _kept_diff(conn: sqlite3.Connection, url: str) -> tuple[int, Path] | None:
     unit = sql.execute(conn, sql.select("ticket_key, repo").from_("ticket_units").where("pr_url = ?", url)).fetchone()
     if unit is None:
         return None
-    rows = sql.execute(
-        conn,
+    query = (
         sql.select("r.id, r.log_path")
         .from_("runs r")
-        .join("run_slots s ON s.run_id = r.id")
+        .join("run_changes c ON c.run_id = r.id")
         .where("r.ticket_key = ?", unit["ticket_key"])
-        .where("s.repo = ?", unit["repo"])
+        .where("c.repo = ?", unit["repo"])
+        .where("c.branch_kept = 1")
+        .where("c.unpushed_sha IS NULL")
         .order_by("r.id DESC")
-        .limit(20),
+        .limit(20)
     )
-    for r in rows:
-        path = review_diff.run_path_for(str(r["log_path"]), str(unit["repo"]))
+    for r in records.fetch_all(conn, _KeptBy, query):
+        path = review_diff.run_path_for(r.log_path, str(unit["repo"]))
         if path.is_file():
-            return int(r["id"]), path
+            return r.id, path
     return None
+
+
+@dataclass(frozen=True)
+class _KeptBy(records.View):
+    """A run that kept its branch's diff with its work on origin, and its log, which the diff sits beside."""
+
+    id: int
+    log_path: str
 
 
 def _side(value: str | None) -> Literal["left", "right"] | None:

@@ -12,7 +12,8 @@ All of it is built but one row: the pass removes no memory text yet, though `can
 
 | What | Grows by | Removed |
 | --- | --- | --- |
-| `runs/<id>.log`, `.prompt`, and `<id>.<repo>.diff`, `.head` under `approve` (§29) | one set per worker run | after `run_files_days`; a plan run's prompt never |
+| `runs/<id>.log`, `.prompt`, and per repository `<id>.<repo>.change.diff`, `<id>.<repo>.diff`, `.head` (§45) and a checklist's stretches (§42) | one set per worker run | after `run_files_days`; a plan run's prompt never |
+| `task-runs/<id>.log`, `.prompt`, and the same diffs | one set per task run | after `run_files_days` |
 | `ticks/<id>.log`, `.prompt` | one pair per tick | after `tick_files_days` (a tick not `ok`: `run_files_days`) |
 | `chore-runs/<name>/<id>.log`, `.prompt` | one pair per chore run | after `run_files_days` |
 | `reviews/<id>.log`, `.prompt`, `.diff` | one set per review run | after `run_files_days` |
@@ -39,7 +40,8 @@ All of it is built but one row: the pass removes no memory text yet, though `can
   over all time, and a guard that history can reset is not a guard (D030, D086).
 - Ticks, tickets, messages, units, forgets, starts, notices, ended review requests, chore runs, the web UI's record of
   its writes, and the overseer's own decisions, the audit log and prompt-evaluation corpus (§11, §19, §21, §22); plan
-  files, the operator's to remove, and their runs' prompts, which the plan archive carries (§25).
+  files, the operator's to remove, and their runs' prompts, which the plan archive carries (§25); and what each run
+  changed, its range of commits, by which a later run, a kick, or the operator tells which commits were whose (§45).
 - Anything a live run uses, or a run's lifelock holds; remote branches, which `canopy gc` lists and deletes none of,
   since deleting one is outward-facing and may lose work (§22); and what is not canopy's: a chore's working
   directory (§19), ignored files in a pool slot (§18), the runtime's own data.

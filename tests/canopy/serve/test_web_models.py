@@ -9,13 +9,14 @@ import json
 from pathlib import Path
 
 import httpx2
+import pytest
 
 from canopy.core.context import Context
 from canopy.loop import reread, tick_now, web
 from canopy.runtime.implementation import Version
 from canopy.runtime.report import ModelList
 from canopy.serve.backend import MODEL_LIST_SECONDS, Backend
-from tests.canopy.helpers import KEY, FakeTime
+from tests.canopy.helpers import KEY, FakeTime, model_list
 from tests.canopy.web_helpers import refused, signed_in_client
 
 
@@ -73,7 +74,7 @@ def test_the_list_names_what_hide_models_hides_and_a_hidden_model_may_still_be_c
 def test_a_list_that_could_not_be_read_is_never_kept(ctx: Context, opencode_state: Path) -> None:
     backend, _ = kept(ctx)
     opencode_state.write_text(json.dumps({"exit": 1}))
-    assert listed(backend).error == "`opencode models --verbose` exited 1"
+    assert listed(backend).error == f"`{model_list(ctx.config.runtime.version, variants=True)[1]}` exited 1"
 
     # The runtime is asked again at once, and then answers.
     lists(opencode_state, "acme/fake-model-1")
@@ -102,6 +103,7 @@ def test_the_model_list_is_read_again_once_it_is_minutes_old(ctx: Context, openc
     assert runtime_runs(opencode_state) == 2
 
 
+@pytest.mark.opencode1  # from OpenCode 1 to 2
 def test_the_model_list_is_read_again_when_the_loop_reads_its_config_again(ctx: Context, opencode_state: Path) -> None:
     backend, _ = kept(ctx)
     lists(opencode_state, "acme/fake-model-1")

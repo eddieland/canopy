@@ -386,6 +386,7 @@ class Stops(procs.SubprocessRunner):
         on_start: Callable[[int], None] | None = None,
         on_line: Callable[[str], None] | None = None,
         stdout_to_file: bool = False,
+        max_stdout: int | None = None,
     ) -> procs.Result:
         if self.posts:
             super().run(
@@ -397,6 +398,7 @@ class Stops(procs.SubprocessRunner):
                 on_start=on_start,
                 on_line=on_line,
                 stdout_to_file=stdout_to_file,
+                max_stdout=max_stdout,
             )
         raise self.error
 

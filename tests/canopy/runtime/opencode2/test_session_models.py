@@ -37,12 +37,19 @@ def data_home(tmp_path: Path) -> Iterator[Path]:
         yield tmp_path
 
 
-def assistant(provider: str, model: str, cost: float, *, variant: str | None = None) -> dict[str, object]:
+def assistant(
+    provider: str,
+    model: str,
+    cost: float,
+    *,
+    variant: str | None = None,
+    message: str = "msg_2",
+) -> dict[str, object]:
     """A reply as `opencode session export --sanitize` prints it, its content redacted; no variant for the default."""
     ref: dict[str, object] = {"id": model, "providerID": provider}
     if variant is not None:
         ref["variant"] = variant
-    return {"id": "msg_2", "type": "assistant", "agent": "canopy-worker", "model": ref, "content": [], "cost": cost}
+    return {"id": message, "type": "assistant", "agent": "canopy-worker", "model": ref, "content": [], "cost": cost}
 
 
 #: The prompt and a model switch, which name no model that served.
@@ -80,10 +87,10 @@ def test_each_model_s_replies_and_cost_are_summed_the_most_costly_first_on_a_pri
     export = runner(
         exported(
             *OTHERS,
-            assistant("anthropic", "claude-haiku", 0.125),
-            assistant("openrouter", "anthropic/claude-sonnet", 0.25),
-            assistant("anthropic", "claude-haiku", 0.25),
-            assistant("local", "free", 0),
+            assistant("anthropic", "claude-haiku", 0.125, message="msg_2"),
+            assistant("openrouter", "anthropic/claude-sonnet", 0.25, message="msg_3"),
+            assistant("anthropic", "claude-haiku", 0.25, message="msg_4"),
+            assistant("local", "free", 0, message="msg_5"),
         ),
     )
     assert read(export) == SessionModels(
@@ -93,6 +100,12 @@ def test_each_model_s_replies_and_cost_are_summed_the_most_costly_first_on_a_pri
             ModelUse("openrouter/anthropic/claude-sonnet", 1, 0.25),
             ModelUse("local/free", 1, 0.0),
         ),
+        replies={
+            "msg_2": "anthropic/claude-haiku",
+            "msg_3": "openrouter/anthropic/claude-sonnet",
+            "msg_4": "anthropic/claude-haiku",
+            "msg_5": "local/free",
+        },
     )
     # Sanitized, on a server of its own rather than the shared service, and its stdout read from a file.
     export.run.assert_called_once_with(
@@ -106,15 +119,39 @@ def test_each_model_s_replies_and_cost_are_summed_the_most_costly_first_on_a_pri
 def test_each_variant_of_a_model_is_counted_on_its_own_as_opencode_2_spells_it() -> None:
     export = runner(
         exported(
-            assistant("anthropic", "claude-opus", 0.5, variant="high"),
-            assistant("anthropic", "claude-opus", 0.25),
-            assistant("anthropic", "claude-opus", 0.5, variant="high"),
+            assistant("anthropic", "claude-opus", 0.5, variant="high", message="msg_2"),
+            assistant("anthropic", "claude-opus", 0.25, message="msg_3"),
+            assistant("anthropic", "claude-opus", 0.5, variant="high", message="msg_4"),
         ),
     )
     assert read(export) == SessionModels(
         "found",
         (ModelUse("anthropic/claude-opus#high", 2, 1.0), ModelUse("anthropic/claude-opus", 1, 0.25)),
+        replies={
+            "msg_2": "anthropic/claude-opus#high",
+            "msg_3": "anthropic/claude-opus",
+            "msg_4": "anthropic/claude-opus#high",
+        },
     )
+
+
+def test_each_reply_names_its_model_by_its_message_once_more_than_one_model_served() -> None:
+    """The transcript names each call's model by the reply its `step_finish` names (`replies`)."""
+    export = runner(
+        exported(
+            *OTHERS,
+            assistant("anthropic", "claude-opus", 0.5, variant="high", message="msg_a"),
+            assistant("openai", "gpt-5", 0.25, message="msg_b"),
+            # An id canopy would not keep names no reply, and its model still counts.
+            assistant("openai", "gpt-5", 0.25, message="msg b"),
+        ),
+    )
+    found = read(export)
+    assert found.replies == {"msg_a": "anthropic/claude-opus#high", "msg_b": "openai/gpt-5"}
+    assert [(m.model, m.replies) for m in found.models] == [("anthropic/claude-opus#high", 1), ("openai/gpt-5", 2)]
+    # One model names every reply: the session's models say it.
+    one = exported(assistant("a", "x", 0.5, message="msg_a"), assistant("a", "x", 0.5, message="msg_b"))
+    assert read(runner(one)).replies == {}
 
 
 def test_the_version_of_opencode_that_made_the_session_is_read_where_the_export_names_it() -> None:
@@ -188,6 +225,8 @@ def test_a_sandboxed_runs_session_is_read_from_its_roles_database(data_home: Pat
             {"model": {"providerID": "openai", "id": "gpt-5"}, "cost": 0.25, "content": "x" * 10**6},
         ),
         ("msg_6", "assistant", {"model": {"providerID": "openai", "id": "x" * 2_000}, "cost": 1}),
+        # An id longer than canopy keeps names no reply, and its model and cost still count.
+        ("m" * 101, "assistant", {"model": {"providerID": "openai", "id": "gpt-5"}, "cost": 0.25}),
     ]
     with contextlib.closing(sqlite3.connect(path)) as conn, conn:
         conn.executescript(SCHEMA)
@@ -201,6 +240,7 @@ def test_a_sandboxed_runs_session_is_read_from_its_roles_database(data_home: Pat
 
     assert found == SessionModels(
         "found",
-        (ModelUse("anthropic/claude-opus", 1, 0.5), ModelUse("openai/gpt-5", 2, 0.5)),
+        (ModelUse("openai/gpt-5", 3, 0.75), ModelUse("anthropic/claude-opus", 1, 0.5)),
+        replies={"msg_2": "anthropic/claude-opus", "msg_4": "openai/gpt-5", "msg_5": "openai/gpt-5"},
         runtime_version="2.1.4",
     )

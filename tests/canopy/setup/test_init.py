@@ -12,9 +12,14 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import config, workspace
 from canopy.core.config import TRACKER_REQUIRED, load
+from canopy.runtime.implementation import Version
 from canopy.setup import init
 from canopy.setup.init import is_ssh_url, sandbox_suggestion
 from tests.conftest import CanopyEnv
+
+#: Where each runtime reads a project's config from, as its warning about a copy of canopy's agents says: OpenCode 2
+#: reads the directories above the start directory too.
+WHERE = {Version.ONE: "here", Version.TWO: "here or above"}
 
 
 @pytest.fixture
@@ -190,8 +195,8 @@ def test_init_warns_about_copies_of_canopys_agents_in_a_repository(
     assert main(["init"]) == 0
     out = capsys.readouterr().out
     assert (
-        f"Warning: OpenCode config here defines one of canopy's agents or one of its MCP servers, `canopy` or "
-        f"`canopy_*` ({old})"
+        f"Warning: OpenCode config {WHERE[canopy_env.runtime]} defines one of canopy's agents or one of its MCP "
+        f"servers, `canopy` or `canopy_*` ({old})"
     ) in out
 
 
@@ -210,8 +215,8 @@ def test_init_warns_about_copies_of_canopys_agents(canopy_env: CanopyEnv, capsys
     assert main(["init"]) == 0
     out = capsys.readouterr().out
     assert (
-        f"Warning: OpenCode config here defines one of canopy's agents or one of its MCP servers, `canopy` or "
-        f"`canopy_*` ({old})"
+        f"Warning: OpenCode config {WHERE[canopy_env.runtime]} defines one of canopy's agents or one of its MCP "
+        f"servers, `canopy` or `canopy_*` ({old})"
     ) in out
     assert old.exists()
 

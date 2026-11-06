@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, assert_never
 import click
 
 from canopy.cli import attachments as attachments_cli
+from canopy.cli import changes as changes_cli
 from canopy.cli import epics as epics_cli
 from canopy.cli import tasks as tasks_cli
 from canopy.cli.common import CliError, open_context
@@ -45,6 +46,7 @@ from canopy.core import (
     review_drafts_manage,
     review_revisions,
     review_runs,
+    run_changes,
 )
 from canopy.core.vocab import Decider, DismissalReason, PlanItem, PlanSetting, PlanStatus, ReviewRunStatus, RunKind
 from canopy.infra import lock, logs
@@ -828,20 +830,34 @@ def _send_left(ctx: Context, key: str, numbers: tuple[int, ...]) -> int:
     is_flag=True,
     help="For a ticket, every plan it has had, and your open comments.",
 )
+@click.option(
+    "--diff",
+    "the_diff",
+    is_flag=True,
+    help="For a run or a task, the diff of what the run changed, as canopy kept it, for a pager.",
+)
 @click.pass_context
-def cmd_show(click_ctx: click.Context, ref: str, *, every_plan: bool) -> int:
+def cmd_show(click_ctx: click.Context, ref: str, *, every_plan: bool, the_diff: bool) -> int:
     """Show a ticket's phase, PRs, plan, recent runs, and conversation, a run, a chore, a task, an epic, or a PR.
 
     A ticket's newest plan is printed as its file stands, with its status; --plans prints every plan, oldest first, and
-    the open comments on the newest. A chore is `chore:NAME`. A task, `task:N`, shows its text and each run, with its
-    branch and the head it left on origin. An epic, `epic:N`, shows its text and its members. A PR, by its URL,
-    shows your review request on it, if you made one, and canopy's reviews of it.
+    the open comments on the newest. A run, `run:ID`, shows each repository's range of commits and where its diffs are
+    kept; --diff prints the diff of its own change instead. A chore is `chore:NAME`. A task, `task:N`, shows its text
+    and each run, with its branch, the head it left on origin, and its range; --diff prints its newest run's change.
+    An epic, `epic:N`, shows its text and its members. A PR, by its URL, shows your review request on it, if you made
+    one, and canopy's reviews of it.
     """
     subject = _ref(ref, "show")
     if every_plan and subject.kind != conversation.TICKET:
         raise click.UsageError("--plans is for a ticket")
+    if the_diff and subject.kind not in (conversation.RUN, conversation.TASK):
+        raise click.UsageError("--diff is for a run or a task")
     ctx = open_context(click_ctx)
-    if subject.kind == conversation.RUN:
+    if the_diff and subject.kind == conversation.RUN:
+        _show_run_diff(ctx, int(subject.id))
+    elif the_diff:
+        tasks_cli.diff(ctx, int(subject.id))
+    elif subject.kind == conversation.RUN:
         _show_run(ctx, int(subject.id))
     elif subject.kind == conversation.TASK:
         tasks_cli.show(ctx, int(subject.id))
@@ -1120,6 +1136,13 @@ def _show_run(ctx: Context, run_id: int) -> None:
         click.echo(readback.read_run(ctx, readback.ShowRun(run=run_id), card=conversation.is_operator()))
     except reports.Refused as e:
         raise CliError(str(e)) from None
+
+
+def _show_run_diff(ctx: Context, run_id: int) -> None:
+    run = db.get_run(ctx.conn, run_id)
+    if run is None:
+        raise CliError(f"no run {run_id}")
+    changes_cli.echo(run_changes.of_run(ctx.conn, run_id), log_path=str(run["log_path"]), ref=f"run:{run_id}")
 
 
 def _show_chore(ctx: Context, name: str) -> None:
