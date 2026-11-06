@@ -59,9 +59,10 @@ NOT_FOUND = "Session not found"
 SESSION_SQL = "SELECT version FROM session_v2 WHERE id = ?"
 #: Its messages, by its id and at most how many, in the order OpenCode wrote them: each one's id and type, and of its
 #: data, as JSON, only the fields `_Message` reads, which SQLite takes out of each, as OpenCode 1's reader does
-#: (`canopy.runtime.opencode.session_models.MESSAGES_SQL`): a reply's data holds its content, which may be long.
+#: (`canopy.runtime.opencode.session_models.MESSAGES_SQL`): a reply's data holds its content, which may be long. An id
+#: longer than any canopy keeps (`MESSAGE_ID_RE`) is left out, and its message with its model and cost kept.
 MESSAGES_SQL = """
-SELECT id, type, data FROM (
+SELECT CASE WHEN length(id) <= 100 THEN id END, type, data FROM (
     SELECT id, type, seq, json_object(
         'model', json_object(
             'providerID', json_extract(data, '$.model.providerID'),
@@ -73,7 +74,7 @@ SELECT id, type, data FROM (
     FROM session_message
     WHERE session_id = ? AND json_valid(data)
 )
-WHERE length(id) <= 64 AND length(type) <= 64 AND length(data) <= 1024
+WHERE length(type) <= 64 AND length(data) <= 1024
 ORDER BY seq
 LIMIT ?
 """
@@ -95,7 +96,7 @@ class _Message(BaseModel):
 
     # Besides the replies, a session holds the prompts, agent and model switches, and its idle marks.
     type: StrictStr
-    # A reply's is the `messageID` its call's `step_finish` event names.
+    #: A reply's is the `messageID` its call's `step_finish` event names.
     id: StrictStr | None = None
     model: _Model | None = None
     cost: Annotated[StrictFloat | StrictInt, Field(ge=0, le=MAX_COST_USD, allow_inf_nan=False)] = 0
@@ -161,9 +162,10 @@ def _found(messages: tuple[_Message, ...], version: str | None) -> SessionModels
 
 
 # A message's row, its id, type, and data as JSON, as the export prints the message; None for one canopy cannot read.
+# An id that is not text reads as none: the message's model and cost still count.
 def _message(row: Sequence[object]) -> _Message | None:
     message_id, kind, data = row
-    if not isinstance(data, str) or not isinstance(message_id, str):
+    if not isinstance(data, str):
         return None
     try:
         fields: object = json.loads(data)
@@ -172,7 +174,8 @@ def _message(row: Sequence[object]) -> _Message | None:
     if not isinstance(fields, dict):
         return None
     try:
-        return _Message.model_validate({**fields, "id": message_id, "type": kind})
+        named = {"id": message_id} if isinstance(message_id, str) else {}
+        return _Message.model_validate({**fields, **named, "type": kind})
     except ValidationError:
         return None
 

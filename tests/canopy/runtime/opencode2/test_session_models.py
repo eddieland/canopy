@@ -225,6 +225,8 @@ def test_a_sandboxed_runs_session_is_read_from_its_roles_database(data_home: Pat
             {"model": {"providerID": "openai", "id": "gpt-5"}, "cost": 0.25, "content": "x" * 10**6},
         ),
         ("msg_6", "assistant", {"model": {"providerID": "openai", "id": "x" * 2_000}, "cost": 1}),
+        # An id longer than canopy keeps names no reply, and its model and cost still count.
+        ("m" * 101, "assistant", {"model": {"providerID": "openai", "id": "gpt-5"}, "cost": 0.25}),
     ]
     with contextlib.closing(sqlite3.connect(path)) as conn, conn:
         conn.executescript(SCHEMA)
@@ -238,7 +240,7 @@ def test_a_sandboxed_runs_session_is_read_from_its_roles_database(data_home: Pat
 
     assert found == SessionModels(
         "found",
-        (ModelUse("anthropic/claude-opus", 1, 0.5), ModelUse("openai/gpt-5", 2, 0.5)),
+        (ModelUse("openai/gpt-5", 3, 0.75), ModelUse("anthropic/claude-opus", 1, 0.5)),
         replies={"msg_2": "anthropic/claude-opus", "msg_4": "openai/gpt-5", "msg_5": "openai/gpt-5"},
         runtime_version="2.1.4",
     )
