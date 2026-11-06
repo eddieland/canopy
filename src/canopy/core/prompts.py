@@ -146,7 +146,8 @@ REQUIRED_PRIVATE = ("CONVERSATION",)
 # still serves a ticket the operator never replied to; once there is a reply, it fails to render instead of dropping it.
 REQUIRED_OPERATOR = ("OPERATOR_MESSAGES",)
 # Placeholders an implement's or a resume's prompt must use once the ticket has an approved plan (DESIGN §25): an older
-# override would otherwise run the work without the plan the operator approved for it.
+# override would otherwise run the work without the plan the operator approved for it. A reviewer's must too, once the
+# ticket of the PR it reviews has one (DESIGN §21), or it would review the change without the plan it was to follow.
 REQUIRED_PLAN_COPY = ("PLAN",)
 #: Placeholders a worker's or a task's prompt must use once its subject has attachments (DESIGN §22): an older override
 #: would otherwise run the work without the files the operator attached for it.
@@ -588,6 +589,25 @@ def plan_note(copy: Path, outline: Sequence[str], *, by_planner: bool = False) -
     """
     who = _BY_PLANNER if by_planner else "the operator approved"
     lines = [f"`{copy}` is the plan {who} for this ticket, a copy written for this run alone."]
+    return "\n".join([*lines, *_outline(outline)])
+
+
+def review_plan_note(copy: Path, outline: Sequence[str] | None, *, by_planner: bool = False) -> str:
+    """Return a reviewer's `{{PLAN}}`: where its copy of the ticket's approved plan is, and the plan's outline (§21).
+
+    As a worker's `plan_note`, the plan's text is never in the prompt, and its outline is fenced as data. `outline` is
+    None when the plan's file is no longer the text approved, so the review has no copy.
+
+    Returns:
+        The copy's path, then the headings in a fenced block; or, with no copy, a line saying the review goes without.
+    """
+    if outline is None:
+        return (
+            "The ticket has an approved plan, but its file is no longer the text approved, so this review has no copy "
+            "of it: review the change against the ticket alone."
+        )
+    who = _BY_PLANNER if by_planner else "the operator approved"
+    lines = [f"`{copy}` is the plan {who} for this ticket, a copy written for this review alone."]
     return "\n".join([*lines, *_outline(outline)])
 
 
@@ -1062,16 +1082,18 @@ def render_reviewer(
     notes: str | None = None,
     previous: str | None = None,
     persona: personas.Persona | None = None,
+    plan: str | None = None,
 ) -> str:
     """Return the reviewer's prompt (DESIGN §21) with every `{{NAME}}` replaced from `values`.
 
     It must carry `REQUIRED_REVIEWER`. `notice` is the operator's notice in force (`core.notice`), for `{{NOTICE}}`:
     a review reads CI too, so with one the prompt must carry it. `notes` are the operator's on the review request the
     review answers, for `{{NOTES}}`, which the prompt must carry when there are some. `previous` is the PR's latest
-    `done` review, for `{{PREVIOUS_REVIEW}}`, which the prompt must carry when there is one. Each of the three that is
-    None or empty leaves its section out. `{{PERSONA}}` is `persona`'s text, as a worker's is. `{{STANDING_SECTION}}`
-    comes from the config, and with
-    `paths.reviewer_instructions` set the prompt must carry it, or `{{STANDING_INSTRUCTIONS}}`, the text alone.
+    `done` review, for `{{PREVIOUS_REVIEW}}`, which the prompt must carry when there is one. `plan` is the ticket's
+    approved plan (`review_plan_note`), for `{{PLAN}}`, which the prompt must carry when there is one. Each of the four
+    that is None or empty leaves its section out. `{{PERSONA}}` is `persona`'s text, as a worker's is.
+    `{{STANDING_SECTION}}` comes from the config, and with `paths.reviewer_instructions` set the prompt must carry it,
+    or `{{STANDING_INSTRUCTIONS}}`, the text alone.
 
     Returns:
         The rendered prompt.
@@ -1084,12 +1106,14 @@ def render_reviewer(
         "NOTES": notes or None,
         "PREVIOUS_REVIEW": previous or None,
         "PERSONA": persona.text if persona is not None else "",
+        "PLAN": plan or None,
     }
     standing = (REQUIRED_STANDING,) if config.paths.reviewer_instructions is not None else ()
     noticed = REQUIRED_NOTICE if notice is not None else ()
     noted = REQUIRED_NOTES if notes else ()
     followed = REQUIRED_PREVIOUS_REVIEW if previous else ()
-    required = (*REQUIRED_REVIEWER, *noticed, *noted, *followed, *_persona_required(persona))
+    planned = REQUIRED_PLAN_COPY if plan else ()
+    required = (*REQUIRED_REVIEWER, *noticed, *noted, *followed, *planned, *_persona_required(persona))
     return render(config, REVIEWER, values, required=required, one_of=standing)
 
 

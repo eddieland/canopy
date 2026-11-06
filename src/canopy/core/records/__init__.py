@@ -167,6 +167,7 @@ from canopy.core.records.ticks import (
     GcPass,
     OverseerRun,
     RecordedRun,
+    RequestDerivation,
     Tick,
 )
 
@@ -236,6 +237,7 @@ __all__ = [
     "Query",
     "Record",
     "RecordedRun",
+    "RequestDerivation",
     "ReviewAnswer",
     "ReviewDismissal",
     "ReviewDraft",

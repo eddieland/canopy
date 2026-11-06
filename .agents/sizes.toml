@@ -3,10 +3,10 @@
 # tests/canopy/test_prompt_sizes.py names the line to update; `make prompt-sizes` prints the sizes, with tokens.
 "agents/canopy-chore.md" = 4435
 "agents/canopy-overseer.md" = 5198
-"agents/canopy-planner.md" = 5967
+"agents/canopy-planner.md" = 6107
 "agents/canopy-reviewer.md" = 5873
-"agents/canopy-worker-private.md" = 8316
-"agents/canopy-worker.md" = 7020
+"agents/canopy-worker-private.md" = 8460
+"agents/canopy-worker.md" = 7165
 "personas/canopy.md" = 1048
 "personas/eddie.md" = 3673
 "personas/explainer.md" = 1106
@@ -14,15 +14,15 @@
 "personas/skeptic.md" = 1292
 "prompts/epic-plan.md" = 7147
 "prompts/overseer.md" = 57291
-"prompts/reviewer.md" = 11701
+"prompts/reviewer.md" = 12117
 "prompts/reviser.md" = 5811
-"prompts/task.md" = 8838
-"prompts/worker-feedback-plan.md" = 13725
-"prompts/worker-implement-private.md" = 9876
-"prompts/worker-implement.md" = 10187
-"prompts/worker-plan.md" = 14665
-"prompts/worker-resume-private.md" = 13635
-"prompts/worker-resume.md" = 14127
+"prompts/task.md" = 9179
+"prompts/worker-feedback-plan.md" = 14057
+"prompts/worker-implement-private.md" = 10208
+"prompts/worker-implement.md" = 10519
+"prompts/worker-plan.md" = 14997
+"prompts/worker-resume-private.md" = 13967
+"prompts/worker-resume.md" = 14459
 "skills/canopy-artifacts/SKILL.md" = 3076
 "skills/tracker-github/SKILL.md" = 3883
 "skills/tracker-jira/SKILL.md" = 3245

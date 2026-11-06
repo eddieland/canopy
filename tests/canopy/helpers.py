@@ -1193,17 +1193,33 @@ def worker_does(
     *commands: list[str],
     result: str = WORKER_DONE,
     tools: Sequence[Called] = (),
+    then_tools: Sequence[Called] = (),
     **behavior: Unpack[Behavior],
 ) -> Script:
     """Until the block ends, the fake worker makes the calls `tools` names, runs `commands`, and then prints `result`.
 
+    It makes the calls `then_tools` names after `commands`, so after the gate a held run waits at: a call of
+    `canopy_run_messages` once the test has sent the run a message, say.
+
     Returns:
         The worker's script, a block.
     """
-    settings = {"COMMANDS": json.dumps(commands), "RESULT": result}
+    settings = {"COMMANDS": json.dumps(commands), "RESULT": result, **reported_tools(tools, then_tools)}
+    return scripted("WORKER", settings, behavior)
+
+
+def reported_tools(tools: Sequence[Called], then_tools: Sequence[Called] = ()) -> dict[str, str]:
+    """The fake's settings for the calls an agent makes: `tools` before its commands, `then_tools` after them.
+
+    Returns:
+        The settings, none for no call.
+    """
+    settings: dict[str, str] = {}
     if tools:
         settings["TOOLS"] = json.dumps([[call.name, call.arguments] for call in tools])
-    return scripted("WORKER", settings, behavior)
+    if then_tools:
+        settings["THEN_TOOLS"] = json.dumps([[call.name, call.arguments] for call in then_tools])
+    return settings
 
 
 @contextmanager
@@ -1233,17 +1249,21 @@ def chore_reports(
         yield
 
 
-def reported(report: object, commands: Sequence[list[str]], tools: Sequence[Called] = ()) -> dict[str, str]:
+def reported(
+    report: object,
+    commands: Sequence[list[str]],
+    tools: Sequence[Called] = (),
+    then_tools: Sequence[Called] = (),
+) -> dict[str, str]:
     """A `*_reports` helper's settings.
 
-    `report` as the result line, verbatim if a string, and `commands` and the calls `tools` names, if any.
+    `report` as the result line, verbatim if a string, and `commands` and the calls `tools` and `then_tools` name, if
+    any (`reported_tools`).
     """
     settings = {"RESULT": report if isinstance(report, str) else json.dumps(report)}
     if commands:
         settings["COMMANDS"] = json.dumps(commands)
-    if tools:
-        settings["TOOLS"] = json.dumps([[call.name, call.arguments] for call in tools])
-    return settings
+    return {**settings, **reported_tools(tools, then_tools)}
 
 
 @contextmanager
@@ -1252,17 +1272,18 @@ def planner_does(
     plan: str | None,
     result: Mapping[str, object] | None = None,
     tools: Sequence[Called] = (),
+    then_tools: Sequence[Called] = (),
 ) -> Iterator[None]:
     """Until the block ends, the fake planner makes the calls `tools` names, writes `plan`, and reports.
 
-    It writes `plan` to its desk's plan file and runs `commands` before it reports. It writes as the planner's edit
-    tool would, before `commands`; with `plan` None it writes no file. `result`, its result line, defaults to a `done`
-    one (DESIGN §25).
+    It writes `plan` to its desk's plan file and runs `commands` before it reports, then makes the calls `then_tools`
+    names. It writes as the planner's edit tool would, before `commands`; with `plan` None it writes no file.
+    `result`, its result line, defaults to a `done` one (DESIGN §25).
     """
     script = "import pathlib, sys; pathlib.Path(sys.argv[1]).write_text(sys.argv[2])"
     write = [["python3", "-c", script, plans.WRITTEN, plan]] if plan is not None else []
     line = json.dumps(result if result is not None else {"status": "done", "summary": "planned it"})
-    with scripted("PLANNER", reported(line, [*write, *commands], tools)):
+    with scripted("PLANNER", reported(line, [*write, *commands], tools, then_tools)):
         yield
 
 

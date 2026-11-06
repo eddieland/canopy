@@ -117,10 +117,11 @@ has printed so far, and the page reads it again as the task moves.
 A run that needs something from you ends `blocked` with a question, and the task goes on the attention list as
 `awaiting_reply`. Answer it in the box under the task's conversation, or with `canopy reply task:N "TEXT"`; they are
 the same reply. A reply is also how you ask for more after a run is done: the next tick starts another run on the same
-branch, with the conversation so far and the latest report. If a run is still working, the next one waits for it to
-end, and the line under the box says which run that is. A task never retries on its own; a run that failed stays
-failed until you say what to do differently. What you write is kept while the tab is open, and a reply sent twice
-after a flaky connection is recorded once.
+branch, with the conversation so far and the latest report. If a run is still working, your reply reaches it too:
+its agent hears on its next tool call that you wrote, and if it reads it and then reports, that run has handled it and
+no next run starts for it. Otherwise the next one waits for it to end, and the line under the box says which run that
+is. A task never retries on its own; a run that failed stays failed until you say what to do differently. What you
+write is kept while the tab is open, and a reply sent twice after a flaky connection is recorded once.
 
 Under Stop, **Attach a file** uploads a text file for the task's runs to read, such as the design doc you want
 checked against the code, the same as `canopy attach task:N FILE`; your text or a reply says what to do with it. Each

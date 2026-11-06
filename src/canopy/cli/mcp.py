@@ -26,7 +26,8 @@ from canopy.runtime import servers
 @click.option(
     "--status",
     is_flag=True,
-    help="Serve a worker's, planner's, or reviewer's run the one tool it posts progress with, which writes nothing.",
+    help="Serve a worker's, planner's, reviewer's, or task's run its progress tool and, but for a review's, the "
+    "operator's messages to it; neither writes anything.",
 )
 @click.option(
     "--git",
@@ -51,8 +52,10 @@ def cmd_mcp(
     `config show`, and `agents` print with `--json`, and `canopy decisions` and `show` of a run or a chore print, and
     nothing else.
     With --git, serve a review's or a plan's run read-only git in the checkouts it names, and nothing else.
-    With --status, serve a worker's, planner's, or reviewer's run the `status` tool, which validates an update and
-    writes nothing: canopy records the update from the call in the events the agent prints (DESIGN §41).
+    With --status, serve a worker's, planner's, reviewer's, or task's run the `status` tool, which validates an update
+    and writes nothing: canopy records the update from the call in the events the agent prints (DESIGN §41). Beside it,
+    but for a review's run, serve `messages`, which reads the operator's messages to the run from its answers directory
+    and writes nothing; canopy records the fetch from the call as it records an update (§44).
 
     A run a tool asks for is recorded, and the tick starts it once the overseer's run has ended (DESIGN §40), so no run
     is the server's descendant.

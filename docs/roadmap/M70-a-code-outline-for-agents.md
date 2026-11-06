@@ -147,9 +147,20 @@ reviewer's outline holds the PR's touched definitions and their callers; the mon
 workspace sync` over its batches, or its outline the tree with the log line saying so; and two weeks at `symbols` as
 stage 2 says, with the operator's call on stage 3 recorded on the `Status:` line.
 
-Status: not started. Drafted 2026-11-05 at the operator's ask; the operator chose a parser library over ctags the same
-day, and the same day, on their adversarial review of the draft, made stage 0 a gate with a threshold, put the tree
+Status: in progress. Drafted 2026-11-05 at the operator's ask; the operator chose a parser library over ctags the
+same day, and the same day, on their adversarial review of the draft, made stage 0 a gate with a threshold, put the tree
 before the symbols, bounded the cache and the ranking, and renamed the map to the outline, since "map" is the
-workspace's. Open, for the operator before stage 1: the gate's threshold, if not the draft's; the monorepo's languages,
-with each grammar's query coverage, which decides whether canopy vendors queries; and whether stage 1 renders the
-outline for every role at once or the workers first.
+workspace's. Stage 0's measurement built 2026-11-06 against the fakes, as a command rather than a loose script, as
+`canopy cards` and `canopy latency` are: `canopy orientation`, read only, over `--days` (14 by default) of ended runs
+by when they started (`core/orientation.py`), per role and repository, gives the medians of the tool calls, the
+searches among them, the share, and the spend before each run's anchor, and says whether each repository's worker runs
+pass the gate; `--json` for `MEASUREMENTS.md`. Each implementation reads what a call did to files from its own tools
+(`touched`), so a search is a `grep` or `glob` call or a shell command that starts one. Chosen conservatively, for the
+operator to change: a plan run's anchor is the first read of a file its plan names, not one its ticket names, since a
+ticket names a behavior and seldom a file; a feedback plan's run has none; a run whose log was cut at the transcript's
+bound is read and not anchored; an epic's planner runs are not measured, as the gate reads worker runs and an epic is
+planned once; a joint run is its own repository row (`api+web`); and the spend before an anchor is of the model calls
+that ended before it, unknown once one could not be priced. Open, for the operator before
+stage 1: the gate's threshold, if not the draft's; the monorepo's languages, with each grammar's query coverage, which
+decides whether canopy vendors queries; and whether stage 1 renders the outline for every role at once or the workers
+first. Next: two weeks of `canopy orientation` on the operator's workspace, in `MEASUREMENTS.md`.

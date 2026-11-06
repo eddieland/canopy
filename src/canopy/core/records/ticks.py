@@ -20,6 +20,7 @@ from canopy.core.vocab import (
     Phase,
     RecordedKind,
     RecordedStatus,
+    RequestAction,
     RunKind,
     TickStatus,
 )
@@ -176,6 +177,26 @@ class Derivation(Row):
     stale: str | None
     #: The phase the journal held for the subject when the tick closed: the overseer's.
     overseer_phase: Phase | None
+
+
+@dataclass(frozen=True)
+class RequestDerivation(Row):
+    """What a tick derived in shadow for one of the operator's open review requests (DESIGN §21, §30)."""
+
+    TABLE: ClassVar[LiteralString] = "request_derivations"
+
+    id: int
+    tick_id: int
+    request_id: int
+    pr_url: str
+    #: What the harness would do with the request: start its review, wait, or end it.
+    action: RequestAction
+    #: Why it waits, or the end reason of `review_requests` it ends with; None for a start.
+    reason: str | None
+    #: The PR's head as a fresh read observed it; None when none did.
+    head_sha: str | None
+    #: The stale or missing observation the request rests on, which makes it wait; None when it was derived.
+    stale: str | None
 
 
 @dataclass(frozen=True)
