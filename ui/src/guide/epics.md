@@ -95,6 +95,9 @@ line, how many of its breakdown's entries have a member (`2 of 4 entries filed`;
 and `breakdown unreadable` for a plan canopy can't read: its file is gone, or its ids repeat or won't parse), and how
 long ago you submitted it. A stopped epic says under its goal how long ago you stopped it.
 
+The list moves as the loop does: a plan run starting or ending, a stop, a reply, a member added from the shell, all
+show without a reload, and so does an epic's page you have open, its plans with it.
+
 From the shell, `canopy epic list` lists them and `canopy show epic:N` prints one, its breakdown with each entry's
 members.
 
