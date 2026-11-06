@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest import mock
 
+import pytest
+
 from canopy.cli import orientation as orientation_cli
 from canopy.cli.main import main
 from canopy.core import db, orientation, plans, records, review_diff, review_runs
@@ -25,7 +27,6 @@ from tests.canopy.helpers import in_tick, in_zone, present
 if TYPE_CHECKING:
     import sqlite3
 
-    import pytest
     from syrupy.assertion import SnapshotAssertion
 
     from tests.conftest import CanopyEnv, Journals
@@ -285,6 +286,7 @@ def test_the_report_is_printed_as_a_table(tmp_path: Path, journals: Journals, sn
         ]
 
 
+@pytest.mark.opencode1  # its runs' logs hold OpenCode 1's events, and its shell tool's name
 def test_canopy_orientation_reads_the_last_two_weeks(
     canopy_env: CanopyEnv,
     tmp_path: Path,
