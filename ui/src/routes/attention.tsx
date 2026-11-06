@@ -646,7 +646,11 @@ function Head({
             <div className="flex flex-wrap items-center gap-2">
                 <ReasonChip item={item} />
                 {done && <Answered />}
-                <Subject item={item} />
+                {/* Its own group, which shrinks and cuts a long title or goal rather than wrap the age onto a line of
+                its own: it wraps whole only once fewer than its basis's columns are left beside the chip. */}
+                <span className="flex min-w-0 flex-1 basis-40 items-center gap-2" data-testid="attention-subject">
+                    <Subject item={item} />
+                </span>
                 <Age at={item.since} className="ml-auto" />
                 {action}
             </div>
