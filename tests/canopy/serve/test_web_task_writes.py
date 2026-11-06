@@ -70,7 +70,12 @@ def test_a_reply_from_the_web_is_the_operators_next_instruction_and_a_retry_reco
 
     first = c.post("/api/tasks/1/replies", json=REPLY, headers=headers).json()
     again = c.post("/api/tasks/1/replies", json=REPLY, headers=headers).json()
-    assert {k: v for k, v in first.items() if k != "message_id"} == {"answers": None, "new": True, "running_run": None}
+    assert {k: v for k, v in first.items() if k != "message_id"} == {
+        "answers": None,
+        "new": True,
+        "running_run": None,
+        "told": False,
+    }
     assert again == {**first, "new": False}
     [message] = tasks.messages_of(ctx.conn, 1)
     assert (message.source, message.kind, message.channel) == ("operator", "reply", "web")

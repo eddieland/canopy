@@ -25,6 +25,7 @@ from canopy.core import (
     pools,
     records,
     run_changes,
+    run_inbox,
     run_metrics,
     sql,
 )
@@ -125,18 +126,22 @@ def queued(conn: sqlite3.Connection) -> list[records.Task]:
     """Return the tasks waiting for a tick to start a run, the oldest first (DESIGN §36).
 
     A task waits when it is not stopped and has no run running, and has never run, or the operator replied to it
-    after its latest run started: each run follows an operator's word, so a task never retries on its own.
+    after its latest run started, and that run did not fetch the reply as it ran and then report on it (DESIGN §44):
+    each run follows an operator's word, so a task never retries on its own.
 
     Returns:
         The tasks, by when they were submitted.
     """
     never_run = sql.frag("NOT EXISTS (SELECT 1 FROM task_runs r WHERE r.task_id = tasks.id)")
-    # Past the newest message the latest run's prompt carried: a reply no run has taken yet.
+    # Past the newest message the latest run's prompt carried: a reply no run has taken yet, nor answered as it ran
+    # (DESIGN §44).
     replied = sql.frag(
         "EXISTS (SELECT 1 FROM messages m WHERE m.subject_kind = ? AND m.subject_id = CAST(tasks.id AS TEXT)"
         " AND m.source = 'operator' AND m.id > coalesce("
-        "(SELECT r.message_id FROM task_runs r WHERE r.task_id = tasks.id ORDER BY r.id DESC LIMIT 1), 0))",
+        "(SELECT r.message_id FROM task_runs r WHERE r.task_id = tasks.id ORDER BY r.id DESC LIMIT 1), 0)"
+        " AND m.id NOT IN ({}))",
         conversation.TASK,
+        run_inbox.HEARD,
     )
     query = (
         records.select(records.Task)

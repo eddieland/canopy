@@ -387,6 +387,18 @@ def answers_dir(state_dir: Path, run: str) -> Path:
     return state_dir / ("reviews" if review else "runs") / f"{int(run_id)}.answers"
 
 
+def task_answers_dir(log_path: Path) -> Path:
+    """The answers directory of a one-off task's run, whose log is at `log_path`: beside it, as `<id>.answers`.
+
+    A task's run asks no question (§41), so the directory holds its repository's checklist (§42) and the operator's
+    messages to it (§44).
+
+    Returns:
+        The directory's path.
+    """
+    return log_path.with_suffix(".answers")
+
+
 def make_answers(path: Path) -> None:
     """Make a run's empty answers directory, the operator's alone to write, before its agent starts."""
     path.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -413,7 +425,7 @@ def deliver(path: Path, answered: Answered) -> bool:
         "letter": answered.letter,
         "option": answered.option,
     }
-    return _replace(path, ANSWER_FILE, data)
+    return replace_file(path, ANSWER_FILE, data)
 
 
 def ask_wrap_up(path: Path) -> bool:
@@ -424,13 +436,13 @@ def ask_wrap_up(path: Path) -> bool:
     Returns:
         Whether it was asked: False when the directory is gone, its run having ended.
     """
-    return _replace(path, WRAP_UP_FILE, {"asked": db.now()})
+    return replace_file(path, WRAP_UP_FILE, {"asked": db.now()})
 
 
-def _replace(path: Path, name: str, data: Mapping[str, str]) -> bool:
-    """Write `data` as the file `name` in the answers directory at `path`, replaced whole.
+def replace_file(path: Path, name: str, data: Mapping[str, object]) -> bool:
+    """Write `data`, as JSON, as the file `name` in the answers directory at `path`, replaced whole.
 
-    A reader sees the file before or after, never half of it.
+    A reader sees the file before or after, never half of it: an answer, a wrap-up ask, or a run's messages (§44).
 
     Returns:
         Whether it was written: False when the directory is gone.

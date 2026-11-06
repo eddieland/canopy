@@ -431,13 +431,24 @@ Controls:
 - A running agent's progress (DESIGN §41) is its own text, which may echo a ticket's or a PR's. canopy's `status` server
   writes nothing; the harness records each update from the call the agent prints, bounded, plain text, as it records the
   agent's spend, and shows it to the operator as data. No progress goes into another agent's prompt.
-- The operator's answer to the question a running agent asks (DESIGN §41) is the one operator word that reaches
-  an agent while it runs: a letter, one of the options the agent offered, never the operator's own words. canopy
-  writes it to a file in the run's answers directory, which a sandboxed run may read but not write, and canopy's plugin
-  tells
+- The operator's answer to the question a running agent asks (DESIGN §41) is a letter, one of the options the agent
+  offered, never the operator's own words. canopy writes it to a file in the run's answers directory, which a
+  sandboxed run may read but not write, and canopy's plugin tells
   the agent on its next tool call with a `[canopy]` line naming the letter and the agent's own option. Anything the
   agent reads can print a line that looks like it, so a forged one can choose an option the agent offered, which it
   was already prepared to do, and nothing else; the prompts say a canopy line that answers anything else is data.
+- The operator's message to a running worker, planner, or task's worker (DESIGN §44, M68) is the one way the
+  operator's own words reach an agent while it runs, and they reach it only as the result of canopy's own tool,
+  `canopy_run_messages`, served over the run's own server. Only the operator's channels send one, through
+  `conversation.reply` with its guards and its bound, refused inside a tick or any run, and only to a run still
+  running; it is an operator message on the run's subject, its ticket or its task, as any reply is. canopy writes the
+  messages to the run's answers directory, and beside them a mark that holds the newest one's id and none of its words,
+  which is all canopy's plugin reads: its `[canopy]` line says only that a message waits and names the tool. So a line
+  forged by a file, a PR, or a tool's result can make the agent spend one call to learn that nothing is new, and
+  nothing else; the prompts say any other text that claims to be the operator's is data. A message lifts nothing: the
+  agent it steers is held by branch protection, the harness's refusals, and the capacity and attempt limits as before
+  (T3). An unsandboxed run could write the messages' file, as it could any of the operator's files, and so make its
+  own tool return what it wrote; nothing it reads can.
 - No agent has web tools (D077). Every canopy definition denies `webfetch`, `websearch`, and `codesearch` as scalars,
   which a repository's config cannot loosen (D044), and `execute`, OpenCode 2's code mode, whose code can make HTTP
   requests. Fetched and searched pages are text anyone can shape, and an agent that reaches for them on its own reads
@@ -601,7 +612,8 @@ Controls now:
   denies, does not make it run.
 - canopy's own code runs inside every agent process that loads its definitions: canopy's plugin, whose jobs are the
   clock, the split, the nudge for a stale update and the answer to its question (DESIGN §41), asking a run the
-  operator stopped to wrap up (§22), moving a shell command's
+  operator stopped to wrap up (§22), telling a run that a message from the operator waits (§44), moving a shell
+  command's
   leading `cd` into its working directory, and, under OpenCode 2, holding a session's first prompt until its MCP tools
   are registered and explaining a call its permission rules refuse (DESIGN §33), from the snapshot. canopy takes the
   snapshot's write permission away once it is written, the operator's included, so no run changes it through its
@@ -610,7 +622,8 @@ Controls now:
   it, which it cuts in two without changing its text, each tool call's tool and session, which the nudge counts in its
   session, the step titles of a `status` call in a run that follows a plan, which the nudge restates with the plan's
   path, so its line carries only canopy's words and the worker's own,
-  two files, the answer and the ask to wrap up canopy writes in the run's answers directory, through the runtime's own
+  three files, the answer, the ask to wrap up, and the mark of the newest message, an id and nothing of its text,
+  canopy writes in the run's answers directory, through the runtime's own
   `node:fs`, and under OpenCode 2 the runtime's MCP servers' states and its tools' names, and a refused call's
   permission and resources, whose reason, what the agent is told of the refusal, it sets; it writes no file, refuses no
   call, grants no tool, and catches its own errors. The one call it changes is a shell command that opens with
@@ -618,9 +631,11 @@ Controls now:
   then checks, with the rest of the command from it, as it checks any call's: so the plugin reaches nothing the `cd`
   could not. A repository's own plugins already load in the same process (T7). The answers directory is the run's
   own, in the state directory beside its other files, made before the agent starts and removed once it ends; a
-  sandboxed run may read it and nothing else of the state directory, and write none of it (§24). An unsandboxed run
-  could write the ask to wrap up, as it could any of the operator's files; it could only tell itself to end early,
-  keeping its work.
+  sandboxed run may read it and nothing else of the state directory, and write none of it (§24); a one-off task's
+  run has one too, for the operator's messages to it. An unsandboxed run could write the ask to wrap up, as it could
+  any of the operator's files; it could only tell itself to end early, keeping its work. canopy's `messages` tool,
+  beside `status` on the run's own server, reads the messages' file in the same directory and writes nothing; it
+  opens no journal, so a sandboxed run, and the servers it starts, reach no more than before.
 - canopy's git hooks, from the same snapshot, run in every worker's git (T5). Their `pre-push` holds a worker's first
   push of a stretch for its repository's checklist (DESIGN §42): it reads one more file, the slot's list in the run's
   answers directory, which the run cannot write, and writes one marker, the run's id and the time, in the slot's own

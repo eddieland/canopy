@@ -138,9 +138,21 @@ describe('outcomes', () => {
     })
 
     it("say what a task's reply recorded, or that one already said it, and what starts its next run", () => {
-        expect(taskRepliedText(4, { message_id: 14, answers: 13, new: false, running_run: null })).toBe(
+        const reply = { message_id: 14, answers: 13, new: false, running_run: null, told: false }
+        expect(taskRepliedText(4, reply)).toBe(
             'Message 14 on task:4 already says this, answering message 13; nothing new recorded. The next tick ' +
                 'starts its next run, on its branch.',
+        )
+        const sent = { ...reply, answers: null, new: true, running_run: 6 }
+        expect(taskRepliedText(4, sent)).toBe(
+            'Recorded message 14 on task:4. Its run 6 is still working; the first tick after it ends starts the next ' +
+                'run.',
+        )
+        // Its running run hears of it: one it reads and then reports on starts no run (DESIGN §44).
+        expect(taskRepliedText(4, { ...sent, told: true })).toBe(
+            'Recorded message 14 on task:4. Its run 6 is still working, and its agent hears that the reply waits on ' +
+                'its next tool call. If it reads it and then reports, that run has answered it; if not, the first ' +
+                'tick after it ends starts the next run.',
         )
     })
 

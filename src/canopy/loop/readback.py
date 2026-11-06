@@ -29,6 +29,7 @@ from canopy.core import (
     reports,
     review_diff,
     run_changes,
+    run_inbox,
 )
 from canopy.core.vocab import Decider, RunStatus
 from canopy.infra.text import one_line
@@ -179,6 +180,10 @@ def read_run(ctx: Context, request: ShowRun, *, card: bool = False) -> str:
                 ref=f"run:{run_id}",
             ),
         )
+    # The operator's messages to it while it ran, and when its agent fetched each (DESIGN §44): the operator's alone.
+    sent = run_inbox.sent_to(ctx.conn, "runs", run_id) if card else []
+    if sent:
+        lines.extend([f"\nYour messages to it ({len(sent)}):", *run_inbox.show_lines(sent, running=running)])
     messages = db.run_messages(ctx.conn, run_id)
     if messages:
         lines.append("\nMessages:")
