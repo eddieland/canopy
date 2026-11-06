@@ -209,6 +209,7 @@ def _summary(ctx: Context, epic: records.Epic, outlined: _Outlined, *, due: Abst
         stopped_at=db.parse_time(epic.stopped_at) if epic.stopped_at is not None else None,
         standing=_standing(ctx.conn, epic, due=due),
         members=len(members),
+        planned=outlined.plan is not None,
         entries=entries,
         entries_with_members=filed,
     )
