@@ -188,6 +188,26 @@ def test_an_epic_waits_for_a_run_then_for_a_reply_once_its_run_wrote_no_plan(bac
     assert listed["standing"] == "queued"
 
 
+def test_a_stopped_epic_stands_stopped_once_its_plan_run_ends(backend: Backend) -> None:
+    """While its plan run works it is `planning`; once that ends it is `stopped`, with when, approved plan or not."""
+    c = client(None, backend)
+    with backend.open() as ctx:
+        run_id = start_epic_run(ctx, mock_epics.APPROVED)
+        stopped = epics.stop(ctx.conn, mock_epics.APPROVED)
+    assert (stopped.already, present(stopped.running).id) == (False, run_id)
+    summary = c.get(f"/api/epics/{mock_epics.APPROVED}").json()["epic"]
+    assert summary["standing"] == "planning"
+    assert summary["stopped_at"] is not None
+    with backend.open() as ctx:
+        records.update(records.EpicRun).set(status=RunStatus.STOPPED, ended_at=db.now()).where(
+            "id = ?",
+            run_id,
+        ).run(ctx.conn)
+    listed = {e["id"]: e for e in c.get("/api/epics").json()}
+    assert listed[mock_epics.APPROVED]["standing"] == "stopped"
+    assert listed[mock_epics.PROPOSED]["stopped_at"] is None
+
+
 def test_an_unknown_epic_is_a_404(backend: Backend) -> None:
     c = client(None, backend)
     assert c.get("/api/epics/99").status_code == 404

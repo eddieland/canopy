@@ -14,9 +14,12 @@ describe('EPIC_LOOK', () => {
                 proposed: 'blocked',
                 approved: 'done',
                 unplanned: 'failed',
+                stopped: 'stopped',
             },
         )
         expect(EPIC_LOOK.proposed.word).toBe('waiting on you')
+        // A queued and a stopped epic wear the same muted color, so their words tell them apart.
+        expect(EPIC_LOOK.queued.word).not.toBe(EPIC_LOOK.stopped.word)
     })
 })
 

@@ -10,6 +10,7 @@ epic, never a ticket: the overseer never reads them.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -30,6 +31,8 @@ if TYPE_CHECKING:
 HOLDER_KEY = "epic:"
 #: Where plan runs' logs and prompts live: `<state_dir>/epic-runs/`, the operator's only.
 RUNS_DIR = "epic-runs"
+#: The note a plan run ended by the operator's stop is closed with.
+STOP_NOTE = "the operator stopped the epic with `canopy stop --now`"
 
 
 def desk_key(epic_id: int) -> str:
@@ -63,16 +66,20 @@ def insert_run(
     pool: PoolKind,
     logs_dir: Path,
     model: str | None = None,
-) -> int:
-    """Record a plan run of epic `epic_id` in the slots `leases` hold, one per repository, in one go.
+) -> int | None:
+    """Record a plan run of epic `epic_id` in the slots `leases` hold, one per repository, in one go, if not stopped.
 
     Its log is `<logs_dir>/<id>.log`; `model` is the one its planner asks for (DESIGN §13), None for the runtime's
-    default. The run carries the newest message about the epic, so a reply after it asks for the next plan.
+    default. The run carries the newest message about the epic, so a reply after it asks for the next plan. Checked in
+    the transaction that inserts it, so a `stop` that commits first starts nothing.
 
     Returns:
-        The new run's id.
+        The new run's id, or None when the operator stopped the epic.
     """
     with db.transaction(conn):
+        epic = records.select(records.Epic).where("id = ?", epic_id).one(conn)
+        if epic is None or epic.stopped_at is not None:
+            return None
         newest = (
             sql.select("max(id)")
             .from_("messages")
@@ -109,8 +116,8 @@ def due(conn: sqlite3.Connection, max_attempts: int) -> list[records.Epic]:
     """Return the epics a tick starts a plan run for now, the oldest first (DESIGN §43).
 
     One is due once after its submission, and once after each reply of the operator's newer than its latest run: each
-    run follows an operator's word, so one that failed waits for the next. None is due while a run of it runs, or once
-    it has had `max_attempts` runs, a bound never reset (D030).
+    run follows an operator's word, so one that failed waits for the next. None is due while a run of it runs, once
+    it has had `max_attempts` runs, a bound never reset (D030), or once the operator stopped it.
 
     Returns:
         The epics, by when they were submitted.
@@ -125,6 +132,7 @@ def due(conn: sqlite3.Connection, max_attempts: int) -> list[records.Epic]:
     )
     query = (
         records.select(records.Epic)
+        .where("stopped_at IS NULL")
         .where(
             "NOT EXISTS (SELECT 1 FROM epic_runs r WHERE r.epic_id = epics.id AND r.status = ?)",
             RunStatus.RUNNING,
@@ -191,6 +199,22 @@ def end(ctx: Context, run: records.EpicRun, status: RunStatus, note: str, log: l
     dealt = release(ctx, run, log)
     log.warning("epic plan run closed without its process", extra={**fields, "status": status, "note": note})
     return dealt
+
+
+def stop_now(ctx: Context, run: records.EpicRun, log: logs.TickAdapter) -> bool:
+    """Kill plan run `run`'s processes and close it `stopped`, its slots returned: `canopy stop epic:N --now`.
+
+    Returns:
+        True once the run is closed, or False if it had already ended: nothing changes.
+    """
+    for pid in (run.pid, run.agent_pid):
+        # Never this process's own group: an `_epic` claimed in-process, as tests run it, has this pid.
+        if pid is not None and pid not in (os.getpid(), os.getpgid(0)):
+            procs.kill_group(pid)
+    current = get_run(ctx.conn, run.id)
+    if current is None or current.status is not RunStatus.RUNNING:
+        return False
+    return bool(end(ctx, current, RunStatus.STOPPED, STOP_NOTE, log))
 
 
 def release(ctx: Context, run: records.EpicRun, log: logs.TickAdapter) -> set[str]:

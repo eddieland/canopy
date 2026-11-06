@@ -28,14 +28,16 @@ def plan_run(ctx: Context, *, pid: int, cost: float | None = None) -> records.Ep
     key = epic_runs.desk_key(epic.id)
     desk = desks.make(ctx.workspace.root, key, [("repo", lease.path)])
     with in_tick(ctx.conn) as tick_id:
-        run_id = epic_runs.insert_run(
-            ctx.conn,
-            epic_id=epic.id,
-            tick_id=tick_id,
-            desk=desk,
-            leases=[("repo", lease)],
-            pool=ctx.config.pools.backend,
-            logs_dir=epic_runs.runs_dir(ctx),
+        run_id = present(
+            epic_runs.insert_run(
+                ctx.conn,
+                epic_id=epic.id,
+                tick_id=tick_id,
+                desk=desk,
+                leases=[("repo", lease)],
+                pool=ctx.config.pools.backend,
+                logs_dir=epic_runs.runs_dir(ctx),
+            ),
         )
     assert db.claim_run(ctx.conn, "epic_runs", run_id, pid)
     if cost is not None:

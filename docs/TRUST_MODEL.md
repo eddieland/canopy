@@ -283,7 +283,8 @@ Controls:
   writes only its plan, in a desk of the epic's repositories at their bases. canopy reads the plan's ids and
   breakdown as data (`core/epic_outline.py`), keeps a plan only when they read in the outline's shape, and records
   it `proposed`: no agent approves an epic's plan. Only the operator approves one, by `canopy plan epic:N
-  --approve`, replies to ask for the next, and registers members against its entries, each refused as `inside_run`.
+  --approve`, replies to ask for the next, registers members against its entries, and stops the epic, by `canopy stop
+  epic:N`, so no tick plans it again, each refused as `inside_run`. Stopping one leaves its members as they are.
   A member's planner reads its epic's approved plan from a copy checked against the hash the operator approved, and
   is not run when it no longer matches; the epic's plan describes the work, as the ticket does, and widens nothing a
   planner or a worker may do.
@@ -545,9 +546,10 @@ Controls in code, not prompts:
   later tick. Each run follows an operator's word, so a run that fails is never retried: the task stays as it ended.
 - Epics (DESIGN §43): at most `policy.max_epic_tickets` members each (8 by default, and the workspace file
   may only lower it); an addition past it is refused whole. One plan run per epic at a time, started only by a
-  live tick, in code, and only after the submission or an operator's reply newer than its latest run, so a run that
-  fails is never retried on its own; at most `policy.max_plan_attempts` of them, never reset; within
-  `capacity.max_workers`, which counts plan runs with every other run holding a slot; each with the worker's timeout.
+  live tick, in code, and only after the submission or an operator's reply newer than its latest run, and never once
+  the operator stopped the epic, so a run that fails is never retried on its own; at most `policy.max_plan_attempts`
+  of them, never reset; within `capacity.max_workers`, which counts plan runs with every other run holding a slot;
+  each with the worker's timeout.
 - Attachments (DESIGN §22): only UTF-8 text with no NUL, at most `policy.max_attachments` files on one ticket or task
   (5 by default), each at most `policy.max_attachment_kib` (512) and all together at most
   `policy.max_attachments_total_kib` (1024), each under a ceiling in code (20 files, 1024 and 4096 KiB), and the

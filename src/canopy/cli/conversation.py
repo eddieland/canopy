@@ -352,13 +352,14 @@ def _start_review(
 )
 @click.pass_context
 def cmd_stop(click_ctx: click.Context, ref: str, *, now: bool, wrap_up: bool) -> int:
-    """Stop working a started ticket or a task (`task:N`), or stop reviewing a PR you asked canopy to review.
+    """Stop working a started ticket or a task (`task:N`), stop planning an epic (`epic:N`), or stop reviewing a PR.
 
     A ticket is not dispatched again until `canopy start`, and a task is not started again; one still queued is
-    dropped. A running run finishes, unless --now ends it: its processes are killed, its slots returned, and it ends
-    `stopped`. With --wrap-up, a ticket's running run is told on its next tool call to keep its work (commit and push
-    it), print its result line, and start nothing new; it ends on its own, or at its timeout if it goes on. A PR's
-    review request ends; a review of it already running finishes.
+    dropped. An epic gets no plan run again, and its members are left as they are. A running run finishes, unless
+    --now ends it: its processes are killed, its slots returned, and it ends `stopped`. With --wrap-up, a ticket's
+    running run is told on its next tool call to keep its work (commit and push it), print its result line, and start
+    nothing new; it ends on its own, or at its timeout if it goes on. A PR's review request ends; a review of it
+    already running finishes.
     """
     _operator("stop")
     subject = _ref(ref, "stop")
@@ -368,6 +369,8 @@ def cmd_stop(click_ctx: click.Context, ref: str, *, now: bool, wrap_up: bool) ->
         raise click.UsageError("--wrap-up is for a ticket's run")
     if subject.kind == conversation.TASK:
         return tasks_cli.stop(open_context(click_ctx), int(subject.id), now=now)
+    if subject.kind == conversation.EPIC:
+        return epics_cli.stop(open_context(click_ctx), int(subject.id), now=now)
     if subject.kind == conversation.PR:
         if now:
             raise click.UsageError("--now is for a ticket's run; a PR's running review finishes")
