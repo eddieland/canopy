@@ -22,6 +22,7 @@ import re
 import sqlite3
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, NotRequired, TypedDict
 
 from canopy.core import (
@@ -36,6 +37,7 @@ from canopy.core import (
     review_drafts,
     review_result,
     review_runs,
+    run_inbox,
     sql,
 )
 from canopy.core.chore_result import FINDING_ID_RE, MAX_ID
@@ -46,7 +48,6 @@ from canopy.infra.text import printable, quoted
 
 if TYPE_CHECKING:
     from datetime import datetime
-    from pathlib import Path
 
     from canopy.core.config import Chore, Config
 
@@ -125,7 +126,7 @@ VERBS: Mapping[str, tuple[str, ...]] = {
     ),
     PR: ("grant", "start", "stop", "show", "persona"),
     CHORE: ("reply", "dismiss", "show"),
-    # A running run's reply answers the question it asks you (DESIGN §41).
+    # A running run's reply answers the question it asks you with a letter, or sends it words (DESIGN §41, §44).
     RUN: ("show", "reply"),
     # `canopy review show ID` shows one; a reference to it serves to dismiss its findings, or send some to a worker
     # (DESIGN §21), to mark it seen, as that show and its page do (§22), and to note what a revision of its draft should
@@ -366,6 +367,8 @@ class Replied:
     message_id: int
     answers: int | None
     new: bool
+    #: Whether it was written where a running run's agent hears that it waits, on its next tool call (DESIGN §44).
+    told: bool = False
 
 
 def reply(
@@ -377,6 +380,7 @@ def reply(
     submission: str | None = None,
     chores: Collection[str] = (),
     event: Callable[[int], db.Event | None] | None = None,
+    state_dir: Path | None = None,
 ) -> Replied:
     """Record the operator's reply to a ticket canopy knows or a task, or a note to a chore in `chores` (§19, §22, §36).
 
@@ -390,6 +394,12 @@ def reply(
     builds, from a new message's id, the event a channel tells the sinks it with (§20), recorded in the same
     transaction.
 
+    A reply to a running run, `run:ID` of a worker or a planner, is a message to it (§44): recorded on its ticket as
+    the operator's instruction, answering no question, and written to the run's answers directory in `state_dir`, where
+    its agent hears on its next tool call that a message waits. A reply to a task whose run is running is written to
+    that run's directory too. Either is answered once the run that fetched it ends with its report
+    (`run_inbox.HEARD`); until then it is the operator's word to its subject as any reply is.
+
     Returns:
         The message's id, the question it answers, if any, and whether it was new. A repeated submission returns the
         message it recorded first, with what that answered.
@@ -399,35 +409,139 @@ def reply(
             that was neither started nor seen by a tick, a task or an epic canopy has no record of, or a chore not in
             `chores`, `stopped` for a task or an epic the operator stopped, `inside_run` for either inside a tick or
             a run, `bad_body` for an empty body or one over 4000 characters, `bad_submission` for a submission id that
-            is not 8 to 64 letters, digits, `-`, or `_`.
+            is not 8 to 64 letters, digits, `-`, or `_`. For a run, `unknown` for one canopy has no record of,
+            `ended` for one no longer running, whose ticket takes the reply instead, `too_many` for one sent
+            `run_inbox.MAX_MESSAGES` already, and `inside_run` inside a tick or a run.
+        ValueError: a reply to a run with no `state_dir`.
     """
     check_verb(ref, "reply")
     if ref.kind == REVIEW:
         # A reply on a review is a note on its draft, a journal fact of the draft's (`review_drafts_manage.note`).
         raise Refused("unsupported", f"a note on {ref}'s draft is recorded with the draft, not as a message")
-    if ref.kind == RUN:
-        # A reply on a running run answers the question it asks (`answer`), a fact of the run's, not a message.
-        raise Refused("unsupported", f"a reply on {ref} answers the question it asks you, and is recorded on the run")
-    if ref.kind in (TASK, EPIC):
+    if ref.kind in (RUN, TASK, EPIC):
         # A task's and an epic's guards are in core, as their submissions' are: a reply authorizes the next run
-        # (TRUST_MODEL T1).
+        # (TRUST_MODEL T1). A run's too: its message is the first operator text a running agent reads (§44).
         check_operator()
     if submission is not None and not SUBMISSION_RE.fullmatch(submission):
         raise Refused("bad_submission", f"a submission id is {SUBMISSION_RE.pattern}")
-    text = body.strip()
-    if not text:
-        raise Refused("bad_body", "the reply is empty")
-    if len(text) > MAX_OPERATOR:
-        raise Refused("bad_body", f"the reply is {len(text)} characters; the most is {MAX_OPERATOR}")
+    text = _body(body)
     if ref.kind == CHORE and ref.id not in chores:
         raise Refused("unknown", f"no chore {ref.id!r} is defined for this workspace")
+    if ref.kind == RUN:
+        return _message_run(conn, ref, text, channel=channel, submission=submission, event=event, state_dir=state_dir)
     with db.transaction(conn):
         check_subject(conn, ref)
         replied = write_reply(conn, ref, text, channel=channel, submission=submission)
         built = event(replied.message_id) if event is not None and replied.new else None
         if built is not None:
             db.record_event(conn, built)
+        running = _send_to_task_run(conn, int(ref.id), replied) if ref.kind == TASK else None
+    if running is None:
         return replied
+    # Written once it is recorded: the files never hold a message the journal does not (`run_inbox.deliver`).
+    told = run_inbox.deliver(conn, "task_runs", running.id, cards.task_answers_dir(Path(running.log_path)))
+    return dataclasses.replace(replied, told=told)
+
+
+def _body(body: str) -> str:
+    """The text of the operator's message `body`: stripped, and held to its bound.
+
+    Returns:
+        The text.
+
+    Raises:
+        Refused: (`bad_body`) it is empty, or over `MAX_OPERATOR` characters.
+    """
+    text = body.strip()
+    if not text:
+        raise Refused("bad_body", "the reply is empty")
+    if len(text) > MAX_OPERATOR:
+        raise Refused("bad_body", f"the reply is {len(text)} characters; the most is {MAX_OPERATOR}")
+    return text
+
+
+def _message_run(
+    conn: sqlite3.Connection,
+    ref: Ref,
+    text: str,
+    *,
+    channel: str,
+    submission: str | None,
+    event: Callable[[int], db.Event | None] | None,
+    state_dir: Path | None,
+) -> Replied:
+    """Record the operator's message `text` to running run `ref` on its ticket, and write it where its agent reads it.
+
+    It is the operator's instruction to the run, so it answers no question asked before it (`write_reply`), and the
+    same text sent to the same run again records nothing new, and is refused for nothing that happened since: a retry
+    of one already recorded is told so though the run has ended or had the most it takes. It is written once it is
+    recorded, best effort (`run_inbox.deliver`).
+
+    Returns:
+        What was recorded, and whether its agent can hear of it: not when its answers directory is gone, as the run
+        ends, or cannot be written, which leaves the message for the ticket's next run.
+
+    Raises:
+        Refused: `unknown` for a run canopy has no record of, `ended` for one no longer running, `too_many` for one
+            sent `run_inbox.MAX_MESSAGES` already.
+        ValueError: no `state_dir`, where the run's answers directory is.
+    """
+    if state_dir is None:
+        raise ValueError("a message to a run is written to its answers directory: give the state directory")
+    run_id = int(ref.id)
+    with db.transaction(conn):
+        run = records.select(records.Run).where("id = ?", run_id).one(conn)
+        if run is None:
+            raise Refused("unknown", f"canopy has no record of {ref}")
+        # Its own submission for each run, so the same words sent to the ticket's next run are a message of their own.
+        stored = submission or hashlib.sha256(f"{ref}\0{text}".encode()).hexdigest()[:32]
+        ticket = Ref(TICKET, run.ticket_key)
+        # Recorded before the run's guards are held, so a retry finds the message it recorded; a new one they refuse
+        # rolls back with the transaction.
+        replied = write_reply(conn, ticket, text, channel=channel, submission=stored, answers=False)
+        running = run.status is RunStatus.RUNNING
+        if replied.new:
+            _check_run_takes(conn, ref, run)
+            run_inbox.mark_sent(conn, "runs", run_id, replied.message_id)
+            built = event(replied.message_id) if event is not None else None
+            if built is not None:
+                db.record_event(conn, built)
+    if not running:
+        return replied
+    told = run_inbox.deliver(conn, "runs", run_id, cards.answers_dir(state_dir, str(run_id)))
+    return dataclasses.replace(replied, told=told)
+
+
+def _check_run_takes(conn: sqlite3.Connection, ref: Ref, run: records.Run) -> None:
+    """Check that run `run`, which `ref` names, takes another message: it runs, and has not had the most.
+
+    Raises:
+        Refused: `ended` for a run no longer running, `too_many` for one sent `run_inbox.MAX_MESSAGES` already.
+    """
+    instead = f"reply to its ticket instead, `canopy reply {run.ticket_key}`, which its next run reads"
+    if run.status is not RunStatus.RUNNING:
+        raise Refused("ended", f"{ref} has ended ({run.status}); its agent can no longer hear a message: {instead}")
+    if len(run_inbox.sent_to(conn, "runs", run.id)) >= run_inbox.MAX_MESSAGES:
+        most = run_inbox.MAX_MESSAGES
+        raise Refused("too_many", f"{ref} has had {most} messages, the most a run takes: {instead}")
+
+
+def _send_to_task_run(conn: sqlite3.Connection, task_id: int, replied: Replied) -> records.TaskRun | None:
+    """Name task `task_id`'s running run as the one a new reply was sent to, if a run of it is running (§44).
+
+    Call inside the reply's transaction, and write the run's messages once it commits. A reply that comes as no run
+    runs, or past the most a run takes, is sent to none, and waits for the task's next run, as every reply did before.
+
+    Returns:
+        The run it was sent to, or None.
+    """
+    if not replied.new:
+        return None
+    running = records.select(records.TaskRun).where("task_id = ? AND status = ?", task_id, RunStatus.RUNNING).one(conn)
+    if running is None or len(run_inbox.sent_to(conn, "task_runs", running.id)) >= run_inbox.MAX_MESSAGES:
+        return None
+    run_inbox.mark_sent(conn, "task_runs", running.id, replied.message_id)
+    return running
 
 
 def answer(
@@ -1024,10 +1138,15 @@ def stopped(conn: sqlite3.Connection) -> list[str]:
 
 
 def operator_messages_after(conn: sqlite3.Connection, key: str, after: int) -> list[records.Message]:
-    """Return a ticket's operator messages newer than message id `after`, oldest first."""
+    """Return a ticket's operator messages newer than message id `after` that no run has answered, oldest first.
+
+    A message to a running run that the run fetched and then reported on is answered, and left out, as one past the
+    ticket's message cursor is (DESIGN §44): its run said what it did with it.
+    """
     return (
         records.select(records.Message)
         .where("subject_kind = ? AND subject_id = ? AND source = 'operator' AND id > ?", TICKET, key, after)
+        .where("id NOT IN ({})", run_inbox.HEARD)
         .order_by("id")
         .all(conn)
     )
@@ -1151,9 +1270,17 @@ def has_operator_messages(conn: sqlite3.Connection, key: str) -> bool:
     """Whether the operator has written to a ticket in canopy since any forget: what its worker must hear (D093).
 
     Returns:
-        True if the ticket has an operator message newer than its last forget.
+        True if the ticket has an operator message newer than its last forget, one a run answered among them: what
+        the operator told one run, the next still hears.
     """
-    return bool(operator_messages_after(conn, key, db.forgotten_message_id(conn, key)))
+    query = (
+        sql.select("1")
+        .from_("messages")
+        .where("subject_kind = ? AND subject_id = ? AND source = 'operator'", TICKET, key)
+        .where("id > ?", db.forgotten_message_id(conn, key))
+        .limit(1)
+    )
+    return sql.execute(conn, query).fetchone() is not None
 
 
 def prompt_operator_messages(

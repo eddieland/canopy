@@ -125,7 +125,7 @@ def did(event: Mapping[str, object]) -> tuple[str, str] | None:
 
 
 def called(event: Mapping[str, object]) -> Called | None:
-    """The tool call a `tool_use` event ended, as the agent made it (DESIGN §41): its tool, how it ended, and its input.
+    """The tool call a `tool_use` event ended (DESIGN §41, §44): its tool, how it ended, its input, and its start.
 
     Returns:
         The call, or None when `event` is not a `tool_use` event that validates.
@@ -136,7 +136,9 @@ def called(event: Mapping[str, object]) -> Called | None:
         tool = _Tool.model_validate(event.get("part"))
     except ValidationError:
         return None
-    return Called(tool.tool, completed=tool.state.status == "completed", input=tool.state.input)
+    time = tool.state.time
+    started = _at(time.start) if time is not None else None
+    return Called(tool.tool, completed=tool.state.status == "completed", input=tool.state.input, started_at=started)
 
 
 def _entry(event: Mapping[str, object]) -> Entry | None:

@@ -148,7 +148,7 @@ from typing import Any, Literal, Self, Unpack, assert_never
 from unittest import mock
 
 from canopy.cli.main import main
-from canopy.core import db, records, review_runs
+from canopy.core import db, records, review_runs, run_inbox
 from canopy.core.context import Context
 from canopy.core.vocab import Phase, ResumeReason, ReviewRunStatus, RunKind, RunStatus, TickStatus
 from canopy.infra import logs, procs
@@ -182,6 +182,7 @@ from tests.canopy.helpers import (
     overseer_does,
     planner_does,
     present,
+    reported_tools,
     seen,
     state_block,
     tick_starts,
@@ -1167,6 +1168,21 @@ def asks(question: str = QUESTION) -> Script:
 def fails(summary: str = "could not build") -> Script:
     """The worker pushes nothing and reports it failed, saying `summary`."""
     return worker_does(result=json.dumps({"status": "failed", "summary": summary}))
+
+
+def reads_messages(worker: Script) -> Script:
+    """`worker`, which also reads the operator's messages to its run, through canopy's tool, once its commands are run.
+
+    So a held run reads them once the test lets it go on, after the test has sent it one (DESIGN §44). Made for each
+    ticket as `worker` is.
+    """
+
+    def made(key: str) -> Script:
+        played = worker.for_ticket(key)
+        fetch = reported_tools((), [calls(run_inbox.tool_name())])
+        return replace(played, settings={**played.settings, **fetch}, per_ticket=None)
+
+    return replace(made(KEY), per_ticket=made)
 
 
 def sends_drafts(entries: object, *, pr: str = DRAFTS_PR) -> Script:

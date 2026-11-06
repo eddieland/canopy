@@ -97,3 +97,13 @@ follows. `opencode run` (`cli/src/run/noninteractive.ts`) sends its own prompt a
 session went idle. So a turn queued from the plugin is clean in 2, and in 1 only with care: it must name the run's
 agent and model, be sent without waiting, and can be lost as the loop ends. Neither plugin path opens a listener, so
 it is T4 that bars it, and `opencode serve` stays T8's; it stays a candidate for a later stage, never stage 1.
+Stage 1 built 2026-11-06 against the fakes, with the bullets after it but the web UI's channel, left for a follow-up PR:
+`canopy reply run:ID` with words, not a lone letter, is a message to a running worker or planner, and a reply to
+`task:N` while its run runs reaches that run, through `conversation.reply`; canopy writes the messages and a mark, the
+newest id alone, to the run's answers directory, which a task's run now always has; the plugin's seventh job reads the
+mark; the `messages` tool reads the messages' file, not the journal, which a sandboxed run's servers cannot read (DESIGN
+§44 says so now); a fetch is a message canopy wrote before the call started, by the call's start time in the runtime's
+events; the loop reads past one fetched by a run that ended `done` or `blocked` (`run_inbox.HEARD`); `canopy show
+run:ID` lists them. Chosen conservatively, for the operator to change: a run takes at most 20 messages; a message to a
+run answers no earlier question; a message sent before the run's directory exists is written there as the run starts;
+one sent as it ends is told to nothing and waits for the next run.
