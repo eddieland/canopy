@@ -75,7 +75,8 @@ Below:
   writes in next and the model it runs on. See [Choosing a persona](#choosing-a-persona) and
   [Choosing a model](#choosing-a-model). Once more than one model has served the ticket, a line under its total cost
   splits it by model, then `unread` for runs whose sessions canopy hasn't read yet and `none` for runs it read that
-  named no model: the override's bill, itemized.
+  named no model: the override's bill, itemized. At its foot, once the ticket has a branch, its **desk**: see
+  [Editing the branch yourself](#editing-the-branch-yourself).
 - **Conversation**: every message, the box to reply in, and under it the ticket's actions.
   [Attention](attention#replying) covers how a reply works. When one of the ticket's attention items clears while
   you're here, a leaf drifts off the panel, the same one the attention list drops.
@@ -129,6 +130,29 @@ reply before **Stop** or **Forget**. Hover over each to see its command.
   has happened since you last forgot it. A ticket no tracker read has ever seen, with no runs, messages, or start, is
   the exception: forgetting it removes it whole, which is how you clear a key the tracker doesn't hold, the one a
   `connector_failed` item keeps saying it did not read. Its decisions stay in the journal.
+
+## Editing the branch yourself
+
+Sometimes the fix is three lines and explaining them to a worker would take longer than typing them. **Open desk**, at
+the foot of the Work panel, is `canopy desk KEY`: canopy leases a slot of each repository's pool to you, checks the
+ticket's branch out in it as a local branch tracking origin's, and links them all from `checkouts/KEY/` in the
+workspace. When the branch is in more than one repository, the picker beside the button narrows the desk to some of
+them; left alone, it takes them all.
+
+Open, the desk lists each repository's slot, with two ways in. **Open in VS Code** hands the desk's workspace file to
+VS Code, every slot in one window, through its WSL remote when canopy runs inside WSL. Beside it is the `code` line to
+paste into a terminal, for when the browser and canopy aren't on the same machine. Commit and push as in any
+checkout: it's your branch, under your name.
+
+The slots stay yours until you close the desk: no tick takes them back, and the worktrees page marks them `held`. The
+loop keeps going all the same. A run of the ticket works in slots of its own and pushes to the same branch, so pull
+before you push, unless you enjoy rebasing. To keep the loop off the ticket while you work, stop it, or remove a
+public ticket's queue label.
+
+**Close desk** returns the slots and deletes the local branch, but not while a slot has uncommitted changes or commits
+origin lacks: it says which, and offers **Discard it and close**, which asks for the ticket's key typed out, since
+what it throws away is gone. Either button waits for a running tick to end first, as the command does, and says so
+while it waits.
 
 ## Feedback left with no worker
 

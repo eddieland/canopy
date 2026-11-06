@@ -61,6 +61,9 @@ class EpicMember(Row):
     #: When the operator removed it; None while it is a member.
     removed_at: str | None
     removed_channel: str | None
+    #: The ids, space-separated, that changes of its epic's plan reached it by since its work last took one in: its
+    #: next plan run is told them, and the operator's approval of its plan clears them; None for none (DESIGN §43).
+    changed_ids: str | None
 
 
 @dataclass(frozen=True)

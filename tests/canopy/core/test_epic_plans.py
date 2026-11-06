@@ -203,7 +203,14 @@ def test_an_approval_refuses_while_a_plan_run_runs(planned: CanopyEnv) -> None:
     with in_tick(ctx.conn) as tick_id:
         assert epic_starts.start_due(ctx, tick_id, logs.for_tick(tick_id))
     with pytest.raises(conversation.Refused, match="planning"):
-        epics.approve(ctx.conn, ctx.state_dir, 1, repos=frozenset({"repo"}), channel="cli")
+        epics.approve(
+            ctx.conn,
+            ctx.state_dir,
+            1,
+            repos=frozenset({"repo"}),
+            channel="cli",
+            dispatch_lock=ctx.dispatch_lock_path,
+        )
 
 
 def test_an_approval_retried_after_its_copy_was_written_goes_through(planned: CanopyEnv) -> None:

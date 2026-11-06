@@ -243,8 +243,8 @@ A slot is:
 
 - `working`: a run, a review, or a task's run holds it. A ticket's run names the ticket and `run:N`; a task's names
   `task:N` and its run, `task:N#M`, each opening its page.
-- `held`: something else holds it, such as your own shell, a pool sync, or your own desk (`canopy desk KEY`, your
-  checkout of a ticket's branch, which its note says how to close).
+- `held`: something else holds it, such as your own shell, a pool sync, or your own desk (your checkout of a
+  ticket's branch, opened from its page or with `canopy desk KEY`, which its note says how to close).
 - `dirty`: nobody holds it, but it has changes nobody committed.
 - `idle`: free for the next run.
 - `broken`: the pool can't vouch for it; hover over it, or Tab to it, for the pool's own word, such as `damaged` or

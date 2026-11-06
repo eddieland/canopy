@@ -15,12 +15,13 @@ import sqlite3
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, epic_outline, plans, records
+from canopy.core import conversation, db, epic_changes, epic_outline, plans, records
 from canopy.core.conversation import Refused
 from canopy.core.vocab import PlanStatus, RunStatus
+from canopy.infra import lock
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Callable, Iterable, Sequence
     from collections.abc import Set as AbstractSet
     from pathlib import Path
 
@@ -77,11 +78,17 @@ class Stopped:
 
 @dataclass(frozen=True)
 class Approved:
-    """What an approval did: the plan approved, and what it changed from the one approved before it, if any."""
+    """What an approval did: the plan approved, what it changed from the one approved before, and whom that reached."""
 
     plan: records.EpicPlan
     #: None for the epic's first approved plan.
     change: epic_outline.Change | None
+    #: The members the change reached, each way (DESIGN §43, When its plan changes); none for a first plan.
+    reached: epic_changes.Reached
+
+
+#: What builds the `epic.changed` event from the plan approved, its change, and the members it reached (DESIGN §20).
+type ChangedEvent = Callable[[records.EpicPlan, epic_outline.Change, epic_changes.Reached], db.Event | None]
 
 
 def submit(
@@ -396,7 +403,9 @@ def approve(
     *,
     repos: AbstractSet[str],
     channel: str,
+    dispatch_lock: Path,
     read_sha256: str | None = None,
+    event: ChangedEvent | None = None,
 ) -> Approved:
     """Approve epic `epic_id`'s waiting plan, as its file stands, the operator's edits included (§43).
 
@@ -405,8 +414,13 @@ def approve(
     as what the next approval is compared with. With `read_sha256`, the file's hash as a page read it, a file changed
     since is refused rather than approved unseen.
 
+    What it changed from the plan approved before it meets each member it reaches where it stands
+    (`epic_changes.reach`), in the same transaction, under the dispatch lock, so no dispatch decides between the two;
+    `event`, given what reached any member, builds the `epic.changed` event recorded with it, the operator's one word
+    of it (DESIGN §20).
+
     Returns:
-        The plan approved, and what it changed from the plan approved before it.
+        The plan approved, what it changed from the plan approved before it, and the members that reached.
 
     Raises:
         Refused: `inside_run` inside a tick or a run, `unknown_epic` for no such epic, `planning` while a
@@ -415,11 +429,10 @@ def approve(
             cannot be read, `approved_changed` when an earlier approved plan's copy is not what was approved, and
             `reused_id` for an id an earlier approval dropped.
         PlanFileError: the approved copy could not be written: the epic's directory is not the operator's own.
-        DatabaseError: the approval was not recorded, which nothing but a broken journal does.
     """
     conversation.check_operator()
     _check_epic(conn, epic_id)
-    with db.transaction(conn):
+    with lock.hold(dispatch_lock, wait=True), db.transaction(conn):
         running = records.select(records.EpicRun).where(
             "epic_id = ? AND status = ?",
             epic_id,
@@ -454,11 +467,14 @@ def approve(
             approved_at=db.now(),
             approved_channel=channel,
         )
-        update.where("id = ?", current.id).run(conn)
-    approved = records.select(records.EpicPlan).where("id = ?", current.id).one(conn)
-    if approved is None:
-        raise sqlite3.DatabaseError("the epic plan's approval was not recorded")
-    return Approved(plan=approved, change=change)
+        [approved] = update.where("id = ?", current.id).returned(conn)
+        reached = epic_changes.Reached()
+        if change is not None:
+            reached = epic_changes.reach(conn, epic_id, change, before=earlier[-1], after=outline)
+            built = event(approved, change, reached) if event is not None and reached.any() else None
+            if built is not None:
+                db.record_event(conn, built)
+    return Approved(plan=approved, change=change, reached=reached)
 
 
 def approved_outline(

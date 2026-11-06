@@ -3,6 +3,8 @@ import type { QueryClient } from '@tanstack/react-query'
 import { api, unwrap } from './client'
 import { keys } from './queries'
 import type {
+    DeskClosed,
+    DeskOpened,
     EpicMemberAdded,
     EpicMemberRemoved,
     EpicPlanApproved,
@@ -102,6 +104,31 @@ export async function stopTicket(key: string, now: boolean): Promise<Stopped> {
 /** `canopy forget`, with the key as the operator typed it: the server refuses `not_confirmed` unless it matches. */
 export async function forgetTicket(key: string, confirm: string): Promise<Forgot> {
     return unwrap(await api.POST('/api/tickets/{key}/forget', { params: { path: { key } }, body: { confirm } }))
+}
+
+/**
+ * `canopy desk KEY [--repo NAME]...`: check the ticket's branch out for the operator, a slot per repository; none named
+ * is every one with the branch. Waits for a running tick to end, as the CLI does.
+ */
+export async function openDesk(key: string, repos: readonly string[]): Promise<DeskOpened> {
+    return unwrap(await api.POST('/api/tickets/{key}/desk', { params: { path: { key } }, body: { repos: [...repos] } }))
+}
+
+/**
+ * `canopy desk KEY --close`, or with `confirm`, the key as the operator typed it, `--discard`: the server refuses
+ * `unpushed` while a slot holds work origin lacks, and a discard whose key does not match `not_confirmed`.
+ */
+export async function closeDesk(key: string, confirm?: string): Promise<DeskClosed> {
+    const body = confirm === undefined ? { discard: false } : { discard: true, confirm }
+    return unwrap(await api.POST('/api/tickets/{key}/desk/close', { params: { path: { key } }, body }))
+}
+
+/** After a desk opens or closes: its ticket, and the worktrees, whose slots it leased or returned, read again now. */
+export async function refreshDesk(client: QueryClient, key: string): Promise<void> {
+    await Promise.all([
+        client.invalidateQueries({ queryKey: keys.ticket(key) }),
+        client.invalidateQueries({ queryKey: keys.worktrees }),
+    ])
 }
 
 /**

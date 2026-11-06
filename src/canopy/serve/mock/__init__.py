@@ -1,13 +1,13 @@
 """A journal seeded from fixtures, for the UI's development server and its end-to-end tests (`--mock`).
 
 The server reads and writes it through the same code as the loop's journal: only the attention list, ending a run, a
-reload, a tick asked for, the attempt and review limits and their grants, a chore's try, the pools' slots, the models
-the runtime lists, and the skills it finds are stand-ins, since the first six belong to the loop, `runs`,
-`reviews`, and `chores`, and there is no treehouse or runtime to ask (backend.py): the models are those its runs'
-sessions name, and the skills five the `skills` module makes up. A try records its run and starts nothing, so the run
-stays running.
-It is a workspace (DESIGN §18), canopy's usual shape: `api` has no clone, `mobile` and `web` do, `web`'s pool holds one
-slot past its declared size, and run 43 holds a slot in both. Two chores are configured (§19), `deps` and
+reload, a tick asked for, the attempt and review limits and their grants, a chore's try, the pools' slots, the
+operator's desks (`desks`), the models the runtime lists, and the skills it finds are stand-ins, since the first six
+belong to the loop, `runs`, `reviews`, and `chores`, and there is no treehouse, git, or runtime to ask (backend.py): the
+models are those its runs' sessions name, and the skills five the `skills` module makes up. A try records its run and
+starts nothing, so the run stays running.
+It is a workspace (DESIGN §18), canopy's usual shape: `api` has no clone, `mobile` and `web` do, `web`'s pool holds two
+slots past its declared size, and run 43 holds a slot in both. Two chores are configured (§19), `deps` and
 `build-health`, `deps` on a model of its own (§13). Two ticks recorded decisions about tickets, a unit, a repository,
 a chore, and a PR (§6). The
 workspace's policy allows one resume and two reviews, so ABC-100 is at its resume limit in web, where its run 40, a
@@ -55,6 +55,7 @@ from canopy.serve.mock import (
     checklists,
     chores,
     ci,
+    desks,
     drafts,
     epics,
     feedback_plans,
@@ -248,8 +249,8 @@ def slot_path(root: Path, repo: str, slot: int) -> str:
 def _pools(root: Path) -> dict[str, list[pools.Slot]]:
     """What `treehouse status --json` would show for each cloned repository's pool.
 
-    web: the two running runs' slots, a shell someone opened in a third, one idle, and one dirty, five for a declared
-    size of four. mobile: run 43's other slot, and the running task's (tasks.py).
+    web: the two running runs' slots, a shell someone opened in a third, one idle, one dirty, and the one ABC-103's desk
+    leases, six for a declared size of four. mobile: run 43's other slot, and the running task's (tasks.py).
 
     Returns:
         Each cloned repository's slots, by repository name, numbered from 1.
@@ -275,6 +276,8 @@ def _pools(root: Path) -> dict[str, list[pools.Slot]]:
             {"status": "in-use", "detached": True, "processes": [{"pid": 2210, "name": "zsh"}]},
             {"status": "available", "detached": True},
             {"status": "dirty", "detached": True},
+            # ABC-103's desk leases it (desks.py).
+            {"status": "available", "detached": True},
         ],
         "mobile": [
             {
@@ -329,6 +332,8 @@ def seed(directory: Path) -> Backend:
     cfg = config.load(root, user_file)
     workspace.ensure_state_dir(ws.state_dir)
     slots_by_repo = _pools(root)
+    # ABC-103's desk is open, on a slot of web's, and opening or closing one leases or returns a slot of these.
+    opened = desks.Desks(root, slots_by_repo, at)
 
     def slots(_ctx: Context, repo: str) -> list[pools.Slot]:
         return list(slots_by_repo.get(repo, []))
@@ -346,6 +351,9 @@ def seed(directory: Path) -> Backend:
         try_chore=_try_chore,
         mock=True,
         slots=slots,
+        find_desk=opened.find,
+        open_desk=opened.open,
+        close_desk=opened.close,
         clock=lambda: T0,
         runner=lambda: drafts.GitHub(db_path(ws)),
         user_file=user_file,

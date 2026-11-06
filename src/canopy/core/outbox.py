@@ -11,11 +11,11 @@ import sqlite3
 from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING, TypedDict
 
-from canopy.core import contract, review_result
+from canopy.core import contract, epic_outline, review_result
 from canopy.core.db import Event
 
 if TYPE_CHECKING:
-    from canopy.core import records, spend
+    from canopy.core import epic_changes, records, spend
     from canopy.core.config import Config
     from canopy.core.vocab import ChoreRunStatus, ReviewRunStatus, RunStatus
 
@@ -33,6 +33,8 @@ SUMMARY_LIMIT = 300
 DETAIL_LIMIT = 500
 #: How many follow-ups a `follow_ups.filed` event names; the rest are counted.
 MAX_FOLLOW_UPS = 20
+#: How many ids an `epic.changed` event names; the rest are counted.
+MAX_EPIC_IDS = 40
 
 
 class RunStarted(TypedDict):
@@ -82,6 +84,27 @@ class PlanApproved(TypedDict):
     feedback: bool
     #: The planner's reason, model text cut to one line.
     reason: str
+
+
+class EpicChanged(TypedDict):
+    """An `epic.changed` event's fields: an approval of an epic's plan changed ids that reached its members (§43).
+
+    Never the plan's text: its ids, and the members each way, which the operator decides on.
+    """
+
+    epic: int
+    #: The epic plan approved.
+    plan: int
+    #: The ids it added, removed, or changed from the plan approved before it, in the plan's order, at most
+    #: `MAX_EPIC_IDS`; `count` is how many.
+    ids: list[str]
+    count: int
+    #: The members whose plan waited on the operator, superseded as stale.
+    stale: list[str]
+    #: The members whose approved plan's `implement` waits on the operator (`epic_changed`).
+    held: list[str]
+    #: The members left as they are, whose next run is told.
+    told: list[str]
 
 
 class FollowUpsFiled(TypedDict):
@@ -361,6 +384,34 @@ def plan_recorded(
             return None
         fields: PlanProposed = {"ticket": key, "run": run_id, "plan": plan_id}
         return Event(RUNS, "plan.proposed", fields)
+
+    return build
+
+
+def epic_changed(
+    config: Config,
+) -> Callable[[records.EpicPlan, epic_outline.Change, epic_changes.Reached], Event | None]:
+    """Return what builds the `epic.changed` event from the plan approved, its change, and whom it reached.
+
+    `epics.approve` builds it once, in the approval's transaction, when the change reached a member: the operator's one
+    word of which members it reached, each way (DESIGN §43). No plan text, so nothing of the plan leaves the machine
+    through a sink. It is None if no sink takes runs.
+    """
+
+    def build(plan: records.EpicPlan, change: epic_outline.Change, reached: epic_changes.Reached) -> Event | None:
+        if not config.notify.takes(RUNS):
+            return None
+        ids = epic_outline.ordered(change.ids())
+        fields: EpicChanged = {
+            "epic": plan.epic_id,
+            "plan": plan.id,
+            "ids": ids[:MAX_EPIC_IDS],
+            "count": len(ids),
+            "stale": list(reached.stale),
+            "held": list(reached.held),
+            "told": list(reached.told),
+        }
+        return Event(RUNS, "epic.changed", fields)
 
     return build
 

@@ -72,6 +72,8 @@ def event_line(kind: str, fields: Mapping[str, object]) -> str:  # noqa: C901, P
     if kind == "plan.approved":
         which = "feedback plan" if f.get("feedback") else "plan"
         return _line(f"+ {f.get('ticket')} {which} {f.get('plan')} approved by its planner: {f.get('reason')}")
+    if kind == "epic.changed":
+        return _line(_epic_changed_line(f))
     if kind == "follow_ups.filed":
         given = f.get("follow_ups")
         filed: dict[str, object] = cast("dict[str, object]", given) if isinstance(given, dict) else {}
@@ -135,6 +137,34 @@ def event_line(kind: str, fields: Mapping[str, object]) -> str:  # noqa: C901, P
     return _line(f"{kind} {json.dumps(f)}")
 
 
+def _epic_changed_line(f: Mapping[str, object]) -> str:
+    """The line of an `epic.changed` event: the ids an approval of an epic's plan changed, and whom that reached.
+
+    Returns:
+        The line, led by `?`: each member reached waits on the operator's word, or is told at its next run.
+    """
+    ids = _names(f.get("ids"))
+    count = f.get("count")
+    if isinstance(count, int) and count > len(ids):
+        ids.append(f"{count - len(ids)} more")
+    ways = [
+        f"{what} {', '.join(keys)}"
+        for what, keys in (
+            ("plan stale, planned again:", _names(f.get("stale"))),
+            ("implement held until you approve its plan again:", _names(f.get("held"))),
+            ("left as is, its next run told:", _names(f.get("told"))),
+        )
+        if keys
+    ]
+    epic = f"epic:{f.get('epic')}"
+    return f"? {epic} plan {f.get('plan')} changed {', '.join(ids) or '-'}; {'; '.join(ways)}: canopy show {epic}"
+
+
+def _names(given: object) -> list[str]:
+    """Return a list field's items as text, or none when it is not a list."""
+    return [str(x) for x in cast("list[object]", given)] if isinstance(given, list) else []
+
+
 def _flaky_line(f: Mapping[str, object]) -> str:
     """The line of a `ci.flaky` event.
 
@@ -186,6 +216,8 @@ def event_page(ui: str | None, kind: str, fields: Mapping[str, object]) -> str |
     match kind:
         case "run.started" | "run.ended" | "follow_ups.filed" | "ci.flaky" | "ci.kicked" if f.get("run"):
             return page(ui, "runs", f["run"])
+        case "epic.changed" if f.get("epic"):
+            return page(ui, "epics", f["epic"])
         case "plan.proposed" | "plan.approved" if f.get("ticket"):
             # A feedback plan has no page of its own yet: its ticket's page is where its PRs are.
             return page(ui, "tickets", f["ticket"], *(() if f.get("feedback") else ("plan",)))
