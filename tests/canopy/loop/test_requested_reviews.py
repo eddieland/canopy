@@ -8,12 +8,13 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from canopy.cli import agreement as agreement_cli
 from canopy.core import db, records, review_runs
-from canopy.core.vocab import Decider, PrState, RequestAction, ReviewRunStatus
+from canopy.core.vocab import Decider, PrState, RequestAction, ReviewRunStatus, TickStatus
 from canopy.infra import resources
 from canopy.loop import agreement, requested_reviews
 from canopy.reviews import review_requests
-from tests.canopy.helpers import context, in_tick, sources
+from tests.canopy.helpers import KEY, context, in_tick, sources
 from tests.canopy.scenario_helpers import Scenario, review_ends, review_waits, reviews
 from tests.conftest import SHARED_TOML
 
@@ -207,6 +208,20 @@ def test_each_move_of_the_overseers_agrees_with_its_derivation_or_says_why_not(c
     assert compared(conn, tick_id) == [(PR, "disagrees", f"derived start at {HEAD}; decided wait")]
 
 
+def test_a_decision_about_a_tickets_own_pr_is_the_requests_too(ctx: Context) -> None:
+    """A review the operator asked for of one of the loop's PRs names its ticket; an attention refusal is no review."""
+    conn = ctx.conn
+    requested(conn)
+    with in_tick(conn) as tick_id:
+        requested_reviews.record(conn, tick_id, [requested_reviews.Derived(1, PR, RequestAction.START, head_sha=HEAD)])
+        db.record_decision(conn, tick_id, KEY, "refused:raised", "the harness raises it", pr=PR)
+    assert compared(conn, tick_id) == [(PR, "disagrees", f"derived start at {HEAD}; decided nothing")]
+    with in_tick(conn) as tick_id:
+        requested_reviews.record(conn, tick_id, [requested_reviews.Derived(1, PR, RequestAction.START, head_sha=HEAD)])
+        db.record_decision(conn, tick_id, KEY, "dispatch:review", "review run 1", pr=PR)
+    assert compared(conn, tick_id) == [(PR, "agrees", None)]
+
+
 @pytest.fixture
 def watching(scenario: Scenario, connector_state: Path) -> Path:
     """A workspace with a reviewer and a `vcs` source, the operator's request for PR, and GitHub's PR at HEAD, open.
@@ -257,3 +272,30 @@ def test_canopy_agreement_counts_the_requests_row_and_lists_its_disagreements(
     assert "review_request          2      1         1           1            1" in out
     assert f"  {PR}  review_request  tick {waited.tick.id}: derived start at {HEAD}; decided wait\n" in out
     assert "      the author is still pushing\n" in out
+
+
+@pytest.mark.usefixtures("watching")
+def test_a_wait_on_a_tickets_own_pr_is_compared_by_the_pr_with_its_rationale(scenario: Scenario) -> None:
+    """The overseer names the ticket of one of the loop's PRs, and the request's row still reads its decision."""
+    waited = scenario.tick(review_waits(PR, "the author is still pushing", ticket=KEY))
+    found = agreement.agreement(scenario.conn, datetime.now(UTC), 1)
+    [row] = [r for r in found.rows if r.row == agreement.REQUEST]
+    assert (row.decisions, row.disagrees) == (1, 1)
+    [disagreed] = [d for d in found.disagreements if d.ticket_key == PR]
+    assert (disagreed.last_tick, disagreed.why) == (waited.tick.id, f"derived start at {HEAD}; decided wait")
+    assert disagreed.rationale == "the author is still pushing"
+
+
+def test_a_stale_request_is_counted_apart_from_the_stale_tickets(ctx: Context) -> None:
+    """A request's PR is no ticket: `canopy agreement` counts the stale requests in a field of their own."""
+    conn = ctx.conn
+    requested(conn)
+    with in_tick(conn) as tick_id:
+        stale = requested_reviews.Derived(1, PR, RequestAction.WAIT, stale=f"{PR} never observed")
+        requested_reviews.record(conn, tick_id, [stale])
+        db.set_tick_overseer(conn, tick_id, ran=True)
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
+    found = agreement.agreement(conn, datetime.now(UTC), 1)
+    assert (found.stale, found.stale_tickets, found.stale_requests) == (1, 0, 1)
+    assert found.as_json()["stale_requests"] == 1
+    assert "Stale, counted apart: 1 decision on 0 tickets and 1 review request." in agreement_cli.render(found)

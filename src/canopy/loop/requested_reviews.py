@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, NamedTuple, assert_never
 from canopy.core import conversation, db, observe, records, review_runs
 from canopy.core.vocab import Decider, PrState, RequestAction, ReviewRunStatus
 from canopy.loop.review_tools import END_ACTION
+from canopy.loop.tools import RAISED, UNNAMED
 from canopy.reviews import review_requests
 from canopy.reviews import start as review_start
 
@@ -40,6 +41,8 @@ if TYPE_CHECKING:
 
 #: The `refused:<guard>` decisions of the `review-end` tool, an end the overseer asked for, not a review.
 _END_REFUSALS = frozenset({"refused:not_requested", "refused:bad_reason"})
+#: The `refused:<guard>` decisions of the `attention` tool, which may name the PR too: an item, not a review.
+_ATTENTION_REFUSALS = frozenset({f"refused:{RAISED}", f"refused:{UNNAMED}"})
 #: The refusal that answers a request whose head is reviewed already (`review_requests.answered`).
 _REVIEWED = f"refused:{review_requests.REVIEWED}"
 #: The end each state of a PR that is not open makes of its request.
@@ -100,9 +103,9 @@ class Compared:
 def compare(conn: sqlite3.Connection, tick_id: int) -> list[Compared]:
     """Compare tick `tick_id`'s derivation of the open requests with the overseer's decisions about their PRs.
 
-    The overseer's are its decisions that name the PR and no ticket, as a request's do, and are not the harness's: a
-    review it asked for, started or refused, a `review-wait`, and a `review-end`, which a refusal of the tool records
-    too. An attention item a guard recorded beside a refusal is the guard's, not a choice.
+    The overseer's are its decisions that name the PR, and its ticket too when the PR is one of the loop's own, and are
+    not the harness's: a review it asked for, started or refused, a `review-wait`, and a `review-end`, which a refusal
+    of the tool records too. An attention item a guard recorded beside a refusal is the guard's, not a choice.
 
     Returns:
         One comparison per request the tick derived, by the PR's URL.
@@ -110,7 +113,7 @@ def compare(conn: sqlite3.Connection, tick_id: int) -> list[Compared]:
     rows = records.select(records.RequestDerivation).where("tick_id = ?", tick_id).order_by("pr_url, id").all(conn)
     moves: dict[str, list[_Move]] = {}
     for d in db.decisions_for_tick(conn, tick_id):
-        if d.pr is None or d.ticket_key is not None or d.decider is Decider.HARNESS:
+        if d.pr is None or d.decider is Decider.HARNESS:
             continue
         move = _move(d)
         if move is not None:
@@ -141,6 +144,8 @@ def _move(decision: records.Decision) -> _Move | None:  # noqa: PLR0911  (one mo
         return _Move(RequestAction.END, review_requests.REVIEWED, "review, refused reviewed")
     if action in _END_REFUSALS:
         return _Move(RequestAction.END, None, f"end, {action.replace(':', ' ')}")
+    if action in _ATTENTION_REFUSALS:
+        return None
     if action.startswith("refused:"):
         return _Move(RequestAction.START, None, f"review, {action.replace(':', ' ')}")
     if action == END_ACTION:

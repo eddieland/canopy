@@ -322,8 +322,9 @@ Each records its numbers in `MEASUREMENTS.md`, as a dated section.
   over enough ticks with open requests: some at an unreviewed head, one made after its head was reviewed, a draft, and
   one merged, closed, or in no repository of the workspace before its review. Then `canopy agreement --days N`: expect
   its `review_request` row to count each request in each tick against what the overseer did about its PR, and each
-  disagreement listed with the overseer's rationale. Record the row and each disagreement, read and attributed, in
-  `MEASUREMENTS.md`; with none the derivation's, a PR enables the row citing that section.
+  disagreement listed with the overseer's rationale, and a stale request counted apart from the stale tickets. Record
+  the row and each disagreement, read and attributed, in `MEASUREMENTS.md`. If no disagreement is the derivation's
+  fault, a PR enables the row, citing that `MEASUREMENTS.md` section.
 
 ## Retired
 

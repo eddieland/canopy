@@ -71,9 +71,10 @@ def render(found: Agreement) -> list[str]:
         lines.append("No live tick of the window that ran its overseer derived a ticket.")
     else:
         lines.extend(_rows(found))
-        lines.append(
-            f"Stale, counted apart: {_counted(found.stale, 'decision')} on {_counted(found.stale_tickets, 'ticket')}.",
-        )
+        on = _counted(found.stale_tickets, "ticket")
+        if found.stale_requests:
+            on += f" and {_counted(found.stale_requests, 'review request')}"
+        lines.append(f"Stale, counted apart: {_counted(found.stale, 'decision')} on {on}.")
     lines.append("")
     lines.extend(_disagreements(found))
     lines.append("")

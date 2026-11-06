@@ -11,8 +11,8 @@ from syrupy.assertion import SnapshotAssertion
 
 from canopy.cli import gc as gc_cli
 from canopy.cli.main import main
-from canopy.core import conversation, db, plans
-from canopy.core.vocab import Decider
+from canopy.core import conversation, db, plans, records
+from canopy.core.vocab import Decider, RequestAction
 from canopy.infra import lock, logs
 from canopy.loop import attention, gc
 from tests.canopy.helpers import KEY, PLAN, earlier, ended_tick, run_with_files, write_file
@@ -225,18 +225,25 @@ def test_a_ticks_derivations_go_outside_the_window_after_journal_days(
     conn = canopy_env.journal()
     now = datetime.now(UTC)
     pr = "https://example.test/acme/repo/pull/12"
-    conn.execute("INSERT INTO review_requests (pr_url, created_at, channel) VALUES (?, ?, 'cli')", (pr, db.now()))
+    [request] = records.insert(records.ReviewRequest, pr_url=pr, created_at=db.now(), channel="cli").returned(conn)
     for started in (earlier(now, 200), earlier(now, 200), db.now()):
         tick_id = ended_tick(conn, started)
-        conn.execute(
-            "INSERT INTO derivations (tick_id, ticket_key, repo, candidate, closed, phases) "
-            "VALUES (?, ?, NULL, 1, 0, ?)",
-            (tick_id, KEY, '["ready"]'),
-        )
-        conn.execute(
-            "INSERT INTO request_derivations (tick_id, request_id, pr_url, action) VALUES (?, 1, ?, 'start')",
-            (tick_id, pr),
-        )
+        records.insert(
+            records.Derivation,
+            tick_id=tick_id,
+            ticket_key=KEY,
+            repo=None,
+            candidate=True,
+            closed=False,
+            phases='["ready"]',
+        ).run(conn)
+        records.insert(
+            records.RequestDerivation,
+            tick_id=tick_id,
+            request_id=request.id,
+            pr_url=pr,
+            action=RequestAction.START,
+        ).run(conn)
     conn.commit()
     kinds = dry_run(capsys)
     assert kinds["derivations"]["removable"] == 0, "nothing goes while the window holds every tick"

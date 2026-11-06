@@ -100,10 +100,12 @@ class Agreement:
     ticks: int
     #: Each ticket and review request in each tick compared.
     decisions: int
-    #: Each ticket or request in each tick with a stale subject, counted apart, never as a disagreement; and the
-    #: distinct tickets and requests' PRs.
+    #: Each ticket or request in each tick with a stale subject, counted apart, never as a disagreement.
     stale: int
+    #: The distinct tickets among them.
     stale_tickets: int
+    #: The distinct review requests among them, by their PRs' URLs.
+    stale_requests: int
     #: Per row, in `ROW_ORDER`, those that held at least once.
     rows: Sequence[RowCounts] = ()
     #: Newest first.
@@ -114,8 +116,8 @@ class Agreement:
         """Return the agreement as one JSON object.
 
         Returns:
-            `since`, `until`, `days`, `ticks`, `decisions`, `stale`, `stale_tickets`, then `rows`, `disagreements`,
-            and `sources`, each a list of objects with its dataclass's fields.
+            `since`, `until`, `days`, `ticks`, `decisions`, `stale`, `stale_tickets`, `stale_requests`, then `rows`,
+            `disagreements`, and `sources`, each a list of objects with its dataclass's fields.
         """
         return {
             "since": self.since,
@@ -125,6 +127,7 @@ class Agreement:
             "decisions": self.decisions,
             "stale": self.stale,
             "stale_tickets": self.stale_tickets,
+            "stale_requests": self.stale_requests,
             "rows": [vars(r) for r in self.rows],
             "disagreements": [{**vars(d), "rows": list(d.rows)} for d in self.disagreements],
             "sources": [vars(s) for s in self.sources],
@@ -163,6 +166,7 @@ def agreement(conn: sqlite3.Connection, now: datetime, days: int) -> Agreement:
         decisions=tally.decisions,
         stale=tally.stale,
         stale_tickets=len(tally.stale_tickets),
+        stale_requests=len(tally.stale_requests),
         rows=tally.rows(),
         disagreements=tally.grouped(),
         sources=_sources(conn, since, until),
@@ -176,6 +180,7 @@ class _Tally:
     decisions: int = 0
     stale: int = 0
     stale_tickets: set[str] = field(default_factory=set[str])
+    stale_requests: set[str] = field(default_factory=set[str])
     verdicts: Counter[tuple[str, phases.Verdict]] = field(default_factory=Counter[tuple[str, phases.Verdict]])
     situations: dict[str, set[str]] = field(default_factory=dict[str, set[str]])
     disagreeing: dict[str, set[str]] = field(default_factory=dict[str, set[str]])
@@ -210,7 +215,7 @@ class _Tally:
         self.decisions += 1
         if verdict == "stale":
             self.stale += 1
-            self.stale_tickets.add(key)
+            (self.stale_requests if REQUEST in rows else self.stale_tickets).add(key)
             return
         for row in rows:
             self.verdicts[row, verdict] += 1
@@ -275,19 +280,22 @@ def _rows_held(conn: sqlite3.Connection, tick_id: int) -> dict[str, tuple[str, .
 def _rationales(conn: sqlite3.Connection, tick_id: int) -> dict[str, str]:
     """The rationale of each ticket's decisions in tick `tick_id` that are not the harness's, joined, and each PR's.
 
-    A decision about a PR that names no ticket, such as one about a review request, is the PR's.
+    A decision about a PR is the PR's, and its ticket's too when it names one: a review the operator asked for of a
+    ticket's own PR is compared by the PR (`requested_reviews.compare`).
 
     Returns:
-        By ticket, or by the PR's URL, its rationales in the order recorded, each once.
+        By ticket, and by the PR's URL, its rationales in the order recorded, each once.
     """
     found: dict[str, list[str]] = {}
     for d in db.decisions_for_tick(conn, tick_id):
-        subject = d.ticket_key if d.ticket_key is not None else d.pr
-        if subject is None or d.decider is Decider.HARNESS or not d.rationale:
+        if d.decider is Decider.HARNESS or not d.rationale:
             continue
-        said = found.setdefault(subject, [])
-        if d.rationale not in said:
-            said.append(d.rationale)
+        for subject in (d.ticket_key, d.pr):
+            if subject is None:
+                continue
+            said = found.setdefault(subject, [])
+            if d.rationale not in said:
+                said.append(d.rationale)
     return {key: "; ".join(said) for key, said in found.items()}
 
 
