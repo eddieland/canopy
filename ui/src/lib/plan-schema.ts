@@ -268,9 +268,10 @@ const PlanMarkdown = Markdown.extend({
 // both sides of it, which the parser gives the text alone. A soft break at either end of its block, which an edit can
 // leave there, separates nothing and is dropped.
 //
-// `indent` is what the line after each soft break in `node` starts with beyond the wrap itself: in a list item's first
-// paragraph, its marker's width, since the list writes that paragraph after its marker and indents no line of it.
-function softBreaksAsText(node: JSONContent, indent = ''): JSONContent {
+// `indent` is what the line after each soft break in `node` starts with beyond the wrap itself, in place of what the
+// source had there: in a list item's first paragraph, its marker's width, since the list writes that paragraph after
+// its marker and indents no line of it. Outside a list item it is `undefined`, and each wrap keeps the source's text.
+function softBreaksAsText(node: JSONContent, indent?: string): JSONContent {
     if (node.content === undefined) {
         return node
     }
@@ -288,27 +289,31 @@ function softBreaksAsText(node: JSONContent, indent = ''): JSONContent {
         const wrap = String(child.attrs?.['raw'] ?? '\n')
         // In a list item, the marker's width in place of what the reader left of the source's indent, which differs
         // between Tiptap's lists.
-        const raw = indent ? wrap.replace(/\n[ \t]*/u, `\n${indent}`) : wrap
+        const raw = indent === undefined ? wrap : wrap.replace(/\n[ \t]*/u, `\n${indent}`)
         content.push({ type: 'text', text: raw, marks })
     })
     return { ...node, content: joinText(content) }
 }
 
 // The indent of the lines a soft break starts in `child`, the `i`th child of `node`: a list hands each item its
-// marker's width (`- `, `- [ ] ` as `- `, `12. `), which the item hands its first paragraph. Any other line is
-// indented, or quoted, by the block around it as it is written.
-function indentIn(node: JSONContent, child: JSONContent, i: number, indent: string): string {
-    if (node.type === 'bulletList' || node.type === 'taskList') {
+// marker's width (`- `, `12. `), which the item hands its first paragraph. A task item indents its first paragraph's
+// lines itself, by the configured indentation, so its list hands it none. Any other line is indented, or quoted, by
+// the block around it as it is written.
+function indentIn(node: JSONContent, child: JSONContent, i: number, indent: string | undefined): string | undefined {
+    if (node.type === 'bulletList') {
         return '  '
+    }
+    if (node.type === 'taskList') {
+        return ''
     }
     if (node.type === 'orderedList') {
         const start = Number(node.attrs?.['start'] ?? 1)
         return ' '.repeat(`${(Number.isFinite(start) ? start : 1) + i}. `.length)
     }
     if (node.type === 'listItem' || node.type === 'taskItem') {
-        return i === 0 && child.type === 'paragraph' ? indent : ''
+        return i === 0 && child.type === 'paragraph' ? indent : undefined
     }
-    return ''
+    return undefined
 }
 
 // Adjacent text nodes with the same marks, as one.
