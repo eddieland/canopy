@@ -5,12 +5,11 @@ or, while none is approved, the proposed one's, and a plan that will not read se
 """
 
 from canopy.core import conversation, db, epics, records
-from canopy.core.context import Context
 from canopy.core.vocab import RunStatus
 from canopy.serve.backend import Backend
 from canopy.serve.mock import epics as mock_epics
 from tests.canopy.helpers import present
-from tests.canopy.web_helpers import client
+from tests.canopy.web_helpers import client, replan_epic, start_epic_run
 
 APPROVED, PROPOSED, PLANNING = mock_epics.APPROVED, mock_epics.PROPOSED, mock_epics.PLANNING
 
@@ -85,10 +84,16 @@ def test_a_just_submitted_epic_has_its_plan_run_working_and_no_plan(backend: Bac
 def test_an_epics_plans_are_each_as_its_file_stands(backend: Backend) -> None:
     c = client(None, backend)
     found = c.get(f"/api/epics/{PROPOSED}/plans").json()
-    assert found["planning"] is None
+    # Its reply was read by the run that wrote the plan that waits: no changes are asked of it.
+    assert (found["planning"], found["changes_asked"]) == (None, None)
     assert [p["plan"]["status"] for p in found["plans"]] == ["superseded", "proposed"]
     assert all(p["text"].startswith("# Offline order history") and not p["edited"] for p in found["plans"])
-    assert c.get(f"/api/epics/{PLANNING}/plans").json() == {"epic_id": PLANNING, "planning": 4, "plans": []}
+    assert c.get(f"/api/epics/{PLANNING}/plans").json() == {
+        "epic_id": PLANNING,
+        "planning": 4,
+        "plans": [],
+        "changes_asked": None,
+    }
 
     # An approved plan's file edited since: canopy still reads the copy the operator approved.
     with backend.open() as ctx:
@@ -135,7 +140,7 @@ def test_a_member_whose_entry_a_later_approval_dropped_comes_back_as_such(backen
         text = epics.plan_path(ctx.state_dir, APPROVED, old.run_id).read_text()
         # The next plan drops B2, its retries, and B4's wait on it with it.
         start, end = text.index("### B2."), text.index("### B3.")
-        replan(ctx, APPROVED, text[:start] + text[end:])
+        replan_epic(ctx, APPROVED, text[:start] + text[end:])
         epics.approve(
             ctx.conn,
             ctx.state_dir,
@@ -166,7 +171,7 @@ def test_an_epic_waits_for_a_run_then_for_a_reply_once_its_run_wrote_no_plan(bac
     assert (listed["id"], listed["standing"], listed["text"]) == (epic.id, "queued", "Plan the  move.")
 
     with backend.open() as ctx:
-        run_id = start(ctx, epic.id)
+        run_id = start_epic_run(ctx, epic.id)
         records.update(records.EpicRun).set(
             status=RunStatus.UNKNOWN,
             ended_at=db.now(),
@@ -187,23 +192,3 @@ def test_an_unknown_epic_is_a_404(backend: Backend) -> None:
     c = client(None, backend)
     assert c.get("/api/epics/99").status_code == 404
     assert c.get("/api/epics/99/plans").status_code == 404
-
-
-def start(ctx: Context, epic_id: int) -> int:
-    """Record a plan run of the epic, running, as a tick starts one: return its id."""
-    insert = records.insert(
-        records.EpicRun,
-        epic_id=epic_id,
-        tick_id=2,
-        desk_path="",
-        started_at=db.now(),
-        log_path="",
-    )
-    return db.rowid(insert.run(ctx.conn))
-
-
-def replan(ctx: Context, epic_id: int, text: str) -> None:
-    """Have a plan run of the epic write `text`, recorded as its newest plan, as a run that ends `done` does."""
-    run_id = start(ctx, epic_id)
-    epics.record_plan(ctx.conn, epic_id, run_id, epics.write_plan(ctx.state_dir, epic_id, run_id, text))
-    records.update(records.EpicRun).set(status=RunStatus.DONE, ended_at=db.now()).where("id = ?", run_id).run(ctx.conn)

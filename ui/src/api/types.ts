@@ -359,8 +359,17 @@ export type EpicPlanRun = Schemas['EpicPlanRun']
 export type EpicPlanSummary = Schemas['EpicPlanSummary']
 /** One of an epic's plans as its file stands now. */
 export type EpicPlanFile = Schemas['EpicPlanFile']
-/** An epic's plans, each as its file stands, and the plan run writing the next, if one is. */
+/**
+ * An epic's plans, each as its file stands, the plan run writing the next, if one is, and changes asked of it that the
+ * next tick's plan run reads.
+ */
 export type EpicPlans = Schemas['EpicPlans']
+/** What approving an epic's plan did: the plan, and the ids it added, removed, and changed since the last approved. */
+export type EpicPlanApproved = Schemas['EpicPlanApproved']
+/**
+ * What a reply to an epic recorded, and what starts its next plan run: the next tick, after the run at work, or none.
+ */
+export type EpicReplied = Schemas['EpicReplied']
 /** A text file the operator attached to a ticket or a task, for its runs to read as data (DESIGN §22). */
 export type Attachment = Schemas['Attachment']
 /** A ticket's or a task's attachments, and the limits `policy` holds them to. */

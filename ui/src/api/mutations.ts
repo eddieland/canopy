@@ -3,6 +3,8 @@ import type { QueryClient } from '@tanstack/react-query'
 import { api, unwrap } from './client'
 import { keys } from './queries'
 import type {
+    EpicPlanApproved,
+    EpicReplied,
     LeftSent,
     AgentModel,
     Answered,
@@ -195,6 +197,32 @@ export async function replyTask(id: number, body: string, submission: string): P
     return unwrap(
         await api.POST('/api/tasks/{task_id}/replies', {
             params: { path: { task_id: id } },
+            body: { body, submission },
+        }),
+    )
+}
+
+/**
+ * `canopy plan epic:N --approve`: approve the epic's waiting plan as its file stands (DESIGN §43), refused `stale` when
+ * the file is not the one `readSha256`, its hash as the page read it, names.
+ */
+export async function approveEpicPlan(id: number, readSha256: string): Promise<EpicPlanApproved> {
+    return unwrap(
+        await api.POST('/api/epics/{epic_id}/plan/approval', {
+            params: { path: { epic_id: id } },
+            body: { read_sha256: readSha256 },
+        }),
+    )
+}
+
+/**
+ * `canopy reply epic:N`: ask for changes to the epic's plan, which its next plan run reads. `submission` makes a resend
+ * a no-op.
+ */
+export async function replyEpic(id: number, body: string, submission: string): Promise<EpicReplied> {
+    return unwrap(
+        await api.POST('/api/epics/{epic_id}/replies', {
+            params: { path: { epic_id: id } },
             body: { body, submission },
         }),
     )

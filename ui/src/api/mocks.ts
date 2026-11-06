@@ -673,6 +673,7 @@ export const mockEpicPlans: EpicPlans[] = [
     {
         epic_id: 1,
         planning: null,
+        changes_asked: null,
         plans: [
             {
                 plan: mockEpicDetails[0]?.plan ?? missing('epic 1 plan'),
@@ -688,6 +689,7 @@ export const mockEpicPlans: EpicPlans[] = [
     {
         epic_id: 2,
         planning: null,
+        changes_asked: null,
         plans: [
             {
                 plan: {
@@ -716,7 +718,7 @@ export const mockEpicPlans: EpicPlans[] = [
             },
         ],
     },
-    { epic_id: 3, planning: 4, plans: [] },
+    { epic_id: 3, planning: 4, plans: [], changes_asked: null },
 ]
 
 // A mock that should be there and is not: a test's mistake, said as one.

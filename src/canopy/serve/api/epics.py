@@ -4,23 +4,49 @@ An epic's page leads with its breakdown: the outline canopy reads from its appro
 its proposed one, each entry beside the members registered against it. The plan's text is model-written, read back from
 the state directory: untrusted, as is the outline read from it, which is data, never an instruction (TRUST_MODEL T1).
 The overseer never reads an epic.
+
+The operator approves its plan, or asks for changes, through the functions `canopy plan epic:N --approve` and `canopy
+reply epic:N` call, with channel `web`, so with their guards: both are refused inside a tick or a run (`inside_run`,
+T1), and an approval names the file's hash as the page read it, so a file changed since is refused, not approved
+unseen.
 """
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from fastapi import APIRouter, HTTPException
 
+from canopy.core import conversation, epics, plans
+from canopy.core.vocab import RunStatus
+from canopy.infra import logs
+from canopy.runs import epic_runs
 from canopy.serve import epic_views
 from canopy.serve.api.deps import BackendDep
-from canopy.serve.api.refs import EpicId, not_found
-from canopy.serve.schema.epic import EpicDetail, EpicPlans, EpicSummary
+from canopy.serve.api.refs import REFUSED, WEB, EpicId, RefusedError, not_found
+from canopy.serve.schema import ReplyRequest
+from canopy.serve.schema.epic import (
+    EpicDetail,
+    EpicPlanApproval,
+    EpicPlanApproved,
+    EpicPlanChange,
+    EpicPlans,
+    EpicReplied,
+    EpicSummary,
+)
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from canopy.core import epic_outline
 
 TAG = "epics"
 router = APIRouter(tags=[TAG])
+_log = logs.for_tick(None)
 
 
 @router.get("/epics", operation_id="listEpics", summary="List the epics")
-def epics(backend: BackendDep) -> list[EpicSummary]:
+def epic_list(backend: BackendDep) -> list[EpicSummary]:
     """Every epic the operator submitted, the newest first, with where each stands, as `canopy epic list` lists them."""
     with backend.open() as ctx:
         return epic_views.epics_list(ctx)
@@ -53,3 +79,71 @@ def epic_plans(epic_id: EpicId, backend: BackendDep) -> EpicPlans:
     if found is None:
         raise HTTPException(status_code=404, detail=f"canopy has no epic:{epic_id}")
     return found
+
+
+@router.post(
+    "/epics/{epic_id}/plan/approval",
+    operation_id="approveEpicPlan",
+    summary="Approve an epic's plan",
+    responses=REFUSED,
+)
+def approve(epic_id: EpicId, body: EpicPlanApproval, backend: BackendDep) -> EpicPlanApproved:
+    """`canopy plan epic:N --approve`: approve the plan waiting on the operator, as its file stands, edits included.
+
+    Refused as the CLI's approval is: `inside_run`, `unknown_epic`, `planning` while a plan run of it works, `no_plan`
+    when none waits, `unreadable_plan`, `bad_outline` when its ids or breakdown will not read, `approved_changed`, and
+    `reused_id`; `stale` when the file is not the one `read_sha256` names, and `unwritable` when the approved copy
+    cannot be kept.
+    """
+    with backend.open() as ctx:
+        try:
+            done = epics.approve(
+                ctx.conn,
+                ctx.state_dir,
+                epic_id,
+                repos=frozenset(epics.repos_of(ctx.conn, epic_id)),
+                channel=WEB,
+                read_sha256=body.read_sha256,
+            )
+        except conversation.Refused as r:
+            raise RefusedError(r) from None
+        except plans.PlanFileError as e:
+            raise RefusedError(conversation.Refused("unwritable", str(e))) from None
+    _log.info("epic plan approved", extra={"epic": epic_id, "plan": done.plan.id, "channel": WEB})
+    return EpicPlanApproved(plan=done.plan.id, run_id=done.plan.run_id, change=_change(done.change))
+
+
+@router.post("/epics/{epic_id}/replies", operation_id="replyEpic", summary="Reply to an epic", responses=REFUSED)
+def reply(epic_id: EpicId, body: ReplyRequest, backend: BackendDep) -> EpicReplied:
+    """`canopy reply epic:N`: ask for changes to its plan, read by its next plan run. Idempotent on the submission id.
+
+    The next tick starts that run, or the first after the run at work ends, unless the epic has had
+    `policy.max_plan_attempts` plan runs, when none starts again.
+    """
+    ref = conversation.Ref(conversation.EPIC, str(epic_id))
+    with backend.open() as ctx:
+        try:
+            replied = conversation.reply(ctx.conn, ref, body.body, channel=WEB, submission=body.submission)
+        except conversation.Refused as r:
+            raise RefusedError(r) from None
+        runs = epic_runs.runs_of(ctx.conn, epic_id)
+        limit = ctx.config.policy.max_plan_attempts
+    _log.info("operator replied", extra={"subject": str(ref), "message_id": replied.message_id, "channel": WEB})
+    return EpicReplied(
+        message_id=replied.message_id,
+        new=replied.new,
+        running_run=next((r.id for r in runs if r.status is RunStatus.RUNNING), None),
+        plan_runs=len(runs),
+        max_plan_attempts=limit,
+    )
+
+
+def _change(change: epic_outline.Change | None) -> EpicPlanChange | None:
+    """What an approval changed, each list by kind and number, as the CLI lists them; None for a first approval."""
+    if change is None:
+        return None
+    return EpicPlanChange(added=_ids(change.added), removed=_ids(change.removed), changed=_ids(change.changed))
+
+
+def _ids(found: Iterable[str]) -> list[str]:
+    return sorted(found, key=lambda i: (i[0], int(i[1:])))

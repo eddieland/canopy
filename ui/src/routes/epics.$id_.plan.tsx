@@ -4,7 +4,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { ApiError } from '@/api/client'
 import { epicPlansQuery, epicQuery } from '@/api/queries'
 import { NoPlan } from '@/components/epic-board'
-import { EpicPlan, EpicPlanHash, EpicPlanState } from '@/components/epic-plan'
+import { EpicChangesAsked, EpicPlan, EpicPlanHash, EpicPlanState } from '@/components/epic-plan'
 import { Notice } from '@/components/notice'
 import { Empty, PageHeader, Panel, PanelLoading, PanelSkeleton } from '@/components/panel'
 import { epicId, epicTitle } from '@/lib/epics'
@@ -12,8 +12,8 @@ import { epicRef } from '@/lib/refs'
 
 // What every epic's plan page shows, on its title's hover: its description is where the plan stands.
 const HELP =
-    "An epic's plan as its file stands, read only: its newest plan, then its earlier ones. An epic's plan takes no " +
-    'comments.'
+    "An epic's plan as its file stands, read only: its newest plan, approved or sent back from its foot while it " +
+    "waits on you, then its earlier ones. An epic's plan takes no comments."
 
 /**
  * An epic's plan on a page of its own (DESIGN §43): its newest plan in the plan editor, read only and with no margin,
@@ -73,6 +73,7 @@ function EpicPlanPage() {
     return (
         <>
             {header}
+            <EpicChangesAsked plans={data} />
             {data.plans.length > 0 ? (
                 // Each epic its own plans, so an earlier plan opened on one is never open on another.
                 <EpicPlan key={data.epic_id} epic={data.epic_id} plans={data} />
