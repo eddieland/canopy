@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { mockEpicDetails, mockEpics } from '@/api/mocks'
 import type { EpicMember } from '@/api/types'
 
-import { EPIC_LOOK, citedBy, cites, entriesFiled, epicId, epicTitle, unplaced } from './epics'
+import { EPIC_LOOK, breakdownFull, citedBy, cites, entriesFiled, epicId, epicTitle, unplaced } from './epics'
 
 describe('EPIC_LOOK', () => {
     it('colors each standing as the run state it means: a proposed plan waits on you, one with none is stuck', () => {
@@ -27,6 +27,17 @@ describe('epicTitle', () => {
     it("names an epic by its goal's first line that holds anything", () => {
         expect(epicTitle('\n  Move billing to v2.  \n\nThen retire v1.')).toBe('Move billing to v2.')
         expect(epicTitle('   ')).toBe('   ')
+    })
+})
+
+describe('breakdownFull', () => {
+    it('reads full only once every entry of a breakdown has a member', () => {
+        expect(mockEpics.map((epic) => breakdownFull(epic))).toEqual([false, false, false, false])
+        expect(breakdownFull({ entries: 4, entries_with_members: 4 })).toBe(true)
+        expect(breakdownFull({ entries: 4, entries_with_members: 3 })).toBe(false)
+        // No breakdown, or one with no entries, has nothing to fill.
+        expect(breakdownFull({ entries: null, entries_with_members: 0 })).toBe(false)
+        expect(breakdownFull({ entries: 0, entries_with_members: 0 })).toBe(false)
     })
 })
 

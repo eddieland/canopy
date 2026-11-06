@@ -62,6 +62,14 @@ export function entriesFiled(epic: Pick<EpicSummary, 'entries' | 'entries_with_m
     return `${String(epic.entries_with_members)} of ${String(epic.entries)} ${noun} filed`
 }
 
+/**
+ * Whether every entry of an epic's breakdown has a member: its plan's map is filed whole. Only an approved breakdown
+ * counts members, so a proposed one never reads full, nor one with no entries to fill.
+ */
+export function breakdownFull(epic: Pick<EpicSummary, 'entries' | 'entries_with_members'>): boolean {
+    return epic.entries !== null && epic.entries > 0 && epic.entries_with_members === epic.entries
+}
+
 // An epic's id as its page's path holds it: a whole number, as `canopy show epic:N` reads one.
 const EPIC_ID = /^[1-9]\d*$/u
 
