@@ -692,6 +692,23 @@ def test_a_closed_ticket_agrees_when_marked_done_and_a_stale_one_is_counted_apar
     assert phases.describe(Counter()) == ""
 
 
+def test_an_open_ticket_no_candidate_is_compared_only_when_the_overseer_decided_it(
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+) -> None:
+    # One left out of the block (`let_go`) is decided by no one, so it neither agrees nor disagrees.
+    with in_tick(conn) as tick_id:
+        recorded(
+            conn,
+            tick_id,
+            phases.Derived("PROJ-1", None, candidate=False, closed=False),
+            phases.Derived("PROJ-2", None, candidate=False, closed=False),
+        )
+        db.record_decision(conn, tick_id, "PROJ-2", "skip", "not_labeled")
+        phases.record_overseer(conn, tick_id)
+    assert [(c.ticket_key, c.verdict) for c in phases.compare(conn, tick_id)] == [("PROJ-2", "agrees")]
+
+
 def test_a_tick_derives_in_shadow_and_records_the_phase_its_overseer_left(
     scenario: Scenario,
     connector_state: Path,

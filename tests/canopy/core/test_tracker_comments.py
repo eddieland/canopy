@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from canopy.core import conversation, db, records
-from tests.canopy.helpers import KEY, present, waits
+from tests.canopy.helpers import KEY, LABEL, present, waits
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -51,8 +51,8 @@ def soon() -> str:
 
 
 def plays(state: Path, *lines: dict[str, object]) -> None:
-    """Have the fake tracker connector read KEY whole, with `lines`."""
-    ticket = {"kind": "ticket", "key": KEY, "title": "Fix the build", "state": "open"}
+    """Have the fake tracker connector read KEY whole, open with the queue label, with `lines`."""
+    ticket = {"kind": "ticket", "key": KEY, "title": "Fix the build", "state": "open", "labels": [{"name": LABEL}]}
     state.write_text(json.dumps({"jira": {"lines": [ticket, *lines]}}))
 
 

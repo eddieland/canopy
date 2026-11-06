@@ -231,7 +231,9 @@ def _render(
     by_harness = harness.recorded(ctx.conn, tick_id)
     to_come = harness_dispatches.plan(ctx, tick_id, now)
     decided = frozenset([*(str(d.ticket_key) for d in by_harness), *(r.key for r in to_come.runs)])
-    tickets = [t for t in db.open_tickets(ctx.conn) if t.key not in stopped and t.key not in decided]
+    # One whose label was removed, or that never had one, is no one's to decide each tick (DESIGN §7).
+    left = decided | phases.let_go(ctx.conn, phases.recorded(ctx.conn, tick_id))
+    tickets = [t for t in db.open_tickets(ctx.conn) if t.key not in stopped and t.key not in left]
     private = {t.key: found for t in tickets if (found := conversation.state_section(ctx.conn, t)) is not None}
     # A public ticket's comments on artifacts that are authority are shown with its operator messages (DESIGN §38).
     authors = frozenset(ctx.config.artifacts.authorized_authors)
