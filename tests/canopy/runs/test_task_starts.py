@@ -25,6 +25,7 @@ from canopy.core import (
     db,
     prompts,
     records,
+    run_inbox,
     run_models,
     spend,
     sql,
@@ -468,6 +469,35 @@ def test_a_task_run_keeps_its_workers_progress_but_never_a_question(
     assert "\n      now: warming the cache\n      next: push\n" in shown
 
 
+@pytest.mark.parametrize("fetches", [True, False], ids=["fetched", "never-fetched"])
+def test_a_reply_to_a_running_task_reaches_its_run_and_one_it_fetched_and_reported_on_queues_no_run(
+    canopy_env: CanopyEnv,
+    inline: Context,
+    agent_log: Path,
+    capsys: pytest.CaptureFixture[str],
+    fetches: bool,  # noqa: FBT001  (a parameter)
+) -> None:
+    """A reply while the task's run runs reaches that run as a message to it, sent before its directory was made too."""
+    with_events(canopy_env, "canopy-worker-private")
+    submit()
+    [started] = start(inline)
+    capsys.readouterr()
+    assert operator("reply", "task:1", "Time the warm build too.") == 0
+    # Its directory is made as the run starts, so this one is written there then.
+    assert "hears that it waits" not in capsys.readouterr().out
+    reads = [calls(run_inbox.tool_name())] if fetches else []
+    with private_worker_does(["true"], result=DONE, tools=reads):
+        run = run_task(inline, started.run_id)
+    [ran] = agent_runs(agent_log)
+    assert ran["env"][cards.ANSWERS_ENV] == str(task_starts.answers_dir(Path(run.log_path)))
+    [message] = run_inbox.sent_to(inline.conn, "task_runs", run.id)
+    assert (message.fetched_at is not None) is fetches
+    if fetches:
+        assert "> Time the warm build too." in ran["tools"][0]["text"]
+    # One its run fetched and reported on is answered; one it never fetched asks for the task's next run.
+    assert [t.id for t in tasks.queued(inline.conn)] == ([] if fetches else [1])
+
+
 def test_commits_the_worker_left_unpushed_are_pushed_once(inline: Context, git_pool: GitPool) -> None:
     submit()
     [started] = start(inline)
@@ -673,7 +703,9 @@ def test_a_task_in_a_repository_without_a_list_hears_none_and_is_not_held(
         run = run_task(checking, started.run_id)
     [worker] = agent_runs(agent_log)
     assert "keeps a checklist" not in told(worker)
-    assert "CANOPY_ANSWERS" not in worker["env"]
+    # It still has an answers directory, where the operator's messages reach it (DESIGN §44), but no list in it.
+    answers = Path(worker["env"]["CANOPY_ANSWERS"])
+    assert not checklists.file_of(answers, "repo").exists()
     assert all(c["returncode"] == 0 for c in worker["commands"])
     assert run.status is RunStatus.DONE
     assert checklist_answers.of_run(checking.conn, run.id, table="task_runs") == []

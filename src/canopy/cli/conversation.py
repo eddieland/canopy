@@ -436,15 +436,23 @@ def cmd_reply(click_ctx: click.Context, ref: str, text: str | None) -> int:
     not wake for it. On `review:ID` it says what to change in that review's draft: the next tick revises it with an
     agent, which reads the PR and the draft and makes a new version, posting nothing, unless you change the draft first.
 
-    On a running run, `run:ID` for a worker or a planner and `review:ID` for a review, TEXT is the letter of one of the
+    On a running run, `run:ID` for a worker or a planner and `review:ID` for a review, a lone letter is one of the
     options its question offers: the agent hears it on its next tool call, and has worked around the question
     until then. A later letter replaces it. Once a review has ended, a lone letter is refused rather than noted on its
     draft, if it asked a question.
+
+    On `run:ID`, any other TEXT is a message to the running worker or planner, in your own words, such as that its
+    ticket's scope changed: its agent hears on its next tool call that a message waits, and reads it through canopy's
+    tool. One it reads and then reports on is answered; one it never reads, or reads and then fails, waits for the
+    ticket's next run, as a reply to the ticket does. A reply to `task:N` while its run runs reaches that run so too.
+    A run that has ended takes no message: reply to its ticket instead.
     """
     _operator("reply")
     subject = _ref(ref, "reply")
     body = sys.stdin.read() if text in {None, "-"} else text
     ctx = open_context(click_ctx)
+    if subject.kind == conversation.RUN and not _letter(body):
+        return _message_run(ctx, subject, body)
     if subject.kind == conversation.RUN or (subject.kind == conversation.REVIEW and _running_review(ctx, subject)):
         return _answer(ctx, subject, body)
     if subject.kind == conversation.REVIEW:
@@ -461,10 +469,38 @@ def cmd_reply(click_ctx: click.Context, ref: str, text: str | None) -> int:
         click.echo(f"Recorded message {replied.message_id} on {subject}{answered}.")
     else:
         click.echo(f"Message {replied.message_id} on {subject} already says this{answered}; nothing new recorded.")
+    if replied.told:
+        click.echo("Its running run's agent hears that it waits on its next tool call.")
     if subject.kind == conversation.TASK:
         tasks_cli.replied(ctx, int(subject.id))
     if subject.kind == conversation.EPIC:
         epics_cli.replied(ctx, int(subject.id))
+    return 0
+
+
+def _letter(body: str) -> bool:
+    """Whether a reply to a run is a lone letter, which answers its question, rather than words, a message to it."""
+    said = body.strip()
+    return len(said) == 1 and said.isascii() and said.isalpha()
+
+
+def _message_run(ctx: Context, subject: Ref, body: str) -> int:
+    try:
+        replied = conversation.reply(ctx.conn, subject, body, channel=CLI, state_dir=ctx.state_dir)
+    except conversation.Refused as r:
+        raise CliError(f"reply refused ({r.guard}): {r.reason}") from None
+    logs.for_tick(None).info(
+        "run messaged",
+        extra={"subject": str(subject), "message_id": replied.message_id, "new": replied.new, "told": replied.told},
+    )
+    if replied.new:
+        click.echo(f"Recorded message {replied.message_id} to {subject}.")
+    else:
+        click.echo(f"Message {replied.message_id} to {subject} already says this; nothing new recorded.")
+    if replied.told:
+        click.echo("Its agent hears that it waits on its next tool call, and reads it through canopy's tool.")
+    else:
+        click.echo("Its run is ending, and its agent will not hear of it: the ticket's next run reads it.")
     return 0
 
 

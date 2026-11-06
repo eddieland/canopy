@@ -129,6 +129,8 @@ permission:
   "canopy_git_files": allow
   # canopy's `status` tool, the run's progress, which writes nothing (DESIGN §41), by exact name too.
   "canopy_run_status": allow
+  # And its `messages` tool, the operator's messages to the run, which reads them and writes nothing (DESIGN §44).
+  "canopy_run_messages": allow
 ---
 
 Your task is the prompt canopy starts this run with. If it is not a "# canopy worker: plan" prompt, print

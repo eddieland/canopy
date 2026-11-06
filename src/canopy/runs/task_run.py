@@ -40,6 +40,7 @@ from canopy.core import (
     plans,
     pools,
     progress,
+    run_inbox,
     run_models,
     sandboxing,
 )
@@ -348,22 +349,25 @@ def _work(ctx: Context, run: records.TaskRun, link: bytes | None, out: TextIO, l
 
 
 def _write_checklist(ctx: Context, run: records.TaskRun) -> None:
-    """Write the list of the run's repository, if it has one, to the run's answers directory, for canopy's hook (§42).
+    """Make the run's answers directory, and write its repository's list, if it has one, there for canopy's hook (§42).
 
-    A run in a repository without a list gets no directory, and is never held.
+    The directory is where the operator's messages to the run reach its agent (§44), those sent before it was made among
+    them. A run in a repository without a list is never held.
 
     Raises:
-        SetupError: the list cannot be used or written: the tick read it to render the prompt, so it changed since, and
-            the run never runs without it.
+        SetupError: the directory cannot be made, or the list used or written: the tick read it to render the prompt,
+            so it changed since, and the run never runs without it.
     """
+    answers = starts.answers_dir(Path(run.log_path))
     try:
+        cards.make_answers(answers)
         lists = checklists.for_repos(ctx.config, [run.repo])
         if lists:
-            answers = starts.answers_dir(Path(run.log_path))
-            cards.make_answers(answers)
             checklists.write(answers, lists)
     except (checklists.ChecklistError, OSError) as e:
         raise SetupError(str(e)) from e
+    with db.transaction(ctx.conn):
+        run_inbox.deliver(ctx.conn, "task_runs", run.id, answers)
 
 
 def _keep_checklist_pushes(
@@ -515,9 +519,9 @@ def _run_agent(
     answers = starts.answers_dir(Path(run.log_path))
     listed = checklists.file_of(answers, run.repo)
     held = {slot: listed} if listed.is_file() else {}
-    if held:
-        # Where canopy's `pre-push` reads the list, which a sandboxed run may read and not write (DESIGN §24, §42).
-        env[cards.ANSWERS_ENV] = str(answers)
+    # Where canopy's `pre-push` reads the list, and canopy's plugin and `messages` tool the operator's messages, which
+    # a sandboxed run may read and not write (DESIGN §24, §42, §44).
+    env[cards.ANSWERS_ENV] = str(answers)
     env |= commit_hooks.env(snapshot, marks, os.environ, held, slots=[slot])
     done = ctx.runner.run(
         argv,

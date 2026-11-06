@@ -54,6 +54,7 @@ from canopy.core import (
     replies,
     review_answers,
     review_diff,
+    run_inbox,
     run_models,
     run_offers,
     sandboxing,
@@ -330,6 +331,9 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
                 raise SetupError(f"run {run_id} has no slots")  # noqa: TRY301  (the same handling as git failures)
             tidy.make_objects(_objects(ctx, run))
             cards.make_answers(_answers(ctx, run))
+            with db.transaction(ctx.conn):
+                # The operator's messages sent since the dispatch, before its agent had a directory (DESIGN §44).
+                run_inbox.deliver(ctx.conn, "runs", run_id, _answers(ctx, run))
             _write_checklists(ctx, run, kind, slots)
             outcome = _doer(kind)(ctx, run, slots, out, log)
         except stopping.Stopped as e:
@@ -691,9 +695,9 @@ class _Progress:
     """Each line the worker prints, as it prints it: written to the run log, and its events read (DESIGN §8).
 
     What they say so far is recorded on the run, so a running run shows its session, what it has spent, its latest
-    tool call, and its card, with the tool calls since. A line comes on `_run`'s own thread, so this may use the journal
-    connection. A journal write that fails is logged, not raised: raising would kill the worker, and the session and
-    spend are recorded again when it ends.
+    tool call, its card, with the tool calls since, and the operator's messages it fetched (DESIGN §44). A line comes
+    on `_run`'s own thread, so this may use the journal connection. A journal write that fails is logged, not raised:
+    raising would kill the worker, and the session and spend are recorded again when it ends.
     """
 
     def __init__(self, ctx: Context, run_id: int, out: TextIO, log: logs.TickAdapter) -> None:
@@ -716,6 +720,8 @@ class _Progress:
                 db.set_run_progress(self.ctx.conn, self.run_id, change.session_id, usage=change.usage, did=change.did)
                 if change.called is not None:
                     cards.record_call(self.ctx.conn, "runs", self.run_id, cards.read_call(change.called))
+                    # A `messages` call fetched what canopy wrote before it started (DESIGN §44).
+                    run_inbox.record_fetch(self.ctx.conn, "runs", self.run_id, change.called)
         except sqlite3.Error as e:
             self.log.warning("worker progress not recorded", extra={"run_id": self.run_id, "error": str(e)})
         if change.started:

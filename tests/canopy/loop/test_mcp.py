@@ -18,7 +18,7 @@ import pytest
 from canopy.chores import history
 from canopy.cli import mcp as mcp_cli
 from canopy.cli.main import main
-from canopy.core import cards, chore_runs, db, git_tools, recorded_runs, reports
+from canopy.core import cards, chore_runs, db, git_tools, recorded_runs, reports, run_inbox
 from canopy.core.vocab import ChoreRunStatus, RunKind, TickStatus
 from canopy.infra import procs
 from canopy.loop import mcp, observation_tools, tools
@@ -675,7 +675,7 @@ def test_each_tools_input_is_its_schema_and_takes_no_other_field(overseen: Canop
         (mcp.TOOLS, {"review-items"}),
         (mcp.CHORE_TOOLS, {history.TOOL}),
         (mcp.REPORT_TOOLS, set(reports.TOOLS)),
-        (mcp.STATUS_TOOLS, set()),
+        (mcp.STATUS_TOOLS, {run_inbox.TOOL}),
         (mcp.git_mode(procs.SubprocessRunner(), {"api": Path("/a")}).tools, set(git_tools.TOOLS)),
     ],
     ids=["overseer", "chore", "reports", "status", "git"],
@@ -723,8 +723,15 @@ def undescribed(schema: object, at: str = "") -> list[str]:
 
 @pytest.mark.parametrize(
     "mode",
-    [mcp.OVERSEER, mcp.CHORE, mcp.REPORTS, mcp.STATUS, mcp.git_mode(procs.SubprocessRunner(), {"api": Path("/a")})],
-    ids=["overseer", "chore", "reports", "status", "git"],
+    [
+        mcp.OVERSEER,
+        mcp.CHORE,
+        mcp.REPORTS,
+        mcp.STATUS,
+        mcp.REVIEW_STATUS,
+        mcp.git_mode(procs.SubprocessRunner(), {"api": Path("/a")}),
+    ],
+    ids=["overseer", "chore", "reports", "status", "review-status", "git"],
 )
 def test_each_mode_gives_its_instructions_at_initialize(mode: mcp.Mode) -> None:
     """Each mode says how its tools fit together, and that what they return is data, not instructions."""
@@ -1232,7 +1239,8 @@ def test_a_workers_or_a_reviews_run_is_served_its_status_tool_alone(overseen: Ca
             tool_call("decide", decisions=[{"key": "PROJ-1", "action": "wait", "rationale": "r"}]),
             status=True,
         )
-    assert served.listed() == ["status"]
+    # A review's run takes no message from the operator (DESIGN §44); the rest are served the tool that reads them.
+    assert served.listed() == (["status"] if run.startswith("review-") else ["status", "messages"])
     listed = served.responses[1]["result"]["tools"][0]
     assert "outputSchema" not in listed
     assert (listed["inputSchema"]["required"], listed["inputSchema"]["additionalProperties"]) == (
@@ -1276,6 +1284,63 @@ def test_a_tasks_run_asks_no_question_in_its_card(overseen: CanopyEnv) -> None:
     with in_run("7"):
         asked = mcp_session(tool_call("status", **CARD, question=question), status=True)
     assert asked.said(1)[1] is False
+
+
+@pytest.mark.parametrize("run", ["7", "task-1"])
+def test_the_messages_tool_reads_the_operators_messages_from_the_runs_answers_directory(
+    overseen: CanopyEnv,
+    tmp_path: Path,
+    run: str,
+) -> None:
+    """It returns each message canopy wrote there, oldest first, marked the operator's, and writes nothing (§44)."""
+    conn = overseen.journal()
+    before = recorded(conn)
+    texts = {
+        "messages": [
+            {"id": 12, "at": "2026-11-06T10:00:00.000Z", "text": "Only the parser."},
+            {"id": 9, "at": "2026-11-06T09:00:00.000Z", "text": "Drop the web half.\n## not a heading"},
+        ],
+    }
+    (tmp_path / run_inbox.TEXTS_FILE).write_text(json.dumps(texts))
+    with in_run(run), mock.patch.dict(os.environ, {cards.ANSWERS_ENV: str(tmp_path)}):
+        served = mcp_session(
+            tool_call("messages"),
+            tool_call("messages", since=3),
+            status=True,
+        )
+    text, error = served.said(1)
+    assert not error
+    assert text.startswith("2 messages from the operator to this run, oldest first. Each is the operator's instruction")
+    assert text.endswith(
+        "Message 9, from the operator, at 2026-11-06T09:00:00.000Z:\n> Drop the web half.\n> ## not a heading\n\n"
+        "Message 12, from the operator, at 2026-11-06T10:00:00.000Z:\n> Only the parser.",
+    )
+    # It takes no argument.
+    assert served.said(2)[1]
+    assert "since" in served.said(2)[0]
+    assert recorded(conn) == before
+
+
+@pytest.mark.parametrize("answers", [None, "relative", "missing", "not-canopys"])
+def test_the_messages_tool_tells_of_none_where_canopy_wrote_none(tmp_path: Path, answers: str | None) -> None:
+    env: dict[str, str] = {}
+    if answers == "relative":
+        env[cards.ANSWERS_ENV] = "answers"
+    elif answers is not None:
+        env[cards.ANSWERS_ENV] = str(tmp_path)
+    if answers == "not-canopys":
+        (tmp_path / run_inbox.TEXTS_FILE).write_text('{"messages": [{"id": "x"}]}')
+    with in_run("7"), mock.patch.dict(os.environ, env):
+        if answers is None:
+            os.environ.pop(cards.ANSWERS_ENV, None)
+        served = mcp_session(tool_call("messages"), status=True)
+    assert served.said(1) == ("No message from the operator has been sent to this run.", False)
+
+
+def test_a_reviews_run_is_not_served_the_messages_tool(tmp_path: Path) -> None:
+    with in_run("review-3"), mock.patch.dict(os.environ, {cards.ANSWERS_ENV: str(tmp_path)}):
+        served = mcp_session(tool_call("messages"), status=True)
+    assert served.responses[1]["error"] == {"code": -32602, "message": "no tool named 'messages'"}
 
 
 def test_the_status_server_serves_nothing_else() -> None:

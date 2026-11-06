@@ -14,7 +14,7 @@ import pytest
 from syrupy.assertion import SnapshotAssertion
 
 from canopy.chores import history
-from canopy.core import cards, commit_hooks, config, definitions, git_tools, plans, prompts, reports
+from canopy.core import cards, commit_hooks, config, definitions, git_tools, plans, prompts, reports, run_inbox
 from canopy.infra import resources
 from canopy.loop import mcp
 from canopy.runtime import agents, servers
@@ -659,6 +659,31 @@ def test_workers_planners_and_reviewers_may_call_the_status_tool_by_name(
 def test_no_other_agent_may_call_the_status_tool(canopy_env: CanopyEnv, agent: str, provider: str) -> None:
     _set_provider(canopy_env, provider)
     assert _opencode_disabled(_ruleset(canopy_env, agent), cards.tool_name())
+
+
+#: The agents the operator may send a message while they run, which they read through canopy's `messages` tool (§44).
+MESSAGE_TAKERS = {agents.WORKER, agents.PRIVATE_WORKER, agents.PLANNER}
+
+
+@pytest.mark.parametrize("provider", ["github", "jira"])
+@pytest.mark.parametrize("agent", sorted(MESSAGE_TAKERS))
+def test_workers_and_planners_may_call_the_messages_tool_by_name(
+    canopy_env: CanopyEnv,
+    agent: str,
+    provider: str,
+) -> None:
+    _set_provider(canopy_env, provider)
+    ruleset = _ruleset(canopy_env, agent)
+    assert _opencode_action(ruleset, run_inbox.tool_name(), "*") == "allow"
+    assert _opencode_action(ruleset, "canopy_run_messages2", "*") == "deny"
+
+
+@pytest.mark.parametrize("provider", ["github", "jira"])
+@pytest.mark.parametrize("agent", sorted(set(runtime_definitions.agent_names()) - MESSAGE_TAKERS))
+def test_no_other_agent_may_call_the_messages_tool(canopy_env: CanopyEnv, agent: str, provider: str) -> None:
+    """A reviewer keeps a card but takes no message, nor does any agent that keeps none."""
+    _set_provider(canopy_env, provider)
+    assert _opencode_disabled(_ruleset(canopy_env, agent), run_inbox.tool_name())
 
 
 #: The artifact store's tools as the runtime names them on a server called `louvre` (DESIGN §38), the feed among them.

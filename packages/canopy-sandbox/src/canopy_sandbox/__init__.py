@@ -47,9 +47,9 @@ In order, it:
    keeps in a cache, such as OpenCode's snapshots or Go's module sources, whose objects would then go when the run's
    directory does. A git run by its absolute path gets neither, and in a worktree cannot write objects at all.
 7. For a worker or a review, allows reading, never writing, the run's answers directory, `CANOPY_ANSWERS`, where canopy
-   writes the operator's answer to the question the run asks (DESIGN §41), and its repositories' checklists (§42),
-   when canopy passes one: it is the run's own, beside its other files in the workspace's `.canopy/`, which the policy
-   denies. A one-off task's run has one only for its checklist.
+   writes the operator's answer to the question the run asks (DESIGN §41), its repositories' checklists (§42), and the
+   operator's messages to it (§44), when canopy passes one: it is the run's own, beside its other files in the
+   workspace's `.canopy/`, which the policy denies. A one-off task's run has one for its checklist and its messages.
 8. Runs `srt --settings POLICY -- COMMAND...`, waits for it, removes its directory, and exits with `srt`'s status.
    The `srt` is the one `canopy sandbox setup` installed, pinned by `runtime/package-lock.json`, in
    `$XDG_DATA_HOME/canopy/sandbox-runtime/` (`~/.local/share/canopy/sandbox-runtime/` when that is unset), or else
@@ -564,10 +564,10 @@ def objects_dir(role: str) -> Path | None:
 def answers_dir(role: str) -> Path | None:
     """Return the run's answers directory, which canopy passes a worker's, a planner's, a review's, or a task's run.
 
-    A one-off task's run has one only when its repository has a checklist (DESIGN §42).
+    A one-off task's run has one for its checklist (DESIGN §42) and the operator's messages to it (§44).
 
     Returns:
-        The directory, or None for another role, or a run canopy passes none, such as a task's with no checklist.
+        The directory, or None for another role, or a run canopy passes none.
 
     Raises:
         SandboxError: it is not a run's answers directory in a workspace's `.canopy/`: an absolute path to a directory,
