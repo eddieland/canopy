@@ -12,16 +12,21 @@ from tests.canopy.helpers import present
 from tests.canopy.web_helpers import client, replan_epic, start_epic_run
 
 APPROVED, PROPOSED, PLANNING = mock_epics.APPROVED, mock_epics.PROPOSED, mock_epics.PLANNING
+STOPPED = mock_epics.STOPPED
 
 
 def test_the_mock_epics_are_listed_newest_first_each_where_it_stands(backend: Backend) -> None:
     listed = client(None, backend).get("/api/epics").json()
     assert [(e["id"], e["standing"]) for e in listed] == [
+        (STOPPED, "stopped"),
         (PLANNING, "planning"),
         (PROPOSED, "proposed"),
         (APPROVED, "approved"),
     ]
-    planning, proposed, approved = listed
+    stopped, planning, proposed, approved = listed
+    # Stopped as soon as it was submitted: it says when, and no plan run of it ever started.
+    assert (stopped["stopped_at"], stopped["entries"]) == (stopped["submitted_at"], None)
+    assert all(e["stopped_at"] is None for e in (planning, proposed, approved))
     assert (planning["repos"], planning["members"], planning["entries"]) == (["api", "web"], 0, None)
     # A proposed plan's breakdown is counted; no member is registered against one.
     assert (proposed["entries"], proposed["entries_with_members"]) == (3, 0)

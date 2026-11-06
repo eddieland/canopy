@@ -11,7 +11,9 @@ its plan, or ask for changes, through the functions `canopy plan epic:N --approv
 channel `web`, so with their guards: both are refused inside a tick or a run (`inside_run`, T1), and an approval names
 the file's hash as the page read it, so a file changed since is refused, not approved unseen. They add and remove its
 members through the functions `canopy epic add` and `remove` call, with the same guards: the bound, a ticket another
-epic holds, an entry the approved plan does not hold, and `inside_run`.
+epic holds, an entry the approved plan does not hold, and `inside_run`. They stop it through the function
+`canopy stop epic:N` calls, refused inside a tick or a run (`inside_run`) as it is, and its running plan run is ended,
+when they ask, as `--now` ends it.
 """
 
 from __future__ import annotations
@@ -38,10 +40,12 @@ from canopy.serve.schema.epic import (
     EpicPlanChange,
     EpicPlans,
     EpicReplied,
+    EpicStopped,
     EpicSubmitRequest,
     EpicSubmitted,
     EpicSummary,
 )
+from canopy.serve.schema.ticket import StopRequest
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -170,6 +174,24 @@ def reply(epic_id: EpicId, body: ReplyRequest, backend: BackendDep) -> EpicRepli
         plan_runs=len(runs),
         max_plan_attempts=limit,
     )
+
+
+@router.post("/epics/{epic_id}/stop", operation_id="stopEpic", summary="Stop an epic", responses=REFUSED)
+def stop(epic_id: EpicId, body: StopRequest, backend: BackendDep) -> EpicStopped:
+    """`canopy stop epic:N`: no plan run of it starts again; one running finishes unless `now` ends it, as `--now` does.
+
+    Its members, their work, and its plans are left as they are: a waiting plan may still be approved. Refused as the
+    CLI's stop is: `inside_run`, and `unknown_epic`.
+    """
+    with backend.open() as ctx:
+        try:
+            stopped = epics.stop(ctx.conn, epic_id)
+        except conversation.Refused as r:
+            raise RefusedError(r) from None
+        _log.info("epic stopped", extra={"epic": epic_id, "now": body.now, "channel": WEB})
+        run = stopped.running
+        ended = run is not None and body.now and backend.end_epic_run(ctx, run)
+    return EpicStopped(already=stopped.already, running_run=run.id if run is not None else None, ended=ended)
 
 
 @router.post(

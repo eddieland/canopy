@@ -1,12 +1,14 @@
 """The mock journal's epics (DESIGN §43), for `python -m canopy.serve --mock`.
 
-Three epics across the workspace's repositories, one in each place an epic's plan stands. Epic 1, over api, web, and
-mobile, was planned before its tickets existed: its plan run's plan, approved, breaks it into four entries, of which
-B4 is marked trivial. The operator filed tickets for two and registered each after the approval: ABC-103 fulfils B1,
-its PR 91 open, and ABC-104 fulfils B2, its resume running; ABC-100, a ticket the breakdown did not foresee, is a member
-of no entry. ABC-103 was planned first: its planner read the approved plan, so its own plan, approved, follows it.
-Epic 2, over mobile and web, had a plan the operator replied to, asking for changes; its second plan run wrote the plan
-that now waits on them. Epic 3, over api and web, was just submitted, and its first plan run works.
+Four epics across the workspace's repositories, one in each place an epic's plan stands, and one the operator stopped.
+Epic 1, over api, web, and mobile, was planned before its tickets existed: its plan run's plan, approved, breaks it into
+four entries, of which B4 is marked trivial. The operator filed tickets for two and registered each after the approval:
+ABC-103 fulfils B1, its PR 91 open, and ABC-104 fulfils B2, its resume running; ABC-100, a ticket the breakdown did not
+foresee, is a member of no entry. ABC-103 was planned first: its planner read the approved plan, so its own plan,
+approved, follows it. Epic 2, over mobile and web, had a plan the operator replied to, asking for changes; its second
+plan run wrote the plan that now waits on them. Epic 3, over api and web, was just submitted, and its first plan run
+works. Epic 4, over web, the operator stopped as soon as they submitted it, before a tick started its plan run: it has
+no plan, and none starts again.
 
 The plan runs, ABC-103's too, report no cost, so the spend page's totals are what they were without them. The running
 one holds no slot in the mock's pools, which show no lease for it. Every row and message here takes its id after every
@@ -33,6 +35,8 @@ APPROVED = 1
 PROPOSED = 2
 #: The epic whose first plan run works.
 PLANNING = 3
+#: The epic the operator stopped before any plan run of it started.
+STOPPED = 4
 
 # The operator's words, as typed: a paragraph is one line.
 _BILLING = (
@@ -45,6 +49,8 @@ _OFFLINE = (
     "Show a customer's order history in the mobile app when it is offline, as of their last sync. The web account "
     "page has the same list; keep the two in step."
 )
+
+_DARK = "Give the web app a dark theme that follows the system's setting."
 
 _FLAGS = "Replace the feature flags read from the `flags` table with the flags service, in api and web."
 
@@ -237,7 +243,11 @@ _EPICS = (
     (APPROVED, _BILLING, ("api", "web", "mobile"), "ABC", "cli", -720),
     (PROPOSED, _OFFLINE, ("mobile", "web"), "ABC", "web", -260),
     (PLANNING, _FLAGS, ("api", "web"), None, "cli", -3),
+    (STOPPED, _DARK, ("web",), "ABC", "web", -1),
 )
+
+#: When the operator stopped epic 4: as soon as they submitted it.
+_STOPPED_AT = -1
 
 #: A plan run's row as `seed` writes it: run, epic, started, ended, status, summary, the plan it wrote.
 type _Run = tuple[int, int, int, int | None, RunStatus, str | None, str | None]
@@ -308,6 +318,7 @@ def seed(conn: sqlite3.Connection, state_dir: Path, root: Path, at: Callable[[in
             approved = written if epic_id == APPROVED else approved
     if approved is not None:
         _approve(conn, state_dir, approved.sha256, at(-600))
+    records.update(records.Epic).set(stopped_at=at(_STOPPED_AT)).where("id = ?", STOPPED).run(conn)
     _members(conn, at)
     _member_plan(conn, state_dir, at)
 
