@@ -45,7 +45,8 @@ overseer, as it starts a task: once after the submission, and once after each re
 run per epic at a time, within `capacity.max_workers`, its attempts counted against `policy.max_plan_attempts` and
 never reset (D030). No agent approves an epic's plan: `policy.planner_may_approve` does not reach it. Once the operator
 stops an epic, no tick starts a plan run of it again and a reply to it is refused; a run at work finishes unless they
-end it, and its members and their work are left as they are.
+end it, and its members and their work are left as they are. A stop ends only its planning: its waiting plan may still
+be approved, and its members changed.
 
 Its outline is fixed: `Goal`; `Requirements`, each `R<n>` tracing to the operator's words; `Contracts` between the
 tickets, each `C<n>` with what it is, who provides it, and who uses it; `Breakdown`, each entry `B<n>` with the `R`s it
