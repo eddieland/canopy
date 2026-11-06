@@ -53,9 +53,11 @@ GATE_SHARE = 0.25
 GATE_SEARCHES = 3
 #: How a run whose slots name no repository, one of a workspace of one, is listed.
 NO_REPO = "-"
-#: A word of a plan's text, and the shape of a file's name with an extension: `README.md`, not `e.g` or `1.5`.
+#: A word of a plan's text, and the shape of a file's name with an extension: `README.md` or `a.py`, not `1.5`.
 _PLAN_WORD_RE = re.compile(r"[\w./-]+")
-_FILE_NAME_RE = re.compile(r"[\w-]{2,}(?:\.[\w-]+)*\.[A-Za-z][A-Za-z0-9]*")
+_FILE_NAME_RE = re.compile(r"[\w-]+(?:\.[\w-]+)*\.[A-Za-z][A-Za-z0-9]*")
+#: An abbreviation shaped as a file's name, a letter and a letter: `e.g`, `i.e`.
+_ABBREVIATION_RE = re.compile(r"\w\.\w")
 
 type Anchor = Literal["edit", "plan", "diff", "none"]
 
@@ -256,7 +258,8 @@ def plan_paths(text: str) -> list[str]:
     found: list[str] = []
     for m in _PLAN_WORD_RE.finditer(text):
         word = m.group().rstrip(".").removeprefix("./").strip("/")
-        if word and not word.startswith(".") and ("/" in word or _FILE_NAME_RE.fullmatch(word)):
+        named = "/" in word or (_FILE_NAME_RE.fullmatch(word) and not _ABBREVIATION_RE.fullmatch(word))
+        if word and not word.startswith(".") and named:
             found.append(word)
     return list(dict.fromkeys(found))
 
@@ -350,7 +353,7 @@ def _measure(ran: _Ran, *, state_dir: Path, version: Version) -> RunOrientation 
     """
     if ran.session_id is None:
         return None
-    read = transcript.uses(Path(ran.log_path), version=version)
+    read = transcript.uses(Path(ran.log_path), ran.session_id, version=version)
     if read is None or not read.calls:
         return None
     if read.truncated:

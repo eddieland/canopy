@@ -13,8 +13,11 @@ BASH: dict[str, object] = {
 }
 
 
+SESSION = "ses_abc123"
+
+
 def event(kind: str, part: object) -> str:
-    return json.dumps({"type": kind, "timestamp": 1, "sessionID": "ses_abc123", "part": part})
+    return json.dumps({"type": kind, "timestamp": 1, "sessionID": SESSION, "part": part})
 
 
 def tool(name: str, state: dict[str, object]) -> str:
@@ -83,3 +86,9 @@ def test_what_a_tool_call_did_to_files_is_its_act_and_the_files_it_named() -> No
     assert touched("apply_patch", {"patchText": "nothing"}) == Touch("other")
     assert touched("read", {"path": "/w/a.py"}) == Touch("other")  # OpenCode 2's field, not 1's
     assert touched("canopy_run_status", {"summary": "s"}) == Touch("other")
+
+
+def test_a_line_is_of_a_session_when_it_is_an_event_that_names_it() -> None:
+    assert transcript.in_session(tool("grep", {"status": "completed", "input": {}}), SESSION)
+    assert not transcript.in_session(tool("grep", {"status": "completed", "input": {}}), "ses_other")
+    assert not transcript.in_session("not an event", SESSION)

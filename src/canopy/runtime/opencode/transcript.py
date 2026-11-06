@@ -153,6 +153,16 @@ def called(event: Mapping[str, object]) -> Called | None:
     return Called(tool.tool, completed=tool.state.status == "completed", input=tool.state.input)
 
 
+def in_session(line: str, session_id: str) -> bool:
+    """Whether `line` is an event of session `session_id`, as `read` keeps only those.
+
+    Returns:
+        True when it is.
+    """
+    event = events.parse_event(line)
+    return event is not None and event["sessionID"] == session_id
+
+
 def touched(call: Called) -> Touch:
     """What a tool call did to files: read one, edited some, searched, or anything else, with the files it named.
 

@@ -9,7 +9,9 @@ which models it lists to run an agent on, and what each session the runtime keep
 
 from __future__ import annotations
 
+import itertools
 import re
+import shlex
 from collections.abc import Iterable, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
@@ -306,8 +308,8 @@ type Act = Literal["read", "edit", "search", "other"]
 _SEARCH_PROGRAMS = frozenset({"ack", "ag", "fd", "find", "grep", "egrep", "fgrep", "rg"})
 #: The commands of two words that do the same, git's searches.
 _TWO_WORD_SEARCHES = frozenset({"git grep", "git ls-files", "git ls-tree"})
-#: Where a shell command's pipeline, or its list of commands, starts a new stage.
-_STAGES_RE = re.compile(r"\|\||&&|[|;&\n]")
+#: The shell's tokens that start a new stage of a pipeline or a list of commands, as `shlex` splits them out.
+_SEPARATORS = frozenset({"|", "||", "&&", ";", "&", ";;", "|&"})
 #: A variable set for the command a stage runs, before its program: `LC_ALL=C grep`.
 _ASSIGNMENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=\S*")
 
@@ -325,15 +327,34 @@ def shell_searches(command: str) -> bool:
     """Whether a shell `command` searches files: a stage of it starts with a search program or `git grep` and its like.
 
     A stage is read by its first word, past any `VAR=value` before it, so `cd src && rg x` counts by its `rg`, and
-    `xargs grep x` does not count by itself. Only a measurement reads this, never a guard.
+    `xargs grep x` does not count by itself. Words are split as the shell splits them, so a separator inside quotes
+    starts no stage; a line whose quotes do not close counts as no search. Only a measurement reads this, never a guard.
 
     Returns:
         True when any stage of the command starts a search.
     """
-    for stage in _STAGES_RE.split(command):
-        words = stage.split()
-        while words and _ASSIGNMENT_RE.fullmatch(words[0]):
-            words = words[1:]
+    return any(_line_searches(line) for line in command.splitlines())
+
+
+def _line_searches(line: str) -> bool:
+    """Whether a stage of one line of a shell command starts a search, as `shell_searches` reads it.
+
+    Returns:
+        True when one does; False also when the line's quotes do not close.
+    """
+    lexer = shlex.shlex(line, posix=True, punctuation_chars=True)
+    lexer.whitespace_split = True
+    try:
+        tokens = list(lexer)
+    except ValueError:
+        return False
+    stage: list[str] = []
+    for token in [*tokens, ";"]:
+        if token not in _SEPARATORS:
+            stage.append(token)
+            continue
+        words = list(itertools.dropwhile(_ASSIGNMENT_RE.fullmatch, stage))
+        stage = []
         if not words:
             continue
         program = words[0].rsplit("/", 1)[-1]

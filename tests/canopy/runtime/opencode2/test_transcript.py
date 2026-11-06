@@ -120,3 +120,9 @@ def test_what_a_tool_call_did_to_files_is_its_act_and_the_files_it_named() -> No
     assert touched("shell", {"command": "uv run pytest"}) == Touch("other")
     assert touched("bash", {"command": "rg parse"}) == Touch("other")  # 1's name for the shell
     assert touched("edit", {}) == Touch("other")
+
+
+def test_a_line_is_of_a_session_when_it_is_an_event_that_names_it() -> None:
+    assert transcript.in_session(tool("grep", {"status": "completed", "input": {}}), SESSION)
+    assert not transcript.in_session(tool("grep", {"status": "completed", "input": {}}), "ses_other")
+    assert not transcript.in_session("not an event", SESSION)

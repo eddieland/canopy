@@ -61,7 +61,10 @@ def test_a_shell_command_searches_when_a_stage_of_it_starts_a_search() -> None:
         "git grep -n parse",
         "git ls-files src",
         "/usr/bin/fd parse",
+        "cat a|grep x",
+        "ls\nrg x",
     ):
         assert report.shell_searches(command), command
-    for command in ("uv run pytest -q", "git status", "cat src/a.py", "xargs grep x", "echo grep", ""):
+    quoted = ('echo "a; grep x"', "echo 'a | rg b'", 'grep "unclosed', "uv run pytest 2>&1 | tail")
+    for command in ("uv run pytest -q", "git status", "cat src/a.py", "xargs grep x", "echo grep", "", *quoted):
         assert not report.shell_searches(command), command

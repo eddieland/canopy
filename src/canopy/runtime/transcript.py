@@ -107,8 +107,8 @@ class Use:
     #: Whether it completed; else it ended in an error.
     completed: bool
     #: What the session's model calls that ended before this call did had cost, in dollars: the calls before the one
-    #: that made it. The latest such sum the log could price; 0 before the first.
-    spent: float
+    #: that made it. 0 before the first; None once one of them could not be priced.
+    spent: float | None
 
 
 @dataclass(frozen=True)
@@ -119,10 +119,11 @@ class Uses:
     truncated: bool = False
 
 
-def uses(path: Path, *, version: Version) -> Uses | None:
-    """Read the tool calls in the log at `path`, a run's of one session, as the runtime `version` prints them.
+def uses(path: Path, session_id: str, *, version: Version) -> Uses | None:
+    """Read `session_id`'s tool calls in the log at `path`, as the runtime `version` prints them.
 
-    The file is refused and bounded as `read` refuses and bounds it.
+    The file is refused and bounded as `read` refuses and bounds it, and another session's events are left out, as
+    `read` leaves them out.
 
     Returns:
         Each call in order, with what it did to files and the spend before it; or None for a file it refuses.
@@ -135,19 +136,20 @@ def uses(path: Path, *, version: Version) -> Uses | None:
     truncated = len(data) > MAX_BYTES
     if truncated:
         data = data[: data.rfind(b"\n", 0, MAX_BYTES) + 1]
-    touched = pick(version, one.transcript, two.transcript).touched
+    implementation = pick(version, one.transcript, two.transcript)
     # The implementation's reader, not `watch.Watch`, which would trace each call again as if it were running now.
     lines = pick(version, one.watch, two.watch).Lines()
-    spent = 0.0
+    spent: float | None = 0.0
     found: list[Use] = []
     for line in data.decode("utf-8", errors="replace").splitlines():
-        printed = lines.read(line)
+        printed = lines.read(line) if implementation.in_session(line, session_id) else None
         if printed is None:
             continue
         if printed.call is not None:
-            found.append(Use(touched(printed.call), printed.call.completed, spent))
-        if printed.ended_call and (usage := lines.usage) is not None:
-            spent = usage.cost_usd
+            found.append(Use(implementation.touched(printed.call), printed.call.completed, spent))
+        if printed.ended_call:
+            # Unknown from the first model call whose cost could not be read on, rather than a sum short of it.
+            spent = usage.cost_usd if (usage := lines.usage) is not None else None
     return Uses(found, truncated)
 
 

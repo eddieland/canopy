@@ -264,7 +264,7 @@ def test_a_missing_prompt_a_symlink_and_a_directory_are_not_read(tmp_path: Path)
 
 
 def test_a_sessions_tool_calls_read_in_order_with_what_was_spent_before_each(tmp_path: Path) -> None:
-    """The spend is of the model calls that ended before the call did; a refused file reads as None."""
+    """The spend is of the model calls that ended before the call did; another session's calls are left out."""
 
     def finished(cost: float) -> str:
         tokens = {"input": 100, "output": 20, "reasoning": 0, "cache": {"read": 0, "write": 0}}
@@ -284,8 +284,9 @@ def test_a_sessions_tool_calls_read_in_order_with_what_was_spent_before_each(tmp
         finished(0.5),
         event("step_start", {"type": "step-start"}),
         tool("bash", BASH),
+        tool("read", read, session="ses_other"),
     )
-    found = transcript.uses(path, version=Version.ONE)
+    found = transcript.uses(path, SESSION, version=Version.ONE)
     assert found is not None
     assert not found.truncated
     assert [(u.touch.act, u.touch.paths, u.completed, u.spent) for u in found.calls] == [
@@ -294,6 +295,23 @@ def test_a_sessions_tool_calls_read_in_order_with_what_was_spent_before_each(tmp
         ("read", ("/w/a.py",), True, 0.25),
         ("other", (), True, 0.75),
     ]
-    assert transcript.uses(tmp_path / "missing.log", version=Version.ONE) is None
+    assert transcript.uses(tmp_path / "missing.log", SESSION, version=Version.ONE) is None
     (tmp_path / "link.log").symlink_to(path)
-    assert transcript.uses(tmp_path / "link.log", version=Version.ONE) is None
+    assert transcript.uses(tmp_path / "link.log", SESSION, version=Version.ONE) is None
+
+
+def test_the_spend_before_a_call_is_unknown_once_a_model_calls_cost_could_not_be_read(tmp_path: Path) -> None:
+    """Rather than the sum of the calls before it, which would read as the whole."""
+    tokens = {"input": 100, "output": 20, "reasoning": 0, "cache": {"read": 0, "write": 0}}
+    grep: dict[str, object] = {"status": "completed", "input": {"pattern": "x"}, "output": "", "time": {}}
+    path = log(
+        tmp_path,
+        tool("grep", grep),
+        event("step_finish", {"type": "step-finish", "reason": "tool-calls", "cost": 0.25, "tokens": tokens}),
+        tool("grep", grep),
+        event("step_finish", {"type": "step-finish", "reason": "tool-calls", "cost": "lots", "tokens": tokens}),
+        tool("grep", grep),
+    )
+    found = transcript.uses(path, SESSION, version=Version.ONE)
+    assert found is not None
+    assert [u.spent for u in found.calls] == [0.0, 0.25, None]
