@@ -201,6 +201,11 @@ type Worker = AbstractContextManager[None]
 #: file, or the workspace's private file.
 type ConfigFile = Literal["user", "workspace", "private"]
 
+#: A ticket's plan, as `plan_approved`'s planner writes it: its acceptance, and its one step.
+PLANNED = (
+    "# Plan for PROJ-1\n\n## Acceptance\n\n- The page shows a button.\n\n## Steps\n\n### Step 1: Add the button\n\n"
+    "In `repo`, `page.py`.\n"
+)
 #: A feedback plan's text, as `feedback_planned`'s planner writes it.
 FEEDBACK_TEXT = "# Feedback plan: PROJ-1\n\n## Items\n\n### Item 501: change\n\nRename it.\n"
 #: alice's comment, which `with_a_pr` trusts her for, and bob's, on a thread of its own, both on DRAFTS_PR's head.
@@ -1308,6 +1313,19 @@ def github_stacked(state: Path, *reviews: dict[str, Any], merged: bool = True, b
     pr = {"pr": {"head_sha": FEEDBACK_HEAD, "base_ref": base}, "reviews": list(reviews), "checks": [FEEDBACK_RED]}
     blocker = {"pr": {"head_sha": "fed4321", "state": "merged" if merged else "open"}}
     state.write_text(json.dumps({"prs": {DRAFTS_PR: pr, BLOCKER_PR: blocker}}))
+
+
+def plan_approved(scenario: Scenario, text: str = PLANNED, *, approve: bool = True) -> int:
+    """A plan run of KEY that writes `text`, and the operator's approval of its plan, unless `approve` is false.
+
+    Returns:
+        The plan run's id.
+    """
+    run = scenario.run(dispatches(kind=RunKind.PLAN), worker=planner_does(plan=text))
+    assert run.status == RunStatus.DONE, run
+    if approve:
+        scenario.operator("plan", KEY, "--approve")
+    return run.id
 
 
 def feedback_planned(

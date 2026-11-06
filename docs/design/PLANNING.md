@@ -89,8 +89,8 @@ putting the plan in its PR; the prompt forbids it and push verification (§8) no
 A plan is a markdown file in canopy's state directory, outside the journal, so the operator reads it, and edits it until
 approving it, with their own tools. The journal holds each plan's status (`proposed`, `approved`, `superseded`), hashes,
 and approval, never its text. canopy never overwrites or deletes a plan file, never reads one the journal does not
-record or through a link, and shows a missing file as missing, never as an empty plan. Workers see only their copy
-(§24); a plan's event to sinks (§20) carries none of its text.
+record or through a link, and shows a missing file as missing, never as an empty plan. Workers, and the reviews of
+the ticket's PRs (§21), see only their copy (§24); a plan's event to sinks (§20) carries none of its text.
 
 `canopy archive DIR`, the operator's alone, copies every plan, superseded and feedback plans included, into a directory
 of theirs, each under a front matter of its row and its planner's persona, models, and cost, since status, approval,

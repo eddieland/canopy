@@ -286,7 +286,10 @@ the checkout and, through canopy's read-only git tools, its history (§27), and 
 writes denied by name. A review that runs the PR's tests uses the operator's own copy (§19), so runs the PR's code (§7).
 
 The prompt carries the notice to workers (§8) and asks only for what the diff itself gets wrong, so a `resume` is never
-sent to fix code its PR did not touch. Rejected: a second agent verifying each finding, doubling a review's spend.
+sent to fix code its PR did not touch. Rejected: a second agent verifying each finding, doubling a review's spend. An
+`own` review also gets its ticket's approved plan (§25), as data (T1), in a copy checked against the approval as a
+worker's is, or none, which its prompt says, if the file changed: a step left undone or a change no step plans is then a
+finding like any other.
 
 It also carries the PR's latest `done` review, its summary and the findings the operator did not dismiss, each with
 the resumed worker's answer, as data to check at the new commit: what still holds and was not declined is reported
