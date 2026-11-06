@@ -21,6 +21,7 @@ from canopy.serve.api import (
     checklists,
     chores,
     deps,
+    desks,
     dictation,
     docs,
     drafts,
@@ -57,6 +58,7 @@ from canopy.serve.api import (
 _RESOURCES = (
     overview,
     tickets,
+    desks,
     plans,
     runs,
     ticks,

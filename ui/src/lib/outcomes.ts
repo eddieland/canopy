@@ -1,6 +1,8 @@
 import { ApiError } from '@/api/client'
 import type {
     Answered,
+    DeskClosed,
+    DeskOpened,
     AgentModel,
     Attached,
     Detached,
@@ -130,6 +132,32 @@ export function taskStoppedText(id: number, stopped: TaskStopped, now: boolean):
     return stopped.ended
         ? `${head} Its run ${run} was ended and its slot returned.`
         : `${head} Its run ${run} had already ended.`
+}
+
+/**
+ * What opening a desk did, as `canopy desk KEY` says it, and the run working the ticket meanwhile, which pushes to the
+ * same branch from slots of its own.
+ */
+export function deskOpenedText(key: string, opened: DeskOpened): string {
+    const head = opened.already
+        ? `${key}'s desk is already open; close it to change its repositories.`
+        : `${key}'s desk is open.`
+    if (opened.running_run === null) {
+        return head
+    }
+    const kind = opened.running_kind === null ? '' : ` (${opened.running_kind})`
+    return (
+        `${head} Run ${opened.running_run}${kind} is working ${key} now, in slots of its own, and pushes to the same ` +
+        'branch; pull before you push.'
+    )
+}
+
+/** What closing a desk did, as `canopy desk KEY --close` says it: the slots it returned, or that none was open. */
+export function deskClosedText(key: string, closed: DeskClosed): string {
+    if (closed.returned.length === 0) {
+        return `${key} has no desk open.`
+    }
+    return `${key}'s desk is closed; its slots are returned: ${closed.returned.join(', ')}.`
 }
 
 /** What a forget cleared, and what is left for the operator: closing its PRs and deleting its branch on origin. */
