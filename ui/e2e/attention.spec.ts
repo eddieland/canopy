@@ -12,9 +12,10 @@ test('the list is most severe first, and the most severe ticket opens beside it'
     await settled(page)
     const rows = page.getByTestId('attention-list').getByRole('link')
     // Broken work, what waits on the operator, the rest by how long it has been open, then a chore's finding.
-    await expect(rows).toHaveCount(11)
+    await expect(rows).toHaveCount(12)
     const reasons = [
         'worker failed',
+        'plan review',
         'review waiting',
         'drafts waiting',
         'awaiting reply',
@@ -32,10 +33,10 @@ test('the list is most severe first, and the most severe ticket opens beside it'
     // A reason reads as words, and keeps the CLI's spelling on hover.
     await expect(rows.first().getByTitle('worker_failed')).toHaveText('worker failed')
     // A finding's id is the agent's text: its chip says `finding`, and the id sits beside its chore.
-    await expect(rows.nth(10).getByText('finding', { exact: true })).toBeVisible()
+    await expect(rows.nth(11).getByText('finding', { exact: true })).toBeVisible()
     // An item about a ticket names it by its title too; a repository's has none to name.
     await expect(rows.first()).toContainText('Fix the flaky checkout test')
-    await expect(rows.nth(7).getByText('untitled')).toHaveCount(0)
+    await expect(rows.nth(8).getByText('untitled')).toHaveCount(0)
 
     await expect(rows.first()).toHaveAttribute('aria-current', 'page')
     const detail = page.getByTestId('attention-detail')
@@ -135,6 +136,27 @@ test("a task's other item opens the task, by the link in its head too", async ({
     await expect(detail.getByTestId('attention-task').getByRole('link', { name: 'Open task:5' })).toBeVisible()
     await detail.getByRole('link', { name: 'task:5', exact: true }).click()
     await expect(page).toHaveURL(/\/tasks\/5$/u)
+})
+
+test("an epic's plan waiting is named by its goal, and leads to the plan's page, where it is approved", async ({
+    page,
+}) => {
+    await page.goto('attention')
+    await settled(page)
+    const row = page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'epic:2' })
+    // Named as the epics list names it, by its goal's first line.
+    await expect(row).toContainText('plan review')
+    await expect(row).toContainText("Show a customer's order history in the mobile app when it is offline")
+    await row.click()
+    const detail = page.getByTestId('attention-detail')
+    await expect(detail.getByTestId('epic-plan-line')).toContainText(/^Its plan 3 waits on your approval, written/u)
+    // Its plan's page is the answer, not the CLI's commands in its detail, nor a ticket's plan card or reply form.
+    await expect(detail.getByTestId('attention-command')).toHaveCount(0)
+    await expect(detail.getByTestId('plan-card')).toHaveCount(0)
+    await expect(detail.getByRole('form', { name: 'Reply' })).toHaveCount(0)
+    await expect(detail.getByRole('link', { name: 'epic:2', exact: true })).toHaveAttribute('href', /\/epics\/2$/u)
+    await detail.getByTestId('attention-epic').getByRole('link', { name: "Open epic:2's plan" }).click()
+    await expect(page).toHaveURL(/\/epics\/2\/plan$/u)
 })
 
 test("a reason says what it means on hover, in the list's row and in the item's head", async ({ page }) => {
@@ -253,9 +275,9 @@ test("Settings hides chores' findings from the list and its counts, and the list
         .click()
     await settled(page)
     const rows = page.getByTestId('attention-list').getByRole('link')
-    await expect(rows).toHaveCount(10)
+    await expect(rows).toHaveCount(11)
     await expect(rows.filter({ hasText: 'lodash-advisory' })).toHaveCount(0)
-    await expect(page.getByTestId('attention-count')).toHaveText('10')
+    await expect(page.getByTestId('attention-count')).toHaveText('11')
     const hidden = page.getByTestId('attention-findings-hidden')
     await expect(hidden).toContainText('1 chore finding hidden from this list')
 
@@ -264,7 +286,7 @@ test("Settings hides chores' findings from the list and its counts, and the list
     await page.getByRole('checkbox', { name: 'Hide chore findings' }).uncheck()
     await page.goto('attention')
     await settled(page)
-    await expect(rows).toHaveCount(11)
+    await expect(rows).toHaveCount(12)
     await expect(page.getByTestId('attention-findings-hidden')).toHaveCount(0)
 })
 
@@ -288,23 +310,23 @@ test("the list's header says the longest wait and its count, and the nav counts 
     await page.goto('attention')
     await settled(page)
     await expect(page.getByTestId('attention-oldest')).toHaveText(/^oldest waiting \S+ · $/u)
-    await expect(page.getByTestId('attention-count')).toHaveText('11')
+    await expect(page.getByTestId('attention-count')).toHaveText('12')
     // What every visit would repeat is the title's hover, so the list starts high on the page.
     await expect(page.getByRole('heading', { level: 1 })).toHaveAttribute('title', /^What needs you/u)
 
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Workspace' }).click()
     await expect(page.getByTestId('nav-attention-failed')).toHaveText('1')
-    await expect(page.getByTestId('nav-attention-waiting')).toHaveText('6')
+    await expect(page.getByTestId('nav-attention-waiting')).toHaveText('7')
     await expect(page.getByTestId('nav-attention-other')).toHaveText('4')
     // Told apart by color, so said in words too: on hover, and in the link's name.
     await expect(page.getByTestId('nav-attention-count')).toHaveAttribute(
         'title',
-        '1 broken, 6 waiting on you, 4 other',
+        '1 broken, 7 waiting on you, 4 other',
     )
     await expect(
         page
             .getByRole('navigation', { name: 'Main' })
-            .getByRole('link', { name: /1 broken, 6 waiting on you, 4 other/u }),
+            .getByRole('link', { name: /1 broken, 7 waiting on you, 4 other/u }),
     ).toHaveCount(1)
 })
 
@@ -334,7 +356,11 @@ test("a question's item is answered in its reply, with the ticket's own actions 
 test("a feedback plan's review waits on you, and links to the plan on its PR's page", async ({ page }) => {
     await page.goto('attention')
     await settled(page)
-    const row = page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'plan review' })
+    const row = page
+        .getByTestId('attention-list')
+        .getByRole('link')
+        .filter({ hasText: 'plan review' })
+        .filter({ hasNotText: 'epic:2' })
     await row.click()
     // Not a ticket plan's: nothing is answered while it waits, and no plan card stands in for it.
     await expect(row).not.toContainText('answered')

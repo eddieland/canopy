@@ -175,8 +175,9 @@ export function breakdownText(parts: readonly BreakdownPart[]): string {
  * reply, for an answer; the plan's card, for a plan; the PR's page at the plan, for a feedback plan; the proposals or
  * lessons memory's items name; the PR's threads, for the replies a run drafted; the review's page, for a review's
  * draft; the question, for a running run's or review's question in its progress, answered by letter; the task's page,
- * for a one-off task's item; the ticket's models, for a ticket's run refused its model; the
- * command to run, for an item about nothing canopy shows that names one, or one refused its model about no ticket.
+ * for a one-off task's item; the epic's plan's page, for an epic's plan waiting; the ticket's models, for a ticket's
+ * run refused its model; the command to run, for an item about nothing canopy shows that names one, or one refused its
+ * model about no ticket.
  * `ticket` is any other ticket's item, which leads with the ticket's own actions; `none`, the rest.
  */
 export type Ask =
@@ -190,6 +191,7 @@ export type Ask =
     | 'review'
     | 'question'
     | 'task'
+    | 'epic'
     | 'model'
     | 'command'
     | 'ticket'
@@ -214,6 +216,10 @@ export function ask(item: AttentionItem, ticket?: TicketSummary): Ask {
     // A task's item names `canopy` commands in its detail, but its page is where it is read and answered.
     if (item.task !== null) {
         return 'task'
+    }
+    // An epic's plan names `canopy` commands in its detail too, but its plan's page is where it is read and approved.
+    if (item.epic !== null) {
+        return 'epic'
     }
     // A chore's item too: its notes cannot fix a model, and its runs and the overseer's take theirs from config alone.
     if (modelRefused(item)) {
