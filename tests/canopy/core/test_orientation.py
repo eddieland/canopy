@@ -10,11 +10,13 @@ import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
+from unittest import mock
 
 from canopy.cli import orientation as orientation_cli
 from canopy.cli.main import main
 from canopy.core import db, orientation, plans, records, review_diff, review_runs
 from canopy.core.vocab import PoolKind, ReviewRunStatus, RunKind, RunStatus
+from canopy.runtime import transcript
 from canopy.runtime.implementation import Version
 from canopy.runtime.report import Touch
 from canopy.runtime.transcript import Use
@@ -247,6 +249,21 @@ def test_runs_are_measured_per_role_and_repository_with_the_gate(tmp_path: Path,
     month = orientation.measure(conn, NOW, 60, state_dir=tmp_path, version=Version.ONE)
     assert month.roles[1].runs == 3
     assert orientation.measure(conn, NOW - timedelta(days=60), 1, state_dir=tmp_path, version=Version.ONE).roles == ()
+
+
+def test_a_run_whose_log_was_cut_is_read_and_not_anchored(tmp_path: Path, journals: Journals) -> None:
+    """Its share would be of the calls read, not of every call it made, so it leaves the medians."""
+    conn = journals.open(tmp_path / "canopy.db")
+    calls = [GREP, read("/pool/web/1/src/a.py"), edit("/pool/web/1/src/a.py"), TESTS, TESTS, TESTS]
+    run_id = worker(conn, tmp_path, RunKind.IMPLEMENT, NOW - timedelta(hours=1), calls)
+    log = Path(present(db.get_run(conn, run_id))["log_path"])
+    # Room for the first four events of the log, its first two calls and their model calls, and no more.
+    bound = sum(len(line) + 1 for line in log.read_text().splitlines()[:4])
+    with mock.patch.object(transcript, "MAX_BYTES", bound):
+        found = orientation.measure(conn, NOW, 1, state_dir=tmp_path, version=Version.ONE)
+    [implement] = found.roles
+    assert (implement.runs, implement.read, implement.anchored, implement.calls, implement.share) == (1, 1, 0, 2, None)
+    assert found.gates[0].share is None
 
 
 def test_the_gate_holds_a_median_at_or_under_both_bounds() -> None:

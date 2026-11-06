@@ -11,8 +11,9 @@ search is a `grep` or `glob` call, or a shell command that searches (`report.she
 - a review: the first read of a file the review's kept diff changes (§21).
 
 Paths are compared by their end, a read of `/slot/src/a.py` matching `src/a.py`, since a run names files from its
-slot and a plan or a diff from the repository's root. A feedback plan's run, and any run whose anchor is not found,
-counts as read but not anchored. `canopy orientation` prints the medians per role and repository, and whether the
+slot and a plan or a diff from the repository's root. A feedback plan's run, any run whose anchor is not found, and a
+run whose log was cut at the transcript's bound, whose share would be of the calls read and not of all it made, count
+as read but not anchored. `canopy orientation` prints the medians per role and repository, and whether the
 worker runs of each repository pass the gate the milestone names: the median spends more than a quarter of its calls,
 or more than three searches, before its anchor. Read only, over the runs that ended and started in a window of local
 days (`spend.window`); a run whose log is gone, refused, or holds no tool call is counted, and not read.
@@ -352,6 +353,8 @@ def _measure(ran: _Ran, *, state_dir: Path, version: Version) -> RunOrientation 
     read = transcript.uses(Path(ran.log_path), version=version)
     if read is None or not read.calls:
         return None
+    if read.truncated:
+        return orientation_of(read.calls, None)
     return orientation_of(read.calls, _anchor(ran, read.calls, state_dir))
 
 
