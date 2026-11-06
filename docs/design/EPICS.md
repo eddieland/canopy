@@ -91,9 +91,13 @@ member, of no entry. Each reached member, by where it stands:
   data. Nothing built is rewritten;
 - a trivial member with no branch yet is approved again while the new plan still marks it trivial.
 
-The operator hears once, an `epic.changed` event (§20) naming the reached members, and decides. Once every member's PRs
-have merged, the operator may ask for one review over them together, for defects at the seams: a review request (§21)
-reading every member's merged diff with the epic plan, never automatic and never posted.
+The operator hears once, an `epic.changed` event (§20) naming the reached members, and decides.
+
+### Close-out
+
+Once every member's PRs have merged, the operator may ask for one review over them together, for defects at the seams:
+a review request (§21) reading every member's merged diff with the epic plan. Never automatic, and never posted: its
+findings stay in canopy, on the epic.
 
 ### Guards in code
 
@@ -105,8 +109,8 @@ worker per ticket; `epic_changed` refuses an `implement` as `plan_changed` does 
 
 - The plan in the tracker's epic body: its text is data (T1), and a private ticket's plan would leak.
 - One run that implements several members: one worker per ticket.
-- Filing or approving without the operator, or a plan per tracker epic found by the overseer: membership would then be
-  the tracker's word.
+- Filing or approving without the operator: PRIOR_ART's incidents are where that was the default.
+- A plan per tracker epic, found by the overseer: membership would then be the tracker's word.
 
 ### Open
 
