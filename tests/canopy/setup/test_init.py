@@ -12,10 +12,14 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import config, workspace
 from canopy.core.config import TRACKER_REQUIRED, load
-from canopy.runtime import project_config
+from canopy.runtime.implementation import Version
 from canopy.setup import init
 from canopy.setup.init import is_ssh_url, sandbox_suggestion
 from tests.conftest import CanopyEnv
+
+#: Where each runtime reads a project's config from, as its warning about a copy of canopy's agents says: OpenCode 2
+#: reads the directories above the start directory too.
+WHERE = {Version.ONE: "here", Version.TWO: "here or above"}
 
 
 @pytest.fixture
@@ -190,7 +194,10 @@ def test_init_warns_about_copies_of_canopys_agents_in_a_repository(
     old.write_text("---\ndescription: an old copy\n---\n")
     assert main(["init"]) == 0
     out = capsys.readouterr().out
-    assert f"Warning: {project_config.shadowing_message([old], version=canopy_env.runtime)}" in out
+    assert (
+        f"Warning: OpenCode config {WHERE[canopy_env.runtime]} defines one of canopy's agents or one of its MCP "
+        f"servers, `canopy` or `canopy_*` ({old})"
+    ) in out
 
 
 def test_init_explains_an_old_user_file(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
@@ -207,7 +214,10 @@ def test_init_warns_about_copies_of_canopys_agents(canopy_env: CanopyEnv, capsys
     old.write_text("---\ndescription: an old copy\n---\n")
     assert main(["init"]) == 0
     out = capsys.readouterr().out
-    assert f"Warning: {project_config.shadowing_message([old], version=canopy_env.runtime)}" in out
+    assert (
+        f"Warning: OpenCode config {WHERE[canopy_env.runtime]} defines one of canopy's agents or one of its MCP "
+        f"servers, `canopy` or `canopy_*` ({old})"
+    ) in out
     assert old.exists()
 
 

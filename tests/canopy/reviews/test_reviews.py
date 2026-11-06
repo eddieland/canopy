@@ -994,7 +994,7 @@ def test_a_reviewer_reads_its_checkouts_history_through_canopys_git_tools(
 
     [reviewer] = agent_runs(scenario.agent_log)
     slot = Path(present(reviewed.row.slot_path))
-    entry = given_server(reviewer, "canopy_git")
+    entry = given_server(reviewer, "canopy_git", scenario.env.runtime)
     assert entry["command"][-3:] == ["_mcp", "--git", f"checkout={slot}"]
     fork, diff, log, root, escape, option = reviewer["tools"]
     assert [call["error"] for call in (fork, diff, log, root)] == [False] * 4, [fork, diff, log, root]

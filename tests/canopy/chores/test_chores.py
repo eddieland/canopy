@@ -1171,9 +1171,9 @@ def test_a_chore_reads_its_earlier_runs_through_its_tool_from_a_cwd_outside_the_
     assert agent["cwd"] == str(own)
     root = canopy_env.root.absolute()
     assert agent["env"]["CANOPY_CHORE_WORKSPACE"] == str(root)
-    entry = given_server(agent, "canopy_chore")
+    entry = given_server(agent, "canopy_chore", canopy_env.runtime)
     assert (entry["command"][-2:], entry["cwd"]) == (["_mcp", "--chore"], str(root))
-    entry = given_server(agent, reports.SERVER)
+    entry = given_server(agent, reports.SERVER, canopy_env.runtime)
     assert (entry["command"][-2:], entry["cwd"]) == (["_mcp", "--reports"], str(root))
     assert json_block(agent["argv"][3])["history"] == tool == history.tool_name()
     listed, whole, other, both = agent["tools"]

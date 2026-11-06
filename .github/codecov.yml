@@ -13,14 +13,14 @@ coverage:
 # No PR comment: the statuses and codecov.io carry the numbers, and a comment on every push is noise in the thread.
 comment: false
 
-# Five uploads per commit, one from each of the test job's four slices and one from ui-check: Codecov reports only
-# once all arrive, not on the part that came first. Each carries its flag, python or ui, and the slices each a name of
-# its own, python-1 to python-4, which Codecov merges under the python flag. The uploader names every job's upload
-# alike (the run id and the workflow's name), so without flags Codecov kept only one of two, and a commit showed only
-# the UI's coverage. Keep the count in step with the test job's matrix.
+# Nine uploads per commit, one from each of the test job's eight slices, four under each runtime version, and one from
+# ui-check: Codecov reports only once all arrive, not on the part that came first. Each carries its flag, python or
+# ui, and the slices each a name of their own, python-1-1 to python-2-4, which Codecov merges under the python flag.
+# The uploader names every job's upload alike (the run id and the workflow's name), so without flags Codecov kept
+# only one of two, and a commit showed only the UI's coverage. Keep the count in step with the test job's matrix.
 codecov:
   notify:
-    after_n_builds: 5
+    after_n_builds: 9
 
 # A job that fails skips its upload, so a commit can arrive with one flag's coverage and not the other's. Carryforward
 # fills the missing flag from the nearest parent that has it, so the commit, and main's head on codecov.io, still show

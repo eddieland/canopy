@@ -1453,19 +1453,23 @@ def inline_servers(run: Mapping[str, Any]) -> dict[str, list[str]]:
     return {name: entry["command"] for name, entry in _inline_entries(run).items()}
 
 
-def given_server(run: Mapping[str, Any], server: str) -> dict[str, Any]:
+def given_server(run: Mapping[str, Any], server: str, runtime: Version) -> dict[str, Any]:
     """The entry canopy gave a fake agent's `run` for its MCP server `server`, in its inline config, outside code mode.
 
-    Code mode is off as the run's runtime turns it off: for the whole run under OpenCode 1, and in the server's own
-    entry under OpenCode 2.
+    The config is in the shape of the runtime `runtime`, and code mode off as it turns it off: OpenCode 1's servers by
+    name under `mcp`, code mode off for the whole run; OpenCode 2's under `mcp.servers`, each with it off in its entry.
     """
-    entry = _inline_entries(run)[server]
-    if "codemode" in entry:
+    inline: dict[str, Any] = json.loads(run["env"]["OPENCODE_CONFIG_CONTENT"])["mcp"]
+    if runtime == Version.TWO:
+        entry: dict[str, Any] = inline["servers"][server]
         assert entry["codemode"] is False, entry
         assert "OPENCODE_EXPERIMENTAL_CODE_MODE" not in run["env"]
-    else:
-        assert run["env"]["OPENCODE_EXPERIMENTAL_CODE_MODE"] == "false"
-    return entry
+        return entry
+    assert "servers" not in inline, inline
+    assert "codemode" not in inline[server], inline
+    assert run["env"]["OPENCODE_EXPERIMENTAL_CODE_MODE"] == "false"
+    found: dict[str, Any] = inline[server]
+    return found
 
 
 # The servers a run's inline config names, by name, in either runtime's shape: OpenCode 1's under `mcp`, OpenCode 2's
