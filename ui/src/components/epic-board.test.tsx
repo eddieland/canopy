@@ -167,6 +167,9 @@ describe('EpicBoard', () => {
         cleanup()
         await board(detail(3, { epic: { ...epic, standing: 'queued' }, runs: [] }))
         expect(screen.getByText('no plan yet: the next tick starts its plan run')).toBeTruthy()
+        cleanup()
+        await board(detail(3, { epic: { ...epic, standing: 'stopped' }, runs: [failed] }))
+        expect(screen.getByText('no plan: you stopped it, and no plan run of it starts again')).toBeTruthy()
     })
 
     it("lights a contract's entries, and the contract wherever it shows, while it is pointed at", async () => {

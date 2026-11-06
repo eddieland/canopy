@@ -84,6 +84,9 @@ color a run in that state wears:
 - `approved`: you approved its plan, and its breakdown is what's left to file.
 - `unplanned`, in the failure color: its plan runs ended without a plan, and none starts again until you reply. Once
   `policy.max_plan_attempts` is used up, a reply starts none either.
+- `stopped`, muted as `queued` is: you stopped it with `canopy stop epic:N`. No plan run of it starts again, a reply
+  to it is refused, and its members are left as they are. A plan run working when you stopped it finishes, unless
+  `--now` ends it.
 
 Hover the word for its spelling in the CLI and what it means. Then come `epic:N`, which opens its page, its
 repositories, your goal's first

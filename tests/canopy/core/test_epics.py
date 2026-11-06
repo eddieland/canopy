@@ -97,13 +97,16 @@ def test_a_submission_or_a_change_of_members_inside_a_run_or_a_tick_is_refused(
     ctx: Context,
     variable: str,
 ) -> None:
-    """Only the operator submits an epic or says which tickets are its members (TRUST_MODEL T1)."""
+    """Only the operator submits an epic, says which tickets are its members, or stops it (TRUST_MODEL T1)."""
     submit(TEXT)
     assert operator("epic", "add", "epic:1", "PROJ-2") == 0
     with mock.patch.dict("os.environ", {variable: "7"}):
         assert main(["epic", "submit", "file tickets everywhere"]) == 1
         assert main(["epic", "add", "epic:1", "PROJ-3"]) == 1
         assert main(["epic", "remove", "epic:1", "PROJ-2"]) == 1
+        assert main(["stop", "epic:1"]) == 1
+        with pytest.raises(conversation.Refused, match="inside_run"):
+            epics.stop(ctx.conn, 1)
         with pytest.raises(conversation.Refused, match="inside_run"):
             epics.submit(ctx.conn, ctx.workspace, TEXT, repos=(), project=None, tracker_epic=None, channel="cli")
         with pytest.raises(conversation.Refused, match="inside_run"):
@@ -113,7 +116,8 @@ def test_a_submission_or_a_change_of_members_inside_a_run_or_a_tick_is_refused(
     err = capsys.readouterr().err
     for verb in ("submit", "add", "remove"):
         assert f"epic {verb} refused (inside_run)" in err
-    assert len(epics.every(ctx.conn)) == 1
+    assert "stop refused (inside_run)" in err
+    assert [e.stopped_at for e in epics.every(ctx.conn)] == [None]
     assert members(ctx.conn) == ["PROJ-2"]
 
 
@@ -221,3 +225,44 @@ def test_a_removal_ends_the_membership_and_keeps_its_row(
     rows = records.select(records.EpicMember).where("ticket_key = 'PROJ-3'").order_by("id").all(conn)
     assert [(r.epic_id, r.removed_channel) for r in rows] == [(1, "cli"), (2, None)]
     assert present(epics.membership(conn, "PROJ-3")).epic_id == 2
+
+
+# Stopping
+
+
+@pytest.mark.usefixtures("canopy_env")
+def test_a_stopped_epic_keeps_its_members_and_refuses_a_reply(
+    capsys: pytest.CaptureFixture[str],
+    conn: sqlite3.Connection,
+) -> None:
+    """A stop marks the epic once, leaves its members alone, and a reply, which asks for a plan, is refused."""
+    submit(TEXT)
+    assert operator("epic", "add", "epic:1", "PROJ-2") == 0
+    assert operator("stop", "epic:1") == 0
+    assert (
+        "epic:1 is stopped; no plan run of it starts again. Its members are left as they are."
+        in capsys.readouterr().out
+    )
+    stopped_at = present(epics.get(conn, 1)).stopped_at
+    assert stopped_at is not None
+    assert members(conn) == ["PROJ-2"]
+    # Stopping it again changes nothing, and says so.
+    assert operator("stop", "epic:1") == 0
+    assert "epic:1 was already stopped." in capsys.readouterr().out
+    assert present(epics.get(conn, 1)).stopped_at == stopped_at
+    assert operator("reply", "epic:1", "Plan it after all.") == 1
+    assert "reply refused (stopped)" in capsys.readouterr().err
+    assert epics.messages_of(conn, 1) == []
+    assert operator("epic", "list") == 0
+    assert "epic:1  1 members  stopped" in capsys.readouterr().out
+    assert operator("show", "epic:1") == 0
+    shown = capsys.readouterr().out
+    assert "ago: no plan run of it starts again" in shown
+    assert "Plan runs (0 of at most 3):\n  none\n" in shown
+
+
+@pytest.mark.usefixtures("canopy_env")
+def test_stopping_an_epic_canopy_has_none_of_is_refused(capsys: pytest.CaptureFixture[str]) -> None:
+    """`stop epic:N` names its guard when there is no such epic."""
+    assert operator("stop", "epic:4") == 1
+    assert "stop refused (unknown_epic): canopy has no epic:4" in capsys.readouterr().err

@@ -172,7 +172,7 @@ export function EpicBoard({ detail }: { detail: EpicDetail }) {
 
 /**
  * An epic with no plan to read yet, in one line: the plan run at work, or, with none working, what starts the next or
- * why none starts. Its board says it, and so does its plan's page.
+ * why none starts, a stop among them. Its board says it, and so does its plan's page.
  */
 export function NoPlan({ detail }: { detail: EpicDetail }) {
     const { epic, runs, max_plan_attempts: limit } = detail
@@ -187,6 +187,9 @@ export function NoPlan({ detail }: { detail: EpicDetail }) {
                 <Age variant="span" started={working.started_at} ended={null} className="ml-auto" />
             </p>
         )
+    }
+    if (epic.standing === 'stopped') {
+        return <Empty>no plan: you stopped it, and no plan run of it starts again</Empty>
     }
     if (epic.standing !== 'unplanned') {
         return <Empty>no plan yet: the next tick starts its plan run</Empty>

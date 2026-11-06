@@ -14,8 +14,9 @@ export interface EpicLook {
  * Each standing's look, written out so a new standing fails the type check until it has one, mapped to a run state
  * by what it means, as a task's are (`TASK_LOOK`): a queued epic waits on a tick, not on the operator, so it is muted;
  * its plan run working is `running`; a proposed plan waits on the operator, `waiting on you` in the blocked color, as
- * a ticket's plan does; an approved one is settled, `done`'s color; and an epic whose plan runs ended without a plan is
- * stuck until the operator replies, in `failed`'s, as a run that left no result is.
+ * a ticket's plan does; an approved one is settled, `done`'s color; an epic whose plan runs ended without a plan is
+ * stuck until the operator replies, in `failed`'s, as a run that left no result is; and a stopped one is `stopped`, as
+ * a stopped task is, muted as a queued epic is, the two told apart by their words.
  */
 export const EPIC_LOOK: Record<EpicStanding, EpicLook> = {
     queued: { state: 'stopped', word: 'queued', meaning: 'The next tick starts its plan run.' },
@@ -35,6 +36,7 @@ export const EPIC_LOOK: Record<EpicStanding, EpicLook> = {
         word: 'unplanned',
         meaning: 'Its plan runs ended without a plan: a reply starts another, until policy.max_plan_attempts is used.',
     },
+    stopped: { state: 'stopped', word: 'stopped', meaning: 'You stopped it: no plan run of it starts again.' },
 }
 
 /** An epic's name in a list: the first line of its goal that holds anything, or the goal whole. */

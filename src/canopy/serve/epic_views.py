@@ -206,22 +206,25 @@ def _summary(ctx: Context, epic: records.Epic, outlined: _Outlined, *, due: Abst
         tracker_epic=epic.tracker_epic,
         channel=epic.channel,
         submitted_at=db.parse_time(epic.submitted_at),
-        standing=_standing(ctx.conn, epic.id, due=due),
+        stopped_at=db.parse_time(epic.stopped_at) if epic.stopped_at is not None else None,
+        standing=_standing(ctx.conn, epic, due=due),
         members=len(members),
         entries=entries,
         entries_with_members=filed,
     )
 
 
-def _standing(conn: sqlite3.Connection, epic_id: int, *, due: AbstractSet[int]) -> EpicStanding:
-    """Where the epic stands: its plan run working, else its current plan's status, else whether a run is due.
+def _standing(conn: sqlite3.Connection, epic: records.Epic, *, due: AbstractSet[int]) -> EpicStanding:
+    """Where the epic stands: its plan run working, else stopped, else its current plan's status, else a run due.
 
     Returns:
         The word, as the API's vocabulary spells it.
     """
-    if any(r.status is RunStatus.RUNNING for r in epic_runs.runs_of(conn, epic_id)):
+    if any(r.status is RunStatus.RUNNING for r in epic_runs.runs_of(conn, epic.id)):
         return "planning"
-    current = epics.current_plan(conn, epic_id)
+    if epic.stopped_at is not None:
+        return "stopped"
+    current = epics.current_plan(conn, epic.id)
     if current is not None:
         match current.status:
             case PlanStatus.PROPOSED:
@@ -233,7 +236,7 @@ def _standing(conn: sqlite3.Connection, epic_id: int, *, due: AbstractSet[int]) 
                 pass
             case _:
                 assert_never(current.status)
-    return "queued" if epic_id in due else "unplanned"
+    return "queued" if epic.id in due else "unplanned"
 
 
 def _due(ctx: Context) -> frozenset[int]:

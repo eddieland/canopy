@@ -1,8 +1,8 @@
-"""`canopy epic`: work spanning several tickets (DESIGN §43), and how `show` treats `epic:N`.
+"""`canopy epic`: work spanning several tickets (DESIGN §43), and how `show` and `stop` treat `epic:N`.
 
-A submission and each change of membership write through `canopy.core.epics`, each refusing inside canopy's own
-ticks and runs (`inside_run`): only the operator submits an epic or says which tickets are its members. A member
-is worked only once a label or a start says so, as any ticket is.
+A submission, each change of membership, and a stop write through `canopy.core.epics`, each refusing inside canopy's
+own ticks and runs (`inside_run`): only the operator submits an epic, says which tickets are its members, or stops
+it. A member is worked only once a label or a start says so, as any ticket is.
 """
 
 from __future__ import annotations
@@ -23,6 +23,7 @@ from canopy.infra.text import one_line, printable
 from canopy.runs import epic_runs
 
 if TYPE_CHECKING:
+    from canopy.core import records
     from canopy.core.context import Context
 
 CLI = "cli"
@@ -93,14 +94,15 @@ def cmd_epic_submit(
 @epic_group.command("list")
 @click.pass_context
 def cmd_epic_list(click_ctx: click.Context) -> int:
-    """List your epics, the newest first, each with how many members it has."""
+    """List your epics, the newest first, each with how many members it has, and whether you stopped it."""
     ctx = open_context(click_ctx)
     found = epics.every(ctx.conn)
     for epic in found:
         text = one_line(epic.text)
         cut = f"{text[:LIST_TEXT]}..." if len(text) > LIST_TEXT else text
         held = len(epics.members_of(ctx.conn, epic.id))
-        click.echo(f"epic:{epic.id}  {held} members  {age(epic.submitted_at)}  {cut}")
+        stopped = "  stopped" if epic.stopped_at is not None else ""
+        click.echo(f"epic:{epic.id}  {held} members{stopped}  {age(epic.submitted_at)}  {cut}")
     if not found:
         click.echo("No epics yet: `canopy epic submit TEXT` hands canopy one.")
     return 0
@@ -196,6 +198,8 @@ def show(ctx: Context, epic_id: int) -> None:
     if found is None:
         raise CliError(f"canopy has no epic:{epic_id}")
     click.echo(f"epic:{found.id}: submitted {age(found.submitted_at)} ago via {found.channel}")
+    if found.stopped_at is not None:
+        click.echo(f"  stopped {age(found.stopped_at)} ago: no plan run of it starts again")
     click.echo(f"  repositories {', '.join(epics.repos_of(ctx.conn, found.id))}")
     click.echo(f"  project {found.project}" if found.project else "  no project: it files no tickets")
     if found.tracker_epic:
@@ -211,11 +215,12 @@ def show(ctx: Context, epic_id: int) -> None:
         click.echo(f"  {member.ticket_key}  {fulfils}  added {age(member.added_at)} ago via {member.added_channel}")
     if not members:
         click.echo(f"  none yet: `canopy epic add epic:{found.id} KEY` adds one")
-    _show_plan(ctx, found.id)
+    _show_plan(ctx, found)
 
 
-def _show_plan(ctx: Context, epic_id: int) -> None:
+def _show_plan(ctx: Context, epic: records.Epic) -> None:
     """Print the epic's plan runs, each with how it ended, and its current plan's status and file (DESIGN §43)."""
+    epic_id = epic.id
     runs = epic_runs.runs_of(ctx.conn, epic_id)
     click.echo(f"\nPlan runs ({len(runs)} of at most {ctx.config.policy.max_plan_attempts}):")
     for run in runs:
@@ -225,7 +230,7 @@ def _show_plan(ctx: Context, epic_id: int) -> None:
             said = one_line(str(result.get("harness") or result.get("question") or result.get("summary") or ""))
         click.echo(f"  {run.id}  {run.status}  {age(run.started_at)} ago" + (f"  {printable(said)}" if said else ""))
     if not runs:
-        click.echo("  none yet: the next tick starts one")
+        click.echo("  none yet: the next tick starts one" if epic.stopped_at is None else "  none")
     plan = epics.current_plan(ctx.conn, epic_id)
     if plan is None:
         return
@@ -233,7 +238,7 @@ def _show_plan(ctx: Context, epic_id: int) -> None:
     reading = plans.read(path)
     where = path if reading.text is not None else f"{path} ({reading.problem})"
     click.echo(f"\nPlan: {plan.status}, written {age(plan.created_at)} ago by run {plan.run_id}\n  {where}")
-    if plan.status is PlanStatus.PROPOSED:
+    if plan.status is PlanStatus.PROPOSED and epic.stopped_at is None:
         click.echo(
             f"  `canopy plan epic:{epic_id} --approve` approves it; `canopy reply epic:{epic_id}` asks",
         )
@@ -266,6 +271,37 @@ def _show_breakdown(ctx: Context, epic_id: int) -> None:
     )
     if gone:
         click.echo(f"  Registered against entries the approved plan no longer holds: {', '.join(gone)}")
+
+
+def stop(ctx: Context, epic_id: int, *, now: bool) -> int:
+    """Stop epic `epic_id`: no tick plans it again, its members are left alone, and `now` ends its running plan run.
+
+    Returns:
+        0, once it has said what it did.
+
+    Raises:
+        CliError: the stop was refused.
+    """
+    try:
+        stopped = epics.stop(ctx.conn, epic_id)
+    except conversation.Refused as r:
+        raise CliError(f"stop refused ({r.guard}): {r.reason}") from None
+    log = logs.for_tick(None)
+    log.info("epic stopped", extra={"epic": epic_id, "now": now, "channel": CLI})
+    if stopped.already:
+        click.echo(f"epic:{epic_id} was already stopped.")
+    else:
+        click.echo(f"epic:{epic_id} is stopped; no plan run of it starts again. Its members are left as they are.")
+    run = stopped.running
+    if run is None:
+        return 0
+    if not now:
+        click.echo(f"Its plan run {run.id} is still working and will finish; --now ends it.")
+    elif epic_runs.stop_now(ctx, run, log):
+        click.echo(f"Its plan run {run.id} was ended and its slots returned.")
+    else:
+        click.echo(f"Its plan run {run.id} had already ended.")
+    return 0
 
 
 def replied(ctx: Context, epic_id: int) -> None:

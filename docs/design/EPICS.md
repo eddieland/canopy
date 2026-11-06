@@ -8,7 +8,7 @@ map. Previous: [The operator's checklist](CHECKLIST.md). Next: [Messages to runn
 
 Being built (REQUIREMENTS R28, ROADMAP M67). Built: the epic, its members, and their bound, from the CLI; its plan runs,
 which record a plan `proposed`; its approval, replies, and members registered against its entries; a member's planner,
-which reads the epic's approved plan, its plan recording which.
+which reads the epic's approved plan, its plan recording which; and stopping it, from the CLI.
 
 §25 plans one ticket. Work that spans several has no plan of its own, so each ticket's planner settles the shared
 questions again and the operator approves them again. An **epic** is that work as canopy's own subject: the
@@ -43,7 +43,9 @@ A plan run as §25's: the planner, in a desk at the epic's repositories' bases (
 file stands, or replies to ask for changes, and a new plan supersedes the old. The tick starts it in code, before the
 overseer, as it starts a task: once after the submission, and once after each reply newer than its newest plan. One plan
 run per epic at a time, within `capacity.max_workers`, its attempts counted against `policy.max_plan_attempts` and
-never reset (D030). No agent approves an epic's plan: `policy.planner_may_approve` does not reach it.
+never reset (D030). No agent approves an epic's plan: `policy.planner_may_approve` does not reach it. A stop ends only
+an epic's planning: no tick starts a plan run of it again and a reply to it is refused, while its plan may still be
+approved and its members changed.
 
 Its outline is fixed: `Goal`; `Requirements`, each `R<n>` tracing to the operator's words; `Contracts` between the
 tickets, each `C<n>` with what it is, who provides it, and who uses it; `Breakdown`, each entry `B<n>` with the `R`s it

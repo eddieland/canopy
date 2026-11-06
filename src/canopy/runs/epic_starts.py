@@ -70,7 +70,7 @@ def _start(ctx: Context, epic: records.Epic, tick_id: int, log: logs.TickAdapter
     """Lease a slot in each of `epic`'s repositories, record its plan run, and spawn its `canopy _epic`.
 
     Returns:
-        The run, or None when the epic waits: a repository has no clone here, or its pool no slot.
+        The run, or None when the epic waits, a repository with no clone here or its pool with no slot, or was stopped.
     """
     fields = {"epic": epic.id}
     names = epics.repos_of(ctx.conn, epic.id)
@@ -94,6 +94,11 @@ def _start(ctx: Context, epic: records.Epic, tick_id: int, log: logs.TickAdapter
         logs_dir=epic_runs.runs_dir(ctx),
         model=model.name if model is not None else None,
     )
+    if run_id is None:
+        # The operator stopped it since the tick read it due.
+        log.info("epic plan not started: the epic is stopped", extra=fields)
+        _give_back(ctx, leases, log)
+        return None
     try:
         pid = _spawn(ctx, epic, run_id, names)
     except _NotStarted as e:

@@ -15,9 +15,10 @@ from pydantic import Field
 from canopy.serve.schema import Message, Model, RunState
 
 type EpicStanding = Annotated[
-    Literal["queued", "planning", "proposed", "approved", "unplanned"],
+    Literal["queued", "planning", "proposed", "approved", "unplanned", "stopped"],
     Field(
-        description="Where an epic stands (DESIGN §43): `planning` while a plan run of it works; else its current "
+        description="Where an epic stands (DESIGN §43): `planning` while a plan run of it works; else `stopped` once "
+        "the operator stopped it, and no plan run of it starts again; else its current "
         "plan's status, `proposed` while it waits on the operator, `approved` once they approved it; with neither, "
         "`queued` when the next tick starts a plan run, after its submission or a reply, and `unplanned` when its "
         "runs ended without a plan canopy kept and none starts until the operator replies, or ever, once it has had "
@@ -50,6 +51,8 @@ class EpicSummary(Model):
     """Where the operator submitted it: cli or web."""
     submitted_at: datetime
     """When the operator submitted it."""
+    stopped_at: datetime | None = None
+    """When the operator stopped it; None while it is not stopped."""
     standing: EpicStanding
     """Where it stands now."""
     members: int

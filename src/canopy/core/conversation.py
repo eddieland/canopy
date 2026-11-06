@@ -135,8 +135,8 @@ VERBS: Mapping[str, tuple[str, ...]] = {
     # waits (DESIGN §36). A ticket's or a task's attachments are text its runs read (§22, `runs/attachments.py`).
     TASK: ("stop", "reply", "show", "attach", "detach"),
     # Submitted with `canopy epic submit`, its members added and removed there; a reply asks for its next plan,
-    # and `plan --approve` approves its plan (DESIGN §43).
-    EPIC: ("show", "reply", "plan"),
+    # `plan --approve` approves its plan, and stopping it ends its planning (DESIGN §43).
+    EPIC: ("stop", "show", "reply", "plan"),
 }
 # What a PR refuses beyond reviews: canopy works only tickets until PR-scoped work exists.
 _PR_WORK = (
@@ -395,11 +395,11 @@ def reply(
         message it recorded first, with what that answered.
 
     Raises:
-        Refused: `unsupported` for a subject that is not a ticket, a task, or a chore, `unknown` for a ticket that was
-            neither started nor seen by a tick, a task canopy has no record of, or a chore not in `chores`,
-            `stopped` for a task the operator stopped, `inside_run` for a task's inside a tick or a run, `bad_body` for
-            an empty body or one over 4000 characters, `bad_submission` for a submission id that is not 8 to 64
-            letters, digits, `-`, or `_`.
+        Refused: `unsupported` for a subject that is not a ticket, a task, an epic, or a chore, `unknown` for a ticket
+            that was neither started nor seen by a tick, a task or an epic canopy has no record of, or a chore not in
+            `chores`, `stopped` for a task or an epic the operator stopped, `inside_run` for either inside a tick or
+            a run, `bad_body` for an empty body or one over 4000 characters, `bad_submission` for a submission id that
+            is not 8 to 64 letters, digits, `-`, or `_`.
     """
     check_verb(ref, "reply")
     if ref.kind == REVIEW:
@@ -538,13 +538,13 @@ def write_reply(
 
 
 def check_subject(conn: sqlite3.Connection, ref: Ref) -> None:
-    """Check that a subject can take a reply or an attachment: a ticket canopy knows, a task not stopped, an epic.
+    """Check that a subject can take a reply or an attachment: a ticket canopy knows, a task or an epic not stopped.
 
     A chore takes either too.
 
     Raises:
         Refused: (`unknown`) a ticket that was neither started nor seen by a tick, or a task or an epic canopy has
-            no record of; (`stopped`) a task the operator stopped.
+            no record of; (`stopped`) a task or an epic the operator stopped.
     """
     if ref.kind == TICKET:
         if db.get_start(conn, TICKET, ref.id) is None and db.get_ticket(conn, ref.id) is None:
@@ -559,9 +559,12 @@ def check_subject(conn: sqlite3.Connection, ref: Ref) -> None:
         if row[0] is not None:
             raise Refused("stopped", f"{ref} is stopped, and nothing starts it again; submit a new task instead")
     elif ref.kind == EPIC:
-        found = sql.execute(conn, sql.select("1").from_("epics").where("id = ?", int(ref.id))).fetchone()
-        if found is None:
+        row = sql.execute(conn, sql.select("stopped_at").from_("epics").where("id = ?", int(ref.id))).fetchone()
+        if row is None:
             raise Refused("unknown", f"canopy has no {ref}")
+        if row[0] is not None:
+            # A reply asks for its next plan, which no tick starts once it is stopped.
+            raise Refused("stopped", f"{ref} is stopped, and nothing plans it again; submit a new epic instead")
 
 
 def _waiting_question(conn: sqlite3.Connection, ref: Ref) -> int | None:
