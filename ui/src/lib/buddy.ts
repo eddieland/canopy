@@ -84,6 +84,13 @@ export const TIPS = {
         'Hot take: a requirement with an id is a promise with a receipt.',
         'Haiku: one goal, many stops / a line drawn across the map / I am the next stop',
     ],
+    '/epics/$id': [
+        "It looks like you're reading a breakdown. Would you like me to file every entry as B1?",
+        'Unhelpful tip: an entry with no member is not empty. It is full of potential.',
+        'Dear diary, pointed at C1 and three rows lit up. Nobody has ever lit up when they pointed at me.',
+        'Hot take: "trivial" is a promise the plan makes so the ticket does not have to.',
+        'Haiku: covers R1 / provides C1, uses none / a stop on the line',
+    ],
     '/tasks/$id': [
         "It looks like you're reading a report. Would you like me to skim it and nod?",
         'Unhelpful tip: copy the commit, not the branch. Branches move. I would know, I am mostly branch.',

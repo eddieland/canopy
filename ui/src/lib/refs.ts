@@ -59,6 +59,14 @@ export function epicRef(id: number | string): string {
     return `epic:${id}`
 }
 
+/**
+ * One plan run of an epic, which has no reference of its own: its epic, then its number, as a task's run is:
+ * `epic:2#3`.
+ */
+export function epicRunRef(epic: number | string, id: number | string): string {
+    return `${epicRef(epic)}#${id}`
+}
+
 /** A one-off task, as `canopy show` reads it: `task:4`. */
 export function taskRef(id: number | string): string {
     return `task:${id}`

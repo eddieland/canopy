@@ -36,6 +36,13 @@ export const GHOST_TIPS = {
         'Dear Traveler, the plan named its contracts. Even the Vex keep fewer.',
         'Scanning... one plan for the whole fireteam. Each ticket still plans its own loadout.',
     ],
+    '/epics/$id': [
+        'Eyes up, Guardian. The breakdown is the raid map. "none yet" means nobody has called that encounter.',
+        'Scanning... R1 is covered twice. R3 once. Somebody is carrying.',
+        'Field report: pointed at C1. Three rows lit up. Like a Hive ritual, but useful.',
+        'Grimoire: a member of no entry walked into the raid without a loadout. It happens.',
+        'Dear Traveler, the plan marked B4 trivial. Famous last words, in my experience.',
+    ],
     '/tasks/$id': [
         "Eyes up, Guardian. It's a report. I can decrypt it, but it'll take a minute. Hold here.",
         "Grimoire: a draft PR is a Ghost that hasn't found its Guardian yet.",
