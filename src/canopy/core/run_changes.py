@@ -1,0 +1,145 @@
+"""What a worker's or a task's run changed, per repository, as the harness read it when the run ended (DESIGN §45).
+
+`runs.changes` reads each slot as the run ends, after its push and before a flaky kick (§8 step 5): the commit the run
+started from, the commit it left on origin, and the merge base with its base, and keeps two diffs beside the run's
+log, as a review keeps its one: the run's own change (`change_path`) and the branch against its base
+(`review_diff.run_path_for`, with the commit it was taken at beside it). This records them, a row per repository, in
+the transaction that closes the run, and reads them back. The commits are the harness's own reads, never the agent's
+word; the diffs are the branch's text, untrusted, read back within `review_diff`'s bounds. The rows are never removed:
+the files go with the run's others after `run_files_days` (§26).
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+from typing import TYPE_CHECKING, Literal, LiteralString, assert_never
+
+from canopy.core import records, review_diff
+
+if TYPE_CHECKING:
+    import sqlite3
+    from collections.abc import Iterable
+
+#: Why a run that crashed keeps nothing: no git runs in a slot whose links may point at a git directory the worker made
+#: (§8 step 5), and a setup failure or a signal ends the run before its slot is read.
+CRASHED = "the run crashed, so canopy read nothing of its slot and kept no diff"
+#: The tables of the runs that record what they changed: a worker's, and a one-off task's (DESIGN §36).
+type RunTable = Literal["runs", "task_runs"]
+
+
+@dataclass(frozen=True)
+class Change:
+    """One repository's range and kept diffs, as a run's end read them: what its row records."""
+
+    repo: str
+    #: The commit the run started from: origin's branch then, or the base's commit when origin had none; None when no
+    #: git ran in the slot.
+    start: str | None
+    #: Whether `start` is the base's commit, origin having had no branch.
+    start_on_base: bool = False
+    #: The commit the run left on origin's branch, before any kick; None when origin has no branch.
+    end: str | None = None
+    #: Where the diffed commit leaves the base, as the slot last fetched it.
+    merge_base: str | None = None
+    #: For a slot the run left unpushed, the last commit the run made there, whose diffs are of work not on origin.
+    unpushed: str | None = None
+    #: Whether the run's own change was kept, at `change_path`.
+    change_kept: bool = False
+    #: Whether the branch against its base was kept, at `review_diff.run_path_for`.
+    branch_kept: bool = False
+    #: Why a diff was not kept; None when both were.
+    missing: str | None = None
+
+
+def crashed(repos: Iterable[str]) -> tuple[Change, ...]:
+    """What a run that crashed records of each of its repositories: no commits, and why nothing was kept.
+
+    Returns:
+        A change per repository, each saying the run kept nothing.
+    """
+    return tuple(Change(repo, None, missing=CRASHED) for repo in repos)
+
+
+def change_path(log_path: str | Path, repo: str) -> Path:
+    """Where a run keeps the diff of its own change to `repo`: from the commit it started from to the one it left.
+
+    Returns:
+        `<id>.<repo>.change.diff` beside `log_path`. The file may not exist.
+    """
+    log = Path(log_path)
+    return log.with_name(f"{log.stem}.{repo}.change.diff")
+
+
+def files(log_path: str | Path, repos: Iterable[str]) -> list[Path]:
+    """The files a run keeps of what it changed in `repos`: each one's own change, its branch, and that diff's head.
+
+    Returns:
+        The paths, three per repository; any may not exist.
+    """
+    found: list[Path] = []
+    for repo in repos:
+        branch = review_diff.run_path_for(log_path, repo)
+        found.extend((change_path(log_path, repo), branch, branch.with_suffix(".head")))
+    return found
+
+
+def record(conn: sqlite3.Connection, run_id: int, changes: Iterable[Change], *, table: RunTable = "runs") -> None:
+    """Record what run `run_id` of `table` changed, a row per repository, in the transaction that closes it."""
+    rows = [
+        (
+            run_id,
+            c.repo,
+            c.start,
+            c.start_on_base,
+            c.end,
+            c.merge_base,
+            c.unpushed,
+            c.change_kept,
+            c.branch_kept,
+            c.missing,
+        )
+        for c in changes
+    ]
+    if not rows:
+        return
+    columns: list[LiteralString] = [
+        _column(table),
+        "repo",
+        "start_sha",
+        "start_on_base",
+        "end_sha",
+        "merge_base_sha",
+        "unpushed_sha",
+        "change_kept",
+        "branch_kept",
+        "missing",
+    ]
+    records.insert_rows(records.RunChange, columns).many(conn, rows)
+
+
+def of_run(conn: sqlite3.Connection, run_id: int, *, table: RunTable = "runs") -> list[records.RunChange]:
+    """Return what run `run_id` of `table` changed, by repository.
+
+    Returns:
+        A row per repository the run recorded; none for a run that recorded none, as one reconcile closed.
+    """
+    query = records.select(records.RunChange)
+    match table:
+        case "runs":
+            query = query.where("run_id = ?", run_id)
+        case "task_runs":
+            query = query.where("task_run_id = ?", run_id)
+        case _:
+            assert_never(table)
+    return query.order_by("repo").all(conn)
+
+
+def _column(table: RunTable) -> Literal["run_id", "task_run_id"]:
+    match table:
+        case "runs":
+            return "run_id"
+        case "task_runs":
+            return "task_run_id"
+        case _:
+            assert_never(table)

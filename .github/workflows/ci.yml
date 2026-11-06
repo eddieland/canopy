@@ -127,6 +127,8 @@ jobs:
   # The Python tests, in slices run side by side (`make test SHARD=i/n`, tests/conftest.py): on one runner they took
   # about 20 minutes (2026-11-04), longer than every other job together. Each slice keeps the runner's workers, and a
   # failing slice lets the others finish, to report every failure. Skipped on a PR that changes only ui/ and docs.
+  # Every slice runs under each runtime version (`make test RUNTIME=2`), so OpenCode 2 is held to the whole suite
+  # before it is the only one; a test marked `opencode1` runs on 1 under either.
   test:
     runs-on: ubuntu-latest
     needs: changes
@@ -139,6 +141,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        runtime: [1, 2]
         shard: [1, 2, 3, 4]
     steps:
       - name: Check out repository
@@ -161,11 +164,13 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked
 
-      # COVERAGE=1 writes coverage.xml for this slice's tests.
+      # COVERAGE=1 writes coverage.xml for this slice's tests. The slices are counted per runtime: 4, the length of
+      # `matrix.shard`, which `strategy.job-total` no longer is.
       - name: Test
         env:
-          SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
-        run: make test COVERAGE=1 SHARD="$SHARD"
+          SHARD: ${{ matrix.shard }}/4
+          RUNTIME: ${{ matrix.runtime }}
+        run: make test COVERAGE=1 SHARD="$SHARD" RUNTIME="$RUNTIME"
 
       # Codecov authenticates with the run's OIDC token, so no secret is needed; the repository only has to be added
       # on codecov.io. An upload that fails warns and leaves the check green: Codecov being down never blocks a PR.
@@ -176,7 +181,7 @@ jobs:
         with:
           files: coverage.xml
           flags: python
-          name: python-${{ matrix.shard }}
+          name: python-${{ matrix.runtime }}-${{ matrix.shard }}
           use_oidc: true
           fail_ci_if_error: false
 

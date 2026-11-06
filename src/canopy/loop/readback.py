@@ -17,7 +17,19 @@ from typing import TYPE_CHECKING, Annotated
 
 from pydantic import AfterValidator, Field, StrictInt, StrictStr
 
-from canopy.core import cards, checklist_answers, chore_result, chore_view, config, contract, conversation, db, reports
+from canopy.core import (
+    cards,
+    checklist_answers,
+    chore_result,
+    chore_view,
+    config,
+    contract,
+    conversation,
+    db,
+    reports,
+    review_diff,
+    run_changes,
+)
 from canopy.core.vocab import Decider, RunStatus
 from canopy.infra.text import one_line
 from canopy.loop import attention
@@ -25,9 +37,14 @@ from canopy.loop.render import chore_line, named, prs_of, result_of, spent
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+    from pathlib import Path
 
     from canopy.core import records
     from canopy.core.context import Context
+
+
+#: How many characters of a commit a range names.
+_SHORT = 12
 
 
 def _chore_name(value: str) -> str:
@@ -146,6 +163,9 @@ def read_run(ctx: Context, request: ShowRun, *, card: bool = False) -> str:
     answered = checklist_lines(checklist_answers.of_run(ctx.conn, run_id), pushed, log_path=str(run["log_path"]))
     if answered:
         lines.extend(["\nChecklist:", *(f"  {line}" for line in answered)])
+    changed = change_lines(run_changes.of_run(ctx.conn, run_id), log_path=str(run["log_path"]))
+    if changed:
+        lines.extend(["\nChanged:", *(f"  {line}" for line in changed)])
     # Its agent's progress, while it runs and its last once it ends (DESIGN §41).
     running = run["status"] == RunStatus.RUNNING
     standing = cards.of(run)
@@ -189,6 +209,38 @@ def checklist_lines(
     for p in pushes:
         diff = checklist_answers.diff_path(log_path, p.repo, p.shown_sha)
         lines.append(f"{p.repo}  pushed {p.shown_sha[:12]}..{p.pushed_sha[:12]} after the list, diff {diff}")
+    return lines
+
+
+def change_lines(changes: Sequence[records.RunChange], *, log_path: str) -> list[str]:
+    """What a run changed in each repository (DESIGN §45): its range in short commits, and where its diffs are kept.
+
+    `canopy show run:ID` prints them under a heading, and `canopy show task:N` under each of its runs. A range is from
+    the commit the run started from to the one it left on origin, or, for a slot it left unpushed, to the last commit it
+    made there, marked as not on origin. A diff that was not kept is said to be missing, with why; one kept and since
+    removed with the run's other files (§26) is said to be removed.
+
+    Returns:
+        The lines, unindented: a repository's range, then a line for each diff kept, then why one was not.
+    """
+    lines: list[str] = []
+    for c in changes:
+        if c.start_sha is None:
+            lines.append(f"{c.repo}  nothing read: {one_line(c.missing or '')}")
+            continue
+        start = c.start_sha[:_SHORT]
+        head = c.unpushed_sha or c.end_sha
+        span = f"{start}..{head[:_SHORT]}" if head is not None else f"from {start}, no branch on origin"
+        base = ", from its base" if c.start_on_base else ""
+        fork = f", merge base {c.merge_base_sha[:_SHORT]}" if c.merge_base_sha is not None else ""
+        left = "; not on origin: the run left it unpushed" if c.unpushed_sha is not None else ""
+        lines.append(f"{c.repo}  {span}{base}{fork}{left}")
+        if c.change_kept:
+            lines.append(f"  its change {_kept(run_changes.change_path(log_path, c.repo))}")
+        if c.branch_kept:
+            lines.append(f"  against its base {_kept(review_diff.run_path_for(log_path, c.repo))}")
+        if c.missing is not None:
+            lines.append(f"  not kept: {one_line(c.missing)}")
     return lines
 
 
@@ -257,3 +309,8 @@ def _message_head(m: records.Message) -> str:
         about += f" answering {m.answers}"
     via = f" via {m.channel}" if m.source == "operator" else ""
     return f"  #{m.id}  {attention.age(m.at)} ago  {who} {m.kind}{about}{via}"
+
+
+def _kept(path: Path) -> str:
+    """Return a kept diff's path, said to be removed once garbage collection removed it (DESIGN §26)."""
+    return f"{path}" if path.is_file() else f"{path}, since removed"

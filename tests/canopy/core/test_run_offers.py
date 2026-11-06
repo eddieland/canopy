@@ -115,6 +115,7 @@ def probing(conn: sqlite3.Connection, runner: procs.Runner, argv: Sequence[str])
         yield
 
 
+@pytest.mark.opencode1  # OpenCode 1's `debug`, with its tools by agent
 # A pool the worker can push from.
 @pytest.mark.usefixtures("git_pool")
 def test_each_run_records_what_the_runtime_offered_its_agent(
