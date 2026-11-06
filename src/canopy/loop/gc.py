@@ -44,7 +44,14 @@ KIB = 1024
 MIB = KIB * KIB
 _COUNT_OBJECTS_TIMEOUT_SECONDS = 60
 #: A table of the journal a pass removes rows of (DESIGN §26, The journal).
-type RowTable = Literal["decisions", "connector_runs", "derivations", "observed_check_runs", "observed_status_runs"]
+type RowTable = Literal[
+    "decisions",
+    "connector_runs",
+    "derivations",
+    "request_derivations",
+    "observed_check_runs",
+    "observed_status_runs",
+]
 # The bytes of each row's text, in each table a pass removes rows of: what it holds, not the pages it fills.
 _DECISION_BYTES = sql.frag(
     "length(CAST(action AS BLOB)) + length(CAST(rationale AS BLOB)) + length(CAST(created_at AS BLOB)) + "
@@ -59,6 +66,10 @@ _RUN_BYTES = sql.frag(
 _DERIVED_BYTES = sql.frag(
     "length(CAST(ticket_key AS BLOB)) + coalesce(length(CAST(repo AS BLOB)), 0) + length(CAST(phases AS BLOB)) + "
     "coalesce(length(CAST(stale AS BLOB)), 0) + coalesce(length(CAST(overseer_phase AS BLOB)), 0)",
+)
+_REQUEST_DERIVED_BYTES = sql.frag(
+    "length(CAST(pr_url AS BLOB)) + length(CAST(action AS BLOB)) + coalesce(length(CAST(reason AS BLOB)), 0) + "
+    "coalesce(length(CAST(head_sha AS BLOB)), 0) + coalesce(length(CAST(stale AS BLOB)), 0)",
 )
 _CHECK_RUN_BYTES = sql.frag(
     "length(CAST(pr_url AS BLOB)) + length(CAST(name AS BLOB)) + length(CAST(head_sha AS BLOB)) + "
@@ -277,6 +288,14 @@ def row_kinds(conn: sqlite3.Connection, now: datetime, retention: Retention) -> 
             "derivations",
             sql.frag("1"),
             _DERIVED_BYTES,
+            sql.frag("tick_id < ? AND tick_id IN (SELECT id FROM ticks WHERE started_at < ?)", window.tick_id, cutoff),
+            rule,
+        ),
+        RowKind(
+            "request derivations",
+            "request_derivations",
+            sql.frag("1"),
+            _REQUEST_DERIVED_BYTES,
             sql.frag("tick_id < ? AND tick_id IN (SELECT id FROM ticks WHERE started_at < ?)", window.tick_id, cutoff),
             rule,
         ),

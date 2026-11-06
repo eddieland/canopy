@@ -42,9 +42,10 @@ def cmd_agreement(click_ctx: click.Context, *, days: int, as_json: bool) -> int:
     A row moves into the harness only on a day of the loop that shows the derivation right on it, each disagreement
     read and attributed. This reads the live ticks of the window that closed ok and ran their overseer: per row, the
     tickets compared, how many agreed and disagreed, and the distinct tickets (situations), a floor, since one PR
-    decided each tick is one. Each disagreement is listed once per ticket and reason, with the ticks it held across
-    and the overseer's rationale, for the operator to say which side was right. A ticket with a stale subject is
-    counted apart. Then each connector source's runs and seconds.
+    decided each tick is one. The operator's review requests are one more row, review_request, each counted by its
+    PR. Each disagreement is listed once per ticket or PR and reason, with the ticks it held across and the overseer's
+    rationale, for the operator to say which side was right. A ticket or request with a stale subject is counted
+    apart. Then each connector source's runs and seconds.
     """
     ctx = open_context(click_ctx)
     found = agreement.agreement(ctx.conn, datetime.now(UTC), days)

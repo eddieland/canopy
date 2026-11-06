@@ -221,20 +221,31 @@ def test_a_ticks_derivations_go_outside_the_window_after_journal_days(
     canopy_env: CanopyEnv,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    """A review request's derivation goes as a ticket's does."""
     conn = canopy_env.journal()
     now = datetime.now(UTC)
+    pr = "https://example.test/acme/repo/pull/12"
+    conn.execute("INSERT INTO review_requests (pr_url, created_at, channel) VALUES (?, ?, 'cli')", (pr, db.now()))
     for started in (earlier(now, 200), earlier(now, 200), db.now()):
+        tick_id = ended_tick(conn, started)
         conn.execute(
             "INSERT INTO derivations (tick_id, ticket_key, repo, candidate, closed, phases) "
             "VALUES (?, ?, NULL, 1, 0, ?)",
-            (ended_tick(conn, started), KEY, '["ready"]'),
+            (tick_id, KEY, '["ready"]'),
+        )
+        conn.execute(
+            "INSERT INTO request_derivations (tick_id, request_id, pr_url, action) VALUES (?, 1, ?, 'start')",
+            (tick_id, pr),
         )
     conn.commit()
-    assert dry_run(capsys)["derivations"]["removable"] == 0, "nothing goes while the window holds every tick"
+    kinds = dry_run(capsys)
+    assert kinds["derivations"]["removable"] == 0, "nothing goes while the window holds every tick"
+    assert kinds["request derivations"]["removable"] == 0
     with mock.patch.object(attention, "HISTORY_TICKS", 1):
         kinds = dry_run(capsys)
     # The newest tick is inside the window; both older ones are past journal_days.
-    assert (kinds["derivations"]["count"], kinds["derivations"]["removable"]) == (3, 2)
+    for kind in ("derivations", "request derivations"):
+        assert (kinds[kind]["count"], kinds[kind]["removable"]) == (3, 2)
 
 
 def test_a_kept_check_run_goes_after_journal_days_once_its_pr_is_seen_past_its_head(

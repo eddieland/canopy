@@ -92,11 +92,13 @@ was not read ages until it is stale (below), when the harness waits on it and no
 D008 moves a rule from the prompt into code one at a time, on a measurement against the `decisions` corpus (§37).
 
 - Each tick the harness derives, from the observations and the journal, what §7 and §14 derive: the candidates (§17),
-  each ticket's and unit's phase, its next action and the actions a choice allows, and the attention reasons. A ticket
-  that depends on a stale or missing observation is derived as stale and counted apart, never as a disagreement.
+  each ticket's and unit's phase, its next action and the actions a choice allows, and the attention reasons; and for
+  each of the operator's review requests (§21), whether §37 would start its review, wait, or end it. A subject that
+  depends on a stale or missing observation is derived as stale and counted apart, never as a disagreement.
 - It records every row of §7 that held, as §7 has no order yet, beside the phase the overseer left each subject at,
-  and agrees when that phase is one of the rows and the overseer's decision one that row allows. The overseer is
-  shown it (above); by itself it changes no attention item, cursor, phase, or guard.
+  and agrees when that phase is one of the rows and the overseer's decision one that row allows; a request agrees when
+  the overseer started, waited on, or ended it as derived. The overseer is shown a ticket's (above), not a request's;
+  by itself it changes no attention item, cursor, phase, or guard.
 
 ### Checks that are not CI
 

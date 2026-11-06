@@ -4,8 +4,9 @@ A row of the phase table moves into the harness only on a measurement showing th
 loop in shadow, each disagreement read and attributed (§37, SCENARIOS S68). Each tick already records what it derived
 and the phase the overseer left each subject at, and `phases.compare` reads one tick's agreement from them; this reads
 every tick of a window so, per row, and lists each disagreement with the overseer's own rationale beside it, so the
-operator can say which side was right. It also counts what the connectors cost, in runs and seconds, which S68 records
-beside the agreement.
+operator can say which side was right. The operator's review requests are one more row, `review_request`, compared by
+`requested_reviews.compare` from what each tick derived for them (§21), each counted as a ticket is, by its PR's URL.
+It also counts what the connectors cost, in runs and seconds, which S68 records beside the agreement.
 
 Only live ticks that closed `ok` and ran their overseer are read: a failed run's decisions may stop partway, a dry run
 moves no phase, and a tick that ran no overseer left it nothing to compare. A ticket counts under every row that held
@@ -27,17 +28,19 @@ from typing import TYPE_CHECKING
 
 from canopy.core import db, records, spend, sql
 from canopy.core.vocab import ConnectorRunStatus, Decider, Phase, TickStatus
-from canopy.loop import phases
+from canopy.loop import phases, requested_reviews
 
 if TYPE_CHECKING:
     import sqlite3
     from datetime import datetime
 
+#: The row each of the operator's open review requests counts under (DESIGN §21, §37).
+REQUEST = "review_request"
 #: The row a ticket with no row held counts under: `closed` when the tracker said it was closed, else `none`.
 CLOSED = "closed"
 NONE = "none"
-#: The rows in the order the report lists them: the vocabulary's, then the two above.
-ROW_ORDER: Sequence[str] = (*(str(p) for p in Phase), CLOSED, NONE)
+#: The rows in the order the report lists them: the vocabulary's, then the three above.
+ROW_ORDER: Sequence[str] = (*(str(p) for p in Phase), REQUEST, CLOSED, NONE)
 
 
 @dataclass(frozen=True)
@@ -56,8 +59,9 @@ class RowCounts:
 
 @dataclass(frozen=True)
 class Disagreement:
-    """One ticket's disagreement, grouped across the ticks it held in by the comparison's words."""
+    """One subject's disagreement, grouped across the ticks it held in by the comparison's words."""
 
+    #: The ticket, or for a review request, its PR's URL.
     ticket_key: str
     #: The rows that held for it in its latest tick.
     rows: Sequence[str]
@@ -66,7 +70,7 @@ class Disagreement:
     ticks: int
     first_tick: int
     last_tick: int
-    #: The overseer's rationale for its decisions on the ticket in the latest tick; empty when it recorded none.
+    #: The overseer's rationale for its decisions on the subject in the latest tick; empty when it recorded none.
     rationale: str
 
 
@@ -94,9 +98,10 @@ class Agreement:
     days: int
     #: The ticks compared: live, closed `ok`, and with their overseer run.
     ticks: int
-    #: Each ticket in each tick compared.
+    #: Each ticket and review request in each tick compared.
     decisions: int
-    #: Each ticket in each tick with a stale subject, counted apart, never as a disagreement; and the distinct tickets.
+    #: Each ticket or request in each tick with a stale subject, counted apart, never as a disagreement; and the
+    #: distinct tickets and requests' PRs.
     stale: int
     stale_tickets: int
     #: Per row, in `ROW_ORDER`, those that held at least once.
@@ -180,26 +185,42 @@ class _Tally:
     )
 
     def read(self, conn: sqlite3.Connection, tick_id: int) -> None:
-        """Add tick `tick_id`'s comparisons."""
+        """Add tick `tick_id`'s comparisons: its tickets', then its review requests'."""
         held = _rows_held(conn, tick_id)
         rationale = _rationales(conn, tick_id)
         for compared in phases.compare(conn, tick_id):
             key = compared.ticket_key
-            self.decisions += 1
-            if compared.verdict == "stale":
-                self.stale += 1
-                self.stale_tickets.add(key)
-                continue
             rows = held.get(key, (NONE,))
-            for row in rows:
-                self.verdicts[row, compared.verdict] += 1
-                self.situations.setdefault(row, set()).add(key)
-                if compared.verdict == "disagrees":
-                    self.disagreeing.setdefault(row, set()).add(key)
-            if compared.verdict == "disagrees":
-                why = compared.why or ""
-                _, seen, _ = self.found.get((key, why), ((), [], ""))
-                self.found[key, why] = (rows, [*seen, tick_id], rationale.get(key, ""))
+            self.add(tick_id, key, rows, verdict=compared.verdict, why=compared.why, rationale=rationale.get(key, ""))
+        for asked in requested_reviews.compare(conn, tick_id):
+            url = asked.pr_url
+            self.add(tick_id, url, (REQUEST,), verdict=asked.verdict, why=asked.why, rationale=rationale.get(url, ""))
+
+    def add(
+        self,
+        tick_id: int,
+        key: str,
+        rows: Sequence[str],
+        *,
+        verdict: phases.Verdict,
+        why: str | None,
+        rationale: str,
+    ) -> None:
+        """Add one subject's comparison in tick `tick_id`: a ticket's, or a request's, keyed by its PR's URL."""
+        self.decisions += 1
+        if verdict == "stale":
+            self.stale += 1
+            self.stale_tickets.add(key)
+            return
+        for row in rows:
+            self.verdicts[row, verdict] += 1
+            self.situations.setdefault(row, set()).add(key)
+            if verdict == "disagrees":
+                self.disagreeing.setdefault(row, set()).add(key)
+        if verdict == "disagrees":
+            said = why or ""
+            _, seen, _ = self.found.get((key, said), ((), [], ""))
+            self.found[key, said] = (rows, [*seen, tick_id], rationale)
 
     def rows(self) -> list[RowCounts]:
         """Return the counts of each row that held, in `ROW_ORDER`."""
@@ -252,16 +273,19 @@ def _rows_held(conn: sqlite3.Connection, tick_id: int) -> dict[str, tuple[str, .
 
 
 def _rationales(conn: sqlite3.Connection, tick_id: int) -> dict[str, str]:
-    """The rationale of each ticket's decisions in tick `tick_id` that are not the harness's, joined.
+    """The rationale of each ticket's decisions in tick `tick_id` that are not the harness's, joined, and each PR's.
+
+    A decision about a PR that names no ticket, such as one about a review request, is the PR's.
 
     Returns:
-        By ticket, its rationales in the order recorded, each once.
+        By ticket, or by the PR's URL, its rationales in the order recorded, each once.
     """
     found: dict[str, list[str]] = {}
     for d in db.decisions_for_tick(conn, tick_id):
-        if d.ticket_key is None or d.decider is Decider.HARNESS or not d.rationale:
+        subject = d.ticket_key if d.ticket_key is not None else d.pr
+        if subject is None or d.decider is Decider.HARNESS or not d.rationale:
             continue
-        said = found.setdefault(d.ticket_key, [])
+        said = found.setdefault(subject, [])
         if d.rationale not in said:
             said.append(d.rationale)
     return {key: "; ".join(said) for key, said in found.items()}
