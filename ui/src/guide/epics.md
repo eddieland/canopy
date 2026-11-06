@@ -79,13 +79,15 @@ members.
 
 An epic's page answers what is left to file, and how far along each part is. Its title is `epic:N` and your goal's
 first line; under it, where the epic stands, how many of its breakdown's entries are filed, how many members it has
-against `policy.max_epic_tickets`, and when you submitted it.
+against `policy.max_epic_tickets`, and when you submitted it. Once it has a plan, **Open plan** at the title's right
+opens [its plan's page](#an-epics-plan).
 
 **Breakdown** leads, at the page's width: a row per entry, in the plan's order. Each row has the entry's `B` id and
 title, `trivial` when the plan marks it so (hover it for why), the requirements it covers, the contracts it provides
 and uses, its repositories, the entries it comes after, and its members: each ticket's key, opening its page, with
 the dot of its latest run and its phase. An entry with no member says `none yet`: that is what's left to file. Before
-you approve a plan, the board is the proposed plan's, marked `proposed`, and every entry is still to file. With no
+you approve a plan, the board is the proposed plan's, marked `proposed`, and every entry is still to file. The mark,
+`proposed` or `approved`, opens the plan it names. With no
 plan yet, the board is one line: the plan run writing it, or what starts the next. A plan canopy can't read says why
 in place of the rows. Under the board come the members it has no row for: those of no entry, with their titles, and
 those registered against an entry the approved plan has since dropped.
@@ -101,3 +103,25 @@ a plan run asked wears `waiting on you` until you reply.
 
 **Requirements and contracts** lists each `R` and `C` with what the plan says of it. **Plan runs** lists every run of
 the planner, the first first: how it ended, `epic:N#M`, cost, how long it took, and what it said.
+
+## An epic's plan
+
+The plan's text gets a page of its own, `/epics/N/plan`, since it wants the width: its trail is Epics, then `epic:N`,
+which takes you back to the breakdown.
+
+The newest plan opens in the plan editor, read only, as its file stands now. An epic's plan takes no comments, so it
+has no margin: what you want changed goes in a reply, which reads the whole plan anyway. Its header has its status,
+`waiting on you` while it is proposed and no plan run is working, and how long ago it was written, then the plan's
+modes: **Markdown** shows the file as written, and **Outline** jumps to a heading. A plan that replaced another opens
+with **Changes since plan N** pressed while it waits on you, so you read what your reply changed rather than the whole
+thing again.
+
+Under the title, a line says which plan run wrote it (`epic:N#M`), when you approved it and how, and whether its file
+was edited since the planner wrote it or since you approved it. While a plan waits on you, it names the commands too:
+`canopy plan epic:N --approve` approves it, `canopy reply epic:N "TEXT"` asks for changes. Under that is the file's
+`sha256` as it stands, the start of it shown, the whole on hover and copied by the button beside it. canopy approves a
+plan by that hash and keeps a copy, so an edit after approval doesn't sneak in: canopy goes on reading the copy you
+approved, and a change you want goes in a reply, which asks for a new plan.
+
+**Earlier plans** lists the plans this one replaced, the newest first, each folded. Open one to read it as it was, in
+the same editor.

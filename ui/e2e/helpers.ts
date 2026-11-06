@@ -38,6 +38,8 @@ export const ROUTES = [
     'epics/1',
     'epics/2',
     'epics/3',
+    'epics/1/plan',
+    'epics/2/plan',
     'pull-requests',
     `pull-requests/pr?url=${encodeURIComponent('https://github.com/acme/web/pull/88')}`,
     'pull-requests/reviews',
@@ -83,7 +85,8 @@ export const WHOLE_ROUTES: readonly Route[] = [
  * The pages screenshotted in light as well: the shell, a list, and a detail page. Both themes draw from the same
  * tokens, so a few pages in light catch a light token gone wrong without doubling every image. Epics is here for its
  * section's color, the newest, on the trail and on its title, and each mock epic's page for its board, whose ids and
- * marks are new in both themes (#2126).
+ * marks are new in both themes (#2126), and the approved and the proposed epic's plans, the editor with no margin
+ * (#2127).
  */
 export const LIGHT_ROUTES: readonly Route[] = [
     'attention',
@@ -93,6 +96,8 @@ export const LIGHT_ROUTES: readonly Route[] = [
     'epics/1',
     'epics/2',
     'epics/3',
+    'epics/1/plan',
+    'epics/2/plan',
 ]
 /** The themes the app has; a page is screenshotted in light only if in LIGHT_ROUTES. */
 export const THEMES = ['light', 'dark'] as const

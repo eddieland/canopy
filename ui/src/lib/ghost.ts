@@ -43,6 +43,13 @@ export const GHOST_TIPS = {
         'Grimoire: a member of no entry walked into the raid without a loadout. It happens.',
         'Dear Traveler, the plan marked B4 trivial. Famous last words, in my experience.',
     ],
+    '/epics/$id_/plan': [
+        'Eyes up, Guardian. The raid plan. No margin notes, so read it the whole way through.',
+        'Grimoire: an earlier plan is folded away, not forgotten. The Vault keeps everything.',
+        'Scanning... the hash matches the file. For now. Edit it and the Cryptarchs will notice.',
+        'Field report: plan three replaced plan two. Plan two took it well. Plans are not Warlocks.',
+        'Dear Traveler, one plan for the whole fireteam, and nobody gets to scribble on it. Rare discipline.',
+    ],
     '/tasks/$id': [
         "Eyes up, Guardian. It's a report. I can decrypt it, but it'll take a minute. Hold here.",
         "Grimoire: a draft PR is a Ghost that hasn't found its Guardian yet.",

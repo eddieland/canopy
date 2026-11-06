@@ -1,3 +1,5 @@
+import { Link } from '@tanstack/react-router'
+
 import type { EpicDetail, EpicEntry, EpicMember } from '@/api/types'
 import { Age } from '@/components/age'
 import { Code } from '@/components/code'
@@ -17,8 +19,9 @@ import { cn } from '@/lib/utils'
 // What the board's marks mean, in their tips: which plan the breakdown is read from.
 const PROPOSED =
     'Read from the plan waiting on you: approve it, or reply with what to change. No ticket is registered against it ' +
-    'until it is approved.'
-const APPROVED = 'Read from the plan you approved: register each ticket you file against the entries it fulfils.'
+    'until it is approved. Opens the plan.'
+const APPROVED =
+    'Read from the plan you approved: register each ticket you file against the entries it fulfils. Opens the plan.'
 
 // A cell of the board: its room, and its top edge, so a cell of several lines reads from its first.
 const CELL = 'px-3 py-2.5 align-top'
@@ -45,11 +48,19 @@ export function EpicBoard({ detail }: { detail: EpicDetail }) {
             <PanelHeader label="Breakdown">
                 {outline !== null && (
                     <span className="flex items-center gap-2">
-                        {outline.source === 'proposed' ? (
-                            <Chip tone="blocked" word="proposed" meaning={PROPOSED} />
-                        ) : (
-                            <Chip word="approved" meaning={APPROVED} />
-                        )}
+                        {/* The mark opens the plan it names, on its page. */}
+                        <Link
+                            to="/epics/$id/plan"
+                            params={{ id: String(detail.epic.id) }}
+                            aria-label={`Open the ${outline.source} plan`}
+                            className="rounded-sm"
+                        >
+                            {outline.source === 'proposed' ? (
+                                <Chip tone="blocked" word="proposed" meaning={PROPOSED} />
+                            ) : (
+                                <Chip word="approved" meaning={APPROVED} />
+                            )}
+                        </Link>
                         {outline.problem === null && (
                             <span className="readout text-xs text-muted-foreground">{entries.length}</span>
                         )}
@@ -91,10 +102,10 @@ export function EpicBoard({ detail }: { detail: EpicDetail }) {
 }
 
 /**
- * The board with no plan to read yet: one line naming the plan run at work, or, with none working, what starts the
- * next or why none starts.
+ * An epic with no plan to read yet, in one line: the plan run at work, or, with none working, what starts the next or
+ * why none starts. Its board says it, and so does its plan's page.
  */
-function NoPlan({ detail }: { detail: EpicDetail }) {
+export function NoPlan({ detail }: { detail: EpicDetail }) {
     const { epic, runs, max_plan_attempts: limit } = detail
     const working = runs.find((run) => run.status === 'running')
     if (working !== undefined) {

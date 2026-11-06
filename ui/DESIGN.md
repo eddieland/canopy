@@ -703,11 +703,14 @@ reader, so no table repeats them.
   (`EpicBoard`), at the page's width, a table with a row per entry in the plan's order and a column for each part of it,
   headed, so an id reads by its column; the members fulfilling it, each its run's dot, key, and phase, or `none yet`,
   muted. A narrow window wraps a row's cells and never stacks an entry into a card. Its mark says which plan it is read
-  from, `proposed` in `status-blocked`; with no plan it is one line, and a plan that does not read is a `Notice`. Under
+  from, `proposed` in `status-blocked`, and opens that plan; with no plan it is one line, and a plan that does not read
+  is a `Notice`. Under
   it, the members it has no row for. Then the story (`EpicStory`, a task's story's bubbles) beside the requirements and
   contracts, and the plan runs. Pointing at an `R`, `C`, or `B` id anywhere on the page (`OutlineId`) lights it in the
   accent and the rows that cite it in the accent's tint, with no delay: fun that only adds, never dimming the rest, and
-  whose facts each id's tip says in words.
+  whose facts each id's tip says in words. Its plan's text is on a page of its own, `/epics/$id/plan` (`EpicPlan`),
+  which `Open plan` at the title's right opens, as a ticket's plan is: the newest plan in the editor, read only and with
+  no margin, since an epic's plan takes no comments, then its earlier plans folded, newest first.
 - **A task** (`/tasks/$id`) is one story: its title `task:N` and its text's first line, its description where it
   stands, then the detail skeleton, with the story as its thread: a Conversation panel (`TaskStory`) whose oldest end
   is the operator's instruction, whole, as their own bubble, then its messages, each naming its run as `task:4#5`, which

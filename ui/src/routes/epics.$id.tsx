@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
+import { FileText } from 'lucide-react'
 
 import { ApiError } from '@/api/client'
 import { epicQuery } from '@/api/queries'
@@ -15,6 +16,7 @@ import { Notice } from '@/components/notice'
 import { Empty, PageHeader, Panel, PanelLoading, PanelScroll } from '@/components/panel'
 import { RowList } from '@/components/rows'
 import { Word } from '@/components/status'
+import { Button } from '@/components/ui/button'
 import { EPIC_LOOK, entriesFiled, epicId, epicTitle } from '@/lib/epics'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { epicRef } from '@/lib/refs'
@@ -76,7 +78,12 @@ function Epic({ detail }: { detail: EpicDetail }) {
     const runsOrder = useListOrder('epic-runs')
     return (
         <>
-            <PageHeader title={epicRef(epic.id)} subject={epicTitle(epic.text)} help={HELP}>
+            <PageHeader
+                title={epicRef(epic.id)}
+                subject={epicTitle(epic.text)}
+                help={HELP}
+                controls={runs.some((run) => run.plan_id !== null) && <OpenPlan epic={epic.id} />}
+            >
                 {/* Where it stands first, in its state's color, as a task's page says it. */}
                 <Word word={epic.standing} text={look.word} meaning={look.meaning} className={RUN_TEXT[look.state]} />
                 {` · ${entriesFiled(epic)} · members ${String(detail.members.length)} of at most ` +
@@ -122,5 +129,17 @@ function Epic({ detail }: { detail: EpicDetail }) {
                 </div>
             </OutlineLights>
         </>
+    )
+}
+
+// The plan's own page, where its text has the page's width, once any plan run recorded one.
+function OpenPlan({ epic }: { epic: number }) {
+    return (
+        <Button asChild variant="outline" size="sm">
+            <Link to="/epics/$id/plan" params={{ id: String(epic) }}>
+                <FileText />
+                Open plan
+            </Link>
+        </Button>
     )
 }
