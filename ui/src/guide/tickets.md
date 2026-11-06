@@ -69,11 +69,13 @@ its plan's status, and when it was last active. Hover the `public` or `private` 
 ticket's comments stay on the tracker, and a reply you send from here stays in canopy either way, for its next worker.
 Below:
 
-- **Work**: the ticket's phase, its branch, each PR with its own phase (a ticket that spans repositories has one per
-  repository), what the ticket has cost so far, and the persona each of its agents writes in next and the model it
-  runs on. See [Choosing a persona](#choosing-a-persona) and [Choosing a model](#choosing-a-model). Once more than
-  one model has served the ticket, a line under its total cost splits it by model, then `unread` for runs whose
-  sessions canopy hasn't read yet and `none` for runs it read that named no model: the override's bill, itemized.
+- **Work**: the ticket's phase, its branch, for a member of an [epic](epics#its-members) `member of epic:2 · B1, B3`,
+  the epic opening its page and the entries the ticket fulfils, or `of no entry`, each PR with its own phase (a ticket
+  that spans repositories has one per repository), what the ticket has cost so far, and the persona each of its agents
+  writes in next and the model it runs on. See [Choosing a persona](#choosing-a-persona) and
+  [Choosing a model](#choosing-a-model). Once more than one model has served the ticket, a line under its total cost
+  splits it by model, then `unread` for runs whose sessions canopy hasn't read yet and `none` for runs it read that
+  named no model: the override's bill, itemized.
 - **Conversation**: every message, the box to reply in, and under it the ticket's actions.
   [Attention](attention#replying) covers how a reply works. When one of the ticket's attention items clears while
   you're here, a leaf drifts off the panel, the same one the attention list drops.

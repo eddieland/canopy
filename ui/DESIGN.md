@@ -714,7 +714,10 @@ reader, so no table repeats them.
   accent and the rows that cite it in the accent's tint, with no delay: fun that only adds, never dimming the rest, and
   whose facts each id's tip says in words. Its plan's text is on a page of its own, `/epics/$id/plan` (`EpicPlan`),
   which `Open plan` at the title's right opens, as a ticket's plan is: the newest plan in the editor, read only and with
-  no margin, since an epic's plan takes no comments, then its earlier plans folded, newest first.
+  no margin, since an epic's plan takes no comments, then its earlier plans folded, newest first. A member's own page
+  says whose it is, so its record reads as one story: its Work panel's `member of` field (`MembershipField`), the epic
+  and its entries, or `of no entry`; its plan page, under the description, the epic plan its planner read, by hash, and
+  when that was approved (`FollowedEpicPlanLine`), and a newer approval since as a fact, never as a warning.
 - **A task** (`/tasks/$id`) is one story: its title `task:N` and its text's first line, its description where it
   stands, then the detail skeleton, with the story as its thread: a Conversation panel (`TaskStory`) whose oldest end
   is the operator's instruction, whole, as their own bubble, then its messages, each naming its run as `task:4#5`, which

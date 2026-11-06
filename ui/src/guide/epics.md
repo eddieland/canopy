@@ -49,6 +49,10 @@ breakdown. A ticket is a member of one epic at most, and an epic holds `policy.m
 member authorizes no work: a member is worked once you label it or start it, like any other ticket, and then its
 planner reads the epic's approved plan beside its own ticket.
 
+A member's own page says whose it is: its **Work** panel reads `member of epic:2 · B1`, or `of no entry`, one click
+from the epic. Its plan's page names the epic plan its planner read, by hash, and when you approved it, and says when
+you've approved a newer one since. See [Reading a plan](plans#reading-a-plan).
+
 In a terminal, name the entries it fulfils with `--entry`, once for each, or `--no-entry` for one the breakdown didn't
 foresee, and `canopy epic remove` takes it out again:
 

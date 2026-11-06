@@ -242,3 +242,33 @@ test('an epic canopy has no record of is missing', async ({ page }) => {
     await settled(page)
     await expect(page.getByText('canopy has no epic:999')).toBeVisible()
 })
+
+test("a member's ticket page names its epic, one click from it, and its plan the epic plan it follows", async ({
+    page,
+}) => {
+    await page.goto('tickets/ABC-103')
+    await settled(page)
+    await expect(page.getByTestId('ticket-membership')).toHaveText('epic:1 · B1')
+    await page.getByTestId('ticket-membership').getByRole('link', { name: 'epic:1' }).click()
+    await expect(page).toHaveURL(/\/epics\/1$/u)
+
+    await page.goto('tickets/ABC-103/plan')
+    await settled(page)
+    const followed = page.getByTestId('plan-epic')
+    await expect(followed).toContainText('follows')
+    await expect(followed).toContainText('epic:1’s plan')
+    await expect(followed).toContainText(/approved \S+ ago/u)
+    // The mock's epic has approved no plan since.
+    await expect(page.getByTestId('plan-epic-newer')).toHaveCount(0)
+
+    // A member of no entry says so; a ticket of no epic names none.
+    await page.goto('tickets/ABC-100')
+    await settled(page)
+    await expect(page.getByTestId('ticket-membership')).toHaveText('epic:1 · of no entry')
+    await page.goto('tickets/ABC-105')
+    await settled(page)
+    await expect(page.getByTestId('ticket-membership')).toHaveCount(0)
+    await page.goto('tickets/ABC-105/plan')
+    await settled(page)
+    await expect(page.getByTestId('plan-epic')).toHaveCount(0)
+})

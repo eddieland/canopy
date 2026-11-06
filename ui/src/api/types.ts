@@ -37,6 +37,8 @@ export type TicketSummary = Schemas['TicketSummary']
 export type TicketDetail = Schemas['TicketDetail']
 /** One time the operator forgot a ticket's work (DESIGN §22), and the branch and PRs it dropped. */
 export type TicketForget = Schemas['TicketForget']
+/** The epic a ticket is a member of (DESIGN §43), and the entries of its breakdown it fulfils. */
+export type TicketMembership = Schemas['TicketMembership']
 /** What a ticket's or a PR's agent runs cost in all (DESIGN §13), and how many runs and reviews that counts. */
 export type CostTotal = Schemas['CostTotal']
 /** What one model cost over a ticket's runs, as their sessions say (DESIGN §13). */
@@ -49,6 +51,8 @@ export type PlanFile = Schemas['PlanFile']
 export type RunPersona = Schemas['RunPersona']
 /** One of a ticket's plans: its status and approval, never its text. */
 export type PlanSummary = Schemas['PlanSummary']
+/** The approved epic plan a member ticket's plan was written against, and when a newer one was approved, if one was. */
+export type FollowedEpicPlan = Schemas['FollowedEpicPlan']
 /** One of the operator's comments on a plan: a thread on a passage, with its replies. */
 export type PlanThreadView = Schemas['PlanThreadView']
 /** What the operator's word on a plan did: approve, request, or skip. */

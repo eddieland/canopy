@@ -20,6 +20,7 @@ const EARLIER: PlanSummary = {
     approved_channel: null,
     approved_reason: null,
     effort: null,
+    epic_plan: null,
 }
 const PLAN: PlanSummary = { ...EARLIER, id: 2, run_id: 50, status: 'proposed', created_at: '2026-10-08T11:00:00Z' }
 const TEXT = '# Plan\n\nAdd the CSV writer.\n'

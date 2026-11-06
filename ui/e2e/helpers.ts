@@ -28,6 +28,7 @@ export const ROUTES = [
     'tickets/ABC-101',
     'tickets/ABC-102',
     'tickets/ABC-103',
+    'tickets/ABC-103/plan',
     'tickets/ABC-105',
     'tickets/ABC-105/plan',
     'tasks',

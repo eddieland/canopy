@@ -21,6 +21,7 @@ from canopy.core import (
     contract,
     conversation,
     db,
+    epics,
     items,
     notice,
     passed_reviews,
@@ -73,7 +74,7 @@ from canopy.serve.schema import (
 from canopy.serve.schema.model import AgentModel
 from canopy.serve.schema.persona import AgentPersona, PersonaChoice
 from canopy.serve.schema.spend import SpendModel
-from canopy.serve.schema.ticket import LeftFeedback, TicketDetail, TicketForget, Unit
+from canopy.serve.schema.ticket import LeftFeedback, TicketDetail, TicketForget, TicketMembership, Unit
 from canopy.serve.transcript_views import raw_output, removed_after, session_transcript
 
 if TYPE_CHECKING:
@@ -739,6 +740,31 @@ def ticket(backend: Backend, ctx: Context, key: str) -> TicketDetail | None:
         worker_models=_worker_models(backend, ctx, key),
         attachments=attachments_of(ctx, conversation.Ref(conversation.TICKET, key)),
         left_feedback=[left_feedback(p) for p in _left(ctx, key)],
+        membership=membership(ctx, key),
+    )
+
+
+def membership(ctx: Context, key: str) -> TicketMembership | None:
+    """The epic ticket `key` is a member of, and the entries it fulfils, as its planner meets them (DESIGN §43).
+
+    An entry a later approved plan dropped is set apart, as the epic's page sets it; while no approved plan can be
+    read, every entry it was registered against stands.
+
+    Returns:
+        The membership, or None for a ticket of no epic.
+    """
+    member = epics.membership(ctx.conn, key)
+    if member is None:
+        return None
+    found = epics.member_epic(ctx.conn, ctx.state_dir, key)
+    if found is not None and found.epic_id != member.epic_id:
+        # It reads the membership again: one the operator replaced between the two reads is not mixed with this one.
+        found = None
+    return TicketMembership(
+        epic_id=member.epic_id,
+        entries=list(found.entries) if found is not None else epics.entries_of(ctx.conn, member.id),
+        dropped=list(found.dropped) if found is not None else [],
+        added_at=db.parse_time(member.added_at),
     )
 
 
