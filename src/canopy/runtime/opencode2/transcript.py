@@ -12,6 +12,10 @@ command a shell ran, else the path, pattern, address, or skill it was given. The
 `canopy.runtime.opencode2.events` says why. A call's `step_finish` names the reply it wrote, `messageID`, which the
 session's record names its model by (`canopy.runtime.opencode2.session_models`).
 
+`touched` says what a call did to files, from 2.1.4's tools: `read`, `edit`, and `write` name one by `path`, or by
+`filePath` in a session moved from OpenCode 1, `patch` each file its patch adds, updates, deletes, or moves to, and
+`grep`, `glob`, and a `shell` command that searches (`report.shell_searches`) search.
+
 `canopy.runtime.transcript` reads the file and bounds the transcript as a whole.
 """
 
@@ -19,6 +23,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import re
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Annotated, Literal
 
@@ -27,7 +32,7 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, StrictFloat, Stric
 from canopy.runtime import entries
 from canopy.runtime.entries import MAX_INPUT, MAX_TEXT, Entry, Error, Step, Text, Tokens, ToolCall
 from canopy.runtime.opencode2 import events
-from canopy.runtime.report import MAX_COST_USD, MESSAGE_ID_RE, Called, Count
+from canopy.runtime.report import MAX_COST_USD, MESSAGE_ID_RE, Called, Count, Touch, shell_searches
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping
@@ -37,6 +42,17 @@ _MAX_MS = 253_402_300_799_999
 # The fields of a tool call's input that say what it did, in the order a title takes the first that is a string: a
 # shell's command, a file tool's path, a search's pattern, a fetch's address, a search's query, a skill's id.
 _SAID_BY = ("command", "path", "pattern", "url", "query", "id")
+
+#: The tools that read one file, that edit one, that edit those a patch names, and that search, and the shell.
+_READS = frozenset({"read"})
+_EDITS = frozenset({"edit", "write"})
+_PATCHES = frozenset({"patch", "apply_patch"})
+_SEARCHES = frozenset({"grep", "glob"})
+_SHELL = "shell"
+#: The fields of a file tool's input that name its file: OpenCode 2's own, then OpenCode 1's.
+_PATH_BY = ("path", "filePath")
+#: A patch's line naming a file it changes: `*** Update File: src/a.py`, and the path it moves one to.
+_PATCH_FILE_RE = re.compile(r"^\*\*\* (?:Add File|Update File|Delete File|Move to): (.+?)\s*$", re.MULTILINE)
 
 Millis = Annotated[StrictInt, Field(ge=0, le=_MAX_MS)]
 
@@ -144,6 +160,41 @@ def called(event: Mapping[str, object]) -> Called | None:
     time = tool.state.time
     started = _at(time.start) if time is not None else None
     return Called(tool.tool, completed=tool.state.status == "completed", input=tool.state.input, started_at=started)
+
+
+def in_session(line: str, session_id: str) -> bool:
+    """Whether `line` is an event of session `session_id`, as `read` keeps only those.
+
+    Returns:
+        True when it is.
+    """
+    event = events.parse_event(line)
+    return event is not None and event["sessionID"] == session_id
+
+
+def touched(call: Called) -> Touch:
+    """What a tool call did to files: read one, edited some, searched, or anything else, with the files it named.
+
+    Returns:
+        Its act, and for a read or an edit the paths its input names, as given; an edit that names none is `other`.
+    """
+    given = call.input
+    if call.tool in _READS or call.tool in _EDITS:
+        path = next((v for key in _PATH_BY if isinstance(v := given.get(key), str) and v.strip()), None)
+        if path is not None:
+            return Touch("read" if call.tool in _READS else "edit", (path.strip(),))
+    elif call.tool in _PATCHES:
+        text = given.get("patchText")
+        paths = tuple(dict.fromkeys(_PATCH_FILE_RE.findall(text))) if isinstance(text, str) else ()
+        if paths:
+            return Touch("edit", paths)
+    elif call.tool in _SEARCHES:
+        return Touch("search")
+    elif call.tool == _SHELL:
+        command = given.get("command")
+        if isinstance(command, str) and shell_searches(command):
+            return Touch("search")
+    return Touch("other")
 
 
 def _entry(event: Mapping[str, object]) -> Entry | None:

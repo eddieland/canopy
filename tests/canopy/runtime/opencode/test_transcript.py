@@ -4,7 +4,7 @@ import json
 from datetime import UTC, datetime
 
 from canopy.runtime.opencode import events, transcript
-from canopy.runtime.report import Called
+from canopy.runtime.report import Called, Touch
 
 BASH: dict[str, object] = {
     "status": "completed",
@@ -14,8 +14,11 @@ BASH: dict[str, object] = {
 }
 
 
+SESSION = "ses_abc123"
+
+
 def event(kind: str, part: object) -> str:
-    return json.dumps({"type": kind, "timestamp": 1, "sessionID": "ses_abc123", "part": part})
+    return json.dumps({"type": kind, "timestamp": 1, "sessionID": SESSION, "part": part})
 
 
 def tool(name: str, state: dict[str, object]) -> str:
@@ -62,3 +65,36 @@ def test_a_tool_call_as_the_agent_made_it_is_its_exact_name_how_it_ended_and_its
     found = called(tool("canopy_run_messages", timed))
     assert found is not None
     assert found.started_at == datetime(2025, 11, 6, 10, 0, 0, 500_000, UTC)
+
+
+def test_what_a_tool_call_did_to_files_is_its_act_and_the_files_it_named() -> None:
+    """A read or an edit names its file, a patch each it changes; a search names none; an edit of none is other."""
+
+    def touched(tool: str, given: dict[str, object], *, completed: bool = True) -> Touch:
+        return transcript.touched(Called(tool, completed=completed, input=given))
+
+    assert touched("read", {"filePath": "/w/src/a.py"}) == Touch("read", ("/w/src/a.py",))
+    assert touched("edit", {"filePath": "/w/src/a.py", "oldString": "a", "newString": "b"}) == Touch(
+        "edit",
+        ("/w/src/a.py",),
+    )
+    assert touched("write", {"filePath": "b.py", "content": ""}) == Touch("edit", ("b.py",))
+    patch = "*** Begin Patch\n*** Update File: src/a.py\n*** Move to: src/c.py\n@@\n-a\n+b\n*** Add File: d.py\n+x\n"
+    assert touched("apply_patch", {"patchText": patch + "*** End Patch"}) == Touch(
+        "edit",
+        ("src/a.py", "src/c.py", "d.py"),
+    )
+    assert touched("grep", {"pattern": "parse"}) == Touch("search")
+    assert touched("glob", {"pattern": "**/*.py"}) == Touch("search")
+    assert touched("bash", {"command": "rg parse src"}) == Touch("search")
+    assert touched("bash", {"command": "uv run pytest"}) == Touch("other")
+    assert touched("edit", {"filePath": " "}) == Touch("other")
+    assert touched("apply_patch", {"patchText": "nothing"}) == Touch("other")
+    assert touched("read", {"path": "/w/a.py"}) == Touch("other")  # OpenCode 2's field, not 1's
+    assert touched("canopy_run_status", {"summary": "s"}) == Touch("other")
+
+
+def test_a_line_is_of_a_session_when_it_is_an_event_that_names_it() -> None:
+    assert transcript.in_session(tool("grep", {"status": "completed", "input": {}}), SESSION)
+    assert not transcript.in_session(tool("grep", {"status": "completed", "input": {}}), "ses_other")
+    assert not transcript.in_session("not an event", SESSION)

@@ -42,6 +42,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "checklist": ("checklist", "cmd_checklist"),
     "cards": ("cards", "cmd_cards"),
     "latency": ("latency", "cmd_latency"),
+    "orientation": ("orientation", "cmd_orientation"),
     "gc": ("gc", "cmd_gc"),
     "pause": ("conversation", "cmd_pause"),
     "resume": ("conversation", "cmd_resume"),
