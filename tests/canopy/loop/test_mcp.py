@@ -1331,7 +1331,7 @@ def test_a_worker_starts_without_the_overseers_server(scenario: Scenario) -> Non
     ticked = scenario.tick(dispatches("PROJ-1"), worker=pushes())
     assert [run.status for run in ticked.runs] == ["done"]
     overseer, worker = agent_runs(scenario.agent_log)
-    assert overseer["env"].keys() >= servers.VARIABLES
+    assert overseer["env"].keys() >= servers.env({}, version=scenario.env.runtime, cwd=scenario.env.root).keys()
     # The worker's own inline config gives it canopy's `status` server alone (DESIGN §41).
     assert inline_servers(worker).keys() == {cards.SERVER}
     assert "CANOPY_TICK_ID" not in worker["env"]

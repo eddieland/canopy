@@ -15,12 +15,15 @@ from canopy.core.context import Context
 from canopy.core.vocab import ModelsRead
 from canopy.infra import logs
 from canopy.loop import models, repeat
+from canopy.runtime.implementation import Version
 from tests.canopy.helpers import KEY, FakeTime, console, context, overseer_does, waits, with_events
 from tests.canopy.scenario_helpers import Scenario
 from tests.conftest import CanopyEnv
 
 #: The fake agent's session id on every event it prints.
 SESSION = "ses_fake"
+#: How a failed read names the command it ran, as each runtime is asked.
+EXPORT = {Version.ONE: "opencode export --sanitize", Version.TWO: "opencode session export --sanitize"}
 
 
 def sessions(state: Path, **calls: list[tuple[str, str, float]]) -> None:
@@ -45,8 +48,8 @@ def ended_ticks(conn: sqlite3.Connection, n: int) -> None:
 
 
 def exported(state: Path) -> list[str]:
-    """The sessions the fake `opencode` exported, in order."""
-    return [argv[1] for argv, _ in exports(state)]
+    """The sessions the fake `opencode` exported, in order: 1's `export ID ...`, or 2's `session export ... ID`."""
+    return [argv[1] if argv[0] == "export" else argv[-1] for argv, _ in exports(state)]
 
 
 def reads(conn: sqlite3.Connection) -> list[tuple[str, int, str, str | None, int]]:
@@ -58,6 +61,7 @@ def reads(conn: sqlite3.Connection) -> list[tuple[str, int, str, str | None, int
     ]
 
 
+@pytest.mark.opencode1  # OpenCode 2's command is the test below
 def test_a_live_tick_reads_which_models_served_its_overseer_once(scenario: Scenario, opencode_state: Path) -> None:
     with_events(scenario.env, "canopy-overseer")
     sessions(opencode_state, **{SESSION: [("anthropic", "claude-x", 0.25), ("openai", "gpt-y", 0.5)] * 2})
@@ -133,7 +137,7 @@ def test_a_failing_opencode_never_fails_the_tick(scenario: Scenario, opencode_st
     assert ticked.tick.status == "ok"
     # Failed in canopy's words, not OpenCode's, and read again later.
     assert reads(scenario.conn) == [
-        ("ticks", ticked.tick.id, "failed", "`opencode export --sanitize` exited 1", 1),
+        ("ticks", ticked.tick.id, "failed", f"`{EXPORT[scenario.env.runtime]}` exited 1", 1),
     ]
 
 
