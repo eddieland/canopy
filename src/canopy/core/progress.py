@@ -3,8 +3,9 @@
 Each line goes to the log as it comes, so the web UI reads a running session's transcript from it, and what its events
 report so far, its session and what it has spent, goes on the tick or the chore, task, or review run, whose change the
 UI's stream carries. A tick's also records its overseer's latest tool call (§8).
-A review run's and a task run's also record their agent's card (§41). A worker run's `_run` keeps its own, which also
-records the latest tool call and the card on the run.
+A review run's and a task run's also record their agent's card (§41), and a task run's the operator's messages its
+agent fetched (§44). A worker run's `_run` keeps its own, which also records the latest tool call, the card, and the
+fetches on the run.
 """
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ from __future__ import annotations
 import sqlite3
 from typing import TYPE_CHECKING, TextIO
 
-from canopy.core import cards, db, sql
+from canopy.core import cards, db, run_inbox, sql
 from canopy.runtime.watch import Watch
 
 if TYPE_CHECKING:
@@ -81,6 +82,9 @@ class Progress:
                 if table is not None and called is not None:
                     card = cards.read_call(called, may_ask=table != "task_runs")
                     cards.record_call(self.conn, table, self.row_id, card)
+                    if table == "task_runs":
+                        # A task's run fetches the operator's messages to it as a worker's does (§44).
+                        run_inbox.record_fetch(self.conn, table, self.row_id, called)
         except sqlite3.Error as e:
             self.log.warning("agent progress not recorded", extra={**self.fields, "agent": self.agent, "error": str(e)})
         if change.started:

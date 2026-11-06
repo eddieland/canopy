@@ -1238,8 +1238,11 @@ def test_a_sandboxed_repositorys_task_runs_in_the_wrapper_canopy_adds(canopy_env
     assert call["cwd"] == present(tasks.get_run(ctx.conn, started.run_id)).slot_path
     assert call["env"]["XDG_CACHE_HOME"] == str(sandbox.caches() / "worker")
     assert call["env"]["CANOPY_GIT_OBJECTS"]
-    # A task in a repository without a checklist has no answers directory to read.
-    assert not any(p.endswith(".answers") for p in call["settings"]["filesystem"]["allowRead"])
+    # A task in a repository without a checklist still reads its answers directory, for the operator's messages
+    # (DESIGN §44), and writes none of it.
+    answers = str(task_starts.answers_dir(Path(run.log_path)))
+    assert answers in call["settings"]["filesystem"]["allowRead"]
+    assert answers not in call["settings"]["filesystem"]["allowWrite"]
 
 
 @pytest.mark.usefixtures("worktree_pool")

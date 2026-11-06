@@ -119,6 +119,12 @@ class Message(Row):
     truncated: bool
     #: A task's run that reported it, as `run_id` names a ticket's (DESIGN §36).
     task_run_id: int | None
+    #: The running run an operator message was sent to, a ticket's worker's or planner's, or a task's (DESIGN §44).
+    to_run_id: int | None = None
+    to_task_run_id: int | None = None
+    #: When canopy first wrote it where that run's agent reads it, and when the agent first fetched it there.
+    delivered_at: str | None = None
+    fetched_at: str | None = None
 
 
 @dataclass(frozen=True)

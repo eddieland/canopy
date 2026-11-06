@@ -714,3 +714,14 @@ class Decider(StrEnum):
     OVERSEER = "overseer"
     #: The harness on its own, in code: an attention item it raises, or a decision that needed no judgment.
     HARNESS = "harness"
+
+
+class RequestAction(StrEnum):
+    """What the harness would do with an open review request, derived in shadow: `request_derivations.action` (§30)."""
+
+    #: Start its review at the PR's head.
+    START = "start"
+    #: Wait, for the reason it names: a review running, a draft, or an observation stale or missing.
+    WAIT = "wait"
+    #: End the request, for the reason it names: the PR merged, closed, in no repository here, or already reviewed.
+    END = "end"

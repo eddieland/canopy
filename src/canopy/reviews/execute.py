@@ -34,6 +34,7 @@ from canopy.core import (
     git_tools,
     hostgit,
     outbox,
+    plans,
     pools,
     progress,
     review_answers,
@@ -357,6 +358,7 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
         changed = _save_diff(ctx.runner, slot, run, log)
     cwd = start.run_dir(ctx, run.id)
     reviewer_dir(ctx, cwd, slot)
+    _copy_plan(ctx, run, cwd, log)
     prompt = start.prompt_file(ctx, run.id).read_text(encoding="utf-8")
     title = f"{'revise' if run.revises is not None else 'review'} {run.pr_url}"
     run_id = run.id
@@ -426,6 +428,23 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
         found = late.late(ctx.conn, ctx.runner, run, parsed, slot=slot, log=log)
         outcome = dataclasses.replace(outcome, late=tuple(found))
     return outcome
+
+
+def _copy_plan(ctx: Context, run: records.ReviewRun, cwd: Path, log: logs.TickAdapter) -> None:
+    """Write the ticket's approved plan into the reviewer's directory `cwd`, where its prompt names it (DESIGN §21).
+
+    The plan is read again and checked against its approval, as a worker's copy is (§25), so the reviewer never reads a
+    text that was not approved. One that no longer is goes without, logged: the review goes ahead on the ticket alone.
+    The copy goes with the directory as the run closes.
+    """
+    found = start.planned(ctx, run)
+    if found is None:
+        return
+    if found.text is None:
+        path = plans.path_for(ctx.state_dir, found.plan.ticket_key, found.plan.run_id)
+        log.warning("plan left out of the review", extra={"review_run_id": run.id, "plan": str(path)})
+        return
+    logs.write_private(cwd / plans.COPY, found.text)
 
 
 def _models(ctx: Context, run: records.ReviewRun) -> dict[str, Model]:

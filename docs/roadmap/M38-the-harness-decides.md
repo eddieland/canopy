@@ -178,8 +178,18 @@ waits on, read from the journal. `canopy agreement` counts, per row of §7's tab
 ticks that closed `ok` and ran their overseer compared, how many agreed and disagreed, and the distinct tickets the row
 held for, a floor on its situations; lists each disagreement once per ticket and reason, with the ticks it held across
 and the overseer's rationale, for the operator to attribute; counts stale tickets apart; and gives each source's runs
-and seconds per tick, so SCENARIOS S68 is one command (`--json` for data). Left: every other row, each on its
-measurement; the prompt cut to the judgment; and the design folded into the sections it names.
+and seconds per tick, so SCENARIOS S68 is one command (`--json` for data). Built 2026-11-06, for #1990's measurement:
+each tick, beside the derivation, the harness derives in shadow what the row for the operator's review requests would do
+with each one open, read from the `vcs` source's observation of its PR and the journal's review runs
+(`loop/requested_reviews.py`, `request_derivations`): start its review at an unreviewed head; wait on a review running,
+a draft, or a PR stale or never read, the last counted apart; or end it `merged`, `closed`, `unknown_repo` (in no
+repository of the workspace, or one with no clone), or `reviewed` for a head already reviewed, as the `review-run`
+tool's refusal ends it. `canopy agreement` counts it as one more row, `review_request`, against the overseer's review,
+its refusal, `review-wait`, `review-end`, or nothing, so SCENARIOS S75 is one command. The row stays the overseer's, and
+the state block does not show the derivation's reading of it. Chosen conservatively, for the operator to change: a
+review the overseer asked for that a guard refused, for capacity say, agrees with a start; a wait agrees with no
+decision at all. Left: every other row, each on its measurement; the prompt cut to the judgment; and the design
+folded into the sections it names.
 Open for the operator: the bar a row clears in the measurement (recommended: at least three distinct situations, each
 disagreement the overseer's mistake), and whether `ci_red`'s `resume` needs a shared list of PR labels that hold a PR
 (recommended: yes).

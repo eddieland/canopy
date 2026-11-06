@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import agent_models, checklist_answers, checklists, conversation, db, notice, pools, prompts
+from canopy.core import agent_models, cards, checklist_answers, checklists, conversation, db, notice, pools, prompts
 from canopy.core.vocab import Decider, RunStatus
 from canopy.infra import lock, logs, procs
 from canopy.runs import attachments, tasks
@@ -97,12 +97,8 @@ def objects_dir(log_path: Path) -> Path:
 
 
 def answers_dir(log_path: Path) -> Path:
-    """Return a task run's answers directory, beside its log at `log_path`: where its repository's checklist is (§42).
-
-    A task's run asks the operator no question (§41), so the directory holds only its list, and is made only for a run
-    given one.
-    """
-    return log_path.with_suffix(".answers")
+    """Return a task run's answers directory, beside its log at `log_path`: its checklist (§42) and messages (§44)."""
+    return cards.task_answers_dir(log_path)
 
 
 def _held(ctx: Context) -> str | None:
