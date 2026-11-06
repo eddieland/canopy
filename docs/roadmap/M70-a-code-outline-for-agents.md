@@ -157,8 +157,10 @@ searches among them, the share, and the spend before each run's anchor, and says
 pass the gate; `--json` for `MEASUREMENTS.md`. Each implementation reads what a call did to files from its own tools
 (`touched`), so a search is a `grep` or `glob` call or a shell command that starts one. Chosen conservatively, for the
 operator to change: a plan run's anchor is the first read of a file its plan names, not one its ticket names, since a
-ticket names a behavior and seldom a file; a feedback plan's run has none; a joint run is its own repository row
-(`api+web`); and the spend before an anchor is of the model calls that ended before it. Open, for the operator before
+ticket names a behavior and seldom a file; a feedback plan's run has none; a run whose log was cut at the transcript's
+bound is read and not anchored; an epic's planner runs are not measured, as the gate reads worker runs and an epic is
+planned once; a joint run is its own repository row (`api+web`); and the spend before an anchor is of the model calls
+that ended before it, unknown once one could not be priced. Open, for the operator before
 stage 1: the gate's threshold, if not the draft's; the monorepo's languages, with each grammar's query coverage, which
 decides whether canopy vendors queries; and whether stage 1 renders the outline for every role at once or the workers
 first. Next: two weeks of `canopy orientation` on the operator's workspace, in `MEASUREMENTS.md`.
