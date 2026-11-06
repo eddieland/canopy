@@ -6,6 +6,9 @@ import type {
     Capacity,
     ChoreSummary,
     Draft,
+    EpicDetail,
+    EpicPlans,
+    EpicSummary,
     FeedbackPlan,
     FeedbackPlanItem,
     HostResources,
@@ -85,6 +88,8 @@ export const mockRuns: Run[] = [
         models: { status: 'running', models: [], error: null },
         feedback_plan: null,
         checklist: [],
+        checklist_stretches: [],
+        checklist_stretches_left_out: 0,
     },
     {
         id: 42,
@@ -119,6 +124,8 @@ export const mockRuns: Run[] = [
         },
         feedback_plan: null,
         checklist: [],
+        checklist_stretches: [],
+        checklist_stretches_left_out: 0,
     },
 ]
 
@@ -137,6 +144,7 @@ export const mockAttention: AttentionItem[] = [
         finding: false,
         pr: null,
         task: null,
+        epic: null,
         run: null,
         review: null,
     },
@@ -171,6 +179,7 @@ export const mockReviews: ReviewSummary[] = [
         ticket_key: 'ABC-103',
         title: 'ABC-103: move billing to v2 and drop the v1 client',
         repo: 'web',
+        author: 'op',
         status: 'running',
         state: 'running',
         verdict: null,
@@ -261,6 +270,498 @@ export function mockTaskRun(fields: Partial<TaskRun> = {}): TaskRun {
         card: null,
         ...fields,
     }
+}
+
+/**
+ * The mock journal's four epics, the newest first as `GET /api/epics` sends them: stopped, as soon as it was
+ * submitted; planning; proposed; and approved.
+ */
+export const mockEpics: EpicSummary[] = [
+    {
+        id: 4,
+        text: "Give the web app a dark theme that follows the system's setting.",
+        repos: ['web'],
+        project: 'ABC',
+        tracker_epic: null,
+        channel: 'web',
+        submitted_at: '2026-10-08T11:59:00Z',
+        stopped_at: '2026-10-08T11:59:00Z',
+        standing: 'stopped',
+        members: 0,
+        entries: null,
+        entries_with_members: 0,
+    },
+    {
+        id: 3,
+        text: 'Replace the feature flags read from the `flags` table with the flags service, in api and web.',
+        repos: ['api', 'web'],
+        project: null,
+        tracker_epic: null,
+        channel: 'cli',
+        submitted_at: '2026-10-08T11:57:00Z',
+        stopped_at: null,
+        standing: 'planning',
+        members: 0,
+        entries: null,
+        entries_with_members: 0,
+    },
+    {
+        id: 2,
+        text:
+            "Show a customer's order history in the mobile app when it is offline, as of their last sync. The web " +
+            'account page has the same list; keep the two in step.',
+        repos: ['mobile', 'web'],
+        project: 'ABC',
+        tracker_epic: null,
+        channel: 'web',
+        submitted_at: '2026-10-08T07:40:00Z',
+        stopped_at: null,
+        standing: 'proposed',
+        members: 0,
+        entries: 3,
+        entries_with_members: 0,
+    },
+    {
+        id: 1,
+        text:
+            'Move billing to the v2 API everywhere it is called, web and mobile both, and retire v1 once nothing ' +
+            'reads it.\n\nv2 is down for a minute or two most weeks, so a call that fails should wait and try again ' +
+            "rather than show the customer an error. Keep the invoices' numbers exactly as they are.",
+        repos: ['api', 'web', 'mobile'],
+        project: 'ABC',
+        tracker_epic: null,
+        channel: 'cli',
+        submitted_at: '2026-10-08T00:00:00Z',
+        stopped_at: null,
+        standing: 'approved',
+        members: 3,
+        entries: 4,
+        entries_with_members: 2,
+    },
+]
+
+/** The mock epic numbered `id`, as the list has it. */
+function epicOf(id: number): EpicSummary {
+    const found = mockEpics.find((epic) => epic.id === id)
+    if (found === undefined) {
+        throw new Error(`no mock epic:${String(id)}`)
+    }
+    return found
+}
+
+/**
+ * The mock journal's four epics as `GET /api/epics/{id}` sends each, oldest first: approved, with members, one of
+ * them of no entry; proposed, after the operator's reply; planning, its first plan run at work; and stopped before
+ * any plan run of it started.
+ */
+export const mockEpicDetails: EpicDetail[] = [
+    {
+        epic: epicOf(1),
+        members: [
+            {
+                key: 'ABC-103',
+                title: 'Move billing to the v2 API',
+                entries: ['B1'],
+                dropped: [],
+                added_at: '2026-10-08T07:10:00Z',
+                added_channel: 'cli',
+                phase: 'review_pending',
+                prs: ['https://github.com/acme/web/pull/91'],
+                latest_run: {
+                    id: 38,
+                    kind: 'implement',
+                    status: 'done',
+                    state: 'done',
+                },
+            },
+            {
+                key: 'ABC-104',
+                title: null,
+                entries: ['B2'],
+                dropped: [],
+                added_at: '2026-10-08T07:15:00Z',
+                added_channel: 'cli',
+                phase: 'ci_red',
+                prs: [],
+                latest_run: {
+                    id: 43,
+                    kind: 'resume',
+                    status: 'running',
+                    state: 'running',
+                },
+            },
+            {
+                key: 'ABC-100',
+                title: 'Fix the flaky checkout test',
+                entries: [],
+                dropped: [],
+                added_at: '2026-10-08T08:40:00Z',
+                added_channel: 'cli',
+                phase: 'ci_red',
+                prs: [],
+                latest_run: {
+                    id: 40,
+                    kind: 'fix-ci',
+                    status: 'failed',
+                    state: 'failed',
+                },
+            },
+        ],
+        bound: 8,
+        max_plan_attempts: 3,
+        runs: [
+            {
+                id: 1,
+                status: 'done',
+                state: 'done',
+                started_at: '2026-10-08T00:05:00Z',
+                ended_at: '2026-10-08T00:30:00Z',
+                summary: 'A plan of four entries; B4 is trivial.',
+                question: null,
+                plan_id: 1,
+                model: null,
+                cost_usd: null,
+            },
+        ],
+        messages: [],
+        plan: {
+            id: 1,
+            run_id: 1,
+            status: 'approved',
+            created_at: '2026-10-08T00:30:00Z',
+            approved_at: '2026-10-08T02:00:00Z',
+            approved_channel: 'web',
+        },
+        outline: {
+            source: 'approved',
+            plan_id: 1,
+            run_id: 1,
+            problem: null,
+            requirements: [
+                {
+                    id: 'R1',
+                    text: 'Every billing call in web and mobile goes to the v2 endpoint.',
+                },
+                {
+                    id: 'R2',
+                    text:
+                        'A billing call that fails while v2 is down is queued and retried, never shown to the ' +
+                        'customer as an error.',
+                },
+                {
+                    id: 'R3',
+                    text: 'Nothing reads the `billing_v1` flag, and api no longer serves it.',
+                },
+            ],
+            contracts: [
+                {
+                    id: 'C1',
+                    text:
+                        "`BillingClient`, the v2 client: `listInvoices`, `charge`, and `refund`, each returning v2's " +
+                        "types unchanged. web provides it; mobile's screens and the retry queue use it.",
+                },
+            ],
+            entries: [
+                {
+                    id: 'B1',
+                    title: 'A v2 billing client in web',
+                    covers: ['R1'],
+                    provides: ['C1'],
+                    uses: [],
+                    repos: ['web'],
+                    after: [],
+                    trivial: null,
+                    members: ['ABC-103'],
+                },
+                {
+                    id: 'B2',
+                    title: 'Retry failed billing calls from a queue',
+                    covers: ['R2'],
+                    provides: [],
+                    uses: ['C1'],
+                    repos: ['mobile', 'web'],
+                    after: ['B1'],
+                    trivial: null,
+                    members: ['ABC-104'],
+                },
+                {
+                    id: 'B3',
+                    title: "Mobile's billing screens on v2",
+                    covers: ['R1'],
+                    provides: [],
+                    uses: ['C1'],
+                    repos: ['mobile'],
+                    after: ['B1'],
+                    trivial: null,
+                    members: [],
+                },
+                {
+                    id: 'B4',
+                    title: 'Retire the v1 billing flag',
+                    covers: ['R3'],
+                    provides: [],
+                    uses: [],
+                    repos: ['api'],
+                    after: ['B1', 'B3'],
+                    trivial: 'it deletes one flag and its read, which nothing calls once B1 and B3 ship',
+                    members: [],
+                },
+            ],
+        },
+    },
+    {
+        epic: epicOf(2),
+        members: [],
+        bound: 8,
+        max_plan_attempts: 3,
+        runs: [
+            {
+                id: 2,
+                status: 'done',
+                state: 'done',
+                started_at: '2026-10-08T07:42:00Z',
+                ended_at: '2026-10-08T08:00:00Z',
+                summary: 'A plan of two entries, one per repository.',
+                question: null,
+                plan_id: 2,
+                model: null,
+                cost_usd: null,
+            },
+            {
+                id: 3,
+                status: 'done',
+                state: 'done',
+                started_at: '2026-10-08T08:50:00Z',
+                ended_at: '2026-10-08T09:10:00Z',
+                summary: 'Kept it to mobile, and added clearing at sign-out.',
+                question: null,
+                plan_id: 3,
+                model: null,
+                cost_usd: null,
+            },
+        ],
+        messages: [
+            {
+                id: 20,
+                at: '2026-10-08T08:40:00Z',
+                source: 'operator',
+                kind: 'reply',
+                channel: 'web',
+                run_id: null,
+                task_run_id: null,
+                answers: null,
+                body:
+                    'Drop the web half: the account page already reads the same API, so the two cannot drift. Keep ' +
+                    'it to mobile, and say how the local copy is cleared when the customer signs out.',
+                comment: null,
+            },
+        ],
+        plan: {
+            id: 3,
+            run_id: 3,
+            status: 'proposed',
+            created_at: '2026-10-08T09:10:00Z',
+            approved_at: null,
+            approved_channel: null,
+        },
+        outline: {
+            source: 'proposed',
+            plan_id: 3,
+            run_id: 3,
+            problem: null,
+            requirements: [
+                {
+                    id: 'R1',
+                    text: 'The mobile app shows the order history offline, as of its last sync.',
+                },
+                {
+                    id: 'R2',
+                    text: 'Signing out clears the local copy before the sign-in screen shows.',
+                },
+            ],
+            contracts: [
+                {
+                    id: 'C1',
+                    text: '`OrderStore`: `orders()`, `sync()`, and `clear()`, the local copy the screens read.',
+                },
+            ],
+            entries: [
+                {
+                    id: 'B1',
+                    title: 'A local copy of the order history',
+                    covers: ['R1'],
+                    provides: ['C1'],
+                    uses: [],
+                    repos: ['mobile'],
+                    after: [],
+                    trivial: null,
+                    members: [],
+                },
+                {
+                    id: 'B2',
+                    title: 'The order screens read the local copy',
+                    covers: ['R1'],
+                    provides: [],
+                    uses: ['C1'],
+                    repos: ['mobile'],
+                    after: ['B1'],
+                    trivial: null,
+                    members: [],
+                },
+                {
+                    id: 'B3',
+                    title: 'Clear the local copy at sign-out',
+                    covers: ['R2'],
+                    provides: [],
+                    uses: ['C1'],
+                    repos: ['mobile'],
+                    after: ['B1'],
+                    trivial: null,
+                    members: [],
+                },
+            ],
+        },
+    },
+    {
+        epic: epicOf(3),
+        members: [],
+        bound: 8,
+        max_plan_attempts: 3,
+        runs: [
+            {
+                id: 4,
+                status: 'running',
+                state: 'running',
+                started_at: '2026-10-08T11:58:00Z',
+                ended_at: null,
+                summary: null,
+                question: null,
+                plan_id: null,
+                model: null,
+                cost_usd: null,
+            },
+        ],
+        messages: [],
+        plan: null,
+        outline: null,
+    },
+    {
+        epic: epicOf(4),
+        members: [],
+        bound: 8,
+        max_plan_attempts: 3,
+        runs: [],
+        messages: [],
+        plan: null,
+        outline: null,
+    },
+]
+
+/** Epic 1's plan as its planner wrote it, and as the operator approved it. */
+const BILLING_PLAN = `# Billing on v2
+
+## Goal
+
+Every billing call goes to v2, a failed call is retried from a queue, and the v1 flag is gone.
+
+## Requirements
+
+- **R1.** Every billing call in web and mobile goes to the v2 endpoint.
+- **R2.** A billing call that fails while v2 is down is queued and retried, never shown to the customer as an error.
+- **R3.** Nothing reads the \`billing_v1\` flag, and api no longer serves it.
+
+## Breakdown
+
+### B1. A v2 billing client in web
+
+- Covers: R1
+- Provides: C1
+`
+
+/** Epic 2's first plan, which the operator's reply superseded. */
+const OFFLINE_FIRST = `# Offline order history
+
+## Goal
+
+The order history reads from a local copy when the app is offline.
+
+## Decisions
+
+- Sync on launch and on pull to refresh only.
+`
+
+/** Epic 2's second plan, written after the reply, which waits on the operator. */
+const OFFLINE_SECOND = `# Offline order history
+
+## Goal
+
+The mobile app's order history reads from a local copy when it is offline, and the copy goes when its customer does.
+
+## Decisions
+
+- The web account page is left as it is: it reads the same API the copy syncs from.
+`
+
+/**
+ * The mock journal's three epics' plans as `GET /api/epics/{id}/plans` sends each, the oldest plan first: epic 1's
+ * approved plan; epic 2's superseded plan, then the proposed one; and epic 3's none, its plan run at work.
+ */
+export const mockEpicPlans: EpicPlans[] = [
+    {
+        epic_id: 1,
+        planning: null,
+        changes_asked: null,
+        plans: [
+            {
+                plan: mockEpicDetails[0]?.plan ?? missing('epic 1 plan'),
+                path: '.canopy/plans/epics/1/run-1.md',
+                text: BILLING_PLAN,
+                problem: null,
+                sha256: '9f2c4e81b07d3a65c1e8f4a2d9b0c7e3f6a1d4b8e2c5f9a07b3d6e1c4f8a2b5d',
+                edited: false,
+                changed_since_approval: false,
+            },
+        ],
+    },
+    {
+        epic_id: 2,
+        planning: null,
+        changes_asked: null,
+        plans: [
+            {
+                plan: {
+                    id: 2,
+                    run_id: 2,
+                    status: 'superseded',
+                    created_at: '2026-10-08T08:00:00Z',
+                    approved_at: null,
+                    approved_channel: null,
+                },
+                path: '.canopy/plans/epics/2/run-2.md',
+                text: OFFLINE_FIRST,
+                problem: null,
+                sha256: '4b7e1d9a3c6f0e2b8d5a1c4f7e0b3d6a9c2f5e8b1d4a7c0f3e6b9d2a5c8f1e4b',
+                edited: false,
+                changed_since_approval: false,
+            },
+            {
+                plan: mockEpicDetails[1]?.plan ?? missing('epic 2 plan'),
+                path: '.canopy/plans/epics/2/run-3.md',
+                text: OFFLINE_SECOND,
+                problem: null,
+                sha256: 'd1a4c7f0e3b6d9a2c5f8e1b4d7a0c3f6e9b2d5a8c1f4e7b0d3a6c9f2e5b8d1a4',
+                edited: false,
+                changed_since_approval: false,
+            },
+        ],
+    },
+    { epic_id: 3, planning: 4, plans: [], changes_asked: null },
+    { epic_id: 4, planning: null, plans: [], changes_asked: null },
+]
+
+// A mock that should be there and is not: a test's mistake, said as one.
+function missing(what: string): never {
+    throw new Error(`no mock ${what}`)
 }
 
 /** Four tasks, the newest first as `GET /api/tasks` sends them: queued, running, waiting on a reply, and done. */

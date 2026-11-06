@@ -318,6 +318,13 @@ Each records its numbers in `MEASUREMENTS.md`, as a dated section.
   the rate of `needs_author` items, and of dispatches refused `stale`, unchanged against the week before, and a
   `canopy_review-items` call only on a tick that judged an item, never on one that waited. Record the numbers in
   `MEASUREMENTS.md`.
+- **S75. The operator's review requests against the overseer** (M38, #1990). Run `canopy loop` with the `vcs` source
+  over enough ticks with open requests: some at an unreviewed head, one made after its head was reviewed, a draft, and
+  one merged, closed, or in no repository of the workspace before its review. Then `canopy agreement --days N`: expect
+  its `review_request` row to count each request in each tick against what the overseer did about its PR, and each
+  disagreement listed with the overseer's rationale, and a stale request counted apart from the stale tickets. Record
+  the row and each disagreement, read and attributed, in `MEASUREMENTS.md`. If no disagreement is the derivation's
+  fault, a PR enables the row, citing that `MEASUREMENTS.md` section.
 
 ## Retired
 

@@ -61,6 +61,7 @@ class RaisingRunner:
         on_start: Callable[[int], None] | None = None,
         on_line: Callable[[str], None] | None = None,
         stdout_to_file: bool = False,
+        max_stdout: int | None = None,
     ) -> procs.Result:
         if self.raises:
             self.raises -= 1
@@ -74,6 +75,7 @@ class RaisingRunner:
             on_start=on_start,
             on_line=on_line,
             stdout_to_file=stdout_to_file,
+            max_stdout=max_stdout,
         )
 
     def spawn(self, args: Sequence[str], *, cwd: Path, log_path: Path) -> int:
@@ -994,7 +996,7 @@ def hup_me() -> list[str]:
 
 def paced(env: CanopyEnv, minutes: int) -> None:
     """Write the user config with `loop.interval_minutes` at `minutes`, and idle pacing off."""
-    env.write_user(user_toml() + f"\n[loop]\ninterval_minutes = {minutes}\nidle_max_minutes = {minutes}\n")
+    env.write_user(user_toml(env.runtime) + f"\n[loop]\ninterval_minutes = {minutes}\nidle_max_minutes = {minutes}\n")
 
 
 def polled(env: CanopyEnv, *, interval: int, every: int) -> None:
@@ -1003,7 +1005,7 @@ def polled(env: CanopyEnv, *, interval: int, every: int) -> None:
     It has one `vcs` connector beside the tests' `tracker` source, polled every `every` minutes.
     """
     env.write_user(
-        user_toml()
+        user_toml(env.runtime)
         + f"\n[loop]\ninterval_minutes = {interval}\nidle_max_minutes = {interval}\n"
         + f"\n[connect]\nevery_minutes = {every}\n"
         + '\n[connect.sources.github]\nkind = "vcs"\ncmd = "connector github"\ntimeout_minutes = 1\n',

@@ -29,6 +29,7 @@ import { TicketAgents } from '@/components/ticket-agents'
 import { TicketAnswer, TicketVerbs } from '@/components/ticket-answer'
 import { TicketDesk } from '@/components/ticket-desk'
 import { TicketDrafts } from '@/components/ticket-drafts'
+import { MembershipField } from '@/components/ticket-epic'
 import { TicketLinks } from '@/components/ticket-links'
 import { TicketModelSpend } from '@/components/ticket-model-spend'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
@@ -168,6 +169,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                         <Field label="branch" mono>
                             {ticket.branch === null ? <None /> : <Copyable text={ticket.branch} label="branch" />}
                         </Field>
+                        <MembershipField membership={detail.membership} />
                     </Fields>
                     {units.length > 0 && (
                         <PanelScroll label="Repositories" className="max-h-60" data-testid="ticket-units">

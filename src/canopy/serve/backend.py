@@ -1,10 +1,10 @@
 """What the server reads and writes through, handed to it by whoever runs it (DESIGN §22).
 
 `serve` is a feature: it cannot import `loop`, `runs`, `reviews`, or `chores`. The attention list
-(`loop.attention.listed`), ending a stopped ticket's or task's run (`runs.halt.end`, `runs.task_run.stop_now`, as
-`canopy stop --now` does), asking the loop to read its config again (`loop.reread`, as SIGHUP does) or for a tick now
-(`loop.tick_now`, as `t` does), the attempt
-and review limits `canopy grant` raises (`runs.policy`, `reviews.grants`), and trying a chore (`chores.trial`) are
+(`loop.attention.listed`), ending a stopped ticket's, task's, or epic's run (`runs.halt.end`, `runs.task_run.stop_now`,
+`runs.epic_runs.stop_now`, as `canopy stop --now` does), asking the loop to read its config again (`loop.reread`, as
+SIGHUP does) or for a tick now (`loop.tick_now`, as `t` does), the attempt and review limits `canopy grant` raises
+(`runs.policy`, `reviews.grants`), and trying a chore (`chores.trial`) are
 theirs, so `canopy loop` passes them in, and `python -m canopy.serve --mock` passes stand-ins over its seeded journal.
 Reading a pool is the pool's own `status` unless told otherwise, and the models and the skills the runtime lists its
 own answers: the mock has no pool or runtime to ask. The server keeps the model list it read for a
@@ -30,7 +30,7 @@ from canopy.core import chore_view, config, conversation, db, definitions, pools
 from canopy.core.context import Context, db_path
 from canopy.core.vocab import RunStatus
 from canopy.infra import procs
-from canopy.runs import checkouts, tasks
+from canopy.runs import checkouts, epic_runs, tasks
 from canopy.runtime import definitions as runtime_definitions
 from canopy.runtime import models as runtime_models
 from canopy.runtime import offerings
@@ -91,6 +91,12 @@ def _close_task_run(ctx: Context, run: records.TaskRun) -> bool:
     # The mock's, which has no process to kill and no pool to return a slot to: it closes the run's row alone.
     note = json.dumps({"harness": "the operator stopped the task (mock: no process was killed)"})
     return tasks.close_run(ctx.conn, ctx.config, run.id, RunStatus.STOPPED, note, head=None)
+
+
+def _close_epic_run(ctx: Context, run: records.EpicRun) -> bool:
+    # The mock's, as `_close_task_run` is: it closes the plan run's row alone.
+    note = json.dumps({"harness": "the operator stopped the epic (mock: no process was killed)"})
+    return epic_runs.close_run(ctx.conn, run.id, RunStatus.STOPPED, note)
 
 
 @dataclass(frozen=True)
@@ -179,6 +185,9 @@ class Backend:
     #: End a stopped task's running run as `canopy stop task:N --now` does; False if it had already ended. The loop
     #: passes `runs.task_run.stop_now`; the default, the mock's, closes the run's row and kills nothing.
     end_task_run: Callable[[Context, records.TaskRun], bool] = field(default=_close_task_run)
+    #: End a stopped epic's running plan run as `canopy stop epic:N --now` does; False if it had already ended. The
+    #: loop passes `runs.epic_runs.stop_now`; the default, the mock's, closes the run's row and kills nothing.
+    end_epic_run: Callable[[Context, records.EpicRun], bool] = field(default=_close_epic_run)
     #: The ticket's desk, `canopy desk KEY`'s checkout of its branch (DESIGN §18), if open: read from `checkouts/`. The
     #: mock's are kept in memory, as its pools are.
     find_desk: Callable[[Context, str], checkouts.Desk | None] = field(default=_find_desk)

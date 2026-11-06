@@ -13,14 +13,15 @@ from typing import TYPE_CHECKING
 import click
 
 from canopy.cli import attachments as attachments_cli
+from canopy.cli import changes as changes_cli
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import REPO
-from canopy.core import cards, checklist_answers, conversation, plans
+from canopy.core import cards, checklist_answers, conversation, plans, run_changes, run_inbox
 from canopy.core.items import age
 from canopy.core.vocab import RunStatus
 from canopy.infra import logs
 from canopy.infra.text import one_line, printable
-from canopy.loop.readback import checklist_lines
+from canopy.loop.readback import change_lines, checklist_lines
 from canopy.loop.render import result_of, spent
 from canopy.runs import task_run, task_tickets, tasks
 
@@ -98,8 +99,9 @@ def cmd_task_list(click_ctx: click.Context) -> int:
 def show(ctx: Context, task_id: int) -> None:
     """Print task `task_id`: where it stands, its text, each run, its tickets, its conversation, and its report.
 
-    Each run is shown with its branch, the head it left on origin, and its answers to its repository's checklist (§42);
-    the newest report as its file stands (§36).
+    Each run is shown with its branch, the head it left on origin, its answers to its repository's checklist (§42), and
+    the replies sent to it while it ran, with when its agent fetched each (§44); what it changed (§45); the newest
+    report as its file stands (§36).
 
     Raises:
         CliError: canopy has no such task.
@@ -138,10 +140,44 @@ def show(ctx: Context, task_id: int) -> None:
         click.echo(f"\nMessage {question.id} waits on your answer: `canopy reply task:{task_id} TEXT`.")
 
 
-def replied(ctx: Context, task_id: int) -> None:
-    """Say what a reply to task `task_id` starts: its next run, at the next tick or once its running run ends."""
+def diff(ctx: Context, task_id: int) -> None:
+    """Print the kept diff of what the newest run of task `task_id` that kept one changed (DESIGN §45).
+
+    A newer run that kept none, as one that crashed, is passed over for an older one that did; when none did, the
+    newest that recorded anything says why.
+
+    Raises:
+        CliError: canopy has no such task, or none of its runs kept a diff of what it changed.
+    """
+    if tasks.get(ctx.conn, task_id) is None:
+        raise CliError(f"canopy has no task:{task_id}")
+    newest: tuple[records.TaskRun, list[records.RunChange]] | None = None
+    for run in reversed(tasks.runs_of(ctx.conn, task_id)):
+        found = run_changes.of_run(ctx.conn, run.id, table="task_runs")
+        if found and changes_cli.kept(found, log_path=run.log_path):
+            changes_cli.echo(found, log_path=run.log_path, ref=f"task:{task_id}'s run {run.id}")
+            return
+        if found and newest is None:
+            newest = run, found
+    if newest is None:
+        raise CliError(f"no run of task:{task_id} recorded what it changed")
+    run, found = newest
+    changes_cli.echo(found, log_path=run.log_path, ref=f"task:{task_id}'s run {run.id}")
+
+
+def replied(ctx: Context, task_id: int, *, told: bool) -> None:
+    """Say what a reply to task `task_id` starts: its next run, at the next tick or once its running run ends.
+
+    A reply its running run was `told` of starts none if that run reads it and then reports on it (DESIGN §44).
+    """
     running = next((r for r in tasks.runs_of(ctx.conn, task_id) if r.status is RunStatus.RUNNING), None)
-    if running is not None:
+    if running is not None and told:
+        click.echo(
+            f"Its run {running.id} is still working, and its agent hears that the reply waits on its next tool call. "
+            "If it reads it and then reports, that run has answered it; if not, the first tick after it ends starts "
+            "the next run.",
+        )
+    elif running is not None:
         click.echo(f"Its run {running.id} is still working; the first tick after it ends starts the next run.")
     else:
         click.echo("The next tick starts its next run, on its branch.")
@@ -204,10 +240,12 @@ def _show_run(ctx: Context, run: records.TaskRun) -> None:
         checklist_answers.pushes_of(ctx.conn, run.id, table="task_runs"),
         log_path=run.log_path,
     )
-    if answered:
-        click.echo("    checklist:")
-    for line in answered:
-        click.echo(f"      {line}")
+    changed = change_lines(run_changes.of_run(ctx.conn, run.id, table="task_runs"), log_path=run.log_path)
+    for heading, lines in (("checklist", answered), ("changed", changed)):
+        if lines:
+            click.echo(f"    {heading}:")
+        for line in lines:
+            click.echo(f"      {line}")
     # Its worker's progress, while it runs and its last once it ends: the operator's alone, never shown inside one of
     # canopy's ticks or runs (DESIGN §41). A task's asks no question, so `ref` names no run to answer.
     running = run.status is RunStatus.RUNNING
@@ -222,6 +260,16 @@ def _show_run(ctx: Context, run: records.TaskRun) -> None:
         )
         for line in found:
             click.echo(f"  {line}")
+    _show_sent(ctx, run)
+
+
+def _show_sent(ctx: Context, run: records.TaskRun) -> None:
+    # The replies sent to it while it ran, and when its agent fetched each (DESIGN §44): the operator's alone.
+    sent = run_inbox.sent_to(ctx.conn, "task_runs", run.id) if conversation.is_operator() else []
+    if sent:
+        click.echo(f"    your messages to it ({len(sent)}):")
+    for line in run_inbox.show_lines(sent, running=run.status is RunStatus.RUNNING):
+        click.echo(f"    {line}")
 
 
 def _show_tickets(ctx: Context, task: records.Task) -> None:

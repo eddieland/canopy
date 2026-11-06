@@ -110,6 +110,20 @@ class TicketForget(Model):
     """The URLs of the PRs it dropped, the operator's to close; None when not recorded."""
 
 
+class TicketMembership(Model):
+    """The epic a ticket is a member of (DESIGN §43), and the entries of its breakdown it fulfils."""
+
+    epic_id: int
+    """The epic, `epic:N`."""
+    entries: list[str]
+    """The breakdown's entries it fulfils that the epic's approved plan holds, `B<n>`, by number; empty for a member of
+    no entry. While no approved plan can be read, every entry it was registered against."""
+    dropped: list[str] = []
+    """Entries it was registered against that a later approved plan dropped."""
+    added_at: datetime
+    """When the operator made it a member."""
+
+
 class TicketDetail(Model):
     """One ticket: what `canopy show` prints, and the latest decisions about it."""
 
@@ -152,6 +166,8 @@ class TicketDetail(Model):
     on its thread, on a thread not resolved. `canopy send KEY N` sends one to a worker."""
     desk: TicketDesk
     """The operator's own checkout of its branch (DESIGN §18): what a desk would cover, and the desk while open."""
+    membership: TicketMembership | None = None
+    """The epic it is a member of, and the entries it fulfils; none for a ticket of no epic."""
 
 
 class StartRequest(Model):

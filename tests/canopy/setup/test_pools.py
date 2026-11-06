@@ -25,7 +25,7 @@ GIT_AUTHORS = ("GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME", "GIT_AUTHOR_EMAIL", "GIT
 
 def declare(canopy_env: CanopyEnv, capacity: str) -> None:
     """Add `capacity` lines to the operator's user file."""
-    canopy_env.write_user(user_toml() + f"\n[capacity]\n{capacity}\n")
+    canopy_env.write_user(user_toml(canopy_env.runtime) + f"\n[capacity]\n{capacity}\n")
 
 
 def fake_state(treehouse_state: Path) -> dict[str, Any]:
@@ -83,7 +83,7 @@ def test_slots_are_declared_in_the_user_file_only(ws: Ws, canopy_env: CanopyEnv)
     with pytest.raises(config.ConfigError, match=r"capacity\.slots_per_repo"):
         config.load(ws.root, canopy_env.user_file)
 
-    canopy_env.write_user(user_toml())
+    canopy_env.write_user(user_toml(canopy_env.runtime))
     assert config.load(ws.root, canopy_env.user_file).capacity.slots_for("api") is None  # unmanaged by default
     (ws.root / config.WORKSPACE_FILE_NAME).write_text(map_text(extra="\n[capacity.repo_slots]\napi = 9\n"))
     with pytest.raises(config.ConfigError, match=r"capacity\.repo_slots is private"):

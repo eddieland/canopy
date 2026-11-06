@@ -94,6 +94,7 @@ describe('planExtensions', () => {
         ['a numbered item past nine', '9. nine\n10. ten\n    that wraps'],
         ['a nested item', '- outer\n  - inner\n    that wraps'],
         ['a task', '- [ ] a task\n  that wraps\n- [x] done'],
+        ['a nested task', '- [ ] outer\n  - [ ] inner\n    that wraps'],
         ['a task with a second paragraph', '- [ ] a task\n\n  its own paragraph'],
     ])('writes back %s that wraps as it was read', (_, plan) => {
         expect(open(plan).getMarkdown()).toBe(plan)

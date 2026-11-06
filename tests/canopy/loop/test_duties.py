@@ -8,7 +8,7 @@ import pytest
 
 from canopy.core import db
 from canopy.core.vocab import Phase, TickStatus
-from canopy.loop import attention, duties
+from canopy.loop import attention, duties, phases
 from tests.canopy.helpers import LABEL, calls, chore_toml, chore_waits, decides, in_tick, raises, seen, waits
 from tests.canopy.scenario_helpers import Scenario, sets_phase
 from tests.conftest import TRACKER_SOURCE, CanopyEnv
@@ -32,6 +32,12 @@ def reads(state: Path, **jira: Any) -> None:  # noqa: ANN401 - the fake connecto
 def observed(key: str) -> dict[str, object]:
     """The `tracker` source's line for `key`, open with the queue label."""
     return {"kind": "ticket", "key": key, "title": key, "state": "open", "labels": [{"name": LABEL}]}
+
+
+def unlabeled(key: str) -> dict[str, object]:
+    """The `tracker` source's line for `key`, open with no label."""
+    labels: list[dict[str, str]] = []
+    return {**observed(key), "labels": labels}
 
 
 def test_a_tick_that_does_every_duty_closes_ok(scenario: Scenario) -> None:
@@ -147,6 +153,46 @@ def test_a_ticket_the_query_found_is_owed_a_decision_and_kept_for_the_next_tick(
     assert failed.tick.summary == "overseer left duties undone: no decision for PROJ-9"
     scenario.tick(*waits("PROJ-9"))
     assert [t["key"] for t in scenario.state()["tickets"]] == ["PROJ-9"]
+
+
+def test_a_ticket_whose_label_was_removed_is_owed_nothing_until_labeled_again(
+    scenario: Scenario,
+    connector_state: Path,
+) -> None:
+    """The journal keeps it open, but once the tracker shows it unlabeled and the query left it, it is no one's (§7)."""
+    scenario.seen("PROJ-1")
+    scenario.tick(*waits("PROJ-1"))
+    connector_state.write_text(json.dumps({TRACKER_SOURCE: {"query": [], "lines": [unlabeled("PROJ-1")]}}))
+    for _ in range(2):
+        # Nothing is left to judge, so no overseer runs to skip it.
+        ticked = scenario.tick()
+        assert (ticked.tick.status, ticked.actions, ticked.tick.overseer_ran) == ("ok", ["queried"], False)
+    # Nor is it in the block of an overseer that runs for another.
+    scenario.seen("PROJ-2")
+    scenario.tick(*waits("PROJ-2"))
+    assert [t["key"] for t in scenario.state()["tickets"]] == ["PROJ-2"]
+    assert [t["key"] for t in scenario.state()["observations"]["tickets"]] == ["PROJ-2"]
+    # The source still reads it, so a label put back makes it a candidate again, owed a decision.
+    connector_state.write_text(json.dumps({TRACKER_SOURCE: {"query": []}}))
+    failed = scenario.tick(*waits("PROJ-2"), code=1)
+    assert failed.tick.summary == "overseer left duties undone: no decision for PROJ-1"
+
+
+def test_an_unlabeled_ticket_started_since_its_derivation_is_listed(scenario: Scenario) -> None:
+    """Started between the tick's derivation and its block, it is a candidate, though derived none (DESIGN §22)."""
+    scenario.seen("PROJ-1")
+    derived = [phases.Derived("PROJ-1", None, (), candidate=False, closed=False)]
+    assert phases.let_go(scenario.conn, derived) == {"PROJ-1"}
+    scenario.operator("start", "PROJ-1")
+    assert phases.let_go(scenario.conn, derived) == set()
+
+
+def test_an_unlabeled_ticket_the_query_still_returns_is_owed_a_skip(scenario: Scenario, connector_state: Path) -> None:
+    scenario.seen("PROJ-1")
+    connector_state.write_text(json.dumps({TRACKER_SOURCE: {"query": ["PROJ-1"], "lines": [unlabeled("PROJ-1")]}}))
+    failed = scenario.tick(code=1)
+    assert failed.tick.summary == "overseer left duties undone: no decision for PROJ-1"
+    assert scenario.ticket_state("PROJ-1")["key"] == "PROJ-1"
 
 
 def test_stopped_and_recently_done_tickets_are_owed_nothing(

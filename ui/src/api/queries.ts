@@ -32,6 +32,10 @@ export const keys = {
     ticketPlans: (key: string) => ['ticket', key, 'plans'] as const,
     ticketPlan: (key: string, id: number) => ['ticket', key, 'plans', id] as const,
     chores: ['chores'] as const,
+    epics: ['epics'] as const,
+    epic: (id: number) => ['epic', id] as const,
+    // Under the epic's, so whatever marks an epic stale marks its plans stale too: a plan run's end changes both.
+    epicPlans: (id: number) => ['epic', id, 'plans'] as const,
     tasks: ['tasks'] as const,
     // A task's page, and its runs' reports, pages, and transcripts under it, so the stream's `task.changed` marks
     // them all stale: a run that started, called a model, or ended moves its task's summary.
@@ -379,6 +383,36 @@ export const choresQuery = queryOptions({
     queryKey: keys.chores,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/chores', { signal })),
 })
+
+/** Every epic the operator submitted, the newest first, as `canopy epic list` lists them. */
+export const epicsQuery = queryOptions({
+    queryKey: keys.epics,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/epics', { signal })),
+})
+
+/**
+ * One epic, as `canopy show epic:N` prints it: its members, its plan runs and replies, and its breakdown read as data.
+ * No stream event names an epic yet: its page reads it as it opens, once what it read last has gone stale.
+ */
+export function epicQuery(id: number) {
+    return queryOptions({
+        queryKey: keys.epic(id),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/epics/{epic_id}', { params: { path: { epic_id: id } }, signal })),
+        // An epic from another page's data is a different epic: never show it while this one loads.
+        placeholderData: undefined,
+    })
+}
+
+/** An epic's plans, each as its file stands, the oldest first, and the plan run writing the next, if one is. */
+export function epicPlansQuery(id: number) {
+    return queryOptions({
+        queryKey: keys.epicPlans(id),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/epics/{epic_id}/plans', { params: { path: { epic_id: id } }, signal })),
+        placeholderData: undefined,
+    })
+}
 
 /** Every task the operator submitted, the newest first. The stream sends the list again whenever it changes. */
 export const tasksQuery = queryOptions({

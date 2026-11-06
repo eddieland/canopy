@@ -70,6 +70,7 @@ describe('rowTemplate', () => {
             'own-review': ['verdict', 'id'],
             ticket: ['run', 'key'],
             task: ['state', 'id'],
+            epic: ['state', 'id'],
             'pull-request': ['state', 'pr'],
             memory: ['state', 'id'],
             'memory-across': ['state', 'id'],

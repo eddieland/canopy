@@ -16,7 +16,7 @@ from canopy.core.vocab import PlanStatus, PoolKind, RunStatus
 
 @dataclass(frozen=True)
 class Epic(Row):
-    """An epic the operator submitted (DESIGN §43): their goal, and where its tickets come from."""
+    """An epic the operator submitted (DESIGN §43): their goal, where its tickets come from, and if they stopped it."""
 
     TABLE: ClassVar[LiteralString] = "epics"
 
@@ -30,6 +30,8 @@ class Epic(Row):
     #: `cli` or `web`: where the operator submitted it.
     channel: str
     submitted_at: str
+    #: When the operator stopped it; None while it is not stopped.
+    stopped_at: str | None
 
 
 @dataclass(frozen=True)

@@ -16,6 +16,8 @@ const schema = execFileSync('uv', ['run', '--quiet', 'python', '-m', 'canopy.ser
     cwd: resolve(ui, '..'),
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'inherit'],
+    // The schema passed node's default of 1 MiB; well past it, so the next routes need no change here.
+    maxBuffer: 16 * 1024 * 1024,
 })
 const ast = await openapiTS(JSON.parse(schema), { exportType: true, alphabetize: true })
 const header =

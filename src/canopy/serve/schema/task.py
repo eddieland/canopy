@@ -11,7 +11,16 @@ from typing import Annotated, Literal
 
 from pydantic import Field
 
-from canopy.serve.schema import Attachments, ChecklistAnswer, Message, Model, ModelsServed, RunCard, RunState
+from canopy.serve.schema import (
+    Attachments,
+    ChecklistAnswer,
+    ChecklistStretch,
+    Message,
+    Model,
+    ModelsServed,
+    RunCard,
+    RunState,
+)
 
 type TaskStanding = Annotated[
     Literal[
@@ -161,6 +170,11 @@ class TaskRunDetail(Model):
     checklist: list[ChecklistAnswer] = []
     """What it answered of its repository's checklist (DESIGN §42), as a worker run's page has it: a row per item it
     was given, in its list's order. Empty for a run given no list, and one still running."""
+    checklist_stretches: list[ChecklistStretch] = []
+    """What it pushed after being shown its list (DESIGN §42), as a worker run's page has it: the first five stretches,
+    each with its kept diff. Empty for a run never shown one, and one still running."""
+    checklist_stretches_left_out: int = 0
+    """How many stretches after the first five the page is not sent: `canopy show task:N` names them all."""
 
 
 class TaskReport(Model):
@@ -218,6 +232,8 @@ class TaskReplied(Model):
     """Whether it was recorded now, rather than by an earlier submission with the same id."""
     running_run: int | None = None
     """A run of the task still working: the first tick after it ends starts the next. None: the next tick does."""
+    told: bool = False
+    """Whether that run's agent hears that the reply waits: one it reads and then reports on starts no next run."""
 
 
 class TaskStopped(Model):

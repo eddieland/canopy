@@ -434,6 +434,19 @@
     }
 }
 
+/* A row the page was opened at, by its anchor (Loop settings' `#key`): lit in the accent's tint, which fades away. */
+@keyframes lit {
+    from {
+        background-color: color-mix(in oklab, var(--accent) 18%, transparent);
+    }
+}
+
+@utility animate-lit {
+    @media (prefers-reduced-motion: no-preference) {
+        animation: lit 700ms cubic-bezier(0.2, 0, 0, 1) backwards;
+    }
+}
+
 /* Children arrive one after another: a page's blocks, a list's rows. `[--enter:pop]` on a child pops it instead. */
 @utility stagger {
     @media (prefers-reduced-motion: no-preference) {
@@ -756,6 +769,7 @@
             var(--section-attention),
             var(--section-tickets),
             var(--section-tasks),
+            var(--section-epics),
             var(--section-pull-requests),
             var(--section-workspace),
             var(--section-chores),

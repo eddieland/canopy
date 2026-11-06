@@ -59,6 +59,7 @@ from canopy.loop import (
     mcp,
     observations,
     phases,
+    requested_reviews,
     spawns,
     state,
 )
@@ -231,7 +232,9 @@ def _render(
     by_harness = harness.recorded(ctx.conn, tick_id)
     to_come = harness_dispatches.plan(ctx, tick_id, now)
     decided = frozenset([*(str(d.ticket_key) for d in by_harness), *(r.key for r in to_come.runs)])
-    tickets = [t for t in db.open_tickets(ctx.conn) if t.key not in stopped and t.key not in decided]
+    # One whose label was removed, or that never had one, is no one's to decide each tick (DESIGN §7).
+    left = decided | phases.let_go(ctx.conn, phases.recorded(ctx.conn, tick_id))
+    tickets = [t for t in db.open_tickets(ctx.conn) if t.key not in stopped and t.key not in left]
     private = {t.key: found for t in tickets if (found := conversation.state_section(ctx.conn, t)) is not None}
     # A public ticket's comments on artifacts that are authority are shown with its operator messages (DESIGN §38).
     authors = frozenset(ctx.config.artifacts.authorized_authors)
@@ -614,6 +617,7 @@ def _decide_in_code(
         # Before the derivation and the block, so both read each cursor past what needs no handling (DESIGN §37).
         _harness_cursors(ctx, tick_id, log, dry_run=dry_run)
         derived = _derive(ctx, tick_id, log)
+        _derive_requests(ctx, tick_id, log)
         # Before anything reads a message or a run: the harness items and the state block see at least every message,
         # and every run that started or ended, up to here. Idle pacing reads the time (DESIGN §6).
         db.set_tick_read(ctx.conn, tick_id)
@@ -683,6 +687,22 @@ def _derive(ctx: Context, tick_id: int, log: logs.TickAdapter) -> list[phases.De
     stale = sum(d.stale is not None for d in derived)
     log.info("phases derived", extra={"subjects": len(derived), "stale": stale})
     return derived
+
+
+def _derive_requests(ctx: Context, tick_id: int, log: logs.TickAdapter) -> None:
+    """Derive what the harness would do with each of the operator's open review requests, and record it (DESIGN §30).
+
+    In shadow: the overseer still decides every request, and only `canopy agreement` reads what this records. What it
+    raises is logged, never the tick's outcome.
+    """
+    try:
+        derived = requested_reviews.derive(ctx, datetime.now(UTC))
+        requested_reviews.record(ctx.conn, tick_id, derived)
+    except Exception as e:
+        log.exception("deriving the review requests raised", extra={"error": str(e)})
+        return
+    if derived:
+        log.info("review requests derived", extra={"requests": [f"{d.pr_url}: {d.action}" for d in derived]})
 
 
 def _harness_decides(ctx: Context, tick_id: int, derived: Iterable[phases.Derived], log: logs.TickAdapter) -> None:

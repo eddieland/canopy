@@ -37,6 +37,7 @@ ThreadId = Annotated[int, Path(ge=1, le=_MAX_ID, description="The comment thread
 TaskId = Annotated[int, Path(ge=1, le=_MAX_ID, description="The task's id, as `task:N` names it.")]
 TaskRunId = Annotated[int, Path(ge=1, le=_MAX_ID, description="The task run's id.")]
 MemoryId = Annotated[int, Path(ge=1, le=_MAX_ID, description="The memory's id, as `memory:ID` names it.")]
+EpicId = Annotated[int, Path(ge=1, le=_MAX_ID, description="The epic's id, as `epic:N` names it.")]
 
 # Every API route's: the guard answers 403, 411, or 413 before any route does (guard.py), and a session's check on a
 # write answers 403.

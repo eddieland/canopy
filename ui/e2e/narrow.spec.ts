@@ -134,15 +134,15 @@ test.describe('in a narrow window', () => {
         await settled(page)
         const strip = page.getByTestId('rail-strip')
         await expect(strip.getByRole('link', { name: 'Workspace' })).toBeVisible()
-        await expect(strip.getByTestId('nav-attention-count')).toHaveText(/^11/u)
+        await expect(strip.getByTestId('nav-attention-count')).toHaveText(/^12/u)
         await expect(page.getByTestId('rail-working')).toHaveCount(0)
 
         await strip.getByRole('button', { name: 'Open the rail' }).click()
         const sheet = page.getByRole('dialog', { name: 'Rail' })
         // The rail's first item is the search box, so the sheet opens in it.
         await expect(sheet.getByRole('searchbox', { name: 'Search the journal' })).toBeFocused()
-        // Four rows, then `+1 more`.
-        await expect(sheet.getByTestId('rail-working').getByRole('link')).toHaveCount(5)
+        // Three rows, then `+2 more`.
+        await expect(sheet.getByTestId('rail-working').getByRole('link')).toHaveCount(4)
         await expect(sheet.getByTestId('rail-spend-24h')).toBeVisible()
 
         // A link followed leaves the page the sheet covered: it closes.

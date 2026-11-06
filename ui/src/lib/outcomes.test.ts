@@ -14,6 +14,11 @@ import {
     draftsStagedText,
     draftsStagedToast,
     editedText,
+    epicApprovedText,
+    epicMemberAddedText,
+    epicMemberRemovedText,
+    epicRepliedText,
+    epicStoppedText,
     failedText,
     forgotText,
     grantedText,
@@ -133,9 +138,21 @@ describe('outcomes', () => {
     })
 
     it("say what a task's reply recorded, or that one already said it, and what starts its next run", () => {
-        expect(taskRepliedText(4, { message_id: 14, answers: 13, new: false, running_run: null })).toBe(
+        const reply = { message_id: 14, answers: 13, new: false, running_run: null, told: false }
+        expect(taskRepliedText(4, reply)).toBe(
             'Message 14 on task:4 already says this, answering message 13; nothing new recorded. The next tick ' +
                 'starts its next run, on its branch.',
+        )
+        const sent = { ...reply, answers: null, new: true, running_run: 6 }
+        expect(taskRepliedText(4, sent)).toBe(
+            'Recorded message 14 on task:4. Its run 6 is still working; the first tick after it ends starts the next ' +
+                'run.',
+        )
+        // Its running run hears of it: one it reads and then reports on starts no run (DESIGN §44).
+        expect(taskRepliedText(4, { ...sent, told: true })).toBe(
+            'Recorded message 14 on task:4. Its run 6 is still working, and its agent hears that the reply waits on ' +
+                'its next tool call. If it reads it and then reports, that run has answered it; if not, the first ' +
+                'tick after it ends starts the next run.',
         )
     })
 
@@ -330,7 +347,11 @@ describe('outcomes', () => {
             tone: 'failed',
         })
         const two = [draft({ status: 'sent', sent_url: url }), draft({ number: 2, status: 'sent', sent_url: url })]
-        expect(draftsSentToast({ ...none, posted: two })).toEqual({ title: 'Sent 2 drafts', detail: url, tone: 'done' })
+        expect(draftsSentToast({ ...none, posted: two })).toEqual({
+            title: 'Sent 2 drafts',
+            detail: url,
+            tone: 'done',
+        })
         expect(
             draftsSentToast({
                 ...none,
@@ -351,6 +372,60 @@ describe('outcomes', () => {
         expect(repliedText('A-1', { message_id: 9, answers: null, new: false })).toBe(
             'Message 9 on A-1 already says this; nothing new recorded.',
         )
+    })
+
+    it("says what approving an epic's plan did, as `canopy plan epic:N --approve` does", () => {
+        expect(epicApprovedText(2, { plan: 3, run_id: 3, change: null })).toBe(
+            "Approved epic:2's plan, written by run 3.",
+        )
+        const change = { added: ['B5', 'R4'], removed: ['B2'], changed: [] }
+        expect(epicApprovedText(1, { plan: 5, run_id: 6, change })).toBe(
+            "Approved epic:1's plan, written by run 6. added: B5, R4; removed: B2.",
+        )
+        // A re-approval that changed no id says only that it approved.
+        expect(epicApprovedText(1, { plan: 5, run_id: 6, change: { added: [], removed: [], changed: [] } })).toBe(
+            "Approved epic:1's plan, written by run 6.",
+        )
+    })
+
+    it('says what a reply to an epic starts, as `canopy reply epic:N` does', () => {
+        const replied = { message_id: 21, new: true, running_run: null, plan_runs: 2, max_plan_attempts: 3 }
+        expect(epicRepliedText(2, replied)).toBe(
+            'Recorded message 21 on epic:2. The next tick starts its next plan run, which reads your reply.',
+        )
+        expect(epicRepliedText(2, { ...replied, running_run: 5, new: false })).toBe(
+            'Message 21 on epic:2 already says this; nothing new recorded. Its plan run is still working; the first ' +
+                'tick after it ends starts the next, with your reply.',
+        )
+        expect(epicRepliedText(2, { ...replied, plan_runs: 3 })).toBe(
+            'Recorded message 21 on epic:2. It has had 3 plan runs, policy.max_plan_attempts; none starts again for ' +
+                'this reply.',
+        )
+    })
+
+    it('says what a stop did to an epic, as `canopy stop epic:N` does', () => {
+        const stopped = { already: false, running_run: null, ended: false }
+        expect(epicStoppedText(4, stopped, false)).toBe(
+            'epic:4 is stopped; no plan run of it starts again. Its members are left as they are.',
+        )
+        expect(epicStoppedText(4, { ...stopped, already: true }, true)).toBe('epic:4 was already stopped.')
+        expect(epicStoppedText(3, { ...stopped, already: true, running_run: 4 }, true)).toBe(
+            'epic:3 was already stopped. Its plan run 4 had already ended.',
+        )
+    })
+
+    it('says what adding a ticket to an epic did, as `canopy epic add` does', () => {
+        expect(epicMemberAddedText(1, { key: 'ABC-105', added: true, entries: ['B3'] })).toBe(
+            'Added ABC-105 to epic:1. Registered ABC-105 against B3.',
+        )
+        // Registered again: its entries replaced, or none.
+        expect(epicMemberAddedText(1, { key: 'ABC-103', added: false, entries: ['B1', 'B3'] })).toBe(
+            'Already a member: ABC-103. Registered ABC-103 against B1, B3.',
+        )
+        expect(epicMemberAddedText(2, { key: 'ABC-140', added: true, entries: [] })).toBe(
+            'Added ABC-140 to epic:2. Registered ABC-140 against no entry.',
+        )
+        expect(epicMemberRemovedText(1, { key: 'ABC-104' })).toBe('Removed ABC-104 from epic:1.')
     })
 
     it('says what a word on a plan did, as `canopy plan` does', () => {

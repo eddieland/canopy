@@ -53,13 +53,13 @@ to do, not just faster.
 - Notifications (desktop, Slack) bring the operator back to the UI when the attention list changes. A reply in a
   ticket's Slack thread reaches the ticket as one from the UI would.
 - Every UI write goes through the same core function and guards as a CLI verb (`reply`, `grant`, `start`, `stop`,
-  `forget`, `pause`). The few no one would type (seen marks, the operator's words on a plan, limits and trust
-  settings) are TRUST_MODEL T8's own. A refusal names its guard as the CLI does.
+  `forget`, `pause`). The few no one would type (seen marks, the operator's words on a plan, loop settings) are
+  TRUST_MODEL T8's own. A refusal names its guard as the CLI does.
 
 ## Capabilities and Constraints
 
 - Sections today: attention, tickets (each with its plan), tasks, pull requests (with reviews), runs (with ticks and
-  worktrees), chores, reports (spend), and memory; then search, settings (with limits and trust), and the guide. Old
+  worktrees), chores, reports (spend), and memory; then search, settings (with loop settings), and the guide. Old
   paths such as `/ticks` and `/worktrees` redirect.
 - Terminology is fixed by the docs and code, and the guide's glossary (`ui/src/guide/glossary.md`). Ticket, task, run,
   tick, worktree/slot, overseer, worker, plan, attention item, chore, review, finding, draft, grant, guard, journal,

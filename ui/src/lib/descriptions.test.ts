@@ -22,6 +22,7 @@ const REVIEW: ReviewSummary = {
     ticket_key: 'ABC-099',
     title: null,
     repo: 'web',
+    author: null,
     status: 'done',
     state: 'done',
     verdict: 'findings',
@@ -198,6 +199,7 @@ describe('ticketDescription', () => {
             approved_channel: null,
             approved_reason: null,
             effort: null,
+            epic_plan: null,
         } as const
         const file = {
             plan,

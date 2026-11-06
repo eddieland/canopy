@@ -114,7 +114,9 @@ const SOURCE = [
  * header, swaps the document for its Markdown as plain text, to read or edit as written; `onChange` gets that text as
  * it is typed, and turning Markdown off reads it back into the document, where the comments find their passages again.
  * With `marks`, the Outline lets the operator mark each section read or a concern, and counts those left to read
- * (`src/lib/plan-marks.ts`).
+ * (`src/lib/plan-marks.ts`). Without `comments`, the plan has no Comments panel and no margin kept for one: for a plan
+ * read only that takes no comments, as an epic's is. Its foot offers the caller's actions while it may be edited, or,
+ * with `decides`, while it is read only too: an epic's plan is approved as its file stands, never edited here.
  */
 export function PlanEditor({
     markdown,
@@ -133,6 +135,8 @@ export function PlanEditor({
     outcome,
     previous,
     marks,
+    comments = true,
+    decides = editable,
 }: {
     /** The plan, as Markdown. Read when the editor opens. */
     markdown: string
@@ -182,6 +186,16 @@ export function PlanEditor({
      * Outline marks nothing.
      */
     marks?: string | undefined
+    /**
+     * Whether the plan takes comments, in a margin beside it: without them it has no Comments panel, and no column kept
+     * for one.
+     */
+    comments?: boolean
+    /**
+     * Whether its foot offers `actions` and Ask for changes: by default while the plan may be edited, and given for a
+     * plan read only that still waits on the operator's word.
+     */
+    decides?: boolean
 }) {
     const editor = useEditor({
         extensions: planExtensions([
@@ -528,8 +542,11 @@ export function PlanEditor({
             <div
                 className={cn(
                     'grid min-w-0 items-start gap-6',
-                    // The comments take up to 24rem of what the page leaves beside the plan, and no less than 20.
-                    '@min-[60rem]:grid-cols-[minmax(0,51rem)_minmax(20rem,24rem)]',
+                    // The comments take up to 24rem of what the page leaves beside the plan, and no less than 20; with
+                    // none, the plan keeps the measure it has beside them.
+                    comments
+                        ? '@min-[60rem]:grid-cols-[minmax(0,51rem)_minmax(20rem,24rem)]'
+                        : 'grid-cols-[minmax(0,51rem)]',
                 )}
             >
                 <Panel>
@@ -619,13 +636,13 @@ export function PlanEditor({
                             </Button>
                         </BubbleMenu>
                     )}
-                    {((editable &&
+                    {((decides &&
                         (actions !== undefined || renderActions !== undefined || onAskForChanges !== undefined)) ||
                         outcome !== undefined) && (
                         // The plan's actions stay at the bottom of the page while it scrolls, as a document's do, so
                         // a long plan is approved or sent back from where it is read, not from under its last line.
                         <PanelFooter ref={bar} sticky data-testid="plan-bar">
-                            {editable && (
+                            {decides && (
                                 <div className="flex flex-wrap items-center gap-2">
                                     {renderActions === undefined ? actions : renderActions(notes)}
                                     {onAskForChanges !== undefined && (
@@ -661,33 +678,37 @@ export function PlanEditor({
                 </Panel>
                 {/* Beside the plan, its comments are a margin, not a box: cards on the page, each level with its
                     passage, under a header that stays at the top of the page with their count. */}
-                <Panel className={cn(aligned && 'border-transparent bg-transparent')}>
-                    <PanelHeader label="Comments" sticky={aligned}>
-                        <span className="readout text-xs text-muted-foreground">{open} open</span>
-                    </PanelHeader>
-                    <PlanThreads
-                        threads={ordered}
-                        found={new Set(starts.keys())}
-                        active={seen.active}
-                        draft={draftFloats ? undefined : draft}
-                        draftAt={draftAt}
-                        hidden={floating?.id}
-                        listRef={list}
-                        editable={editable}
-                        onDraftChange={onDraftChange}
-                        onDraftSubmit={addComment}
-                        onDraftCancel={cancelComment}
-                        onDraftLeave={onDraftLeave}
-                        onResolveGone={() =>
-                            onThreadsChange(
-                                threads.map((thread) =>
-                                    thread.resolved || starts.has(thread.id) ? thread : { ...thread, resolved: true },
-                                ),
-                            )
-                        }
-                        {...threadActions}
-                    />
-                </Panel>
+                {comments && (
+                    <Panel className={cn(aligned && 'border-transparent bg-transparent')}>
+                        <PanelHeader label="Comments" sticky={aligned}>
+                            <span className="readout text-xs text-muted-foreground">{open} open</span>
+                        </PanelHeader>
+                        <PlanThreads
+                            threads={ordered}
+                            found={new Set(starts.keys())}
+                            active={seen.active}
+                            draft={draftFloats ? undefined : draft}
+                            draftAt={draftAt}
+                            hidden={floating?.id}
+                            listRef={list}
+                            editable={editable}
+                            onDraftChange={onDraftChange}
+                            onDraftSubmit={addComment}
+                            onDraftCancel={cancelComment}
+                            onDraftLeave={onDraftLeave}
+                            onResolveGone={() =>
+                                onThreadsChange(
+                                    threads.map((thread) =>
+                                        thread.resolved || starts.has(thread.id)
+                                            ? thread
+                                            : { ...thread, resolved: true },
+                                    ),
+                                )
+                            }
+                            {...threadActions}
+                        />
+                    </Panel>
+                )}
             </div>
             {draftFloats && (
                 <div ref={float} data-testid="plan-float" className={cn(FLOAT, 'bg-accent/14 px-3 py-2.5')}>

@@ -24,6 +24,8 @@ from canopy.core import (
     plans,
     pools,
     records,
+    run_changes,
+    run_inbox,
     run_metrics,
     sql,
 )
@@ -124,18 +126,22 @@ def queued(conn: sqlite3.Connection) -> list[records.Task]:
     """Return the tasks waiting for a tick to start a run, the oldest first (DESIGN §36).
 
     A task waits when it is not stopped and has no run running, and has never run, or the operator replied to it
-    after its latest run started: each run follows an operator's word, so a task never retries on its own.
+    after its latest run started, and that run did not fetch the reply as it ran and then report on it (DESIGN §44):
+    each run follows an operator's word, so a task never retries on its own.
 
     Returns:
         The tasks, by when they were submitted.
     """
     never_run = sql.frag("NOT EXISTS (SELECT 1 FROM task_runs r WHERE r.task_id = tasks.id)")
-    # Past the newest message the latest run's prompt carried: a reply no run has taken yet.
+    # Past the newest message the latest run's prompt carried: a reply no run has taken yet, nor answered as it ran
+    # (DESIGN §44).
     replied = sql.frag(
         "EXISTS (SELECT 1 FROM messages m WHERE m.subject_kind = ? AND m.subject_id = CAST(tasks.id AS TEXT)"
         " AND m.source = 'operator' AND m.id > coalesce("
-        "(SELECT r.message_id FROM task_runs r WHERE r.task_id = tasks.id ORDER BY r.id DESC LIMIT 1), 0))",
+        "(SELECT r.message_id FROM task_runs r WHERE r.task_id = tasks.id ORDER BY r.id DESC LIMIT 1), 0)"
+        " AND m.id NOT IN ({}))",
         conversation.TASK,
+        run_inbox.HEARD,
     )
     query = (
         records.select(records.Task)
@@ -451,12 +457,14 @@ def close_run(
     head: str | None,
     tickets: Iterable[str] = (),
     checklist: checklist_answers.Checked | None = None,
+    changes: Iterable[run_changes.Change] = (),
 ) -> bool:
     """Close task run `run_id` as `status`, with its result and the head its branch was at on origin (DESIGN §36).
 
     In the same transaction it records the run's messages about its task, its report and a `blocked` run's question,
     each naming the run; `tickets`, the keys `task_tickets.check` passed, against the task; `checklist`, its answers to
-    its repository's list (§42); and its `task.ended` event, naming the keys it recorded, when a sink takes `tasks`.
+    its repository's list (§42); `changes`, what it changed in its slot (§45); and its `task.ended` event, naming the
+    keys it recorded, when a sink takes `tasks`.
 
     Returns:
         True if this call closed it; False when it was already closed, by reconcile or a stop: nothing is recorded.
@@ -489,6 +497,7 @@ def close_run(
             )
         recorded = task_tickets.record(conn, run.task_id, run_id, tickets)
         checklist_answers.record(conn, run_id, checklist, table="task_runs")
+        run_changes.record(conn, run_id, changes, table="task_runs")
         event = outbox.task_ended(config, run, status, result_json, head=head, message=last, tickets=recorded)
         if event is not None:
             db.record_event(conn, event)

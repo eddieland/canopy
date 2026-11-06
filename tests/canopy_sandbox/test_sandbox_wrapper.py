@@ -1073,7 +1073,7 @@ def test_canopys_sandboxed_worker_commits_through_the_wrapper_and_is_pushed(
     """
     primary, _ = worktree_pool
     prefix = f"{WRAPPER} worker --read {{definitions_dir}} -- env"
-    canopy_env.write_user(user_toml().replace("\nworker_cmd = 'env", f"\nworker_cmd = '{prefix}"))
+    canopy_env.write_user(user_toml(canopy_env.runtime).replace("\nworker_cmd = 'env", f"\nworker_cmd = '{prefix}"))
     conn: sqlite3.Connection = canopy_env.journal()
     commit = ["git", "-c", "core.hooksPath=/dev/null", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: work"]
     with worker_does(commit):
@@ -1238,8 +1238,11 @@ def test_a_sandboxed_repositorys_task_runs_in_the_wrapper_canopy_adds(canopy_env
     assert call["cwd"] == present(tasks.get_run(ctx.conn, started.run_id)).slot_path
     assert call["env"]["XDG_CACHE_HOME"] == str(sandbox.caches() / "worker")
     assert call["env"]["CANOPY_GIT_OBJECTS"]
-    # A task in a repository without a checklist has no answers directory to read.
-    assert not any(p.endswith(".answers") for p in call["settings"]["filesystem"]["allowRead"])
+    # A task in a repository without a checklist still reads its answers directory, for the operator's messages
+    # (DESIGN §44), and writes none of it.
+    answers = str(task_starts.answers_dir(Path(run.log_path)))
+    assert answers in call["settings"]["filesystem"]["allowRead"]
+    assert answers not in call["settings"]["filesystem"]["allowWrite"]
 
 
 @pytest.mark.usefixtures("worktree_pool")

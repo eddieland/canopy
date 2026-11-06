@@ -11,6 +11,7 @@ import { RunLink } from '@/components/run-link'
 import { Chip } from '@/components/status'
 import { TaskRunLink } from '@/components/task-link'
 import { awaitsTick } from '@/lib/acknowledged'
+import { BUBBLE_TONE, OPEN_QUESTION } from '@/lib/bubble-tone'
 import { useClock } from '@/lib/clock'
 import { messageAnchor, messageRef } from '@/lib/refs'
 import { localTime } from '@/lib/time'
@@ -22,21 +23,6 @@ const WHO: Record<Message['source'], string> = {
     tracker: 'tracker',
     canopy: 'canopy',
 }
-
-// Written out so Tailwind finds them. Each message is a bubble: the operator's own words on the right in the accent's
-// tint, a worker's on the raised surface, a tracker comment quoted, a hairline on the panel's own surface, since it is
-// data from outside the loop, and canopy's note on what a tick did as a muted dashed outline, since it is about the
-// loop rather than the work. A question is on the raised surface once answered; the one still open is `OPEN_QUESTION`.
-const TONE: Record<Message['kind'], string> = {
-    report: 'bg-surface-raised',
-    question: 'bg-surface-raised',
-    reply: 'bg-accent/18',
-    comment: 'border bg-surface',
-    note: 'border border-dashed text-muted-foreground',
-}
-
-// The question still waiting on the operator, in the tint and hairline of what waits on a person: the one amber bubble.
-const OPEN_QUESTION = 'border border-status-blocked/40 bg-status-blocked/8'
 
 const UNREAD = 'No tick has read it yet. The loop acts on it, and the attention list catches up, at the next tick.'
 const SEEN = 'A tick has read it: the loop is acting on it.'
@@ -51,9 +37,9 @@ export interface Pending {
     test: (message: Message) => boolean
 }
 
-/** The operator's own words that started a task, which head its conversation as its instruction (DESIGN §36). */
+/** The operator's own words that started a task or an epic, which head its conversation as its instruction. */
 export interface Instruction {
-    /** What it is named by: the task's reference, `task:4`. */
+    /** What it is named by: the task's reference, `task:4`, or the epic's, `epic:2`. */
     ref: string
     /** When the operator submitted it. */
     at: string
@@ -108,7 +94,7 @@ export function Conversation({
                     data-testid={messageAnchor(message.id)}
                     data-source={message.source}
                     operator={message.source === 'operator'}
-                    tone={message.id === waiting ? OPEN_QUESTION : TONE[message.kind]}
+                    tone={message.id === waiting ? OPEN_QUESTION : BUBBLE_TONE[message.kind]}
                     body={message.body}
                     head={
                         <Head
@@ -133,14 +119,14 @@ export function Conversation({
     )
 }
 
-/** A task's instruction, as the operator's own words are drawn: on their side, in the accent's tint. */
-function InstructionBubble({ instruction }: { instruction: Instruction }) {
+/** A task's or an epic's instruction, as the operator's own words are drawn: on their side, in the accent's tint. */
+export function InstructionBubble({ instruction }: { instruction: Instruction }) {
     return (
         <Bubble
             data-testid="instruction"
             data-source="operator"
             operator
-            tone={TONE.reply}
+            tone={BUBBLE_TONE.reply}
             body={instruction.body}
             head={
                 <HeadLine name={instruction.ref} at={instruction.at} operator>
@@ -177,9 +163,10 @@ function continues(previous: Message | undefined, message: Message): boolean {
 /**
  * One message: its head line over its bubble, which is as wide as its words, up to a measure that leaves the other
  * side a gutter at any panel's width, so the operator's own stay on the right however narrow the panel. A message
- * that carries on the turn before it (`grouped`) sits closer under it.
+ * that carries on the turn before it (`grouped`) sits closer under it. Its body is untrusted text, laid out by
+ * `RichText`.
  */
-function Bubble({
+export function Bubble({
     operator,
     tone,
     head,
@@ -216,7 +203,7 @@ function Bubble({
  * mirrored on the operator's side. The name comes first in the markup, so a screen reader and the page's text read it
  * first, as the message is referred to by it.
  */
-function HeadLine({
+export function HeadLine({
     name,
     at,
     operator,
@@ -247,7 +234,7 @@ function HeadLine({
 }
 
 /** Who wrote a message: the head line's anchor, in the interface's face rather than the data's. */
-function Who({ children }: { children: ReactNode }) {
+export function Who({ children }: { children: ReactNode }) {
     return <span className="font-sans font-medium text-foreground">{children}</span>
 }
 

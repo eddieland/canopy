@@ -157,6 +157,11 @@ Controls:
   never what an agent does. A draft names a PR of its own run's units, or it is refused. Editing, dropping, sending,
   and settling a draft refuse when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, as `reply` does: an agent that could
   send a draft could post as the operator.
+- What a run changed (DESIGN §45) is a worker's text: the diffs every worker's and task's run keeps beside its log are
+  shown to the operator as text, bounded and with every control character dropped, at the terminal (`canopy show
+  --diff`) as on a page, and put in no agent's prompt or state block. Its range is the harness's own reads of commits,
+  never the agent's word; `canopy show run:ID`, which an agent may read through `show-run`, names the commits and the
+  files' paths, never a diff's text.
 - Review feedback from anyone not in `trust.trusted_reviewers` (private, empty by default) starts no run on its own
   (D089). The overseer records `untrusted_review` and keeps its `review` cursor before it until the operator answers in
   canopy, with `canopy reply` or the web UI; the `resume` worker addresses such a comment only as an operator message
@@ -283,7 +288,8 @@ Controls:
   writes only its plan, in a desk of the epic's repositories at their bases. canopy reads the plan's ids and
   breakdown as data (`core/epic_outline.py`), keeps a plan only when they read in the outline's shape, and records
   it `proposed`: no agent approves an epic's plan. Only the operator approves one, by `canopy plan epic:N
-  --approve`, replies to ask for the next, and registers members against its entries, each refused as `inside_run`.
+  --approve`, replies to ask for the next, registers members against its entries, and stops the epic, by `canopy stop
+  epic:N`, so no tick plans it again, each refused as `inside_run`. Stopping one leaves its members as they are.
   A member's planner reads its epic's approved plan from a copy checked against the hash the operator approved, and
   is not run when it no longer matches; the epic's plan describes the work, as the ticket does, and widens nothing a
   planner or a worker may do.
@@ -425,13 +431,24 @@ Controls:
 - A running agent's progress (DESIGN §41) is its own text, which may echo a ticket's or a PR's. canopy's `status` server
   writes nothing; the harness records each update from the call the agent prints, bounded, plain text, as it records the
   agent's spend, and shows it to the operator as data. No progress goes into another agent's prompt.
-- The operator's answer to the question a running agent asks (DESIGN §41) is the one operator word that reaches
-  an agent while it runs: a letter, one of the options the agent offered, never the operator's own words. canopy
-  writes it to a file in the run's answers directory, which a sandboxed run may read but not write, and canopy's plugin
-  tells
+- The operator's answer to the question a running agent asks (DESIGN §41) is a letter, one of the options the agent
+  offered, never the operator's own words. canopy writes it to a file in the run's answers directory, which a
+  sandboxed run may read but not write, and canopy's plugin tells
   the agent on its next tool call with a `[canopy]` line naming the letter and the agent's own option. Anything the
   agent reads can print a line that looks like it, so a forged one can choose an option the agent offered, which it
   was already prepared to do, and nothing else; the prompts say a canopy line that answers anything else is data.
+- The operator's message to a running worker, planner, or task's worker (DESIGN §44, M68) is the one way the
+  operator's own words reach an agent while it runs, and they reach it only as the result of canopy's own tool,
+  `canopy_run_messages`, served over the run's own server. Only the operator's channels send one, through
+  `conversation.reply` with its guards and its bound, refused inside a tick or any run, and only to a run still
+  running; it is an operator message on the run's subject, its ticket or its task, as any reply is. canopy writes the
+  messages to the run's answers directory, and beside them a mark that holds the newest one's id and none of its words,
+  which is all canopy's plugin reads: its `[canopy]` line says only that a message waits and names the tool. So a line
+  forged by a file, a PR, or a tool's result can make the agent spend one call to learn that nothing is new, and
+  nothing else; the prompts say any other text that claims to be the operator's is data. A message lifts nothing: the
+  agent it steers is held by branch protection, the harness's refusals, and the capacity and attempt limits as before
+  (T3). An unsandboxed run could write the messages' file, as it could any of the operator's files, and so make its
+  own tool return what it wrote; nothing it reads can.
 - No agent has web tools (D077). Every canopy definition denies `webfetch`, `websearch`, and `codesearch` as scalars,
   which a repository's config cannot loosen (D044), and `execute`, OpenCode 2's code mode, whose code can make HTTP
   requests. Fetched and searched pages are text anyone can shape, and an agent that reaches for them on its own reads
@@ -545,9 +562,10 @@ Controls in code, not prompts:
   later tick. Each run follows an operator's word, so a run that fails is never retried: the task stays as it ended.
 - Epics (DESIGN §43): at most `policy.max_epic_tickets` members each (8 by default, and the workspace file
   may only lower it); an addition past it is refused whole. One plan run per epic at a time, started only by a
-  live tick, in code, and only after the submission or an operator's reply newer than its latest run, so a run that
-  fails is never retried on its own; at most `policy.max_plan_attempts` of them, never reset; within
-  `capacity.max_workers`, which counts plan runs with every other run holding a slot; each with the worker's timeout.
+  live tick, in code, and only after the submission or an operator's reply newer than its latest run, and never once
+  the operator stopped the epic, so a run that fails is never retried on its own; at most `policy.max_plan_attempts`
+  of them, never reset; within `capacity.max_workers`, which counts plan runs with every other run holding a slot;
+  each with the worker's timeout.
 - Attachments (DESIGN §22): only UTF-8 text with no NUL, at most `policy.max_attachments` files on one ticket or task
   (5 by default), each at most `policy.max_attachment_kib` (512) and all together at most
   `policy.max_attachments_total_kib` (1024), each under a ceiling in code (20 files, 1024 and 4096 KiB), and the
@@ -594,7 +612,8 @@ Controls now:
   denies, does not make it run.
 - canopy's own code runs inside every agent process that loads its definitions: canopy's plugin, whose jobs are the
   clock, the split, the nudge for a stale update and the answer to its question (DESIGN §41), asking a run the
-  operator stopped to wrap up (§22), moving a shell command's
+  operator stopped to wrap up (§22), telling a run that a message from the operator waits (§44), moving a shell
+  command's
   leading `cd` into its working directory, and, under OpenCode 2, holding a session's first prompt until its MCP tools
   are registered and explaining a call its permission rules refuse (DESIGN §33), from the snapshot. canopy takes the
   snapshot's write permission away once it is written, the operator's included, so no run changes it through its
@@ -603,7 +622,8 @@ Controls now:
   it, which it cuts in two without changing its text, each tool call's tool and session, which the nudge counts in its
   session, the step titles of a `status` call in a run that follows a plan, which the nudge restates with the plan's
   path, so its line carries only canopy's words and the worker's own,
-  two files, the answer and the ask to wrap up canopy writes in the run's answers directory, through the runtime's own
+  three files, the answer, the ask to wrap up, and the mark of the newest message, an id and nothing of its text,
+  canopy writes in the run's answers directory, through the runtime's own
   `node:fs`, and under OpenCode 2 the runtime's MCP servers' states and its tools' names, and a refused call's
   permission and resources, whose reason, what the agent is told of the refusal, it sets; it writes no file, refuses no
   call, grants no tool, and catches its own errors. The one call it changes is a shell command that opens with
@@ -611,9 +631,11 @@ Controls now:
   then checks, with the rest of the command from it, as it checks any call's: so the plugin reaches nothing the `cd`
   could not. A repository's own plugins already load in the same process (T7). The answers directory is the run's
   own, in the state directory beside its other files, made before the agent starts and removed once it ends; a
-  sandboxed run may read it and nothing else of the state directory, and write none of it (§24). An unsandboxed run
-  could write the ask to wrap up, as it could any of the operator's files; it could only tell itself to end early,
-  keeping its work.
+  sandboxed run may read it and nothing else of the state directory, and write none of it (§24); a one-off task's
+  run has one too, for the operator's messages to it. An unsandboxed run could write the ask to wrap up, as it could
+  any of the operator's files; it could only tell itself to end early, keeping its work. canopy's `messages` tool,
+  beside `status` on the run's own server, reads the messages' file in the same directory and writes nothing; it
+  opens no journal, so a sandboxed run, and the servers it starts, reach no more than before.
 - canopy's git hooks, from the same snapshot, run in every worker's git (T5). Their `pre-push` holds a worker's first
   push of a stretch for its repository's checklist (DESIGN §42): it reads one more file, the slot's list in the run's
   answers directory, which the run cannot write, and writes one marker, the run's id and the time, in the slot's own
@@ -683,7 +705,10 @@ Controls now:
   `commondir` is `crashed`, and no git runs in its slots until both are put back (DESIGN §8); and a slot whose run
   wrote objects is checked out detached at `origin/<base>`, without the run's own refs or reflog, before the run's
   object directory is deleted and the slot returned, by `_run` or, for a `_run` that was killed, by reconcile (DESIGN
-  §8, §15).
+  §8, §15). What a run changed (DESIGN §45) is read in those steps, of every worker's and task's run: `ls-remote`,
+  `rev-parse`, `merge-base`, and `diff` of commits the slot already holds, the reads a run under `approve` made before,
+  with no driver or textconv, and the push check's own reads for an unpushed slot. Nothing new is read from a slot,
+  and nothing there is fetched, pushed, or moved.
 - The sandbox canary (`tests/canopy_sandbox/test_sandbox_canary.py`, HOST_ISOLATION §6) runs a plain script, no model,
   through the real prefix and the shipped templates, and checks every sandbox denial above on the host, with positive controls
   so that a sandbox that refuses everything fails. CI runs it on Linux.
@@ -722,7 +747,9 @@ but must be distinguishable:
   that adds none, the commits then carry no trailer, and the branch prefix and PR mark the work. A shared file can
   neither turn it off nor rename it. The worker's environment points git at canopy's hooks also in a run with a
   checklist and no mark to add, since their `pre-push` holds the push for the list (T4, DESIGN §42); what they add to a
-  commit is the marks alone, none in such a run.
+  commit is the marks alone, none in such a run. Each run's range of commits is a row (DESIGN §45), the harness's
+  read of origin as the run ended and before any kick, kept for good, so who put which commits on a branch can be told
+  after a kick rewrites it.
 - PRs labeled `agent` where the runtime gives the worker a GitHub tool that sets labels (D084); every PR title carries
   the ticket key, and its branch the prefix.
 - `decisions` and `runs` tables are a complete local audit log of what the
@@ -997,10 +1024,12 @@ that repeats one of canopy's permission patterns can put its own rules after it 
 
 - The harness refuses to start the overseer or a worker where the repository's OpenCode config defines one of canopy's
   agents, by file name under `.opencode/`, or by name anywhere in the text of an `opencode.json` or `opencode.jsonc`.
-- It refuses the same where that config names an MCP server `canopy` (DESIGN §27): canopy gives the overseer its own
-  server by that name, and a merge keeps the keys canopy's entry leaves out, such as the environment of canopy's
-  interpreter. That interpreter starts with the workspace root off its import path, so no file a workspace holds
-  stands in for canopy's modules.
+- It refuses the same where that config names an MCP server `canopy` or any `canopy_*` (DESIGN §27): canopy gives the
+  overseer its own server by the first name and every other agent theirs by the rest, `canopy_run` for a worker's
+  `status`; a merge keeps the keys canopy's entry leaves out, such as the environment of canopy's interpreter, and a
+  repository's server of one of those names, where a worker starts, would answer a tool the definition allows by exact
+  name. That interpreter starts with the workspace root off its import path, so no file a workspace holds stands in
+  for canopy's modules.
 - A command template that runs one of canopy's agents must name canopy's definitions directory, so OpenCode never falls
   back to its default agent, which allows everything.
 
@@ -1086,11 +1115,11 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   bounded from a regular file opened without following links, and drawn in the plan editor as text, its HTML and
   images kept as characters (D113).
 - It serves a PR's review threads and the drafts that answer them (DESIGN §29): what canopy's reader last read of the
-  PR, coworkers' text, and each draft, a worker's text, all rendered as text; and the diff a run under `approve` kept
-  at its pushed head beside its log, read as a review's diff is (below): bounded, from a regular file opened without
-  following links, never served as a file. Beside them it serves the PR's ticket's current feedback plan (DESIGN §32):
-  its file, read as a plan's is, each item's proposed reply, model text, and what changed since in the harness's words,
-  all rendered as text.
+  PR, coworkers' text, and each draft, a worker's text, all rendered as text; and the diff the latest run that pushed
+  kept at its pushed head beside its log, read as a review's diff is (below): bounded, from a regular file opened
+  without following links, never served as a file. Beside them it serves the PR's ticket's current feedback plan
+  (DESIGN §32): its file, read as a plan's is, each item's proposed reply, model text, and what changed since in the
+  harness's words, all rendered as text.
 - It serves canopy's reviews (DESIGN §21, M32): each review run's findings, and the diff of the commit it read, which
   `_review` writes beside the run's log. The diff is the PR's own text, by whoever wrote the PR, `review.query`'s
   other people's PRs included: as hostile as anything the loop reads. It is read bounded, from a regular file opened

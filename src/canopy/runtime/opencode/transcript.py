@@ -8,6 +8,10 @@ call wrote, by which the session's record names its model (`canopy.runtime.openc
 not an event, or is another session's, is left out, so stderr, a setup command's output, and the harness's own lines
 never show as the agent's. Each event is validated (D026), and each text cut to its bound (`canopy.runtime.entries`).
 
+`touched` says what a call did to files, from 1.19.3's tools: `read`, `edit`, and `write` name one by `filePath`,
+`apply_patch` each its patch adds, updates, deletes, or moves to, and `grep`, `glob`, and a `bash` command that searches
+(`report.shell_searches`) search.
+
 `canopy.runtime.transcript` reads the file and bounds the transcript as a whole.
 """
 
@@ -15,6 +19,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import re
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Annotated, Literal
 
@@ -23,13 +28,22 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, StrictFloat, Stric
 from canopy.runtime import entries
 from canopy.runtime.entries import MAX_INPUT, MAX_TEXT, Entry, Error, Step, Text, Tokens, ToolCall
 from canopy.runtime.opencode import events
-from canopy.runtime.report import MAX_COST_USD, MESSAGE_ID_RE, Called, Count
+from canopy.runtime.report import MAX_COST_USD, MESSAGE_ID_RE, Called, Count, Touch, shell_searches
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping
 
 # Milliseconds since the epoch, as OpenCode stamps events: up to the year 9999.
 _MAX_MS = 253_402_300_799_999
+
+#: The tools that read one file, that edit one, that edit those a patch names, and that search, and the shell.
+_READS = frozenset({"read"})
+_EDITS = frozenset({"edit", "write"})
+_PATCHES = frozenset({"apply_patch"})
+_SEARCHES = frozenset({"grep", "glob"})
+_SHELL = "bash"
+#: A patch's line naming a file it changes: `*** Update File: src/a.py`, and the path it moves one to.
+_PATCH_FILE_RE = re.compile(r"^\*\*\* (?:Add File|Update File|Delete File|Move to): (.+?)\s*$", re.MULTILINE)
 
 Millis = Annotated[StrictInt, Field(ge=0, le=_MAX_MS)]
 
@@ -125,7 +139,7 @@ def did(event: Mapping[str, object]) -> tuple[str, str] | None:
 
 
 def called(event: Mapping[str, object]) -> Called | None:
-    """The tool call a `tool_use` event ended, as the agent made it (DESIGN §41): its tool, how it ended, and its input.
+    """The tool call a `tool_use` event ended (DESIGN §41, §44): its tool, how it ended, its input, and its start.
 
     Returns:
         The call, or None when `event` is not a `tool_use` event that validates.
@@ -136,7 +150,44 @@ def called(event: Mapping[str, object]) -> Called | None:
         tool = _Tool.model_validate(event.get("part"))
     except ValidationError:
         return None
-    return Called(tool.tool, completed=tool.state.status == "completed", input=tool.state.input)
+    time = tool.state.time
+    started = _at(time.start) if time is not None else None
+    return Called(tool.tool, completed=tool.state.status == "completed", input=tool.state.input, started_at=started)
+
+
+def in_session(line: str, session_id: str) -> bool:
+    """Whether `line` is an event of session `session_id`, as `read` keeps only those.
+
+    Returns:
+        True when it is.
+    """
+    event = events.parse_event(line)
+    return event is not None and event["sessionID"] == session_id
+
+
+def touched(call: Called) -> Touch:
+    """What a tool call did to files: read one, edited some, searched, or anything else, with the files it named.
+
+    Returns:
+        Its act, and for a read or an edit the paths its input names, as given; an edit that names none is `other`.
+    """
+    given = call.input
+    if call.tool in _READS or call.tool in _EDITS:
+        path = given.get("filePath")
+        if isinstance(path, str) and path.strip():
+            return Touch("read" if call.tool in _READS else "edit", (path.strip(),))
+    elif call.tool in _PATCHES:
+        text = given.get("patchText")
+        paths = tuple(dict.fromkeys(_PATCH_FILE_RE.findall(text))) if isinstance(text, str) else ()
+        if paths:
+            return Touch("edit", paths)
+    elif call.tool in _SEARCHES:
+        return Touch("search")
+    elif call.tool == _SHELL:
+        command = given.get("command")
+        if isinstance(command, str) and shell_searches(command):
+            return Touch("search")
+    return Touch("other")
 
 
 def _entry(event: Mapping[str, object]) -> Entry | None:

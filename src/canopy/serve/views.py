@@ -21,6 +21,7 @@ from canopy.core import (
     contract,
     conversation,
     db,
+    epics,
     items,
     notice,
     passed_reviews,
@@ -43,6 +44,7 @@ from canopy.serve.schema import (
     Capacity,
     CardStep,
     ChecklistAnswer,
+    ChecklistStretch,
     Comment,
     CostTotal,
     Decision,
@@ -73,7 +75,7 @@ from canopy.serve.schema import (
 from canopy.serve.schema.model import AgentModel
 from canopy.serve.schema.persona import AgentPersona, PersonaChoice
 from canopy.serve.schema.spend import SpendModel
-from canopy.serve.schema.ticket import LeftFeedback, TicketDetail, TicketForget, Unit
+from canopy.serve.schema.ticket import LeftFeedback, TicketDetail, TicketForget, TicketMembership, Unit
 from canopy.serve.transcript_views import raw_output, removed_after, session_transcript
 
 if TYPE_CHECKING:
@@ -106,6 +108,8 @@ _CHORE = "chore:"
 _PR = "pr:"
 # A one-off task's item (DESIGN §36): no ticket, chore, or PR, but the task's own page.
 _TASK = "task:"
+# An epic's item (DESIGN §43): its plan waiting on the operator, read on the epic's plan page.
+_EPIC = "epic:"
 _SOURCES: dict[str, MessageSource] = {
     "worker": "worker",
     "operator": "operator",
@@ -129,8 +133,8 @@ def attention(backend: Backend, ctx: Context) -> list[AttentionItem]:
     A running run's question names the run (DESIGN §41): its ticket is the run's, or the review's when it has one.
 
     Returns:
-        One item per entry, its subject split into a ticket key, a chore name, a PR, a task's id, or a run's or a
-        review's id, with the ticket's title, and its detail without control characters.
+        One item per entry, its subject split into a ticket key, a chore name, a PR, a task's or an epic's id, or a
+        run's or a review's id, with the ticket's title, and its detail without control characters.
     """
     found: list[AttentionItem] = []
     for item in backend.attention(ctx):
@@ -138,9 +142,10 @@ def attention(backend: Backend, ctx: Context) -> list[AttentionItem]:
         chore = key.removeprefix(_CHORE) if key is not None and key.startswith(_CHORE) else None
         pr = key.removeprefix(_PR) if key is not None and key.startswith(_PR) else None
         task = int(key.removeprefix(_TASK)) if key is not None and key.startswith(_TASK) else None
+        epic = _numbered(key, _EPIC)
         run = _numbered(key, cards.RUN_PREFIX)
         review = _numbered(key, cards.REVIEW_PREFIX)
-        named = (chore, pr, task, run, review)
+        named = (chore, pr, task, epic, run, review)
         ticket = key if key is not None and all(n is None for n in named) else None
         if run is not None or review is not None:
             ticket = _asked_about(ctx.conn, run, review)
@@ -159,6 +164,7 @@ def attention(backend: Backend, ctx: Context) -> list[AttentionItem]:
                 finding=item.finding,
                 pr=pr,
                 task=task,
+                epic=epic,
                 run=run,
                 review=review,
             ),
@@ -250,7 +256,23 @@ def run_detail(ctx: Context, run_id: int) -> Run | None:
     limit = ctx.config.runtime.worker_timeout_minutes
     worktrees = [run_worktree(s, root) for s in held]
     answers = checklist_views.run_answers(ctx.conn, run_id)
-    return run(row, root, worktrees, served, wrote, checklist=answers, timeout_minutes=limit)
+    stretches, left_out = checklist_views.run_stretches(
+        ctx.conn,
+        run_id,
+        log_path=str(row["log_path"]),
+        ended_at=row["ended_at"],
+    )
+    return run(
+        row,
+        root,
+        worktrees,
+        served,
+        wrote,
+        checklist=answers,
+        stretches=stretches,
+        stretches_left_out=left_out,
+        timeout_minutes=limit,
+    )
 
 
 def models_served(
@@ -414,13 +436,16 @@ def run(
     feedback_plan: FeedbackPlanWritten | None = None,
     *,
     checklist: Sequence[ChecklistAnswer] = (),
+    stretches: Sequence[ChecklistStretch] = (),
+    stretches_left_out: int = 0,
     timeout_minutes: int | None = None,
 ) -> Run:
     """One run's row, with the `worktrees` it leased, its paths from the workspace `root`.
 
     On the run's own page it carries `models`, the models that served it, for a `feedback-plan` run `feedback_plan`,
-    the plan it wrote, and `checklist`, what it answered of its repositories' lists. `timeout_minutes`, a worker's
-    time limit, says when a step in its progress is stuck; with None, none is.
+    the plan it wrote, `checklist`, what it answered of its repositories' lists, and `stretches`, what it pushed after
+    being shown them, with how many more it pushed, `stretches_left_out`. `timeout_minutes`, a worker's time limit,
+    says when a step in its progress is stuck; with None, none is.
 
     Returns:
         The run as the API sends it. A status it does not know reads as `failed`.
@@ -456,6 +481,8 @@ def run(
         models=models,
         feedback_plan=feedback_plan,
         checklist=list(checklist),
+        checklist_stretches=list(stretches),
+        checklist_stretches_left_out=stretches_left_out,
     )
 
 
@@ -740,6 +767,31 @@ def ticket(backend: Backend, ctx: Context, key: str) -> TicketDetail | None:
         attachments=attachments_of(ctx, conversation.Ref(conversation.TICKET, key)),
         left_feedback=[left_feedback(p) for p in _left(ctx, key)],
         desk=desk_views.ticket_desk(backend, ctx, key),
+        membership=membership(ctx, key),
+    )
+
+
+def membership(ctx: Context, key: str) -> TicketMembership | None:
+    """The epic ticket `key` is a member of, and the entries it fulfils, as its planner meets them (DESIGN §43).
+
+    An entry a later approved plan dropped is set apart, as the epic's page sets it; while no approved plan can be
+    read, every entry it was registered against stands.
+
+    Returns:
+        The membership, or None for a ticket of no epic.
+    """
+    member = epics.membership(ctx.conn, key)
+    if member is None:
+        return None
+    found = epics.member_epic(ctx.conn, ctx.state_dir, key)
+    if found is not None and found.epic_id != member.epic_id:
+        # It reads the membership again: one the operator replaced between the two reads is not mixed with this one.
+        found = None
+    return TicketMembership(
+        epic_id=member.epic_id,
+        entries=list(found.entries) if found is not None else epics.entries_of(ctx.conn, member.id),
+        dropped=list(found.dropped) if found is not None else [],
+        added_at=db.parse_time(member.added_at),
     )
 
 

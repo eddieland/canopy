@@ -69,7 +69,7 @@ interface NavSetup {
 const REPORTS = ['Reports', 'Spend', 'Checklist', 'Health', 'CI', 'Reviews', 'Plans'] as const
 
 // The nav's sections, in its order, with no pages open under any.
-const SECTIONS = ['Attention', 'Tickets', 'Tasks', 'Pull requests', 'Workspace', 'Chores', 'Reports', 'Memory']
+const SECTIONS = ['Attention', 'Tickets', 'Tasks', 'Epics', 'Pull requests', 'Workspace', 'Chores', 'Reports', 'Memory']
 
 // The nav's links with the pages under one section open: the section, then its pages.
 function opening([section, ...pages]: readonly string[]): string[] {
@@ -102,7 +102,7 @@ describe('Nav', () => {
         expect(current()).toEqual([section])
     })
 
-    it('keeps the pages under a section folded while another is shown, so it lists its eight sections', async () => {
+    it('keeps the pages under a section folded while another is shown, so it lists its nine sections', async () => {
         await renderNav({ at: '/tickets/ABC-102', items: [] })
         expect(listed()).toEqual(SECTIONS)
     })

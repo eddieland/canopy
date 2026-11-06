@@ -5,6 +5,12 @@ import { keys } from './queries'
 import type {
     DeskClosed,
     DeskOpened,
+    EpicMemberAdded,
+    EpicMemberRemoved,
+    EpicPlanApproved,
+    EpicReplied,
+    EpicStopped,
+    EpicSubmitted,
     LeftSent,
     AgentModel,
     Answered,
@@ -225,6 +231,74 @@ export async function replyTask(id: number, body: string, submission: string): P
             body: { body, submission },
         }),
     )
+}
+
+/**
+ * `canopy plan epic:N --approve`: approve the epic's waiting plan as its file stands (DESIGN §43), refused `stale` when
+ * the file is not the one `readSha256`, its hash as the page read it, names.
+ */
+export async function approveEpicPlan(id: number, readSha256: string): Promise<EpicPlanApproved> {
+    return unwrap(
+        await api.POST('/api/epics/{epic_id}/plan/approval', {
+            params: { path: { epic_id: id } },
+            body: { read_sha256: readSha256 },
+        }),
+    )
+}
+
+/**
+ * `canopy epic submit TEXT --repo NAME --project KEY --tracker-epic KEY`: the text is recorded as an epic whose plan
+ * reads `repos` (none only in a workspace of one), filing its tickets only in `project`, or none without one, and
+ * putting `trackerEpic`'s tickets to the operator as suggestions; the next tick starts its plan run.
+ */
+export async function submitEpic(
+    text: string,
+    repos: readonly string[],
+    project: string | null,
+    trackerEpic: string | null,
+): Promise<EpicSubmitted> {
+    return unwrap(
+        await api.POST('/api/epics', { body: { text, repos: [...repos], project, tracker_epic: trackerEpic } }),
+    )
+}
+
+/**
+ * `canopy reply epic:N`: ask for changes to the epic's plan, which its next plan run reads. `submission` makes a resend
+ * a no-op.
+ */
+export async function replyEpic(id: number, body: string, submission: string): Promise<EpicReplied> {
+    return unwrap(
+        await api.POST('/api/epics/{epic_id}/replies', {
+            params: { path: { epic_id: id } },
+            body: { body, submission },
+        }),
+    )
+}
+
+/**
+ * `canopy epic add epic:N KEY --entry B<n>`: make the ticket a member of the epic (DESIGN §43), registered against
+ * `entries` of its approved plan's breakdown in place of any it had; none is `--no-entry`.
+ */
+export async function addEpicMember(id: number, key: string, entries: readonly string[]): Promise<EpicMemberAdded> {
+    return unwrap(
+        await api.POST('/api/epics/{epic_id}/members', {
+            params: { path: { epic_id: id } },
+            body: { key, entries: [...entries] },
+        }),
+    )
+}
+
+/** `canopy epic remove epic:N KEY`: end the ticket's membership, leaving the ticket and its work as they are. */
+export async function removeEpicMember(id: number, key: string): Promise<EpicMemberRemoved> {
+    return unwrap(await api.DELETE('/api/epics/{epic_id}/members/{key}', { params: { path: { epic_id: id, key } } }))
+}
+
+/**
+ * `canopy stop epic:N`, or `canopy stop epic:N --now` with `now`, which also ends its plan run at work: no plan run of
+ * it starts again, and its members are left as they are.
+ */
+export async function stopEpic(id: number, now: boolean): Promise<EpicStopped> {
+    return unwrap(await api.POST('/api/epics/{epic_id}/stop', { params: { path: { epic_id: id } }, body: { now } }))
 }
 
 /** `canopy stop task:N`, or `canopy stop task:N --now` with `now`, which also ends the run working it. */

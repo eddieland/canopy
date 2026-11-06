@@ -40,6 +40,7 @@ from tests.canopy.helpers import (
     calls,
     decisions,
     epic_planning,
+    given_server,
     granted_meanwhile,
     has_deadline,
     in_run,
@@ -68,7 +69,7 @@ from tests.canopy.review_helpers import (
     review_decisions,
     reviewer_reports,
 )
-from tests.canopy.scenario_helpers import Scenario, dispatches, pushes, review_waits, reviews
+from tests.canopy.scenario_helpers import Scenario, dispatches, plan_approved, pushes, review_waits, reviews
 from tests.canopy.web_helpers import signed_in_client
 from tests.conftest import CanopyEnv, GitPool, git
 
@@ -294,8 +295,9 @@ def test_the_reviewer_prompt(
 ) -> None:
     """The reviewer's prompt, whole, so a change to its wording or to what fills it in is a diff in review.
 
-    One with every value at its default, and one with each set: a ticket, the overseer's context, the operator's rule
-    for `low`, a notice, standing instructions, and a limit of one review, which makes it the PR's last round.
+    One with every value at its default, and one with each set: a ticket with an approved plan, the overseer's context,
+    the operator's rule for `low`, a notice, standing instructions, and a limit of one review, which makes it the PR's
+    last round.
     `git_pool` gives the review a pool to lease from; the run starts and never runs.
     """
     command = reviews("b" * 40)
@@ -303,6 +305,7 @@ def test_the_reviewer_prompt(
         scenario.configures(review={"low_impact": "A change to docs or tests only."}, policy={"max_reviews_per_pr": 1})
         scenario.operator("notice", "CI is down.")
         reviewer_instructions(scenario, "A migration without a test that applies it is a finding.\n")
+        plan_approved(scenario)
         command = reviews("b" * 40, ticket="PROJ-1", context="Start with src/retry.py")
     with in_tick(scenario.conn):
         said = overseer_calls(command, runner=InlineRunner())
@@ -993,9 +996,8 @@ def test_a_reviewer_reads_its_checkouts_history_through_canopys_git_tools(
 
     [reviewer] = agent_runs(scenario.agent_log)
     slot = Path(present(reviewed.row.slot_path))
-    entry = json.loads(reviewer["env"]["OPENCODE_CONFIG_CONTENT"])["mcp"]["canopy_git"]
+    entry = given_server(reviewer, "canopy_git", scenario.env.runtime)
     assert entry["command"][-3:] == ["_mcp", "--git", f"checkout={slot}"]
-    assert reviewer["env"]["OPENCODE_EXPERIMENTAL_CODE_MODE"] == "false"
     fork, diff, log, root, escape, option = reviewer["tools"]
     assert [call["error"] for call in (fork, diff, log, root)] == [False] * 4, [fork, diff, log, root]
     assert fork["text"] == head(git_pool)

@@ -181,6 +181,32 @@ def recorded(conn: sqlite3.Connection, tick_id: int) -> list[Derived]:
     ]
 
 
+def let_go(conn: sqlite3.Connection, derived: Iterable[Derived]) -> frozenset[str]:
+    """The tickets the journal holds that are the loop's no longer: open, unlabeled, and not returned by the query.
+
+    Each is a ticket whose own row in `derived` was read fresh as open and no candidate (§17), with no worker running,
+    that the tracker query's newest read did not return: one whose label was removed, or one never labeled that came
+    into the journal another way. The state block leaves it out, so no tick is owed a `skip` for it, ever again; the
+    `tracker` source still reads it, so labeled again, it is a candidate again. One the operator started since it was
+    derived is a candidate now, and stays.
+
+    Returns:
+        Their keys.
+    """
+    queried = set(_query_result(conn))
+    return frozenset(
+        d.ticket_key
+        for d in derived
+        if d.repo is None
+        and d.stale is None
+        and d.candidate is False
+        and d.closed is False
+        and Phase.RUNNING not in d.phases
+        and d.ticket_key not in queried
+        and not conversation.is_started(conversation.start_of(conn, d.ticket_key))
+    )
+
+
 def record_overseer(conn: sqlite3.Connection, tick_id: int) -> None:
     """Record, on tick `tick_id`'s derivations, the phase the journal holds for each subject as the tick closes.
 
@@ -249,7 +275,7 @@ def compare(conn: sqlite3.Connection, tick_id: int) -> list[Compared]:
     return [
         _compared(key, subjects, decided.get(key, []), raised=key in raised)
         for key, subjects in by_ticket.items()
-        if key not in by_harness
+        if key not in by_harness and (key in decided or not _unlisted(subjects))
     ]
 
 
@@ -364,6 +390,20 @@ def _overseers(decision: records.Decision) -> bool:
     if decision.decider is Decider.HARNESS or action.startswith("refused:") or action == conversation.MIRROR_ACTION:
         return False
     return not (action.startswith(_ATTENTION) and action.removeprefix(_ATTENTION) in attention.ALWAYS_HARNESS)
+
+
+def _unlisted(subjects: Sequence[records.Derivation]) -> bool:
+    """Whether a ticket's own row is one `let_go` may have left out of the block: open, no candidate, none running.
+
+    A tick that listed it and got no decision for it failed its duties, so leaving it out of the comparison too loses
+    nothing; one it left out was decided by no one.
+
+    Returns:
+        True if it is.
+    """
+    own = subjects[0]
+    running = Phase.RUNNING in json.loads(own.phases)
+    return own.repo is None and own.stale is None and own.candidate is False and own.closed is False and not running
 
 
 def _compared(

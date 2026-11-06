@@ -10,11 +10,14 @@ epic, never a ticket: the overseer never reads them.
 from __future__ import annotations
 
 import json
+import os
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from canopy.core import conversation, db, pools, records, sql
-from canopy.core.vocab import RunStatus
+from canopy.core.items import Item
+from canopy.core.vocab import PlanStatus, RunStatus
 from canopy.infra import procs
 from canopy.runs import desks, tidy
 
@@ -30,6 +33,12 @@ if TYPE_CHECKING:
 HOLDER_KEY = "epic:"
 #: Where plan runs' logs and prompts live: `<state_dir>/epic-runs/`, the operator's only.
 RUNS_DIR = "epic-runs"
+#: Where a ticket key would be, an attention item about an epic names it so (DESIGN §43).
+EPIC_PREFIX = "epic:"
+#: The attention reason an epic's plan waiting on the operator raises, as a ticket's does (DESIGN §25, §43).
+REASON = "plan_review"
+#: The note a plan run ended by the operator's stop is closed with.
+STOP_NOTE = "the operator stopped the epic with `canopy stop --now`"
 
 
 def desk_key(epic_id: int) -> str:
@@ -63,16 +72,20 @@ def insert_run(
     pool: PoolKind,
     logs_dir: Path,
     model: str | None = None,
-) -> int:
-    """Record a plan run of epic `epic_id` in the slots `leases` hold, one per repository, in one go.
+) -> int | None:
+    """Record a plan run of epic `epic_id` in the slots `leases` hold, one per repository, in one go, if not stopped.
 
     Its log is `<logs_dir>/<id>.log`; `model` is the one its planner asks for (DESIGN §13), None for the runtime's
-    default. The run carries the newest message about the epic, so a reply after it asks for the next plan.
+    default. The run carries the newest message about the epic, so a reply after it asks for the next plan. Checked in
+    the transaction that inserts it, so a `stop` that commits first starts nothing.
 
     Returns:
-        The new run's id.
+        The new run's id, or None when the operator stopped the epic.
     """
     with db.transaction(conn):
+        epic = records.select(records.Epic).where("id = ?", epic_id).one(conn)
+        if epic is None or epic.stopped_at is not None:
+            return None
         newest = (
             sql.select("max(id)")
             .from_("messages")
@@ -109,8 +122,8 @@ def due(conn: sqlite3.Connection, max_attempts: int) -> list[records.Epic]:
     """Return the epics a tick starts a plan run for now, the oldest first (DESIGN §43).
 
     One is due once after its submission, and once after each reply of the operator's newer than its latest run: each
-    run follows an operator's word, so one that failed waits for the next. None is due while a run of it runs, or once
-    it has had `max_attempts` runs, a bound never reset (D030).
+    run follows an operator's word, so one that failed waits for the next. None is due while a run of it runs, once
+    it has had `max_attempts` runs, a bound never reset (D030), or once the operator stopped it.
 
     Returns:
         The epics, by when they were submitted.
@@ -125,6 +138,7 @@ def due(conn: sqlite3.Connection, max_attempts: int) -> list[records.Epic]:
     )
     query = (
         records.select(records.Epic)
+        .where("stopped_at IS NULL")
         .where(
             "NOT EXISTS (SELECT 1 FROM epic_runs r WHERE r.epic_id = epics.id AND r.status = ?)",
             RunStatus.RUNNING,
@@ -134,6 +148,69 @@ def due(conn: sqlite3.Connection, max_attempts: int) -> list[records.Epic]:
         .order_by("id")
     )
     return query.all(conn)
+
+
+@dataclass(frozen=True)
+class WaitingPlan:
+    """An epic's plan waiting on the operator, which raises `plan_review` about `epic:<id>` (DESIGN §43)."""
+
+    epic_id: int
+    #: The plan, by its id, and the plan run that wrote it.
+    plan_id: int
+    run_id: int
+    #: When its run recorded it: the item is open since then.
+    at: str
+
+
+def review_items(conn: sqlite3.Connection) -> list[Item]:
+    """Return a `plan_review` item for each epic's plan waiting on the operator, as the attention list lists it (§43).
+
+    Each names the epic and its plan, never the goal or the plan's text: the list reaches sinks whose audience may not
+    be the operator, and an epic is private, as a task is (§36).
+
+    Returns:
+        The items, by epic, each open since its plan was recorded.
+    """
+    return [_review_item(w) for w in waiting_plans(conn)]
+
+
+def waiting_plans(conn: sqlite3.Connection) -> list[WaitingPlan]:
+    """Return each epic's plan that waits on the operator now, by epic: each raises `plan_review` (DESIGN §43).
+
+    One waits while it is its epic's newest, `proposed`, no plan run of the epic works, the operator has not stopped
+    the epic, and no reply of theirs is newer than the messages its run's prompt carried: a reply asks for the next
+    plan, which raises the item again. Approving it, replying, or stopping the epic ends it.
+
+    Returns:
+        The plans, never their text: the item names the epic.
+    """
+    query = (
+        records.select(records.EpicPlan, "p")
+        .join("epics e ON e.id = p.epic_id")
+        .join("epic_runs w ON w.id = p.run_id")
+        .where("p.status = ? AND e.stopped_at IS NULL", PlanStatus.PROPOSED)
+        .where(
+            "NOT EXISTS (SELECT 1 FROM epic_runs r WHERE r.epic_id = p.epic_id AND r.status = ?)",
+            RunStatus.RUNNING,
+        )
+        .where(
+            "NOT EXISTS (SELECT 1 FROM messages m WHERE m.subject_kind = ? AND m.subject_id = CAST(p.epic_id AS TEXT)"
+            " AND m.source = 'operator' AND m.id > coalesce(w.message_id, 0))",
+            conversation.EPIC,
+        )
+        .order_by("p.epic_id")
+    )
+    return [WaitingPlan(p.epic_id, p.id, p.run_id, p.created_at) for p in query.all(conn)]
+
+
+def _review_item(waiting: WaitingPlan) -> Item:
+    ref = f"{EPIC_PREFIX}{waiting.epic_id}"
+    detail = (
+        f"{ref}'s plan {waiting.plan_id}, from run {waiting.run_id}, waits on your approval: read it with "
+        f"`canopy show {ref}`, approve it with `canopy plan {ref} --approve`, or ask for changes with "
+        f"`canopy reply {ref}`"
+    )
+    return Item(ref, REASON, detail, waiting.at)
 
 
 def runs_of(conn: sqlite3.Connection, epic_id: int) -> list[records.EpicRun]:
@@ -191,6 +268,23 @@ def end(ctx: Context, run: records.EpicRun, status: RunStatus, note: str, log: l
     dealt = release(ctx, run, log)
     log.warning("epic plan run closed without its process", extra={**fields, "status": status, "note": note})
     return dealt
+
+
+def stop_now(ctx: Context, run: records.EpicRun, log: logs.TickAdapter) -> bool:
+    """Kill plan run `run`'s processes and close it `stopped`, its slots returned: `canopy stop epic:N --now`.
+
+    Returns:
+        True once the run is closed, or False if it had already ended: nothing changes.
+    """
+    # Read again first: a run that ended since the stop read it signals nothing, so no pid it held, since reused, is.
+    current = get_run(ctx.conn, run.id)
+    if current is None or current.status is not RunStatus.RUNNING:
+        return False
+    for pid in (current.pid, current.agent_pid):
+        # Never this process's own group: an `_epic` claimed in-process, as tests run it, has this pid.
+        if pid is not None and pid not in (os.getpid(), os.getpgid(0)):
+            procs.kill_group(pid)
+    return bool(end(ctx, current, RunStatus.STOPPED, STOP_NOTE, log))
 
 
 def release(ctx: Context, run: records.EpicRun, log: logs.TickAdapter) -> set[str]:

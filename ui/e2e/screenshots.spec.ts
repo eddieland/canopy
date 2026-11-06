@@ -321,9 +321,20 @@ test('the root size grows with the window', async ({ page }) => {
     expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe('20px')
 })
 
+// Loop settings with changes waiting: the rows marked, and the save bar listing them, with the one-way warning a
+// stricter change brings. Typed, never saved: the root server's journal and config never change.
+test('settings/limits with changes waiting', async ({ page }) => {
+    await openInDark(page, 'settings/limits')
+    const form = page.getByTestId('config-form')
+    await form.getByTestId('capacity.max_workers').fill('4')
+    await form.getByTestId('trust.trusted_reviewers-lint-bot').click()
+    await expect(form.getByTestId('config-pending')).toHaveText('2 unsaved changes')
+    await screenshotMain(page, 'settings-limits-changed-dark.png')
+})
+
 // A narrow window, about the narrowest the UI holds up in (DESIGN.md): the behaviour specs hold that it fits, these
 // how it looks. The ticket page whole, for the strip rail, its one column, and the lists in its panels; the tickets,
-// PRs, reviews, and worktrees lists for the columns they let go.
+// PRs, reviews, and worktrees lists for the columns they let go; Loop settings for its rows, stacked where they must.
 test.describe('in a narrow window', () => {
     test.use({ viewport: { width: 820, height: 900 } })
 
@@ -332,7 +343,13 @@ test.describe('in a narrow window', () => {
         await screenshotWhole(page, 'tickets-ABC-102-narrow-dark.png')
     })
 
-    for (const route of ['tickets', 'pull-requests', 'pull-requests/reviews', 'workspace/worktrees']) {
+    for (const route of [
+        'tickets',
+        'pull-requests',
+        'pull-requests/reviews',
+        'workspace/worktrees',
+        'settings/limits',
+    ]) {
         test(`${route} narrow`, async ({ page }) => {
             await openInDark(page, route)
             await screenshotMain(page, `${route.replaceAll('/', '-')}-narrow-dark.png`)

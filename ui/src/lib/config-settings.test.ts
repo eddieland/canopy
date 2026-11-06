@@ -3,13 +3,30 @@ import { describe, expect, it } from 'vitest'
 import type { ConfigKey, ConfigSaved } from '@/api/types'
 
 import {
+    defaultText,
+    resetDone,
+    resetDraft,
+    bandCounts,
+    dropAsks,
+    lockedText,
+    strictest,
+    bandsMatching,
     boundText,
+    byPart,
+    changeList,
     CONFIG_GROUPS,
     configForm,
+    configQueryOf,
     groupedKeys,
+    groupSlug,
+    oneWay,
+    oneWayText,
     pendingText,
     savedText,
-    sourceText,
+    settingsLine,
+    SOURCE_MEANING,
+    SOURCE_WORD,
+    valueText,
 } from './config-settings'
 
 const WORKERS: ConfigKey = {
@@ -21,6 +38,7 @@ const WORKERS: ConfigKey = {
     looser: 'higher',
     forever_at_zero: false,
     choices: [],
+    default: 2,
 }
 const SLOTS: ConfigKey = {
     name: 'capacity.repo_slots',
@@ -31,6 +49,7 @@ const SLOTS: ConfigKey = {
     looser: 'higher',
     forever_at_zero: false,
     choices: [],
+    default: {},
 }
 const PER_REPO: ConfigKey = { ...WORKERS, name: 'capacity.slots_per_repo', value: null }
 const PACE: ConfigKey = { ...WORKERS, name: 'loop.interval_minutes', value: 15, bound: 5, looser: 'lower' }
@@ -45,6 +64,7 @@ const REVIEWERS: ConfigKey = {
     looser: null,
     forever_at_zero: false,
     choices: [],
+    default: [],
 }
 const REBASE: ConfigKey = { ...REVIEWERS, name: 'trust.rebase', value: true, source: 'default' }
 const STACKING: ConfigKey = {
@@ -74,14 +94,14 @@ const SAVED: ConfigSaved = {
 
 function changes(drafts: Parameters<typeof configForm>[1]): ReturnType<typeof configForm>['changes'] {
     const form = configForm(KEYS, drafts)
-    expect(form.invalid).toEqual([])
+    expect(form.errors).toEqual({})
     return form.changes
 }
 
 describe('config settings', () => {
     it('send only the keys touched and changed', () => {
         expect(changes({})).toEqual({})
-        expect(changes({ 'capacity.max_workers': '2', 'loop.interval_minutes': ' ' })).toEqual({})
+        expect(changes({ 'capacity.max_workers': '2', 'capacity.slots_per_repo': ' ' })).toEqual({})
         expect(changes({ 'capacity.max_workers': ' 3 ', 'trust.rebase': false })).toEqual({
             'capacity.max_workers': 3,
             'trust.rebase': false,
@@ -95,13 +115,74 @@ describe('config settings', () => {
     it('send a stricter count as a whole number, and name one that is not', () => {
         expect(configForm([KICKS], { 'trust.max_flaky_kicks': '2' }).changes).toEqual({})
         expect(configForm([KICKS], { 'trust.max_flaky_kicks': '1' }).changes).toEqual({ 'trust.max_flaky_kicks': 1 })
-        expect(configForm([KICKS], { 'trust.max_flaky_kicks': 'once' }).invalid).toEqual(['trust.max_flaky_kicks'])
+        expect(configForm([KICKS], { 'trust.max_flaky_kicks': 'once' }).errors).toEqual({
+            'trust.max_flaky_kicks': 'not a whole number',
+        })
     })
 
     it('name a count that is not a whole number, and send nothing for it', () => {
         expect(configForm(KEYS, { 'capacity.max_workers': 'many', 'capacity.repo_slots': { web: '2.5' } })).toEqual({
             changes: {},
-            invalid: ['capacity.max_workers', 'capacity.repo_slots.web'],
+            errors: { 'capacity.max_workers': 'not a whole number', 'capacity.repo_slots.web': 'not a whole number' },
+        })
+    })
+
+    it("check a limit's bound as the server does: refused only past it and looser than the value read", () => {
+        expect(configForm(KEYS, { 'capacity.max_workers': '9' })).toEqual({
+            changes: {},
+            errors: { 'capacity.max_workers': 'at most 8 from here; set more in the file' },
+        })
+        expect(configForm(KEYS, { 'capacity.max_workers': '-3' }).errors).toEqual({
+            'capacity.max_workers': 'not a whole number',
+        })
+        expect(configForm(KEYS, { 'capacity.max_workers': '8' })).toEqual({
+            changes: { 'capacity.max_workers': 8 },
+            errors: {},
+        })
+        // A count the file set past the bound may come down, though still past it.
+        expect(configForm([{ ...WORKERS, value: 12 }], { 'capacity.max_workers': '10' }).errors).toEqual({})
+        expect(configForm([PACE], { 'loop.interval_minutes': '4' }).errors).toEqual({
+            'loop.interval_minutes': 'at least 5 from here; set less in the file',
+        })
+        expect(configForm([RUN_FILES], { 'retention.run_files_days': '3' }).errors).toEqual({
+            'retention.run_files_days': 'at least 7, or 0 for forever, from here; set less in the file',
+        })
+        expect(configForm([RUN_FILES], { 'retention.run_files_days': '0' }).changes).toEqual({
+            'retention.run_files_days': 0,
+        })
+    })
+
+    it("check a repository's own count against the bound, from the slots per repository it has now", () => {
+        const perRepo = { ...PER_REPO, value: 2 }
+        expect(configForm([SLOTS, perRepo], { 'capacity.repo_slots': { web: '9', api: '8' } })).toEqual({
+            changes: { 'capacity.repo_slots': { api: 8 } },
+            errors: { 'capacity.repo_slots.web': 'at most 8 from here; set more in the file' },
+        })
+    })
+
+    it('let a stricter count only fall', () => {
+        expect(configForm([KICKS], { 'trust.max_flaky_kicks': '3' })).toEqual({
+            changes: {},
+            errors: { 'trust.max_flaky_kicks': 'only fewer from here: at most 2; set more in the file' },
+        })
+        expect(configForm([KICKS], { 'trust.max_flaky_kicks': 'x' }).errors).toEqual({
+            'trust.max_flaky_kicks': 'not a whole number',
+        })
+        expect(configForm([KICKS], { 'trust.max_flaky_kicks': '0' })).toEqual({
+            changes: { 'trust.max_flaky_kicks': 0 },
+            errors: {},
+        })
+    })
+
+    it('name a count emptied of a value the file sets, which the page cannot unset', () => {
+        expect(configForm(KEYS, { 'capacity.max_workers': ' ', 'capacity.repo_slots': { web: '' } }).errors).toEqual({
+            'capacity.max_workers': 'empty: type a count, or Discard to keep 2',
+            'capacity.repo_slots.web': 'empty: type a count, or Discard to keep 4',
+        })
+        // A pool left unmanaged holds nothing to keep; a repository just picked holds a draft to type or discard.
+        expect(changes({ 'capacity.slots_per_repo': '' })).toEqual({})
+        expect(configForm(KEYS, { 'capacity.repo_slots': { api: '' } }).errors).toEqual({
+            'capacity.repo_slots.api': 'empty: type a count, or Discard',
         })
     })
 
@@ -111,7 +192,7 @@ describe('config settings', () => {
     })
 
     it('send only the repositories whose count changed', () => {
-        expect(changes({ 'capacity.repo_slots': { web: '4', api: '' } })).toEqual({})
+        expect(changes({ 'capacity.repo_slots': { web: '4' } })).toEqual({})
         expect(changes({ 'capacity.repo_slots': { web: '5', api: '2' } })).toEqual({
             'capacity.repo_slots': { web: 5, api: 2 },
         })
@@ -123,10 +204,9 @@ describe('config settings', () => {
     })
 
     it('say where a value comes from and how far the page may take it', () => {
-        expect(sourceText(WORKERS)).toBe('from your user config; a change here is for this workspace only')
-        expect(sourceText({ ...WORKERS, source: 'private' })).toBe("set in this workspace's config")
-        expect(sourceText({ ...WORKERS, source: 'workspace' })).toBe('set in the workspace file')
-        expect(sourceText(REBASE)).toBe('default')
+        // A chip's word is short, every row has one; what it means is its tip, and the page's help.
+        expect(Object.values(SOURCE_WORD)).toEqual(['this workspace', 'user', 'workspace', 'default'])
+        expect(SOURCE_MEANING.user).toContain('a change here is saved for this workspace only')
         expect(boundText(WORKERS)).toBe('at most 8 from here')
         expect(boundText(PACE)).toBe('at least 5 from here')
         expect(boundText(QUERY)).toBe('')
@@ -163,21 +243,54 @@ describe('budget alerts', () => {
     })
 
     it('name a list with something other than a whole number in it, and send nothing for it', () => {
-        expect(configForm([ALERTS], { [ALERTS.name]: '50, most' })).toEqual({ changes: {}, invalid: [ALERTS.name] })
+        expect(configForm([ALERTS], { [ALERTS.name]: '50, most' })).toEqual({
+            changes: {},
+            errors: { [ALERTS.name]: 'whole percentages, comma separated' },
+        })
         expect(boundText(ALERTS)).toBe('percentages, comma separated; 100% is always sent')
     })
 })
 
 describe('config groups', () => {
-    it('put each key in its panel with its words, and a key no panel names in Other', () => {
+    it('put each key in its band with its words, and a key no band names in Other', () => {
         const odd: ConfigKey = { ...WORKERS, name: 'capacity.max_something_new' }
         const found = groupedKeys([REVIEWERS, WORKERS, odd, PACE])
-        expect(found.map((g) => g.group.title)).toEqual(['Capacity', 'Pace', 'Trust', 'Other'])
+        expect(found.map((g) => g.group.title)).toEqual(['Capacity', 'Timing', 'Guardrails', 'Other'])
         expect(found[0]?.keys).toEqual([{ setting: WORKERS, label: 'Workers at once' }])
+        expect(found[1]?.keys).toEqual([{ setting: PACE, label: 'Time between ticks', unit: 'min', part: 'Pace' }])
         expect(found[3]?.keys).toEqual([{ setting: odd, label: 'capacity.max_something_new' }])
     })
 
-    it('name every key the server edits in some panel', () => {
+    it('keep a part when the key that names it is not sent, and cut a band into its parts in order', () => {
+        const idle: ConfigKey = { ...PACE, name: 'loop.idle_max_minutes' }
+        const cooldown: ConfigKey = { ...PACE, name: 'policy.ci_cooldown_minutes' }
+        const settle: ConfigKey = { ...PACE, name: 'review.settle_minutes' }
+        const [timing] = groupedKeys([settle, idle, cooldown])
+        expect(timing?.keys.map((k) => [k.setting.name, k.part])).toEqual([
+            ['loop.idle_max_minutes', 'Pace'],
+            ['policy.ci_cooldown_minutes', 'Waits'],
+            ['review.settle_minutes', 'Waits'],
+        ])
+        expect(byPart(timing?.keys ?? []).map((p) => [p.part, p.keys.map((k) => k.setting.name)])).toEqual([
+            ['Pace', ['loop.idle_max_minutes']],
+            ['Waits', ['policy.ci_cooldown_minutes', 'review.settle_minutes']],
+        ])
+        const [capacity] = groupedKeys([WORKERS, PER_REPO])
+        expect(byPart(capacity?.keys ?? []).map((p) => p.part)).toEqual([undefined])
+    })
+
+    it('hold five bands, the minutes in one', () => {
+        expect(CONFIG_GROUPS.map((g) => g.title)).toEqual([
+            'Capacity',
+            'Attempts',
+            'Timing',
+            'Retention & budget',
+            'Guardrails',
+        ])
+        expect(groupSlug('Retention & budget')).toBe('retention-budget')
+    })
+
+    it('name every key the server edits in some band', () => {
         const named = CONFIG_GROUPS.flatMap((g) => g.keys.map((k) => k.name))
         expect(new Set(named).size).toBe(named.length)
         expect(named).toHaveLength(49)
@@ -187,5 +300,192 @@ describe('config groups', () => {
         expect(pendingText(0)).toBe('No unsaved changes')
         expect(pendingText(1)).toBe('1 unsaved change')
         expect(pendingText(3)).toBe('3 unsaved changes')
+        // A field in error is a change too, so the bar never says there is none beside an enabled Discard.
+        expect(pendingText(0, 1)).toBe('1 unsaved change, 1 to fix before saving')
+        expect(pendingText(2, 1)).toBe('3 unsaved changes, 1 to fix before saving')
+    })
+})
+
+describe('the save bar', () => {
+    it('list each change as its key, its value read, and the one a save writes, in the order the keys come', () => {
+        const keys = [...KEYS, STACKING]
+        const { changes: changed } = configForm(keys, {
+            'trust.rebase': false,
+            'capacity.max_workers': '5',
+            'capacity.repo_slots': { web: '6', api: '2' },
+            'trust.trusted_reviewers': ['alice'],
+            'policy.stacking': 'never',
+            'capacity.slots_per_repo': '3',
+        })
+        expect(changeList(keys, changed)).toEqual([
+            { name: 'capacity.max_workers', old: '2', new: '5' },
+            { name: 'capacity.repo_slots.web', old: '4', new: '6' },
+            { name: 'capacity.repo_slots.api', old: 'unmanaged', new: '2' },
+            { name: 'capacity.slots_per_repo', old: 'unmanaged', new: '3' },
+            { name: 'trust.trusted_reviewers', old: 'alice, lint-bot', new: 'alice' },
+            { name: 'trust.rebase', old: 'on', new: 'off' },
+            { name: 'policy.stacking', old: 'auto', new: 'never' },
+        ])
+    })
+
+    it("take a repository's old count from the slots per repository when it has none of its own", () => {
+        const keys = [SLOTS, { ...PER_REPO, value: 2 }]
+        expect(changeList(keys, { 'capacity.repo_slots': { web: 5, api: 3 } })).toEqual([
+            { name: 'capacity.repo_slots.web', old: '4', new: '5' },
+            { name: 'capacity.repo_slots.api', old: '2', new: '3' },
+        ])
+    })
+
+    it('name the stricter keys a save changes, which only the file undoes, and nothing else', () => {
+        expect(oneWay(KEYS, { 'capacity.max_workers': 5 })).toEqual([])
+        expect(oneWay(KEYS, { 'capacity.max_workers': 5, 'trust.rebase': false })).toEqual(['trust.rebase'])
+        expect(oneWayText(['trust.rebase'])).toBe('trust.rebase: only an edit to config.toml undoes this')
+        expect(oneWayText(['trust.rebase', 'policy.plan'])).toBe(
+            'trust.rebase, policy.plan: only an edit to config.toml undoes these',
+        )
+    })
+
+    it('say a value in words', () => {
+        expect(valueText(null, 'spend.monthly_budget_usd')).toBe('none')
+        expect(valueText(null, 'capacity.slots_per_repo')).toBe('unmanaged')
+        expect(valueText([], 'trust.trusted_reviewers')).toBe('none')
+        expect(valueText({ web: 4, api: 2 }, 'capacity.repo_slots')).toBe('web 4, api 2')
+        expect(valueText(true, 'trust.rebase')).toBe('on')
+    })
+})
+
+describe('the band index', () => {
+    it("count a band's keys set in this workspace, and apart from them its rows changed and unsaved", () => {
+        const set: ConfigKey = { ...WORKERS, source: 'private' }
+        const keys = groupedKeys([set, PER_REPO, { ...SLOTS, source: 'private' }])[0]?.keys ?? []
+        expect(bandCounts(keys, () => false)).toEqual({ set: 2, changed: 0 })
+        expect(bandCounts(keys, (name) => name !== 'capacity.max_workers')).toEqual({ set: 2, changed: 2 })
+        expect(bandCounts([], () => true)).toEqual({ set: 0, changed: 0 })
+    })
+})
+
+describe('the filter', () => {
+    const bands = groupedKeys([WORKERS, PACE, KICKS, ALERTS])
+    const rows = (q: string | undefined, changed: (name: string) => boolean = () => false) =>
+        bandsMatching(bands, q, changed).map(({ group, keys }) => [group.title, keys.map((k) => k.setting.name)])
+
+    it("match a row by its label, its key, or its band's blurb, ignoring case", () => {
+        expect(rows('WORKERS AT')).toEqual([
+            ['Capacity', ['capacity.max_workers']],
+            ['Timing', []],
+            ['Retention & budget', []],
+            ['Guardrails', []],
+        ])
+        expect(rows('flaky_kicks').flatMap(([, keys]) => keys)).toEqual(['trust.max_flaky_kicks'])
+        // Timing's blurb: every row in the band.
+        expect(rows('looks around').flatMap(([, keys]) => keys)).toEqual(['loop.interval_minutes'])
+    })
+
+    it('match nothing, leaving every band empty, and everything when there is no filter', () => {
+        expect(rows('zzz').flatMap(([, keys]) => keys)).toEqual([])
+        expect(rows(undefined).flatMap(([, keys]) => keys)).toHaveLength(4)
+    })
+
+    it('keep a row with an unsaved change, whatever the filter', () => {
+        expect(rows('zzz', (name) => name === 'spend.budget_alerts').flatMap(([, keys]) => keys)).toEqual([
+            'spend.budget_alerts',
+        ])
+    })
+
+    it('keep a query of some word, cut to its longest', () => {
+        expect(configQueryOf('  ')).toBeUndefined()
+        expect(configQueryOf(3)).toBeUndefined()
+        expect(configQueryOf('x'.repeat(150))).toHaveLength(100)
+    })
+})
+
+describe("the page's header", () => {
+    it('say in one line how many settings there are, and where those set come from', () => {
+        expect(settingsLine([WORKERS, { ...PACE, source: 'private' }, REBASE, ALERTS])).toBe(
+            '4 settings · 2 set in this workspace · 1 from your user config',
+        )
+        expect(settingsLine([REBASE])).toBe('1 setting')
+    })
+})
+
+describe('the trust ratchet', () => {
+    it('knows a stricter key at its strictest, which the page can take no further', () => {
+        expect(strictest({ ...STACKING, value: 'never' })).toBe(true)
+        expect(strictest(STACKING)).toBe(false)
+        expect(strictest({ ...REBASE, value: false })).toBe(true)
+        expect(strictest(REBASE)).toBe(false)
+        expect(strictest({ ...REVIEWERS, value: [] })).toBe(true)
+        expect(strictest(REVIEWERS)).toBe(false)
+        expect(strictest({ ...KICKS, value: 0 })).toBe(true)
+        expect(strictest(KICKS)).toBe(false)
+        expect(strictest({ ...WORKERS, value: 0 })).toBe(false)
+    })
+
+    it('says a locked value in words, a switch by what it does', () => {
+        expect(lockedText({ ...REBASE, value: false })).toBe('rebase off')
+        expect(lockedText({ ...REBASE, name: 'trust.commit_trailer', value: true })).toBe('add trailer on')
+        expect(lockedText({ ...STACKING, value: 'never' })).toBe('never')
+        expect(lockedText({ ...REVIEWERS, value: [] })).toBe('none')
+    })
+
+    it('asks before dropping any authorized replier, or the last entry of a list', () => {
+        const repliers: ConfigKey = { ...REVIEWERS, name: 'trust.authorized_repliers', value: ['me', 'bot'] }
+        expect(dropAsks(repliers, 'bot', ['me', 'bot'])).toBe(true)
+        expect(dropAsks(REVIEWERS, 'alice', ['alice', 'lint-bot'])).toBe(false)
+        expect(dropAsks(REVIEWERS, 'alice', ['alice'])).toBe(true)
+    })
+})
+
+describe('defaults', () => {
+    it("say a key's default once its value is not it", () => {
+        expect(defaultText(WORKERS)).toBeNull()
+        expect(defaultText({ ...WORKERS, value: 5 })).toBe('default 2')
+        expect(defaultText({ ...PER_REPO, value: 3, default: null })).toBe('default unmanaged')
+    })
+
+    it('reset a limit to its default within its bound, and offer none past it or to unset it', () => {
+        expect(resetDraft({ ...WORKERS, value: 5 })).toBe('2')
+        expect(resetDraft(WORKERS)).toBeNull()
+        // A pace's default under the page's floor would loosen it past the bound.
+        expect(resetDraft({ ...PACE, value: 15, default: 3 })).toBeNull()
+        expect(resetDraft({ ...PER_REPO, value: 3, default: null })).toBeNull()
+        expect(resetDraft({ ...SLOTS, default: {} })).toBeNull()
+        expect(resetDraft({ ...ALERTS, default: [] })).toBe('')
+    })
+
+    it('reset a stricter key only where its default is no looser than its value now', () => {
+        expect(resetDraft({ ...KICKS, default: 0 })).toBe('0')
+        expect(resetDraft({ ...KICKS, value: 1, default: 2 })).toBeNull()
+        expect(resetDraft({ ...REBASE, value: true, default: false })).toBe(false)
+        expect(resetDraft({ ...REBASE, name: 'trust.commit_trailer', value: false, default: true })).toBe(true)
+        expect(resetDraft({ ...REBASE, value: false, default: true })).toBeNull()
+        expect(resetDraft({ ...STACKING, value: 'auto', default: 'never' })).toBe('never')
+        expect(resetDraft({ ...STACKING, value: 'never', default: 'auto' })).toBeNull()
+        expect(resetDraft({ ...STACKING, value: 'sometimes', default: 'often' })).toBeNull()
+        expect(resetDraft({ ...REVIEWERS, default: ['alice'] })).toEqual(['alice'])
+        expect(resetDraft({ ...REVIEWERS, default: ['carol'] })).toBeNull()
+        // Emptying a list, or dropping an authorized replier, asks first: the operator unchecks those, never a reset.
+        expect(resetDraft({ ...REVIEWERS, default: [] })).toBeNull()
+        expect(
+            resetDraft({ ...REVIEWERS, name: 'trust.authorized_repliers', value: ['me', 'bot'], default: ['me'] }),
+        ).toBeNull()
+    })
+
+    it('offer no reset the loader would refuse beside its pair', () => {
+        const idle: ConfigKey = { ...PACE, name: 'loop.idle_max_minutes', value: 200, default: 120, bound: 2 }
+        const pace: ConfigKey = { ...PACE, value: 150, default: 15 }
+        // Back to 120 would be under a pace of 150; the pace back to 15 stays under any idle wait.
+        expect(resetDraft(idle, [idle, pace])).toBeNull()
+        expect(resetDraft(pace, [idle, pace])).toBe('15')
+        expect(resetDraft(idle, [idle, { ...pace, value: 60 }])).toBe('120')
+        const every: ConfigKey = { ...PACE, name: 'connect.every_minutes', value: 2, default: 2 }
+        const age: ConfigKey = { ...PACE, name: 'connect.max_age_minutes', value: 60, default: 30, bound: 2 }
+        expect(resetDraft(age, [age, { ...every, value: 45 }])).toBeNull()
+        expect(resetDraft(age, [age, every])).toBe('30')
+    })
+
+    it("know a reset done once the form's change is the default", () => {
+        expect(resetDone({ ...KICKS, default: 0 }, { 'trust.max_flaky_kicks': 0 })).toBe(true)
+        expect(resetDone({ ...KICKS, default: 0 }, {})).toBe(false)
     })
 })

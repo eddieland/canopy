@@ -248,6 +248,9 @@ ticket it returned into the journal (§11); a query no source read fresh does no
 ticket it would have found waits for the read that finds it.
 `tracker.query_every_minutes` spaces it out, delaying only how soon a new ticket is found; a ticket the operator starts
 is in the block already.
+An open ticket the tracker shows with no queue label, not started, that the query's newest read did not return and no
+worker runs for, is left out of the block: one whose label was removed is owed no `skip` every tick. The source still
+reads it, so labeled again it is a candidate again.
 
 "Closed" means whatever the tracker calls finished; the provider skill says which. A closed ticket is not a candidate
 and has no phase: the overseer marks it done, whatever its labels, branch, or PR, unless a worker is running for it,
@@ -304,6 +307,7 @@ run. A `plan` writes the ticket's plan before its first `implement`, with guards
 5. If a slot's git links changed, the run is `crashed` and no git runs in its slots, which may now point at a git
    directory the worker made. Otherwise push once where the branch is not on origin, never with force (with
    `trust.rebase`, leasing what origin held at step 2). A failed push or commits on no pushed branch is `unpushed`.
+   Then what the run changed in each slot is recorded and its diffs kept (§45).
    A `resume` for `ci` that left a check flaky and pushed nothing may then be kicked (§23).
 6. Always tidy and return each slot, except after SIGKILL, which reconcile handles (§6 step 3); an untidy one is kept.
 7. Close the run with its status and validated result, noting where the harness's status differs from the worker's,

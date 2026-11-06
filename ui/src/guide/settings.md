@@ -1,7 +1,7 @@
 # Settings
 
-A handful of things you set from the browser: how the UI looks and sends, a notice for every worker, your limits and
-trust settings, reloading your config, and the fun. It also shows, read only, which model each agent runs on and the
+A handful of things you set from the browser: how the UI looks and sends, a notice for every worker, your loop
+settings, reloading your config, and the fun. It also shows, read only, which model each agent runs on and the
 skills the runtime finds. It opens from the rail's foot, beside the guide. The theme, the clock, a plan's text size,
 the send key, whether attention lists chore findings, your review personas, and the fun are kept in this browser;
 everything else canopy reads from its config files, as it always did.
@@ -115,32 +115,60 @@ for up to a week, for outages with ambitions.
 
 ## Loop settings
 
-**Open** takes you to a page of its own for the numbers you change most: how many workers, chores, reviews, and tasks
-run at once, each pool's slots, how many tries a ticket, a plan, or a review's draft gets, how many tickets an epic
-holds, how much you may attach to one, how often the loop ticks and asks the tracker and the connectors what's new, how
-long feedback waits on a red build or a pending one and a PR's head settles before its review, how long a run or a
-slot's setup may take before canopy stops it, and the monthly budget the [spend page](reports#the-spend-page) tracks,
-with any alerts short of or past it. You can add and drop alerts freely here: the 100% one isn't in the list, so
-dropping everything still leaves it.
+**Open** takes you to a page of its own for the numbers you change most. The line under its title is the state of
+things: how many settings there are, how many this workspace sets, and how many come from your user config. Hover the
+title for the page's rules, and copy the path under it when you'd rather edit the file by hand. The settings come in
+five bands. **Capacity** is how many workers, chores, reviews, and tasks run at once, each pool's slots, and how much
+you may attach to a ticket. **Attempts** is how many tries a ticket, a plan, or a review's draft gets, and how many
+tickets an epic holds. **Timing** comes in three parts, since every one of them is in minutes and you shouldn't have to
+guess which: **Pace**, how often the loop ticks and asks the tracker and the connectors what's new; **Waits**, how long
+it holds off after a red build, for feedback to go quiet or its checks to finish, and for a PR's head to settle before
+its review; and **Timeouts**, how long a run or a slot's setup may take before canopy stops it.
 
-**Retention** says how many days canopy keeps a run's files, a tick's, the journal's old rows, and a retired note's
-text before a tick removes them. Lengthen them as you like, or set 0 to keep that kind forever; shortening stops at a
-floor (a week of run files, a month of journal), since the transcript a shorter one would delete is the one that shows
-what a run did. If you want last Tuesday gone, the file still takes 1.
+**Retention & budget** says how many days canopy keeps a run's files, a tick's, the journal's old rows, and a retired
+note's text before a tick removes them. Lengthen them as you like, or set 0 to keep that kind forever; shortening stops
+at a floor (a week of run files, a month of journal), since the transcript a shorter one would delete is the one that
+shows what a run did. If you want last Tuesday gone, the file still takes 1. Below them sits the monthly budget the
+[spend page](reports#the-spend-page) tracks, with any alerts short of or past it. You can add and drop alerts freely:
+the 100% one isn't in the list, so dropping everything still leaves it.
 
-It also holds the settings that only get stricter from here. **Plans** says which work waits on a plan you approve,
-and how readily a planner may wave its own plan through: you can make tickets wait, or take the planner's say away,
-but not the reverse. **Trust** lets you drop a trusted reviewer or an authorized replier, never add one, have workers
-draft their review replies for you instead of posting them, turn `trust.rebase` off but not on, and cut the reruns of
-flaky checks but not raise them. A stolen session that could add a replier would keep steering your workers after you
-changed the secret, so adding one stays an edit to the file. A choice that would loosen is greyed out, so there's no
-button to find out the hard way.
+**Guardrails** holds the settings that only get stricter from here. You can make tickets wait on a plan you approve, or
+take a planner's say over its own plan away, but not the reverse. You can drop a trusted reviewer or an authorized
+replier, never add one, have workers draft their review replies for you instead of posting them, turn `trust.rebase` off
+but not on, and cut the reruns of flaky checks but not raise them. A stolen session that could add a replier would keep
+steering your workers after you changed the secret, so adding one stays an edit to the file. The band says that once,
+with a lock, and a setting already as strict as it goes shows its value beside a lock rather than a row of greyed-out
+buttons, which looked broken and wasn't. Unchecking an authorized replier, or a list's last name, asks first: if that
+name is yours, your replies on the ticket stop reaching workers, and the page can't put it back.
 
-Each row says where its value comes from and how far the page will take it. Counts stop at a ceiling (32 workers, 10
-attempts, a $10,000 budget) and paces and retentions at a floor (a tick every 2 minutes, a week of run files); the
-file can still set anything, so the page is for the changes you actually make, not for setting a record.
+Each row's chip says where its value comes from, `this workspace`, `user`, `workspace`, or `default` (hover it, or
+the page's title, for what each means), and the line beside it says how far the page will take it. Units sit after the
+field, as on the rest of Settings, so a label says what a value is and the field says in what. Counts stop at a
+ceiling (32 workers, 10 attempts, a $10,000 budget) and paces and retentions at a floor (a tick every 2 minutes, a week
+of run files); the file can still set anything, so the page is for the changes you actually make, not for setting a
+record. Type past one, or something that isn't a whole number, and the field turns red and says why under it as you
+type, and **Save** waits until you fix it.
 Repositories get a count of their own only when you pick one, so a workspace of fifty repositories shows the two that
 differ.
+
+If you know the key, or a word of its label, type it in the filter at the top: `flaky` leaves the one row about
+flaky checks, and the address keeps it, so `/settings/limits?q=flaky` is a link to exactly that. Anything you've
+changed and not saved stays in view whatever you type, so the filter can't hide a change from you. **Escape** empties
+it.
+
+The bands are listed beside the page, or over it in a narrow window, each with how many of its settings this
+workspace sets and how many you've changed and not saved yet, so you can see where you've customized things without
+scrolling four screens. Every row is a link to itself: `/settings/limits#policy.max_resume_attempts` opens the page at
+that row and lights it for a moment, which is handy for a note to your future self.
+
+A setting you've moved off its default says what the default is, so you can tell how far from stock you've wandered,
+and **reset** puts the field back. It's an ordinary change: it shows in the bar and waits for **Save** like any other.
+On a setting that only gets stricter, reset shows up only when the default isn't looser than what you have, since the
+page won't loosen anything for you, reset or not, and it never drops a name the page would ask you about first.
+
+Change something and its row gets a line down its edge and says what it was, and a bar appears at the foot listing
+each change as `key: old → new`. When one of them only gets stricter from here, the bar says so before you save, since
+the page can't take it back: only an edit to the file can.
 
 **Save** writes `.canopy/config.toml`, this workspace's own file, editing it in place so your comments and layout stay,
 then reloads the loop as **Reload** below does. It never touches `canopy-workspace.toml` or

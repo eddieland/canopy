@@ -246,6 +246,8 @@ test("a ticket changed since its plan was approved shows the plan's card, which 
     expect(approvals).toEqual([{ action: 'approve' }])
     await card.getByRole('link', { name: 'Open plan' }).click()
     await expect(page).toHaveURL(/tickets\/ABC-105\/plan$/u)
+    // The plan's page refetches its plans through the route above, which can still be in it as the page closes.
+    await page.unrouteAll({ behavior: 'ignoreErrors' })
 })
 
 test('a plan review you answered since its tick says so until the next one', async ({ page }) => {
@@ -263,6 +265,8 @@ test('a plan review you answered since its tick says so until the next one', asy
     await expect(page.getByTestId('answered-note')).toHaveText(
         'You answered the plan. The item leaves at the next tick, when the loop reads your answer.',
     )
+    // A refetch of the tickets can still be in the route above as the page closes.
+    await page.unrouteAll({ behavior: 'ignoreErrors' })
 })
 
 test('an earlier plan opens read only', async ({ page }) => {
@@ -378,6 +382,7 @@ async function listItem(page: Page, reason: string, detail: string) {
                     chore: null,
                     pr: null,
                     task: null,
+                    epic: null,
                     run: null,
                     review: null,
                     repo: null,

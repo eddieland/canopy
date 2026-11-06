@@ -175,38 +175,46 @@ test('the settings page asks the loop to read its config again and says what it 
     )
 })
 
-test('the settings page saves a limit and drops a trusted reviewer, but raises nothing past its ceiling', async ({
+test('the settings page saves a limit and drops a trusted reviewer, but offers nothing past its ceiling', async ({
     page,
 }) => {
     await page.goto('settings')
     await page.getByTestId('limits-open').click()
     await expect(page).toHaveURL(/\/canopy\/settings\/limits$/u)
     const form = page.getByTestId('config-form')
-    await expect(form.getByTestId('config-pending')).toHaveText('No unsaved changes')
+    // The save bar comes once something changed.
+    await expect(form.getByTestId('config-save-bar')).toHaveCount(0)
     const workers = form.getByTestId('capacity.max_workers')
     // The count the mock's fixtures set, whatever it is: the test raises it by one, so it holds when they change.
     await expect(workers).toHaveValue(/^\d+$/u)
     const before = await workers.inputValue()
     const after = String(Number(before) + 1)
-    await expect(form.getByTestId('config-save')).toBeDisabled()
 
     await workers.fill(after)
     await expect(form.getByTestId('config-pending')).toHaveText('1 unsaved change')
+    await expect(form.getByTestId('config-changes')).toHaveText(`capacity.max_workers: ${before} → ${after}`)
     await form.getByTestId('config-discard').click()
     await expect(workers).toHaveValue(before)
-    // A choice moves only toward stricter: one looser than the value in force is not offered, and picking the value
-    // back leaves nothing to save.
-    await expect(form.getByTestId('policy.planner_may_approve-lenient')).toBeDisabled()
+    await expect(form.getByTestId('config-save-bar')).toHaveCount(0)
+    // A choice moves only toward stricter, and one already at its strictest is its value beside a lock; picking the
+    // value back leaves nothing to save.
+    await expect(form.getByTestId('policy.planner_may_approve-locked')).toContainText('off')
     await form.getByTestId('policy.plan-approve').click()
     await expect(form.getByTestId('config-pending')).toHaveText('1 unsaved change')
+    await expect(form.getByTestId('config-one-way')).toHaveText('policy.plan: only an edit to config.toml undoes this')
     await form.getByTestId('policy.plan-off').click()
-    await expect(form.getByTestId('config-pending')).toHaveText('No unsaved changes')
+    await expect(form.getByTestId('config-save-bar')).toHaveCount(0)
+    // A field the server would refuse says why on its own row, and keeps Save off.
     await workers.fill('many')
-    await expect(form.getByRole('alert')).toHaveText('capacity.max_workers: a whole number')
+    await expect(workers).toHaveAttribute('aria-invalid', 'true')
+    await expect(form.getByTestId('capacity.max_workers-error')).toHaveText('not a whole number')
     await expect(form.getByTestId('config-save')).toBeDisabled()
     await workers.fill('33')
-    await form.getByTestId('config-save').click()
-    await expect(form.getByRole('alert')).toContainText('refused (past_bound): capacity.max_workers may be at most 32')
+    await expect(form.getByTestId('capacity.max_workers-error')).toHaveText(
+        'at most 32 from here; set more in the file',
+    )
+    await expect(form.getByTestId('config-pending')).toHaveText('1 unsaved change, 1 to fix before saving')
+    await expect(form.getByTestId('config-save')).toBeDisabled()
 
     await workers.fill(after)
     await form.getByTestId('trust.trusted_reviewers-lint-bot').click()
@@ -223,20 +231,20 @@ test('the settings page saves a limit and drops a trusted reviewer, but raises n
         "Saved capacity.max_workers, capacity.repo_slots, trust.trusted_reviewers to this workspace's config.",
     )
     await expect(slots.getByTestId('capacity.repo_slots.api')).toHaveValue('3')
-    // Read again from the file: the reviewer is gone, and only the stricter side of a trust switch is offered.
+    // Read again from the file: the reviewer is gone, and a trust switch at its stricter side is locked.
     await expect(workers).toHaveValue(after)
     await expect(form.getByTestId('trust.trusted_reviewers-lint-bot')).toHaveCount(0)
     await expect(form.getByTestId('trust.trusted_reviewers-canopy:review')).toBeChecked()
-    await expect(form.getByTestId('trust.rebase')).toBeDisabled()
-    await expect(form.getByTestId('trust.commit_trailer')).toBeDisabled()
+    await expect(form.getByTestId('trust.rebase-locked')).toContainText('rebase off')
+    await expect(form.getByTestId('trust.commit_trailer-locked')).toContainText('add trailer on')
 
     // A retention shortens only to its floor, but keeping it forever is always allowed.
     const runFiles = form.getByTestId('retention.run_files_days')
     await runFiles.fill('3')
-    await form.getByTestId('config-save').click()
-    await expect(form.getByRole('alert')).toContainText(
-        'refused (past_bound): retention.run_files_days may be at least 7, or 0 to keep forever',
+    await expect(form.getByTestId('retention.run_files_days-error')).toHaveText(
+        'at least 7, or 0 for forever, from here; set less in the file',
     )
+    await expect(form.getByTestId('config-save')).toBeDisabled()
     await runFiles.fill('0')
     await form.getByTestId('config-save').click()
     await expect(form.getByRole('status')).toContainText("Saved retention.run_files_days to this workspace's config.")
@@ -370,7 +378,8 @@ test('the header pauses the loop and resumes it, as canopy pause and resume do',
     await expect(control).toHaveAttribute('data-paused', 'false')
     await control.getByRole('button', { name: 'Pause' }).click()
     await expect(control).toHaveAttribute('data-paused', 'true')
-    await expect(control).toContainText('paused · 0s')
+    // Seconds old, the pause just made, however long the click took to come back on a loaded runner.
+    await expect(control).toContainText(/paused · \d+s/u)
     await expect(control.getByText('paused')).toHaveAttribute('title', /from the web UI$/u)
 
     // The pause is the journal's: another page reads it back, as the loop does.
@@ -800,9 +809,11 @@ test("R opens Review a PR from any page, which requests a review and lands on th
     const request = page.getByTestId('review-request')
     await expect(request.getByTestId('review-request-notes')).toContainText('The retry loop')
 
-    // On the PR's page, R fills in its URL. One of the loop's own PRs is refused, and the dialog stays open.
+    // The request just sent is open, so R on its page opens empty, as the dialog does once a request goes through.
+    // One of the loop's own PRs is refused, and the dialog stays open.
+    await expect(request).toContainText('canopy reviews its head once')
     await page.keyboard.press('r')
-    await expect(dialog.getByLabel('PR URL')).toHaveValue(pr)
+    await expect(dialog.getByLabel('PR URL')).toHaveValue('')
     await dialog.getByLabel('PR URL').fill('https://github.com/acme/web/pull/88')
     await dialog.getByTestId('review-request-submit').click()
     await expect(dialog.getByRole('alert')).toContainText('refused (loop_pr)')

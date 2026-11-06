@@ -29,6 +29,28 @@ export const GHOST_TIPS = {
         'Dear Traveler, a task asked a question. I said "ask Ikora". It did not.',
         'Scanning... no Fallen here. Just tasks. Somehow that is scarier.',
     ],
+    '/epics/': [
+        'Eyes up, Guardian. An epic is a raid: one goal, a lot of encounters, everyone has a job.',
+        'Grimoire: the requirements were numbered R1 to R3. R4 is said to exist. Nobody has seen it.',
+        'Field report: four entries in the breakdown, two filed. The other two are hiding. Like Hunters.',
+        'Dear Traveler, the plan named its contracts. Even the Vex keep fewer.',
+        'Scanning... one plan for the whole fireteam. Each ticket still plans its own loadout.',
+        'New orders logged, Guardian. The planner drops in at the next tick. Name the worlds it scouts.',
+    ],
+    '/epics/$id': [
+        'Eyes up, Guardian. The breakdown is the raid map. "none yet" means nobody has called that encounter.',
+        'Scanning... R1 is covered twice. R3 once. Somebody is carrying.',
+        'Field report: pointed at C1. Three rows lit up. Like a Hive ritual, but useful.',
+        'Grimoire: a member of no entry walked into the raid without a loadout. It happens.',
+        'Dear Traveler, the plan marked B4 trivial. Famous last words, in my experience.',
+    ],
+    '/epics/$id_/plan': [
+        'Eyes up, Guardian. The raid plan. No margin notes, so read it the whole way through.',
+        'Grimoire: an earlier plan is folded away, not forgotten. The Vault keeps everything.',
+        'Scanning... the hash matches the file. For now. Edit it and the Cryptarchs will notice.',
+        'Field report: plan three replaced plan two. Plan two took it well. Plans are not Warlocks.',
+        'Dear Traveler, one plan for the whole fireteam, and nobody gets to scribble on it. Rare discipline.',
+    ],
     '/tasks/$id': [
         "Eyes up, Guardian. It's a report. I can decrypt it, but it'll take a minute. Hold here.",
         "Grimoire: a draft PR is a Ghost that hasn't found its Guardian yet.",

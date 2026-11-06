@@ -31,16 +31,13 @@ from canopy.core import review_result as result
 from canopy.core.vocab import DismissalReason, ReviewRunStatus, SeenKind
 from canopy.reviews import review_requests
 from canopy.serve import review_draft_views
+from canopy.serve.diff_views import diff_view
 from canopy.serve.schema.review import (
-    DiffFile,
-    DiffHunk,
-    DiffLine,
     DismissalReasonName,
     FindingAnswerName,
     FindingSeverity,
     RequestedReview,
     ReviewDetail,
-    ReviewDiff,
     ReviewDraftStatusName,
     ReviewFinding,
     ReviewSummary,
@@ -189,7 +186,8 @@ def summaries(conn: sqlite3.Connection, rows: Sequence[records.ReviewRun]) -> li
     # A PR's title as its pages give it: its own, as a worker or a review reported it, else as canopy's reader last
     # read it, which is all a coworker's PR may have, else its ticket's.
     own = db.pr_titles(conn, {row.pr_url for row in rows})
-    read = {url: pr.title for url, pr in review_draft_views.observed_prs(conn, {row.pr_url for row in rows}).items()}
+    observed = review_draft_views.observed_prs(conn, {row.pr_url for row in rows})
+    read = {url: pr.title for url, pr in observed.items()}
     tickets = db.ticket_titles(conn, {row.ticket_key for row in rows if row.ticket_key})
     drafts = review_drafts.of_reviews(conn, [row.id for row in rows])
     asked = review_requests.answered_by(conn, rows)
@@ -201,6 +199,7 @@ def summaries(conn: sqlite3.Connection, rows: Sequence[records.ReviewRun]) -> li
             title=ticket_title(own.get(row.pr_url))
             or ticket_title(read.get(row.pr_url))
             or ticket_title(tickets.get(row.ticket_key or "")),
+            author=observed[row.pr_url].author if row.pr_url in observed else None,
             draft=drafts.get(row.id),
             request=asked.get(row.id),
             served=served[row.id],
@@ -217,8 +216,11 @@ def summary(
     draft: records.ReviewDraft | None,
     request: int | None,
     served: Sequence[str] = (),
+    author: str | None = None,
 ) -> ReviewSummary:
     """One review run's row, as the reviews list shows it, `seen` when the operator has seen it, its PR's `title`.
+
+    `author` is the PR's author as canopy's reader last read it, None until it has.
 
     `request` is the id of the operator's request it answers, which groups it with its reviews in other personas, and
     `served` the models its session named.
@@ -235,6 +237,7 @@ def summary(
         ticket_key=row.ticket_key or None,
         title=title,
         repo=row.repo or None,
+        author=author,
         status=row.status,
         state=review_state(row.status),
         verdict=stored.verdict if stored is not None else None,
@@ -285,26 +288,4 @@ def _finding(f: result.Finding, diff: review_diff.Diff | None, number: int, mark
         held=number in marks.held,
         answer=cast("FindingAnswerName", answer.answer.value) if answer is not None else None,
         answer_reason=lines(answer.reason) if answer is not None and answer.reason else None,
-    )
-
-
-def diff_view(diff: review_diff.Diff) -> ReviewDiff:
-    """Return a kept diff as the web UI reads it: a review's, or a run's at its pushed head (DESIGN §21, §29)."""
-    return ReviewDiff(
-        files=[
-            DiffFile(
-                path=f.path,
-                old_path=f.old_path,
-                binary=f.binary,
-                hunks=[
-                    DiffHunk(
-                        header=h.header,
-                        lines=[DiffLine(kind=ln.kind, old=ln.old, new=ln.new, text=ln.text) for ln in h.lines],
-                    )
-                    for h in f.hunks
-                ],
-            )
-            for f in diff.files
-        ],
-        truncated=diff.truncated,
     )

@@ -123,5 +123,6 @@ Checklist page count them together, and `canopy show task:N` prints them under e
 them in the same panel. What a run pushed after being shown a list is kept too, 2026-11-04, at the operator's ask, so
 the diff a list brought about can be read: canopy's `pre-push` notes the commit it showed the list at and the next push
 it let through, in the slot's own git directory, and `_run` or `_task` keeps the diff between them beside the run's
-log, recorded in `checklist_pushes` and named by `canopy show`; no page shows it yet. Stage 1's live checks are next,
-then stage 2's two weeks.
+log, recorded in `checklist_pushes` and named by `canopy show`. The run's page, and a task run's, shows each stretch
+under the Checklist panel, 2026-11-06, as M69 stage 2 asks: its repository and commits, then its diff in the panels a
+review's diff has, or why it has none. Stage 1's live checks are next, then stage 2's two weeks.

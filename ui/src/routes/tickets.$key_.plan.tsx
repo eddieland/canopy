@@ -7,6 +7,7 @@ import { Code } from '@/components/code'
 import { Notice } from '@/components/notice'
 import { Empty, PageHeader, Panel, PanelLoading } from '@/components/panel'
 import { ChangesAsked } from '@/components/plan-card'
+import { FollowedEpicPlanLine } from '@/components/ticket-epic'
 import { PlanState, TicketPlan } from '@/components/ticket-plan'
 import { useViewedTicket } from '@/lib/recent-tickets'
 import { planRef } from '@/lib/refs'
@@ -35,6 +36,7 @@ function PlanPage() {
             title={newest === undefined ? 'Plan' : planRef(newest.id)}
             subject={title}
             tab={`${key} plan`}
+            links={newest !== undefined && <FollowedEpicPlanLine followed={newest.epic_plan} />}
         >
             {data !== undefined && <PlanState plans={data} />}
         </PageHeader>

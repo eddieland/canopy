@@ -37,6 +37,8 @@ export type TicketSummary = Schemas['TicketSummary']
 export type TicketDetail = Schemas['TicketDetail']
 /** One time the operator forgot a ticket's work (DESIGN §22), and the branch and PRs it dropped. */
 export type TicketForget = Schemas['TicketForget']
+/** The epic a ticket is a member of (DESIGN §43), and the entries of its breakdown it fulfils. */
+export type TicketMembership = Schemas['TicketMembership']
 /** What a ticket's or a PR's agent runs cost in all (DESIGN §13), and how many runs and reviews that counts. */
 export type CostTotal = Schemas['CostTotal']
 /** What one model cost over a ticket's runs, as their sessions say (DESIGN §13). */
@@ -49,6 +51,8 @@ export type PlanFile = Schemas['PlanFile']
 export type RunPersona = Schemas['RunPersona']
 /** One of a ticket's plans: its status and approval, never its text. */
 export type PlanSummary = Schemas['PlanSummary']
+/** The approved epic plan a member ticket's plan was written against, and when a newer one was approved, if one was. */
+export type FollowedEpicPlan = Schemas['FollowedEpicPlan']
 /** One of the operator's comments on a plan: a thread on a passage, with its replies. */
 export type PlanThreadView = Schemas['PlanThreadView']
 /** What the operator's word on a plan did: approve, request, or skip. */
@@ -205,6 +209,8 @@ export type ChecklistRun = Schemas['ChecklistRun']
 export type ChecklistWeek = Schemas['ChecklistWeek']
 /** What a run answered of one item of its repository's checklist, with a held item's reason, on the run's page. */
 export type ChecklistAnswer = Schemas['ChecklistAnswer']
+/** What a run pushed after being shown a repository's checklist: the two commits, and the diff kept between them. */
+export type ChecklistStretch = Schemas['ChecklistStretch']
 /** A worker's answer to a checklist item: pass, fixed, held, n/a, or unanswered. */
 export type ItemAnswer = Schemas['ItemAnswer']
 /** How the last days' runs ended, the newest failures, what the guards refused, and each day's counts. */
@@ -347,6 +353,45 @@ export type TaskSubmitted = Schemas['TaskSubmitted']
 export type TaskReplied = Schemas['TaskReplied']
 /** What a stop of a task did: already stopped, or dropped while queued, and the run still working it. */
 export type TaskStopped = Schemas['TaskStopped']
+/** An epic as the epics list shows it: its goal, where its plan stands, and how much of its breakdown has members. */
+export type EpicSummary = Schemas['EpicSummary']
+/** Where an epic stands: queued, its plan run working, its plan proposed or approved, or unplanned (DESIGN §43). */
+export type EpicStanding = EpicSummary['standing']
+/** One epic, as `canopy show epic:N` prints it, its outline read as data beside its members. */
+export type EpicDetail = Schemas['EpicDetail']
+/** A ticket the operator made a member of an epic, with the entries it fulfils and where its work stands. */
+export type EpicMember = Schemas['EpicMember']
+/** What canopy reads of an epic's plan, its ids and breakdown: all of it, or why none of it reads. */
+export type EpicOutline = Schemas['EpicOutline']
+/** One entry of an epic plan's breakdown, with the members registered against it. */
+export type EpicEntry = Schemas['EpicEntry']
+/** A requirement or a contract of an epic plan's outline, with its text. */
+export type EpicId = Schemas['EpicId']
+/** One run of an epic's planner: how it ended, what it said, and the plan it recorded. */
+export type EpicPlanRun = Schemas['EpicPlanRun']
+/** One of an epic's plans: its status and approval, never its text. */
+export type EpicPlanSummary = Schemas['EpicPlanSummary']
+/** One of an epic's plans as its file stands now. */
+export type EpicPlanFile = Schemas['EpicPlanFile']
+/**
+ * An epic's plans, each as its file stands, the plan run writing the next, if one is, and changes asked of it that the
+ * next tick's plan run reads.
+ */
+export type EpicPlans = Schemas['EpicPlans']
+/** What approving an epic's plan did: the plan, and the ids it added, removed, and changed since the last approved. */
+export type EpicPlanApproved = Schemas['EpicPlanApproved']
+/**
+ * What a reply to an epic recorded, and what starts its next plan run: the next tick, after the run at work, or none.
+ */
+export type EpicReplied = Schemas['EpicReplied']
+/** What adding a ticket to an epic did: whether it was a member already, and the entries it is registered against. */
+export type EpicMemberAdded = Schemas['EpicMemberAdded']
+/** What removing a ticket from an epic did: its membership ended, the ticket and its work left as they are. */
+export type EpicMemberRemoved = Schemas['EpicMemberRemoved']
+/** What stopping an epic did: whether it was stopped already, its plan run at work, and whether `now` ended it. */
+export type EpicStopped = Schemas['EpicStopped']
+/** What submitting an epic recorded: the epic, whose plan run the next tick starts, and the repositories it reads. */
+export type EpicSubmitted = Schemas['EpicSubmitted']
 /** A text file the operator attached to a ticket or a task, for its runs to read as data (DESIGN §22). */
 export type Attachment = Schemas['Attachment']
 /** A ticket's or a task's attachments, and the limits `policy` holds them to. */

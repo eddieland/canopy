@@ -10,6 +10,12 @@ import type {
     ChoreTried,
     ConfigReload,
     Dismissed,
+    EpicMemberAdded,
+    EpicMemberRemoved,
+    EpicPlanApproved,
+    EpicReplied,
+    EpicStopped,
+    EpicSubmitted,
     Draft,
     DraftsSent,
     FeedbackPlanApproved,
@@ -42,7 +48,7 @@ import type {
 import { currentClock } from '@/lib/clock'
 import { REACTION_LOOKS } from '@/lib/drafts'
 import { RUNTIME_DEFAULT } from '@/lib/models'
-import { taskRef } from '@/lib/refs'
+import { epicRef, taskRef } from '@/lib/refs'
 import { localTime } from '@/lib/time'
 import type { NewToast } from '@/lib/toasts'
 
@@ -536,13 +542,19 @@ export function taskSubmittedToast(submitted: TaskSubmitted): NewToast {
 
 /**
  * What a reply to a task did, as `canopy reply task:N` says it: the message it recorded, or the one that already said
- * it, then what starts the task's next run: the first tick after its running run ends, or the next tick.
+ * it, then what starts the task's next run: the first tick after its running run ends, unless that run hears of the
+ * reply, reads it, and reports on it, or the next tick.
  */
 export function taskRepliedText(id: number, replied: TaskReplied): string {
-    const next =
-        replied.running_run === null
-            ? 'The next tick starts its next run, on its branch.'
-            : `Its run ${replied.running_run} is still working; the first tick after it ends starts the next run.`
+    let next = 'The next tick starts its next run, on its branch.'
+    if (replied.running_run !== null && replied.told) {
+        next =
+            `Its run ${replied.running_run} is still working, and its agent hears that the reply waits on its next ` +
+            'tool call. If it reads it and then reports, that run has answered it; if not, the first tick after it ' +
+            'ends starts the next run.'
+    } else if (replied.running_run !== null) {
+        next = `Its run ${replied.running_run} is still working; the first tick after it ends starts the next run.`
+    }
     const ref = taskRef(id)
     const answered = replied.answers === null ? '' : `, answering message ${replied.answers}`
     const head = replied.new
@@ -614,6 +626,98 @@ export function reviewStoppedText(url: string, stopped: ReviewRequestStopped): s
         return head
     }
     return `${head} Review run ${stopped.running_review} of it is still running and will finish.`
+}
+
+/**
+ * What approving an epic's plan did, as `canopy plan epic:N --approve` says it (canopy/cli/epics.py): the plan run that
+ * wrote it, then the ids it added, removed, and changed since the plan approved before it, when there was one.
+ */
+export function epicApprovedText(id: number, approved: EpicPlanApproved): string {
+    const head = `Approved ${epicRef(id)}'s plan, written by run ${approved.run_id}.`
+    const { change } = approved
+    if (change === null) {
+        return head
+    }
+    const listed = (
+        [
+            ['added', change.added],
+            ['removed', change.removed],
+            ['changed', change.changed],
+        ] as const
+    )
+        .filter(([, ids]) => ids.length > 0)
+        .map(([word, ids]) => `${word}: ${ids.join(', ')}`)
+    return listed.length === 0 ? head : `${head} ${listed.join('; ')}.`
+}
+
+/**
+ * The toast a submission shows as its form opens the epic's page, in the words `canopy epic submit` says it: the epic,
+ * whose plan run the next tick starts, as its title; the repositories its plan reads under it.
+ */
+export function epicSubmittedToast(submitted: EpicSubmitted): NewToast {
+    return {
+        title: `Submitted ${epicRef(submitted.id)}; the next tick starts its plan run.`,
+        detail: `over ${submitted.repos.join(', ')}`,
+        tone: 'done',
+    }
+}
+
+/**
+ * What a reply to an epic did, as `canopy reply epic:N` says it (canopy/cli/epics.py): the message it recorded, or the
+ * one that already said it, then what starts the next plan run, which reads it: the next tick, the first tick after the
+ * run at work ends, or none once the epic has had `policy.max_plan_attempts` plan runs.
+ */
+export function epicRepliedText(id: number, replied: EpicReplied): string {
+    const ref = epicRef(id)
+    const head = replied.new
+        ? `Recorded message ${replied.message_id} on ${ref}.`
+        : `Message ${replied.message_id} on ${ref} already says this; nothing new recorded.`
+    let next = 'The next tick starts its next plan run, which reads your reply.'
+    if (replied.plan_runs >= replied.max_plan_attempts) {
+        next =
+            `It has had ${replied.plan_runs} plan runs, policy.max_plan_attempts; none starts again for this ` +
+            'reply.'
+    } else if (replied.running_run !== null) {
+        next = 'Its plan run is still working; the first tick after it ends starts the next, with your reply.'
+    }
+    return `${head} ${next}`
+}
+
+/**
+ * What adding a ticket to an epic did, as `canopy epic add` says it (canopy/cli/epics.py): that it was added, or was a
+ * member already, then the entries it is now registered against, or no entry.
+ */
+export function epicMemberAddedText(id: number, added: EpicMemberAdded): string {
+    const head = added.added ? `Added ${added.key} to ${epicRef(id)}.` : `Already a member: ${added.key}.`
+    const named = added.entries.length === 0 ? 'no entry' : added.entries.join(', ')
+    return `${head} Registered ${added.key} against ${named}.`
+}
+
+/** What removing a ticket from an epic did, as `canopy epic remove` says it (canopy/cli/epics.py). */
+export function epicMemberRemovedText(id: number, removed: EpicMemberRemoved): string {
+    return `Removed ${removed.key} from ${epicRef(id)}.`
+}
+
+/**
+ * What a stop did to an epic, as `canopy stop epic:N` says it (canopy/cli/epics.py): stopped, its members left as they
+ * are, or stopped already; then its plan run still working, which finishes unless `now` ended it. Stop now is the
+ * page's `--now`.
+ */
+export function epicStoppedText(id: number, stopped: EpicStopped, now: boolean): string {
+    const ref = epicRef(id)
+    const head = stopped.already
+        ? `${ref} was already stopped.`
+        : `${ref} is stopped; no plan run of it starts again. Its members are left as they are.`
+    const run = stopped.running_run
+    if (run === null) {
+        return head
+    }
+    if (!now) {
+        return `${head} Its plan run ${run} is still working and will finish; Stop now ends it.`
+    }
+    return stopped.ended
+        ? `${head} Its plan run ${run} was ended and its slots returned.`
+        : `${head} Its plan run ${run} had already ended.`
 }
 
 /** What the operator's word on a plan did, as `canopy plan` says it (canopy/cli/plans.py). */

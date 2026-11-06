@@ -17,8 +17,19 @@ import httpx2
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import checklist_answers, config, conversation, db, pause, records, review_runs, run_models
-from canopy.core.checklist_answers import Answer, Checked
+from canopy.core import (
+    checklist_answers,
+    config,
+    conversation,
+    db,
+    gc_passes,
+    pause,
+    records,
+    review_diff,
+    review_runs,
+    run_models,
+)
+from canopy.core.checklist_answers import Answer, Checked, Pushed
 from canopy.core.context import Context
 from canopy.core.vocab import ItemAnswer, ModelsRead, Phase, PlanSetting, RunStatus, StartStatus, TickStatus
 from canopy.infra import resources
@@ -38,6 +49,7 @@ from tests.canopy.helpers import (
     decides,
     in_run,
     messages,
+    model_list,
     overseer_does,
     present,
     raises,
@@ -53,6 +65,18 @@ from tests.canopy.scenario_helpers import (
 )
 from tests.canopy.web_helpers import DEFAULT_CAPACITY, ORIGIN, client, free_port, refused, signed_in_client
 from tests.conftest import SHARED_TOML, CanopyEnv, GitPool, user_toml
+
+#: A stretch's diff, as `checklist_pushes.keep` writes it: the branch's text, a control character in its last line.
+STRETCH = """\
+diff --git a/src/canopy/order.py b/src/canopy/order.py
+index 1111111..2222222 100644
+--- a/src/canopy/order.py
++++ b/src/canopy/order.py
+@@ -1,2 +1,2 @@ def main() -> None:
+ import os
+-def _helper(): ...
++def main() -> None:\x07 # moved up
+"""
 
 
 def test_a_path_shown_from_the_workspace_root_joins_metas_root_back_to_the_journals(ctx: Context) -> None:
@@ -127,6 +151,109 @@ def test_a_runs_page_carries_its_checklist_answers_by_repository_with_a_held_ite
     assert all(r["checklist"] == [] for r in c.get("/api/runs").json())
 
 
+def test_a_runs_page_carries_each_stretch_it_pushed_after_its_list_with_the_diff_kept_beside_its_log(
+    ctx: Context,
+    tmp_path: Path,
+) -> None:
+    """In the order it was shown its lists; a diff that is missing or a link is none, said so, never an empty one."""
+    run_id = running_run(ctx, KEY, private=False)
+    db.finish_run(ctx.conn, "runs", run_id, RunStatus.DONE, None)
+    shown, pushed = ("a1" * 20, "b2" * 20), ("c3" * 20, "d4" * 20)
+    stretches = (
+        Pushed("api", shown[0], pushed[0]),
+        Pushed("web", shown[1], pushed[1]),
+        Pushed("web", "e5" * 20, "f6" * 20),
+    )
+    answers = (Answer("api", "newspaper", ItemAnswer.FIXED), Answer("web", "no-any", ItemAnswer.PASSED))
+    checklist_answers.record(ctx.conn, run_id, Checked(answers=answers, pushes=stretches))
+    log_path = present(db.get_run(ctx.conn, run_id))["log_path"]
+    kept = checklist_answers.diff_path(log_path, "api", shown[0])
+    kept.parent.mkdir(parents=True, exist_ok=True)
+    review_diff.keep(kept, STRETCH)
+    elsewhere = tmp_path / "elsewhere.diff"
+    elsewhere.write_text(STRETCH)
+    checklist_answers.diff_path(log_path, "web", shown[1]).symlink_to(elsewhere)
+    given = running_run(ctx, KEY, private=False)
+
+    c, _ = signed_in_client(ctx)
+    found = c.get(f"/api/runs/{run_id}").json()
+    assert found["checklist_stretches_left_out"] == 0
+    first, linked, missing = found["checklist_stretches"]
+    assert (first["repo"], first["shown_sha"], first["pushed_sha"]) == ("api", shown[0], pushed[0])
+    assert first["diff_removed_after_days"] is None
+    assert first["diff"] == {
+        "files": [
+            {
+                "path": "src/canopy/order.py",
+                "old_path": None,
+                "binary": False,
+                "hunks": [
+                    {
+                        "header": "def main() -> None:",
+                        "lines": [
+                            {"kind": "ctx", "old": 1, "new": 1, "text": "import os"},
+                            {"kind": "del", "old": 2, "new": None, "text": "def _helper(): ..."},
+                            # The branch's text, its control characters made spaces, as a review's diff is.
+                            {"kind": "add", "old": None, "new": 2, "text": "def main() -> None:  # moved up"},
+                        ],
+                    },
+                ],
+            },
+        ],
+        "truncated": False,
+    }
+    assert [(s["repo"], s["shown_sha"], s["diff"]) for s in (linked, missing)] == [
+        ("web", shown[1], None),
+        ("web", "e5" * 20, None),
+    ]
+    # A run never shown a list, and the list of runs, carry none.
+    assert c.get(f"/api/runs/{given}").json()["checklist_stretches"] == []
+    assert all(r["checklist_stretches"] == [] for r in c.get("/api/runs").json())
+
+
+def test_a_runs_stretches_are_read_within_a_reviews_bounds_and_the_page_is_sent_the_first_five(ctx: Context) -> None:
+    """A diff past a bound is cut and says so; a stretch past the first five is counted, not sent."""
+    run_id = running_run(ctx, KEY, private=False)
+    db.finish_run(ctx.conn, "runs", run_id, RunStatus.DONE, None)
+    shas = [f"{n:02x}" * 20 for n in range(7)]
+    pushes = tuple(Pushed("api", sha, "ff" * 20) for sha in shas)
+    checklist_answers.record(ctx.conn, run_id, Checked(answers=(Answer("api", "x", ItemAnswer.FIXED),), pushes=pushes))
+    log_path = present(db.get_run(ctx.conn, run_id))["log_path"]
+    for sha in shas:
+        kept = checklist_answers.diff_path(log_path, "api", sha)
+        kept.parent.mkdir(parents=True, exist_ok=True)
+        review_diff.keep(kept, STRETCH + STRETCH.replace("order.py", "other.py"))
+
+    c, _ = signed_in_client(ctx)
+    with mock.patch.object(review_diff, "MAX_FILES", 1):
+        found = c.get(f"/api/runs/{run_id}").json()
+    assert [s["shown_sha"] for s in found["checklist_stretches"]] == shas[:5]
+    assert found["checklist_stretches_left_out"] == 2
+    assert all(len(s["diff"]["files"]) == 1 and s["diff"]["truncated"] for s in found["checklist_stretches"])
+
+
+def test_a_stretchs_diff_retention_removed_says_after_how_many_days(ctx: Context) -> None:
+    run_id = running_run(ctx, KEY, private=False)
+    db.finish_run(ctx.conn, "runs", run_id, RunStatus.DONE, None)
+    pushes = (Pushed("api", "a1" * 20, "b2" * 20),)
+    checklist_answers.record(ctx.conn, run_id, Checked(answers=(Answer("api", "x", ItemAnswer.FIXED),), pushes=pushes))
+    gc_passes.record(
+        ctx.conn,
+        tick_id=None,
+        started_at=datetime.now(UTC),
+        run_files_days=30,
+        tick_files_days=7,
+        run_cutoff=db.format_time(datetime.now(UTC) + timedelta(days=1)),
+        tick_cutoff=None,
+        removed={},
+        failures=0,
+        error=None,
+    )
+    c, _ = signed_in_client(ctx)
+    [stretch] = c.get(f"/api/runs/{run_id}").json()["checklist_stretches"]
+    assert (stretch["diff"], stretch["diff_removed_after_days"]) == (None, 30)
+
+
 def test_a_runs_page_names_the_models_its_session_says_served_it_once_a_tick_has_read_them(ctx: Context) -> None:
     run_id = running_run(ctx, KEY, private=False)
     c, _ = signed_in_client(ctx)
@@ -193,11 +320,14 @@ def test_a_runs_page_names_the_model_canopy_asked_for_while_it_runs_before_its_s
     assert c.get(f"/api/runs/{ran.id}").json()["model"] is None
 
 
+@pytest.mark.parametrize("version", [1, 2])
 def test_a_transcript_names_each_calls_model_once_canopy_reads_a_session_two_models_served(
     scenario: Scenario,
     opencode_state: Path,
     ctx: Context,
+    version: int,
 ) -> None:
+    scenario.configures(runtime={"version": version})
     with_events(scenario.env, "canopy-overseer")
     # The fake overseer's two calls write replies `msg_1` and `msg_2`, which the session's record names the models of.
     served = [["anthropic", "claude-x", 0.25], ["openai", "gpt-y", 0.5]]
@@ -629,7 +759,7 @@ def test_a_model_chosen_from_the_web_is_the_tickets_override_as_canopy_model_mak
         "models": [],
         "variants": {},
         "hidden": [],
-        "error": "`opencode models --verbose` exited 1",
+        "error": f"`{model_list(ctx.config.runtime.version, variants=True)[1]}` exited 1",
     }
     assert refused(choose({"model": "acme/fake-model-1"})).startswith("model_list_failed: ")
 
@@ -871,7 +1001,9 @@ def test_a_web_reload_reads_the_config_and_asks_the_loop_to_read_it_again(ctx: C
 
     reload.requested, reload.ticking = False, True
     dictation = 'dictation_cmd = "stt -f {audio}"\n'
-    canopy_env.write_user(user_toml() + "\n[capacity]\nmax_workers = 7\n\n[serve]\nport = 8766\n" + dictation)
+    canopy_env.write_user(
+        user_toml(canopy_env.runtime) + "\n[capacity]\nmax_workers = 7\n\n[serve]\nport = 8766\n" + dictation,
+    )
     found = c.post("/api/loop/reload", headers=headers).json()
     changed = ["capacity.max_workers", "serve.port", "serve.dictation_cmd"]
     # The server reads dictation's command from the config a reload gives it: only the listener's keys wait.
@@ -879,7 +1011,7 @@ def test_a_web_reload_reads_the_config_and_asks_the_loop_to_read_it_again(ctx: C
     assert reload.requested
 
     reload.requested = False
-    canopy_env.write_user(user_toml() + "\n[capacity]\nmax_workers = 'many'\n")
+    canopy_env.write_user(user_toml(canopy_env.runtime) + "\n[capacity]\nmax_workers = 'many'\n")
     assert refused(c.post("/api/loop/reload", headers=headers)).startswith("config_invalid: ")
     assert "capacity.max_workers" in refused(c.post("/api/loop/reload", headers=headers))
     assert not reload.requested  # the loop is not asked to read a config that does not load
@@ -1133,7 +1265,7 @@ def test_a_running_ticks_overseers_latest_tool_call_is_sent_until_it_ends(ctx: C
 
 
 def serve_on(env: CanopyEnv, port: int, extra: str = "") -> None:
-    env.write_user(user_toml() + f"\n[serve]\nport = {port}\n{extra}")
+    env.write_user(user_toml(env.runtime) + f"\n[serve]\nport = {port}\n{extra}")
 
 
 def wait_until_up(url: str) -> None:
@@ -1355,7 +1487,7 @@ def test_canopy_secret_makes_one_prints_it_and_rotates_only_when_asked(
 
 @pytest.mark.parametrize("bind", ["0.0.0.0", "::", "8.8.8.8", "canopy.example"])  # noqa: S104
 def test_serve_bind_must_be_loopback_or_private(canopy_env: CanopyEnv, bind: str) -> None:
-    canopy_env.write_user(user_toml() + f'\n[serve]\nbind = "{bind}"\n')
+    canopy_env.write_user(user_toml(canopy_env.runtime) + f'\n[serve]\nbind = "{bind}"\n')
     with pytest.raises(config.ConfigError, match=r"serve\.bind"):
         config.load(canopy_env.root, canopy_env.user_file)
 
@@ -1367,7 +1499,7 @@ def test_serve_is_user_only(canopy_env: CanopyEnv) -> None:
 
 
 def test_a_private_bind_loads(canopy_env: CanopyEnv) -> None:
-    canopy_env.write_user(user_toml() + '\n[serve]\nbind = "10.0.0.5"\nbase_path = "/canopy"\n')
+    canopy_env.write_user(user_toml(canopy_env.runtime) + '\n[serve]\nbind = "10.0.0.5"\nbase_path = "/canopy"\n')
     loaded = config.load(canopy_env.root, canopy_env.user_file).serve
     assert (loaded.enabled, loaded.bind, loaded.port, loaded.base_path) == (True, "10.0.0.5", 8765, "/canopy")
 

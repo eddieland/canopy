@@ -1,11 +1,12 @@
 """A session's transcript read from OpenCode 2's JSON events, and what a running run's row says a tool call did."""
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 from canopy.runtime.entries import Error, Step, Text, ToolCall
 from canopy.runtime.opencode2 import events, transcript
-from canopy.runtime.report import Called
+from canopy.runtime.report import Called, Touch
 
 RECORDED = Path(__file__).parent / "recorded"
 SESSION = "ses_e9efac2adffehb60wAIBaOM6if"
@@ -48,6 +49,27 @@ def test_a_recorded_run_reads_as_its_entries_each_numbered_by_its_model_call() -
     denied = found[5]
     assert isinstance(denied, ToolCall)
     assert (denied.status, denied.output) == ("error", "Permission denied: shell")
+
+
+def test_each_step_names_the_reply_it_wrote_as_the_sessions_record_names_it() -> None:
+    """The recorded run's calls are replies of the recorded export of the same session, by their message's id."""
+    lines = (RECORDED / "run.jsonl").read_text().splitlines()
+    steps = [e for e in transcript.read(lines, SESSION) if isinstance(e, Step)]
+    exported = json.loads((RECORDED / "export.json").read_text())["messages"]
+    replies = [m["id"] for m in exported if m["type"] == "assistant"]
+    # The last call's `step_finish` is lost to 2.1.2's race (`canopy.runtime.opencode2.events`).
+    assert [s.message for s in steps] == replies[:-1]
+
+
+def test_a_reply_id_canopy_would_not_keep_is_none() -> None:
+    finished = {"type": "step-finish", "reason": "stop", "cost": 0.5}
+    for named in ("msg 1", "x" * 101, ""):
+        [step] = transcript.read([event("step_finish", {**finished, "messageID": named})], SESSION)
+        assert isinstance(step, Step)
+        assert step.message is None, named
+    [step] = transcript.read([event("step_finish", finished)], SESSION)
+    assert isinstance(step, Step)
+    assert step.message is None
 
 
 def test_another_sessions_events_are_left_out() -> None:
@@ -100,3 +122,34 @@ def test_a_tool_call_as_the_agent_made_it_is_its_exact_name_how_it_ended_and_its
     assert refused == Called("canopy_run_status", completed=False, input={})
     assert called(tool("bash", {"status": "running"})) is None  # printed only once it ends
     assert called(event("text", {"type": "text", "text": "hi"})) is None
+    # When it started, as the runtime printed it, which says what a `messages` call fetched (DESIGN §44).
+    timed: dict[str, object] = {"status": "completed", "input": {}, "time": {"start": 1_762_423_200_500, "end": 1}}
+    found = called(tool("canopy_run_messages", timed))
+    assert found is not None
+    assert found.started_at == datetime(2025, 11, 6, 10, 0, 0, 500_000, UTC)
+
+
+def test_what_a_tool_call_did_to_files_is_its_act_and_the_files_it_named() -> None:
+    """2's tools name a file by `path`, a session moved from 1 by `filePath`; `patch` and `shell` are 2's names."""
+
+    def touched(tool: str, given: dict[str, object]) -> Touch:
+        return transcript.touched(Called(tool, completed=True, input=given))
+
+    assert touched("read", {"path": "/w/src/a.py"}) == Touch("read", ("/w/src/a.py",))
+    assert touched("read", {"filePath": "/w/src/a.py"}) == Touch("read", ("/w/src/a.py",))
+    assert touched("edit", {"path": "src/a.py", "oldString": "a", "newString": "b"}) == Touch("edit", ("src/a.py",))
+    assert touched("write", {"path": "b.py", "content": ""}) == Touch("edit", ("b.py",))
+    patch = "*** Begin Patch\n*** Delete File: old.py\n*** Update File: src/a.py\n@@\n-a\n+b\n*** End Patch"
+    assert touched("patch", {"patchText": patch}) == Touch("edit", ("old.py", "src/a.py"))
+    assert touched("grep", {"pattern": "parse"}) == Touch("search")
+    assert touched("glob", {"pattern": "**/*.py"}) == Touch("search")
+    assert touched("shell", {"command": "git grep parse"}) == Touch("search")
+    assert touched("shell", {"command": "uv run pytest"}) == Touch("other")
+    assert touched("bash", {"command": "rg parse"}) == Touch("other")  # 1's name for the shell
+    assert touched("edit", {}) == Touch("other")
+
+
+def test_a_line_is_of_a_session_when_it_is_an_event_that_names_it() -> None:
+    assert transcript.in_session(tool("grep", {"status": "completed", "input": {}}), SESSION)
+    assert not transcript.in_session(tool("grep", {"status": "completed", "input": {}}), "ses_other")
+    assert not transcript.in_session("not an event", SESSION)

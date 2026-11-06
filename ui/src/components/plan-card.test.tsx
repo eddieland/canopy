@@ -17,6 +17,7 @@ const PLAN: PlanSummary = {
     approved_channel: null,
     approved_reason: null,
     effort: null,
+    epic_plan: null,
 }
 
 const PLANS: TicketPlans = {

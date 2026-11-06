@@ -6,7 +6,7 @@ operator's word alone. A plan run records the plan it wrote here, as a file in t
 hashes, `proposed`, never approved: only the operator approves one. A tracker's epic, parent, or sub-issue link never
 makes a ticket a member, and membership authorizes no work on it: a member is worked only once a label or a start says
 so, as any ticket is. The overseer never reads an epic. `policy.max_epic_tickets` bounds the members of one,
-a guard in code (§4).
+a guard in code (§4). Stopping an epic, the operator's word too, ends its planning and leaves its members alone.
 """
 
 from __future__ import annotations
@@ -65,6 +65,14 @@ class MemberEpic:
     entries: Sequence[str]
     #: Those it was registered against that a later approval dropped.
     dropped: Sequence[str]
+
+
+@dataclass(frozen=True)
+class Stopped:
+    """What `stop` did: whether the epic was already stopped, and its plan run still working, if one is."""
+
+    already: bool
+    running: records.EpicRun | None
 
 
 @dataclass(frozen=True)
@@ -192,8 +200,9 @@ def add(
     wanted = list(dict.fromkeys(keys))
     for key in wanted:
         _check_key(key, "a ticket key")
-    named = _entries(conn, state_dir, epic_id, entries) if entries is not None else None
     with db.transaction(conn):
+        # Inside the write's transaction, so an approval cannot replace the outline between the check and the write.
+        named = _entries(conn, state_dir, epic_id, entries) if entries is not None else None
         added: list[str] = []
         already: list[str] = []
         for key in wanted:
@@ -270,6 +279,32 @@ def remove(conn: sqlite3.Connection, epic_id: int, keys: Iterable[str], *, chann
             update = records.update(records.EpicMember).set(removed_at=now, removed_channel=channel)
             update.where("epic_id = ? AND ticket_key = ? AND removed_at IS NULL", epic_id, key).run(conn)
     return wanted
+
+
+def stop(conn: sqlite3.Connection, epic_id: int) -> Stopped:
+    """Mark epic `epic_id` stopped, in one transaction with reading its running plan run (DESIGN §43).
+
+    A stopped epic is never planned again: no tick starts a plan run of it, one due is dropped, and a reply to it is
+    refused. Its members, their runs, and its plans are left as they are; membership never authorized work. The tick
+    checks the mark in the transaction that inserts a plan run, so whichever commits first wins, and the run returned
+    here is any run a tick committed first.
+
+    Returns:
+        Whether it was already stopped, and its plan run still running, if one is.
+
+    Raises:
+        Refused: `inside_run` inside a tick or a run, and `unknown_epic` for no such epic.
+    """
+    conversation.check_operator()
+    with db.transaction(conn):
+        epic = get(conn, epic_id)
+        if epic is None:
+            raise Refused("unknown_epic", f"canopy has no epic:{epic_id}")
+        if epic.stopped_at is None:
+            records.update(records.Epic).set(stopped_at=db.now()).where("id = ?", epic_id).run(conn)
+        running = records.select(records.EpicRun).where("epic_id = ? AND status = ?", epic_id, RunStatus.RUNNING)
+        found = running.one(conn)
+    return Stopped(already=epic.stopped_at is not None, running=found)
 
 
 def plan_path(state_dir: Path, epic_id: int, run_id: int) -> Path:
@@ -349,12 +384,14 @@ def approve(
     *,
     repos: AbstractSet[str],
     channel: str,
+    read_sha256: str | None = None,
 ) -> Approved:
     """Approve epic `epic_id`'s waiting plan, as its file stands, the operator's edits included (§43).
 
     Only the operator approves one, and only a `proposed` plan whose ids and breakdown read in the outline's shape, in
     `repos`, and that uses no id an earlier approved plan dropped. A copy of the approved text is kept beside its file,
-    as what the next approval is compared with.
+    as what the next approval is compared with. With `read_sha256`, the file's hash as a page read it, a file changed
+    since is refused rather than approved unseen.
 
     Returns:
         The plan approved, and what it changed from the plan approved before it.
@@ -362,8 +399,9 @@ def approve(
     Raises:
         Refused: `inside_run` inside a tick or a run, `unknown_epic` for no such epic, `planning` while a
             plan run of it runs, `no_plan` when no plan waits on the operator, `unreadable_plan` when its file is not
-            a plan, `bad_outline` when its ids or breakdown cannot be read, `approved_changed` when an earlier
-            approved plan's copy is not what was approved, and `reused_id` for an id an earlier approval dropped.
+            a plan, `stale` when it is not the file `read_sha256` names, `bad_outline` when its ids or breakdown
+            cannot be read, `approved_changed` when an earlier approved plan's copy is not what was approved, and
+            `reused_id` for an id an earlier approval dropped.
         PlanFileError: the approved copy could not be written: the epic's directory is not the operator's own.
         DatabaseError: the approval was not recorded, which nothing but a broken journal does.
     """
@@ -383,6 +421,8 @@ def approve(
         reading = plans.read(plan_path(state_dir, epic_id, current.run_id))
         if reading.text is None or reading.sha256 is None:
             raise Refused("unreadable_plan", f"epic:{epic_id}'s plan file is {reading.problem}")
+        if read_sha256 is not None and reading.sha256 != read_sha256:
+            raise Refused("stale", f"epic:{epic_id}'s plan file changed since you read it; read it again to approve it")
         try:
             outline = epic_outline.read(reading.text, repos=repos)
         except epic_outline.OutlineError as e:

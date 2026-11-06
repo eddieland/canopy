@@ -15,6 +15,22 @@ from canopy.serve.schema import Model
 from canopy.serve.schema.persona import RunPersona
 
 
+class FollowedEpicPlan(Model):
+    """The epic plan a member ticket's plan was written against (DESIGN §43): the approved one its planner read."""
+
+    epic_id: int
+    """The epic the ticket is a member of, `epic:N`."""
+    plan_id: int
+    """The epic's plan."""
+    sha256: str | None = None
+    """Its file's SHA-256 as the operator approved it; none should the journal have lost it."""
+    approved_at: datetime | None = None
+    """When the operator approved it."""
+    newer_approved_at: datetime | None = None
+    """When the epic's latest approved plan was, should a newer one than this have been approved since; none while
+    this is still the latest."""
+
+
 class PlanSummary(Model):
     """One of a ticket's plans (DESIGN §25): its status and approval, never its text."""
 
@@ -34,6 +50,8 @@ class PlanSummary(Model):
     """Why the planner said the plan needs no review, when the harness approved it so; none otherwise."""
     effort: Literal["small", "medium", "large"] | None = None
     """How much work the plan is for its worker, as its planner judged; none when it gave no estimate."""
+    epic_plan: FollowedEpicPlan | None = None
+    """The epic plan it was written against, when its ticket was a member of an epic with an approved plan then."""
 
 
 class PlanFile(Model):

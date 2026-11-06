@@ -145,6 +145,7 @@ from canopy.core.records.runs import (
     FlakyKick,
     PoolSlot,
     Run,
+    RunChange,
     RunRead,
     RunReason,
     RunSlot,
@@ -166,6 +167,7 @@ from canopy.core.records.ticks import (
     GcPass,
     OverseerRun,
     RecordedRun,
+    RequestDerivation,
     Tick,
 )
 
@@ -235,6 +237,7 @@ __all__ = [
     "Query",
     "Record",
     "RecordedRun",
+    "RequestDerivation",
     "ReviewAnswer",
     "ReviewDismissal",
     "ReviewDraft",
@@ -250,6 +253,7 @@ __all__ = [
     "Row",
     "RowError",
     "Run",
+    "RunChange",
     "RunMemory",
     "RunModel",
     "RunModelRead",

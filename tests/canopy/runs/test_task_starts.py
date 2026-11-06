@@ -25,6 +25,7 @@ from canopy.core import (
     db,
     prompts,
     records,
+    run_inbox,
     run_models,
     spend,
     sql,
@@ -51,6 +52,7 @@ from tests.canopy.helpers import (
     json_block,
     listed,
     messages,
+    model_list,
     operator,
     pool_statuses,
     present,
@@ -351,7 +353,7 @@ def test_the_commit_trailer_names_the_private_workers_chosen_model(
             {"exit": 1, "stderr": "Error: something broke\n"},
             "model_list_failed",
             (
-                "could not look up the model provider/model-a chosen in runtime.models: `opencode models` exited 1. "
+                "could not look up the model provider/model-a chosen in runtime.models: `{list}` exited 1. "
                 "Nothing ran on another model; the work resumes once the list can be read"
             ),
         ),
@@ -380,6 +382,7 @@ def test_tasks_wait_while_the_private_workers_model_cannot_be_used(
     with in_tick(ctx.conn, ends_ok=True) as tick_id:
         assert task_starts.start_queued(ctx, tick_id, logs.for_tick(tick_id)) == []
     raised = [(d.ticket_key, d.action, d.rationale, d.decider) for d in db.decisions_for_tick(ctx.conn, tick_id)]
+    why = why.replace("{list}", model_list(canopy_env.runtime)[1])
     assert raised == [(None, f"attention:{guard}", f"queued tasks wait: {why}", Decider.HARNESS)]
     assert every_run(ctx.conn) == []
     assert set(pool_statuses(treehouse_state)) == {"available"}
@@ -466,6 +469,69 @@ def test_a_task_run_keeps_its_workers_progress_but_never_a_question(
     shown = capsys.readouterr().out
     assert "\n    last progress, updated " in shown
     assert "\n      now: warming the cache\n      next: push\n" in shown
+
+
+@pytest.mark.parametrize("fetches", [True, False], ids=["fetched", "never-fetched"])
+def test_a_reply_to_a_running_task_reaches_its_run_and_one_it_fetched_and_reported_on_queues_no_run(
+    canopy_env: CanopyEnv,
+    inline: Context,
+    agent_log: Path,
+    capsys: pytest.CaptureFixture[str],
+    fetches: bool,  # noqa: FBT001  (a parameter)
+) -> None:
+    """A reply while the task's run runs reaches that run as a message to it, sent before its directory was made too."""
+    with_events(canopy_env, "canopy-worker-private")
+    submit()
+    [started] = start(inline)
+    capsys.readouterr()
+    assert operator("reply", "task:1", "Time the warm build too.") == 0
+    # Its directory is made as the run starts, so this one is written there then, and its agent not told of it now.
+    assert capsys.readouterr().out.endswith(
+        f"Its run {started.run_id} is still working; the first tick after it ends starts the next run.\n",
+    )
+    reads = [calls(run_inbox.tool_name())] if fetches else []
+    with private_worker_does(["true"], result=DONE, tools=reads):
+        run = run_task(inline, started.run_id)
+    [ran] = agent_runs(agent_log)
+    assert ran["env"][cards.ANSWERS_ENV] == str(task_starts.answers_dir(Path(run.log_path)))
+    [message] = run_inbox.sent_to(inline.conn, "task_runs", run.id)
+    assert (message.fetched_at is not None) is fetches
+    if fetches:
+        assert "> Time the warm build too." in ran["tools"][0]["text"]
+    # One its run fetched and reported on is answered; one it never fetched asks for the task's next run.
+    assert [t.id for t in tasks.queued(inline.conn)] == ([] if fetches else [1])
+
+
+def test_a_reply_its_running_task_run_hears_of_says_so_and_the_tasks_show_lists_it(
+    canopy_env: CanopyEnv,
+    inline: Context,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Its agent is told of it, so it may answer it, and `show task:N` says whether it fetched it (DESIGN §44)."""
+    with_events(canopy_env, "canopy-worker-private")
+    submit()
+    [started] = start(inline)
+    [running] = tasks.runs_of(inline.conn, 1)
+    cards.make_answers(task_starts.answers_dir(Path(running.log_path)))
+    capsys.readouterr()
+    assert operator("reply", "task:1", "Time the warm build too.") == 0
+    [message] = run_inbox.sent_to(inline.conn, "task_runs", running.id)
+    assert capsys.readouterr().out == (
+        f"Recorded message {message.id} on task:1.\n"
+        f"Its run {running.id} is still working, and its agent hears that the reply waits on its next tool call. If it "
+        "reads it and then reports, that run has answered it; if not, the first tick after it ends starts the next "
+        "run.\n"
+    )
+    assert operator("show", "task:1") == 0
+    listed = (
+        f"    your messages to it (1):\n      #{message.id}  sent {message.at}, %s\n        Time the warm build too.\n"
+    )
+    assert listed % "not fetched yet" in capsys.readouterr().out
+    with private_worker_does(["true"], result=DONE, tools=[calls(run_inbox.tool_name())]):
+        run = run_task(inline, started.run_id)
+    [message] = run_inbox.sent_to(inline.conn, "task_runs", run.id)
+    assert operator("show", "task:1") == 0
+    assert listed % f"fetched {message.fetched_at}" in capsys.readouterr().out
 
 
 def test_commits_the_worker_left_unpushed_are_pushed_once(inline: Context, git_pool: GitPool) -> None:
@@ -673,7 +739,9 @@ def test_a_task_in_a_repository_without_a_list_hears_none_and_is_not_held(
         run = run_task(checking, started.run_id)
     [worker] = agent_runs(agent_log)
     assert "keeps a checklist" not in told(worker)
-    assert "CANOPY_ANSWERS" not in worker["env"]
+    # It still has an answers directory, where the operator's messages reach it (DESIGN §44), but no list in it.
+    answers = Path(worker["env"]["CANOPY_ANSWERS"])
+    assert not checklists.file_of(answers, "repo").exists()
     assert all(c["returncode"] == 0 for c in worker["commands"])
     assert run.status is RunStatus.DONE
     assert checklist_answers.of_run(checking.conn, run.id, table="task_runs") == []

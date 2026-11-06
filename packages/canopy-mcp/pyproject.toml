@@ -23,7 +23,7 @@ classifiers = [
 requires-python = ">=3.12"
 # pydantic for the messages it reads and the tools' schemas (D026), and nothing from canopy: the local artifact store,
 # which canopy never imports, serves through it too (D041, §38).
-dependencies = ["pydantic>=2.14.1"]
+dependencies = ["pydantic>=2.14.2"]
 
 [project.urls]
 Homepage = "https://github.com/eddieland/canopy"

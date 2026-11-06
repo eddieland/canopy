@@ -49,6 +49,10 @@ type StartStatus = Annotated[
     Literal["started", "stopped"],
     Field(description="Whether the operator's start of a ticket in canopy stands, or was stopped (DESIGN §22)."),
 ]
+type DiffLineKind = Annotated[
+    Literal["add", "del", "ctx"],
+    Field(description="Whether a diff line is added, deleted, or context."),
+]
 
 
 class Model(BaseModel):
@@ -156,6 +160,8 @@ class AttentionItem(Model):
     task: int | None = None
     """The one-off task it is about, by its id, when it is about one (DESIGN §36): `awaiting_reply` or
     `task_ticket_unrecorded`."""
+    epic: int | None = None
+    """The epic it is about, by its id, when it is about one (DESIGN §43): `plan_review`, its plan waiting on you."""
     run: int | None = None
     """The running worker's or planner's run whose question it is, by its id (DESIGN §41): `run_question`."""
     review: int | None = None
@@ -218,6 +224,54 @@ class FeedbackPlanWritten(Model):
     did, or superseded by a later plan or a request for one."""
 
 
+class DiffLine(Model):
+    """One line of a hunk, with its number on each side it is on."""
+
+    kind: DiffLineKind
+    """Whether it is added, deleted, or context."""
+    old: int | None = None
+    """Its number on the old side; None for an added line."""
+    new: int | None = None
+    """Its number on the new side; None for a deleted line."""
+    text: str
+    """The line's text, without its `+`, `-`, or space: untrusted."""
+
+
+class DiffHunk(Model):
+    """One hunk: what follows its `@@` ranges, such as a function's name, and its lines."""
+
+    header: str
+    """What follows the hunk's `@@` ranges, such as a function's name."""
+    lines: list[DiffLine]
+    """Its lines."""
+
+
+class DiffFile(Model):
+    """One file the commit changes. `old_path` when it was renamed; `binary` when git shows no lines for it."""
+
+    path: str
+    """The file's path in the repository."""
+    old_path: str | None = None
+    """Its path before, when it was renamed."""
+    binary: bool = False
+    """Whether git shows no lines for it."""
+    hunks: list[DiffHunk]
+    """Its hunks."""
+
+
+class ReviewDiff(Model):
+    """A kept diff, the branch's own text: untrusted, and bounded.
+
+    A review's of the commit it reviewed (DESIGN §21), a run's at its pushed head (§29), or what a run pushed after
+    being shown its checklist (§42).
+    """
+
+    files: list[DiffFile]
+    """The files it changes."""
+    truncated: bool = False
+    """A bound left something out."""
+
+
 class ChecklistAnswer(Model):
     """One item of a run's repository's checklist and what the run answered (DESIGN §42), as `canopy show` prints."""
 
@@ -229,6 +283,25 @@ class ChecklistAnswer(Model):
     """What the run answered of it."""
     reason: str | None = None
     """For `held`, why the run left it failing: the worker's words, untrusted, line breaks kept. None otherwise."""
+
+
+class ChecklistStretch(Model):
+    """What a run pushed after canopy showed it a repository's checklist (DESIGN §42): one stretch, and its kept diff.
+
+    The diff runs from the commit the list was shown at to the next push, or to what the run left on origin: the fix
+    the answers speak of, with whatever else the run did in that stretch.
+    """
+
+    repo: str
+    """The repository whose list the run was shown."""
+    shown_sha: str
+    """The commit the branch was at when canopy showed the list, as the hook noted it in the run's slot."""
+    pushed_sha: str
+    """The commit of the next push the hook let through, or the one the run left on origin when it pushed none."""
+    diff: ReviewDiff | None = None
+    """The diff between the two, kept beside the run's log; None when it is missing, or not a regular file."""
+    diff_removed_after_days: int | None = None
+    """Retention removed the diff, this many days after the run ended (DESIGN §26); None when it did not."""
 
 
 class CardStep(Model):
@@ -409,6 +482,12 @@ class Run(Model):
     checklist: list[ChecklistAnswer] = []
     """What it answered of its repositories' checklists (DESIGN §42), on its page alone: a row per item it was given,
     by repository, each list in its order. Empty for a run given no list, one still running, and in the lists."""
+    checklist_stretches: list[ChecklistStretch] = []
+    """What it pushed after being shown each list (DESIGN §42), on its page alone, in the order it was shown them: the
+    first five, each with its kept diff. Empty for a run never shown one, one still running, and in the lists."""
+    checklist_stretches_left_out: int = 0
+    """How many stretches after the first five the page is not sent, each up to a review's diff: `canopy show run:ID`
+    names them all."""
 
 
 class WaitingFeedbackPlan(Model):
@@ -890,6 +969,9 @@ class ConfigKey(Model):
     choices: list[str]
     """A `stricter` choice's values, loosest first: the page may move it only later in the list. Empty for any other
     key."""
+    default: ConfigValue
+    """Its value when no file sets it, the config model's default: what the page may reset it to, within its bound or
+    toward stricter."""
 
 
 class ConfigSettings(Model):

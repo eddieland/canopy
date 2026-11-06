@@ -1112,6 +1112,9 @@ def test_openapi_names_the_stream_event_and_every_route() -> None:
         "NoticeRequest",
         "NoticeChanged",
         "ConfigReload",
+        "EpicSummary",
+        "EpicDetail",
+        "EpicPlans",
     }
     assert names <= set(schema["components"]["schemas"])
     paths = {
@@ -1179,6 +1182,14 @@ def test_openapi_names_the_stream_event_and_every_route() -> None:
         "/api/tasks/{task_id}/runs/{run_id}",
         "/api/tasks/{task_id}/runs/{run_id}/transcript",
         "/api/tasks/{task_id}/runs/{run_id}/report",
+        "/api/epics",
+        "/api/epics/{epic_id}",
+        "/api/epics/{epic_id}/plans",
+        "/api/epics/{epic_id}/plan/approval",
+        "/api/epics/{epic_id}/replies",
+        "/api/epics/{epic_id}/stop",
+        "/api/epics/{epic_id}/members",
+        "/api/epics/{epic_id}/members/{key}",
         "/api/tickets/{key}/attachments/{name}",
         "/api/tasks/{task_id}/attachments/{name}",
         "/api/dictation",

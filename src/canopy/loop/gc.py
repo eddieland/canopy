@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Literal
 import canopy_sandbox
 
 from canopy.chores import start as chore_start
-from canopy.core import db, hostgit, records, review_diff, sql
+from canopy.core import checklist_answers, db, hostgit, records, run_changes, sql
 from canopy.core.context import db_path
 from canopy.core.vocab import Decider, MemoryScope, MemoryStatus, PrState, TickStatus
 from canopy.infra import lock, logs, procs
@@ -44,7 +44,14 @@ KIB = 1024
 MIB = KIB * KIB
 _COUNT_OBJECTS_TIMEOUT_SECONDS = 60
 #: A table of the journal a pass removes rows of (DESIGN §26, The journal).
-type RowTable = Literal["decisions", "connector_runs", "derivations", "observed_check_runs", "observed_status_runs"]
+type RowTable = Literal[
+    "decisions",
+    "connector_runs",
+    "derivations",
+    "request_derivations",
+    "observed_check_runs",
+    "observed_status_runs",
+]
 # The bytes of each row's text, in each table a pass removes rows of: what it holds, not the pages it fills.
 _DECISION_BYTES = sql.frag(
     "length(CAST(action AS BLOB)) + length(CAST(rationale AS BLOB)) + length(CAST(created_at AS BLOB)) + "
@@ -59,6 +66,10 @@ _RUN_BYTES = sql.frag(
 _DERIVED_BYTES = sql.frag(
     "length(CAST(ticket_key AS BLOB)) + coalesce(length(CAST(repo AS BLOB)), 0) + length(CAST(phases AS BLOB)) + "
     "coalesce(length(CAST(stale AS BLOB)), 0) + coalesce(length(CAST(overseer_phase AS BLOB)), 0)",
+)
+_REQUEST_DERIVED_BYTES = sql.frag(
+    "length(CAST(pr_url AS BLOB)) + length(CAST(action AS BLOB)) + coalesce(length(CAST(reason AS BLOB)), 0) + "
+    "coalesce(length(CAST(head_sha AS BLOB)), 0) + coalesce(length(CAST(stale AS BLOB)), 0)",
 )
 _CHECK_RUN_BYTES = sql.frag(
     "length(CAST(pr_url AS BLOB)) + length(CAST(name AS BLOB)) + length(CAST(head_sha AS BLOB)) + "
@@ -213,6 +224,7 @@ def file_kinds(ctx: Context, now: datetime) -> list[FileKind]:
     by_runs = f"run_files_days = {retention.run_files_days}"
     return [
         files.kind("run files", _run_files(ctx.conn, runs), by_runs),
+        files.kind("task run files", _task_run_files(ctx.conn, runs), by_runs),
         files.kind(
             "tick files",
             _tick_files(ctx.conn, files.root, retention_cutoff(now, retention.tick_files_days), runs),
@@ -277,6 +289,14 @@ def row_kinds(conn: sqlite3.Connection, now: datetime, retention: Retention) -> 
             "derivations",
             sql.frag("1"),
             _DERIVED_BYTES,
+            sql.frag("tick_id < ? AND tick_id IN (SELECT id FROM ticks WHERE started_at < ?)", window.tick_id, cutoff),
+            rule,
+        ),
+        RowKind(
+            "request derivations",
+            "request_derivations",
+            sql.frag("1"),
+            _REQUEST_DERIVED_BYTES,
             sql.frag("tick_id < ? AND tick_id IN (SELECT id FROM ticks WHERE started_at < ?)", window.tick_id, cutoff),
             rule,
         ),
@@ -424,8 +444,9 @@ def _logged(conn: sqlite3.Connection, table: db.RunTable, cutoff: str, *suffixes
 def _run_files(conn: sqlite3.Connection, cutoff: str) -> list[_Owned]:
     """Each worker run's log, its prompt, and the diffs it kept, with the lifelock it holds while it lives.
 
-    A run under `approve` keeps a diff and its head for each repository it leased (DESIGN §29). A run that wrote a
-    plan keeps its prompt as long as the plan, forever, so the plan's archive can say what its planner was given (§25).
+    A run keeps, for each repository it leased, its own change and its branch against its base, with that diff's head
+    (DESIGN §29, §45), and the diff of each stretch it pushed after a checklist (§42). A run that wrote a plan keeps its
+    prompt as long as the plan, forever, so the plan's archive can say what its planner was given (§25).
 
     Returns:
         What each run owns, oldest first.
@@ -434,22 +455,61 @@ def _run_files(conn: sqlite3.Connection, cutoff: str) -> list[_Owned]:
     slots = sql.select("run_id, repo").from_("run_slots").where("repo IS NOT NULL").order_by("run_id, repo")
     for r in sql.execute(conn, slots):
         repos.setdefault(int(r["run_id"]), []).append(str(r["repo"]))
+    stretches = _stretches(conn, "run_id")
     planned = sql.union(sql.select("run_id").from_("plans"), sql.select("run_id").from_("feedback_plans"))
     planned_ids = {int(r[0]) for r in sql.execute(conn, planned)}
     owned: list[_Owned] = []
     for r in sql.execute(conn, sql.select("id, ended_at, log_path").from_("runs").order_by("id")):
         log = Path(r["log_path"])
-        kept = [review_diff.run_path_for(log, repo) for repo in repos.get(int(r["id"]), [])]
+        run_id = int(r["id"])
+        kept = (
+            *run_changes.files(log, repos.get(run_id, [])),
+            *(checklist_answers.diff_path(log, repo, shown) for repo, shown in stretches.get(run_id, [])),
+        )
         prompt = log.with_suffix(".prompt")
         lifelock = procs.lifelock(log)
-        if int(r["id"]) in planned_ids:
+        if run_id in planned_ids:
             # A cutoff of "" is one no time is before: kept forever.
             owned.append(_Owned((prompt,), r["ended_at"], "", lifelock=lifelock))
-            paths = (log, *kept, *(p.with_suffix(".head") for p in kept))
+            paths = (log, *kept)
         else:
-            paths = (log, prompt, *kept, *(p.with_suffix(".head") for p in kept))
+            paths = (log, prompt, *kept)
         owned.append(_Owned(paths, r["ended_at"], cutoff, lifelock=lifelock))
     return owned
+
+
+def _task_run_files(conn: sqlite3.Connection, cutoff: str) -> list[_Owned]:
+    """Each task run's log, its prompt, and the diffs it kept, as a worker run's (DESIGN §36, §45), with its lifelock.
+
+    Its report is the task's, kept in the state directory's `tasks/`, and never removed here.
+
+    Returns:
+        What each task run owns, oldest first.
+    """
+    stretches = _stretches(conn, "task_run_id")
+    owned: list[_Owned] = []
+    for run in records.select(records.TaskRun).order_by("id").all(conn):
+        log = Path(run.log_path)
+        kept = (
+            *run_changes.files(log, [run.repo]),
+            *(checklist_answers.diff_path(log, repo, shown) for repo, shown in stretches.get(run.id, [])),
+        )
+        owned.append(_Owned((log, log.with_suffix(".prompt"), *kept), run.ended_at, cutoff, procs.lifelock(log)))
+    return owned
+
+
+def _stretches(conn: sqlite3.Connection, column: Literal["run_id", "task_run_id"]) -> dict[int, list[tuple[str, str]]]:
+    """Return each run's checklist stretches (DESIGN §42), as its repository and the commit it was shown its list at.
+
+    Returns:
+        The stretches by the run's id in `column`.
+    """
+    found: dict[int, list[tuple[str, str]]] = {}
+    for push in records.select(records.ChecklistPush).order_by("rowid").all(conn):
+        run_id = push.run_id if column == "run_id" else push.task_run_id
+        if run_id is not None:
+            found.setdefault(run_id, []).append((push.repo, push.shown_sha))
+    return found
 
 
 def _tick_files(conn: sqlite3.Connection, state_dir: Path, ok_cutoff: str, other_cutoff: str) -> list[_Owned]:
