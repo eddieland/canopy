@@ -296,6 +296,17 @@ class EpicReplied(Model):
     """`policy.max_plan_attempts`: once it has had that many, no plan run starts again, for this reply or any."""
 
 
+class EpicStopped(Model):
+    """What a stop did, as `canopy stop epic:N` says: no plan run of it starts again, and its members are left alone."""
+
+    already: bool
+    """Whether the epic was already stopped."""
+    running_run: int | None = None
+    """A plan run of it still working, if one is: it finishes unless `now` ended it."""
+    ended: bool = False
+    """Whether `now` ended that run and returned its slots."""
+
+
 class EpicMemberAdd(Model):
     """A ticket the operator makes a member of an epic, or registers again, with the entries it fulfils."""
 

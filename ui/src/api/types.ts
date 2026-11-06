@@ -378,6 +378,8 @@ export type EpicReplied = Schemas['EpicReplied']
 export type EpicMemberAdded = Schemas['EpicMemberAdded']
 /** What removing a ticket from an epic did: its membership ended, the ticket and its work left as they are. */
 export type EpicMemberRemoved = Schemas['EpicMemberRemoved']
+/** What stopping an epic did: whether it was stopped already, its plan run at work, and whether `now` ended it. */
+export type EpicStopped = Schemas['EpicStopped']
 /** What submitting an epic recorded: the epic, whose plan run the next tick starts, and the repositories it reads. */
 export type EpicSubmitted = Schemas['EpicSubmitted']
 /** A text file the operator attached to a ticket or a task, for its runs to read as data (DESIGN §22). */

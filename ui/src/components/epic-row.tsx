@@ -3,7 +3,7 @@ import { Age } from '@/components/age'
 import { Cost } from '@/components/cost'
 import { EpicLink } from '@/components/epic-link'
 import { RichText, SUMMARY_LINES } from '@/components/rich-text'
-import { ListRow } from '@/components/rows'
+import { ListRow, RowLine } from '@/components/rows'
 import { RunDot, Word } from '@/components/status'
 import { TicketTitle } from '@/components/ticket-title'
 import { Clipped } from '@/components/tip'
@@ -16,7 +16,8 @@ import { cn } from '@/lib/utils'
 /**
  * An epic in the epics list: where it stands, in its run state's dot and color (`EPIC_LOOK`), with the CLI's word and
  * what it means on hover; `epic:N`, opening its page; its repositories; its goal's first line, the operator's words,
- * as text; how many of its breakdown's entries are filed (`entriesFiled`); and when it was submitted.
+ * as text; how many of its breakdown's entries are filed (`entriesFiled`); and when it was submitted. Under its goal, a
+ * stopped epic says when the operator stopped it, its standing's word `planning` too while its plan run finishes.
  */
 export function EpicRow({ epic }: { epic: EpicSummary }) {
     const look = EPIC_LOOK[epic.standing]
@@ -33,6 +34,11 @@ export function EpicRow({ epic }: { epic: EpicSummary }) {
             <TicketTitle title={epicTitle(epic.text)} />
             <span className="readout text-right text-xs text-muted-foreground">{filed}</span>
             <Age at={epic.submitted_at} variant="ago" className="text-right" />
+            {epic.stopped_at !== null && (
+                <RowLine from="title" className="text-xs text-muted-foreground" data-testid="epic-stopped">
+                    stopped <Age at={epic.stopped_at} variant="ago" />
+                </RowLine>
+            )}
         </ListRow>
     )
 }

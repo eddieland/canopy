@@ -18,6 +18,7 @@ import {
     epicMemberAddedText,
     epicMemberRemovedText,
     epicRepliedText,
+    epicStoppedText,
     failedText,
     forgotText,
     grantedText,
@@ -334,7 +335,11 @@ describe('outcomes', () => {
             tone: 'failed',
         })
         const two = [draft({ status: 'sent', sent_url: url }), draft({ number: 2, status: 'sent', sent_url: url })]
-        expect(draftsSentToast({ ...none, posted: two })).toEqual({ title: 'Sent 2 drafts', detail: url, tone: 'done' })
+        expect(draftsSentToast({ ...none, posted: two })).toEqual({
+            title: 'Sent 2 drafts',
+            detail: url,
+            tone: 'done',
+        })
         expect(
             draftsSentToast({
                 ...none,
@@ -383,6 +388,17 @@ describe('outcomes', () => {
         expect(epicRepliedText(2, { ...replied, plan_runs: 3 })).toBe(
             'Recorded message 21 on epic:2. It has had 3 plan runs, policy.max_plan_attempts; none starts again for ' +
                 'this reply.',
+        )
+    })
+
+    it('says what a stop did to an epic, as `canopy stop epic:N` does', () => {
+        const stopped = { already: false, running_run: null, ended: false }
+        expect(epicStoppedText(4, stopped, false)).toBe(
+            'epic:4 is stopped; no plan run of it starts again. Its members are left as they are.',
+        )
+        expect(epicStoppedText(4, { ...stopped, already: true }, true)).toBe('epic:4 was already stopped.')
+        expect(epicStoppedText(3, { ...stopped, already: true, running_run: 4 }, true)).toBe(
+            'epic:3 was already stopped. Its plan run 4 had already ended.',
         )
     })
 

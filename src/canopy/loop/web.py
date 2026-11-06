@@ -18,7 +18,7 @@ from canopy.core import conversation, review_runs
 from canopy.infra import logs, resources
 from canopy.loop import attention, reread, tick_now
 from canopy.reviews import grants
-from canopy.runs import halt, policy, task_run
+from canopy.runs import epic_runs, halt, policy, task_run
 from canopy.serve import secret
 from canopy.serve.app import create_app
 from canopy.serve.auth import Sessions
@@ -95,6 +95,9 @@ def backend(ctx: Context, reload: reread.Reload, asked: tick_now.TickNow, every:
     def end_task_run(run_ctx: Context, run: records.TaskRun) -> bool:
         return task_run.stop_now(run_ctx, run, logs.for_tick(None))
 
+    def end_epic_run(run_ctx: Context, run: records.EpicRun) -> bool:
+        return epic_runs.stop_now(run_ctx, run, logs.for_tick(None))
+
     def reload_config(current: Context) -> Reloading:
         # Read here first, so a config that does not load is refused to the operator who asked, not only logged.
         found = reread.load(current)
@@ -111,6 +114,7 @@ def backend(ctx: Context, reload: reread.Reload, asked: tick_now.TickNow, every:
         attention=attention.shown,
         end_run=end_run,
         end_task_run=end_task_run,
+        end_epic_run=end_epic_run,
         reload=reload_config,
         tick_now=ask_tick,
         limits=limits,

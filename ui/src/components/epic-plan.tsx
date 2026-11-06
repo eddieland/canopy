@@ -31,7 +31,7 @@ const APPROVE_TITLE =
  * Every plan is the planner's text, which the editor's schema keeps as text. `epic` is the epic's id; `plans` hold at
  * least one plan.
  */
-export function EpicPlan({ epic, plans }: { epic: number; plans: EpicPlans }) {
+export function EpicPlan({ epic, plans, stopped = false }: { epic: number; plans: EpicPlans; stopped?: boolean }) {
     const newest = plans.plans.at(-1)
     if (newest === undefined) {
         return null
@@ -47,7 +47,14 @@ export function EpicPlan({ epic, plans }: { epic: number; plans: EpicPlans }) {
                 </Panel>
             ) : (
                 // Its own plan's: what the operator's word on one plan did is never said on the next.
-                <NewestPlan key={newest.plan.id} epic={epic} plans={plans} newest={newest} text={newest.text} />
+                <NewestPlan
+                    key={newest.plan.id}
+                    epic={epic}
+                    plans={plans}
+                    newest={newest}
+                    text={newest.text}
+                    stopped={stopped}
+                />
             )}
             {earlier.length > 0 && <EarlierPlans epic={epic} plans={earlier} />}
         </section>
@@ -57,18 +64,21 @@ export function EpicPlan({ epic, plans }: { epic: number; plans: EpicPlans }) {
 /**
  * The newest plan in the editor, with the operator's word on it while it waits on them: Approve, by the file's hash as
  * the page read it, which canopy refuses (`stale`) once the file changed since; and Ask for changes, a reply its next
- * plan run reads. Each says what it did in the CLI's words, or names the guard that refused it, at the plan's foot.
+ * plan run reads, unless the epic is `stopped`, which takes no reply. Each says what it did in the CLI's words, or
+ * names the guard that refused it, at the plan's foot.
  */
 function NewestPlan({
     epic,
     plans,
     newest,
     text,
+    stopped,
 }: {
     epic: number
     plans: EpicPlans
     newest: EpicPlanFile
     text: string
+    stopped: boolean
 }) {
     const client = useQueryClient()
     const [said, setSaid] = useState<string | null>(null)
@@ -134,7 +144,7 @@ function NewestPlan({
                     <Age at={newest.plan.created_at} variant="ago" />
                 </>
             }
-            onAskForChanges={waits ? askForChanges : undefined}
+            onAskForChanges={waits && !stopped ? askForChanges : undefined}
             asked={plans.changes_asked !== null}
             renderActions={(notes) => (
                 // `contents`, so its items are the foot's line's, with Ask for changes after them.
@@ -167,7 +177,7 @@ function NewestPlan({
  * changed in its file since, and what comes next. Its status and age are its panel's header, and its hash the line
  * under this one (`EpicPlanHash`). With no plan, it says nothing: the page's panel says what comes.
  */
-export function EpicPlanState({ epic, plans }: { epic: number; plans: EpicPlans }) {
+export function EpicPlanState({ epic, plans, stopped = false }: { epic: number; plans: EpicPlans; stopped?: boolean }) {
     const newest = plans.plans.at(-1)
     if (newest === undefined) {
         return null
@@ -192,7 +202,9 @@ export function EpicPlanState({ epic, plans }: { epic: number; plans: EpicPlans 
             )}
             {planWaits(plans, newest) &&
                 plans.changes_asked === null &&
-                ' It waits on you: approve it, or ask for changes.'}
+                (stopped
+                    ? ' You stopped the epic: you may still approve it, but no plan run starts for changes.'
+                    : ' It waits on you: approve it, or ask for changes.')}
         </>
     )
 }

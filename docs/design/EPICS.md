@@ -8,7 +8,7 @@ map. Previous: [The operator's checklist](CHECKLIST.md). Next: [Messages to runn
 
 Being built (REQUIREMENTS R28, ROADMAP M67). Built: the epic, its members, and their bound, from the CLI; its plan runs,
 which record a plan `proposed`; its approval, replies, and members registered against its entries; a member's planner,
-which reads the epic's approved plan, its plan recording which; and stopping it, from the CLI.
+which reads the epic's approved plan, its plan recording which; and stopping it, from the CLI and the web UI.
 
 §25 plans one ticket. Work that spans several has no plan of its own, so each ticket's planner settles the shared
 questions again and the operator approves them again. An **epic** is that work as canopy's own subject: the

@@ -12,6 +12,7 @@ import type {
     EpicMemberRemoved,
     EpicPlanApproved,
     EpicReplied,
+    EpicStopped,
     EpicSubmitted,
     Draft,
     DraftsSent,
@@ -661,6 +662,28 @@ export function epicMemberAddedText(id: number, added: EpicMemberAdded): string 
 /** What removing a ticket from an epic did, as `canopy epic remove` says it (canopy/cli/epics.py). */
 export function epicMemberRemovedText(id: number, removed: EpicMemberRemoved): string {
     return `Removed ${removed.key} from ${epicRef(id)}.`
+}
+
+/**
+ * What a stop did to an epic, as `canopy stop epic:N` says it (canopy/cli/epics.py): stopped, its members left as they
+ * are, or stopped already; then its plan run still working, which finishes unless `now` ended it. Stop now is the
+ * page's `--now`.
+ */
+export function epicStoppedText(id: number, stopped: EpicStopped, now: boolean): string {
+    const ref = epicRef(id)
+    const head = stopped.already
+        ? `${ref} was already stopped.`
+        : `${ref} is stopped; no plan run of it starts again. Its members are left as they are.`
+    const run = stopped.running_run
+    if (run === null) {
+        return head
+    }
+    if (!now) {
+        return `${head} Its plan run ${run} is still working and will finish; Stop now ends it.`
+    }
+    return stopped.ended
+        ? `${head} Its plan run ${run} was ended and its slots returned.`
+        : `${head} Its plan run ${run} had already ended.`
 }
 
 /** What the operator's word on a plan did, as `canopy plan` says it (canopy/cli/plans.py). */

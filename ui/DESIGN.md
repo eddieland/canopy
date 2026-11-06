@@ -719,7 +719,11 @@ reader, so no table repeats them.
   no margin, since an epic's plan takes no comments, then its earlier plans folded, newest first. A member's own page
   says whose it is, so its record reads as one story: its Work panel's `member of` field (`MembershipField`), the epic
   and its entries, or `of no entry`; its plan page, under the description, the epic plan its planner read, by hash, and
-  when that was approved (`FollowedEpicPlanLine`), and a newer approval since as a fact, never as a warning.
+  when that was approved (`FollowedEpicPlanLine`), and a newer approval since as a fact, never as a warning. An epic
+  has no identity panel, so its stop (`EpicActions`) sits at the title's right after `Open plan`, `sm` buttons as that
+  one is, asking once more inline as a task's does and saying that its members' work is left as it is, with what it did
+  under the buttons. A stopped epic says so, and when, in its description and under its goal in its row, and its plan
+  page offers Approve alone, since it takes no reply.
 - **A task** (`/tasks/$id`) is one story: its title `task:N` and its text's first line, its description where it
   stands, then the detail skeleton, with the story as its thread: a Conversation panel (`TaskStory`) whose oldest end
   is the operator's instruction, whole, as their own bubble, then its messages, each naming its run as `task:4#5`, which

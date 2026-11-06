@@ -266,8 +266,25 @@ export function mockTaskRun(fields: Partial<TaskRun> = {}): TaskRun {
     }
 }
 
-/** The mock journal's three epics, the newest first as `GET /api/epics` sends them: planning, proposed, approved. */
+/**
+ * The mock journal's four epics, the newest first as `GET /api/epics` sends them: stopped, as soon as it was
+ * submitted; planning; proposed; and approved.
+ */
 export const mockEpics: EpicSummary[] = [
+    {
+        id: 4,
+        text: "Give the web app a dark theme that follows the system's setting.",
+        repos: ['web'],
+        project: 'ABC',
+        tracker_epic: null,
+        channel: 'web',
+        submitted_at: '2026-10-08T11:59:00Z',
+        stopped_at: '2026-10-08T11:59:00Z',
+        standing: 'stopped',
+        members: 0,
+        entries: null,
+        entries_with_members: 0,
+    },
     {
         id: 3,
         text: 'Replace the feature flags read from the `flags` table with the flags service, in api and web.',
@@ -327,8 +344,9 @@ function epicOf(id: number): EpicSummary {
 }
 
 /**
- * The mock journal's three epics as `GET /api/epics/{id}` sends each, oldest first: approved, with members, one of
- * them of no entry; proposed, after the operator's reply; and planning, its first plan run at work.
+ * The mock journal's four epics as `GET /api/epics/{id}` sends each, oldest first: approved, with members, one of
+ * them of no entry; proposed, after the operator's reply; planning, its first plan run at work; and stopped before
+ * any plan run of it started.
  */
 export const mockEpicDetails: EpicDetail[] = [
     {
@@ -621,6 +639,16 @@ export const mockEpicDetails: EpicDetail[] = [
         plan: null,
         outline: null,
     },
+    {
+        epic: epicOf(4),
+        members: [],
+        bound: 8,
+        max_plan_attempts: 3,
+        runs: [],
+        messages: [],
+        plan: null,
+        outline: null,
+    },
 ]
 
 /** Epic 1's plan as its planner wrote it, and as the operator approved it. */
@@ -722,6 +750,7 @@ export const mockEpicPlans: EpicPlans[] = [
         ],
     },
     { epic_id: 3, planning: 4, plans: [], changes_asked: null },
+    { epic_id: 4, planning: null, plans: [], changes_asked: null },
 ]
 
 // A mock that should be there and is not: a test's mistake, said as one.

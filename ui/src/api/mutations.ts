@@ -7,6 +7,7 @@ import type {
     EpicMemberRemoved,
     EpicPlanApproved,
     EpicReplied,
+    EpicStopped,
     EpicSubmitted,
     LeftSent,
     AgentModel,
@@ -263,6 +264,14 @@ export async function addEpicMember(id: number, key: string, entries: readonly s
 /** `canopy epic remove epic:N KEY`: end the ticket's membership, leaving the ticket and its work as they are. */
 export async function removeEpicMember(id: number, key: string): Promise<EpicMemberRemoved> {
     return unwrap(await api.DELETE('/api/epics/{epic_id}/members/{key}', { params: { path: { epic_id: id, key } } }))
+}
+
+/**
+ * `canopy stop epic:N`, or `canopy stop epic:N --now` with `now`, which also ends its plan run at work: no plan run of
+ * it starts again, and its members are left as they are.
+ */
+export async function stopEpic(id: number, now: boolean): Promise<EpicStopped> {
+    return unwrap(await api.POST('/api/epics/{epic_id}/stop', { params: { path: { epic_id: id } }, body: { now } }))
 }
 
 /** `canopy stop task:N`, or `canopy stop task:N --now` with `now`, which also ends the run working it. */

@@ -79,6 +79,27 @@ describe("an epic's page", () => {
         expect(open.getAttribute('href')).toBe(`/epics/${String(id)}/plan`)
     })
 
+    it('says a stopped epic is stopped, and when, and offers no stop', async () => {
+        await renderPage('4')
+        await screen.findByTestId('epic-board')
+        expect(line('stopped ').textContent).toBe(
+            'stopped 31m ago · no breakdown · members 0 of at most 8 · submitted 31m ago',
+        )
+        expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull()
+        expect(screen.getByText('no plan: you stopped it, and no plan run of it starts again')).toBeTruthy()
+    })
+
+    it('offers Stop, and Stop now while its plan run works, beside Open plan', async () => {
+        await renderPage('3')
+        await screen.findByTestId('epic-board')
+        const actions = within(screen.getByTestId('epic-actions'))
+        expect(actions.getAllByRole('button').map((button) => button.textContent)).toEqual(['Stop', 'Stop now'])
+        cleanup()
+        await renderPage('2')
+        await screen.findByTestId('epic-board')
+        expect(screen.getByTestId('epic-actions').textContent).toBe('Open planStop')
+    })
+
     it('offers no plan to open before a plan run records one', async () => {
         await renderPage('3')
         await screen.findByTestId('epic-board')

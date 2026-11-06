@@ -6,6 +6,7 @@ import { ApiError } from '@/api/client'
 import { epicQuery } from '@/api/queries'
 import type { EpicDetail } from '@/api/types'
 import { Age } from '@/components/age'
+import { EpicActions } from '@/components/epic-actions'
 import { EpicBoard } from '@/components/epic-board'
 import { OutlineLights } from '@/components/epic-ids'
 import { OutlinePanel } from '@/components/epic-outline'
@@ -76,19 +77,39 @@ function Epic({ detail }: { detail: EpicDetail }) {
     const { epic, runs } = detail
     const look = EPIC_LOOK[epic.standing]
     const runsOrder = useListOrder('epic-runs')
+    const running = runs.find((run) => run.status === 'running')?.id ?? null
     return (
         <>
             <PageHeader
                 title={epicRef(epic.id)}
                 subject={epicTitle(epic.text)}
                 help={HELP}
-                controls={runs.some((run) => run.plan_id !== null) && <OpenPlan epic={epic.id} />}
+                controls={
+                    <EpicActions
+                        epic={epic}
+                        running={running}
+                        plan={runs.some((run) => run.plan_id !== null) ? <OpenPlan epic={epic.id} /> : undefined}
+                    />
+                }
             >
                 {/* Where it stands first, in its state's color, as a task's page says it. */}
                 <Word word={epic.standing} text={look.word} meaning={look.meaning} className={RUN_TEXT[look.state]} />
+                {/* Stopped, it says when once; stopped while its plan run still works, it says so after the rest. */}
+                {epic.stopped_at !== null && epic.standing === 'stopped' && (
+                    <>
+                        {' '}
+                        <Age at={epic.stopped_at} variant="ago" />
+                    </>
+                )}
                 {` · ${entriesFiled(epic)} · members ${String(detail.members.length)} of at most ` +
                     `${String(detail.bound)} · submitted `}
                 <Age at={epic.submitted_at} variant="ago" />
+                {epic.stopped_at !== null && epic.standing !== 'stopped' && (
+                    <>
+                        {' · stopped '}
+                        <Age at={epic.stopped_at} variant="ago" />
+                    </>
+                )}
             </PageHeader>
             <OutlineLights outline={detail.outline}>
                 {/* The board first, at the page's width; then the story and the key to the board's ids, which the wide

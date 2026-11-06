@@ -41,8 +41,8 @@ describe('the epics page', () => {
             within(list)
                 .getAllByRole('listitem')
                 .map((row) => within(row).getByText(/^epic:\d+$/u).textContent),
-        ).toEqual(['epic:3', 'epic:2', 'epic:1'])
-        expect(screen.getByTestId('epics-count').textContent).toBe('3 epics')
+        ).toEqual(['epic:4', 'epic:3', 'epic:2', 'epic:1'])
+        expect(screen.getByTestId('epics-count').textContent).toBe('4 epics')
     })
 
     it('says one submitted from its form is planned at the next tick while there are none', async () => {

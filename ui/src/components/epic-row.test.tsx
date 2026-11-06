@@ -59,6 +59,18 @@ describe('EpicRow', () => {
         expect(within(shown).getByText('no breakdown')).toBeTruthy()
     })
 
+    it('says a stopped epic is stopped, and when, under its goal', async () => {
+        const shown = await row(epic(4))
+        // Its standing's word, then, under its goal, when.
+        expect(shown.textContent).toMatch(/^stopped\s*epic:4/u)
+        expect(within(shown).getByTestId('epic-stopped').textContent).toMatch(/^stopped \d+\w+ ago$/u)
+        // One still planning says that it plans, and under its goal that it was stopped.
+        const planning = await row({ ...epic(3), stopped_at: '2026-10-08T11:58:00Z' })
+        expect(within(planning).getByText('planning')).toBeTruthy()
+        expect(within(planning).getByTestId('epic-stopped')).toBeTruthy()
+        expect(within(await row(epic(2))).queryByTestId('epic-stopped')).toBeNull()
+    })
+
     it('says an epic whose runs left no plan is unplanned', async () => {
         const shown = await row({ ...epic(3), standing: 'unplanned' })
         expect(within(shown).getByText('unplanned')).toBeTruthy()

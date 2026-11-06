@@ -39,6 +39,7 @@ export const ROUTES = [
     'epics/1',
     'epics/2',
     'epics/3',
+    'epics/4',
     'epics/1/plan',
     'epics/2/plan',
     'pull-requests',
