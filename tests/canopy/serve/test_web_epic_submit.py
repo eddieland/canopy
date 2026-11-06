@@ -18,8 +18,10 @@ GOAL = "Let a user sign in on every app with one account, and sign out of all of
 def test_an_epic_submitted_from_the_web_is_queued_for_its_plan_run_as_the_operators(backend: Backend) -> None:
     c, headers = signed_in_to(backend)
     body = {"text": f"  {GOAL}  ", "repos": ["web", "api", "web"], "project": "ABC", "tracker_epic": "ABC-90"}
-    # A write needs the session's token, as every write does.
+    before = [e["id"] for e in c.get("/api/epics").json()]
+    # A write needs the session's token, as every write does: refused without it, it records nothing.
     assert c.post("/api/epics", json=body).status_code == 403
+    assert [e["id"] for e in c.get("/api/epics").json()] == before
 
     submitted = c.post("/api/epics", json=body, headers=headers).json()
     # Each repository once, in the order named, as the CLI records them.
@@ -30,8 +32,9 @@ def test_an_epic_submitted_from_the_web_is_queued_for_its_plan_run_as_the_operat
     assert found is not None
     assert (found.text, found.project, found.tracker_epic, found.channel) == (GOAL, "ABC", "ABC-90", "web")
     # The list has it first, its plan run to come; its page has no plan and no run yet.
-    [first, *_] = c.get("/api/epics").json()
+    [first, *rest] = c.get("/api/epics").json()
     assert (first["id"], first["standing"], first["repos"]) == (epic_id, "queued", ["web", "api"])
+    assert [e["id"] for e in rest] == before
     detail = c.get(f"/api/epics/{epic_id}").json()
     assert (detail["plan"], detail["runs"], detail["outline"]) == (None, [], None)
 
