@@ -265,12 +265,27 @@ describe('applyStreamEvent', () => {
         }
         const answers = [{ repo: 'web', item: 'no-any', answer: 'held', reason: 'Generated types.' }] as const
         const plan = { id: 7, pr_urls: [], status: 'waiting' } as const
-        client.setQueryData(keys.run(first.id), { ...first, checklist: answers, feedback_plan: plan })
+        const stretches = [
+            { repo: 'web', shown_sha: 'a1b2c3d', pushed_sha: 'e4f5a6b', diff: null, diff_removed_after_days: null },
+        ]
+        client.setQueryData(keys.run(first.id), {
+            ...first,
+            checklist: answers,
+            checklist_stretches: stretches,
+            checklist_stretches_left_out: 2,
+            feedback_plan: plan,
+        })
 
-        // The list sends neither: the page's stay.
+        // The list sends none of them: the page's stay.
         applyStreamEvent(client, { type: 'runs.updated', runs: [{ ...first, cost_usd: 9 }] })
         const shown = client.getQueryData<Run>(keys.run(first.id))
-        expect([shown?.cost_usd, shown?.checklist, shown?.feedback_plan]).toEqual([9, answers, plan])
+        expect([
+            shown?.cost_usd,
+            shown?.checklist,
+            shown?.checklist_stretches,
+            shown?.checklist_stretches_left_out,
+            shown?.feedback_plan,
+        ]).toEqual([9, answers, stretches, 2, plan])
         expect(client.getQueryState(keys.run(first.id))?.isInvalidated).toBe(false)
 
         // Ended, the list names no worktrees for it: the page keeps the ones it worked in.

@@ -30,7 +30,7 @@ import stat
 from dataclasses import dataclass
 from typing import IO, TYPE_CHECKING, Literal, Protocol, TypedDict, assert_never
 
-from canopy.core import conversation, db, records, sql
+from canopy.core import conversation, db, epic_changes, records, sql
 from canopy.core.conversation import KEY_RE, MAX_KEY, Refused
 from canopy.core.vocab import PlanEffort, PlanSetting, PlanStatus, RunKind, RunStatus
 from canopy.infra import lock
@@ -684,7 +684,8 @@ def approve(
     """Approve the ticket's current plan as its file stands now, the operator's edits included, recording its hash.
 
     Beside it goes the hash of the ticket's title and of its description as last observed, so the harness warns while
-    either differs (`ticket_changed`), and approving again is how the operator says the plan still fits.
+    either differs (`ticket_changed`), and approving again is how the operator says the plan still fits. So it is for a
+    member whose epic's plan changed since (DESIGN §43): approving again clears its notice, and with it `epic_changed`.
 
     An operator message newer than the plan, asking for changes, does not stop it: an approval before the new plan run
     starts is the operator's later word (DESIGN §25, Approving a plan). With a `note`, the approval writes it on the
@@ -697,8 +698,9 @@ def approve(
 
     Raises:
         Refused: `inside_run` inside one of canopy's own ticks or runs; `bad_plan` while a plan run for the ticket is
-            running, when it has no current plan, when that plan is approved and neither its file nor the ticket's
-            text has changed since, or when its file is missing, not a regular file, unreadable, or no longer a plan;
+            running, when it has no current plan, when that plan is approved and neither its file, the ticket's
+            text, nor its epic's plan has changed since, or when its file is missing, not a regular file, unreadable,
+            or no longer a plan;
             `bad_body` for a `note` empty or over `MAX_NOTE`.
     """
     conversation.check_operator()
@@ -714,6 +716,7 @@ def approve(
             plan.status is PlanStatus.APPROVED
             and reading.sha256 == plan.approved_sha256
             and not ticket_changed(conn, plan)
+            and epic_changes.pending(conn, key) is None
         ):
             raise Refused(
                 "bad_plan",
@@ -736,6 +739,7 @@ def approve(
             .where("id = ?", plan.id)
             .returned(conn)
         )
+        epic_changes.approved(conn, key)
         if said is not None:
             conversation.write_reply(
                 conn,

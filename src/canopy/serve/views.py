@@ -44,6 +44,7 @@ from canopy.serve.schema import (
     Capacity,
     CardStep,
     ChecklistAnswer,
+    ChecklistStretch,
     Comment,
     CostTotal,
     Decision,
@@ -255,7 +256,23 @@ def run_detail(ctx: Context, run_id: int) -> Run | None:
     limit = ctx.config.runtime.worker_timeout_minutes
     worktrees = [run_worktree(s, root) for s in held]
     answers = checklist_views.run_answers(ctx.conn, run_id)
-    return run(row, root, worktrees, served, wrote, checklist=answers, timeout_minutes=limit)
+    stretches, left_out = checklist_views.run_stretches(
+        ctx.conn,
+        run_id,
+        log_path=str(row["log_path"]),
+        ended_at=row["ended_at"],
+    )
+    return run(
+        row,
+        root,
+        worktrees,
+        served,
+        wrote,
+        checklist=answers,
+        stretches=stretches,
+        stretches_left_out=left_out,
+        timeout_minutes=limit,
+    )
 
 
 def models_served(
@@ -419,13 +436,16 @@ def run(
     feedback_plan: FeedbackPlanWritten | None = None,
     *,
     checklist: Sequence[ChecklistAnswer] = (),
+    stretches: Sequence[ChecklistStretch] = (),
+    stretches_left_out: int = 0,
     timeout_minutes: int | None = None,
 ) -> Run:
     """One run's row, with the `worktrees` it leased, its paths from the workspace `root`.
 
     On the run's own page it carries `models`, the models that served it, for a `feedback-plan` run `feedback_plan`,
-    the plan it wrote, and `checklist`, what it answered of its repositories' lists. `timeout_minutes`, a worker's
-    time limit, says when a step in its progress is stuck; with None, none is.
+    the plan it wrote, `checklist`, what it answered of its repositories' lists, and `stretches`, what it pushed after
+    being shown them, with how many more it pushed, `stretches_left_out`. `timeout_minutes`, a worker's time limit,
+    says when a step in its progress is stuck; with None, none is.
 
     Returns:
         The run as the API sends it. A status it does not know reads as `failed`.
@@ -461,6 +481,8 @@ def run(
         models=models,
         feedback_plan=feedback_plan,
         checklist=list(checklist),
+        checklist_stretches=list(stretches),
+        checklist_stretches_left_out=stretches_left_out,
     )
 
 

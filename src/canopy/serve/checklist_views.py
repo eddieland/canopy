@@ -3,16 +3,19 @@
 The lists as the operator's files hold them now, each read and parsed as a run's would be, one canopy cannot use with
 why. The counts by the backend's clock, as `canopy checklist` prints them, with the runs behind each item's `held` and
 `fixed` answers, a held one's reason on one line, and the counts by week; and one run's answers, as `canopy show run:ID`
-and `task:N` print them, a held item's reason among them: the worker's words, made printable and sent as text.
+and `task:N` print them, a held item's reason among them: the worker's words, made printable and sent as text. With
+them, what the run pushed after being shown each list: each stretch's commits and the diff kept beside its log, read
+within a review's diff's bounds (`review_diff.read`), and said to be missing, or removed by retention, when it is.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, assert_never
 
-from canopy.core import checklist_answers, checklists, conversation, db, health, spend
+from canopy.core import checklist_answers, checklists, conversation, db, health, review_diff, spend
 from canopy.core.vocab import ItemAnswer
-from canopy.serve.schema import ChecklistAnswer
+from canopy.serve.diff_views import diff_view
+from canopy.serve.schema import ChecklistAnswer, ChecklistStretch
 from canopy.serve.schema import ItemAnswer as AnswerWord
 from canopy.serve.schema.checklist import (
     ChecklistCounts,
@@ -24,6 +27,7 @@ from canopy.serve.schema.checklist import (
     ChecklistWeek,
     RepoChecklist,
 )
+from canopy.serve.transcript_views import removed_after
 
 if TYPE_CHECKING:
     import sqlite3
@@ -32,6 +36,10 @@ if TYPE_CHECKING:
     from canopy.core.checklist_answers import AnsweredBy, RunTable
     from canopy.core.context import Context
     from canopy.serve.backend import Backend
+
+#: How many of a run's stretches its page is sent, each with its diff, as large as a review's may be: far more than a
+#: run makes, as it is held again only after half an hour's work.
+MAX_STRETCHES = 5
 
 
 def lists(ctx: Context) -> ChecklistList:
@@ -131,6 +139,40 @@ def run_answers(conn: sqlite3.Connection, run_id: int, *, table: RunTable = "run
         )
         for a in checklist_answers.of_run(conn, run_id, table=table)
     ]
+
+
+def run_stretches(
+    conn: sqlite3.Connection,
+    run_id: int,
+    *,
+    log_path: str,
+    ended_at: str | None,
+    table: RunTable = "runs",
+) -> tuple[list[ChecklistStretch], int]:
+    """What run `run_id` of `table` pushed after being shown its lists, each stretch with the diff kept beside its log.
+
+    `log_path` is the run's log, as the journal names it, and `ended_at` when the run ended, which says whether
+    retention removed a diff that is gone. Each diff is read as a review's is, within its bounds: a file that is
+    missing, a symlink, or not a regular file is no diff, never an empty one.
+
+    Returns:
+        The first `MAX_STRETCHES` stretches, in the order the run was shown its lists, and how many more there are.
+    """
+    pushes = checklist_answers.pushes_of(conn, run_id, table=table)
+    stretches: list[ChecklistStretch] = []
+    for p in pushes[:MAX_STRETCHES]:
+        kept = checklist_answers.diff_path(log_path, p.repo, p.shown_sha)
+        found = review_diff.read(kept)
+        stretches.append(
+            ChecklistStretch(
+                repo=p.repo,
+                shown_sha=p.shown_sha,
+                pushed_sha=p.pushed_sha,
+                diff=diff_view(found) if found is not None else None,
+                diff_removed_after_days=removed_after(conn, kept, ended_at, "run_files_days"),
+            ),
+        )
+    return stretches, max(len(pushes) - MAX_STRETCHES, 0)
 
 
 def _item(item: checklists.Item) -> ChecklistItem:

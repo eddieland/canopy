@@ -215,6 +215,16 @@ def test_a_change_reaches_a_member_by_what_its_entry_cited_before() -> None:
     assert epic_outline.reaches(change, frozenset({"B2"}), before=before, after=after)
 
 
+def test_a_member_is_named_the_ids_that_reached_it_and_one_of_no_entry_every_id() -> None:
+    """What a member is told is what reached it: its entries and the ids they cite, or the whole change."""
+    outline = read()
+    change = Change(added={"R2"}, removed={"B1"}, changed={"C1", "R1"})
+    assert epic_outline.reaching(change, frozenset({"B2"}), before=outline, after=outline) == {"C1", "R2"}
+    assert epic_outline.reaching(change, frozenset({"B1"}), before=outline, after=outline) == {"B1", "C1", "R1"}
+    assert epic_outline.reaching(change, frozenset(), before=outline, after=outline) == change.ids()
+    assert epic_outline.ordered(change.ids()) == ["B1", "C1", "R1", "R2"]
+
+
 @pytest.mark.parametrize(
     ("entries", "trivial"),
     [

@@ -152,6 +152,7 @@ def test_a_member_whose_entry_a_later_approval_dropped_comes_back_as_such(backen
             APPROVED,
             repos=frozenset(epics.repos_of(ctx.conn, APPROVED)),
             channel="web",
+            dispatch_lock=ctx.dispatch_lock_path,
         )
     found = client(None, backend).get(f"/api/epics/{APPROVED}").json()
     members = {m["key"]: (m["entries"], m["dropped"]) for m in found["members"]}

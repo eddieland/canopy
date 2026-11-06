@@ -165,19 +165,33 @@ def reaches(change: Change, entries: AbstractSet[str], *, before: Outline, after
     Returns:
         True when it is reached; never for a change that touched nothing.
     """
+    return bool(reaching(change, entries, before=before, after=after))
+
+
+def reaching(change: Change, entries: AbstractSet[str], *, before: Outline, after: Outline) -> AbstractSet[str]:
+    """Return the ids by which `change` reaches a member that fulfils `entries`, as `reaches` judges it (DESIGN §43).
+
+    Returns:
+        Its entries the change touched, and the touched ids either plan says they cover, provide, or use; every id the
+        change touched for a member of no entry; none when it is not reached.
+    """
     touched = change.ids()
-    if not touched:
-        return False
     if not entries:
-        return True
+        return touched
+    found: set[str] = set()
     for entry_id in entries:
         if entry_id in touched:
-            return True
+            found.add(entry_id)
         for plan in (before, after):
             entry = plan.entries.get(entry_id)
-            if entry is not None and entry.cites() & touched:
-                return True
-    return False
+            if entry is not None:
+                found |= entry.cites() & touched
+    return frozenset(found)
+
+
+def ordered(ids: Iterable[str]) -> list[str]:
+    """Return `ids` sorted by kind, then number, so `R2` comes before `R10`, as the plan's prose names them."""
+    return sorted(ids, key=_order)
 
 
 def trivial(outline: Outline, entries: AbstractSet[str]) -> bool:

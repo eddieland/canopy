@@ -12,7 +12,7 @@ from typing import Annotated, Literal
 
 from pydantic import Field
 
-from canopy.serve.schema import CostTotal, Decision, Limit, Model, ModelsServed, Run, RunCard, RunState
+from canopy.serve.schema import CostTotal, Decision, Limit, Model, ModelsServed, ReviewDiff, Run, RunCard, RunState
 
 type ReviewVerdict = Annotated[Literal["clean", "findings"], Field(description="A review run's verdict (DESIGN §21).")]
 type ReviewImpact = Annotated[
@@ -48,10 +48,6 @@ type ReviewDraftStatusName = Annotated[
         "`staged` in a pending review for them to submit on GitHub; `unconfirmed` until a read says whether it posted; "
         "`discarded` once they said it will not post.",
     ),
-]
-type DiffLineKind = Annotated[
-    Literal["add", "del", "ctx"],
-    Field(description="Whether a diff line is added, deleted, or context."),
 ]
 
 
@@ -154,50 +150,6 @@ class ReviewFinding(Model):
     """What the latest worker handed it answered: `fixed` or `declined`; None when none answered it."""
     answer_reason: str | None = None
     """The worker's reason for its answer, in its words: untrusted text. None when it gave none."""
-
-
-class DiffLine(Model):
-    """One line of a hunk, with its number on each side it is on."""
-
-    kind: DiffLineKind
-    """Whether it is added, deleted, or context."""
-    old: int | None = None
-    """Its number on the old side; None for an added line."""
-    new: int | None = None
-    """Its number on the new side; None for a deleted line."""
-    text: str
-    """The line's text, without its `+`, `-`, or space: untrusted."""
-
-
-class DiffHunk(Model):
-    """One hunk: what follows its `@@` ranges, such as a function's name, and its lines."""
-
-    header: str
-    """What follows the hunk's `@@` ranges, such as a function's name."""
-    lines: list[DiffLine]
-    """Its lines."""
-
-
-class DiffFile(Model):
-    """One file the commit changes. `old_path` when it was renamed; `binary` when git shows no lines for it."""
-
-    path: str
-    """The file's path in the repository."""
-    old_path: str | None = None
-    """Its path before, when it was renamed."""
-    binary: bool = False
-    """Whether git shows no lines for it."""
-    hunks: list[DiffHunk]
-    """Its hunks."""
-
-
-class ReviewDiff(Model):
-    """The reviewed commit's diff against where it leaves its base branch: the PR's own text, untrusted, and bounded."""
-
-    files: list[DiffFile]
-    """The files it changes."""
-    truncated: bool = False
-    """A bound left something out."""
 
 
 type ReviewDraftAuthorName = Annotated[

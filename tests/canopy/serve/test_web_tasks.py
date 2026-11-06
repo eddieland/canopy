@@ -7,8 +7,8 @@ the state directory as the CLI reads it.
 import json
 from pathlib import Path
 
-from canopy.core import cards, conversation, db, pools, records
-from canopy.core.checklist_answers import Answer, Checked
+from canopy.core import cards, checklist_answers, conversation, db, pools, records, review_diff
+from canopy.core.checklist_answers import Answer, Checked, Pushed
 from canopy.core.context import Context
 from canopy.core.vocab import ItemAnswer, PoolKind, RunStatus
 from canopy.runs import tasks
@@ -150,6 +150,28 @@ def test_a_task_runs_page_carries_its_checklist_answers_as_a_worker_runs_does(ba
         {"repo": "web", "item": "general-types", "answer": "pass", "reason": None},
     ]
     assert c.get(f"/api/tasks/{task.id}/runs/{bare}").json()["checklist"] == []
+
+
+def test_a_task_runs_page_carries_what_it_pushed_after_its_list_as_a_worker_runs_does(backend: Backend) -> None:
+    """Each stretch, with the diff kept beside its log, read as a review's is (DESIGN §42)."""
+    shown, pushed = "a1" * 20, "b2" * 20
+    checked = Checked(answers=(Answer("web", "newspaper", ItemAnswer.FIXED),), pushes=(Pushed("web", shown, pushed),))
+    with backend.open() as ctx:
+        task = submit(ctx)
+        run_id = start(ctx, task)
+        end(ctx, run_id, RunStatus.DONE, checklist=checked)
+        log_path = present(records.select(records.TaskRun).where("id = ?", run_id).one(ctx.conn)).log_path
+    kept = checklist_answers.diff_path(log_path, "web", shown)
+    kept.parent.mkdir(parents=True, exist_ok=True)
+    review_diff.keep(kept, "diff --git a/x.py b/x.py\n--- a/x.py\n+++ b/x.py\n@@ -1 +1 @@\n-a\n+b\n")
+    c = client(None, backend)
+    found = c.get(f"/api/tasks/{task.id}/runs/{run_id}").json()
+    [stretch] = found["checklist_stretches"]
+    assert (stretch["repo"], stretch["shown_sha"], stretch["pushed_sha"]) == ("web", shown, pushed)
+    assert [(f["path"], [ln["text"] for h in f["hunks"] for ln in h["lines"]]) for f in stretch["diff"]["files"]] == [
+        ("x.py", ["a", "b"]),
+    ]
+    assert found["checklist_stretches_left_out"] == 0
 
 
 def test_a_task_runs_transcript_is_read_back_from_its_log(backend: Backend) -> None:
