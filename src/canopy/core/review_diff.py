@@ -1,11 +1,11 @@
-"""A review run's diff, as the web UI's review page shows it (DESIGN §21, Reading reviews), and a run's (§29).
+"""A review run's diff, as the web UI's review page shows it (DESIGN §21, Reading reviews), and a run's (§29, §45).
 
 `_review` writes `git diff` of the reviewed commit against where it leaves its pool's base branch beside the run's log,
 `<id>.diff`. This reads it back and parses it into files, hunks, and numbered lines, and anchors each finding at its
 `path:line` when that line is in the diff. The diff is the PR's own text: untrusted, and unbounded until it is read.
 So the file is read only if it is a regular file and not a symlink, at most `MAX_BYTES` of it; control characters
 other than tabs become spaces; and files, lines, and each line's characters are cut at a bound, with `truncated` saying
-something was.
+something was. `text` reads a kept diff within the same bounds as git printed it, for a terminal.
 """
 
 from __future__ import annotations
@@ -81,6 +81,14 @@ class Diff:
     truncated: bool = False
 
 
+class Text(NamedTuple):
+    """A kept diff's lines as `text` reads them, for a terminal."""
+
+    lines: tuple[str, ...]
+    #: Whether a bound cut them.
+    truncated: bool
+
+
 def diff_args(fork: str, head: str) -> tuple[str, ...]:
     """The `git` arguments that take a diff to keep: `head` against `fork`, with no diff driver or textconv filter.
 
@@ -112,7 +120,7 @@ def keep(path: Path, diff: str) -> None:
 
 
 def run_path_for(log_path: str | Path, repo: str) -> Path:
-    """Where a worker run keeps one repository's diff at its pushed head (DESIGN §29): beside its log.
+    """Where a worker's or a task's run keeps a repository's branch against its base (DESIGN §45): beside its log.
 
     Returns:
         `<id>.<repo>.diff` beside `log_path`. The file may not exist.
@@ -160,23 +168,35 @@ def read(path: Path) -> Diff | None:
         The parsed diff, with `truncated` set when the file was longer than `MAX_BYTES` or a bound cut it, or None
         when the file cannot be opened or is not a regular file.
     """
-    try:
-        # Non-blocking, so a FIFO in the diff's place cannot hold the request open; it is refused below.
-        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-    except OSError:
+    found = _read_bounded(path)
+    if found is None:
         return None
-    if not stat.S_ISREG(os.fstat(fd).st_mode):
-        os.close(fd)
-        return None
-    with os.fdopen(fd, "rb") as f:
-        data = f.read(MAX_BYTES + 1)
-    truncated = len(data) > MAX_BYTES
-    if truncated:
-        # The last line read may be cut short; drop it.
-        data = data[: data.rfind(b"\n", 0, MAX_BYTES) + 1]
-    diff = parse(data.decode("utf-8", errors="replace"))
+    raw, truncated = found
+    diff = parse(raw)
     diff.truncated = diff.truncated or truncated
     return diff
+
+
+def text(path: Path) -> Text | None:
+    """Read the diff at `path` as git printed it, for a terminal, within the bounds `read` parses it in.
+
+    Each line is made printable as `read` makes it, and the lines stop where `read`'s files or lines would.
+
+    Returns:
+        Its lines, and whether a bound cut them; None when the file cannot be opened or is not a regular file.
+    """
+    found = _read_bounded(path)
+    if found is None:
+        return None
+    raw, truncated = found
+    parser = _Parser()
+    lines: list[str] = []
+    for line in raw.splitlines():
+        if not parser.feed(line):
+            truncated = True
+            break
+        lines.append(_clean(line))
+    return Text(tuple(lines), truncated=truncated)
 
 
 def parse(text: str) -> Diff:
@@ -230,6 +250,29 @@ def located(location: str) -> Location | None:
         return None
     line = int(found["line"]) if found["line"] is not None else None
     return Location(path, line, int(found["last"]) if found["last"] is not None else line)
+
+
+def _read_bounded(path: Path) -> tuple[str, bool] | None:
+    """Read at most `MAX_BYTES` of the regular file at `path`, never through a link, dropping a line cut short.
+
+    Returns:
+        The text, and whether the file was longer; None when it cannot be opened or is not a regular file.
+    """
+    try:
+        # Non-blocking, so a FIFO in the diff's place cannot hold the request open; it is refused below.
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:
+        return None
+    if not stat.S_ISREG(os.fstat(fd).st_mode):
+        os.close(fd)
+        return None
+    with os.fdopen(fd, "rb") as f:
+        data = f.read(MAX_BYTES + 1)
+    truncated = len(data) > MAX_BYTES
+    if truncated:
+        # The last line read may be cut short; drop it.
+        data = data[: data.rfind(b"\n", 0, MAX_BYTES) + 1]
+    return data.decode("utf-8", errors="replace"), truncated
 
 
 class _Parser:

@@ -6,7 +6,8 @@ design; the [README](README.md) has the map. Previous: [Messages to running agen
 
 ## 45. What a run changed
 
-Not yet built (ROADMAP M69); the code does not follow it until it is.
+The record, the kept diffs, and the CLI's view of them are built; the pages and the commits are not yet (ROADMAP M69),
+and the code does not follow those until they are.
 
 A run's result line says what its worker thinks it did; its branch on GitHub shows every commit anyone put there,
 rewritten by each flaky kick (§23). Neither says what this run changed. This section makes that a journal fact, read

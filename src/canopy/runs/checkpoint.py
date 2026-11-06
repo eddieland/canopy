@@ -154,6 +154,30 @@ def ensure_pushed(git: Git, branch: str, start: Start, log: logs.TickAdapter, *,
     return ""
 
 
+def left_work(git: Git, branch: str, start: Start) -> str | None:
+    """Return the last commit of the run's that `ensure_pushed` found not on origin: what a slot left unpushed holds.
+
+    That is HEAD, when it holds work past the start that origin's `branch` is not at, or else the newest of the commits
+    HEAD was moved off that neither HEAD nor origin holds, found as `ensure_pushed` finds them (DESIGN §45).
+
+    Returns:
+        The commit's full hash, or None when the slot holds no such commit.
+
+    Raises:
+        SetupError: a git step failed.
+    """
+    local = git.run("rev-parse", "HEAD")
+    remote = remote_head(git, branch)
+    if remote != local and not git.ok("merge-base", "--is-ancestor", local, start.commit):
+        return local
+    left = _left_behind(git, branch, start, remote)
+    # Newest first by date, which a commit made in its parent's second may not be: the first that no other builds on.
+    return next(
+        (c for c in left if not any(o != c and git.ok("merge-base", "--is-ancestor", c, o) for o in left)),
+        None,
+    )
+
+
 def rebase_for_kick(git: Git, branch: str, base: str, head: str) -> str:
     """Rebase `head`, where origin has `branch`, onto origin's `base`, making every commit again (DESIGN §23).
 

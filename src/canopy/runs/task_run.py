@@ -2,9 +2,10 @@
 
 Checks out the task's branch at a detached HEAD, or the base before one is pushed, runs `runtime.private_worker_cmd`
 with the task's prompt, parses the result line, verifies the push of the task's branch as a worker's run does, never
-with force whatever `trust.rebase` says (`unpushed` when it cannot), records the head the branch is at on origin, and
-tidies and returns the slot. The slot is returned on every exit path this process can see; a run whose `_task` died is
-closed by reconcile, and one the operator stops with `--now` by `canopy stop` (`end`).
+with force whatever `trust.rebase` says (`unpushed` when it cannot), records the head the branch is at on origin and
+what the run changed (`changes`, DESIGN §45), and tidies and returns the slot. The slot is returned on every exit path
+this process can see; a run whose `_task` died is closed by reconcile, and one the operator stops with `--now` by
+`canopy stop` (`end`), each keeping nothing of what it changed.
 
 What the run leaves besides its branch: its report, `.canopy-task-report.md` at the slot's root, which git there
 ignores, is kept in the state directory before the slot is returned, and the next run starts with a copy of the
@@ -40,18 +41,21 @@ from canopy.core import (
     plans,
     pools,
     progress,
+    run_changes,
     run_models,
     sandboxing,
 )
 from canopy.core.config import render_command
 from canopy.core.vocab import RunStatus
 from canopy.infra import logs, procs, stopping
-from canopy.runs import attachments, checklist_pushes, checkpoint, follow_ups, task_tickets, tasks, tidy
+from canopy.runs import attachments, changes, checklist_pushes, checkpoint, follow_ups, task_tickets, tasks, tidy
 from canopy.runs import task_starts as starts
 from canopy.runs.checkpoint import SetupError
 from canopy.runtime import project_config, servers, stdout
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from canopy.core import records
     from canopy.core.context import Context
 
@@ -98,6 +102,8 @@ class Outcome:
     tickets: task_tickets.Checked = field(default_factory=task_tickets.Checked)
     #: What the worker answered of each item of its repository's list, checked (DESIGN §42); None when it got none.
     checklist: checklist_answers.Checked | None = None
+    #: What the run changed in its slot, read as it ended (DESIGN §45); none for a run that read no slot.
+    changes: Sequence[run_changes.Change] = ()
 
     def result_json(self) -> str:
         """Return what `task_runs.result_json` stores: the validated result, the harness's note, and the refusals.
@@ -150,6 +156,9 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
         finally:
             # From here on a signal is ignored: returning the slot and closing the row must not be interrupted.
             stop.armed = False
+            if outcome.status is RunStatus.CRASHED and not outcome.changes:
+                # No git ran in its slot, or none past a step that failed: the journal says it kept nothing (§45).
+                outcome = replace(outcome, changes=run_changes.crashed([run.repo]))
             # Before the slot goes back, which removes the report from it (DESIGN §36).
             kept = keep_report(ctx, run, log)
             if kept:
@@ -165,6 +174,7 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
                 head=outcome.head,
                 tickets=outcome.tickets.recorded,
                 checklist=outcome.checklist,
+                changes=outcome.changes,
             )
             if not closed:
                 log.warning("task run was already closed; its outcome is not recorded", extra=fields)
@@ -334,6 +344,16 @@ def _work(ctx: Context, run: records.TaskRun, link: bytes | None, out: TextIO, l
     unpushed = checkpoint.ensure_pushed(git, run.branch, start, log, rebase=False)
     if unpushed:
         status, note = RunStatus.UNPUSHED, unpushed
+    changed = changes.keep(
+        git,
+        repo=run.repo,
+        base=run.base_branch,
+        branch=run.branch,
+        start=start,
+        pushed=not unpushed,
+        log_path=run.log_path,
+        log=log,
+    )
     listed = _keep_checklist_pushes(git, run, listed, log)
     head = checkpoint.remote_head(git, run.branch) or None
     forced = _forced(git, run.branch, start, head)
@@ -344,7 +364,7 @@ def _work(ctx: Context, run: records.TaskRun, link: bytes | None, out: TextIO, l
     note = "; ".join(n for n in (note, *checkpoint.unmarked(git, run.branch, start, run.base_branch, marks)) if n)
     if listed is not None:
         note = "; ".join(n for n in (note, listed.note()) if n)
-    return Outcome(status, parsed, note, head=head, tickets=tickets, checklist=listed)
+    return Outcome(status, parsed, note, head=head, tickets=tickets, checklist=listed, changes=(changed,))
 
 
 def _write_checklist(ctx: Context, run: records.TaskRun) -> None:
