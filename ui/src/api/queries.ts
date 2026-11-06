@@ -34,7 +34,7 @@ export const keys = {
     chores: ['chores'] as const,
     epics: ['epics'] as const,
     epic: (id: number) => ['epic', id] as const,
-    // Under the epic's, so whatever marks an epic stale marks its plans stale too: a plan run's end changes both.
+    // Under the epic's, so the stream's `epic.changed` marks its plans stale too: a plan run's end changes both.
     epicPlans: (id: number) => ['epic', id, 'plans'] as const,
     tasks: ['tasks'] as const,
     // A task's page, and its runs' reports, pages, and transcripts under it, so the stream's `task.changed` marks
@@ -384,7 +384,10 @@ export const choresQuery = queryOptions({
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/chores', { signal })),
 })
 
-/** Every epic the operator submitted, the newest first, as `canopy epic list` lists them. */
+/**
+ * Every epic the operator submitted, the newest first, as `canopy epic list` lists them. The stream sends the list
+ * again whenever it changes.
+ */
 export const epicsQuery = queryOptions({
     queryKey: keys.epics,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/epics', { signal })),
@@ -392,7 +395,7 @@ export const epicsQuery = queryOptions({
 
 /**
  * One epic, as `canopy show epic:N` prints it: its members, its plan runs and replies, and its breakdown read as data.
- * No stream event names an epic yet: its page reads it as it opens, once what it read last has gone stale.
+ * The stream marks it stale, with its plans, when it says that epic changed.
  */
 export function epicQuery(id: number) {
     return queryOptions({

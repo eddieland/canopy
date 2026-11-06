@@ -22,6 +22,7 @@ from canopy.serve.schema import (
     WorkerNotice,
 )
 from canopy.serve.schema.chore import ChoreSummary
+from canopy.serve.schema.epic import EpicSummary
 from canopy.serve.schema.review import RequestedReview, ReviewSummary
 from canopy.serve.schema.spend import Spend
 from canopy.serve.schema.task import TaskSummary
@@ -79,6 +80,24 @@ class TaskChanged(Model):
     """What the event is."""
     id: int
     """The task's id, as `task:N` names it."""
+
+
+class EpicsUpdated(Model):
+    """The epics changed: one was submitted or stopped, its plan run started or ended, or its members changed. Whole."""
+
+    type: Literal["epics.updated"] = "epics.updated"
+    """What the event is."""
+    epics: list[EpicSummary]
+    """The epics, as `GET /epics` returns them."""
+
+
+class EpicChanged(Model):
+    """Something about one epic changed, its summary or its replies: a page showing it, or its plans, reads it again."""
+
+    type: Literal["epic.changed"] = "epic.changed"
+    """What the event is."""
+    id: int
+    """The epic's id, as `epic:N` names it."""
 
 
 class ReviewsUpdated(Model):
@@ -163,6 +182,8 @@ class StreamEvent(
             | ChoresUpdated
             | TasksUpdated
             | TaskChanged
+            | EpicsUpdated
+            | EpicChanged
             | ReviewsUpdated
             | ReviewRequestsUpdated
             | SpendUpdated
