@@ -193,11 +193,14 @@ def test_a_runs_page_names_the_model_canopy_asked_for_while_it_runs_before_its_s
     assert c.get(f"/api/runs/{ran.id}").json()["model"] is None
 
 
+@pytest.mark.parametrize("version", [1, 2])
 def test_a_transcript_names_each_calls_model_once_canopy_reads_a_session_two_models_served(
     scenario: Scenario,
     opencode_state: Path,
     ctx: Context,
+    version: int,
 ) -> None:
+    scenario.configures(runtime={"version": version})
     with_events(scenario.env, "canopy-overseer")
     # The fake overseer's two calls write replies `msg_1` and `msg_2`, which the session's record names the models of.
     served = [["anthropic", "claude-x", 0.25], ["openai", "gpt-y", 0.5]]
