@@ -185,14 +185,14 @@ describe('RailWorking', () => {
         expect(router.state.location.pathname).toBe('/tasks/6/runs/8')
     })
 
-    it('lists four, then how many more, which opens the runs page; the count is of them all', async () => {
+    it('lists three, then how many more, which opens the runs page; the count is of them all', async () => {
         const runs = [1, 2, 3, 4, 5, 6].map((n) => running(n, n))
         const { router } = await renderRouted(<RailWorking />, { client: rail(runs) })
         const working = screen.getByRole('region', { name: 'Working' })
-        expect(within(working).getAllByRole('link', { name: /^ABC-/u })).toHaveLength(4)
+        expect(within(working).getAllByRole('link', { name: /^ABC-/u })).toHaveLength(3)
         expect(within(working).getByText('6')).toBeDefined()
 
-        await follow(within(working).getByRole('link', { name: '+2 more' }))
+        await follow(within(working).getByRole('link', { name: '+3 more' }))
         expect(router.state.location.href).toBe('/workspace/runs')
     })
 })

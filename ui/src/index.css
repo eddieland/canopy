@@ -769,6 +769,7 @@
             var(--section-attention),
             var(--section-tickets),
             var(--section-tasks),
+            var(--section-epics),
             var(--section-pull-requests),
             var(--section-workspace),
             var(--section-chores),

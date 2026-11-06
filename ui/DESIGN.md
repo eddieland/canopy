@@ -83,11 +83,12 @@ Rules:
   claims it.
 - **Section colors**, one per section, each taken from something its page is about, so the color says what the page
   is for (`src/lib/sections.ts`): Attention rose, an alarm light; Tickets sky, a message bubble; Tasks chartreuse, a
-  new shoot, yellow-green before it is `status-running`'s emerald; Pull requests violet, the purple a merged PR turns;
-  Workspace indigo, the night shift; Chores orange, a hi-vis vest; Reports gold, coins; Memory pale azure, the
-  forget-me-not, which shares done's hue at no cost since its page shows no run state; Settings slate, the machinery,
-  worn on its trail alone since it sits in the rail's footer. A new section takes a color the same way, and stays apart
-  from its neighbours in the nav and from the status colors on its own page; eight nav hues, five statuses, and the
+  new shoot, yellow-green before it is `status-running`'s emerald; Epics fuchsia, a transit map's route line, one line
+  tying many stops together; Pull requests violet, the purple a merged PR turns; Workspace indigo, the night shift;
+  Chores orange, a hi-vis vest; Reports gold, coins; Memory pale azure, the forget-me-not, which shares done's hue at
+  no cost since its page shows no run state; Settings slate, the machinery, worn on its trail alone since it sits in
+  the rail's footer. A new section takes a color the same way, and stays apart
+  from its neighbours in the nav and from the status colors on its own page; nine nav hues, five statuses, and the
   accent leave the wheel full, so a new one may mean moving another. They go on the nav's icons, highlight, and active
   label, the hairline beside the pages open under a section, the first step of the page header's trail, and the
   header's aurora and name, and nowhere in a page's data: there a color is a state's. A page in no section (the 404)
@@ -198,11 +199,11 @@ Rules:
   Settings, opened least, is in the footer, since each nav item is height the sticky part has none to spare of in an
   800px window. The pages under a section open under its item while it is the section shown, `muted-foreground` rows
   on a hairline in the section's color, so the rail says where a page is; elsewhere they stay folded, so the nav keeps
-  its eight rows. Each nav item says on hover what its page holds, and each spend window what it covers. What is
+  its nine rows. Each nav item says on hover what its page holds, and each spend window what it covers. What is
   working is every agent run running, then the worker runs waiting on the operator's answer, each oldest first, a
   ticket's latest run alone: its state's dot, what it works on, how long it has run (or `waiting on you` in
   `status-blocked`, the whole row on a question's tint so it shows from across the room), and under it what names it,
-  opening the run's page; at most four, then `+N more` to the page of the rest, so the sticky part fits an 800px
+  opening the run's page; at most three, then `+N more` to the page of the rest, so the sticky part fits an 800px
   window. The spend is the last 24 hours and the last 30 days, from the stream, two rows set alike so neither reads as
   a different kind of figure, the figures right-aligned readouts so they line up at four digits as at one; the 30 days
   is shown nowhere else but what Fun buys with the lifetime total. The foot sits at the foot of the sticky column, so
@@ -694,6 +695,10 @@ reader, so no table repeats them.
   `OrderToggle`. Above it, a `Submit a task` panel (`TaskSubmitForm`) on one line, as the reviews page's `Review a PR`
   is; on success a toast says what the CLI says and the form opens the task's page; the row arrives on the stream,
   never added by the page.
+- **The epics list**: where the epic stands (`EPIC_LOOK` in `src/lib/epics.ts`, each standing a run state's dot and
+  color by what it means: a proposed plan `waiting on you` in blocked's, one stuck without a plan in failed's),
+  `epic:N`, its repositories, its goal's first line in the free column, how many of its breakdown's entries are filed,
+  and the age, newest first.
 - **A task** (`/tasks/$id`) is one story: its title `task:N` and its text's first line, its description where it
   stands, then the detail skeleton, with the story as its thread: a Conversation panel (`TaskStory`) whose oldest end
   is the operator's instruction, whole, as their own bubble, then its messages, each naming its run as `task:4#5`, which

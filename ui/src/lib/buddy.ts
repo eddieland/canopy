@@ -76,6 +76,14 @@ export const TIPS = {
         'Hot take: every big feature starts as a task. Every sprout starts as me.',
         'Did you know? A task that pushes nothing has not failed. Sometimes I also do nothing, successfully.',
     ],
+    '/epics/': [
+        "It looks like you're planning something big. Would you like me to file it all as one ticket?",
+        'Fun fact: an epic is a ticket that brought friends.',
+        'Unhelpful tip: B1 comes before B2. Except when it comes after. That is what after is for.',
+        'Dear diary, the operator approved one plan for the whole thing. I have never had a plan.',
+        'Hot take: a requirement with an id is a promise with a receipt.',
+        'Haiku: one goal, many stops / a line drawn across the map / I am the next stop',
+    ],
     '/tasks/$id': [
         "It looks like you're reading a report. Would you like me to skim it and nod?",
         'Unhelpful tip: copy the commit, not the branch. Branches move. I would know, I am mostly branch.',

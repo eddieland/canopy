@@ -32,6 +32,7 @@ export const keys = {
     ticketPlans: (key: string) => ['ticket', key, 'plans'] as const,
     ticketPlan: (key: string, id: number) => ['ticket', key, 'plans', id] as const,
     chores: ['chores'] as const,
+    epics: ['epics'] as const,
     tasks: ['tasks'] as const,
     // A task's page, and its runs' reports, pages, and transcripts under it, so the stream's `task.changed` marks
     // them all stale: a run that started, called a model, or ended moves its task's summary.
@@ -378,6 +379,12 @@ export function ticketPlanQuery(key: string, id: number) {
 export const choresQuery = queryOptions({
     queryKey: keys.chores,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/chores', { signal })),
+})
+
+/** Every epic the operator submitted, the newest first, as `canopy epic list` lists them. */
+export const epicsQuery = queryOptions({
+    queryKey: keys.epics,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/epics', { signal })),
 })
 
 /** Every task the operator submitted, the newest first. The stream sends the list again whenever it changes. */

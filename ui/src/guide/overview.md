@@ -137,7 +137,7 @@ asks you a question reads `asks you` in amber where its age would be, though it 
 what it's doing under its ticket's title: `planning`, `implementing`, `fixing CI`. While it works, that comes as a
 quip of the ticket's own, `appeasing CI`; hover it for the plain words, or turn the quips off in [Settings](settings).
 Each
-row opens its run's page. It shows four rows at most, then `+N more`, which opens the page that lists the rest, and
+row opens its run's page. It shows three rows at most, then `+N more`, which opens the page that lists the rest, and
 it dims while the loop isn't answering, since what it shows may have ended. The 24 hours open the spend page by the
 hour, and the 30 days by the day. A ticket you stopped drops out once its run ends; a question it left behind waits
 on nothing, so it is not listed either. Under the spend, the rail's foot names the version canopy is serving, which

@@ -6,6 +6,7 @@ import type {
     Capacity,
     ChoreSummary,
     Draft,
+    EpicSummary,
     FeedbackPlan,
     FeedbackPlanItem,
     HostResources,
@@ -262,6 +263,54 @@ export function mockTaskRun(fields: Partial<TaskRun> = {}): TaskRun {
         ...fields,
     }
 }
+
+/** The mock journal's three epics, the newest first as `GET /api/epics` sends them: planning, proposed, approved. */
+export const mockEpics: EpicSummary[] = [
+    {
+        id: 3,
+        text: 'Replace the feature flags read from the `flags` table with the flags service, in api and web.',
+        repos: ['api', 'web'],
+        project: null,
+        tracker_epic: null,
+        channel: 'cli',
+        submitted_at: '2026-10-08T11:57:00Z',
+        standing: 'planning',
+        members: 0,
+        entries: null,
+        entries_with_members: 0,
+    },
+    {
+        id: 2,
+        text:
+            "Show a customer's order history in the mobile app when it is offline, as of their last sync. The web " +
+            'account page has the same list; keep the two in step.',
+        repos: ['mobile', 'web'],
+        project: 'ABC',
+        tracker_epic: null,
+        channel: 'web',
+        submitted_at: '2026-10-08T07:40:00Z',
+        standing: 'proposed',
+        members: 0,
+        entries: 3,
+        entries_with_members: 0,
+    },
+    {
+        id: 1,
+        text:
+            'Move billing to the v2 API everywhere it is called, web and mobile both, and retire v1 once nothing ' +
+            'reads it.\n\nv2 is down for a minute or two most weeks, so a call that fails should wait and try again ' +
+            "rather than show the customer an error. Keep the invoices' numbers exactly as they are.",
+        repos: ['api', 'web', 'mobile'],
+        project: 'ABC',
+        tracker_epic: null,
+        channel: 'cli',
+        submitted_at: '2026-10-08T00:00:00Z',
+        standing: 'approved',
+        members: 3,
+        entries: 4,
+        entries_with_members: 2,
+    },
+]
 
 /** Four tasks, the newest first as `GET /api/tasks` sends them: queued, running, waiting on a reply, and done. */
 export const mockTasks: TaskSummary[] = [

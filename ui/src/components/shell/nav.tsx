@@ -9,6 +9,7 @@ import {
     Inbox,
     MessagesSquare,
     Sprout,
+    Waypoints,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Fragment } from 'react'
@@ -84,6 +85,11 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string; pages?: SubPage[] }[
         hint: 'One-off work you handed canopy in your own words, about no ticket, and a form to submit one',
     },
     {
+        to: '/epics',
+        icon: Waypoints,
+        hint: 'Goals that span tickets: each epic, where its plan stands, and how many of its entries are filed',
+    },
+    {
         to: '/pull-requests',
         icon: GitPullRequest,
         hint: "Every PR canopy knows, the loop's own and the ones it reviewed, and canopy's reviews of them",
@@ -148,6 +154,7 @@ const SECTION_ACTIVE_INK: Record<Section, string> = {
     '/workspace': 'data-[status=active]:text-[color:var(--nav-on-ink,var(--nav-label-workspace))]',
     '/tickets': 'data-[status=active]:text-[color:var(--nav-on-ink,var(--nav-label-tickets))]',
     '/tasks': 'data-[status=active]:text-[color:var(--nav-on-ink,var(--nav-label-tasks))]',
+    '/epics': 'data-[status=active]:text-[color:var(--nav-on-ink,var(--nav-label-epics))]',
     '/pull-requests': 'data-[status=active]:text-[color:var(--nav-on-ink,var(--nav-label-pull-requests))]',
     '/chores': 'data-[status=active]:text-[color:var(--nav-on-ink,var(--nav-label-chores))]',
     '/reports': 'data-[status=active]:text-[color:var(--nav-on-ink,var(--nav-label-reports))]',

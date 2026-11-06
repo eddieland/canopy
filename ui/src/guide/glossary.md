@@ -146,6 +146,34 @@ Where your tickets live, such as Jira or GitHub Issues. canopy reaches it only t
 A ticket or run whose worker stopped to ask you something. Not the same as `blocked`, which is a phase: another ticket
 holds this one up.
 
+## Epics
+
+### Contract
+
+`C1`, `C2`, ...: what one ticket of an epic provides another, by its id in the epic's plan, with who provides it and
+who uses it. The seam two tickets must agree on before either is built. See [Epics](epics#its-plan).
+
+### Entry
+
+`B1`, `B2`, ...: one ticket's worth of an epic's breakdown, with the requirements it covers, the contracts it provides
+and uses, its repositories, and what it comes after. A member is registered against the entries it fulfils. See
+[Epics](epics#its-members).
+
+### Epic
+
+Work that spans several tickets: your goal in your own words, one plan for the whole that you approve once, and its
+member tickets, each planned against it. `epic:N` names it. Being a member authorizes no work. See [Epics](epics).
+
+### Requirement
+
+`R1`, `R2`, ...: one thing an epic's plan must deliver, traced to your words, by an id that keeps its meaning from one
+plan to the next. See [Epics](epics#its-plan).
+
+### Tracker epic
+
+The tracker's own epic, such as a Jira epic. It is never one of canopy's by itself, and a ticket under it is never a
+member of an epic until you add it: a link in the tracker is data, not your say-so.
+
 ## Runs and worktrees
 
 ### Attempt limit
