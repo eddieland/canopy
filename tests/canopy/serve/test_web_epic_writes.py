@@ -7,12 +7,15 @@ the page read it, so a file changed since is refused rather than approved unseen
 
 from pathlib import Path
 
+import pytest
+from fastapi.testclient import TestClient
+
 from canopy.core import epics
 from canopy.core.vocab import PlanStatus
 from canopy.serve.backend import Backend
 from canopy.serve.mock import epics as mock_epics
 from tests.canopy.helpers import in_run, present
-from tests.canopy.web_helpers import refused, replan_epic, signed_in_to, start_epic_run
+from tests.canopy.web_helpers import client, refused, replan_epic, signed_in_to, start_epic_run
 
 APPROVED, PROPOSED, PLANNING = mock_epics.APPROVED, mock_epics.PROPOSED, mock_epics.PLANNING
 #: A reply's form, with the submission id it drew.
@@ -42,6 +45,37 @@ def test_the_mock_epics_plan_is_approved_from_the_web_and_its_breakdown_is_the_b
     # Approved once: approving it again finds no plan waiting.
     again = c.post(route, json={"read_sha256": read["sha256"]}, headers=headers)
     assert refused(again) == f"no_plan: no plan of epic:{PROPOSED} waits on you; reply to it to ask for one"
+
+
+def epic_items(c: TestClient) -> list[tuple[str, str, int | None, str | None]]:
+    """The epics' items on the attention list: reason, subject, epic, and ticket."""
+    listed = c.get("/api/attention").json()
+    return [(i["reason"], i["subject"], i["epic"], i["ticket_key"]) for i in listed if i["epic"] is not None]
+
+
+def test_the_mock_epics_plan_waits_on_attention_naming_the_epic(backend: Backend) -> None:
+    """The proposed epic's plan is a `plan_review` about the epic, for its plan's page, never its goal's text."""
+    c = client(None, backend)
+    assert epic_items(c) == [("plan_review", f"epic:{PROPOSED}", PROPOSED, None)]
+    [item] = [i for i in c.get("/api/attention").json() if i["epic"] == PROPOSED]
+    assert item["task"] is None
+    with backend.open() as ctx:
+        goal = present(epics.get(ctx.conn, PROPOSED)).text
+    assert goal.splitlines()[0] not in item["detail"]
+
+
+@pytest.mark.parametrize("answer", ["approval", "reply", "stop"])
+def test_an_answer_from_the_web_takes_the_epics_plan_off_attention(backend: Backend, answer: str) -> None:
+    """Approving the plan, asking for changes, or stopping the epic: nothing waits on the operator then."""
+    c, headers = signed_in_to(backend)
+    sha256 = c.get(f"/api/epics/{PROPOSED}/plans").json()["plans"][-1]["sha256"]
+    route, body = {
+        "approval": (f"/api/epics/{PROPOSED}/plan/approval", {"read_sha256": sha256}),
+        "reply": (f"/api/epics/{PROPOSED}/replies", REPLY),
+        "stop": (f"/api/epics/{PROPOSED}/stop", {"now": False}),
+    }[answer]
+    assert c.post(route, json=body, headers=headers).status_code == 200
+    assert epic_items(c) == []
 
 
 def test_a_re_approval_says_the_ids_it_added_removed_and_changed(backend: Backend) -> None:

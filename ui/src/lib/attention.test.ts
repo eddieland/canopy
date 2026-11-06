@@ -34,6 +34,7 @@ const item = (id: string, reason: string, since: string, finding = false): Atten
     finding,
     pr: null,
     task: null,
+    epic: null,
     run: null,
     review: null,
 })
@@ -246,6 +247,17 @@ describe('ask', () => {
         }
         expect(ask(task)).toBe('task')
         expect(ask({ ...task, reason: 'task_ticket_unrecorded' })).toBe('task')
+    })
+
+    it("leads an epic's plan to its plan's page, not to a ticket's plan card or the commands its detail names", () => {
+        const epic = {
+            ...item('epic:2', 'plan_review', at),
+            ticket_key: null,
+            epic: 2,
+            detail: "epic:2's plan 3, from run 3, waits on your approval: read it with `canopy show epic:2`",
+        }
+        expect(ask(epic)).toBe('epic')
+        expect(feedbackPlanReview(epic)).toBe(false)
     })
 
     it("answers a running run's question here, by letter, about its ticket or none", () => {

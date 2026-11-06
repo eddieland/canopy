@@ -29,11 +29,13 @@ MAX_LINES = 20
 # Events older than this when a sink next succeeds are counted, not listed.
 STALE_EVENTS = timedelta(hours=24)
 _DONE_LISTED = 10
-# The attention list's subjects that are not tickets: a chore, by `chore:<name>`, a PR, by `pr:<url>`, and a one-off
-# task, by `task:<id>`, which has no page of its own yet (DESIGN §36).
+# The attention list's subjects that are not tickets: a chore, by `chore:<name>`, a PR, by `pr:<url>`, a one-off
+# task, by `task:<id>`, which has no page of its own yet (DESIGN §36), and an epic, by `epic:<id>`, whose one item is
+# its plan waiting on the operator (§43).
 _CHORE = "chore:"
 _PR = "pr:"
 _TASK = "task:"
+_EPIC = "epic:"
 #: How a `ci.flaky` event's `cause` reads in its line: the worker's estimate, so hedged.
 _CAUSES = {
     FlakyCause.TEST: "likely a flaky test",
@@ -158,7 +160,7 @@ def _flaky_line(f: Mapping[str, object]) -> str:
 
 
 def item_page(ui: str | None, ticket_key: str | None) -> str | None:
-    """The web UI's page for an attention item's subject: its ticket's, chore's, or PR's, else the attention list.
+    """The web UI's page for an attention item's subject: its ticket's, chore's, PR's, or epic's plan's, else the list.
 
     Returns:
         The page's URL under `ui`, or None when `ui` is None.
@@ -169,6 +171,8 @@ def item_page(ui: str | None, ticket_key: str | None) -> str | None:
         return page(ui, "chores", ticket_key.removeprefix(_CHORE))
     if ticket_key.startswith(_PR):
         return page(ui, "pull-requests", "pr", query=ticket_key.removeprefix(_PR))
+    if ticket_key.startswith(_EPIC):
+        return page(ui, "epics", ticket_key.removeprefix(_EPIC), "plan")
     return page(ui, "tickets", ticket_key)
 
 

@@ -382,6 +382,7 @@ async function listItem(page: Page, reason: string, detail: string) {
                     chore: null,
                     pr: null,
                     task: null,
+                    epic: null,
                     run: null,
                     review: null,
                     repo: null,

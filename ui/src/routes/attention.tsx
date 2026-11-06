@@ -9,6 +9,8 @@ import type { AnswerTarget } from '@/api/mutations'
 import {
     attentionQuery,
     choreQuery,
+    epicQuery,
+    epicsQuery,
     pullRequestQuery,
     reviewQuery,
     runQuery,
@@ -26,6 +28,7 @@ import { ChoreLink } from '@/components/chore-link'
 import { ChoreNotes } from '@/components/chore-notes'
 import { Copyable } from '@/components/copy-button'
 import { useDismissFinding } from '@/components/dismiss-finding'
+import { EpicLink } from '@/components/epic-link'
 import { FeedbackPlanWaits } from '@/components/feedback-plan-card'
 import { GrantLimits } from '@/components/grant-limits'
 import { Leaf } from '@/components/leaf'
@@ -71,10 +74,11 @@ import {
 import type { Ask, Severity } from '@/lib/attention'
 import { useFindingsHidden } from '@/lib/attention-findings'
 import { counted } from '@/lib/descriptions'
+import { epicTitle } from '@/lib/epics'
 import { onGitHub } from '@/lib/links'
 import { reasonMeaning } from '@/lib/meanings'
 import { pullRequestLabel } from '@/lib/pull-request-label'
-import { reviewRef, taskRef } from '@/lib/refs'
+import { epicRef, reviewRef, taskRef } from '@/lib/refs'
 import { taskTitle } from '@/lib/tasks'
 import type { Tone } from '@/lib/tone'
 import { cn } from '@/lib/utils'
@@ -447,7 +451,10 @@ function Row({
     )
 }
 
-/** What a row of the list says: the item's reason, its subject and age, its ticket's or task's title, its detail. */
+/**
+ * What a row of the list says: the item's reason, its subject and age, its ticket's or task's title or its epic's goal,
+ * its detail.
+ */
 function RowContent({ item, done }: { item: AttentionItem; done: boolean }) {
     return (
         <>
@@ -464,6 +471,7 @@ function RowContent({ item, done }: { item: AttentionItem; done: boolean }) {
             {/* The title is the row's name and the detail its preview, as an inbox's subject over its first line. */}
             {item.ticket_key !== null && <TicketTitle title={item.ticket_title} className="font-semibold" />}
             {item.task !== null && <TaskTitle id={item.task} />}
+            {item.epic !== null && <EpicGoal id={item.epic} />}
             <span className="line-clamp-2 text-sm break-words text-muted-foreground">
                 <InlineCode text={shownDetail(item)} links={false} />
             </span>
@@ -496,7 +504,8 @@ function Answered() {
  * actions and grants under them, or ahead of them when the reason asks for nothing else; a chore's item its notes and
  * the form for another, and for a finding the button to dismiss it; a review's draft's item the review's page, where
  * the draft is read and published; a running run's question, by letter, as its page answers it, before its ticket's
- * conversation when it has a ticket; a task's item the task's page, where it is read and answered; a PR's other item
+ * conversation when it has a ticket; a task's item the task's page, where it is read and answered; an epic's plan its
+ * plan's page, where it is read, approved, or sent back; a PR's other item
  * its review limit and its grant, for a PR no ticket owns; an item about none of them, what it says. `ticket` is the
  * item's ticket as the tickets list has it, which tells a feedback plan's `plan_review` from a ticket plan's.
  * `onReplied` hears each reply sent from it, with what the form said of it.
@@ -542,6 +551,7 @@ function Detail({
             {item.chore !== null && <ChoreThread name={item.chore} />}
             {asks === 'review' && <ReviewAction item={item} />}
             {item.task !== null && <TaskAction item={item} task={item.task} />}
+            {asks === 'epic' && item.epic !== null && <EpicAction epic={item.epic} />}
             {item.pr !== null && asks !== 'review' && <PullRequestLimits url={item.pr} />}
             {asks === 'none' && item.ticket_key === null && item.chore === null && item.pr === null && (
                 <NothingToAnswer />
@@ -564,6 +574,9 @@ function ItemHead({ item, asks, done }: { item: AttentionItem; asks: Ask; done: 
     }
     if (item.reason === 'awaiting_reply' && item.task !== null) {
         return <TaskAwaitingHead item={item} task={item.task} done={done} />
+    }
+    if (asks === 'epic' && item.epic !== null) {
+        return <EpicPlanHead item={item} epic={item.epic} done={done} />
     }
     if (asks === 'question') {
         return <QuestionHead item={item} done={done} />
@@ -719,6 +732,28 @@ function TaskAwaitingHead({ item, task, done }: { item: AttentionItem; task: num
 }
 
 /**
+ * An epic's plan's head: as a task's question's, naming the plan and when it was written rather than the `canopy`
+ * commands its detail names, since its page holds the plan and its answers. Until the epic is read the line is
+ * reserved; once its plan waits no more, the item's detail stands in.
+ */
+function EpicPlanHead({ item, epic, done }: { item: AttentionItem; epic: number; done: boolean }) {
+    const { data } = useQuery(epicQuery(epic))
+    if (data === undefined) {
+        return <Head item={item} done={done} body={<Skeleton className="h-5 w-72 max-w-full" />} />
+    }
+    const plan = data.plan
+    if (plan?.status !== 'proposed') {
+        return <Head item={item} done={done} />
+    }
+    const body = (
+        <p className="text-sm" data-testid="epic-plan-line">
+            Its plan {plan.id} waits on your approval, written <Age at={plan.created_at} variant="ago" />.
+        </p>
+    )
+    return <Head item={item} done={done} body={body} />
+}
+
+/**
  * A running run's question's head: as any item's, but naming whose question it is and when it was asked rather than
  * saying it, as a ticket's question's does, since the question is under it with its options (ui/DESIGN.md, "One home
  * per fact").
@@ -843,6 +878,14 @@ function Subject({ item }: { item: AttentionItem }) {
             <>
                 <TaskLink id={item.task} className="shrink-0" />
                 <TaskTitle id={item.task} />
+            </>
+        )
+    }
+    if (item.epic !== null) {
+        return (
+            <>
+                <EpicLink id={item.epic} className="shrink-0" />
+                <EpicGoal id={item.epic} />
             </>
         )
     }
@@ -1042,6 +1085,33 @@ function TaskTitle({ id }: { id: number }) {
     }
     const task = data.find((t) => t.id === id)
     return <TicketTitle title={task === undefined ? null : taskTitle(task.text)} className="font-semibold" />
+}
+
+/** An epic's goal's first line, as its row in the epics list names it, from that list. */
+function EpicGoal({ id }: { id: number }) {
+    const { data } = useQuery(epicsQuery)
+    if (data === undefined) {
+        return <Skeleton className="h-5 w-48 max-w-full" />
+    }
+    const epic = data.find((e) => e.id === id)
+    return <TicketTitle title={epic === undefined ? null : epicTitle(epic.text)} className="font-semibold" />
+}
+
+/**
+ * An epic's plan waiting on the operator (DESIGN §43): its plan's page, where its text is read, commented on, and
+ * approved or sent back. Only the operator approves an epic's plan, so it is one tab stop from here.
+ */
+function EpicAction({ epic }: { epic: number }) {
+    return (
+        <div className="flex flex-wrap items-center gap-2 border-b p-3" data-testid="attention-epic">
+            <Button asChild variant="outline">
+                <Link to="/epics/$id/plan" params={{ id: String(epic) }}>
+                    <FileText />
+                    Open {epicRef(epic)}&apos;s plan
+                </Link>
+            </Button>
+        </div>
+    )
 }
 
 /**

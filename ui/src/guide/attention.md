@@ -134,6 +134,11 @@ Under its head, an item leads with whatever its reason asks of you, so the thing
   to its page, where its question waits, marked, and where you answer it
   ([Replying and stopping](tasks#replying-and-stopping)). The other item, tickets its run reported that canopy
   couldn't record, opens the task too: a reply or a stop clears it.
+- **An epic's plan** (`plan review`, on `epic:N`): named by your goal's first line, with the plan's number and how long
+  ago it was written, and a button to [its plan's page](epics#an-epics-plan), where you read it and approve it or ask
+  for changes. It waits while the plan is proposed and no plan run of the epic is working. Approving clears it, a reply
+  clears it until the next plan, and so does [stopping the epic](epics#stopping-one), though you can still approve its
+  plan from that page. Your notification sinks hear `epic:N` and the plan's number, never your goal or the plan.
 - **A model that's gone** (`model missing`, `model list failed`): the ticket's models, the same menus its page
   shows ([Choosing a model](tickets#choosing-a-model)). The runtime's list is read afresh as the item opens, not the
   one canopy kept, so the agent whose model dropped off it is already red: pick one it lists, or clear the override.

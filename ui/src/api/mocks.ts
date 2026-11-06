@@ -140,6 +140,7 @@ export const mockAttention: AttentionItem[] = [
         finding: false,
         pr: null,
         task: null,
+        epic: null,
         run: null,
         review: null,
     },

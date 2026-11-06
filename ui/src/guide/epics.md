@@ -48,8 +48,9 @@ uses, its repositories, and what it comes after; its decisions; and what is out 
 no ticket's steps, which each ticket's own plan writes just before it is built.
 
 The ids are the one part of the plan canopy reads, and they never change meaning, so a later plan can say what it
-changed by id. You approve the plan from its page, or ask for changes there (`canopy plan epic:N --approve` and
-`canopy reply epic:N "TEXT"` in a terminal), and the next tick plans again with your reply. Its plan runs count against
+changed by id. A plan waiting on you is on [Attention](attention), as `plan review` on `epic:N`. You approve the plan
+from its page, or ask for changes there (`canopy plan epic:N --approve` and `canopy reply epic:N "TEXT"` in a
+terminal), and the next tick plans again with your reply. Its plan runs count against
 `policy.max_plan_attempts` and are never reset, so a planner that can't land one stops rather than burning the budget
 on its fortieth try.
 

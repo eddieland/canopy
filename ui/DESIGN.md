@@ -855,12 +855,13 @@ reader, so no table repeats them.
   it, each option a button that answers by letter; a toast says what the answer did, since the item leaves with it.
   Memory's items: the proposals or lessons they name, with their verbs. Drafts a run left: an outline link to where
   they sit. A task's: `task:N` and its text's first line, then an outline link to the task's page, which holds its
-  question and its answer, never the `canopy` commands its detail names. A ticket's run refused its model: the ticket's
-  models, the runtime's list read fresh as the item opens, so the model it no longer lists is marked already. An item
-  about nothing the page shows whose detail names a `canopy` command: the command, `Copyable`, and nothing to answer. A
-  ticket's item then shows its answer (below), with the ticket's own verbs and any other limit as a quiet row under the
-  reply; on a reason that is not about the ticket's thread the verbs and the limit lead, under the head, as what it
-  asks.
+  question and its answer, never the `canopy` commands its detail names. An epic's plan: `epic:N` and its goal's first
+  line, then an outline link to its plan's page, where it is read and approved. A ticket's run refused its model: the
+  ticket's models, the runtime's list read fresh as the item opens, so the model it no longer lists is marked already.
+  An item about nothing the page shows whose detail names a `canopy` command: the command, `Copyable`, and nothing to
+  answer. A ticket's item then shows its answer (below), with the ticket's own verbs and any other limit as a quiet
+  row under the reply; on a reason that is not about the ticket's thread the verbs and the limit lead, under the head,
+  as what it asks.
   A chore's item shows the chore's notes and the note form, and a finding a ghost `dismiss` beside its age and, in
   place of its detail, the finding as its chore's page has it. The page keeps no list of the runs working now: the
   rail's, on every page, is the one, so one count of them shows at a time.

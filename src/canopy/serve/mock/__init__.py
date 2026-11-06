@@ -48,6 +48,7 @@ from canopy.core.context import db_path
 from canopy.core.items import Item
 from canopy.core.vocab import Decider, NumberedItem, PassReason, ReviewItem, RunKind, RunStatus
 from canopy.infra import resources
+from canopy.runs import epic_runs
 from canopy.runtime.report import ModelList
 from canopy.serve.backend import Backend, Granted, Limit, Reloading
 from canopy.serve.mock import (
@@ -513,8 +514,8 @@ def _attention(ctx: Context) -> list[Item]:
     """The fixtures' list, less a finding the operator dismissed, as `loop.attention.listed` leaves one out.
 
     Returns:
-        `ATTENTION` without the findings dismissed in the mock journal, the tasks' items as the journal has them, and
-        the running runs' questions unanswered, as `loop.attention.shown` adds them.
+        `ATTENTION` without the findings dismissed in the mock journal, the tasks' items and the epics' plans waiting
+        as the journal has them, and the running runs' questions unanswered, as `loop.attention.shown` adds them.
     """
     dismissed = {
         (f"chore:{f.chore}", f.finding.id)
@@ -522,6 +523,7 @@ def _attention(ctx: Context) -> list[Item]:
         if f.dismissed
     }
     listed = [i for i in ATTENTION if (i.ticket_key, i.reason) not in dismissed] + tasks.attention(ctx.conn)
+    listed += epic_runs.review_items(ctx.conn)
     return listed + cards.questions(ctx.conn)
 
 
