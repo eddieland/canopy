@@ -23,7 +23,6 @@ from canopy.core import cards, config, db, definitions, prompts, run_models, wor
 from canopy.core.vocab import FlakyCause, RunStatus
 from canopy.runs import worker
 from canopy.runtime import servers
-from canopy.runtime.implementation import Version
 from tests.canopy.helpers import (
     InlineRunner,
     agent_runs,
@@ -81,7 +80,7 @@ def test_worker_that_pushes_is_done(scenario: Scenario, git_pool: GitPool, treeh
     # canopy's `status` server, the one server of canopy's a worker is given (DESIGN §41).
     assert inline_servers(w) == {cards.SERVER: [*cards.SERVER_COMMAND]}
     assert w["env"] == {
-        **{name: w["env"][name] for name in servers.VARIABLES},
+        **{name: w["env"][name] for name in servers.env({}, version=scenario.env.runtime, cwd=scenario.env.root)},
         "CANOPY_RUN_ID": str(run.id),
         "CANOPY_GIT_OBJECTS": str(objects),
         # Where the operator's answer to a question its card asks reaches it (DESIGN §41).
@@ -111,7 +110,11 @@ def test_worker_that_pushes_is_done(scenario: Scenario, git_pool: GitPool, treeh
 @pytest.mark.usefixtures("git_pool")
 def test_a_worker_inherits_no_server_its_process_was_given(scenario: Scenario) -> None:
     """A server of canopy's is given to one run alone (DESIGN §27): a run started below it does not inherit it."""
-    given = servers.env({"canopy_chore": ["canopy", "_mcp", "--chore"]}, cwd=scenario.env.root, version=Version.ONE)
+    given = servers.env(
+        {"canopy_chore": ["canopy", "_mcp", "--chore"]},
+        cwd=scenario.env.root,
+        version=scenario.env.runtime,
+    )
     with mock.patch.dict(os.environ, given):
         scenario.run(worker=pushes())
     [w] = agent_runs(scenario.agent_log)

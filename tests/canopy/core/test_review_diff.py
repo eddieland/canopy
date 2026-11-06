@@ -117,6 +117,21 @@ def test_reading_a_diff_beside_a_log(tmp_path: Path) -> None:
     assert cut.truncated
 
 
+def test_a_diff_read_for_a_terminal_has_no_control_character_and_says_a_long_line_was_cut(tmp_path: Path) -> None:
+    path = tmp_path / "1.diff"
+    path.write_text("diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-a\x1b[2J\n+\tb\x07\n")
+    found = review_diff.text(path)
+    assert found == review_diff.Text(
+        ("diff --git a/x b/x", "--- a/x", "+++ b/x", "@@ -1 +1 @@", "-a [2J", "+       b "),
+        truncated=False,
+    )
+    path.write_text(f"diff --git a/x b/x\n@@ -1 +1 @@\n+{'y' * 5000}\n")
+    long = review_diff.text(path)
+    assert long is not None
+    assert long.truncated
+    assert len(long.lines[-1]) == review_diff.MAX_LINE_CHARS
+
+
 def test_a_diff_that_is_not_a_regular_file_is_not_read(tmp_path: Path) -> None:
     target = tmp_path / "secret"
     target.write_text(DIFF)

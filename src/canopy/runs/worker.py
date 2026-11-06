@@ -1,11 +1,11 @@
 """`canopy _run <run_id>`: one worker execution in its leased slots (DESIGN §8, §18).
 
 Sets up the branch in each slot, runs the operator's `setup_cmd` there, makes the desk of a joint run, runs
-`worker_cmd` with a timeout, parses the result line, verifies the branch is pushed in each slot, removes the desk,
-returns every slot, and closes the `runs` row, recording the follow-up tickets its result names that pass their checks
-(DESIGN §18). The slots are returned on every exit path this process can see: normal,
-exception, and SIGTERM, SIGHUP, or SIGINT. SIGKILL cannot be caught; reconcile finds that run's dead pid on the next
-tick.
+`worker_cmd` with a timeout, parses the result line, verifies the branch is pushed in each slot and keeps what the run
+changed there (`changes`, DESIGN §45), removes the desk, returns every slot, and closes the `runs` row, recording the
+follow-up tickets its result names that pass their checks (DESIGN §18). The slots are returned on every exit path
+this process can see: normal, exception, and SIGTERM, SIGHUP, or SIGINT. SIGKILL cannot be caught; reconcile finds
+that run's dead pid on the next tick.
 
 A plan run checks each slot out at its base and pushes nothing, and always works in a desk, even over one repository:
 the desk holds a copy of the plan it replaces, if the ticket has one. The planner runs with `plan_cmd` and writes its
@@ -52,20 +52,20 @@ from canopy.core import (
     plans,
     pools,
     records,
-    replies,
     review_answers,
-    review_diff,
+    run_changes,
     run_models,
     run_offers,
     sandboxing,
 )
 from canopy.core.config import render_command, setup_words
-from canopy.core.vocab import FlakyCause, PlanEffort, PoolKind, Proposal, ReplyMode, RunKind, RunStatus
+from canopy.core.vocab import FlakyCause, PlanEffort, PoolKind, Proposal, RunKind, RunStatus
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import logs, procs, stopping
 from canopy.runs import (
     artifact_feed,
     attachments,
+    changes,
     checklist_pushes,
     checkpoint,
     desks,
@@ -293,6 +293,8 @@ class Outcome:
     kicks: flaky_kick.Kicks = field(default_factory=flaky_kick.Kicks)
     #: What the worker answered of each item of the lists it was given, checked (DESIGN §42); None when it got none.
     checklist: checklist_answers.Checked | None = None
+    #: What the run changed in each of its slots, read as it ended (DESIGN §45); none for a run that read no slot.
+    changes: Sequence[run_changes.Change] = ()
 
     def result_json(self) -> str:
         """Return the summary stored in `runs.result_json`. Never raw output (DESIGN §11).
@@ -364,6 +366,9 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
         finally:
             # From here on a signal is ignored: returning the slots and closing the row must not be interrupted.
             stop.armed = False
+            if outcome.status is RunStatus.CRASHED and not outcome.changes and changes.recorded(str(run["kind"])):
+                # No git ran in its slots, or none past a step that failed: the journal says it kept nothing (§45).
+                outcome = replace(outcome, changes=run_changes.crashed(s.repo for s in slots))
             _release(ctx, run, slots, log)
             _record_prs(ctx, run, outcome)
             stored = outcome.result_json()
@@ -418,12 +423,14 @@ def _record_reported(ctx: Context, run: sqlite3.Row, outcome: Outcome) -> None:
     them, and the event that tells them it left a check flaky (§23), so a run reconcile closed first writes none. So
     are its answers to review findings (§21), but only from a run that ended `done` or `blocked`: one that did not
     finish its work cannot say what it fixed. Its answers to its checklists are recorded however it ended (§42): an item
-    it was given and did not answer is counted unanswered.
+    it was given and did not answer is counted unanswered. So is what it changed in each slot, as the harness read it
+    (§45).
     """
     run_id = int(run["id"])
     memory.record_run(ctx.conn, run_id, outcome.memory, head=outcome.head)
     drafts.record_run(ctx.conn, run_id, outcome.drafts)
     checklist_answers.record(ctx.conn, run_id, outcome.checklist)
+    run_changes.record(ctx.conn, run_id, outcome.changes)
     if outcome.status in (RunStatus.DONE, RunStatus.BLOCKED):
         review_answers.record(ctx.conn, run_id, outcome.answers)
     if outcome.follow_ups is not None and outcome.follow_ups.recorded:
@@ -1098,14 +1105,14 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
         slots = [slot.reading(ctx, objects) for slot in slots]
 
     # Every repository is checked, and pushed once if it needs it, even after one fails: a run is unpushed if any is.
-    unpushed = [
-        found
+    checked_pushes = [
+        checkpoint.ensure_pushed(slot.git, branch, start, log, rebase=ctx.config.trust.rebase)
         for slot, start in zip(slots, starts, strict=True)
-        if (found := checkpoint.ensure_pushed(slot.git, branch, start, log, rebase=ctx.config.trust.rebase))
     ]
-    if unpushed:
-        status, note = RunStatus.UNPUSHED, "; ".join(unpushed)
+    if any(found.unpushed for found in checked_pushes):
+        status, note = RunStatus.UNPUSHED, "; ".join(found.unpushed for found in checked_pushes if found.unpushed)
     # Before a kick, which replaces the branch's commits with copies the run did not make (DESIGN §23).
+    changed = _keep_changes(run, slots, starts, checked_pushes, log)
     listed = _keep_checklist_pushes(run, slots, branch, listed, log)
     committed = [found for slot in slots if copy is not None and (found := _committed_copy(slot, branch))]
     committed += [found for slot in slots if attached and (found := _committed_attachments(slot, branch))]
@@ -1122,7 +1129,6 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
         log=log,
     )
     committed += kicks.notes
-    _keep_diffs(ctx, run, slots, log)
     head = _heads(slots, log) if remembered is not None and remembered.notes else None
     checked = [found.note() for found in (filed, answered, listed) if found is not None]
     notes = "; ".join(n for n in [note, *committed, *checked] if n)
@@ -1137,6 +1143,7 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
         answers=answered,
         kicks=kicks,
         checklist=listed,
+        changes=changed,
     )
 
 
@@ -1217,35 +1224,34 @@ def _keep_checklist_pushes(
     )
 
 
-def _keep_diffs(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], log: logs.TickAdapter) -> None:
-    """Keep each slot's diff, for a run whose drafts the PR's page shows on it: one rendered under `approve`."""
-    rendered = replies.run_replies(ctx.conn, int(run["id"]))
-    if rendered is not None and rendered.mode is ReplyMode.APPROVE:
-        for slot in slots:
-            _keep_diff(slot, Path(run["log_path"]), log)
+def _keep_changes(
+    run: sqlite3.Row,
+    slots: Sequence[_Slot],
+    starts: Sequence[checkpoint.Start],
+    checked: Sequence[checkpoint.Pushed],
+    log: logs.TickAdapter,
+) -> tuple[run_changes.Change, ...]:
+    """Read what the run changed in each slot and keep its diffs, which the PR's page shows its threads on (§29, §45).
 
+    `checked` is what the push check found of each slot. Best effort, as a review's diff is (§21, The diff): a failure
+    is logged and named in the slot's record, and the run goes on.
 
-def _keep_diff(slot: _Slot, log_path: Path, log: logs.TickAdapter) -> None:
-    """Keep the slot's diff at the run's head, from where it leaves its base, for the PR's page (DESIGN §29).
-
-    Best effort, as a review's is (§21, The diff): the run does not need it, so any failure, git's or the disk's, is
-    logged and the page shows the threads without a diff. The head is written before the diff, so a diff is never kept
-    without the commit it was taken at.
+    Returns:
+        A change per slot, in the slots' order.
     """
-    fields = {"repo": slot.repo, "base": slot.base}
-    try:
-        head = slot.git.result("rev-parse", "HEAD")
-        found = slot.git.result("merge-base", f"refs/remotes/origin/{slot.base}", "HEAD") if head.ok else head
-        sha = head.stdout.strip()
-        diff = slot.git.result(*review_diff.diff_args(found.stdout.strip(), sha)) if found.ok else found
-        if not diff.ok:
-            log.warning("run diff not kept", extra={**fields, "error": diff.stderr[:500]})
-            return
-        path = review_diff.run_path_for(log_path, slot.repo)
-        review_diff.keep_head(path, sha)
-        review_diff.keep(path, diff.stdout)
-    except (SetupError, OSError) as e:
-        log.warning("run diff not kept", extra={**fields, "error": str(e)})
+    return tuple(
+        changes.keep(
+            slot.git,
+            repo=slot.repo,
+            base=slot.base,
+            branch=str(run["branch"]),
+            start=start,
+            pushed=found,
+            log_path=str(run["log_path"]),
+            log=log,
+        )
+        for slot, start, found in zip(slots, starts, checked, strict=True)
+    )
 
 
 def _heads(slots: Sequence[_Slot], log: logs.TickAdapter) -> str | None:

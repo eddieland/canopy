@@ -3,11 +3,14 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from canopy.core.context import Context
 from canopy.serve.backend import Backend
 from tests.canopy.web_helpers import SECRET, client, signed_in, signed_in_client
 
 
+@pytest.mark.opencode1  # OpenCode 1's `debug skill`
 def test_each_skill_is_listed_with_its_file_and_its_text_from_one_start_of_the_runtime(
     ctx: Context,
     opencode_state: Path,
@@ -54,6 +57,7 @@ def test_each_skill_is_listed_with_its_file_and_its_text_from_one_start_of_the_r
     assert started == [["debug", "skill"]]
 
 
+@pytest.mark.opencode1  # OpenCode 1's `debug skill`
 def test_a_runtime_that_cannot_list_its_skills_is_the_error(ctx: Context, opencode_state: Path) -> None:
     opencode_state.write_text(json.dumps({"exit": 1, "stderr": "Error: bad config: token = ghp_s3cret\n"}))
     c, _ = signed_in_client(ctx)

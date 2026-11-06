@@ -791,7 +791,7 @@ def test_canopys_sandboxed_worker_is_pushed(
     templates.mkdir(parents=True)
     shutil.copy(canopy_sandbox.TEMPLATES / "worker.json", templates)
     prefix = f"{WRAPPER} worker --read {{definitions_dir}} -- env"
-    canopy_env.write_user(user_toml().replace("\nworker_cmd = 'env", f"\nworker_cmd = '{prefix}"))
+    canopy_env.write_user(user_toml(canopy_env.runtime).replace("\nworker_cmd = 'env", f"\nworker_cmd = '{prefix}"))
     conn: sqlite3.Connection = canopy_env.journal()
     commit = ["git", "-c", "core.hooksPath=/dev/null", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: work"]
     tracker_holds(conn)
