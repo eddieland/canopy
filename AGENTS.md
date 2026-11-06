@@ -260,10 +260,10 @@ If code and the design disagree, the design doc wins until a decision entry says
   plays an overseer calling `canopy_decide`, and run commands (`FAKE_AGENT_COMMANDS`). Beside them are the plain
   helpers every test may need: `git`, and `executable` for a script a test puts on a path.
 - A test's workspace runs the runtime version `--runtime` names, 1 by default (`make test RUNTIME=2`), and CI runs the
-  suite under each, as the step to OpenCode 2 alone. An expectation that differs by version follows
-  `canopy_env.runtime`, or reads either shape (`given_server`, `model_list`). A test that tells OpenCode 1's own story,
-  its commands or the shapes its fakes play, is marked `opencode1` and runs on 1 under either; those marked are what
-  is left to port before 1 is dropped.
+  suite under each, so OpenCode 2 meets the whole suite before it is the only runtime. An expectation that differs
+  by version follows `canopy_env.runtime`, or reads either shape (`given_server`, `model_list`). A test that tells
+  OpenCode 1's own story, its commands or the shapes its fakes play, is marked `opencode1` and runs on 1 under either;
+  those marked are what is left to port before 1 is dropped.
 - What two test modules share lives in one place, never in a test module: `tests/canopy/conftest.py` for fixtures
   (`conn`, the workspace's journal; `ctx`; the web UI's mock `backend`; `ws`; `notified` and `sink_script`, notification
   commands that record what they are sent), `tests/canopy/helpers.py` for helpers (`in_tick`, with `ends_ok=True` for a
