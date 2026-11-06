@@ -17,7 +17,8 @@ ticket key would be, which no ticket key can equal. Only chores configured for t
 finding the operator dismissed (`listed`). A one-off task whose run asked a question waits on the operator's reply: its
 `awaiting_reply` item is read from the journal as it is listed, named `task:<id>` where a ticket key would be, and
 gone once they reply or stop it (DESIGN §36); so is `task_ticket_unrecorded`, for tickets a task's run reported that
-canopy did not record.
+canopy did not record. So is an epic's plan waiting on the operator, `plan_review` named `epic:<id>`, gone once they
+approve it, reply, or stop the epic (DESIGN §43).
 
 The web UI's list adds one more source (`shown`): a running run whose progress asks the operator a question they have
 not answered, read from the journal as it is listed, named `run:<id>` or `review:<id>` where a ticket key would be
@@ -57,7 +58,7 @@ from canopy.loop import archive
 from canopy.notify import deliver
 from canopy.reviews import impact as review_impact
 from canopy.reviews import waiting as review_waiting
-from canopy.runs import artifact_authority, drafted, follow_ups, task_tickets, tasks
+from canopy.runs import artifact_authority, drafted, epic_runs, follow_ups, task_tickets, tasks
 
 if TYPE_CHECKING:
     from canopy.core import records
@@ -453,8 +454,9 @@ def listed(ctx: Context) -> list[Item]:
     it, so one a run's drafts raise is listed once the run ends, and one the operator sent or dropped every draft of
     is gone at once (DESIGN §29), and so do a review's
     `review_waiting` and `review_unsettled`, gone once the operator publishes or a read settles it (§34). So do a
-    task's `awaiting_reply` and `task_ticket_unrecorded`, which no tick records (DESIGN §36). An item about a PR whose
-    latest review is `high` impact, or about its ticket, comes before the rest (§21), so a notification lists it first.
+    task's `awaiting_reply` and `task_ticket_unrecorded`, which no tick records (DESIGN §36), and an epic's
+    `plan_review` (§43). An item about a PR whose latest review is `high` impact, or about its ticket, comes before the
+    rest (§21), so a notification lists it first.
     """
     configured = set(chore_view.configured(ctx.config, ctx.workspace))
     items = [
@@ -477,7 +479,8 @@ def listed(ctx: Context) -> list[Item]:
     ]
     waiting = [_task_item(w) for w in tasks.awaiting(ctx.conn)]
     unrecorded = [_unrecorded_item(u) for u in task_tickets.unrecorded(ctx.conn)]
-    return _high_first(ctx.conn, items) + waiting + unrecorded + findings
+    plans = epic_runs.review_items(ctx.conn)
+    return _high_first(ctx.conn, items) + waiting + unrecorded + plans + findings
 
 
 def shown(ctx: Context) -> list[Item]:

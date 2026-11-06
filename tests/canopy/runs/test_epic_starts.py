@@ -12,6 +12,7 @@ from canopy.core import config, db, epics, plans, prompts, records
 from canopy.core.context import Context
 from canopy.core.vocab import PlanStatus, RunStatus
 from canopy.infra import logs, procs
+from canopy.loop import attention
 from canopy.runs import epic_runs, epic_starts
 from tests.canopy.helpers import (
     InlineRunner,
@@ -21,6 +22,7 @@ from tests.canopy.helpers import (
     epic_planning,
     in_tick,
     inline_context,
+    messages,
     operator,
     planner_does,
     pool_statuses,
@@ -289,6 +291,81 @@ def test_stopping_an_epic_stops_no_member_s_run(inline: Context) -> None:
     assert present(epic_runs.get_run(inline.conn, started.run_id)).status is RunStatus.STOPPED
     assert present(records.select(records.Run).where("id = ?", worker).one(inline.conn)).status is RunStatus.RUNNING
     assert [m.ticket_key for m in epics.members_of(inline.conn, 1)] == ["PROJ-2"]
+
+
+# Waiting on the operator
+
+
+def plan_reviews(ctx: Context) -> list[tuple[str | None, str]]:
+    """The epics' `plan_review` items on the attention list, as subject and reason."""
+    return [(i.ticket_key, i.reason) for i in attention.listed(ctx) if (i.ticket_key or "").startswith("epic:")]
+
+
+def proposed(ctx: Context) -> int:
+    """Submit an epic and have its first plan run propose its plan, as the operator then finds it.
+
+    Returns:
+        The plan run's id.
+    """
+    assert operator("epic", "submit", GOAL) == 0
+    [started] = start(ctx)
+    # A plan run at work waits on no one: its plan is not written yet.
+    assert plan_reviews(ctx) == []
+    with planner_does(plan=PLAN):
+        run_plan(started.run_id)
+    return started.run_id
+
+
+def test_a_proposed_plan_is_on_attention_naming_the_epic_never_its_text(notified: Path, inline: Context) -> None:
+    """The item is `plan_review` about `epic:1`, kept from the overseer, and a sink hears of it without its text.
+
+    `notified` comes first, so the context reads the sink it configures.
+    """
+    run_id = proposed(inline)
+    [item] = [i for i in attention.listed(inline) if i.ticket_key == "epic:1"]
+    plan = present(epics.current_plan(inline.conn, 1))
+    assert (item.reason, item.since) == ("plan_review", plan.created_at)
+    assert item.detail.startswith(f"epic:1's plan {plan.id}, from run {run_id}, waits on your approval")
+    assert "`canopy plan epic:1 --approve`" in item.detail
+    assert "`canopy reply epic:1`" in item.detail
+    # An epic never reaches the overseer (DESIGN §43), and its goal and plan stay in canopy: a sink's audience may not
+    # be the operator's.
+    assert attention.for_overseer(inline.conn) == []
+    attention.publish(inline, logs.for_tick(None))
+    [sent] = messages(notified)
+    assert "+ epic:1 plan_review: epic:1's plan" in sent
+    assert GOAL not in sent
+    assert "Sessions survive a restart" not in sent
+
+
+def test_approving_the_plan_clears_its_item(inline: Context) -> None:
+    """Once approved, the plan waits on no one."""
+    proposed(inline)
+    assert plan_reviews(inline) == [("epic:1", "plan_review")]
+    assert operator("plan", "epic:1", "--approve") == 0
+    assert plan_reviews(inline) == []
+
+
+def test_a_reply_clears_the_item_until_the_next_plan(inline: Context) -> None:
+    """A reply asks for another plan: nothing waits on the operator until the plan run it starts proposes one."""
+    proposed(inline)
+    assert operator("reply", "epic:1", "Say where the store moves.") == 0
+    assert plan_reviews(inline) == []
+    [again] = start(inline)
+    assert plan_reviews(inline) == []
+    with planner_does(edits_plan("The store moves.", "The store moves to Redis."), plan=None):
+        run_plan(again.run_id)
+    assert plan_reviews(inline) == [("epic:1", "plan_review")]
+    [item] = [i for i in attention.listed(inline) if i.ticket_key == "epic:1"]
+    assert f"from run {again.run_id}" in item.detail
+
+
+def test_stopping_the_epic_clears_its_item(inline: Context) -> None:
+    """A stopped epic waits on no one, though its plan may still be approved."""
+    proposed(inline)
+    assert operator("stop", "epic:1") == 0
+    assert plan_reviews(inline) == []
+    assert present(epics.current_plan(inline.conn, 1)).status is PlanStatus.PROPOSED
 
 
 def test_the_epic_planner_prompt(canopy_env: CanopyEnv, markdown_snapshot: SnapshotAssertion) -> None:

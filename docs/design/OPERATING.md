@@ -502,6 +502,7 @@ cause is gone when a newer run starts or the ticket is done. The overseer does n
 an authorized replier comments, or the operator sends a message, after the run ended (§22, D093): that is how a human
 says "try again". `blocked` and `stopped` raise nothing, nor does a ticket the operator stopped (§22). The harness also
 raises `awaiting_reply` for a started ticket's, a planner's, or a task's unanswered question (§22, §25, §36),
+`plan_review` on `epic:N` for an epic's plan waiting on the operator (§43),
 `repo_missing` for a mapped repository with no clone and `auto_maintenance_on` for a clone whose config leaves git's
 automatic maintenance on (§18), `git_too_old` while the git on `PATH` is too old for canopy's commit hooks (§8),
 `connector_failed` about the workspace, one item naming

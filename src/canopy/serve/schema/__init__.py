@@ -156,6 +156,8 @@ class AttentionItem(Model):
     task: int | None = None
     """The one-off task it is about, by its id, when it is about one (DESIGN §36): `awaiting_reply` or
     `task_ticket_unrecorded`."""
+    epic: int | None = None
+    """The epic it is about, by its id, when it is about one (DESIGN §43): `plan_review`, its plan waiting on you."""
     run: int | None = None
     """The running worker's or planner's run whose question it is, by its id (DESIGN §41): `run_question`."""
     review: int | None = None

@@ -107,6 +107,8 @@ _CHORE = "chore:"
 _PR = "pr:"
 # A one-off task's item (DESIGN §36): no ticket, chore, or PR, but the task's own page.
 _TASK = "task:"
+# An epic's item (DESIGN §43): its plan waiting on the operator, read on the epic's plan page.
+_EPIC = "epic:"
 _SOURCES: dict[str, MessageSource] = {
     "worker": "worker",
     "operator": "operator",
@@ -130,8 +132,8 @@ def attention(backend: Backend, ctx: Context) -> list[AttentionItem]:
     A running run's question names the run (DESIGN §41): its ticket is the run's, or the review's when it has one.
 
     Returns:
-        One item per entry, its subject split into a ticket key, a chore name, a PR, a task's id, or a run's or a
-        review's id, with the ticket's title, and its detail without control characters.
+        One item per entry, its subject split into a ticket key, a chore name, a PR, a task's or an epic's id, or a
+        run's or a review's id, with the ticket's title, and its detail without control characters.
     """
     found: list[AttentionItem] = []
     for item in backend.attention(ctx):
@@ -139,9 +141,10 @@ def attention(backend: Backend, ctx: Context) -> list[AttentionItem]:
         chore = key.removeprefix(_CHORE) if key is not None and key.startswith(_CHORE) else None
         pr = key.removeprefix(_PR) if key is not None and key.startswith(_PR) else None
         task = int(key.removeprefix(_TASK)) if key is not None and key.startswith(_TASK) else None
+        epic = _numbered(key, _EPIC)
         run = _numbered(key, cards.RUN_PREFIX)
         review = _numbered(key, cards.REVIEW_PREFIX)
-        named = (chore, pr, task, run, review)
+        named = (chore, pr, task, epic, run, review)
         ticket = key if key is not None and all(n is None for n in named) else None
         if run is not None or review is not None:
             ticket = _asked_about(ctx.conn, run, review)
@@ -160,6 +163,7 @@ def attention(backend: Backend, ctx: Context) -> list[AttentionItem]:
                 finding=item.finding,
                 pr=pr,
                 task=task,
+                epic=epic,
                 run=run,
                 review=review,
             ),

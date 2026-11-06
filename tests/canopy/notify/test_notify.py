@@ -735,6 +735,7 @@ def test_a_json_message_links_each_subject_to_its_page_in_the_web_ui() -> None:
         Item("chore:deps", "lodash", "d", since, finding=True),
         Item(f"pr:{pr}", "review_requested", "d", since),
         Item(None, "repo_missing", "d", since, repo="web"),
+        Item("epic:2", "plan_review", "d", since),
     ]
     events = [
         message.Event(1, "run.started", since, {"ticket": "PROJ-1", "run": 3}),
@@ -749,7 +750,7 @@ def test_a_json_message_links_each_subject_to_its_page_in_the_web_ui() -> None:
         message.Event(10, "reply.refused", since, {"ticket": None, "ts": "1.3", "guard": "no_ticket", "reason": "r"}),
     ]
     change = notify_journal.Diff(added, [], [], [])
-    sent = message.Message("slack", "/r", Path("/r/attention.md"), change, 4, events, ui=UI)
+    sent = message.Message("slack", "/r", Path("/r/attention.md"), change, 5, events, ui=UI)
     body = json.loads(sent.json())
     assert body["ui"] == UI
     assert body["attention"]["ui"] == f"{UI}attention"
@@ -758,6 +759,7 @@ def test_a_json_message_links_each_subject_to_its_page_in_the_web_ui() -> None:
         f"{UI}chores/deps",
         f"{UI}pull-requests/pr?url=https%3A%2F%2Fgithub.test%2Fo%2Fr%2Fpull%2F7",
         f"{UI}attention",
+        f"{UI}epics/2/plan",
     ]
     # An event's own field named `ui` is dropped: the link is canopy's.
     assert [e["ui"] for e in body["events"]] == [
