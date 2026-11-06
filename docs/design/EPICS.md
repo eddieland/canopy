@@ -8,8 +8,8 @@ map. Previous: [The operator's checklist](CHECKLIST.md). Next: [Messages to runn
 
 Being built (REQUIREMENTS R28, ROADMAP M67). Built: the epic, its members, and their bound, from the CLI; its plan runs,
 which record a plan `proposed`; its approval, replies, and members registered against its entries; a member's planner,
-which reads the epic's approved plan, its plan recording which; stopping it, from the CLI and the web UI; and its plan
-waiting on the operator, on the attention list.
+which reads the epic's approved plan, its plan recording which, and names where it departs from it, raised as
+`epic_drift`; stopping it, from the CLI and the web UI; and its plan waiting on the operator, on the attention list.
 
 §25 plans one ticket. Work that spans several has no plan of its own, so each ticket's planner settles the shared
 questions again and the operator approves them again. An **epic** is that work as canopy's own subject: the
@@ -93,7 +93,8 @@ The operator's approval of the epic plan, which they read with the mark, approve
 the epic plan's copy directly. A member whose own setting asks for a plan (§25) is planned, whatever the mark.
 
 **Upward.** A member's planner whose `Decisions` depart from a contract or a requirement names those ids in its result
-line, and the harness raises `epic_drift` (§14) naming the member and the ids. The operator settles it one of
+line, and the harness raises `epic_drift` (§14) naming the member and the ids, those the epic plan holds. Such a plan
+waits on the operator, whatever `policy.planner_may_approve` says. The operator settles it one of
 three ways, and each ends the item: approving the epic plan again, amended to the member's choice; approving the
 member's plan as written, which accepts the departure for that member alone; or asking for a new plan of either.
 

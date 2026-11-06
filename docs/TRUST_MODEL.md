@@ -287,7 +287,9 @@ Controls:
   epic:N`, so no tick plans it again, each refused as `inside_run`. Stopping one leaves its members as they are.
   A member's planner reads its epic's approved plan from a copy checked against the hash the operator approved, and
   is not run when it no longer matches; the epic's plan describes the work, as the ticket does, and widens nothing a
-  planner or a worker may do.
+  planner or a worker may do. Where its plan departs from the epic's, the ids its result names are its word, data:
+  canopy keeps only those the epic plan holds and raises `epic_drift` naming them, and such a plan is never approved
+  on its planner's word.
 - Attachments (DESIGN §22, ROADMAP M63) are written and removed only through `runs/attachments.py` by a channel that
   authenticated the operator: `canopy attach` and `canopy detach` in the operator's shell, or the web UI behind the
   listener secret (T8), each refused as `inside_run`, on a ticket canopy knows or a task not stopped. An attachment's

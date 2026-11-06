@@ -77,4 +77,9 @@ epic plan after the first merged leaving it alone, marking the second's proposed
 operator once.
 
 Status: in progress. Sketched 2026-11-02 from the survey in PRIOR_ART, and the open points settled by the operator
-the same day; designed in §43, before any code.
+the same day; designed in §43, before any code. Upward built: a member's planner names in its result's `drift` the
+ids of the epic plan it departs from, held to that plan's requirements and contracts, recorded with its plan, and
+the harness raises `epic_drift` on the member while that plan waits, ending as §43 says, a reply to the epic after
+the plan being its ask for a new epic plan, or once the ticket is done or stopped. Chosen conservatively, for the
+operator to change: the item also ends when the ticket leaves the epic, and a plan with drift is never approved on its
+planner's word.

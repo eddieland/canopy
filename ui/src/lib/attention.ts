@@ -37,8 +37,8 @@ const REVIEW_DRAFT_REASONS = new Set(['review_waiting', 'review_unsettled'])
 
 // Reasons that wait on the operator's own answer: a private ticket's question or a planner's, an untrusted review's
 // go-ahead (D089), an unlisted author's comment on an artifact to send on (§38), a review's rebuttal of a worker's
-// decline or its late finding (DESIGN §21), a plan to approve (§25), the replies a run drafted (§29), or a review's
-// draft (§34), or a running run's question in its progress (§41).
+// decline or its late finding (DESIGN §21), a plan to approve (§25) or one that departs from its epic's (§43), the
+// replies a run drafted (§29), or a review's draft (§34), or a running run's question in its progress (§41).
 const WAITING = new Set([
     'awaiting_reply',
     'run_question',
@@ -47,6 +47,7 @@ const WAITING = new Set([
     'review_rebuttal',
     'review_late',
     'plan_review',
+    'epic_drift',
     'drafts_waiting',
     ...REVIEW_DRAFT_REASONS,
 ])

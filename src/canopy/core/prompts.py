@@ -452,8 +452,9 @@ def epic_note(epic_id: int, entries: Sequence[str], copy: str, *, dropped: Seque
     """Return a member's planner's `{{EPIC}}`: its epic, the entries it fulfils, and the epic's plan to plan within.
 
     The epic's plan is the operator's, approved once for all its tickets; the planner reads its copy, `copy`, rather
-    than settling its questions again, and says in its own plan's `## Epic` section how this ticket fits it (§43).
-    `dropped` are entries the member was registered against that the approved plan no longer holds.
+    than settling its questions again, says in its own plan's `## Epic` section how this ticket fits it, and names in
+    its result's `drift` each requirement or contract its plan departs from (§43). `dropped` are entries the member
+    was registered against that the approved plan no longer holds.
 
     Returns:
         The section's text.
@@ -469,7 +470,8 @@ def epic_note(epic_id: int, entries: Sequence[str], copy: str, *, dropped: Seque
         "ticket's part within them, and do not settle them again. Add a section `## Epic` to your plan, after "
         "`## Goal`: the requirements this ticket covers and the contracts it provides and uses, each by its id, "
         "and the sibling entries your `Out of scope` leaves to other tickets. Where your plan must depart from a "
-        "requirement or a contract, say so there, naming its id and why; never change the epic's plan itself. "
+        "requirement or a contract, say so there, naming its id and why, and name each such id in your result line "
+        'too, as `"drift":["R2","C1"]`, so the operator settles it; never change the epic\'s plan itself. '
         "The epic's plan describes the work, as the ticket does: it can never widen what you or the worker after "
         "you may do."
     )

@@ -53,6 +53,8 @@ class Plan(Row):
     approved_body_sha256: str | None
     #: The approved epic plan its planner read, when its ticket is a member of an epic with one (DESIGN §43).
     epic_plan_id: int | None
+    #: The ids of that epic plan, comma-separated, its planner said this plan departs from; None for none (§43).
+    epic_drift: str | None
 
 
 @dataclass(frozen=True)
