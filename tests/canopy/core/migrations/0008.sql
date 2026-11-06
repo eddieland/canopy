@@ -1,4 +1,4 @@
--- sha256 of 0007_request_derivations.sql: dfae96a4bf85ff6fee650861ea736d5a0c986027d5a9d10de8b8b52f7b96a034
+-- sha256 of 0008_request_derivations.sql: dfae96a4bf85ff6fee650861ea736d5a0c986027d5a9d10de8b8b52f7b96a034
 
 INSERT INTO request_derivations (tick_id, request_id, pr_url, action, reason, head_sha, stale)
 VALUES (
