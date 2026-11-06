@@ -30,7 +30,7 @@ from canopy.core import chore_view, config, conversation, db, definitions, pools
 from canopy.core.context import Context, db_path
 from canopy.core.vocab import RunStatus
 from canopy.infra import procs
-from canopy.runs import epic_runs, tasks
+from canopy.runs import ending, epic_runs, tasks
 from canopy.runtime import definitions as runtime_definitions
 from canopy.runtime import models as runtime_models
 from canopy.runtime import offerings
@@ -78,16 +78,18 @@ def _skills(ctx: Context) -> Skills:
     )
 
 
-def _close_task_run(ctx: Context, run: records.TaskRun) -> bool:
+def _close_task_run(ctx: Context, run: records.TaskRun) -> ending.Ending:
     # The mock's, which has no process to kill and no pool to return a slot to: it closes the run's row alone.
     note = json.dumps({"harness": "the operator stopped the task (mock: no process was killed)"})
-    return tasks.close_run(ctx.conn, ctx.config, run.id, RunStatus.STOPPED, note, head=None)
+    closed = tasks.close_run(ctx.conn, ctx.config, run.id, RunStatus.STOPPED, note, head=None)
+    return ending.Ending.ENDED if closed else ending.Ending.GONE
 
 
-def _close_epic_run(ctx: Context, run: records.EpicRun) -> bool:
+def _close_epic_run(ctx: Context, run: records.EpicRun) -> ending.Ending:
     # The mock's, as `_close_task_run` is: it closes the plan run's row alone.
     note = json.dumps({"harness": "the operator stopped the epic (mock: no process was killed)"})
-    return epic_runs.close_run(ctx.conn, run.id, RunStatus.STOPPED, note)
+    closed = epic_runs.close_run(ctx.conn, run.id, RunStatus.STOPPED, note)
+    return ending.Ending.ENDED if closed else ending.Ending.GONE
 
 
 @dataclass(frozen=True)
@@ -173,12 +175,12 @@ class Backend:
     # The process runner each Context gets. The mock's answers for canopy's GitHub programs from its own journal, so a
     # draft sent from the mock posts nowhere.
     runner: Callable[[], procs.Runner] = field(default=procs.SubprocessRunner)
-    #: End a stopped task's running run as `canopy stop task:N --now` does; False if it had already ended. The loop
-    #: passes `runs.task_run.stop_now`; the default, the mock's, closes the run's row and kills nothing.
-    end_task_run: Callable[[Context, records.TaskRun], bool] = field(default=_close_task_run)
-    #: End a stopped epic's running plan run as `canopy stop epic:N --now` does; False if it had already ended. The
-    #: loop passes `runs.epic_runs.stop_now`; the default, the mock's, closes the run's row and kills nothing.
-    end_epic_run: Callable[[Context, records.EpicRun], bool] = field(default=_close_epic_run)
+    #: End a stopped task's running run as `canopy stop task:N --now` does, and say how it ended. The loop passes
+    #: `runs.task_run.stop_now`; the default, the mock's, closes the run's row and kills nothing.
+    end_task_run: Callable[[Context, records.TaskRun], ending.Ending] = field(default=_close_task_run)
+    #: End a stopped epic's running plan run as `canopy stop epic:N --now` does, and say how it ended. The loop passes
+    #: `runs.epic_runs.stop_now`; the default, the mock's, closes the run's row and kills nothing.
+    end_epic_run: Callable[[Context, records.EpicRun], ending.Ending] = field(default=_close_epic_run)
     # The user config the loop read, under the private file the settings page edits (config_edit.py).
     user_file: Path = field(default_factory=config.user_config_path)
     # `canopy loop --every`'s minutes, which set the pace whatever `loop.interval_minutes` says, or None.

@@ -8,7 +8,7 @@ starts a run, before the overseer, which never sees it; `canopy _task` (`cli/run
 from __future__ import annotations
 
 import sys
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, assert_never
 
 import click
 
@@ -23,7 +23,7 @@ from canopy.infra import logs
 from canopy.infra.text import one_line, printable
 from canopy.loop.readback import change_lines, checklist_lines
 from canopy.loop.render import result_of, spent
-from canopy.runs import task_run, task_tickets, tasks
+from canopy.runs import ending, task_run, task_tickets, tasks
 
 if TYPE_CHECKING:
     from canopy.core import records
@@ -210,10 +210,15 @@ def stop(ctx: Context, task_id: int, *, now: bool) -> int:
     if not now:
         click.echo(f"Its run {run.id} is still working and will finish; --now ends it.")
         return 0
-    if task_run.stop_now(ctx, run, log):
-        click.echo(f"Its run {run.id} was ended and its slot returned.")
-    else:
-        click.echo(f"Its run {run.id} had already ended.")
+    match task_run.stop_now(ctx, run, log):
+        case ending.Ending.ENDED:
+            click.echo(f"Its run {run.id} was ended and its slot returned.")
+        case ending.Ending.KEPT:
+            click.echo(f"Its run {run.id} was ended, but its slot was not returned; {ending.KEPT_NOTE}")
+        case ending.Ending.GONE:
+            click.echo(f"Its run {run.id} had already ended.")
+        case _ as unreachable:
+            assert_never(unreachable)
     return 0
 
 

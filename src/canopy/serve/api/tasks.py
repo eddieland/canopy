@@ -16,6 +16,7 @@ from canopy.core import conversation
 from canopy.core.vocab import RunStatus
 from canopy.infra import logs
 from canopy.runs import tasks as task_rows
+from canopy.runs.ending import Ending
 from canopy.serve import task_views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, RefusedError, TaskId, TaskRunId, not_found
@@ -165,10 +166,11 @@ def stop(task_id: TaskId, body: StopRequest, backend: BackendDep) -> TaskStopped
             raise RefusedError(r) from None
         _log.info("task stopped", extra={"task": task_id, "now": body.now, "channel": WEB})
         run = stopped.running
-        ended = run is not None and body.now and backend.end_task_run(ctx, run)
+        ending = backend.end_task_run(ctx, run) if run is not None and body.now else Ending.GONE
     return TaskStopped(
         already=stopped.already,
         dropped=stopped.dropped,
         running_run=run.id if run is not None else None,
-        ended=ended,
+        ended=ending is not Ending.GONE,
+        kept=ending is Ending.KEPT,
     )
