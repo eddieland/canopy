@@ -251,10 +251,10 @@ matching `review.query`; and PRs the operator asks for (Review requests); those 
 Why nothing is posted: a review on the PR speaks for the operator to everyone, and an adversarial reader is wrong often
 enough that the operator wants its findings first; kept in the journal, it needs no write tool and cannot be forged.
 Its text is shown only as data, and its verdict leaves the machine only as a notification (§20), so no automation can
-let a PR skip a human reviewer. Every review key is private (§12) but `policy.max_reviews_per_pr`, which the
-repository may only tighten (T7). With no source of reviews or no review capacity, nothing about reviews reaches the
-overseer. `review.query` authorizes, unlike `tracker.query` (§17): without an author filter it reviews others' PRs in
-the operator's name (TRUST_MODEL §7).
+let a PR skip a human reviewer. Every review key is private (§12) but `policy.max_reviews_per_pr` and §34's
+`policy.max_revisions_per_draft`, shared limits the repository may only tighten (T7). With no source of reviews or no
+review capacity, nothing about reviews reaches the overseer. `review.query` authorizes, unlike `tracker.query` (§17):
+without an author filter it reviews others' PRs in the operator's name (TRUST_MODEL §7).
 
 ### Running a review
 
