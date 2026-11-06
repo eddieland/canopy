@@ -298,6 +298,50 @@ class Called:
     input: Mapping[str, object]
 
 
+#: What a tool call did to the repository's files, as the outline's measurement counts it (ROADMAP M70): read a file,
+#: edited some, searched for them by name or text, or anything else.
+type Act = Literal["read", "edit", "search", "other"]
+
+#: The programs a shell command searches files with, by name or by text, when one starts a stage of its pipeline.
+_SEARCH_PROGRAMS = frozenset({"ack", "ag", "fd", "find", "grep", "egrep", "fgrep", "rg"})
+#: The git subcommands that do the same.
+_GIT_SEARCHES = frozenset({"grep", "ls-files", "ls-tree"})
+#: Where a shell command's pipeline, or its list of commands, starts a new stage.
+_STAGES_RE = re.compile(r"\|\||&&|[|;&\n]")
+#: A variable set for the command a stage runs, before its program: `LC_ALL=C grep`.
+_ASSIGNMENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=\S*")
+
+
+@dataclass(frozen=True)
+class Touch:
+    """What one tool call did to files: its act, and the files a read or an edit named, as the agent named them."""
+
+    act: Act
+    #: Absolute or relative, as the agent gave them; none for a search or anything else.
+    paths: Sequence[str] = ()
+
+
+def shell_searches(command: str) -> bool:
+    """Whether a shell `command` searches files: a stage of it starts with a search program or `git grep` and its like.
+
+    A stage is read by its first word, past any `VAR=value` before it, so `cd src && rg x` counts by its `rg`, and
+    `xargs grep x` does not count by itself. Only a measurement reads this, never a guard.
+
+    Returns:
+        True when any stage of the command starts a search.
+    """
+    for stage in _STAGES_RE.split(command):
+        words = stage.split()
+        while words and _ASSIGNMENT_RE.fullmatch(words[0]):
+            words = words[1:]
+        if not words:
+            continue
+        program = words[0].rsplit("/", 1)[-1]
+        if program in _SEARCH_PROGRAMS or (program == "git" and len(words) > 1 and words[1] in _GIT_SEARCHES):
+            return True
+    return False
+
+
 def session_id(value: object) -> str | None:
     """Return `value` if it is a session id canopy prints (`SESSION_ID_RE`), else None."""
     return value if isinstance(value, str) and SESSION_ID_RE.fullmatch(value) else None

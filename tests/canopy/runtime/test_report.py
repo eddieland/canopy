@@ -48,3 +48,20 @@ def test_a_session_id_is_one_canopy_prints() -> None:
     assert report.session_id("ses_abc-123") == "ses_abc-123"
     for bad in ("bad id!", "", "x" * 101, 7, None):
         assert report.session_id(bad) is None
+
+
+def test_a_shell_command_searches_when_a_stage_of_it_starts_a_search() -> None:
+    """By each stage's first word, past any variables it sets: a measurement's reading, never a guard's."""
+    for command in (
+        "rg parse src",
+        "grep -rn TODO .",
+        "cd src && rg parse",
+        "LC_ALL=C grep -r x .",
+        "find . -name '*.py' | head",
+        "git grep -n parse",
+        "git ls-files src",
+        "/usr/bin/fd parse",
+    ):
+        assert report.shell_searches(command), command
+    for command in ("uv run pytest -q", "git status", "cat src/a.py", "xargs grep x", "echo grep", ""):
+        assert not report.shell_searches(command), command

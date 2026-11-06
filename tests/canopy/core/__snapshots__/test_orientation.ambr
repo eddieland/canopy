@@ -1,0 +1,19 @@
+# serializer version: 1
+# name: test_the_report_is_printed_as_a_table
+  '''
+  Orientation over 14 days, since 2026-09-25 UTC, by role and repository: medians before the anchor.
+  
+  role           repository  runs  read  anchored  calls  before  searches  share  spend
+  implement      api+web        1     1         1      4       2         1    50%  $1.00
+  implement      web            2     1         1      5       3         2    60%  $1.50
+  resume         web            1     1         1      2       0         0     0%  $0.00
+  plan           web            1     1         1      3       2         1    67%  $1.00
+  feedback-plan  web            1     1         0      1       -         -      -      -
+  review         web            1     1         1      3       2         1    67%  $1.00
+  task           web            1     1         1      2       1         0    50%  $0.50
+  
+  Gate: a median worker run over 25% of its calls, or over 3 searches, before its anchor.
+  api+web: over the gate, a median share of 50% and 1 search, over 1 run
+  web: over the gate, a median share of 30% and 1 search, over 2 runs
+  '''
+# ---

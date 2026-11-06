@@ -14,6 +14,9 @@ regular file and not a symlink, at most `MAX_BYTES` of it; each event is validat
 dropped; and each text, the transcript's entries, and their characters altogether are cut at a bound, with
 `truncated` saying something was. An event of a known type that does not validate is counted in `unreadable`.
 
+`uses` reads the same file for a measurement (ROADMAP M70): each tool call of the session, in order, with what it did
+to files (`report.Touch`) and what the session had spent when it ended.
+
 `tail` reads the end of such a file as written, for a tick's output shown whole: stderr and every line the transcript
 leaves out. The same checks hold, at most `MAX_TAIL` of it is read, and its control characters are dropped.
 """
@@ -36,6 +39,7 @@ if TYPE_CHECKING:
 
     from canopy.runtime.entries import Entry
     from canopy.runtime.implementation import Version
+    from canopy.runtime.report import Touch
 
 #: How much of a log is read: far more than a long run prints, and little enough to read on each request.
 MAX_BYTES = 32 * 1024 * 1024
@@ -93,6 +97,58 @@ def read(path: Path, session_id: str, *, version: Version) -> Transcript | None:
         data = data[: data.rfind(b"\n", 0, MAX_BYTES) + 1]
     lines = data.decode("utf-8", errors="replace").splitlines()
     return _bounded(pick(version, one.transcript, two.transcript).read(lines, session_id), truncated=truncated)
+
+
+@dataclass(frozen=True)
+class Use:
+    """One tool call a session's log holds, as a measurement reads it: what it did to files, and the spend before it."""
+
+    touch: Touch
+    #: Whether it completed; else it ended in an error.
+    completed: bool
+    #: What the session's model calls that ended before this call did had cost, in dollars: the calls before the one
+    #: that made it. The latest such sum the log could price; 0 before the first.
+    spent: float
+
+
+@dataclass(frozen=True)
+class Uses:
+    """The tool calls of one session in its log, in the order they ended; `truncated` when the log held more."""
+
+    calls: Sequence[Use] = ()
+    truncated: bool = False
+
+
+def uses(path: Path, *, version: Version) -> Uses | None:
+    """Read the tool calls in the log at `path`, a run's of one session, as the runtime `version` prints them.
+
+    The file is refused and bounded as `read` refuses and bounds it.
+
+    Returns:
+        Each call in order, with what it did to files and the spend before it; or None for a file it refuses.
+    """
+    fd = _open(path)
+    if fd is None:
+        return None
+    with os.fdopen(fd, "rb") as f:
+        data = f.read(MAX_BYTES + 1)
+    truncated = len(data) > MAX_BYTES
+    if truncated:
+        data = data[: data.rfind(b"\n", 0, MAX_BYTES) + 1]
+    touched = pick(version, one.transcript, two.transcript).touched
+    # The implementation's reader, not `watch.Watch`, which would trace each call again as if it were running now.
+    lines = pick(version, one.watch, two.watch).Lines()
+    spent = 0.0
+    found: list[Use] = []
+    for line in data.decode("utf-8", errors="replace").splitlines():
+        printed = lines.read(line)
+        if printed is None:
+            continue
+        if printed.call is not None:
+            found.append(Use(touched(printed.call), printed.call.completed, spent))
+        if printed.ended_call and (usage := lines.usage) is not None:
+            spent = usage.cost_usd
+    return Uses(found, truncated)
 
 
 def tail(path: Path) -> Tail | None:

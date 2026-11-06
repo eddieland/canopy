@@ -3,7 +3,7 @@
 import json
 
 from canopy.runtime.opencode import events, transcript
-from canopy.runtime.report import Called
+from canopy.runtime.report import Called, Touch
 
 BASH: dict[str, object] = {
     "status": "completed",
@@ -56,3 +56,30 @@ def test_a_tool_call_as_the_agent_made_it_is_its_exact_name_how_it_ended_and_its
     assert refused == Called("canopy_run_status", completed=False, input={})
     assert called(tool("bash", {"status": "running"})) is None  # printed only once it ends
     assert called(event("text", {"type": "text", "text": "hi"})) is None
+
+
+def test_what_a_tool_call_did_to_files_is_its_act_and_the_files_it_named() -> None:
+    """A read or an edit names its file, a patch each it changes; a search names none; an edit of none is other."""
+
+    def touched(tool: str, given: dict[str, object], *, completed: bool = True) -> Touch:
+        return transcript.touched(Called(tool, completed=completed, input=given))
+
+    assert touched("read", {"filePath": "/w/src/a.py"}) == Touch("read", ("/w/src/a.py",))
+    assert touched("edit", {"filePath": "/w/src/a.py", "oldString": "a", "newString": "b"}) == Touch(
+        "edit",
+        ("/w/src/a.py",),
+    )
+    assert touched("write", {"filePath": "b.py", "content": ""}) == Touch("edit", ("b.py",))
+    patch = "*** Begin Patch\n*** Update File: src/a.py\n*** Move to: src/c.py\n@@\n-a\n+b\n*** Add File: d.py\n+x\n"
+    assert touched("apply_patch", {"patchText": patch + "*** End Patch"}) == Touch(
+        "edit",
+        ("src/a.py", "src/c.py", "d.py"),
+    )
+    assert touched("grep", {"pattern": "parse"}) == Touch("search")
+    assert touched("glob", {"pattern": "**/*.py"}) == Touch("search")
+    assert touched("bash", {"command": "rg parse src"}) == Touch("search")
+    assert touched("bash", {"command": "uv run pytest"}) == Touch("other")
+    assert touched("edit", {"filePath": " "}) == Touch("other")
+    assert touched("apply_patch", {"patchText": "nothing"}) == Touch("other")
+    assert touched("read", {"path": "/w/a.py"}) == Touch("other")  # OpenCode 2's field, not 1's
+    assert touched("canopy_run_status", {"summary": "s"}) == Touch("other")

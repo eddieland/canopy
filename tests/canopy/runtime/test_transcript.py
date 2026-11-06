@@ -261,3 +261,39 @@ def test_a_missing_prompt_a_symlink_and_a_directory_are_not_read(tmp_path: Path)
     (tmp_path / "dir.prompt").mkdir()
     for name in ("missing.prompt", "link.prompt", "dir.prompt"):
         assert transcript.prompt(tmp_path / name) is None
+
+
+def test_a_sessions_tool_calls_read_in_order_with_what_was_spent_before_each(tmp_path: Path) -> None:
+    """The spend is of the model calls that ended before the call did; a refused file reads as None."""
+
+    def finished(cost: float) -> str:
+        tokens = {"input": 100, "output": 20, "reasoning": 0, "cache": {"read": 0, "write": 0}}
+        return event("step_finish", {"type": "step-finish", "reason": "tool-calls", "cost": cost, "tokens": tokens})
+
+    read: dict[str, object] = {"status": "completed", "input": {"filePath": "/w/a.py"}, "output": "", "time": {}}
+    failed: dict[str, object] = {"status": "error", "input": {"filePath": "/w/b.py"}, "error": "no", "time": {}}
+    grep: dict[str, object] = {"status": "completed", "input": {"pattern": "x"}, "output": "", "time": {}}
+    path = log(
+        tmp_path,
+        event("step_start", {"type": "step-start"}),
+        tool("grep", grep),
+        finished(0.25),
+        event("step_start", {"type": "step-start"}),
+        tool("read", failed),
+        tool("read", read),
+        finished(0.5),
+        event("step_start", {"type": "step-start"}),
+        tool("bash", BASH),
+    )
+    found = transcript.uses(path, version=Version.ONE)
+    assert found is not None
+    assert not found.truncated
+    assert [(u.touch.act, u.touch.paths, u.completed, u.spent) for u in found.calls] == [
+        ("search", (), True, 0.0),
+        ("read", ("/w/b.py",), False, 0.25),
+        ("read", ("/w/a.py",), True, 0.25),
+        ("other", (), True, 0.75),
+    ]
+    assert transcript.uses(tmp_path / "missing.log", version=Version.ONE) is None
+    (tmp_path / "link.log").symlink_to(path)
+    assert transcript.uses(tmp_path / "link.log", version=Version.ONE) is None
