@@ -11,7 +11,7 @@ from canopy.cli.main import main
 from canopy.core import config, db, epics, plans, prompts, records
 from canopy.core.context import Context
 from canopy.core.vocab import PlanStatus, RunStatus
-from canopy.infra import logs
+from canopy.infra import logs, procs
 from canopy.runs import epic_runs, epic_starts
 from tests.canopy.helpers import (
     InlineRunner,
@@ -248,7 +248,12 @@ def test_stop_now_ends_the_plan_run_and_returns_its_slots(
     """`--now` kills the plan run, closes it `stopped`, returns its slot, and removes its desk."""
     assert operator("epic", "submit", GOAL) == 0
     [started] = start(inline)
-    assert operator("stop", "epic:1", "--now") == 0
+    # Its `canopy _epic`'s process group, which the stop kills: a pid no process here holds.
+    process = 4_000_000
+    records.update(records.EpicRun).set(pid=process).where("id = ?", started.run_id).run(inline.conn)
+    with mock.patch.object(procs, "kill_group", autospec=True, return_value=True) as killed:
+        assert operator("stop", "epic:1", "--now") == 0
+    killed.assert_called_once_with(process)
     assert f"Its plan run {started.run_id} was ended and its slots returned." in capsys.readouterr().out
     run = present(epic_runs.get_run(inline.conn, started.run_id))
     assert run.status is RunStatus.STOPPED

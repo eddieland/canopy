@@ -207,13 +207,14 @@ def stop_now(ctx: Context, run: records.EpicRun, log: logs.TickAdapter) -> bool:
     Returns:
         True once the run is closed, or False if it had already ended: nothing changes.
     """
-    for pid in (run.pid, run.agent_pid):
-        # Never this process's own group: an `_epic` claimed in-process, as tests run it, has this pid.
-        if pid is not None and pid not in (os.getpid(), os.getpgid(0)):
-            procs.kill_group(pid)
+    # Read again first: a run that ended since the stop read it signals nothing, so no pid it held, since reused, is.
     current = get_run(ctx.conn, run.id)
     if current is None or current.status is not RunStatus.RUNNING:
         return False
+    for pid in (current.pid, current.agent_pid):
+        # Never this process's own group: an `_epic` claimed in-process, as tests run it, has this pid.
+        if pid is not None and pid not in (os.getpid(), os.getpgid(0)):
+            procs.kill_group(pid)
     return bool(end(ctx, current, RunStatus.STOPPED, STOP_NOTE, log))
 
 
