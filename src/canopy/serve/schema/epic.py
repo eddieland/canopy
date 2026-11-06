@@ -291,3 +291,31 @@ class EpicReplied(Model):
     """How many plan runs the epic has had."""
     max_plan_attempts: int
     """`policy.max_plan_attempts`: once it has had that many, no plan run starts again, for this reply or any."""
+
+
+class EpicMemberAdd(Model):
+    """A ticket the operator makes a member of an epic, or registers again, with the entries it fulfils."""
+
+    key: str
+    """The ticket's key, as the tracker names it: `PROJ-1`."""
+    entries: Annotated[list[Annotated[str, Field(max_length=16)]], Field(max_length=200)]
+    """The approved plan's breakdown entries it fulfils, `B1`, in place of any it had; none for a ticket the breakdown
+    did not foresee, the only choice before a plan is approved."""
+
+
+class EpicMemberAdded(Model):
+    """What adding a ticket to an epic did, as `canopy epic add` says it."""
+
+    key: str
+    """The ticket."""
+    added: bool
+    """Whether it was made a member now, rather than being one already, its entries replaced."""
+    entries: list[str]
+    """The entries it is now registered against, by number; none for a member of no entry."""
+
+
+class EpicMemberRemoved(Model):
+    """What removing a ticket from an epic did, as `canopy epic remove` says it: the ticket and its work stay as is."""
+
+    key: str
+    """The ticket whose membership ended."""

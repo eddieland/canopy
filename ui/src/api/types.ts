@@ -370,6 +370,10 @@ export type EpicPlanApproved = Schemas['EpicPlanApproved']
  * What a reply to an epic recorded, and what starts its next plan run: the next tick, after the run at work, or none.
  */
 export type EpicReplied = Schemas['EpicReplied']
+/** What adding a ticket to an epic did: whether it was a member already, and the entries it is registered against. */
+export type EpicMemberAdded = Schemas['EpicMemberAdded']
+/** What removing a ticket from an epic did: its membership ended, the ticket and its work left as they are. */
+export type EpicMemberRemoved = Schemas['EpicMemberRemoved']
 /** A text file the operator attached to a ticket or a task, for its runs to read as data (DESIGN §22). */
 export type Attachment = Schemas['Attachment']
 /** A ticket's or a task's attachments, and the limits `policy` holds them to. */

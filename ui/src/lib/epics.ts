@@ -1,4 +1,4 @@
-import type { EpicEntry, EpicMember, EpicStanding, EpicSummary, RunState } from '@/api/types'
+import type { EpicDetail, EpicEntry, EpicMember, EpicStanding, EpicSummary, RunState } from '@/api/types'
 
 /** Where an epic stands as the epics list shows it: the run state it is colored as, its word, and what it means. */
 export interface EpicLook {
@@ -134,4 +134,31 @@ export function unplaced(members: readonly EpicMember[], rows = true): Unplaced 
         dropped: members.filter((member) => member.dropped.length > 0),
         registered: rows ? [] : members.filter((member) => member.entries.length > 0),
     }
+}
+
+/**
+ * What the board has open, one thing at a time: the form under an entry's row, Register a ticket with that entry
+ * picked; the form in its foot, Add a ticket; or the question under a member before it is removed, `at` the entry's
+ * row it was asked from, or the list under the board that names it.
+ */
+export type MemberOpen =
+    | { kind: 'register'; at: string }
+    | { kind: 'add' }
+    | { kind: 'remove'; key: string; at: string }
+    | null
+
+/**
+ * The entries a ticket can be registered against now: the approved breakdown's, or none, with why, while no plan is
+ * approved or the approved one does not read. A ticket then joins as a member of no entry, as §43 lets one join before
+ * its plan.
+ */
+export function memberChoices(detail: EpicDetail): { entries: readonly EpicEntry[]; why: string | null } {
+    const { outline } = detail
+    if (outline === null || outline.source === 'proposed') {
+        return { entries: [], why: 'No plan of it is approved yet, so a ticket joins as a member of no entry.' }
+    }
+    if (outline.problem !== null) {
+        return { entries: [], why: 'Its approved plan does not read, so a ticket joins as a member of no entry.' }
+    }
+    return { entries: outline.entries, why: null }
 }

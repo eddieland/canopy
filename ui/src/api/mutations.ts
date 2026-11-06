@@ -3,6 +3,8 @@ import type { QueryClient } from '@tanstack/react-query'
 import { api, unwrap } from './client'
 import { keys } from './queries'
 import type {
+    EpicMemberAdded,
+    EpicMemberRemoved,
     EpicPlanApproved,
     EpicReplied,
     LeftSent,
@@ -226,6 +228,24 @@ export async function replyEpic(id: number, body: string, submission: string): P
             body: { body, submission },
         }),
     )
+}
+
+/**
+ * `canopy epic add epic:N KEY --entry B<n>`: make the ticket a member of the epic (DESIGN §43), registered against
+ * `entries` of its approved plan's breakdown in place of any it had; none is `--no-entry`.
+ */
+export async function addEpicMember(id: number, key: string, entries: readonly string[]): Promise<EpicMemberAdded> {
+    return unwrap(
+        await api.POST('/api/epics/{epic_id}/members', {
+            params: { path: { epic_id: id } },
+            body: { key, entries: [...entries] },
+        }),
+    )
+}
+
+/** `canopy epic remove epic:N KEY`: end the ticket's membership, leaving the ticket and its work as they are. */
+export async function removeEpicMember(id: number, key: string): Promise<EpicMemberRemoved> {
+    return unwrap(await api.DELETE('/api/epics/{epic_id}/members/{key}', { params: { path: { epic_id: id, key } } }))
 }
 
 /** `canopy stop task:N`, or `canopy stop task:N --now` with `now`, which also ends the run working it. */
