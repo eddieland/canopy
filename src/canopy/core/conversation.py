@@ -435,9 +435,12 @@ def reply(
         built = event(replied.message_id) if event is not None and replied.new else None
         if built is not None:
             db.record_event(conn, built)
-        if ref.kind == TASK:
-            return dataclasses.replace(replied, told=_tell_task_run(conn, int(ref.id), replied))
+        running = _send_to_task_run(conn, int(ref.id), replied) if ref.kind == TASK else None
+    if running is None:
         return replied
+    # Written once it is recorded: the files never hold a message the journal does not (`run_inbox.deliver`).
+    told = run_inbox.deliver(conn, "task_runs", running.id, cards.task_answers_dir(Path(running.log_path)))
+    return dataclasses.replace(replied, told=told)
 
 
 def _body(body: str) -> str:
@@ -470,12 +473,13 @@ def _message_run(
     """Record the operator's message `text` to running run `ref` on its ticket, and write it where its agent reads it.
 
     It is the operator's instruction to the run, so it answers no question asked before it (`write_reply`), and the
-    same text sent to the same run again records nothing new. It is written while the transaction holds the journal's
-    write lock, so two at once reach the agent in the order they were recorded (DESIGN §44).
+    same text sent to the same run again records nothing new, and is refused for nothing that happened since: a retry
+    of one already recorded is told so though the run has ended or had the most it takes. It is written once it is
+    recorded, best effort (`run_inbox.deliver`).
 
     Returns:
         What was recorded, and whether its agent can hear of it: not when its answers directory is gone, as the run
-        ends, which leaves the message for the ticket's next run.
+        ends, or cannot be written, which leaves the message for the ticket's next run.
 
     Raises:
         Refused: `unknown` for a run canopy has no record of, `ended` for one no longer running, `too_many` for one
@@ -489,41 +493,55 @@ def _message_run(
         run = records.select(records.Run).where("id = ?", run_id).one(conn)
         if run is None:
             raise Refused("unknown", f"canopy has no record of {ref}")
-        instead = f"reply to its ticket instead, `canopy reply {run.ticket_key}`, which its next run reads"
-        if run.status is not RunStatus.RUNNING:
-            raise Refused("ended", f"{ref} has ended ({run.status}); its agent can no longer hear a message: {instead}")
-        if len(run_inbox.sent_to(conn, "runs", run_id)) >= run_inbox.MAX_MESSAGES:
-            most = run_inbox.MAX_MESSAGES
-            raise Refused("too_many", f"{ref} has had {most} messages, the most a run takes: {instead}")
         # Its own submission for each run, so the same words sent to the ticket's next run are a message of their own.
         stored = submission or hashlib.sha256(f"{ref}\0{text}".encode()).hexdigest()[:32]
         ticket = Ref(TICKET, run.ticket_key)
+        # Recorded before the run's guards are held, so a retry finds the message it recorded; a new one they refuse
+        # rolls back with the transaction.
         replied = write_reply(conn, ticket, text, channel=channel, submission=stored, answers=False)
+        running = run.status is RunStatus.RUNNING
         if replied.new:
+            _check_run_takes(conn, ref, run)
             run_inbox.mark_sent(conn, "runs", run_id, replied.message_id)
             built = event(replied.message_id) if event is not None else None
             if built is not None:
                 db.record_event(conn, built)
-        told = run_inbox.deliver(conn, "runs", run_id, cards.answers_dir(state_dir, str(run_id)))
-        return dataclasses.replace(replied, told=told)
+    if not running:
+        return replied
+    told = run_inbox.deliver(conn, "runs", run_id, cards.answers_dir(state_dir, str(run_id)))
+    return dataclasses.replace(replied, told=told)
 
 
-def _tell_task_run(conn: sqlite3.Connection, task_id: int, replied: Replied) -> bool:
-    """Write a new reply to task `task_id` where its running run's agent reads it, if a run of it is running (§44).
+def _check_run_takes(conn: sqlite3.Connection, ref: Ref, run: records.Run) -> None:
+    """Check that run `run`, which `ref` names, takes another message: it runs, and has not had the most.
 
-    Call inside the reply's transaction. A reply that comes as no run runs, or past the most a run takes, is told to
-    none, and waits for the task's next run, as every reply did before.
+    Raises:
+        Refused: `ended` for a run no longer running, `too_many` for one sent `run_inbox.MAX_MESSAGES` already.
+    """
+    instead = f"reply to its ticket instead, `canopy reply {run.ticket_key}`, which its next run reads"
+    if run.status is not RunStatus.RUNNING:
+        raise Refused("ended", f"{ref} has ended ({run.status}); its agent can no longer hear a message: {instead}")
+    if len(run_inbox.sent_to(conn, "runs", run.id)) >= run_inbox.MAX_MESSAGES:
+        most = run_inbox.MAX_MESSAGES
+        raise Refused("too_many", f"{ref} has had {most} messages, the most a run takes: {instead}")
+
+
+def _send_to_task_run(conn: sqlite3.Connection, task_id: int, replied: Replied) -> records.TaskRun | None:
+    """Name task `task_id`'s running run as the one a new reply was sent to, if a run of it is running (§44).
+
+    Call inside the reply's transaction, and write the run's messages once it commits. A reply that comes as no run
+    runs, or past the most a run takes, is sent to none, and waits for the task's next run, as every reply did before.
 
     Returns:
-        Whether a running run's agent can hear of it.
+        The run it was sent to, or None.
     """
     if not replied.new:
-        return False
+        return None
     running = records.select(records.TaskRun).where("task_id = ? AND status = ?", task_id, RunStatus.RUNNING).one(conn)
     if running is None or len(run_inbox.sent_to(conn, "task_runs", running.id)) >= run_inbox.MAX_MESSAGES:
-        return False
+        return None
     run_inbox.mark_sent(conn, "task_runs", running.id, replied.message_id)
-    return run_inbox.deliver(conn, "task_runs", running.id, cards.task_answers_dir(Path(running.log_path)))
+    return running
 
 
 def answer(

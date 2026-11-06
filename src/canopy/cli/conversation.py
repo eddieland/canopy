@@ -469,10 +469,8 @@ def cmd_reply(click_ctx: click.Context, ref: str, text: str | None) -> int:
         click.echo(f"Recorded message {replied.message_id} on {subject}{answered}.")
     else:
         click.echo(f"Message {replied.message_id} on {subject} already says this{answered}; nothing new recorded.")
-    if replied.told:
-        click.echo("Its running run's agent hears that it waits on its next tool call.")
     if subject.kind == conversation.TASK:
-        tasks_cli.replied(ctx, int(subject.id))
+        tasks_cli.replied(ctx, int(subject.id), told=replied.told)
     if subject.kind == conversation.EPIC:
         epics_cli.replied(ctx, int(subject.id))
     return 0
@@ -499,8 +497,12 @@ def _message_run(ctx: Context, subject: Ref, body: str) -> int:
         click.echo(f"Message {replied.message_id} to {subject} already says this; nothing new recorded.")
     if replied.told:
         click.echo("Its agent hears that it waits on its next tool call, and reads it through canopy's tool.")
-    else:
-        click.echo("Its run is ending, and its agent will not hear of it: the ticket's next run reads it.")
+    elif replied.new:
+        # Recorded either way: what its agent never fetched reaches the ticket's next run as any reply does (§44).
+        click.echo(
+            "Its agent was not told of it, its run ending or its answers directory not written (the log says which): "
+            "the ticket's next run reads it.",
+        )
     return 0
 
 

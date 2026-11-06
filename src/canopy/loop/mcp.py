@@ -377,7 +377,8 @@ def _messages(arguments: Mapping[str, object], opened: Opener) -> str:  # noqa: 
         What the agent is told: each message, the operator's, oldest first.
 
     Raises:
-        tools.Refused: CANOPY_RUN_ID names no run that takes messages: a worker's, a planner's, or a task's.
+        tools.Refused: CANOPY_RUN_ID names no run that takes messages: a worker's, a planner's, or a task's; or the
+            messages cannot be read, which is a tool error, so the harness records no fetch, rather than none sent.
     """
     if not run_inbox.may_message(os.environ.get(conversation.RUN_ID_ENV, "")):
         raise tools.Refused(
@@ -385,7 +386,10 @@ def _messages(arguments: Mapping[str, object], opened: Opener) -> str:  # noqa: 
             "operator's messages",
         )
     run_inbox.Request.model_validate(arguments)
-    return run_inbox.told(run_inbox.read())
+    try:
+        return run_inbox.told(run_inbox.read())
+    except run_inbox.InboxError as e:
+        raise tools.Refused(f"messages refused: {e}") from None
 
 
 #: A run's progress, which the runtime names `canopy_run_status` (its server is `cards.SERVER`).

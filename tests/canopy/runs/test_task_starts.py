@@ -483,8 +483,10 @@ def test_a_reply_to_a_running_task_reaches_its_run_and_one_it_fetched_and_report
     [started] = start(inline)
     capsys.readouterr()
     assert operator("reply", "task:1", "Time the warm build too.") == 0
-    # Its directory is made as the run starts, so this one is written there then.
-    assert "hears that it waits" not in capsys.readouterr().out
+    # Its directory is made as the run starts, so this one is written there then, and its agent not told of it now.
+    assert capsys.readouterr().out.endswith(
+        f"Its run {started.run_id} is still working; the first tick after it ends starts the next run.\n",
+    )
     reads = [calls(run_inbox.tool_name())] if fetches else []
     with private_worker_does(["true"], result=DONE, tools=reads):
         run = run_task(inline, started.run_id)
@@ -496,6 +498,38 @@ def test_a_reply_to_a_running_task_reaches_its_run_and_one_it_fetched_and_report
         assert "> Time the warm build too." in ran["tools"][0]["text"]
     # One its run fetched and reported on is answered; one it never fetched asks for the task's next run.
     assert [t.id for t in tasks.queued(inline.conn)] == ([] if fetches else [1])
+
+
+def test_a_reply_its_running_task_run_hears_of_says_so_and_the_tasks_show_lists_it(
+    canopy_env: CanopyEnv,
+    inline: Context,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Its agent is told of it, so it may answer it, and `show task:N` says whether it fetched it (DESIGN §44)."""
+    with_events(canopy_env, "canopy-worker-private")
+    submit()
+    [started] = start(inline)
+    [running] = tasks.runs_of(inline.conn, 1)
+    cards.make_answers(task_starts.answers_dir(Path(running.log_path)))
+    capsys.readouterr()
+    assert operator("reply", "task:1", "Time the warm build too.") == 0
+    [message] = run_inbox.sent_to(inline.conn, "task_runs", running.id)
+    assert capsys.readouterr().out == (
+        f"Recorded message {message.id} on task:1.\n"
+        f"Its run {running.id} is still working, and its agent hears that the reply waits on its next tool call. If it "
+        "reads it and then reports, that run has answered it; if not, the first tick after it ends starts the next "
+        "run.\n"
+    )
+    assert operator("show", "task:1") == 0
+    listed = (
+        f"    your messages to it (1):\n      #{message.id}  sent {message.at}, %s\n        Time the warm build too.\n"
+    )
+    assert listed % "not fetched yet" in capsys.readouterr().out
+    with private_worker_does(["true"], result=DONE, tools=[calls(run_inbox.tool_name())]):
+        run = run_task(inline, started.run_id)
+    [message] = run_inbox.sent_to(inline.conn, "task_runs", run.id)
+    assert operator("show", "task:1") == 0
+    assert listed % f"fetched {message.fetched_at}" in capsys.readouterr().out
 
 
 def test_commits_the_worker_left_unpushed_are_pushed_once(inline: Context, git_pool: GitPool) -> None:

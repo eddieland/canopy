@@ -331,9 +331,8 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
                 raise SetupError(f"run {run_id} has no slots")  # noqa: TRY301  (the same handling as git failures)
             tidy.make_objects(_objects(ctx, run))
             cards.make_answers(_answers(ctx, run))
-            with db.transaction(ctx.conn):
-                # The operator's messages sent since the dispatch, before its agent had a directory (DESIGN §44).
-                run_inbox.deliver(ctx.conn, "runs", run_id, _answers(ctx, run))
+            # The operator's messages sent since the dispatch, before its agent had a directory (DESIGN §44).
+            run_inbox.deliver(ctx.conn, "runs", run_id, _answers(ctx, run))
             _write_checklists(ctx, run, kind, slots)
             outcome = _doer(kind)(ctx, run, slots, out, log)
         except stopping.Stopped as e:

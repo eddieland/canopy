@@ -366,8 +366,7 @@ def _write_checklist(ctx: Context, run: records.TaskRun) -> None:
             checklists.write(answers, lists)
     except (checklists.ChecklistError, OSError) as e:
         raise SetupError(str(e)) from e
-    with db.transaction(ctx.conn):
-        run_inbox.deliver(ctx.conn, "task_runs", run.id, answers)
+    run_inbox.deliver(ctx.conn, "task_runs", run.id, answers)
 
 
 def _keep_checklist_pushes(

@@ -12,6 +12,10 @@ The tool is served beside `status` by the run's own server (`canopy _mcp --statu
 sandboxed run, and the servers it starts, may not read the journal, so the tool reads the file canopy wrote. The harness
 records the fetch from the call in the events it already reads (§8): a message canopy wrote before the call started was
 in the file the call read, so it is fetched; one written while the call ran may not have been, so it waits for the next.
+A call that failed, the file unreadable among the reasons, fetched nothing.
+
+The message is recorded first and written after, best effort: the files never hold a message the journal does not, and
+one that could not be written is never fetched, so it waits for the next run as any reply does.
 
 A message the run fetched is answered once that run ends with its report, `done` or `blocked`, which says what it did
 with it, and the loop reads past it (`HEARD`). One never fetched, or fetched by a run that then failed, timed out,
@@ -34,6 +38,7 @@ from pydantic import BaseModel, ConfigDict, StrictInt, StrictStr, ValidationErro
 
 from canopy.core import cards, db, records, sql
 from canopy.core.vocab import RunStatus
+from canopy.infra import logs
 from canopy.infra.text import printable, quoted
 from canopy.runtime import servers
 
@@ -71,6 +76,10 @@ HEARD = sql.frag(
     *_REPORTED,
     *_REPORTED,
 )
+
+
+class InboxError(Exception):
+    """The run's messages cannot be read: no answers directory is named, or the file there is not canopy's."""
 
 
 class Request(BaseModel):
@@ -127,34 +136,52 @@ def mark_sent(conn: sqlite3.Connection, table: MessageTable, run_id: int, messag
 def deliver(conn: sqlite3.Connection, table: MessageTable, run_id: int, path: Path) -> bool:
     """Write every message sent to run `run_id` of `table` to its answers directory at `path`, for its agent to read.
 
-    The messages go first and the mark after, each file replaced whole, so the plugin never tells of a message the tool
-    cannot return. Each message written for the first time is marked delivered then. Call inside the transaction that
-    recorded the latest, so two at once reach the agent in the order they were recorded.
+    Call once the messages are committed, outside any transaction: this takes the journal's write lock for its own, so
+    two at once write in turn, the later with every message the earlier wrote, and the files never hold a message the
+    journal does not. The messages go first and the mark after, each file replaced whole, so the plugin never tells of a
+    message the tool cannot return. Each message written for the first time is marked delivered once both are, so a
+    call that started before then is never its fetch (`record_fetch`).
 
     Returns:
-        Whether they were written: False when the directory is gone, its run having ended, or not made yet.
+        Whether they were written: False when the directory is gone, its run having ended, or not made yet, or cannot
+        be written, which is logged. A message not written is never fetched, so the next run's prompt carries it.
     """
-    sent = sent_to(conn, table, run_id)
-    if not sent:
-        return False
-    texts = {"messages": [{"id": m.id, "at": m.at, "text": m.body} for m in sent]}
-    mark = {"newest": sent[-1].id}
-    if not (cards.replace_file(path, TEXTS_FILE, texts) and cards.replace_file(path, MARK_FILE, mark)):
-        return False
-    records.update(records.Message).where("{} = ? AND delivered_at IS NULL", sql.name(_TO[table]), run_id).set(
-        delivered_at=db.now(),
-    ).run(conn)
-    return True
+    with db.transaction(conn):
+        sent = sent_to(conn, table, run_id)
+        if not sent:
+            return False
+        texts = {"messages": [{"id": m.id, "at": m.at, "text": m.body} for m in sent]}
+        mark = {"newest": sent[-1].id}
+        try:
+            written = cards.replace_file(path, TEXTS_FILE, texts) and cards.replace_file(path, MARK_FILE, mark)
+        except OSError as e:
+            fields = {"table": table, "run_id": run_id, "error": str(e)}
+            logs.for_tick(None).warning("run's messages not written", extra=fields)
+            return False
+        if not written:
+            return False
+        records.update(records.Message).where("{} = ? AND delivered_at IS NULL", sql.name(_TO[table]), run_id).set(
+            delivered_at=db.now(),
+        ).run(conn)
+        return True
 
 
 def record_fetch(conn: sqlite3.Connection, table: MessageTable, run_id: int, called: Called) -> None:
     """Record the messages run `run_id` of `table` fetched, if `called` is a `messages` call of its that completed.
 
     A message canopy delivered before the call started was in the file the call read, so it is fetched then; one
-    delivered as it ran may not have been, and waits for the next call. A message keeps its first fetch. A call the
-    runtime printed without its start fetched nothing that can be told, so it records nothing.
+    delivered as it ran may not have been, nor one marked delivered in the same millisecond the call started, and each
+    waits for the next call: the safe side, since one never fetched reaches the next run's prompt. A message keeps its
+    first fetch. A call the runtime printed without its start fetched nothing that can be told, so it records nothing.
+
+    A call the server refused, or that could not read the file, is a tool error, which both runtimes print as failed,
+    not completed; its input is held to the tool's own too, as a `status` call's is (`cards.read_call`).
     """
     if called.tool != tool_name() or not called.completed or called.started_at is None:
+        return
+    try:
+        Request.model_validate(called.input)
+    except ValidationError:
         return
     at = db.format_time(called.started_at)
     records.update(records.Message).where(
@@ -169,16 +196,22 @@ def read(environ: Mapping[str, str] | None = None) -> list[Delivered]:
     """Read the messages sent to this run, from the answers directory CANOPY_ANSWERS names in `environ`.
 
     Returns:
-        The messages, oldest first; none without the directory or its file, or when the file is not canopy's.
+        The messages, oldest first; none when canopy has written none there.
+
+    Raises:
+        InboxError: CANOPY_ANSWERS names no directory, or the file there cannot be read or is not canopy's: the tool
+            says so as an error, which fetches nothing, rather than that no message was sent.
     """
     env = os.environ if environ is None else environ
     answers = env.get(cards.ANSWERS_ENV, "")
     if not answers.startswith("/"):
-        return []
+        raise InboxError(f"{cards.ANSWERS_ENV} names no answers directory, where the operator's messages to it are")
     try:
         found = _Texts.model_validate_json((Path(answers) / TEXTS_FILE).read_bytes())
-    except (OSError, ValidationError):
+    except FileNotFoundError:
         return []
+    except (OSError, ValidationError) as e:
+        raise InboxError(f"the operator's messages to this run cannot be read: {type(e).__name__}") from e
     return [Delivered(m.id, m.at, m.text) for m in sorted(found.messages, key=lambda m: m.id)]
 
 

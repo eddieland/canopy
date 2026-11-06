@@ -15,7 +15,7 @@ import click
 from canopy.cli import attachments as attachments_cli
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import REPO
-from canopy.core import cards, checklist_answers, conversation, plans
+from canopy.core import cards, checklist_answers, conversation, plans, run_inbox
 from canopy.core.items import age
 from canopy.core.vocab import RunStatus
 from canopy.infra import logs
@@ -98,8 +98,9 @@ def cmd_task_list(click_ctx: click.Context) -> int:
 def show(ctx: Context, task_id: int) -> None:
     """Print task `task_id`: where it stands, its text, each run, its tickets, its conversation, and its report.
 
-    Each run is shown with its branch, the head it left on origin, and its answers to its repository's checklist (§42);
-    the newest report as its file stands (§36).
+    Each run is shown with its branch, the head it left on origin, its answers to its repository's checklist (§42), and
+    the replies sent to it while it ran, with when its agent fetched each (§44); the newest report as its file stands
+    (§36).
 
     Raises:
         CliError: canopy has no such task.
@@ -138,10 +139,19 @@ def show(ctx: Context, task_id: int) -> None:
         click.echo(f"\nMessage {question.id} waits on your answer: `canopy reply task:{task_id} TEXT`.")
 
 
-def replied(ctx: Context, task_id: int) -> None:
-    """Say what a reply to task `task_id` starts: its next run, at the next tick or once its running run ends."""
+def replied(ctx: Context, task_id: int, *, told: bool) -> None:
+    """Say what a reply to task `task_id` starts: its next run, at the next tick or once its running run ends.
+
+    A reply its running run was `told` of starts none if that run reads it and then reports on it (DESIGN §44).
+    """
     running = next((r for r in tasks.runs_of(ctx.conn, task_id) if r.status is RunStatus.RUNNING), None)
-    if running is not None:
+    if running is not None and told:
+        click.echo(
+            f"Its run {running.id} is still working, and its agent hears that the reply waits on its next tool call. "
+            "If it reads it and then reports, that run has answered it; if not, the first tick after it ends starts "
+            "the next run.",
+        )
+    elif running is not None:
         click.echo(f"Its run {running.id} is still working; the first tick after it ends starts the next run.")
     else:
         click.echo("The next tick starts its next run, on its branch.")
@@ -222,6 +232,16 @@ def _show_run(ctx: Context, run: records.TaskRun) -> None:
         )
         for line in found:
             click.echo(f"  {line}")
+    _show_sent(ctx, run)
+
+
+def _show_sent(ctx: Context, run: records.TaskRun) -> None:
+    # The replies sent to it while it ran, and when its agent fetched each (DESIGN §44): the operator's alone.
+    sent = run_inbox.sent_to(ctx.conn, "task_runs", run.id) if conversation.is_operator() else []
+    if sent:
+        click.echo(f"    your messages to it ({len(sent)}):")
+    for line in run_inbox.show_lines(sent, running=run.status is RunStatus.RUNNING):
+        click.echo(f"    {line}")
 
 
 def _show_tickets(ctx: Context, task: records.Task) -> None:

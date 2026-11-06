@@ -514,13 +514,19 @@ export function taskSubmittedToast(submitted: TaskSubmitted): NewToast {
 
 /**
  * What a reply to a task did, as `canopy reply task:N` says it: the message it recorded, or the one that already said
- * it, then what starts the task's next run: the first tick after its running run ends, or the next tick.
+ * it, then what starts the task's next run: the first tick after its running run ends, unless that run hears of the
+ * reply, reads it, and reports on it, or the next tick.
  */
 export function taskRepliedText(id: number, replied: TaskReplied): string {
-    const next =
-        replied.running_run === null
-            ? 'The next tick starts its next run, on its branch.'
-            : `Its run ${replied.running_run} is still working; the first tick after it ends starts the next run.`
+    let next = 'The next tick starts its next run, on its branch.'
+    if (replied.running_run !== null && replied.told) {
+        next =
+            `Its run ${replied.running_run} is still working, and its agent hears that the reply waits on its next ` +
+            'tool call. If it reads it and then reports, that run has answered it; if not, the first tick after it ' +
+            'ends starts the next run.'
+    } else if (replied.running_run !== null) {
+        next = `Its run ${replied.running_run} is still working; the first tick after it ends starts the next run.`
+    }
     const ref = taskRef(id)
     const answered = replied.answers === null ? '' : `, answering message ${replied.answers}`
     const head = replied.new

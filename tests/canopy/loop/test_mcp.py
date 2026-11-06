@@ -1321,20 +1321,30 @@ def test_the_messages_tool_reads_the_operators_messages_from_the_runs_answers_di
     assert recorded(conn) == before
 
 
-@pytest.mark.parametrize("answers", [None, "relative", "missing", "not-canopys"])
-def test_the_messages_tool_tells_of_none_where_canopy_wrote_none(tmp_path: Path, answers: str | None) -> None:
+@pytest.mark.parametrize("answers", ["missing", "gone"])
+def test_the_messages_tool_tells_of_none_where_canopy_wrote_none(tmp_path: Path, answers: str) -> None:
+    where = tmp_path if answers == "missing" else tmp_path / "1.answers"
+    with in_run("7"), mock.patch.dict(os.environ, {cards.ANSWERS_ENV: str(where)}):
+        served = mcp_session(tool_call("messages"), status=True)
+    assert served.said(1) == ("No message from the operator has been sent to this run.", False)
+
+
+@pytest.mark.parametrize("answers", [None, "relative", "not-canopys"])
+def test_the_messages_tool_that_cannot_read_them_is_a_tool_error(tmp_path: Path, answers: str | None) -> None:
+    """A read that fails is an error, which the harness records no fetch for, never that no message was sent (§44)."""
     env: dict[str, str] = {}
     if answers == "relative":
         env[cards.ANSWERS_ENV] = "answers"
     elif answers is not None:
         env[cards.ANSWERS_ENV] = str(tmp_path)
-    if answers == "not-canopys":
         (tmp_path / run_inbox.TEXTS_FILE).write_text('{"messages": [{"id": "x"}]}')
     with in_run("7"), mock.patch.dict(os.environ, env):
         if answers is None:
             os.environ.pop(cards.ANSWERS_ENV, None)
         served = mcp_session(tool_call("messages"), status=True)
-    assert served.said(1) == ("No message from the operator has been sent to this run.", False)
+    text, error = served.said(1)
+    assert error
+    assert text.startswith("messages refused: ")
 
 
 def test_a_reviews_run_is_not_served_the_messages_tool(tmp_path: Path) -> None:
