@@ -881,8 +881,11 @@ reader, so no table repeats them.
   operator writes. Its label names the message it answers while a question waits, and the form then wears the open
   question's tint and hairline, so the question and the box answering it read as a pair. Focused, the box takes the
   accent's tint, the operator's side. Its count of characters shows only past 80% of the bound. On a public ticket it
-  says what a reply is for and where it goes: for its next worker, as an instruction, never on the ticket. A ticket's
-  page description is its state, not what public or private means (`ticketDescription`).
+  says what a reply is for and where it goes: for its next worker, as an instruction, never on the ticket. While a
+  worker or planner runs on the ticket, and no question waits, a checkbox beside the button, `Tell run:41 now`, sends
+  the reply to that run instead (DESIGN §44): unchecked by default and after each send, never kept, since steering an
+  agent mid-edit is a choice, and the placeholder says what checked does. A ticket's page description is its state,
+  not what public or private means (`ticketDescription`).
 - **A conversation** is a column of messages, each a head line over a bubble. The head leads with who, in sans
   `font-medium` `foreground`, then what (kind, run, what it answers, how) and its chips in muted mono; its id and age
   are a readout at the end away from the bubble's square corner. A message that carries on the one before it (the same
@@ -896,7 +899,10 @@ reader, so no table repeats them.
   after the latest forget; each forget heads the attempt it ended, its messages folded under a `Disclosure` and dimmed,
   since the loop no longer reads them. Bodies are rich text (below): always text, but for their URLs. An operator
   message no `ok` tick has read carries a `waiting for the next tick` chip in `status-running`, and a `seen` chip with
-  a check, in the accent, once one has, so a reply never goes unacknowledged; an item it answered carries an `answered`
+  a check, in the accent, once one has, so a reply never goes unacknowledged. One sent to a running run says `to run:41`
+  in its head and wears that run's chips in their place, in `canopy show`'s words: `not fetched yet` in
+  `status-running`, `heard` with a check, in the accent, `never fetched` muted once the run ended, and `next run reads
+  it` muted when canopy could not write it where the agent reads it; an item it answered carries an `answered`
   chip, with a line saying it leaves at the next tick. While a run works the ticket, the conversation ends on it, on
   the worker's side, as a chat shows someone typing (`WorkingNow`): a pulsing `RunDot`, `working now`, its run, its
   kind, its latest tool call, its cost so far, and for how long, from the runs on the stream, so it rises in when the

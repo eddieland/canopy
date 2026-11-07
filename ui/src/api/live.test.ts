@@ -331,38 +331,6 @@ describe('applyStreamEvent', () => {
         expect(client.getQueryState(keys.run(first.id))?.isInvalidated).toBe(true)
     })
 
-    it("keeps a run's messages, and reads its page again as it calls a tool while one waits to be fetched", () => {
-        const client = new QueryClient()
-        const [first] = mockRuns
-        if (!first) {
-            throw new Error('fixtures are empty')
-        }
-        const sent = {
-            id: 9,
-            at: '2026-10-08T12:20:00Z',
-            body: 'Drop the logout half.',
-            delivered_at: '2026-10-08T12:20:00Z',
-            fetched_at: null,
-        }
-        client.setQueryData(keys.run(first.id), { ...first, messages: [sent] })
-
-        // The list sends none: the page's stay, and a row that did not move reads nothing again.
-        applyStreamEvent(client, { type: 'runs.updated', runs: [first] })
-        expect(client.getQueryData<Run>(keys.run(first.id))?.messages).toEqual([sent])
-        expect(client.getQueryState(keys.run(first.id))?.isInvalidated).toBe(false)
-
-        // A tool call ended: it may be the fetch, which the page says once it reads the run again.
-        const called = { ...first, activity: { tool: 'canopy_run_messages', did: '', at: '2026-10-08T12:29:00Z' } }
-        applyStreamEvent(client, { type: 'runs.updated', runs: [called] })
-        expect(client.getQueryState(keys.run(first.id))?.isInvalidated).toBe(true)
-
-        // Once every message is fetched, a tool call reads the page again no more.
-        client.setQueryData(keys.run(first.id), { ...called, messages: [{ ...sent, fetched_at: sent.at }] })
-        const later = { ...called, activity: { tool: 'bash', did: 'make check', at: '2026-10-08T12:31:00Z' } }
-        applyStreamEvent(client, { type: 'runs.updated', runs: [later] })
-        expect(client.getQueryState(keys.run(first.id))?.isInvalidated).toBe(false)
-    })
-
     it('writes a run a page holds, and marks its transcript stale when its log has more in it', () => {
         const client = new QueryClient()
         const [first, second] = mockRuns

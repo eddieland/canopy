@@ -19,7 +19,6 @@ from canopy.serve.schema import (
     Model,
     ModelsServed,
     RunCard,
-    RunMessage,
     RunState,
 )
 
@@ -176,9 +175,6 @@ class TaskRunDetail(Model):
     each with its kept diff. Empty for a run never shown one, and one still running."""
     checklist_stretches_left_out: int = 0
     """How many stretches after the first five the page is not sent: `canopy show task:N` names them all."""
-    messages: list[RunMessage] = []
-    """The operator's replies to the task that reached it while it ran (DESIGN §44), oldest first, and when its agent
-    fetched each."""
 
 
 class TaskReport(Model):

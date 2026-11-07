@@ -424,22 +424,6 @@ class RunWorktree(Model):
     """Its whole path, which a shell call's `workdir` names."""
 
 
-class RunMessage(Model):
-    """The operator's message to a running run (DESIGN §44), and whether its agent fetched it, as `canopy show` says."""
-
-    id: int
-    """The message's id, in its run's subject's conversation."""
-    at: datetime
-    """When the operator sent it."""
-    body: str
-    """The operator's text, control characters dropped and line breaks kept."""
-    delivered_at: datetime | None = None
-    """When canopy first wrote it where the run's agent reads it; None when it never could, so its subject's next run
-    reads it."""
-    fetched_at: datetime | None = None
-    """When the run's agent first fetched it through canopy's tool; None while it has not, or never did."""
-
-
 class Run(Model):
     """One worker or split run (`run:ID`)."""
 
@@ -516,8 +500,6 @@ class Run(Model):
     checklist_stretches_left_out: int = 0
     """How many stretches after the first five the page is not sent, each up to a review's diff: `canopy show run:ID`
     names them all."""
-    messages: list[RunMessage] = []
-    """The operator's messages to it while it ran (DESIGN §44), oldest first, on its page alone: empty in the lists."""
 
 
 class WaitingFeedbackPlan(Model):
@@ -602,6 +584,13 @@ class Message(Model):
     """Its text, control characters dropped and line breaks kept: untrusted."""
     comment: Comment | None = None
     """The tracker comment it mirrors, for one that came from the tracker."""
+    to_run: int | None = None
+    """The running worker's or planner's run the operator sent it to, as `canopy reply run:ID` does (DESIGN §44)."""
+    delivered_at: datetime | None = None
+    """When canopy first wrote it where that run's agent reads it, for one sent to a run; None when it never could, so
+    the subject's next run reads it."""
+    fetched_at: datetime | None = None
+    """When that run's agent first fetched it through canopy's tool; None while it has not, or never did."""
 
 
 class Attachment(Model):

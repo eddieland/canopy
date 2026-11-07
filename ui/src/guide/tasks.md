@@ -97,9 +97,7 @@ page, here and wherever the page names a run.
 
 A run's page is a worker run's page with the task in its trail: its title is `task:N#M` and your text's first line, and
 under it how the run ended. Its **Progress** leads, once the worker has posted any, as a worker run's does, but with no
-question in it: a task's run asks its question by ending `blocked`, and your reply starts the next. While the run
-works, **Messages** under it takes a reply to the task, which the run hears on its next tool call, and lists what you
-sent it and when it fetched each ([Runs](runs#a-message-to-a-running-run) has the rest). **Run** has the
+question in it: a task's run asks its question by ending `blocked`, and your reply starts the next. **Run** has the
 whole of what it said, never cut to a line, and its question when it asked one; for a run that failed, the call it ended
 on; the harness's note when canopy decided how it ended; the PRs it named and the tickets it filed; when it ran, what it
 spent and on which models, the one canopy asked for first, as a worker run's page names them; its branch, the commit it

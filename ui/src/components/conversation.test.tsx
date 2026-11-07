@@ -4,8 +4,9 @@ import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { api } from '@/api/client'
+import { mockRuns } from '@/api/mocks'
 import { keys } from '@/api/queries'
-import type { Message } from '@/api/types'
+import type { Message, Run } from '@/api/types'
 import { renderRouted } from '@/test-utils'
 
 import { Conversation } from './conversation'
@@ -21,6 +22,9 @@ function message(fields: Partial<Message> & Pick<Message, 'id'>): Message {
         kind: 'report',
         run_id: null,
         task_run_id: null,
+        to_run: null,
+        delivered_at: null,
+        fetched_at: null,
         source: 'worker',
         answers: null,
         ...fields,
@@ -31,10 +35,10 @@ const QUESTION = message({ id: 3, kind: 'question', run_id: 41, body: 'Red or bl
 const REPLY = message({ id: 4, kind: 'reply', source: 'operator', answers: 3, body: 'Blue.' })
 const LATER = message({ id: 5, kind: 'reply', source: 'operator', channel: 'cli', body: 'And add a test.' })
 
-// The server stand-in: the latest `ok` tick read up to message 4.
+// The server stand-in: the latest `ok` tick read up to message 4, and no run is running.
 const server: Middleware = {
-    onRequest() {
-        return Response.json({ tick: null, acknowledged: 4 })
+    onRequest({ request }) {
+        return Response.json(new URL(request.url).pathname === '/api/runs' ? [] : { tick: null, acknowledged: 4 })
     },
 }
 
@@ -48,9 +52,10 @@ afterEach(() => {
 })
 
 // A client that already knows what the latest tick read, so nothing is fetched.
-function knowing(read: number | null): QueryClient {
+function knowing(read: number | null, runs: Run[] = []): QueryClient {
     const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } })
     client.setQueryData(keys.tick, { tick: null, acknowledged: read })
+    client.setQueryData(keys.runs, runs)
     return client
 }
 
@@ -202,5 +207,31 @@ describe('Conversation', () => {
         await renderRouted(<Conversation messages={[message({ id: 7, body })]} />, { client: knowing(5) })
         expect(screen.getByText(/^<script>alert\(1\)<\/script> see/u)).toBeDefined()
         expect(screen.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual(['https://example.test/a'])
+    })
+
+    it('says whether the run a reply was sent to fetched it, in place of the tick’s chips', async () => {
+        const sent = { source: 'operator', kind: 'reply', to_run: 41, delivered_at: '2026-10-08T11:00:00Z' } as const
+        const waiting = message({ ...sent, id: 6, body: 'Drop the logout half.' })
+        const heard = message({ ...sent, id: 7, fetched_at: '2026-10-08T11:02:00Z', body: 'Keep the old form.' })
+        const unwritten = message({ ...sent, id: 8, delivered_at: null, body: 'And the docs.' })
+        const running = { ...mockRuns[0], id: 41, state: 'running' } as Run
+        const client = knowing(4, [running])
+        await renderRouted(<Conversation messages={[waiting, heard, unwritten]} />, { client })
+
+        // Its head names the run, and no tick's chip says a tick read it or waits to.
+        expect(within(item(6)).getByText(/^reply to/u).textContent).toBe('reply to run:41 via web')
+        expect(within(item(6)).getByRole('link', { name: 'run:41' })).toBeDefined()
+        expect(within(item(6)).getByText('not fetched yet')).toBeDefined()
+        expect(within(item(6)).queryByText('waiting for the next tick')).toBeNull()
+        expect(within(item(7)).getByText('heard')).toBeDefined()
+        expect(within(item(7)).queryByText('seen')).toBeNull()
+        expect(within(item(8)).getByText('next run reads it')).toBeDefined()
+
+        // The run ends: one it never fetched now never will be.
+        act(() => {
+            client.setQueryData(keys.runs, [{ ...running, status: 'done', state: 'done' }])
+        })
+        expect(await within(item(6)).findByText('never fetched')).toBeDefined()
+        expect(within(item(7)).getByText('heard')).toBeDefined()
     })
 })
