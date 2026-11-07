@@ -75,6 +75,27 @@ def test_model_option_finds_a_model_or_variant_passed_on_the_command_line(
 
 
 @pytest.mark.parametrize(
+    ("command", "found"),
+    [
+        ("env X=1 opencode run --agent canopy-worker --auto {prompt}", "--auto"),
+        # Flags of `opencode` itself, so before `run` too, and with a value.
+        ("opencode --yolo run --agent canopy-worker", "--yolo"),
+        ("opencode run --dangerously-skip-permissions=true", "--dangerously-skip-permissions=true"),
+        ("opencode run --dangerouslySkipPermissions", "--dangerouslySkipPermissions"),
+        # A wrapper may hand one on.
+        ("wrap --auto -- opencode run", "--auto"),
+        ("env X=1 opencode run --agent canopy-worker --format json {prompt}", None),
+        ("opencode run --automatic --title=auto", None),
+    ],
+)
+def test_approve_option_finds_an_option_that_approves_what_rules_would_ask_about(
+    command: str,
+    found: str | None,
+) -> None:
+    assert invocation.approve_option(shlex.split(command)) == found
+
+
+@pytest.mark.parametrize(
     ("command", "replaced"),
     [
         (

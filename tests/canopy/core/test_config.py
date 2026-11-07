@@ -608,6 +608,52 @@ def test_the_default_templates_name_the_definitions_dir(canopy_env: CanopyEnv) -
         assert " --format json --thinking " in template
 
 
+#: A command that runs canopy's chore agent.
+CHORE_CMD = "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore {prompt}"
+
+
+@pytest.mark.parametrize(
+    ("tables", "where"),
+    [
+        ({"runtime": {"worker_cmd": "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --auto"}}, "worker_cmd"),
+        (
+            {"runtime": {"overseer_cmd": "env OPENCODE_CONFIG_DIR={definitions_dir} opencode --yolo run"}},
+            "overseer_cmd",
+        ),
+        ({"runtime": {"worker_cmd_prefix": "wrap --dangerously-skip-permissions --"}}, "worker_cmd_prefix"),
+        ({"runtime": {"worker_cmd_suffix": "--auto=true"}}, "worker_cmd_suffix"),
+        (
+            {"chores": {"triage": {"prompt": "~/triage.md", "every_minutes": 60, "cmd": f"{CHORE_CMD} --auto"}}},
+            "chores.triage: Value error, cmd",
+        ),
+    ],
+)
+def test_a_command_that_approves_what_rules_would_ask_about_is_refused(
+    canopy_env: CanopyEnv,
+    tables: dict[str, object],
+    where: str,
+) -> None:
+    """The rules of canopy's agents deny and never ask, and count on a run refusing what OpenCode asks about (D021).
+
+    `--auto` and its aliases approve it instead, such as reading a `.env` file.
+    """
+    canopy_env.configure(canopy_env.user_file, tables)
+    with pytest.raises(ConfigError) as e:
+        load(canopy_env.root, canopy_env.user_file)
+    assert where in str(e.value)
+    assert "approve what an agent's rules would ask about" in str(e.value)
+
+
+def test_a_chore_of_an_agent_of_the_operators_own_may_approve_what_its_rules_ask_about(canopy_env: CanopyEnv) -> None:
+    """Its rules are the operator's, as its model is: canopy wrote no definition it could reach past."""
+    cmd = "opencode run --agent sentry-triage --auto {prompt}"
+    canopy_env.configure(
+        canopy_env.user_file,
+        {"chores": {"triage": {"prompt": "~/t.md", "every_minutes": 60, "cmd": cmd}}},
+    )
+    assert load(canopy_env.root, canopy_env.user_file).chores["triage"].cmd == cmd
+
+
 @pytest.mark.opencode1  # from OpenCode 1, the default, to 2
 def test_runtime_version_2_runs_opencode_2_and_its_default_templates(canopy_env: CanopyEnv) -> None:
     canopy_env.write_user(
