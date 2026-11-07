@@ -261,9 +261,15 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y bubblewrap socat ripgrep
 
       # Ubuntu 24.04 restricts unprivileged user namespaces through AppArmor, which leaves bubblewrap without the
-      # capabilities it needs. docs/SANDBOX.md gives the operator the same command.
+      # capabilities it needs. Ubuntu 26.04 also loads the bwrap-userns-restrict profile, which lets bubblewrap make
+      # its namespace but denies every capability to what it starts, so srt's seccomp helper cannot make the nested
+      # one it needs. ubuntu-latest is either. docs/SANDBOX.md gives the operator the same commands.
       - name: Allow unprivileged user namespaces
-        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          if sudo grep -q '^bwrap ' /sys/kernel/security/apparmor/profiles; then
+            sudo apparmor_parser -R /etc/apparmor.d/bwrap-userns-restrict
+          fi
 
       - name: Install dependencies
         run: uv sync --locked

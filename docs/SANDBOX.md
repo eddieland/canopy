@@ -70,13 +70,22 @@ Setup also checks two things `srt` only warns about in its debug log, and runs a
   elsewhere a sandboxed command can reach your SSH agent, or Docker's socket. Do not rely on the sandbox there.
 
 On Ubuntu 24.04 and later, AppArmor restricts unprivileged user namespaces
-(`kernel.apparmor_restrict_unprivileged_userns`), and bubblewrap fails without them. Setup tries bubblewrap, and when
-it fails this way, says to lift the restriction, now and at boot, or give `bwrap` an AppArmor profile that allows
-`userns`:
+(`kernel.apparmor_restrict_unprivileged_userns`), and bubblewrap fails without them. Setup tries bubblewrap as `srt`
+uses it, with a user namespace inside the sandbox's own as `srt`'s seccomp helper makes, and when it fails this way,
+says to lift the restriction, now and at boot:
 
 ```sh
 sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 echo 'kernel.apparmor_restrict_unprivileged_userns = 0' | sudo tee /etc/sysctl.d/60-canopy-sandbox.conf
+```
+
+Ubuntu 26.04 also loads AppArmor's `bwrap-userns-restrict` profile, which lets bubblewrap make its namespace but
+denies every capability to what it starts, so `srt`'s seccomp helper cannot make its own. Where that profile is
+loaded, setup says to disable it as well, before the two commands above:
+
+```sh
+sudo ln -sf /etc/apparmor.d/bwrap-userns-restrict /etc/apparmor.d/disable/
+sudo apparmor_parser -R /etc/apparmor.d/bwrap-userns-restrict
 ```
 
 Run canopy as yourself, not as root.

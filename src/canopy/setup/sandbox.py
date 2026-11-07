@@ -53,10 +53,28 @@ APPARMOR_USERNS = Path("/proc/sys/kernel/apparmor_restrict_unprivileged_userns")
 NO_IPV6 = """\
 this kernel has no IPv6, so canopy-sandbox has srt's network bridge inside the sandbox listen on IPv4
 (SOCAT_DEFAULT_LISTEN_IP=4), unless you set that variable yourself."""
-USERNS_FIX = """\
-bubblewrap cannot make a user namespace: AppArmor restricts unprivileged ones. Lift the restriction, now and at boot:
+# Ubuntu 26.04 loads this profile at boot; 24.04 ships it unloaded. It lets bubblewrap make its user namespace, but
+# denies every capability to what bubblewrap starts, so srt's seccomp helper cannot make the nested one it needs.
+BWRAP_PROFILE = Path("/etc/apparmor.d/bwrap-userns-restrict")
+BWRAP_PROFILE_DISABLED = Path("/etc/apparmor.d/disable/bwrap-userns-restrict")
+# A sandbox with a user namespace of its own inside, as srt's seccomp helper makes one. Writing the inner namespace's
+# setgroups takes a capability in it, which AppArmor can deny even where bubblewrap's own namespace works.
+USERNS_PROBE = (
+    *("bwrap", "--ro-bind", "/", "/", "--dev", "/dev", "--unshare-pid", "--proc", "/proc"),
+    *("unshare", "--user", "--map-root-user", "true"),
+)
+LIFT_RESTRICTION = """\
     sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
     echo 'kernel.apparmor_restrict_unprivileged_userns = 0' | sudo tee /etc/sysctl.d/60-canopy-sandbox.conf"""
+USERNS_FIX = f"""\
+bubblewrap cannot make a user namespace: AppArmor restricts unprivileged ones. Lift the restriction, now and at boot:
+{LIFT_RESTRICTION}"""
+BWRAP_PROFILE_FIX = f"""\
+srt cannot make the user namespace it needs inside bubblewrap's: AppArmor's bwrap-userns-restrict profile denies every
+capability to what bubblewrap starts. Disable the profile, and lift the restriction it stood in for, now and at boot:
+    sudo ln -sf {BWRAP_PROFILE} {BWRAP_PROFILE_DISABLED.parent}/
+    sudo apparmor_parser -R {BWRAP_PROFILE}
+{LIFT_RESTRICTION}"""
 WRAPPER_MISSING = """\
 canopy-sandbox is not on PATH. It installs with canopy: run the install again, with --reinstall, and put uv's tool
 directory on PATH (`uv tool update-shell`)."""
@@ -300,17 +318,20 @@ def _check_bwrap_version(runner: procs.Runner, report: Report) -> None:
 
 
 def _check_userns(runner: procs.Runner, report: Report) -> None:
-    """Check that bubblewrap can make a sandbox, which needs an unprivileged user namespace with its capabilities."""
-    done = runner.run(["bwrap", "--ro-bind", "/", "/", "true"], timeout=30)
+    """Check that bubblewrap can make a sandbox as srt does: unprivileged user namespaces, one inside the other."""
+    done = runner.run(list(USERNS_PROBE), timeout=30)
     if done.ok:
         return
     try:
         restricted = APPARMOR_USERNS.read_text(encoding="utf-8").strip() == "1"
     except OSError:
         restricted = False
-    report.todo.append(
-        USERNS_FIX if restricted else f"bubblewrap cannot make a sandbox here:\n    {_tail(done.stderr)}",
-    )
+    if BWRAP_PROFILE.exists() and not BWRAP_PROFILE_DISABLED.exists():
+        report.todo.append(BWRAP_PROFILE_FIX)
+    elif restricted:
+        report.todo.append(USERNS_FIX)
+    else:
+        report.todo.append(f"bubblewrap cannot make a sandbox here:\n    {_tail(done.stderr)}")
 
 
 def _answers(runner: procs.Runner, args: Sequence[str]) -> bool:
