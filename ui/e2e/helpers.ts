@@ -185,24 +185,45 @@ export async function settled(page: Page): Promise<void> {
  * stream would.
  */
 export async function holdAttentionList(page: Page): Promise<void> {
-    await page.addInitScript(() => {
-        const Source = globalThis.EventSource
-        globalThis.EventSource = class extends Source {
-            constructor(...args: ConstructorParameters<typeof EventSource>) {
-                super(...args)
-                this.addEventListener('message', (event) => {
-                    if (event.isTrusted && String(event.data).includes('"attention.updated"')) {
-                        event.stopImmediatePropagation()
+    await holdStream(page, ['attention.updated'], true)
+}
+
+/**
+ * Drops the stream's events of these `types` before the page hears them, so what a test serves in place of a read, as
+ * the root server's journal never changes, is not overwritten by the journal's own list. Call it before opening the
+ * page; the rest of the stream keeps the page live.
+ */
+export async function holdStreamEvents(page: Page, types: readonly string[]): Promise<void> {
+    await holdStream(page, types, false)
+}
+
+/** Wraps the page's EventSource so its first listener stops `types`; with `sendAttention`, it takes a list to send. */
+async function holdStream(page: Page, types: readonly string[], sendAttention: boolean): Promise<void> {
+    await page.addInitScript(
+        ({ held, attention }) => {
+            const Source = globalThis.EventSource
+            globalThis.EventSource = class extends Source {
+                constructor(...args: ConstructorParameters<typeof EventSource>) {
+                    super(...args)
+                    this.addEventListener('message', (event) => {
+                        // As the stream names it; a message that names it nowhere is let through.
+                        const data = String(event.data)
+                        if (event.isTrusted && held.some((type) => data.includes(`"type":"${type}"`))) {
+                            event.stopImmediatePropagation()
+                        }
+                    })
+                    if (attention) {
+                        globalThis.addEventListener('send-attention', (event) => {
+                            const { detail: items } = event as CustomEvent<unknown[]>
+                            const data = JSON.stringify({ type: 'attention.updated', items })
+                            this.dispatchEvent(new MessageEvent('message', { data }))
+                        })
                     }
-                })
-                globalThis.addEventListener('send-attention', (event) => {
-                    const { detail: items } = event as CustomEvent<unknown[]>
-                    const data = JSON.stringify({ type: 'attention.updated', items })
-                    this.dispatchEvent(new MessageEvent('message', { data }))
-                })
+                }
             }
-        }
-    })
+        },
+        { held: types, attention: sendAttention },
+    )
 }
 
 /** Empties a list `holdAttentionList` holds, as the stream does when the loop clears the last item. */
