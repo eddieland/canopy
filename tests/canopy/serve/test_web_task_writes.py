@@ -112,6 +112,9 @@ def test_stop_now_from_the_web_ends_the_run_and_returns_its_slot_as_canopy_stop_
 
     reply = c.post("/api/tasks/1/replies", json=REPLY, headers=headers).json()
     assert reply["running_run"] == started.run_id
+    # The run's page lists it as the operator's message to that run, not yet fetched (DESIGN §44).
+    [sent] = c.get(f"/api/tasks/1/runs/{started.run_id}").json()["messages"]
+    assert (sent["id"], sent["body"], sent["fetched_at"]) == (reply["message_id"], REPLY["body"], None)
     graceful = c.post("/api/tasks/1/stop", json={"now": False}, headers=headers).json()
     assert graceful == {
         "already": False,

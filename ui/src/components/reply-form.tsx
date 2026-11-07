@@ -5,8 +5,10 @@ import { useId, useState } from 'react'
 import type { SubmitEvent } from 'react'
 
 import {
+    messageRun,
     newSubmission,
     refreshChore,
+    refreshMessaged,
     refreshTask,
     refreshTicket,
     replyChore,
@@ -18,7 +20,7 @@ import { MarkdownField } from '@/components/markdown-field'
 import { Notice } from '@/components/notice'
 import { SendKeycap } from '@/components/send-keycap'
 import { Button } from '@/components/ui/button'
-import { notedText, repliedText, taskRepliedText } from '@/lib/outcomes'
+import { notedText, repliedText, runMessagedText, taskRepliedText } from '@/lib/outcomes'
 import { draftKey, keepDraft, readDraft } from '@/lib/reply-draft'
 import { useSendKeys } from '@/lib/send-key'
 import { cn } from '@/lib/utils'
@@ -30,17 +32,20 @@ const NEAR_LIMIT = MAX_REPLY * 0.8
 
 /**
  * What a reply goes to: a ticket, public or private; a chore, whose next runs read it as a note (DESIGN §19), and
- * which may have none yet (`noted` false), so its runs follow its prompt file alone; or a task, whose next run it
- * starts as the operator's next instruction (DESIGN §36).
+ * which may have none yet (`noted` false), so its runs follow its prompt file alone; a task, whose next run it
+ * starts as the operator's next instruction (DESIGN §36), or, from a run of it still `running`, that run hears; or a
+ * running worker's or planner's run, which hears it as a message in the operator's own words (DESIGN §44).
  */
 export type ReplyTarget =
     | { kind: 'ticket'; key: string; isPublic: boolean }
     | { kind: 'chore'; name: string; noted: boolean }
-    | { kind: 'task'; id: number }
+    | { kind: 'task'; id: number; running?: boolean }
+    | { kind: 'run'; id: number }
 
 /**
- * Answers a ticket, as `canopy reply` does, notes something to a chore, as `canopy reply chore:NAME` does, or gives a
- * task its next instruction, as `canopy reply task:N` does. The
+ * Answers a ticket, as `canopy reply` does, notes something to a chore, as `canopy reply chore:NAME` does, gives a
+ * task its next instruction, as `canopy reply task:N` does, or sends a running run a message, as `canopy reply run:ID`
+ * does with words. The
  * submission id is drawn when the form is rendered and kept until a reply is recorded, so sending again after an
  * uncertain result records nothing new (DESIGN §22). Until it is recorded, what is written is kept with its submission
  * id for the tab's life (`src/lib/reply-draft.ts`), so a sign-out mid-reply loses nothing. On a public ticket the
@@ -91,6 +96,12 @@ export function ReplyForm({
                     const replied = await replyTask(target.id, text, submission)
                     return { replied, line: taskRepliedText(target.id, replied) }
                 }
+                case 'run': {
+                    // A message answers no question (DESIGN §44), so the reply it is to `onReplied` answers none.
+                    const messaged = await messageRun(target.id, text, submission)
+                    const replied = { message_id: messaged.message_id, answers: null, new: messaged.new }
+                    return { replied, line: runMessagedText(target.id, messaged) }
+                }
             }
         },
         onSuccess: ({ replied, line }) => {
@@ -111,13 +122,24 @@ export function ReplyForm({
     }
 
     const chore = target.kind === 'chore'
-    // The form's noun, as its button names it.
-    let label = chore ? 'Note' : 'Reply'
+    const run = target.kind === 'run'
+    // The form's noun, as its label names it.
+    let noun = chore ? 'Note' : 'Reply'
+    if (run) {
+        noun = 'Message'
+    }
+    let label = noun
     if (waiting !== null) {
         label = `Reply to message ${waiting}`
     }
     let placeholder = 'The next worker reads it as an instruction.'
-    if (target.kind === 'task') {
+    if (run) {
+        placeholder =
+            'In your own words, such as that its scope changed. Its agent hears that it waits on its next tool call.'
+    } else if (target.kind === 'task' && target.running === true) {
+        placeholder =
+            'Its running agent hears that it waits on its next tool call, and reads it as your next instruction.'
+    } else if (target.kind === 'task') {
         placeholder = 'Its next run reads it as your next instruction, with the conversation so far.'
     } else if (chore) {
         placeholder = 'Its next runs read it as an instruction, a later note winning, such as a finding to leave out.'
@@ -140,7 +162,7 @@ export function ReplyForm({
     return (
         <form
             onSubmit={submit}
-            aria-label={chore ? 'Note' : 'Reply'}
+            aria-label={noun}
             className={cn(
                 'flex flex-col gap-2 border-t p-3',
                 answering && 'border-status-blocked/40 bg-status-blocked/8',
@@ -180,7 +202,7 @@ export function ReplyForm({
                     aria-keyshortcuts={sendKeys.shortcut}
                 >
                     <Send />
-                    {chore ? 'Add note' : 'Reply'}
+                    {buttonText(target)}
                     <SendKeycap keys={sendKeys.shortcut} />
                 </Button>
             </div>
@@ -188,7 +210,23 @@ export function ReplyForm({
     )
 }
 
-/** Where the draft of a reply to `target` is kept: `ticket:ABC-1`, `chore:deps`, or `task:4`. */
+/** What the form's button says: a chore takes a note, a run is sent a message, anything else a reply. */
+function buttonText(target: ReplyTarget): string {
+    switch (target.kind) {
+        case 'chore': {
+            return 'Add note'
+        }
+        case 'run': {
+            return 'Send'
+        }
+        case 'ticket':
+        case 'task': {
+            return 'Reply'
+        }
+    }
+}
+
+/** Where the draft of a reply to `target` is kept: `ticket:ABC-1`, `chore:deps`, `task:4`, or `run:41`. */
 function subjectOf(target: ReplyTarget): string {
     switch (target.kind) {
         case 'ticket': {
@@ -199,6 +237,9 @@ function subjectOf(target: ReplyTarget): string {
         }
         case 'task': {
             return `task:${target.id}`
+        }
+        case 'run': {
+            return `run:${target.id}`
         }
     }
 }
@@ -214,6 +255,9 @@ function refresh(client: QueryClient, target: ReplyTarget): Promise<void> {
         }
         case 'task': {
             return refreshTask(client, target.id)
+        }
+        case 'run': {
+            return refreshMessaged(client, target.id)
         }
     }
 }

@@ -10,13 +10,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import contract, conversation, db, plans, run_models, sql
+from canopy.core import contract, conversation, db, plans, run_inbox, run_models, sql
 from canopy.core.vocab import RunStatus
 from canopy.runs import task_tickets, tasks
 from canopy.serve import checklist_views, views
 from canopy.serve.schema.task import TaskDetail, TaskReport, TaskRun, TaskRunDetail, TaskSummary, TaskTicket
 from canopy.serve.transcript_views import removed_after, session_transcript
-from canopy.serve.views import lines, message, models_served, new_tokens, run_state, said, shown_path
+from canopy.serve.views import lines, message, models_served, new_tokens, run_message, run_state, said, shown_path
 
 if TYPE_CHECKING:
     import sqlite3
@@ -160,6 +160,7 @@ def task_run_detail(ctx: Context, task_id: int, run_id: int) -> TaskRunDetail | 
         checklist=checklist_views.run_answers(ctx.conn, run_id, table="task_runs"),
         checklist_stretches=stretches,
         checklist_stretches_left_out=left_out,
+        messages=[run_message(m) for m in run_inbox.sent_to(ctx.conn, "task_runs", run_id)],
     )
 
 

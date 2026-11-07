@@ -366,6 +366,18 @@ class Answered(Model):
     """Whether it was written where the agent hears it on its next tool call: false once the agent has ended."""
 
 
+class RunMessaged(Model):
+    """The operator's message to a running run, as recorded: what `canopy reply run:ID "..."` says (DESIGN §44)."""
+
+    message_id: int
+    """The message, on the run's ticket."""
+    new: bool
+    """Whether it was recorded now, rather than by an earlier submission with the same id."""
+    told: bool
+    """Whether it was written where the run's agent hears that it waits, on its next tool call: false when the run is
+    ending or its answers directory could not be written, so the ticket's next run reads it."""
+
+
 class RunCard(Model):
     """Where a worker's, planner's, or reviewer's work stands, in its own words: its progress (DESIGN §41).
 
@@ -410,6 +422,22 @@ class RunWorktree(Model):
     """Its path as a page shows it: from the workspace root when under it, else whole."""
     absolute: str
     """Its whole path, which a shell call's `workdir` names."""
+
+
+class RunMessage(Model):
+    """The operator's message to a running run (DESIGN §44), and whether its agent fetched it, as `canopy show` says."""
+
+    id: int
+    """The message's id, in its run's subject's conversation."""
+    at: datetime
+    """When the operator sent it."""
+    body: str
+    """The operator's text, control characters dropped and line breaks kept."""
+    delivered_at: datetime | None = None
+    """When canopy first wrote it where the run's agent reads it; None when it never could, so its subject's next run
+    reads it."""
+    fetched_at: datetime | None = None
+    """When the run's agent first fetched it through canopy's tool; None while it has not, or never did."""
 
 
 class Run(Model):
@@ -488,6 +516,8 @@ class Run(Model):
     checklist_stretches_left_out: int = 0
     """How many stretches after the first five the page is not sent, each up to a review's diff: `canopy show run:ID`
     names them all."""
+    messages: list[RunMessage] = []
+    """The operator's messages to it while it ran (DESIGN §44), oldest first, on its page alone: empty in the lists."""
 
 
 class WaitingFeedbackPlan(Model):

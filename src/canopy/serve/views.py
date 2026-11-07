@@ -29,6 +29,7 @@ from canopy.core import (
     personas,
     plans,
     records,
+    run_inbox,
     run_models,
     ticket_models,
 )
@@ -64,6 +65,7 @@ from canopy.serve.schema import (
     RunCard,
     RunCardQuestion,
     RunCardStep,
+    RunMessage,
     RunsSince,
     RunState,
     RunWorktree,
@@ -272,6 +274,7 @@ def run_detail(ctx: Context, run_id: int) -> Run | None:
         stretches=stretches,
         stretches_left_out=left_out,
         timeout_minutes=limit,
+        messages=[run_message(m) for m in run_inbox.sent_to(ctx.conn, "runs", run_id)],
     )
 
 
@@ -439,13 +442,14 @@ def run(
     stretches: Sequence[ChecklistStretch] = (),
     stretches_left_out: int = 0,
     timeout_minutes: int | None = None,
+    messages: Sequence[RunMessage] = (),
 ) -> Run:
     """One run's row, with the `worktrees` it leased, its paths from the workspace `root`.
 
     On the run's own page it carries `models`, the models that served it, for a `feedback-plan` run `feedback_plan`,
     the plan it wrote, `checklist`, what it answered of its repositories' lists, and `stretches`, what it pushed after
-    being shown them, with how many more it pushed, `stretches_left_out`. `timeout_minutes`, a worker's time limit,
-    says when a step in its progress is stuck; with None, none is.
+    being shown them, with how many more it pushed, `stretches_left_out`, and `messages`, the operator's to it (§44).
+    `timeout_minutes`, a worker's time limit, says when a step in its progress is stuck; with None, none is.
 
     Returns:
         The run as the API sends it. A status it does not know reads as `failed`.
@@ -483,6 +487,22 @@ def run(
         checklist=list(checklist),
         checklist_stretches=list(stretches),
         checklist_stretches_left_out=stretches_left_out,
+        messages=list(messages),
+    )
+
+
+def run_message(row: records.Message) -> RunMessage:
+    """The operator's message to a running run (DESIGN §44), with when canopy wrote it for its agent and it fetched it.
+
+    Returns:
+        The message as a run's page lists it, its body without control characters.
+    """
+    return RunMessage(
+        id=row.id,
+        at=db.parse_time(row.at),
+        body=lines(row.body),
+        delivered_at=db.parse_time(row.delivered_at) if row.delivered_at else None,
+        fetched_at=db.parse_time(row.fetched_at) if row.fetched_at else None,
     )
 
 

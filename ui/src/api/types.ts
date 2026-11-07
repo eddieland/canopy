@@ -25,6 +25,10 @@ export type RunCard = Schemas['RunCard']
 export type RunCardQuestion = Schemas['RunCardQuestion']
 /** The operator's answer to a running run's question, as recorded: what `canopy reply run:ID LETTER` says. */
 export type Answered = Schemas['Answered']
+/** The operator's message to a running run (DESIGN §44), and when its agent fetched it, as `canopy show` says. */
+export type RunMessage = Schemas['RunMessage']
+/** The operator's message to a running run, as recorded: what `canopy reply run:ID "..."` says (DESIGN §44). */
+export type RunMessaged = Schemas['RunMessaged']
 /** Which models served an agent run, read from its session after it ended (DESIGN §13), or why none are shown. */
 export type ModelsServed = Schemas['ModelsServed']
 /** One model that wrote an agent run's replies, with how many and what they cost. */

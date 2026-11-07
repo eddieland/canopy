@@ -90,6 +90,7 @@ export const mockRuns: Run[] = [
         checklist: [],
         checklist_stretches: [],
         checklist_stretches_left_out: 0,
+        messages: [],
     },
     {
         id: 42,
@@ -126,6 +127,7 @@ export const mockRuns: Run[] = [
         checklist: [],
         checklist_stretches: [],
         checklist_stretches_left_out: 0,
+        messages: [],
     },
 ]
 
