@@ -235,8 +235,10 @@ jobs:
 
   # The sandbox canary (DESIGN §24, The canary): the shipped wrapper and policy templates under the real srt, with
   # bubblewrap, set up the way docs/SANDBOX.md tells the operator to. Linux only: macOS is the operator's to check.
+  # Pinned to 24.04: on the ubuntu-26.04 image the sandbox cannot write /proc/self/setgroups in its nested user
+  # namespace, even with the sysctl below. Back to ubuntu-latest once the sandbox setup supports 26.04.
   sandbox-canary:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.code != 'false' && needs.changes.outputs.python != 'false' }}
     timeout-minutes: 15
