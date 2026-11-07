@@ -28,6 +28,7 @@ from canopy.core import (
     config,
     connector_runs,
     db,
+    epics,
     git_tools,
     observe,
     plans,
@@ -94,6 +95,37 @@ TRACKER = {"kind": "tracker", "cmd": TRACKER_CMD}
 #: The `connect` keys of a source that posts to the tracker, for drafts on a ticket.
 #: The private file's sources replace the user file's whole, so they name the tests' tracker source again.
 TRACKER_POSTS = {"sources": {TRACKER_SOURCE: {**TRACKER, "post_cmd": "canopy-post-github"}}}
+#: An epic's plan as its planner writes one: a requirement, a contract, and the one entry that covers and provides them.
+EPIC_PLAN = """\
+# Epic: sessions
+
+## Goal
+
+Sessions survive a restart.
+
+## Requirements
+
+- **R1.** Sessions survive a restart of the API.
+
+## Contracts
+
+- **C1.** The store's read interface. Provided by B1.
+
+## Breakdown
+
+### B1. Move the store
+
+- Covers: R1
+- Provides: C1
+- Uses: none
+- Repositories: repo
+- After: none
+- Trivial: no
+
+## Decisions
+
+## Out of scope
+"""
 # What a blocked worker asks (`blocked_result`).
 QUESTION = "Should the button be red or blue?"
 # The last line an overseer prints when it has finished its tick.
@@ -331,6 +363,35 @@ def epic_planned(env: CanopyEnv, plan: str, epic_id: int = 1) -> int:
     with planner_does(plan=plan):
         assert main(["_epic", str(run_id)], runner=InlineRunner()) == 0
     return run_id
+
+
+def epic_approved(env: CanopyEnv, plan: str = EPIC_PLAN) -> int:
+    """Submit epic:1, record `plan` as its plan as its planner's run would, and approve it: return the plan's id.
+
+    No planner runs, so the test needs no pool: `epic_planned` is for a test that needs the run itself.
+    """
+    assert operator("epic", "submit", "Move sessions to the new store.") == 0
+    epic_proposed(env, plan)
+    assert operator("plan", "epic:1", "--approve") == 0
+    return present(epics.approved_plan(inline_context(env).conn, 1)).id
+
+
+def epic_proposed(env: CanopyEnv, plan: str, epic_id: int = 1) -> None:
+    """Record `plan` as epic `epic_id`'s newest, `proposed`, as its planner's run would, with no planner run."""
+    ctx = inline_context(env)
+    tick_id = db.start_tick(ctx.conn, dry_run=False)
+    run = records.insert(
+        records.EpicRun,
+        epic_id=epic_id,
+        tick_id=tick_id,
+        desk_path=str(env.root / "desks" / f"epic-{epic_id}"),
+        started_at=db.now(),
+        status=RunStatus.DONE,
+        log_path=str(env.root / f"epic-{epic_id}.log"),
+    )
+    run_id = db.rowid(run.run(ctx.conn))
+    db.finish_tick(ctx.conn, tick_id, TickStatus.OK, "test")
+    epics.record_plan(ctx.conn, epic_id, run_id, epics.write_plan(ctx.state_dir, epic_id, run_id, plan))
 
 
 def running_run(ctx: Context, key: str, *, private: bool = True) -> int:

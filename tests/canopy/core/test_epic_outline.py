@@ -242,3 +242,9 @@ def test_a_member_is_trivial_only_when_every_entry_it_fulfils_is(
 ) -> None:
     """A trivial member skips its own plan only when every entry it fulfils is marked trivial (DESIGN §43)."""
     assert epic_outline.trivial(read(), entries) is trivial
+
+
+def test_a_members_drift_is_held_to_the_plans_requirements_and_contracts() -> None:
+    """An entry, an id the plan holds only in prose or a code block, or no id at all is dropped (DESIGN §43)."""
+    named = ["R2", "C1", "B1", "R7", "R9", "R2", "c1", 3, None]
+    assert epic_outline.drift(read(), named) == ["C1", "R2"]

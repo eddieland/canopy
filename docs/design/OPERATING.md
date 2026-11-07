@@ -496,8 +496,8 @@ raise them define: `canopy_unavailable` and `disk_low` (§6), `fix_ci_override` 
 `lesson_review`, and `lesson_wrong` (§28),
 `drafts_waiting` (§29), `connector_failed` and `check_stuck` (§30), `persona_missing` and `bad_persona` (§31),
 `model_missing` and `model_list_failed` (§13), `git_too_old` (§8), `review_waiting` and `review_unsettled` (§34),
-`task_ticket_unrecorded` (§36), `untrusted_artifact_comment` (§38), and `unobserved_pr` (§37). An item
-about one unit names its repository, shown as `KEY (repo)`. An item about a PR whose latest reviewed commit has a
+`task_ticket_unrecorded` (§36), `untrusted_artifact_comment` (§38), `unobserved_pr` (§37), and `epic_drift` (§43). An
+item about one unit names its repository, shown as `KEY (repo)`. An item about a PR whose latest reviewed commit has a
 `high` review (§21), or about its ticket, comes first: within its reason on the list, and in a notification.
 
 **Raised by the harness.** Every tick, after reconcile, for a ticket not done, its latest run's status maps to a
@@ -524,8 +524,9 @@ From their causes, before the overseer runs, the harness raises the phase table'
 `untrusted_review` while that row holds on a unit, `attempt_limit` for a unit or a ticket's plan whose next run is past
 its limit, `review_limit` for one of the loop's PRs unreviewed at its limit, `review_failed` while a PR's latest review
 run failed, and `plan_review` and `plan_changed` while a plan waits on the operator or its file is no longer what they
-approved; and three the overseer never recorded: `ticket_changed`, while a ticket's text is not what it was when its
-plan was approved (§25), `check_stuck`, for a unit one check holds at `ci_running` long after
+approved; and four the overseer never recorded: `ticket_changed`, while a ticket's text is not what it was when its
+plan was approved (§25), `epic_drift`, while a member's plan that departs from its epic's waits on the operator (§43),
+`check_stuck`, for a unit one check holds at `ci_running` long after
 the rest finished (§30), and `unobserved_pr`, for a unit whose PR URL names no PR, which no source reads, so its ticket
 waits (§37) until the unit names a PR or the operator forgets the ticket's work. Each is open while its cause holds in
 the journal and the observations (§30). One resting on an observation is kept while that observation is stale, and

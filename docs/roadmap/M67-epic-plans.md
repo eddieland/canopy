@@ -89,4 +89,9 @@ against the older plan; a plan run at work when the plan changes lands its plan 
 holding the `implement` until the operator approves a plan of it, a planner's approval not enough; a notice is spent
 when the plan run told it starts, whether or not it writes a plan; and no event when no member was reached. Left for
 this bullet: telling an `implement` or `resume` the ids, which waits on their reading the epic's copy; a trivial
-member's re-approval; and the web UI's approval naming the members reached.
+member's re-approval; and the web UI's approval naming the members reached. Built 2026-11-06, upward: a member's
+planner names in its result's `drift` the ids of the epic plan it departs from, held to that plan's requirements and
+contracts, recorded with its plan, and the harness raises `epic_drift` on the member while that plan waits, ending as
+§43 says, a reply to the epic after the plan being its ask for a new epic plan, or once the ticket is done or stopped.
+Chosen conservatively, for the operator to change: the item also ends when the ticket leaves the epic, and a plan with
+drift is never approved on its planner's word.

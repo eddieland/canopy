@@ -37,7 +37,7 @@ from canopy.infra import lock
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
     from pathlib import Path
 
     from canopy.core.config import Policy
@@ -79,6 +79,9 @@ MAX_NOTE = conversation.MAX_OPERATOR - 200
 #: The channel a plan's approval names when the harness approved it on its planner's word that it needs no review,
 #: under `policy.planner_may_approve`: the planner's approval, never the operator's (DESIGN §25).
 PLANNER = "planner"
+
+#: How a plan's row joins the ids of its epic's plan that it departs from (`epic_drift`, DESIGN §43).
+DRIFT_SEPARATOR = ", "
 
 #: What of a ticket's text can change since its plan was approved, as the harness's warning names it (`ticket_changed`).
 type TicketPart = Literal["title", "description"]
@@ -561,6 +564,7 @@ def record(
     no_review: str | None = None,
     effort: PlanEffort | None = None,
     epic_plan_id: int | None = None,
+    epic_drift: Sequence[str] = (),
 ) -> records.Plan:
     """Record the plan the run `run_id` wrote for `key`, after its file, as `proposed`. It supersedes the current one.
 
@@ -570,7 +574,8 @@ def record(
     asked to approve or approved, or the ticket's own setting asks for a plan. Then it waits on them, as any plan does.
     `event` builds the plan's event from its id and that reason when it held, recorded in the same transaction (§20).
     `effort` is its planner's estimate of how much work the plan is, kept to show beside it. `epic_plan_id` is the
-    approved epic plan its planner read, when its ticket is a member of an epic (DESIGN §43).
+    approved epic plan its planner read, when its ticket is a member of an epic, and `epic_drift` the ids of it its
+    planner said this plan departs from, each one that plan holds (DESIGN §43).
 
     Returns:
         The plan's row.
@@ -597,6 +602,7 @@ def record(
             approved_title_sha256=seen.title_sha256 if seen is not None else None,
             approved_body_sha256=seen.body_sha256 if seen is not None else None,
             epic_plan_id=epic_plan_id,
+            epic_drift=DRIFT_SEPARATOR.join(epic_drift) or None,
         ).returned(conn)
         built = event(plan.id, reason) if event is not None else None
         if built is not None:

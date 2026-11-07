@@ -6,7 +6,8 @@ operator's word alone. A plan run records the plan it wrote here, as a file in t
 hashes, `proposed`, never approved: only the operator approves one. A tracker's epic, parent, or sub-issue link never
 makes a ticket a member, and membership authorizes no work on it: a member is worked only once a label or a start says
 so, as any ticket is. The overseer never reads an epic. `policy.max_epic_tickets` bounds the members of one,
-a guard in code (§4). Stopping an epic, the operator's word too, ends its planning and leaves its members alone.
+a guard in code (§4). Stopping an epic, the operator's word too, ends its planning and leaves its members alone. A
+member's plan whose planner said it departs from the approved plan waits on the operator as `epic_drift` (`drift`).
 """
 
 from __future__ import annotations
@@ -66,6 +67,17 @@ class MemberEpic:
     entries: Sequence[str]
     #: Those it was registered against that a later approval dropped.
     dropped: Sequence[str]
+
+
+@dataclass(frozen=True)
+class Drift:
+    """A member's plan that departs from its epic's plan, waiting on the operator to settle it (DESIGN §43)."""
+
+    epic_id: int
+    #: The member's plan, which names the epic plan it was written against.
+    plan: records.Plan
+    #: The requirements and contracts of that epic plan it departs from, as its planner named them.
+    ids: Sequence[str]
 
 
 @dataclass(frozen=True)
@@ -522,6 +534,32 @@ def member_epic(conn: sqlite3.Connection, state_dir: Path, key: str) -> MemberEp
     entries = [e for e in registered if held is None or e in held]
     dropped = [e for e in registered if e not in entries]
     return MemberEpic(epic_id=member.epic_id, plan=plan, entries=entries, dropped=dropped)
+
+
+def drift(conn: sqlite3.Connection, ticket: records.Ticket) -> Drift | None:
+    """Return `ticket`'s plan that departs from its epic's, while that waits on the operator: `epic_drift` (§43).
+
+    It waits while the plan does (`plans.waits`), the ticket is still a member of the epic whose approved plan it was
+    written against, that is still the epic's latest approved plan, and no reply to the epic came after it. So the
+    operator ends it by approving the member's plan as written, by approving the epic's plan again, or by asking for a
+    new plan of either. The ids were held to that epic plan when the plan was recorded.
+
+    Returns:
+        The plan and its ids, or None while no departure waits.
+    """
+    plan = plans.current(conn, ticket.key)
+    if plan is None or plan.epic_drift is None or plan.epic_plan_id is None or not plans.waits(conn, ticket):
+        return None
+    read = records.select(records.EpicPlan).where("id = ?", plan.epic_plan_id).one(conn)
+    member = membership(conn, ticket.key)
+    if read is None or member is None or member.epic_id != read.epic_id:
+        return None
+    latest = approved_plan(conn, read.epic_id)
+    if latest is None or latest.id != read.id:
+        return None
+    if any(m.at > plan.created_at for m in messages_of(conn, read.epic_id)):
+        return None
+    return Drift(epic_id=read.epic_id, plan=plan, ids=plan.epic_drift.split(plans.DRIFT_SEPARATOR))
 
 
 def approved_text(state_dir: Path, plan: records.EpicPlan) -> str | None:
