@@ -1,3 +1,3 @@
--- sha256 of 0011_plan_epic_drift.sql: 02b297aae02e2dde3397250d3c74767126df2b55bc5087c3e3ee57f284691c69
+-- sha256 of 0011_stop_asks.sql: a9aac876f77c439604414f90aeb586f1598a9621de3b602b4b92238375381f6f
 
 -- Creates no table, so seeds no row.

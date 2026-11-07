@@ -16,7 +16,7 @@ import sqlite3
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, epic_changes, epic_outline, plans, records
+from canopy.core import conversation, db, epic_changes, epic_outline, plans, records, sql
 from canopy.core.conversation import Refused
 from canopy.core.vocab import PlanStatus, RunStatus
 from canopy.infra import lock
@@ -582,6 +582,24 @@ def messages_of(conn: sqlite3.Connection, epic_id: int) -> list[records.Message]
         str(epic_id),
     )
     return query.order_by("id").all(conn)
+
+
+def newest_messages(conn: sqlite3.Connection) -> dict[int, int]:
+    """Return the id of each epic's newest message, by the epic's id; an epic with none is not listed.
+
+    A reply to an epic whose plan run still works changes no summary: this is how a reader of the epics list knows its
+    conversation moved all the same.
+
+    Returns:
+        The ids.
+    """
+    query = (
+        sql.select("subject_id, max(id)")
+        .from_("messages")
+        .where("subject_kind = ?", conversation.EPIC)
+        .group_by("subject_id")
+    )
+    return {int(r[0]): int(r[1]) for r in sql.execute(conn, query)}
 
 
 def _keep_approved(state_dir: Path, epic_id: int, run_id: int, text: str, sha256: str) -> None:

@@ -85,7 +85,7 @@ dozen. When every screenshot differs, check the browser before the change.
   resources. Server pushes arrive through
   `useEventStream` (`src/api/live.ts`, `src/hooks/use-live-updates.ts`): a list arrives whole and is written with
   `setQueryData`; `ticket.changed` marks that ticket's query stale, which refetches only if a page shows it, as
-  `task.changed` does a task's and its reports, and
+  `task.changed` does a task's and its reports, and `epic.changed` an epic's and its plans, and
   `chores.updated` marks every chore's (a new note changes the list it carries); `tick.updated` marks the ticks, a
   tick's page, and the ticket shown. A new
   event type is a pydantic model in the `StreamEvent` union, a case in `applyStreamEvent`, and a check in

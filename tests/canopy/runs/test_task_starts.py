@@ -33,10 +33,10 @@ from canopy.core import (
 from canopy.core.context import Context
 from canopy.core.items import Item
 from canopy.core.vocab import Decider, ItemAnswer, RunStatus
-from canopy.infra import logs
+from canopy.infra import logs, procs
 from canopy.loop import attention
 from canopy.notify import message
-from canopy.runs import reconcile, task_starts, task_tickets, tasks
+from canopy.runs import ending, reconcile, task_run, task_starts, task_tickets, tasks, tidy
 from tests.canopy.helpers import (
     DEAD_PID,
     KEY,
@@ -796,6 +796,47 @@ def test_stop_now_ends_a_running_task_and_returns_its_slot(
     assert run.status is RunStatus.STOPPED
     assert set(pool_statuses(treehouse_state)) == {"available"}
     assert start(inline) == []
+
+
+def test_a_stop_now_that_dies_at_the_kill_leaves_reconcile_to_close_the_run_stopped(
+    inline: Context,
+    treehouse_state: Path,
+) -> None:
+    """The stop records that it was asked before it kills: the run it killed but never closed is no crash."""
+    submit()
+    [started] = start(inline)
+    records.update(records.TaskRun).set(pid=4_000_000).where("id = ?", started.run_id).run(inline.conn)
+    tasks.stop(inline.conn, 1)
+    run = present(tasks.get_run(inline.conn, started.run_id))
+    with (
+        mock.patch.object(procs, "kill_group", autospec=True, side_effect=KeyboardInterrupt),
+        pytest.raises(KeyboardInterrupt),
+    ):
+        task_run.stop_now(inline, run, logs.for_tick(None))
+    assert present(tasks.get_run(inline.conn, started.run_id)).status is RunStatus.RUNNING
+
+    reconcile.run(inline, logs.for_tick(None))
+    run = present(tasks.get_run(inline.conn, started.run_id))
+    assert run.status is RunStatus.STOPPED
+    assert json.loads(present(run.result_json))["harness"] == task_run.STOP_NOTE
+    assert set(pool_statuses(treehouse_state)) == {"available"}
+
+
+def test_stop_now_says_a_slot_it_could_not_tidy_was_not_returned(
+    capsys: pytest.CaptureFixture[str],
+    inline: Context,
+    treehouse_state: Path,
+) -> None:
+    """The run is closed `stopped` all the same; its slot stays leased, and the stop never says it was returned."""
+    submit()
+    [started] = start(inline)
+    with mock.patch.object(tidy, "tidy", autospec=True, return_value=False):
+        assert operator("stop", "task:1", "--now") == 0
+    out = capsys.readouterr().out
+    assert f"Its run {started.run_id} was ended, but its slot was not returned; {ending.KEPT_NOTE}" in out
+    assert "slot returned" not in out
+    assert present(tasks.get_run(inline.conn, started.run_id)).status is RunStatus.STOPPED
+    assert "leased" in pool_statuses(treehouse_state)
 
 
 def test_a_stop_inside_a_run_is_refused(capsys: pytest.CaptureFixture[str], inline: Context) -> None:

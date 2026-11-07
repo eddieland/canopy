@@ -95,6 +95,9 @@ line, how many of its breakdown's entries have a member (`2 of 4 entries filed`;
 and `breakdown unreadable` for a plan canopy can't read: its file is gone, or its ids repeat or won't parse), and how
 long ago you submitted it. A stopped epic says under its goal how long ago you stopped it.
 
+The list moves as the loop does: a plan run starting or ending, a stop, a reply, a member added from the shell, all
+show without a reload, and so does an epic's page you have open, its plans with it.
+
 From the shell, `canopy epic list` lists them and `canopy show epic:N` prints one, its breakdown with each entry's
 members.
 
@@ -144,9 +147,9 @@ the planner, the first first: how it ended, `epic:N#M`, cost, how long it took, 
 replies. It asks once more first, since nothing undoes a stop, and says that its members and their work are left as
 they are: a stop ends no member's run and removes no member. Its waiting plan may still be approved, and its members
 still added and removed. While a plan run of it works, that run finishes its work unless you also press **Stop now**,
-which asks once more too, then ends the run and returns its slots. Stopped with its run still working, the epic keeps
-**Stop now** alone. What the stop did is said under the buttons, in the command's words; it refuses inside a tick or a
-run, as the command does:
+which asks once more too, then ends the run and returns its slots, or says it couldn't return one. Stopped with its
+run still working, the epic keeps **Stop now** alone. What the stop did is said under the buttons, in the command's
+words; it refuses inside a tick or a run, as the command does:
 
 ```sh
 canopy stop epic:3        # its plan run at work finishes

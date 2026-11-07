@@ -49,7 +49,17 @@ from canopy.core import (
 from canopy.core.config import render_command
 from canopy.core.vocab import RunStatus
 from canopy.infra import logs, procs, stopping
-from canopy.runs import attachments, changes, checklist_pushes, checkpoint, follow_ups, task_tickets, tasks, tidy
+from canopy.runs import (
+    attachments,
+    changes,
+    checklist_pushes,
+    checkpoint,
+    ending,
+    follow_ups,
+    task_tickets,
+    tasks,
+    tidy,
+)
 from canopy.runs import task_starts as starts
 from canopy.runs.checkpoint import SetupError
 from canopy.runtime import project_config, servers, stdout
@@ -194,35 +204,29 @@ def end(ctx: Context, run: records.TaskRun, status: RunStatus, note: str, log: l
         The lease ids it dealt with, returned or kept, which reconcile then leaves alone; none when the run's own
         `_task` closed it first.
     """
-    fields = {"task_run_id": run.id, "task": run.task_id, "pid": run.pid, "slot": run.slot_path}
-    # `_task` is gone, but a worker it started may not be. Stop it before its slot goes back to its pool.
-    if run.agent_pid is not None and procs.kill_group(run.agent_pid):
-        log.warning("killed the agent a gone process left behind", extra={**fields, "agent_pid": run.agent_pid})
-    if not tasks.close_run(ctx.conn, ctx.config, run.id, status, json.dumps({"harness": note}), head=None):
-        # Its own `_task` closed it first, and returned its slot.
-        return set()
-    procs.drop_lifelock(Path(run.log_path))
-    # A report the worker wrote is kept however its run ended; why one was not is in the log alone.
-    keep_report(ctx, run, log)
-    release(ctx, run, run.git_link, log)
-    log.warning("task run closed without its `_task`", extra={**fields, "status": status, "note": note})
-    return {run.lease_id}
+    return set() if _close(ctx, run, status, note, log) is None else {run.lease_id}
 
 
-def stop_now(ctx: Context, run: records.TaskRun, log: logs.TickAdapter) -> bool:
+def stop_now(ctx: Context, run: records.TaskRun, log: logs.TickAdapter) -> ending.Ending:
     """Kill task run `run`'s processes and close it `stopped`, its slot returned: `canopy stop task:N --now`.
 
+    That it was asked is recorded first, so a stop that dies after the kill leaves reconcile to close it `stopped`.
+
     Returns:
-        True once the run is closed, or False if it had already ended: nothing changes.
+        How it ended: `GONE` if it had already ended, and nothing changed; `KEPT` if its slot could not be returned.
     """
-    for pid in (run.pid, run.agent_pid):
+    # Read again first: a run that ended since the stop read it signals nothing, so no pid it held, since reused, is.
+    current = tasks.get_run(ctx.conn, run.id)
+    if current is None or current.status is not RunStatus.RUNNING or not db.ask_stop(ctx.conn, "task_runs", run.id):
+        return ending.Ending.GONE
+    for pid in (current.pid, current.agent_pid):
         # Never this process's own group: a `_task` claimed in-process, as tests run it, has this pid.
         if pid is not None and pid not in (os.getpid(), os.getpgid(0)):
             procs.kill_group(pid)
-    current = tasks.get_run(ctx.conn, run.id)
-    if current is None or current.status is not RunStatus.RUNNING:
-        return False
-    return bool(end(ctx, current, RunStatus.STOPPED, STOP_NOTE, log))
+    returned = _close(ctx, current, RunStatus.STOPPED, STOP_NOTE, log)
+    if returned is None:
+        return ending.Ending.GONE
+    return ending.Ending.ENDED if returned else ending.Ending.KEPT
 
 
 def keep_report(ctx: Context, run: records.TaskRun, log: logs.TickAdapter) -> str:
@@ -251,11 +255,14 @@ def keep_report(ctx: Context, run: records.TaskRun, log: logs.TickAdapter) -> st
     return ""
 
 
-def release(ctx: Context, run: records.TaskRun, link: bytes | None, log: logs.TickAdapter) -> None:
+def release(ctx: Context, run: records.TaskRun, link: bytes | None, log: logs.TickAdapter) -> bool:
     """Remove the report from the run's slot, tidy it as a worker run's is (DESIGN §8), and return it.
 
     The run's answers directory, which holds its checklist (§42), is removed first, and its object directory last. A
     slot that could not be tidied is not returned, and the object directory is kept, so its objects can be read.
+
+    Returns:
+        Whether the slot went back to its pool.
     """
     fields = {"task_run_id": run.id, "slot": run.slot_path, "lease_id": run.lease_id, "repo": run.repo}
     slot = Path(run.slot_path)
@@ -268,7 +275,7 @@ def release(ctx: Context, run: records.TaskRun, link: bytes | None, log: logs.Ti
     cards.remove_answers(starts.answers_dir(Path(run.log_path)))
     objects = starts.objects_dir(Path(run.log_path))
     if not tidy.tidy(ctx.runner, slot, link=link, base=run.base_branch, objects=objects, log=log, fields=fields):
-        return
+        return False
     tidy.remove_objects(objects, log)
     try:
         outcome = ctx.pool_of(run.pool, run.repo).return_slot(
@@ -279,11 +286,33 @@ def release(ctx: Context, run: records.TaskRun, link: bytes | None, log: logs.Ti
     except pools.PoolError as e:
         # The next tick's reconcile returns a canopy lease no running run holds.
         log.error("task's slot not returned", extra={**fields, "error": str(e)})  # noqa: TRY400
-        return
+        return False
     if outcome is pools.ReturnOutcome.RETURNED:
         log.info("task's slot returned", extra=fields)
-    else:
-        log.warning("task's slot not returned", extra={**fields, "outcome": outcome.value})
+        return True
+    log.warning("task's slot not returned", extra={**fields, "outcome": outcome.value})
+    return False
+
+
+def _close(ctx: Context, run: records.TaskRun, status: RunStatus, note: str, log: logs.TickAdapter) -> bool | None:
+    """Close task run `run` without its `_task`, as `end` says, and return its slot.
+
+    Returns:
+        Whether its slot went back to its pool; None when its own `_task` closed it first, and returned it.
+    """
+    fields = {"task_run_id": run.id, "task": run.task_id, "pid": run.pid, "slot": run.slot_path}
+    # `_task` is gone, but a worker it started may not be. Stop it before its slot goes back to its pool.
+    if run.agent_pid is not None and procs.kill_group(run.agent_pid):
+        log.warning("killed the agent a gone process left behind", extra={**fields, "agent_pid": run.agent_pid})
+    if not tasks.close_run(ctx.conn, ctx.config, run.id, status, json.dumps({"harness": note}), head=None):
+        # Its own `_task` closed it first, and returned its slot.
+        return None
+    procs.drop_lifelock(Path(run.log_path))
+    # A report the worker wrote is kept however its run ended; why one was not is in the log alone.
+    keep_report(ctx, run, log)
+    returned = release(ctx, run, run.git_link, log)
+    log.warning("task run closed without its `_task`", extra={**fields, "status": status, "note": note})
+    return returned
 
 
 def _work(ctx: Context, run: records.TaskRun, link: bytes | None, out: TextIO, log: logs.TickAdapter) -> Outcome:

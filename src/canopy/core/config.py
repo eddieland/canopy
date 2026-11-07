@@ -290,7 +290,25 @@ def _agent_template(value: str) -> str:
             f"must contain {DEFINITIONS_DIR}, the directory canopy's agent definitions are in (D040). "
             f"For {invocation.NAME}, write: '{invocation.with_config_dir(DEFINITIONS_DIR, value)}'",
         )
+    _refuse_approve_option(value)
     return value
+
+
+def _refuse_approve_option(template: str) -> None:
+    """Refuse `template` if it has the runtime approve what an agent's rules would ask about (D021).
+
+    canopy's rules deny and never ask, and count on a run refusing whatever the runtime's own defaults or the operator's
+    config leave at `ask`, such as reading a `.env` file. An option that approves it instead reaches past them.
+
+    Raises:
+        ValueError: it passes one.
+    """
+    found = invocation.approve_option(shlex.split(template))
+    if found is not None:
+        raise ValueError(
+            f"must not pass {found!r}: it has {invocation.NAME} approve what an agent's rules would ask about, such as "
+            "reading a .env file, where canopy counts on a run refusing it (D021). Remove it",
+        )
 
 
 def notify_words(template: str) -> list[str]:
@@ -374,7 +392,7 @@ def _wrapper(value: str) -> str:
     # the template it wraps, but the prompt is that template's to place, exactly once (D023).
     if PROMPT in value:
         raise ValueError(f"must not contain {PROMPT}; the command it wraps places the prompt")
-    shlex.split(value)
+    _refuse_approve_option(value)
     return value
 
 
@@ -1658,6 +1676,7 @@ class Chore(Section):
         if self.model is not None or runs_chore:
             try:
                 _refuse_model_option(self.cmd, "Set model in this table instead")
+                _refuse_approve_option(self.cmd)
             except ValueError as e:
                 raise ValueError(f"cmd {e}") from None
         return self

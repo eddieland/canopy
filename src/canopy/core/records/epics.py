@@ -100,6 +100,9 @@ class EpicRun(Row):
     #: The model canopy chose for it, written into its definition; None when the runtime's default serves it.
     model: str | None
     tool_calls: int
+    #: When the operator asked to end it now (`canopy stop --now`), before its processes were killed: reconcile closes
+    #: it `stopped` should it find it gone; None when no one did.
+    stop_asked_at: str | None
 
 
 @dataclass(frozen=True)

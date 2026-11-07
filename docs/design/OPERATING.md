@@ -335,6 +335,10 @@ denies: GitHub's tools no prompt asks for, by name, as the server's own name is 
 from both workers and the planner too, off a GitHub tracker. A pattern that would take one of the tracker's own tools
 canopy knows is left out.
 
+Every rule that leaves a call at `ask`, the runtime's own or the operator's, holds only while a run refuses it (D021),
+so config refuses a template, prefix, suffix, or chore command of canopy's agents that passes `--auto` or an alias of
+it, which approves every one instead.
+
 ### What a run prints
 
 Every agent's output is read the same way, whether the template asks for plain text or JSON events. A JSON result

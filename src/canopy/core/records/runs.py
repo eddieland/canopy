@@ -144,6 +144,9 @@ class Run(Row):
     #: The level of `policy.planner_may_approve` a plan or feedback plan run's prompt offered its planner (DESIGN
     #: §25), `off` where it was asked nothing; None for any other kind, and a plan run from before canopy kept it.
     plan_review: PlannerApproval | None
+    #: When the operator asked to end it now (`canopy stop --now`), before its processes were killed: reconcile closes
+    #: it `stopped` should it find it gone; None when no one did.
+    stop_asked_at: str | None
 
 
 @dataclass(frozen=True)

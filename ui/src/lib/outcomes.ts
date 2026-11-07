@@ -1,6 +1,8 @@
 import { ApiError } from '@/api/client'
 import type {
     Answered,
+    DeskClosed,
+    DeskOpened,
     AgentModel,
     Attached,
     Detached,
@@ -80,6 +82,12 @@ export function failedText(error: unknown): string {
     return typeof error === 'string' ? error : 'the request failed'
 }
 
+/**
+ * What a stop that ended a run says of a slot it could not return, as `canopy stop --now` does
+ * (`runs.ending.KEPT_NOTE`).
+ */
+const KEPT_NOTE = 'the next tick returns it, or one canopy could not tidy stays leased for you: canopy.log says which'
+
 /** What a start did, as `canopy start` says it: whether it was already started, and any run still working it. */
 export function startedText(key: string, started: Started): string {
     const state = started.already ? 'was already started' : 'is started'
@@ -127,9 +135,38 @@ export function taskStoppedText(id: number, stopped: TaskStopped, now: boolean):
     if (!now) {
         return `${head} Its run ${run} is still working and will finish; Stop now ends it.`
     }
-    return stopped.ended
-        ? `${head} Its run ${run} was ended and its slot returned.`
-        : `${head} Its run ${run} had already ended.`
+    if (!stopped.ended) {
+        return `${head} Its run ${run} had already ended.`
+    }
+    return stopped.kept
+        ? `${head} Its run ${run} was ended, but its slot was not returned; ${KEPT_NOTE}`
+        : `${head} Its run ${run} was ended and its slot returned.`
+}
+
+/**
+ * What opening a desk did, as `canopy desk KEY` says it, and the run working the ticket meanwhile, which pushes to the
+ * same branch from slots of its own.
+ */
+export function deskOpenedText(key: string, opened: DeskOpened): string {
+    const head = opened.already
+        ? `${key}'s desk is already open; close it to change its repositories.`
+        : `${key}'s desk is open.`
+    if (opened.running_run === null) {
+        return head
+    }
+    const kind = opened.running_kind === null ? '' : ` (${opened.running_kind})`
+    return (
+        `${head} Run ${opened.running_run}${kind} is working ${key} now, in slots of its own, and pushes to the same ` +
+        'branch; pull before you push.'
+    )
+}
+
+/** What closing a desk did, as `canopy desk KEY --close` says it: the slots it returned, or that none was open. */
+export function deskClosedText(key: string, closed: DeskClosed): string {
+    if (closed.returned.length === 0) {
+        return `${key} has no desk open.`
+    }
+    return `${key}'s desk is closed; its slots are returned: ${closed.returned.join(', ')}.`
 }
 
 /** What a forget cleared, and what is left for the operator: closing its PRs and deleting its branch on origin. */
@@ -687,9 +724,12 @@ export function epicStoppedText(id: number, stopped: EpicStopped, now: boolean):
     if (!now) {
         return `${head} Its plan run ${run} is still working and will finish; Stop now ends it.`
     }
-    return stopped.ended
-        ? `${head} Its plan run ${run} was ended and its slots returned.`
-        : `${head} Its plan run ${run} had already ended.`
+    if (!stopped.ended) {
+        return `${head} Its plan run ${run} had already ended.`
+    }
+    return stopped.kept
+        ? `${head} Its plan run ${run} was ended, but a slot it held was not returned; ${KEPT_NOTE}`
+        : `${head} Its plan run ${run} was ended and its slots returned.`
 }
 
 /** What the operator's word on a plan did, as `canopy plan` says it (canopy/cli/plans.py). */
