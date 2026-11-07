@@ -57,6 +57,9 @@ class EpicSummary(Model):
     """Where it stands now."""
     members: int
     """How many tickets are its members now."""
+    planned: bool = False
+    """Whether it has a plan, proposed or approved, whether or not its outline can be read: what tells a breakdown
+    canopy cannot read from none at all, whatever the epic's standing."""
     entries: int | None = None
     """How many entries its outline's breakdown holds; None when it has no plan, or its outline cannot be read."""
     entries_with_members: int = 0

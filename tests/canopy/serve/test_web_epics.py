@@ -30,6 +30,8 @@ def test_the_mock_epics_are_listed_newest_first_each_where_it_stands(backend: Ba
     assert (planning["repos"], planning["members"], planning["entries"]) == (["api", "web"], 0, None)
     # A proposed plan's breakdown is counted; no member is registered against one.
     assert (proposed["entries"], proposed["entries_with_members"]) == (3, 0)
+    # Only the two with a plan are planned.
+    assert [e["planned"] for e in listed] == [False, False, True, True]
     assert (approved["repos"], approved["project"], approved["members"]) == (["api", "web", "mobile"], "ABC", 3)
     assert (approved["entries"], approved["entries_with_members"]) == (4, 2)
 
@@ -121,7 +123,7 @@ def test_a_plan_whose_ids_repeat_is_served_as_its_problem_never_half_a_map(backe
     assert (outline["source"], outline["problem"]) == ("proposed", "R1 appears twice")
     assert (outline["requirements"], outline["contracts"], outline["entries"]) == ([], [], [])
     listed = next(e for e in c.get("/api/epics").json() if e["id"] == PROPOSED)
-    assert listed["entries"] is None
+    assert (listed["entries"], listed["planned"]) == (None, True)
 
     path.unlink()
     assert c.get(f"/api/epics/{PROPOSED}").json()["outline"]["problem"] == "its file is missing"
@@ -212,6 +214,17 @@ def test_a_stopped_epic_stands_stopped_once_its_plan_run_ends(backend: Backend) 
     listed = {e["id"]: e for e in c.get("/api/epics").json()}
     assert listed[mock_epics.APPROVED]["standing"] == "stopped"
     assert listed[mock_epics.PROPOSED]["stopped_at"] is None
+
+
+def test_a_stopped_epic_whose_plan_cannot_be_read_is_still_planned(backend: Backend) -> None:
+    """Its breakdown is unreadable, not missing: the list says it has a plan, whatever the epic stands at."""
+    c = client(None, backend)
+    with backend.open() as ctx:
+        plan = present(epics.current_plan(ctx.conn, PROPOSED))
+        epics.plan_path(ctx.state_dir, PROPOSED, plan.run_id).unlink()
+        epics.stop(ctx.conn, PROPOSED)
+    listed = next(e for e in c.get("/api/epics").json() if e["id"] == PROPOSED)
+    assert (listed["standing"], listed["entries"], listed["planned"]) == ("stopped", None, True)
 
 
 def test_an_unknown_epic_is_a_404(backend: Backend) -> None:

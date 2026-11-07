@@ -51,12 +51,12 @@ export function epicTitle(text: string): string {
 
 /**
  * How much of an epic's breakdown has members, as its row reads it: `2 of 4 entries filed`. With no breakdown to count,
- * an epic whose plan is proposed or approved has one canopy cannot read (its file, or its ids), and says
- * `breakdown unreadable`; any other has no plan yet, `no breakdown`.
+ * an epic with a plan has one canopy cannot read (its file, or its ids), and says `breakdown unreadable`, whatever it
+ * stands at, stopped or planning again included; one with no plan yet says `no breakdown`.
  */
-export function entriesFiled(epic: Pick<EpicSummary, 'entries' | 'entries_with_members' | 'standing'>): string {
+export function entriesFiled(epic: Pick<EpicSummary, 'entries' | 'entries_with_members' | 'planned'>): string {
     if (epic.entries === null) {
-        return epic.standing === 'proposed' || epic.standing === 'approved' ? 'breakdown unreadable' : 'no breakdown'
+        return epic.planned ? 'breakdown unreadable' : 'no breakdown'
     }
     const noun = epic.entries === 1 ? 'entry' : 'entries'
     return `${String(epic.entries_with_members)} of ${String(epic.entries)} ${noun} filed`
