@@ -5,7 +5,8 @@ run `opencode run` with JSON events (`canopy.runtime.opencode2.events`) and a se
 points OpenCode at canopy's definitions rather than the repository's (D040). Without it, OpenCode looks for canopy's
 agent in the repository and, not finding it, runs its default agent, which allows everything. It also knows the
 option that would choose a run's model on the command line, beating the model canopy writes into the agent's
-definition (DESIGN §13), so config can refuse a template that passes one.
+definition (DESIGN §13), and those that would approve every permission an agent's rules leave at `ask` (D021), so
+config can refuse a template that passes one.
 
 OpenCode 2's commands talk to a server. Unless told otherwise they share a background service, started once and kept
 running, whose environment and config are those of whichever command started it, and whose tools run in its process,
@@ -34,6 +35,12 @@ STANDALONE = "--standalone"
 MODEL_OPTION = "--model"
 SHORT_MODEL_OPTION = "-m"
 VARIANT_OPTION = "--variant"
+
+#: The options of `opencode` that approve every permission an agent's rules leave at `ask`, `--auto` and its hidden
+#: aliases, flags of the command itself as OpenCode 2.2.5 takes them, and 1's camel case besides.
+APPROVE_OPTIONS = frozenset(
+    {"--auto", "--yolo", "--dangerously-skip-permissions", "--dangerouslySkipPermissions"},
+)
 # The agent a command runs, as `opencode run` takes it, by a name that is safe as one path component.
 _AGENT_RE = re.compile(r"(--agent[ =])([a-z][a-z0-9-]*)(?=\s|$)")
 
@@ -91,3 +98,16 @@ def model_option(words: Sequence[str], *, run_args: bool = False) -> str | None:
         if word == "run" and i > 0 and PurePosixPath(words[i - 1]).name == "opencode":
             after_run = True
     return None
+
+
+def approve_option(words: Sequence[str]) -> str | None:
+    """Return the first of `words`, a command's, that has OpenCode approve what an agent's rules would ask about.
+
+    canopy's rules deny and never ask, and count on a run refusing whatever OpenCode's own defaults or the operator's
+    config leave at `ask`, such as reading a `.env` file (D021); each of `APPROVE_OPTIONS` approves it instead. They
+    count wherever they are, with a value or without, as a wrapper may hand them on.
+
+    Returns:
+        The word, or None when none passes one.
+    """
+    return next((word for word in words if word.split("=", 1)[0] in APPROVE_OPTIONS), None)
