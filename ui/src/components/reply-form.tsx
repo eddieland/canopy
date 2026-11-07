@@ -1,10 +1,11 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { QueryClient } from '@tanstack/react-query'
 import { Send } from 'lucide-react'
 import { useId, useState } from 'react'
 import type { SubmitEvent } from 'react'
 
 import {
+    messageRun,
     newSubmission,
     refreshChore,
     refreshTask,
@@ -13,13 +14,17 @@ import {
     replyTask,
     replyTicket,
 } from '@/api/mutations'
-import type { Replied } from '@/api/types'
+import { runsQuery } from '@/api/queries'
+import type { Replied, Run } from '@/api/types'
 import { MarkdownField } from '@/components/markdown-field'
 import { Notice } from '@/components/notice'
 import { SendKeycap } from '@/components/send-keycap'
 import { Button } from '@/components/ui/button'
-import { notedText, repliedText, taskRepliedText } from '@/lib/outcomes'
+import { Checkbox } from '@/components/ui/checkbox'
+import { notedText, repliedText, runMessagedText, taskRepliedText } from '@/lib/outcomes'
+import { runRef } from '@/lib/refs'
 import { draftKey, keepDraft, readDraft } from '@/lib/reply-draft'
+import { workingOn } from '@/lib/run-state'
 import { useSendKeys } from '@/lib/send-key'
 import { cn } from '@/lib/utils'
 
@@ -27,6 +32,9 @@ import { cn } from '@/lib/utils'
 const MAX_REPLY = 4000
 // How long a reply grows before its count shows: near the limit, where the count is worth reading.
 const NEAR_LIMIT = MAX_REPLY * 0.8
+// What the box that tells the running run says on hover.
+const TELL_NOW =
+    'Off, the next run reads your reply. On, the run working now hears on its next tool call that you wrote.'
 
 /**
  * What a reply goes to: a ticket, public or private; a chore, whose next runs read it as a note (DESIGN §19), and
@@ -50,6 +58,13 @@ export type ReplyTarget =
  * away; what it is for is said by its label and placeholder: the message it answers (`waiting`), an untrusted review
  * waiting on the go-ahead (`untrusted`), where a reply on a public ticket goes, or that a task's next run reads it.
  * It is written in a `MarkdownField`, in the Markdown the conversation draws, with a Preview of how it will read there.
+ *
+ * While a worker or a planner runs on the ticket, the one its conversation shows working, a box beside the button
+ * offers to tell that run now (DESIGN §44): checked, the reply is a message to the run, as `canopy reply run:ID` sends
+ * one, recorded on the ticket all the same, which its agent hears of on its next tool call. It is off by default, and
+ * after each send, since a reply mid-run is mostly meant for the next run, and steering an agent mid-edit is a choice.
+ * It is not offered while the form answers an open question, and goes once the run ends: a send it refused as ended
+ * keeps the draft and its submission id, so sending again goes to the ticket and records one message.
  *
  * `onReplied` hears each reply recorded, after the form has said what it did, with that line: the attention page moves
  * on to the next item that waits on the operator.
@@ -76,10 +91,20 @@ export function ReplyForm({
     const [body, setBody] = useState(draft?.body ?? '')
     const [submission, setSubmission] = useState(() => draft?.submission ?? newSubmission())
     const [said, setSaid] = useState<string | null>(null)
+    // The run the box offers to tell now, and the one it was checked for: never kept, so each reply starts unchecked.
+    const running = useRunning(target, waiting)
+    const [toRun, setToRun] = useState<number | null>(null)
+    const telling = toRun !== null && running?.id === toRun ? running : undefined
     const mutation = useMutation({
         mutationFn: async (text: string): Promise<{ replied: Replied; line: string }> => {
             switch (target.kind) {
                 case 'ticket': {
+                    if (telling !== undefined) {
+                        // A message answers no question (DESIGN §44), so the reply it is to `onReplied` answers none.
+                        const messaged = await messageRun(telling.id, text, submission)
+                        const replied = { message_id: messaged.message_id, answers: null, new: messaged.new }
+                        return { replied, line: runMessagedText(telling.id, messaged) }
+                    }
                     const replied = await replyTicket(target.key, text, submission)
                     return { replied, line: repliedText(target.key, replied) }
                 }
@@ -97,6 +122,7 @@ export function ReplyForm({
             setSaid(line)
             setBody('')
             setSubmission(newSubmission())
+            setToRun(null)
             keepDraft(stored, { body: '', submission })
             void refresh(client, target)
             onReplied?.(replied, line)
@@ -117,7 +143,10 @@ export function ReplyForm({
         label = `Reply to message ${waiting}`
     }
     let placeholder = 'The next worker reads it as an instruction.'
-    if (target.kind === 'task') {
+    if (telling !== undefined) {
+        const run = `Run ${telling.id}`
+        placeholder = `${run} hears on its next tool call that you wrote, and reads it through canopy's tool.`
+    } else if (target.kind === 'task') {
         placeholder = 'Its next run reads it as your next instruction, with the conversation so far.'
     } else if (chore) {
         placeholder = 'Its next runs read it as an instruction, a later note winning, such as a finding to leave out.'
@@ -173,8 +202,17 @@ export function ReplyForm({
                         {body.length}/{MAX_REPLY}
                     </span>
                 )}
+                {running !== undefined && (
+                    <TellNow
+                        run={running}
+                        checked={telling !== undefined}
+                        disabled={mutation.isPending}
+                        onCheckedChange={(checked) => setToRun(checked ? running.id : null)}
+                        className={cn(!near && 'ml-auto')}
+                    />
+                )}
                 <Button
-                    className={cn(!near && 'ml-auto')}
+                    className={cn(!near && running === undefined && 'ml-auto')}
                     type="submit"
                     disabled={mutation.isPending || !body.trim()}
                     aria-keyshortcuts={sendKeys.shortcut}
@@ -185,6 +223,49 @@ export function ReplyForm({
                 </Button>
             </div>
         </form>
+    )
+}
+
+/**
+ * The run working a ticket now that its reply form may tell at once: its worker or planner, the newest when there are
+ * two, as the conversation shows them working. None for a chore or a task, nor while the form answers an open question.
+ */
+function useRunning(target: ReplyTarget, waiting: number | null): Run | undefined {
+    const runs = useQuery(runsQuery).data ?? []
+    if (target.kind !== 'ticket' || waiting !== null) {
+        return undefined
+    }
+    return workingOn(runs, target.key).at(-1)
+}
+
+/** The box beside the button that sends a ticket's reply to its running run now, rather than to its next run. */
+function TellNow({
+    run,
+    checked,
+    disabled,
+    onCheckedChange,
+    className,
+}: {
+    run: Run
+    checked: boolean
+    disabled: boolean
+    onCheckedChange: (checked: boolean) => void
+    className?: string
+}) {
+    const id = useId()
+    return (
+        // Kept whole: when the row is tight the notice gives, never the label's words.
+        <span className={cn('flex shrink-0 items-center gap-1.5 whitespace-nowrap', className)}>
+            <Checkbox
+                id={id}
+                checked={checked}
+                disabled={disabled}
+                onCheckedChange={(next) => onCheckedChange(next === true)}
+            />
+            <label htmlFor={id} className="text-xs" title={TELL_NOW}>
+                Tell <span className="font-mono">{runRef(run.id)}</span> now
+            </label>
+        </span>
     )
 }
 

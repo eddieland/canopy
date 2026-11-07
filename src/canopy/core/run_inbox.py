@@ -120,6 +120,31 @@ def sent_to(conn: sqlite3.Connection, table: MessageTable, run_id: int) -> list[
     return records.select(records.Message).where("{} = ?", sql.name(_TO[table]), run_id).order_by("id").all(conn)
 
 
+def running_marks(conn: sqlite3.Connection) -> dict[str, tuple[int, int]]:
+    """Return how far the messages sent to each ticket's running runs have gone, by the ticket's key.
+
+    A message canopy writes for a run, and one its agent fetches, changes no ticket's summary, so this is how a reader
+    of the tickets list knows the ticket's conversation moved all the same. A run that ends changes its ticket's
+    summary itself.
+
+    Returns:
+        How many of them canopy has written where the runs' agents read them, and how many the agents have fetched;
+        a ticket whose running runs were sent none is not listed.
+    """
+    query = (
+        sql.select("r.ticket_key, count(m.delivered_at), count(m.fetched_at)")
+        .from_("runs r")
+        # Through the ticket's own messages, which the subject's index finds, rather than every message's run.
+        .join(
+            "messages m ON m.subject_kind = ? AND m.subject_id = r.ticket_key AND m.to_run_id = r.id",
+            db.SUBJECT_TICKET,
+        )
+        .where("r.status = ?", RunStatus.RUNNING)
+        .group_by("r.ticket_key")
+    )
+    return {str(r[0]): (int(r[1]), int(r[2])) for r in sql.execute(conn, query)}
+
+
 def mark_sent(conn: sqlite3.Connection, table: MessageTable, run_id: int, message_id: int) -> None:
     """Name run `run_id` of `table` as the run message `message_id` was sent to. Call inside the reply's transaction."""
     sent = records.update(records.Message).where("id = ?", message_id)

@@ -28,7 +28,7 @@ from contextlib import ExitStack, contextmanager
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from canopy.core import epics, sql
+from canopy.core import epics, run_inbox, sql
 from canopy.infra import logs
 from canopy.runs import tasks
 from canopy.serve import chore_views, epic_views, reviews, spend_views, task_views, tick_views, views
@@ -181,6 +181,7 @@ class _Sent:
         self.reviews: ReviewsUpdated | None = None
         self.requested: ReviewRequestsUpdated | None = None
         self.tickets: dict[str, TicketSummary] | None = None
+        self.ticket_states: dict[str, tuple[TicketSummary, tuple[int, int] | None]] | None = None
         self.spend: Spend | None = None
         self.tick: LastTick | None = None
         self.loop: LoopState | None = None
@@ -251,17 +252,26 @@ class _Sent:
     def _tickets(self, ctx: Context) -> list[StreamEvent]:
         """Read the tickets again, and say what changed since they were last sent.
 
+        A ticket's page holds its conversation too, where a message to its running run says when the run's agent fetched
+        it (DESIGN §44), which moves without its summary, so a ticket changes when either does.
+
         Returns:
-            The tickets list, then a `TicketChanged` for each ticket whose summary changed; empty when none did.
+            The tickets list when it changed, then a `TicketChanged` for each ticket whose summary or messages to its
+            running runs changed; empty when none did.
         """
+        found: list[StreamEvent] = []
         tickets = views.tickets(ctx)
         by_key = {t.key: t for t in tickets}
-        if self.tickets is not None and by_key == self.tickets:
-            return []
-        before = self.tickets or {}
-        changed = [k for k, t in by_key.items() if self.tickets is not None and before.get(k) != t]
-        self.tickets = by_key
-        return [StreamEvent(TicketsUpdated(tickets=tickets)), *(StreamEvent(TicketChanged(key=k)) for k in changed)]
+        if by_key != self.tickets:
+            self.tickets = by_key
+            found.append(StreamEvent(TicketsUpdated(tickets=tickets)))
+        marks = run_inbox.running_marks(ctx.conn)
+        states = {k: (t, marks.get(k)) for k, t in by_key.items()}
+        if self.ticket_states is not None:
+            before = self.ticket_states
+            found.extend(StreamEvent(TicketChanged(key=k)) for k, state in states.items() if before.get(k) != state)
+        self.ticket_states = states
+        return found
 
     def _tasks(self, ctx: Context) -> list[StreamEvent]:
         """Read the tasks again, and say what changed since they were last sent.
