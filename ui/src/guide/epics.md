@@ -30,7 +30,7 @@ Write it as you would a reply, with the same toolbar, and the same microphone wh
 **Submit**, or the send key, records it and opens the epic's page, `queued`: the next tick starts its plan run, before
 the overseer, within `capacity.max_workers`. A submission refuses as the command does, naming the guard: an empty goal,
 a repository the workspace hasn't got, a project or tracker epic that isn't a plain key, and anything sent from inside
-a tick or a run.
+a tick or a run. Submitting again after an unclear failure, say a dropped connection, files the epic once.
 
 From the shell it is the same:
 

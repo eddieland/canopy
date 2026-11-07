@@ -21,7 +21,8 @@ The operator submits an epic's goal in their own words, naming its repositories 
 tickets, the tracker project; `epic:N` names it afterwards (D075). Like a task (§36), it is private, its conversation
 never touches the tracker, and it never reaches the overseer. The submission authorizes its plan runs, and its text is
 the operator's instruction; replies, approvals, stopping it, and adding or removing a member take the same channels,
-each refused inside a tick or any run (TRUST_MODEL T1).
+each refused inside a tick or any run (TRUST_MODEL T1). A retried submission from a form records one epic, as a retried
+reply records one message (§22).
 
 A **member** is a ticket the operator added, or one a filing run filed for it, at any time, before its plan or after.
 A ticket is a member of at most one epic, and at most `policy.max_epic_tickets` are members of one. Membership

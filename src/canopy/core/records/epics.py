@@ -32,6 +32,8 @@ class Epic(Row):
     submitted_at: str
     #: When the operator stopped it; None while it is not stopped.
     stopped_at: str | None
+    #: The id the web's form drew for it, so a retry records it once; None for one the CLI submitted.
+    submission: str | None
 
 
 @dataclass(frozen=True)

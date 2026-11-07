@@ -4,7 +4,7 @@ import { Waypoints } from 'lucide-react'
 import { useState } from 'react'
 import type { SubmitEvent } from 'react'
 
-import { submitEpic } from '@/api/mutations'
+import { newSubmission, submitEpic } from '@/api/mutations'
 import { keys, metaQuery } from '@/api/queries'
 import { Input } from '@/components/input'
 import { MarkdownField } from '@/components/markdown-field'
@@ -26,8 +26,10 @@ const MAX_TEXT = 4000
  * reads while the workspace has several (`ReposChoice`, none chosen until the operator names them, as the CLI asks),
  * the tracker project its tickets are filed in, the tracker epic whose tickets are put to them as suggestions, and an
  * outline `Submit`, which the send key presses too. Under them one line says what the optional two do, which a refusal
- * replaces, naming its guard. Once it is recorded, a toast says what the CLI says and the form opens the epic's page,
- * which says its plan run is to come; the list is read again, since no stream event carries an epic.
+ * replaces, naming its guard. Its submission id is drawn when the form is rendered and kept until an epic is
+ * recorded, so sending again after an uncertain result files no second epic (DESIGN §43). Once it is recorded, a toast
+ * says what the CLI says and the form opens the epic's page, which says its plan run is to come; the list is read
+ * again at once, rather than wait for the stream's `epics.updated`.
  */
 export function EpicSubmitForm() {
     const navigate = useNavigate()
@@ -40,12 +42,15 @@ export function EpicSubmitForm() {
     const [chosen, setChosen] = useState<string[]>([])
     const [project, setProject] = useState('')
     const [trackerEpic, setTrackerEpic] = useState('')
+    // Drawn anew once an epic is recorded, so a retry of the same one records nothing new.
+    const [submission, setSubmission] = useState(newSubmission)
     // A workspace of one needs no name: the server reads its one repository, as the CLI does.
     const several = repos.length > 1
     const named = chosen.filter((repo) => repos.includes(repo))
     const mutation = useMutation({
-        mutationFn: () => submitEpic(text, several ? named : [], optional(project), optional(trackerEpic)),
+        mutationFn: () => submitEpic(text, several ? named : [], optional(project), optional(trackerEpic), submission),
         onSuccess: (submitted) => {
+            setSubmission(newSubmission())
             toast(epicSubmittedToast(submitted))
             void client.invalidateQueries({ queryKey: keys.epics })
             void navigate({ to: '/epics/$id', params: { id: String(submitted.id) } })

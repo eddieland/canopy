@@ -14,20 +14,22 @@ import { renderRouted } from '@/test-utils'
 import { EpicSubmitForm } from './epic-submit'
 
 // What each submission sent, and what the server stand-in answers.
-let sent: unknown[] = []
+let sent: Record<string, unknown>[] = []
 let answer: Response | undefined
 let toasts: NewToast[] = []
 
 const server: Middleware = {
     async onRequest({ request }) {
         if (request.method === 'POST' && new URL(request.url).pathname === '/api/epics') {
-            sent.push(await request.json())
+            sent.push((await request.json()) as Record<string, unknown>)
         }
         return answer ?? Response.json({ id: 4, repos: ['api', 'web'] })
     },
 }
 
 const GOAL = 'Let customers export their invoices as CSV.'
+// A submission id, whatever the form drew.
+const DRAWN = expect.any(String) as unknown
 
 beforeEach(() => {
     sent = []
@@ -108,7 +110,7 @@ describe('EpicSubmitForm', () => {
         await waitFor(() => {
             expect(router.state.location.pathname).toBe('/epics/4')
         })
-        expect(sent).toEqual([{ text: GOAL, repos: [], project: null, tracker_epic: null }])
+        expect(sent).toEqual([{ text: GOAL, repos: [], project: null, tracker_epic: null, submission: DRAWN }])
         expect(toasts).toEqual([
             { title: 'Submitted epic:4; the next tick starts its plan run.', detail: 'over api, web', tone: 'done' },
         ])
@@ -130,7 +132,35 @@ describe('EpicSubmitForm', () => {
         await waitFor(() => {
             expect(router.state.location.pathname).toBe('/epics/4')
         })
-        expect(sent).toEqual([{ text: GOAL, repos: ['api', 'web'], project: 'ABC', tracker_epic: 'ABC-90' }])
+        expect(sent).toEqual([
+            { text: GOAL, repos: ['api', 'web'], project: 'ABC', tracker_epic: 'ABC-90', submission: DRAWN },
+        ])
+    })
+
+    it('sends a retry after a failure as the same submission, and the epic after it as another', async () => {
+        // The first try's answer is lost: the server may have recorded it, so the retry must not file a second epic.
+        answer = Response.json({ detail: 'the journal is busy' }, { status: 503 })
+        const { router } = await renderForm(['web'])
+        write(GOAL)
+        submit()
+        expect((await screen.findByRole('alert')).textContent).toBe('the journal is busy')
+        expect(router.state.location.pathname).toBe('/epics')
+
+        answer = undefined
+        submit()
+        await waitFor(() => {
+            expect(router.state.location.pathname).toBe('/epics/4')
+        })
+
+        write('Let customers export their invoices as PDF too.')
+        submit()
+        await waitFor(() => {
+            expect(sent).toHaveLength(3)
+        })
+        const [failed, retried, next] = sent.map((body) => body['submission'])
+        expect(typeof failed).toBe('string')
+        expect(retried).toBe(failed)
+        expect(next).not.toBe(retried)
     })
 
     it('sends nothing for a blank goal', async () => {
