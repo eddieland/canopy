@@ -304,6 +304,49 @@ class ChecklistStretch(Model):
     """Retention removed the diff, this many days after the run ended (DESIGN §26); None when it did not."""
 
 
+class RunRange(Model):
+    """The commits a worker's or a task's run went from and to in one repository (DESIGN §45), as `canopy show` prints.
+
+    The harness's own reads of origin and of the run's slot as the run ended, after its push and before a flaky kick,
+    never the agent's word.
+    """
+
+    repo: str
+    """The repository."""
+    start_sha: str | None = None
+    """The commit the run started from: origin's branch then, or the base's commit when origin had no branch; None for
+    a run that crashed before any git ran in its slot."""
+    start_on_base: bool = False
+    """Whether `start_sha` is the base's commit, origin having had no branch when the run started."""
+    end_sha: str | None = None
+    """The commit the run left on origin's branch, before any flaky kick; None when origin has no branch."""
+    unpushed_sha: str | None = None
+    """For a slot the run left unpushed, the last commit it made there, whose diffs are of work not on origin; None
+    for a slot that pushed."""
+
+
+class RunChange(Model):
+    """What a worker's or a task's run changed in one repository (DESIGN §45): its range and the two diffs it kept.
+
+    Both diffs are the branch's text, untrusted, kept beside the run's log as it ended and read within a review's
+    diff's bounds.
+    """
+
+    range: RunRange
+    """The commits it went from and to."""
+    merge_base_sha: str | None = None
+    """Where the diffed commit leaves the base, as the slot last fetched it; None when canopy found none."""
+    diff: ReviewDiff | None = None
+    """The run's own change, from `start_sha` to the commit it left; None when it was not kept, or its file is gone or
+    not a regular file."""
+    branch_diff: ReviewDiff | None = None
+    """The branch against its base, from the merge base to the same commit; None as `diff` is."""
+    missing: str | None = None
+    """Why canopy kept no diff, or only one, as the run's end recorded it; None when it kept both."""
+    removed_after_days: int | None = None
+    """Retention removed the kept diffs, this many days after the run ended (DESIGN §26); None when it did not."""
+
+
 class CardStep(Model):
     """A finished step in a running agent's progress, with what shows it is done."""
 
@@ -488,6 +531,12 @@ class Run(Model):
     checklist_stretches_left_out: int = 0
     """How many stretches after the first five the page is not sent, each up to a review's diff: `canopy show run:ID`
     names them all."""
+    changes: list[RunChange] = []
+    """What it changed in each repository (DESIGN §45), on its page alone, by repository: its range and its kept diffs.
+    Empty for a run still running, one that recorded none, and in the lists."""
+    ranges: list[RunRange] = []
+    """The commits it went from and to in each repository (DESIGN §45), by repository, in its ticket's runs list alone:
+    its page has them in `changes`. Empty elsewhere."""
 
 
 class WaitingFeedbackPlan(Model):

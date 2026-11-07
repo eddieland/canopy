@@ -19,6 +19,7 @@ import { PromptPanel } from '@/components/prompt-panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { RunOutputPanel } from '@/components/raw-output'
 import { RichText } from '@/components/rich-text'
+import { RunChangesPanel } from '@/components/run-changes'
 import { ChecklistPanel } from '@/components/run-checklist'
 import { RunDoing } from '@/components/run-doing'
 import { ProgressPanel } from '@/components/run-progress'
@@ -30,6 +31,7 @@ import { useTranscriptView } from '@/hooks/use-transcript-view'
 import { runDescription } from '@/lib/descriptions'
 import { readNothingText } from '@/lib/memory'
 import { runRef } from '@/lib/refs'
+import { recordsChanges } from '@/lib/run-changes'
 import { tickId } from '@/lib/ticks'
 import { RUN_TOKENS_TITLE, runTokens } from '@/lib/transcript'
 
@@ -104,6 +106,7 @@ function Loaded({ id }: { id: number }) {
                     leftOut={data.checklist_stretches_left_out}
                     shownBy={runRef(data.id)}
                 />
+                <RunChangesPanel changes={data.changes} records={data.ended_at !== null && recordsChanges(data.kind)} />
                 <TranscriptPanel
                     transcript={transcript}
                     running={data.state === 'running'}

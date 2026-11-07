@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 from canopy.core import contract, conversation, db, plans, run_models, sql
 from canopy.core.vocab import RunStatus
 from canopy.runs import task_tickets, tasks
-from canopy.serve import checklist_views, views
+from canopy.serve import change_views, checklist_views, views
 from canopy.serve.schema.task import TaskDetail, TaskReport, TaskRun, TaskRunDetail, TaskSummary, TaskTicket
 from canopy.serve.transcript_views import removed_after, session_transcript
 from canopy.serve.views import lines, message, models_served, new_tokens, run_state, said, shown_path
@@ -123,7 +123,8 @@ def task_run_detail(ctx: Context, task_id: int, run_id: int) -> TaskRunDetail | 
 
     Returns:
         The run, its whole summary and question, the harness's note, the tickets recorded from it, its models, and
-        what it answered of its repository's checklist (DESIGN §42), with what it pushed after being shown it.
+        what it answered of its repository's checklist (DESIGN §42), with what it pushed after being shown it, and
+        what it changed, with its kept diffs (§45).
     """
     row = _run_of(ctx.conn, task_id, run_id)
     if row is None:
@@ -160,6 +161,13 @@ def task_run_detail(ctx: Context, task_id: int, run_id: int) -> TaskRunDetail | 
         checklist=checklist_views.run_answers(ctx.conn, run_id, table="task_runs"),
         checklist_stretches=stretches,
         checklist_stretches_left_out=left_out,
+        changes=change_views.run_changes_of(
+            ctx.conn,
+            run_id,
+            log_path=row.log_path,
+            ended_at=row.ended_at,
+            table="task_runs",
+        ),
     )
 
 
