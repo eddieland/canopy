@@ -150,6 +150,13 @@ test("an epic's plan waiting is named by its goal, and leads to the plan's page,
     await row.click()
     const detail = page.getByTestId('attention-detail')
     await expect(detail.getByTestId('epic-plan-line')).toContainText(/^Its plan 3 waits on your approval, written/u)
+    // Its goal is long: cut beside the item's age, which keeps its line rather than drop onto one of its own.
+    const goal = await detail.getByTestId('attention-subject').boundingBox()
+    const age = await detail.getByTestId('attention-subject').locator('xpath=following-sibling::time').boundingBox()
+    expect(goal).not.toBeNull()
+    expect(age).not.toBeNull()
+    const middle = (box: typeof goal) => (box?.y ?? 0) + (box?.height ?? 0) / 2
+    expect(Math.abs(middle(age) - middle(goal))).toBeLessThan(1)
     // Its plan's page is the answer, not the CLI's commands in its detail, nor a ticket's plan card or reply form.
     await expect(detail.getByTestId('attention-command')).toHaveCount(0)
     await expect(detail.getByTestId('plan-card')).toHaveCount(0)
