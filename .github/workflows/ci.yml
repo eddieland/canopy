@@ -38,9 +38,11 @@ jobs:
   # A pull request that changes only docs needs none of the checks below, so they are skipped and take no runner;
   # `ci-passed` accepts a skip only when this job said code=false. Docs are anything under docs/ and any Markdown file
   # outside .agents/, src/, and packages/, whose Markdown ships in the wheel, and below ui/'s top level, where the
-  # guide's pages are bundled into the UI. One that changes only ui/ and docs (python=false) skips the Python tests,
-  # the sandbox canary, and the pool contract, none of which reads ui/; the lint still runs, since it covers ui/'s
-  # files too. Pushes to main and manual runs always check everything, so whatever a PR's skips let through fails there.
+  # guide's pages are bundled into the UI. The vendored Impeccable skill, .claude/skills/impeccable/, counts as docs
+  # too: the linters exclude it and nothing in canopy reads it. One that changes only ui/ and docs (python=false) skips
+  # the Python tests, the sandbox canary, and the pool contract, none of which reads ui/; the lint still runs, since it
+  # covers ui/'s files too. Pushes to main and manual runs always check everything, so whatever a PR's skips let
+  # through fails there.
   # The jobs that need this one run even if it fails, and anything but code=false or python=false runs them in full, so
   # an unexpected output checks too much, never too little.
   changes:
@@ -74,7 +76,7 @@ jobs:
           python=false
           while IFS= read -r file; do
             case "$file" in
-              docs/*) ;;
+              docs/* | .claude/skills/impeccable/*) ;;
               .agents/* | src/* | packages/*) code=true python=true ;;
               ui/*/*) code=true ;;
               *.md) ;;
