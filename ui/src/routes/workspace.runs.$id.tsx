@@ -21,6 +21,7 @@ import { RunOutputPanel } from '@/components/raw-output'
 import { RichText } from '@/components/rich-text'
 import { ChecklistPanel } from '@/components/run-checklist'
 import { RunDoing } from '@/components/run-doing'
+import { RunMessagesPanel } from '@/components/run-messages'
 import { ProgressPanel } from '@/components/run-progress'
 import { Chip } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
@@ -97,6 +98,11 @@ function Loaded({ id }: { id: number }) {
                         answers={{ kind: 'run', id: data.id }}
                     />
                 )}
+                <RunMessagesPanel
+                    messages={data.messages}
+                    running={data.ended_at === null}
+                    target={{ kind: 'run', id: data.id }}
+                />
                 <RunPanel run={data} transcript={transcript} onShow={view.show} />
                 <ChecklistPanel
                     answers={data.checklist}

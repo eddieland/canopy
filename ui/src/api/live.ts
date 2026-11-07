@@ -50,17 +50,23 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
                     continue
                 }
                 // What only its page carries, the list sends empty: the plan it wrote, its checklist's answers and
-                // what it pushed after them, and once it ends the worktrees it worked in stay as the page read them.
+                // what it pushed after them, the operator's messages to it, and once it ends the worktrees it worked in
+                // stay as the page read them.
                 client.setQueryData(keys.run(run.id), {
                     ...run,
                     feedback_plan: shown.feedback_plan,
                     checklist: shown.checklist,
                     checklist_stretches: shown.checklist_stretches,
                     checklist_stretches_left_out: shown.checklist_stretches_left_out,
+                    messages: shown.messages,
                     worktrees: run.ended_at === null ? run.worktrees : shown.worktrees,
                 })
                 if (logged(shown) !== logged(run)) {
                     void client.invalidateQueries({ queryKey: keys.runTranscript(run.id) })
+                    // Its agent fetches a message by a tool call, which moves its row: the page reads when it did.
+                    if (shown.messages.some((message) => message.fetched_at === null)) {
+                        void client.invalidateQueries({ queryKey: keys.run(run.id), exact: true })
+                    }
                 }
                 // A run writes its memory, and records its checklist's answers, as it ends: its page reads them again.
                 if (shown.status !== run.status) {

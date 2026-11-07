@@ -83,7 +83,9 @@ The line under the title says how the run ended, its kind, and its ticket, whose
 of those is said there and nowhere else on the page, so the panels under it can get on with the rest.
 
 While its agent has written any, a **Progress** panel leads the page: where the run's work stands, in the agent's own
-words ([below](#a-running-agents-progress)). The **Run** panel under it leads with its summary, the run's own account of
+words ([below](#a-running-agents-progress)). Under it, while the run works, **Messages** is where you tell it something
+in your own words ([below](#a-message-to-a-running-run)), and once it ends, what you told it, if anything. The **Run**
+panel under that leads with its summary, the run's own account of
 what it did, then, for a `feedback-plan` run, **wrote**: the plan it wrote, `feedback-plan:7`, which opens the PR's page
 at the plan, with the PR and where the plan stands now. Then its **last call** while it runs, then its PRs, then
 **when**: when it started and ended and
@@ -220,10 +222,31 @@ own and canopy's prompt. Figures marked `≈` are estimates, shared out by chara
 A session with only one call the runtime counted tokens for has the line alone. One bar is not a chart; it is a
 number standing on a box. Hover the peak for how much of it was canopy's prompt.
 
+## A message to a running run
+
+Scope moved while a worker was halfway through it? Tell it, without ending the run. While a worker's or planner's run
+works, its page has a **Messages** panel with a box: write what changed, `only the parser, please`, and **Send**. A
+[task](tasks)'s run has the same box on its page, and what you send there is a reply to the task, as the task's own
+box sends one, which reaches the run while it works. From a terminal it's `canopy reply run:ID 'only the parser,
+please'`, words rather than a letter, or `canopy reply task:N` for a task. A review takes none.
+
+On its next tool call the agent hears that you wrote, never what: it reads your words through canopy's own tool, so a
+line dressed up as canopy's can at worst send it to check an empty inbox. One it reads and then reports on is handled.
+One it never reads, or reads just before falling over, waits for the next run's prompt like any reply, so nothing you
+said goes missing. The line under the box says which it was, in the CLI's words; if canopy couldn't write it where the
+agent reads it, usually because the run was in the middle of ending, it says the ticket's next run reads it instead.
+
+The panel lists every message you sent the run, oldest first: when you sent it, and when its agent fetched it, or
+`not fetched yet`, or once the run has ended `never fetched`. The header counts them, `2 sent · 1 fetched`, the same
+count `canopy show run:ID` gives, so you can tell a worker that ignored you from one that never got the chance. A run
+takes up to 20, which is plenty: by the third rewrite of its scope mid-run, the ticket wants rewriting more than the
+worker does. Once a run ends the box goes away, and the refusal you'd get anyway says to reply to its ticket, which its
+next run reads.
+
 ## Stopping a run
 
-A run's page only reads. To stop a run, stop its ticket, from the ticket's page or its attention item: **Stop now** ends
-a private ticket's run at once. [Tickets](tickets#acting-on-a-ticket) covers it.
+A run's page doesn't stop it. To stop a run, stop its ticket, from the ticket's page or its attention item: **Stop
+now** ends a private ticket's run at once. [Tickets](tickets#acting-on-a-ticket) covers it.
 
 ## Worktrees
 
@@ -299,12 +322,7 @@ still ends the run as `blocked`, as before. A task's run asks none here: its que
 starts the next. While a question waits, it's an item on [the attention list](attention#the-list) too, answerable
 right there, the rail's row for the run reads `asks you` in amber, and the tab's title and icon count it.
 
-Words, not a letter, are a message: `canopy reply run:ID 'only the parser, please'` tells a running worker or planner
-that its scope moved without ending its run, and a reply to a task while its run works reaches that run too. On its
-next tool call the agent hears that you wrote, never what; it reads your words through canopy's own tool, so a line
-dressed up as canopy's can at worst send it to check an empty inbox. One it reads and then reports on is handled. One
-it never reads, or reads just before falling over, waits for the next run's prompt like any reply, so nothing you said
-goes missing. A run that already ended takes none: reply to its ticket instead.
+Words, not a letter, are a message, which has [its own panel](#a-message-to-a-running-run).
 
 A run's page, a review's, and a task run's lead with the whole of it; the runs list shows what it's doing now, `asks
 you` while a question waits, and when it was last updated, after a small meter when it has steps; a ticket's page shows

@@ -106,4 +106,6 @@ mark; the `messages` tool reads the messages' file, not the journal, which a san
 events; the loop reads past one fetched by a run that ended `done` or `blocked` (`run_inbox.HEARD`); `canopy show
 run:ID` lists them. Chosen conservatively, for the operator to change: a run takes at most 20 messages; a message to a
 run answers no earlier question; a message sent before the run's directory exists is written there as the run starts;
-one sent as it ends is told to nothing and waits for the next run.
+one sent as it ends is told to nothing and waits for the next run. The web UI's channel built 2026-11-07: a running
+run's page, a worker's or planner's or a task's, has a Messages panel that sends one through `conversation.reply` as
+`canopy reply run:ID` does, or a reply to the task for a task's run, and lists what was sent and when each was fetched.

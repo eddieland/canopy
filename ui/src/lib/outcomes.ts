@@ -38,6 +38,7 @@ import type {
     ReviewRequested,
     ReviewRequestStopped,
     ReviewSent,
+    RunMessaged,
     LeftSent,
     Started,
     Stopped,
@@ -48,7 +49,7 @@ import type {
 import { currentClock } from '@/lib/clock'
 import { REACTION_LOOKS } from '@/lib/drafts'
 import { RUNTIME_DEFAULT } from '@/lib/models'
-import { epicRef, taskRef } from '@/lib/refs'
+import { epicRef, runRef, taskRef } from '@/lib/refs'
 import { localTime } from '@/lib/time'
 import type { NewToast } from '@/lib/toasts'
 
@@ -240,6 +241,27 @@ export function answeredText(answered: Answered): string {
         ? 'Its agent hears it on its next tool call.'
         : 'Its agent had already ended, and will not hear it.'
     return `${said} ${heard}`
+}
+
+/**
+ * What a message to a running run did, as `canopy reply run:ID "..."` says it (DESIGN §44): its agent hears that it
+ * waits on its next tool call, or, when canopy could not write it where the agent reads it, the ticket's next run does.
+ */
+export function runMessagedText(id: number, messaged: RunMessaged): string {
+    const ref = runRef(id)
+    const head = messaged.new
+        ? `Recorded message ${messaged.message_id} to ${ref}.`
+        : `Message ${messaged.message_id} to ${ref} already says this; nothing new recorded.`
+    if (messaged.told) {
+        return `${head} Its agent hears that it waits on its next tool call, and reads it through canopy's tool.`
+    }
+    if (messaged.new) {
+        return (
+            `${head} Its agent was not told of it, its run ending or its answers directory not written (the log says ` +
+            "which): the ticket's next run reads it."
+        )
+    }
+    return head
 }
 
 /** What a note to a chore did, as `canopy reply chore:NAME` says it: its next runs read it, not the next tick. */

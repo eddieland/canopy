@@ -6,8 +6,7 @@ worker while it runs, and how it reaches the agent. Sections are numbered across
 
 ## 44. Messages to running agents
 
-Built (ROADMAP M68, stage 1) and checked against the fakes, but for the web UI's channel, which is still to come; its
-live check is in the milestone's Accept.
+Built (ROADMAP M68, stage 1) and checked against the fakes; its live check is in the milestone's Accept.
 
 A running agent hears from the operator once, in its prompt, and after that only a letter answering a question of its
 own (§41). What changes while it works, the ticket's scope or what the operator expects of its PR, reaches it at the

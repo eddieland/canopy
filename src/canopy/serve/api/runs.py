@@ -1,7 +1,8 @@
-"""The runs (DESIGN §8), each one's session transcript and its log's end, and the answer to a running run's question.
+"""The runs (DESIGN §8), each one's session transcript and its log's end, and the operator's words to a running run.
 
 The transcript and the log are untrusted text. The answer is the operator's to the question a running run's card asks
-(§41), as `canopy reply run:ID LETTER` gives it.
+(§41), as `canopy reply run:ID LETTER` gives it; a message is the operator's own words to it (§44), as `canopy reply
+run:ID "..."` sends one.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ from canopy.infra import logs
 from canopy.serve import views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, RefusedError, RunId, not_found
-from canopy.serve.schema import Answered, AnswerRequest, Run, RunsSince
+from canopy.serve.schema import Answered, AnswerRequest, ReplyRequest, Run, RunMessaged, RunsSince
 from canopy.serve.schema.transcript import RawOutput, Transcript
 
 TAG = "runs"
@@ -91,6 +92,46 @@ def answer(run_id: RunId, body: AnswerRequest, backend: BackendDep) -> Answered:
     Refused `moved_on` when its card asks another question than the one asked at `asked_at`, which the page showed.
     """
     return answered(backend, conversation.Ref(conversation.RUN, str(run_id)), body)
+
+
+@router.post(
+    "/runs/{run_id}/messages",
+    operation_id="messageRun",
+    summary="Send a running run a message",
+    responses=REFUSED,
+)
+def message(run_id: RunId, body: ReplyRequest, backend: BackendDep) -> RunMessaged:
+    """`canopy reply run:ID "..."`: the operator's message to a running worker or planner, in their own words (§44).
+
+    Recorded on the run's ticket through the function the CLI calls, with its guards, and written where its agent hears
+    on its next tool call that a message waits. Refused `ended` for a run no longer running, whose ticket takes the
+    reply instead, `too_many` past the most a run takes, `bad_body` for an empty text or one too long, and `inside_run`
+    inside a tick or a run. Idempotent on the submission id: a retried submission records nothing new.
+    """
+    ref = conversation.Ref(conversation.RUN, str(run_id))
+    with backend.open() as ctx:
+        try:
+            replied = conversation.reply(
+                ctx.conn,
+                ref,
+                body.body,
+                channel=WEB,
+                submission=body.submission,
+                state_dir=ctx.state_dir,
+            )
+        except conversation.Refused as r:
+            raise RefusedError(r) from None
+    _log.info(
+        "run messaged",
+        extra={
+            "subject": str(ref),
+            "message_id": replied.message_id,
+            "new": replied.new,
+            "told": replied.told,
+            "channel": WEB,
+        },
+    )
+    return RunMessaged(message_id=replied.message_id, new=replied.new, told=replied.told)
 
 
 def answered(backend: BackendDep, ref: conversation.Ref, body: AnswerRequest) -> Answered:
