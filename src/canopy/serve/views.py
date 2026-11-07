@@ -36,7 +36,7 @@ from canopy.core import spend as spending
 from canopy.core.items import fingerprint
 from canopy.core.vocab import ModelsRead, ReviewRunStatus, RunKind, RunStatus
 from canopy.runs import attachments, drafts, worker
-from canopy.serve import checklist_views, desk_views, draft_views, feedback_plan_views, memory_views
+from canopy.serve import change_views, checklist_views, desk_views, draft_views, feedback_plan_views, memory_views
 from canopy.serve.schema import (
     Attachment,
     Attachments,
@@ -64,6 +64,8 @@ from canopy.serve.schema import (
     RunCard,
     RunCardQuestion,
     RunCardStep,
+    RunChange,
+    RunRange,
     RunsSince,
     RunState,
     RunWorktree,
@@ -262,6 +264,7 @@ def run_detail(ctx: Context, run_id: int) -> Run | None:
         log_path=str(row["log_path"]),
         ended_at=row["ended_at"],
     )
+    changed = change_views.run_changes_of(ctx.conn, run_id, log_path=str(row["log_path"]), ended_at=row["ended_at"])
     return run(
         row,
         root,
@@ -271,6 +274,7 @@ def run_detail(ctx: Context, run_id: int) -> Run | None:
         checklist=answers,
         stretches=stretches,
         stretches_left_out=left_out,
+        changes=changed,
         timeout_minutes=limit,
     )
 
@@ -438,14 +442,17 @@ def run(
     checklist: Sequence[ChecklistAnswer] = (),
     stretches: Sequence[ChecklistStretch] = (),
     stretches_left_out: int = 0,
+    changes: Sequence[RunChange] = (),
+    ranges: Sequence[RunRange] = (),
     timeout_minutes: int | None = None,
 ) -> Run:
     """One run's row, with the `worktrees` it leased, its paths from the workspace `root`.
 
     On the run's own page it carries `models`, the models that served it, for a `feedback-plan` run `feedback_plan`,
     the plan it wrote, `checklist`, what it answered of its repositories' lists, and `stretches`, what it pushed after
-    being shown them, with how many more it pushed, `stretches_left_out`. `timeout_minutes`, a worker's time limit,
-    says when a step in its progress is stuck; with None, none is.
+    being shown them, with how many more it pushed, `stretches_left_out`, and `changes`, what it changed in each
+    repository with its kept diffs; in its ticket's runs list, `ranges`, the commits alone. `timeout_minutes`, a
+    worker's time limit, says when a step in its progress is stuck; with None, none is.
 
     Returns:
         The run as the API sends it. A status it does not know reads as `failed`.
@@ -483,6 +490,8 @@ def run(
         checklist=list(checklist),
         checklist_stretches=list(stretches),
         checklist_stretches_left_out=stretches_left_out,
+        changes=list(changes),
+        ranges=list(ranges),
     )
 
 
@@ -732,6 +741,7 @@ def ticket(backend: Backend, ctx: Context, key: str) -> TicketDetail | None:
         return None
     [row] = rows
     ran = db.runs_of(ctx.conn, key, TICKET_RUNS)
+    ranges = change_views.ranges_of(ctx.conn, [int(r["id"]) for r in ran])
     served = ticket_models.last_served(ctx.conn, key)
     units = [
         Unit(
@@ -752,7 +762,13 @@ def ticket(backend: Backend, ctx: Context, key: str) -> TicketDetail | None:
         limits=[limit(found) for found in backend.limits(ctx, key)]
         + [limit(found, repo=repo) for repo, found in reviews],
         runs=[
-            run(r, ctx.workspace.root, models=m, timeout_minutes=ctx.config.runtime.worker_timeout_minutes)
+            run(
+                r,
+                ctx.workspace.root,
+                models=m,
+                ranges=ranges.get(int(r["id"]), ()),
+                timeout_minutes=ctx.config.runtime.worker_timeout_minutes,
+            )
             for r, m in zip(ran, runs_served(ctx.conn, ran), strict=True)
         ],
         messages=[message(m) for m in db.messages_of(ctx.conn, conversation.TICKET, key, TICKET_MESSAGES)],

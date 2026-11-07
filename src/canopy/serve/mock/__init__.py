@@ -67,6 +67,7 @@ from canopy.serve.mock import (
     plans,
     review_waits,
     reviews,
+    run_diffs,
     skills,
     tasks,
     transcripts,
@@ -378,6 +379,7 @@ def seed(directory: Path) -> Backend:
             personas.seed(ctx.conn, ctx.config, at)
             tasks.seed(ctx.conn, ws.state_dir, at, lambda repo, n: slot_path(root, repo, n))
             checklists.seed(ctx.conn)
+            run_diffs.seed(ctx.conn)
             ci.seed(ctx.conn, at)
             _first_calls(ctx.conn)
             _attachments(ctx.conn)

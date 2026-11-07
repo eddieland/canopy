@@ -75,6 +75,32 @@ describe('RunsTable', () => {
         expect(screen.getByRole('link', { name: 'acme/api#12' })).toBeDefined()
     })
 
+    it('names each repository’s range in short commits on a ticket’s page, each opening the run', async () => {
+        const ranges = [
+            {
+                repo: 'api',
+                start_sha: 'a'.repeat(40),
+                start_on_base: true,
+                end_sha: 'b'.repeat(40),
+                unpushed_sha: null,
+            },
+            // Left unpushed: its range runs to the commit it left in its slot.
+            {
+                repo: 'web',
+                start_sha: 'c'.repeat(40),
+                start_on_base: false,
+                end_sha: 'c'.repeat(40),
+                unpushed_sha: 'd'.repeat(40),
+            },
+            // A run that crashed read nothing of its slot: no range to name.
+            { repo: 'mobile', start_sha: null, start_on_base: false, end_sha: null, unpushed_sha: null },
+        ]
+        await renderRuns([run({ ranges })], { ticket: false })
+        const named = screen.getAllByTestId('run-range')
+        expect(named.map((r) => r.textContent)).toEqual(['api aaaaaaa..bbbbbbb', 'web ccccccc..ddddddd'])
+        expect(named.map((r) => r.getAttribute('href'))).toEqual(['/workspace/runs/42', '/workspace/runs/42'])
+    })
+
     it('names up to four worktrees, and counts the rest past three, every one in a tip', async () => {
         const four = ['w/1', 'w/2', 'w/3', 'w/4']
         const { unmount } = await renderRuns([run({ worktrees: four.map((path) => slot(path)) })])

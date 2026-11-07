@@ -103,4 +103,12 @@ files with the run's others, a task run's too, and a checklist's stretches, whic
 Chosen conservatively, for the operator to change: the branch's diff is still the one file §29's PR page reads, so a
 PR's page under `post` shows its threads on it from now on; a run reconcile closes, and a plan run, records nothing; a
 run that crashes after its slots were read is recorded as having read nothing, its kept files left to garbage
-collection; `task:N --diff` prints the newest of its runs that recorded one.
+collection; `task:N --diff` prints the newest of its runs that recorded one. Stage 2 in part, 2026-11-07, against the
+fakes: a worker run's page, and a task run's, has a Diff panel per repository after its checklist, the run's own change
+in `DiffPanels` with a toggle to the branch against its base, an unpushed slot's marked as work not on origin, a diff
+not kept saying why or that retention removed it, and an ended run of a kind that records saying it recorded nothing;
+a ticket's runs list names each run's range in short commits, linking to the run (the stretches under the checklist
+came 2026-11-06). Both diffs are sent with the page, each within `review_diff`'s bounds; the mock's runs 39, 40, and
+37 and task 1's run show the states, so the screenshots of `workspace/runs/39` and `tasks/1/runs/1` are to be taken
+again. Left for a follow-up: the PR's page, its threads on the kept diff under every `trust.review_replies` setting and
+each run's range in its runs list, and its guide page.

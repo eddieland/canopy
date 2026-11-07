@@ -14,6 +14,7 @@ import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/component
 import { PromptPanel } from '@/components/prompt-panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { RichText } from '@/components/rich-text'
+import { RunChangesPanel } from '@/components/run-changes'
 import { ChecklistPanel } from '@/components/run-checklist'
 import { ProgressPanel } from '@/components/run-progress'
 import { TaskLink } from '@/components/task-link'
@@ -103,6 +104,7 @@ function Loaded({ task, run }: { task: number; run: number }) {
                     leftOut={data.checklist_stretches_left_out}
                     shownBy={taskRef(data.task_id)}
                 />
+                <RunChangesPanel changes={data.changes} records={data.run.ended_at !== null} />
                 <TranscriptPanel
                     transcript={transcript}
                     running={data.run.state === 'running'}

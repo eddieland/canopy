@@ -5,11 +5,13 @@ the state directory as the CLI reads it.
 """
 
 import json
+from collections.abc import Sequence
 from pathlib import Path
 
-from canopy.core import cards, checklist_answers, conversation, db, pools, records, review_diff
+from canopy.core import cards, checklist_answers, conversation, db, pools, records, review_diff, run_changes
 from canopy.core.checklist_answers import Answer, Checked, Pushed
 from canopy.core.context import Context
+from canopy.core.run_changes import Change
 from canopy.core.vocab import ItemAnswer, PoolKind, RunStatus
 from canopy.runs import tasks
 from canopy.serve.backend import Backend
@@ -174,6 +176,25 @@ def test_a_task_runs_page_carries_what_it_pushed_after_its_list_as_a_worker_runs
     assert found["checklist_stretches_left_out"] == 0
 
 
+def test_a_task_runs_page_carries_what_it_changed_as_a_worker_runs_does(backend: Backend) -> None:
+    """Its range and its own change, read as a review's diff is (DESIGN §45); a kept file since gone is no diff."""
+    start_sha, end_sha = "a1" * 20, "b2" * 20
+    change = Change("web", start_sha, start_on_base=True, end=end_sha, change_kept=True, branch_kept=True)
+    with backend.open() as ctx:
+        task = submit(ctx)
+        run_id = start(ctx, task)
+        end(ctx, run_id, RunStatus.DONE, head=end_sha, changes=[change])
+        log_path = present(records.select(records.TaskRun).where("id = ?", run_id).one(ctx.conn)).log_path
+    kept = run_changes.change_path(log_path, "web")
+    kept.parent.mkdir(parents=True, exist_ok=True)
+    review_diff.keep(kept, "diff --git a/x.py b/x.py\n--- a/x.py\n+++ b/x.py\n@@ -1 +1 @@\n-a\n+b\n")
+    c = client(None, backend)
+    [found] = c.get(f"/api/tasks/{task.id}/runs/{run_id}").json()["changes"]
+    assert (found["range"]["start_on_base"], found["range"]["end_sha"]) == (True, end_sha)
+    assert [f["path"] for f in found["diff"]["files"]] == ["x.py"]
+    assert found["branch_diff"] is None
+
+
 def test_a_task_runs_transcript_is_read_back_from_its_log(backend: Backend) -> None:
     with backend.open() as ctx:
         task = submit(ctx)
@@ -296,6 +317,7 @@ def end(
     head: str | None = None,
     tickets: list[str] | None = None,
     checklist: Checked | None = None,
+    changes: Sequence[Change] = (),
 ) -> None:
     """Close run `run_id` as `_task` does, with a result saying `summary`, and `question` for a blocked one."""
     result: dict[str, object] = {"status": str(status), "summary": summary, "prs": prs or []}
@@ -310,6 +332,7 @@ def end(
         head=head,
         tickets=tickets or [],
         checklist=checklist,
+        changes=changes,
     )
     assert closed
 

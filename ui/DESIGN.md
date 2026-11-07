@@ -332,10 +332,12 @@ Rules:
   ended, and how long it took in one field; `spent`; then the paths. A run given a checklist has its answers in a panel
   of their own under that one, a row an item, too many for a field, `held` in `status-blocked`, since a reviewer reads
   its reason under it; each stretch it pushed after a list follows them, a panel naming its repository and commits as
-  a readout, then its diff's file panels (`DiffPanels`), so the answers and the fix are read together. Then the thread
-  the operator came to answer, with its form, then the ticket's actions; a page with no thread has its main content
-  there instead: a transcript, a chore's open findings and runs, a tick's decisions, a review's findings and diff, a
-  PR's reviews. A chore's notes are a thread nothing waits on, so they follow
+  a readout, then its diff's file panels (`DiffPanels`), so the answers and the fix are read together. A worker's or a
+  task's run that ended has its Diff next, the same way, a panel per repository with a segmented control between the
+  run's own change and the branch against its base, and a sentence where a diff is missing, never an empty panel. Then
+  the thread the operator came to answer, with its form, then the ticket's actions; a page with no thread has its main
+  content there instead: a transcript, a chore's open findings and runs, a tick's decisions, a review's findings and
+  diff, a PR's reviews. A chore's notes are a thread nothing waits on, so they follow
   its main content. Then the supporting lists: runs, decisions, spend, and a ticket's memory last, the least read. So
   in a narrow window a ticket's reply is reached before its runs, and the attention detail reads in the same order. An
   action over a whole list sits in that list's panel header. A ticket's plan is on a page of its own,

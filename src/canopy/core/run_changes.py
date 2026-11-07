@@ -19,7 +19,7 @@ from canopy.core import records, review_diff
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Iterable
+    from collections.abc import Collection, Iterable
 
 #: Why a run that crashed keeps nothing: no git runs in a slot whose links may point at a git directory the worker made
 #: (§8 step 5), and a setup failure or a signal ends the run before its slot is read.
@@ -133,6 +133,21 @@ def of_run(conn: sqlite3.Connection, run_id: int, *, table: RunTable = "runs") -
         case _:
             assert_never(table)
     return query.order_by("repo").all(conn)
+
+
+def of_runs(conn: sqlite3.Connection, run_ids: Collection[int]) -> dict[int, list[records.RunChange]]:
+    """Return what each of the worker runs `run_ids` changed, by repository, in one read.
+
+    Returns:
+        Each run's rows, as `of_run` reads them; a run that recorded none is not in it.
+    """
+    found: dict[int, list[records.RunChange]] = {}
+    if not run_ids:
+        return found
+    for row in records.select(records.RunChange).where_in("run_id", run_ids).order_by("repo").all(conn):
+        if row.run_id is not None:
+            found.setdefault(row.run_id, []).append(row)
+    return found
 
 
 def _column(table: RunTable) -> Literal["run_id", "task_run_id"]:

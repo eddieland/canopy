@@ -19,6 +19,7 @@ from canopy.serve.schema import (
     Model,
     ModelsServed,
     RunCard,
+    RunChange,
     RunState,
 )
 
@@ -175,6 +176,9 @@ class TaskRunDetail(Model):
     each with its kept diff. Empty for a run never shown one, and one still running."""
     checklist_stretches_left_out: int = 0
     """How many stretches after the first five the page is not sent: `canopy show task:N` names them all."""
+    changes: list[RunChange] = []
+    """What it changed in its repository (DESIGN §45), as a worker run's page has it: its range and its kept diffs.
+    Empty for a run still running, and one that recorded none."""
 
 
 class TaskReport(Model):

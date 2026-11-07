@@ -83,7 +83,9 @@ Below:
 - **Left feedback**: the reviewers' comments the loop read and chose not to send a worker, with how many. See
   [Feedback left with no worker](#feedback-left-with-no-worker).
 - **Runs**: every run on the ticket, each linking to its transcript ([Runs](runs#a-runs-page)), and naming the model
-  that served it beside its session.
+  that served it beside its session. A run that pushed names what it went from and to in each repository, in short
+  commits, `web 5b1e0c4..c9d24f8`; click it for the run's diff, which is how you tell which commits on the branch
+  were whose without counting timestamps.
 - **Decisions**: what each tick decided about the ticket, and why, in the overseer's words. A `refused` decision names
   the [guard](how-the-loop-works#guards) that stopped it, and an `attention` decision the reason it reached your list.
 - **Memory**, while ticket notes are on: the notes its runs left for the runs after them. It arrives folded, since
