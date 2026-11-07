@@ -15,6 +15,7 @@ import {
     draftsStagedToast,
     editedText,
     epicApprovedText,
+    epicReachedWays,
     epicMemberAddedText,
     epicMemberRemovedText,
     epicRepliedText,
@@ -383,17 +384,37 @@ describe('outcomes', () => {
     })
 
     it("says what approving an epic's plan did, as `canopy plan epic:N --approve` does", () => {
-        expect(epicApprovedText(2, { plan: 3, run_id: 3, change: null })).toBe(
+        // What the change reached is the page's list under it, not this sentence.
+        const reached = { stale: ['ABC-201'], held: [], told: [] }
+        expect(epicApprovedText(2, { plan: 3, run_id: 3, change: null, reached })).toBe(
             "Approved epic:2's plan, written by run 3.",
         )
         const change = { added: ['B5', 'R4'], removed: ['B2'], changed: [] }
-        expect(epicApprovedText(1, { plan: 5, run_id: 6, change })).toBe(
+        expect(epicApprovedText(1, { plan: 5, run_id: 6, change, reached })).toBe(
             "Approved epic:1's plan, written by run 6. added: B5, R4; removed: B2.",
         )
         // A re-approval that changed no id says only that it approved.
-        expect(epicApprovedText(1, { plan: 5, run_id: 6, change: { added: [], removed: [], changed: [] } })).toBe(
+        const none = { added: [], removed: [], changed: [] }
+        expect(epicApprovedText(1, { plan: 5, run_id: 6, change: none, reached })).toBe(
             "Approved epic:1's plan, written by run 6.",
         )
+    })
+
+    it("names the members an epic's plan change reached each way, as `canopy plan epic:N --approve` does", () => {
+        const reached = { stale: ['ABC-201'], held: ['ABC-202', 'ABC-203'], told: ['ABC-100'] }
+        expect(epicReachedWays(reached)).toEqual([
+            { what: 'Plans superseded as stale, to be planned again', keys: ['ABC-201'] },
+            {
+                what: 'Implements held until you approve the plan again or ask for a new one (epic_changed)',
+                keys: ['ABC-202', 'ABC-203'],
+            },
+            { what: 'Left as they are, each told at its next plan', keys: ['ABC-100'] },
+        ])
+        // A way that reached none is left out, and none at all says nothing.
+        expect(epicReachedWays({ stale: [], held: [], told: ['ABC-100'] }).map(({ what }) => what)).toEqual([
+            'Left as they are, each told at its next plan',
+        ])
+        expect(epicReachedWays({ stale: [], held: [], told: [] })).toEqual([])
     })
 
     it('says what a reply to an epic starts, as `canopy reply epic:N` does', () => {

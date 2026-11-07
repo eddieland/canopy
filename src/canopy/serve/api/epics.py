@@ -39,6 +39,7 @@ from canopy.serve.schema.epic import (
     EpicPlanApproval,
     EpicPlanApproved,
     EpicPlanChange,
+    EpicPlanReached,
     EpicPlans,
     EpicReplied,
     EpicStopped,
@@ -51,7 +52,7 @@ from canopy.serve.schema.ticket import StopRequest
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from canopy.core import epic_outline
+    from canopy.core import epic_changes, epic_outline
 
 TAG = "epics"
 router = APIRouter(tags=[TAG])
@@ -132,7 +133,7 @@ def approve(epic_id: EpicId, body: EpicPlanApproval, backend: BackendDep) -> Epi
     Refused as the CLI's approval is: `inside_run`, `unknown_epic`, `planning` while a plan run of it works, `no_plan`
     when none waits, `unreadable_plan`, `bad_outline` when its ids or breakdown will not read, `approved_changed`, and
     `reused_id`; `stale` when the file is not the one `read_sha256` names, and `unwritable` when the approved copy
-    cannot be kept.
+    cannot be kept. Its answer names the members a change reached each way, as the CLI's does (DESIGN §43).
     """
     with backend.open() as ctx:
         try:
@@ -151,7 +152,12 @@ def approve(epic_id: EpicId, body: EpicPlanApproval, backend: BackendDep) -> Epi
         except plans.PlanFileError as e:
             raise RefusedError(conversation.Refused("unwritable", str(e))) from None
     _log.info("epic plan approved", extra={"epic": epic_id, "plan": done.plan.id, "channel": WEB})
-    return EpicPlanApproved(plan=done.plan.id, run_id=done.plan.run_id, change=_change(done.change))
+    return EpicPlanApproved(
+        plan=done.plan.id,
+        run_id=done.plan.run_id,
+        change=_change(done.change),
+        reached=_reached(done.reached),
+    )
 
 
 @router.post("/epics/{epic_id}/replies", operation_id="replyEpic", summary="Reply to an epic", responses=REFUSED)
@@ -260,6 +266,11 @@ def _change(change: epic_outline.Change | None) -> EpicPlanChange | None:
     if change is None:
         return None
     return EpicPlanChange(added=_ids(change.added), removed=_ids(change.removed), changed=_ids(change.changed))
+
+
+def _reached(reached: epic_changes.Reached) -> EpicPlanReached:
+    """The members an approval reached, each way, in the order they were added, as the CLI names them."""
+    return EpicPlanReached(stale=list(reached.stale), held=list(reached.held), told=list(reached.told))
 
 
 def _ids(found: Iterable[str]) -> list[str]:

@@ -88,5 +88,5 @@ and one of no entry every id; a member with no plan, run, branch, or notice is n
 against the older plan; a plan run at work when the plan changes lands its plan `proposed`, unmarked, its notice
 holding the `implement` until the operator approves a plan of it, a planner's approval not enough; a notice is spent
 when the plan run told it starts, whether or not it writes a plan; and no event when no member was reached. Left for
-this bullet: telling an `implement` or `resume` the ids, which waits on their reading the epic's copy; a trivial
-member's re-approval; and the web UI's approval naming the members reached.
+this bullet: telling an `implement` or `resume` the ids, which waits on their reading the epic's copy; and a trivial
+member's re-approval. Built 2026-11-07: the web UI's approval names the members reached, each way, as the CLI's does.

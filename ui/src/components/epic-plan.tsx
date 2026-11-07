@@ -4,7 +4,7 @@ import { useState } from 'react'
 
 import { approveEpicPlan, newSubmission, replyEpic } from '@/api/mutations'
 import { keys } from '@/api/queries'
-import type { EpicPlanFile, EpicPlans } from '@/api/types'
+import type { EpicPlanFile, EpicPlanReached, EpicPlans } from '@/api/types'
 import { Age } from '@/components/age'
 import { ApprovedBand } from '@/components/approved-band'
 import { Disclosure } from '@/components/disclosure'
@@ -14,9 +14,10 @@ import { Empty, Panel, PanelHeader } from '@/components/panel'
 import { ChangesAskedBand } from '@/components/plan-card'
 import { PlanEditor } from '@/components/plan-editor'
 import { Chip } from '@/components/status'
+import { TicketLink } from '@/components/ticket-link'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
-import { epicApprovedText, epicRepliedText } from '@/lib/outcomes'
+import { epicApprovedText, epicReachedWays, epicRepliedText } from '@/lib/outcomes'
 import { epicRunRef } from '@/lib/refs'
 
 // What Approve does, on its hover.
@@ -65,7 +66,7 @@ export function EpicPlan({ epic, plans, stopped = false }: { epic: number; plans
  * The newest plan in the editor, with the operator's word on it while it waits on them: Approve, by the file's hash as
  * the page read it, which canopy refuses (`stale`) once the file changed since; and Ask for changes, a reply its next
  * plan run reads, unless the epic is `stopped`, which takes no reply. Each says what it did in the CLI's words, or
- * names the guard that refused it, at the plan's foot.
+ * names the guard that refused it, at the plan's foot; an approval then names the members its change reached.
  */
 function NewestPlan({
     epic,
@@ -87,6 +88,8 @@ function NewestPlan({
     // How many times the operator approved the plan here, the last thing they did: each plays its moment once.
     const [approvals, setApprovals] = useState(0)
     const [approved, setApproved] = useState(false)
+    // The members the last approval's change reached, each way; null until one is made here.
+    const [reached, setReached] = useState<EpicPlanReached | null>(null)
     const before = plans.plans.at(-2)
     const waits = planWaits(plans, newest)
 
@@ -95,6 +98,7 @@ function NewestPlan({
         setFailure(null)
         setSaid(null)
         setApproved(false)
+        setReached(null)
         setBusy(true)
         try {
             setSaid(await work())
@@ -115,7 +119,11 @@ function NewestPlan({
 
     function approve() {
         const read = newest.sha256 ?? ''
-        void act(async () => epicApprovedText(epic, await approveEpicPlan(epic, read)), true)
+        void act(async () => {
+            const done = await approveEpicPlan(epic, read)
+            setReached(done.reached)
+            return epicApprovedText(epic, done)
+        }, true)
     }
 
     function askForChanges(message: string) {
@@ -163,12 +171,42 @@ function NewestPlan({
             // Kept once the plan no longer waits, so the approval that ended its waiting still says what it did.
             outcome={
                 approved && said !== null && failure === null ? (
-                    <ApprovedBand key={approvals} text={said} />
+                    <>
+                        <ApprovedBand key={approvals} text={said} />
+                        {reached !== null && <EpicReached reached={reached} />}
+                    </>
                 ) : said !== null || failure !== null ? (
                     <Notice error={failure}>{said}</Notice>
                 ) : undefined
             }
         />
+    )
+}
+
+/**
+ * The members an approval's change reached (DESIGN §43, When its plan changes), under the moment: a line for each way
+ * it met them, in the CLI's words, each member linked to its ticket's page. Nothing when it reached none, as the CLI
+ * prints nothing then.
+ */
+function EpicReached({ reached }: { reached: EpicPlanReached }) {
+    const ways = epicReachedWays(reached)
+    if (ways.length === 0) {
+        return null
+    }
+    return (
+        <ul aria-label="Members reached" data-testid="epic-reached" className="flex flex-col gap-1 text-sm">
+            {ways.map(({ what, keys: members }) => (
+                <li key={what}>
+                    {what}:{' '}
+                    {members.map((key, i) => (
+                        <span key={key}>
+                            {i > 0 && ', '}
+                            <TicketLink ticketKey={key} />
+                        </span>
+                    ))}
+                </li>
+            ))}
+        </ul>
     )
 }
 
