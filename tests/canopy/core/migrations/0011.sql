@@ -1,3 +1,3 @@
--- sha256 of 0011_epic_submissions.sql: 28678d4bb72abcf2681c681a28e33ee0156df0ec41d015401fe32dca4b92a13e
+-- sha256 of 0011_stop_asks.sql: a9aac876f77c439604414f90aeb586f1598a9621de3b602b4b92238375381f6f
 
 -- Creates no table, so seeds no row.

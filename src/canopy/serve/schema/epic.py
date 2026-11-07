@@ -304,7 +304,9 @@ class EpicStopped(Model):
     running_run: int | None = None
     """A plan run of it still working, if one is: it finishes unless `now` ended it."""
     ended: bool = False
-    """Whether `now` ended that run and returned its slots."""
+    """Whether `now` ended that run."""
+    kept: bool = False
+    """Whether that run, ended, left a slot it held leased: it could not be tidied or returned."""
 
 
 class EpicMemberAdd(Model):

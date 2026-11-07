@@ -3,8 +3,9 @@
 canopy's templates are the operator's to change, so this holds only what canopy writes into one: the default for each
 agent, and how a template points the runtime at canopy's definitions rather than the repository's (D040). Without
 that, the runtime looks for canopy's agent in the repository and, not finding it, runs an agent that allows everything.
-It also says whether a template chooses a model of its own, which config refuses, and runs a template on another of
-canopy's agents, as a chore with a model of its own is run (DESIGN §13).
+It also says whether a template chooses a model of its own, or has the runtime approve what an agent's rules would ask
+about, both of which config refuses, and runs a template on another of canopy's agents, as a chore with a model of its
+own is run (DESIGN §13).
 """
 
 from __future__ import annotations
@@ -72,3 +73,15 @@ def model_option(words: Sequence[str], *, run_args: bool = False) -> str | None:
     are.
     """
     return _shared.model_option(words, run_args=run_args)
+
+
+def approve_option(words: Sequence[str]) -> str | None:
+    """Return the first of `words`, a command's, that has the runtime approve what an agent's rules would ask about.
+
+    canopy's rules deny and never ask, and count on a run refusing whatever the runtime's own defaults or the
+    operator's config leave at `ask` (D021), so config refuses a command that passes one.
+
+    Returns:
+        The word, or None when none passes one.
+    """
+    return _shared.approve_option(words)

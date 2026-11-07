@@ -26,6 +26,7 @@ from canopy.core import conversation, epics, outbox, plans
 from canopy.core.vocab import RunStatus
 from canopy.infra import logs
 from canopy.runs import epic_runs
+from canopy.runs.ending import Ending
 from canopy.serve import epic_views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, EpicId, RefusedError, TicketKey, not_found
@@ -194,8 +195,13 @@ def stop(epic_id: EpicId, body: StopRequest, backend: BackendDep) -> EpicStopped
             raise RefusedError(r) from None
         _log.info("epic stopped", extra={"epic": epic_id, "now": body.now, "channel": WEB})
         run = stopped.running
-        ended = run is not None and body.now and backend.end_epic_run(ctx, run)
-    return EpicStopped(already=stopped.already, running_run=run.id if run is not None else None, ended=ended)
+        ending = backend.end_epic_run(ctx, run) if run is not None and body.now else Ending.GONE
+    return EpicStopped(
+        already=stopped.already,
+        running_run=run.id if run is not None else None,
+        ended=ending is not Ending.GONE,
+        kept=ending is Ending.KEPT,
+    )
 
 
 @router.post(

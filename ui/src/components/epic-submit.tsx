@@ -29,7 +29,7 @@ const MAX_TEXT = 4000
  * replaces, naming its guard. Its submission id is drawn when the form is rendered and kept until an epic is
  * recorded, so sending again after an uncertain result files no second epic (DESIGN §43). Once it is recorded, a toast
  * says what the CLI says and the form opens the epic's page, which says its plan run is to come; the list is read
- * again, since no stream event carries an epic.
+ * again at once, rather than wait for the stream's `epics.updated`.
  */
 export function EpicSubmitForm() {
     const navigate = useNavigate()

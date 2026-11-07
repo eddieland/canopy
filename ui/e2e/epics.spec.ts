@@ -1,12 +1,14 @@
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import { settled, signIn } from './helpers.ts'
+import { holdStreamEvents, settled, signIn } from './helpers.ts'
 
 // An epic's page (ui/DESIGN.md, "An epic"), over the mock journal's epics: epic 1 approved, with members; epic 2
 // proposed, after a reply; epic 3 just submitted, its plan run at work; epic 4 stopped before any plan run started.
 
 test.beforeEach(async ({ page }) => {
+    // The tests answer epics' reads as their writes would have left them; the stream would send the journal's instead.
+    await holdStreamEvents(page, ['epics.updated', 'epic.changed'])
     await signIn(page)
 })
 

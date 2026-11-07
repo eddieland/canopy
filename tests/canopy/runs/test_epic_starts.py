@@ -13,7 +13,7 @@ from canopy.core.context import Context
 from canopy.core.vocab import PlanStatus, RunStatus
 from canopy.infra import logs, procs
 from canopy.loop import attention
-from canopy.runs import epic_runs, epic_starts
+from canopy.runs import ending, epic_runs, epic_starts, reconcile, tidy
 from tests.canopy.helpers import (
     InlineRunner,
     agent_runs,
@@ -268,6 +268,47 @@ def test_stop_now_ends_the_plan_run_and_returns_its_slots(
     out = capsys.readouterr().out
     assert "epic:1 was already stopped." in out
     assert "plan run" not in out
+
+
+def test_a_stop_now_that_dies_at_the_kill_leaves_reconcile_to_close_the_run_stopped(
+    inline: Context,
+    treehouse_state: Path,
+) -> None:
+    """The stop records that it was asked before it kills: the run it killed but never closed is no crash."""
+    assert operator("epic", "submit", GOAL) == 0
+    [started] = start(inline)
+    records.update(records.EpicRun).set(pid=4_000_000).where("id = ?", started.run_id).run(inline.conn)
+    epics.stop(inline.conn, 1)
+    run = present(epic_runs.get_run(inline.conn, started.run_id))
+    with (
+        mock.patch.object(procs, "kill_group", autospec=True, side_effect=KeyboardInterrupt),
+        pytest.raises(KeyboardInterrupt),
+    ):
+        epic_runs.stop_now(inline, run, logs.for_tick(None))
+    assert present(epic_runs.get_run(inline.conn, started.run_id)).status is RunStatus.RUNNING
+
+    reconcile.run(inline, logs.for_tick(None))
+    run = present(epic_runs.get_run(inline.conn, started.run_id))
+    assert run.status is RunStatus.STOPPED
+    assert json.loads(present(run.result_json))["harness"] == epic_runs.STOP_NOTE
+    assert set(pool_statuses(treehouse_state)) == {"available"}
+
+
+def test_stop_now_says_a_slot_it_could_not_tidy_was_not_returned(
+    capsys: pytest.CaptureFixture[str],
+    inline: Context,
+    treehouse_state: Path,
+) -> None:
+    """The run is closed `stopped` all the same; its slot stays leased, and the stop never says it was returned."""
+    assert operator("epic", "submit", GOAL) == 0
+    [started] = start(inline)
+    with mock.patch.object(tidy, "tidy", autospec=True, return_value=False):
+        assert operator("stop", "epic:1", "--now") == 0
+    out = capsys.readouterr().out
+    assert f"Its plan run {started.run_id} was ended, but a slot it held was not returned; {ending.KEPT_NOTE}" in out
+    assert "slots returned" not in out
+    assert present(epic_runs.get_run(inline.conn, started.run_id)).status is RunStatus.STOPPED
+    assert "leased" in pool_statuses(treehouse_state)
 
 
 def test_a_stop_after_the_tick_read_the_epic_due_starts_nothing(inline: Context, treehouse_state: Path) -> None:

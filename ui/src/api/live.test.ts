@@ -2,7 +2,18 @@ import { QueryClient } from '@tanstack/react-query'
 import { describe, expect, it } from 'vitest'
 
 import { applyStreamEvent, parseStreamEvent } from './live'
-import { mockAttention, mockCapacity, mockChores, mockReviews, mockRuns, mockTasks, mockTickets } from './mocks'
+import {
+    mockAttention,
+    mockCapacity,
+    mockChores,
+    mockEpicDetails,
+    mockEpicPlans,
+    mockEpics,
+    mockReviews,
+    mockRuns,
+    mockTasks,
+    mockTickets,
+} from './mocks'
 import { keys } from './queries'
 import type { ChoreDetail, ChoreRunDetail, ReviewDetail, ReviewSummary, Run, TicketDetail } from './types'
 
@@ -117,6 +128,30 @@ describe('applyStreamEvent', () => {
         expect(client.getQueryState(keys.taskRunTranscript(4, 5))?.isInvalidated).toBe(true)
         expect(client.getQueryState(keys.taskRun(1, 1))?.isInvalidated).toBe(false)
         expect(client.getQueryState(keys.task(1))?.isInvalidated).toBe(false)
+    })
+
+    it("marks a changed epic's page and plans stale, and no other epic's", () => {
+        const client = new QueryClient()
+        client.setQueryData(keys.epic(1), mockEpicDetails[0])
+        client.setQueryData(keys.epicPlans(1), mockEpicPlans[0])
+        client.setQueryData(keys.epic(2), mockEpicDetails[1])
+        client.setQueryData(keys.epicPlans(2), mockEpicPlans[1])
+
+        applyStreamEvent(client, { type: 'epic.changed', id: 1 })
+
+        expect(client.getQueryState(keys.epic(1))?.isInvalidated).toBe(true)
+        expect(client.getQueryState(keys.epicPlans(1))?.isInvalidated).toBe(true)
+        expect(client.getQueryState(keys.epic(2))?.isInvalidated).toBe(false)
+        expect(client.getQueryState(keys.epicPlans(2))?.isInvalidated).toBe(false)
+    })
+
+    it('replaces the epics whole, as one is submitted or stopped or its plan run starts or ends', () => {
+        const client = new QueryClient()
+        client.setQueryData(keys.epics, mockEpics.slice(1))
+
+        applyStreamEvent(client, { type: 'epics.updated', epics: mockEpics })
+
+        expect(client.getQueryData(keys.epics)).toEqual(mockEpics)
     })
 
     it('replaces the chores and marks every chore page stale, for a page to read again', () => {
@@ -437,6 +472,11 @@ describe('parseStreamEvent', () => {
         expect(parseStreamEvent('{"type":"ticket.changed","key":7}')).toBeNull()
         expect(parseStreamEvent('{"type":"task.changed","id":4}')).toEqual({ type: 'task.changed', id: 4 })
         expect(parseStreamEvent('{"type":"task.changed","id":"4"}')).toBeNull()
+        const epics = { type: 'epics.updated', epics: mockEpics }
+        expect(parseStreamEvent(JSON.stringify(epics))).toEqual(epics)
+        expect(parseStreamEvent('{"type":"epics.updated","epics":null}')).toBeNull()
+        expect(parseStreamEvent('{"type":"epic.changed","id":2}')).toEqual({ type: 'epic.changed', id: 2 })
+        expect(parseStreamEvent('{"type":"epic.changed","id":"2"}')).toBeNull()
         const day = { since: '2026-10-07T12:00:00Z', hours: 24, cost_usd: 2.5 }
         const spend = { type: 'spend.updated', spend: { day, month: { ...day, hours: 720 } } }
         expect(parseStreamEvent(JSON.stringify(spend))).toEqual(spend)
