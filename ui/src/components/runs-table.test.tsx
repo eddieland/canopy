@@ -75,6 +75,49 @@ describe('RunsTable', () => {
         expect(screen.getByRole('link', { name: 'acme/api#12' })).toBeDefined()
     })
 
+    it('names each repository’s range and size on a ticket’s page, each opening the run at its diff', async () => {
+        const counted = { files_changed: 2, lines_added: 21, lines_removed: 3 }
+        const ranges = [
+            {
+                repo: 'api',
+                start_sha: 'a'.repeat(40),
+                start_on_base: true,
+                end_sha: 'b'.repeat(40),
+                unpushed_sha: null,
+                ...counted,
+            },
+            // Left unpushed: its range runs to the commit it left in its slot. Counted by no canopy, it names no size.
+            {
+                repo: 'web',
+                start_sha: 'c'.repeat(40),
+                start_on_base: false,
+                end_sha: 'c'.repeat(40),
+                unpushed_sha: 'd'.repeat(40),
+                files_changed: null,
+                lines_added: null,
+                lines_removed: null,
+            },
+            // A run that crashed read nothing of its slot: no range to name.
+            {
+                repo: 'mobile',
+                start_sha: null,
+                start_on_base: false,
+                end_sha: null,
+                unpushed_sha: null,
+                files_changed: null,
+                lines_added: null,
+                lines_removed: null,
+            },
+        ]
+        await renderRuns([run({ ranges })], { ticket: false })
+        const named = screen.getAllByTestId('run-range')
+        expect(named.map((r) => r.textContent)).toEqual(['api aaaaaaa..bbbbbbb +21 −3', 'web ccccccc..ddddddd'])
+        expect(named.map((r) => r.getAttribute('href'))).toEqual([
+            '/workspace/runs/42#diff-api',
+            '/workspace/runs/42#diff-web',
+        ])
+    })
+
     it('names up to four worktrees, and counts the rest past three, every one in a tip', async () => {
         const four = ['w/1', 'w/2', 'w/3', 'w/4']
         const { unmount } = await renderRuns([run({ worktrees: four.map((path) => slot(path)) })])

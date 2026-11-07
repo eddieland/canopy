@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 
-import type { ChoreRun, ReviewSummary, Run, RunState, TaskRun, TaskSummary } from '@/api/types'
+import type { ChoreRun, ReviewSummary, Run, RunRange, RunState, TaskRun, TaskSummary } from '@/api/types'
 import { Age } from '@/components/age'
 import { ChoreLink } from '@/components/chore-link'
 import { Copyable } from '@/components/copy-button'
@@ -28,6 +28,7 @@ import { isUnread, modelNames, runModelIds, sameModel, UNREAD, unservedReason } 
 import { choreRunRef } from '@/lib/refs'
 import { shortSha, verdictText, verdictTone } from '@/lib/reviews'
 import { ROW_SUBGRID, rowLineFrom } from '@/lib/rows'
+import { diffAnchor, linesText, rangeSpan, rangeTitle } from '@/lib/run-changes'
 import { RUN_TEXT } from '@/lib/run-state'
 import type { SubjectRuns } from '@/lib/run-state'
 import { taskTitle } from '@/lib/tasks'
@@ -417,11 +418,16 @@ function RunBody({
                     <RunProgressLine card={run.card} />
                 </RowLine>
             )}
-            {(prs.length > 0 || run.worktrees.length > 0 || run.session_id || namesModel(run)) && (
+            {(prs.length > 0 ||
+                run.ranges.length > 0 ||
+                run.worktrees.length > 0 ||
+                run.session_id ||
+                namesModel(run)) && (
                 <RowLine from={under} className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-xs">
                     {prs.map((pr) => (
                         <PullRequestLink key={pr} url={pr} />
                     ))}
+                    <RunRanges id={run.id} ranges={run.ranges} />
                     <RunWorktrees paths={run.worktrees.map((w) => w.path)} />
                     <RunModel run={run} names={names} />
                     {run.session_id && (
@@ -507,6 +513,47 @@ function RunModel({ run, names, className }: { run: Run; names: ModelNames; clas
                 )}
             </span>
         </Tip>
+    )
+}
+
+/**
+ * The commits a run went from and to in each repository, short, as `git log` names a range (`web 5b1e0c4..c9d24f8`),
+ * then how many lines it added and removed, the reason the column is worth reading. Each opens the run's page at that
+ * repository's diff (`#diff-web`). Only a ticket's runs list is sent them; a run that recorded none has none.
+ */
+function RunRanges({ id, ranges }: { id: number; ranges: readonly RunRange[] }) {
+    return (
+        <>
+            {ranges.map((range) => {
+                const span = rangeSpan(range)
+                const lines =
+                    range.lines_added === null || range.lines_removed === null
+                        ? null
+                        : linesText(range.lines_added, range.lines_removed)
+                return (
+                    span !== '' && (
+                        <Link
+                            key={range.repo}
+                            to="/workspace/runs/$id"
+                            params={{ id: String(id) }}
+                            hash={diffAnchor(range.repo)}
+                            title={rangeTitle(range)}
+                            className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                            data-testid="run-range"
+                        >
+                            {range.repo} {span}
+                            {lines !== null && (
+                                <>
+                                    {' '}
+                                    <span className="text-diff-add">{lines[0]}</span>{' '}
+                                    <span className="text-diff-del">{lines[1]}</span>
+                                </>
+                            )}
+                        </Link>
+                    )
+                )
+            })}
+        </>
     )
 }
 

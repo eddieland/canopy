@@ -19,8 +19,8 @@ from canopy.runs import tasks as task_rows
 from canopy.runs.ending import Ending
 from canopy.serve import task_views
 from canopy.serve.api.deps import BackendDep
-from canopy.serve.api.refs import REFUSED, WEB, RefusedError, TaskId, TaskRunId, not_found
-from canopy.serve.schema import ReplyRequest
+from canopy.serve.api.refs import REFUSED, WEB, RefusedError, RepoName, TaskId, TaskRunId, not_found
+from canopy.serve.schema import ReplyRequest, ReviewDiff
 from canopy.serve.schema.task import (
     TaskDetail,
     TaskReplied,
@@ -87,6 +87,21 @@ def task_run_transcript(task_id: TaskId, run_id: TaskRunId, backend: BackendDep)
         found = task_views.task_run_transcript(ctx, task_id, run_id)
     if found is None:
         raise HTTPException(status_code=404, detail=f"task:{task_id} has no run {run_id}")
+    return found
+
+
+@router.get(
+    "/tasks/{task_id}/runs/{run_id}/changes/{repo}",
+    operation_id="getTaskRunChange",
+    summary="Get the diff of what a task run changed",
+    responses=not_found("diff of this task run's change"),
+)
+def task_run_change(task_id: TaskId, run_id: TaskRunId, repo: RepoName, backend: BackendDep) -> ReviewDiff:
+    """The diff of the run's own change to its repository, read when its page opens it: untrusted and bounded."""
+    with backend.open() as ctx:
+        found = task_views.task_run_change_diff(ctx, task_id, run_id, repo)
+    if found is None:
+        raise HTTPException(status_code=404, detail=f"run {run_id} of task:{task_id} kept no diff of {repo}")
     return found
 
 

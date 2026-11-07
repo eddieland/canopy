@@ -25,7 +25,22 @@ def change(
     missing: str | None = None,
 ) -> records.RunChange:
     """A row of run 7's: its range, whether each diff was kept, and why one was not."""
-    return records.RunChange(7, None, repo, start, on_base, end, fork, left, kept[0], kept[1], missing)
+    return records.RunChange(
+        7,
+        None,
+        repo,
+        start,
+        on_base,
+        end,
+        fork,
+        left,
+        kept[0],
+        kept[1],
+        missing,
+        None,
+        None,
+        None,
+    )
 
 
 def test_each_repositorys_range_and_kept_diffs_are_printed(tmp_path: Path, snapshot: SnapshotAssertion) -> None:

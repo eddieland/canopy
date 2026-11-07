@@ -6,8 +6,8 @@ design; the [README](README.md) has the map. Previous: [Messages to running agen
 
 ## 45. What a run changed
 
-Partly built (ROADMAP M69): the record, the kept diffs, and `canopy show` are; the pages of Where it shows and The
-commits are not, and the code does not follow those parts until they are.
+Partly built (ROADMAP M69): the record, the kept diffs, `canopy show`, and a run's page are; the PR's page of Where it
+shows and The commits are not, and the code does not follow those parts until they are.
 
 A run's result line says what its worker thinks it did; its branch on GitHub shows every commit anyone put there,
 rewritten by each flaky kick (§23). Neither says what this run changed. This section makes that a journal fact, read
@@ -39,8 +39,10 @@ drivers and textconv off (D107), and removed with the run's other files, a task 
 ### Where it shows
 
 The operator reads what a run changed where they judge the run: on its page, a worker run's or a task run's, a joint
-run's per repository, with the branch against its base beside it, and the stretches a checklist kept (§42) with its
-answers; on its PR's page, whose threads sit on the kept diff of the latest run that pushed, under every
+run's per repository, a summary first, since the page is opened far more often to see why a run ended than to read its
+diff: the range and how many files and lines it touched, as git counted them at the run's end and the journal keeps,
+with the run's own diff read only when asked for; the stretches a checklist kept (§42) with its answers; on its PR's
+page, which holds the branch against its base, whose threads sit on the kept diff of the latest run that pushed, under every
 `trust.review_replies` setting (§29); and from the CLI, which prints a kept diff on request. An `unpushed` run's diff is
 marked as work not on origin, and a diff that was not kept is said to be missing, never shown as nothing. What each page
 draws is `ui/DESIGN.md`'s. Nothing here reaches the overseer's state block (§6) or any agent's prompt: the reviewer and

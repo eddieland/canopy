@@ -108,6 +108,11 @@ first push is held for the list too, and its answers sit in a **Checklist** pane
 the list under them, as on [a worker run's page](runs#a-runs-page). A one-off task doesn't get a pass on the house rules
 just for being one-off.
 
+Then its **Diff**, what the run changed in the task's repository, its files and lines, with the diff itself behind
+**Show diff**, as on [a worker run's page](runs#a-runs-page). A task that went three rounds of `blocked` and your
+replies has three runs, and each one's diff is its own round's work, so you can see what your answer to its question
+actually bought.
+
 Under it is the **transcript**, the session's events read from the run's log: what the worker wrote, each tool call
 with its input and output, and what each model call cost, with the context chart one click away, as on a run's page.
 It is the place to check how a run got its answer before you build on it. A run still working shows what its worker
