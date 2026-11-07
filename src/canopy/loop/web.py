@@ -18,7 +18,7 @@ from canopy.core import conversation, review_runs
 from canopy.infra import logs, resources
 from canopy.loop import attention, reread, tick_now
 from canopy.reviews import grants
-from canopy.runs import epic_runs, halt, policy, task_run
+from canopy.runs import ending, epic_runs, halt, policy, task_run
 from canopy.serve import secret
 from canopy.serve.app import create_app
 from canopy.serve.auth import Sessions
@@ -92,10 +92,10 @@ def backend(ctx: Context, reload: reread.Reload, asked: tick_now.TickNow, every:
     def end_run(run_ctx: Context, run: records.Run) -> bool:
         return halt.end(run_ctx, run, logs.for_tick(None))
 
-    def end_task_run(run_ctx: Context, run: records.TaskRun) -> bool:
+    def end_task_run(run_ctx: Context, run: records.TaskRun) -> ending.Ending:
         return task_run.stop_now(run_ctx, run, logs.for_tick(None))
 
-    def end_epic_run(run_ctx: Context, run: records.EpicRun) -> bool:
+    def end_epic_run(run_ctx: Context, run: records.EpicRun) -> ending.Ending:
         return epic_runs.stop_now(run_ctx, run, logs.for_tick(None))
 
     def reload_config(current: Context) -> Reloading:

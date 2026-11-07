@@ -82,6 +82,12 @@ export function failedText(error: unknown): string {
     return typeof error === 'string' ? error : 'the request failed'
 }
 
+/**
+ * What a stop that ended a run says of a slot it could not return, as `canopy stop --now` does
+ * (`runs.ending.KEPT_NOTE`).
+ */
+const KEPT_NOTE = 'the next tick returns it, or one canopy could not tidy stays leased for you: canopy.log says which'
+
 /** What a start did, as `canopy start` says it: whether it was already started, and any run still working it. */
 export function startedText(key: string, started: Started): string {
     const state = started.already ? 'was already started' : 'is started'
@@ -129,9 +135,12 @@ export function taskStoppedText(id: number, stopped: TaskStopped, now: boolean):
     if (!now) {
         return `${head} Its run ${run} is still working and will finish; Stop now ends it.`
     }
-    return stopped.ended
-        ? `${head} Its run ${run} was ended and its slot returned.`
-        : `${head} Its run ${run} had already ended.`
+    if (!stopped.ended) {
+        return `${head} Its run ${run} had already ended.`
+    }
+    return stopped.kept
+        ? `${head} Its run ${run} was ended, but its slot was not returned; ${KEPT_NOTE}`
+        : `${head} Its run ${run} was ended and its slot returned.`
 }
 
 /**
@@ -715,9 +724,12 @@ export function epicStoppedText(id: number, stopped: EpicStopped, now: boolean):
     if (!now) {
         return `${head} Its plan run ${run} is still working and will finish; Stop now ends it.`
     }
-    return stopped.ended
-        ? `${head} Its plan run ${run} was ended and its slots returned.`
-        : `${head} Its plan run ${run} had already ended.`
+    if (!stopped.ended) {
+        return `${head} Its plan run ${run} had already ended.`
+    }
+    return stopped.kept
+        ? `${head} Its plan run ${run} was ended, but a slot it held was not returned; ${KEPT_NOTE}`
+        : `${head} Its plan run ${run} was ended and its slots returned.`
 }
 
 /** What the operator's word on a plan did, as `canopy plan` says it (canopy/cli/plans.py). */

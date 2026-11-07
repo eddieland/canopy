@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import sys
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, assert_never
 
 import click
 
@@ -20,7 +20,7 @@ from canopy.core.items import age
 from canopy.core.vocab import PlanStatus, RunStatus
 from canopy.infra import logs
 from canopy.infra.text import one_line, printable
-from canopy.runs import epic_runs
+from canopy.runs import ending, epic_runs
 
 if TYPE_CHECKING:
     from canopy.core import epic_changes, records
@@ -301,10 +301,16 @@ def stop(ctx: Context, epic_id: int, *, now: bool) -> int:
         return 0
     if not now:
         click.echo(f"Its plan run {run.id} is still working and will finish; --now ends it.")
-    elif epic_runs.stop_now(ctx, run, log):
-        click.echo(f"Its plan run {run.id} was ended and its slots returned.")
     else:
-        click.echo(f"Its plan run {run.id} had already ended.")
+        match epic_runs.stop_now(ctx, run, log):
+            case ending.Ending.ENDED:
+                click.echo(f"Its plan run {run.id} was ended and its slots returned.")
+            case ending.Ending.KEPT:
+                click.echo(f"Its plan run {run.id} was ended, but a slot it held was not returned; {ending.KEPT_NOTE}")
+            case ending.Ending.GONE:
+                click.echo(f"Its plan run {run.id} had already ended.")
+            case _ as unreachable:
+                assert_never(unreachable)
     return 0
 
 
