@@ -1,7 +1,7 @@
 """What the mock journal's ended worker and task runs changed (DESIGN §45), for `python -m canopy.serve --mock`.
 
 Run 39, ABC-099's implement in web, started from main, origin having no branch yet, and pushed PR 88's head: both its
-diffs are kept, so its page shows what it changed and, a toggle away, the branch against main. Run 40, ABC-100's
+diffs are kept, so its page names the files it changed and shows their diff when opened. Run 40, ABC-100's
 fix-ci, failed with its fix still in its slot: its diffs are of work not on origin. Run 37, ABC-100's implement, kept
 neither, and its page says why. Task 1's run in web kept both, as a worker run's do. Run 45's record is `drafts`'s,
 whose PR page reads its branch's diff.
@@ -128,6 +128,7 @@ def seed(conn: sqlite3.Connection) -> None:
                 merge_base=_MAIN,
                 change_kept=True,
                 branch_kept=True,
+                counted=_counted(_DEBOUNCE),
             ),
         ],
     )
@@ -143,6 +144,7 @@ def seed(conn: sqlite3.Connection) -> None:
                 unpushed=_UNPUSHED_86,
                 change_kept=True,
                 branch_kept=True,
+                counted=_counted(_RETRY),
             ),
         ],
     )
@@ -163,9 +165,29 @@ def seed(conn: sqlite3.Connection) -> None:
                 merge_base=_MAIN_TASK,
                 change_kept=True,
                 branch_kept=True,
+                counted=_counted(_BUNDLE),
             ),
         ],
         table="task_runs",
+    )
+
+
+def _counted(diff: str) -> run_changes.Counted:
+    """What git would count of `diff`, as `runs.changes` records it.
+
+    Returns:
+        Each file's lines added and removed, and their totals.
+    """
+    return run_changes.counted(
+        [
+            review_diff.Count(
+                f.path,
+                f.old_path,
+                sum(ln.kind == "add" for h in f.hunks for ln in h.lines),
+                sum(ln.kind == "del" for h in f.hunks for ln in h.lines),
+            )
+            for f in review_diff.parse(diff).files
+        ],
     )
 
 

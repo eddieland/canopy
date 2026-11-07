@@ -99,6 +99,9 @@ def test_an_implement_records_the_bases_commit_origins_head_and_the_merge_base_a
     assert "+the change\n" in change_of(ran)
     assert branch_of(ran) == change_of(ran)
     assert review_diff.read_head(review_diff.run_path_for(ran.row["log_path"], "repo")) == head
+    assert (row.files_changed, row.lines_added, row.lines_removed) == (1, 1, 0)
+    [counted] = run_changes.files_of(scenario.conn, ran.id, "repo")
+    assert (counted.path, counted.old_path, counted.added, counted.removed) == ("a.txt", None, 1, 0)
     shown = scenario.operator("show", f"run:{ran.id}").out
     assert f"\nChanged:\n  repo  {base[:12]}..{head[:12]}, from its base, merge base {base[:12]}\n" in shown
     assert f"\n    its change {run_changes.change_path(ran.row['log_path'], 'repo')}\n" in shown
@@ -120,6 +123,8 @@ def test_a_resume_starts_from_origins_previous_head_and_its_own_diff_holds_the_f
     assert (row.start_sha, row.start_on_base, row.end_sha, row.merge_base_sha) == (before, False, after, base)
     assert "b.txt" in change_of(ran)
     assert "a.txt" not in change_of(ran)
+    # Counted of the run's own change alone.
+    assert [f.path for f in run_changes.files_of(scenario.conn, ran.id, "repo")] == ["b.txt"]
     assert ("a.txt" in branch_of(ran), "b.txt" in branch_of(ran)) == (True, True)
     # For a pager: the run's own change, as git printed it.
     printed = scenario.operator("show", f"run:{ran.id}", "--diff").out
@@ -300,7 +305,7 @@ def test_a_diff_is_read_no_further_than_canopy_keeps_it(scenario: Scenario, git_
     ):
         ran = scenario.run(worker=worker_does(*writes("a.txt", "x" * 500), push()))
         printed = scenario.operator("show", f"run:{ran.id}", "--diff")
-    diffs = [c for c in git_ran.call_args_list if c.args[1] == "diff" and "--find-renames" in c.args]
+    diffs = [c for c in git_ran.call_args_list if c.args[1] == "diff" and "--no-color" in c.args]
     assert [c.kwargs["max_stdout"] for c in diffs] == [100, 100]
     assert len(change_of(ran)) == 100
     assert f"run:{ran.id}'s diff of repo is cut where canopy's bounds end" in printed.err

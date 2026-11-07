@@ -38,6 +38,10 @@ TaskId = Annotated[int, Path(ge=1, le=_MAX_ID, description="The task's id, as `t
 TaskRunId = Annotated[int, Path(ge=1, le=_MAX_ID, description="The task run's id.")]
 MemoryId = Annotated[int, Path(ge=1, le=_MAX_ID, description="The memory's id, as `memory:ID` names it.")]
 EpicId = Annotated[int, Path(ge=1, le=_MAX_ID, description="The epic's id, as `epic:N` names it.")]
+RepoName = Annotated[
+    str,
+    Path(max_length=200, description="A repository's name in the workspace, as the run's change names it."),
+]
 
 # Every API route's: the guard answers 403, 411, or 413 before any route does (guard.py), and a session's check on a
 # write answers 403.

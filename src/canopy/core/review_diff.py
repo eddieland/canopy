@@ -84,6 +84,18 @@ class Diff:
     truncated: bool = False
 
 
+class Count(NamedTuple):
+    """One file's lines as `git diff --numstat` counts them."""
+
+    path: str
+    #: The path it had before, when git found it renamed.
+    old_path: str | None
+    #: The lines added; None for a binary file, whose lines git does not count.
+    added: int | None
+    #: The lines removed; None for a binary file.
+    removed: int | None
+
+
 class Text(NamedTuple):
     """A kept diff's lines as `text` reads them, for a terminal."""
 
@@ -112,6 +124,46 @@ def names_args(fork: str, head: str) -> tuple[str, ...]:
         The arguments after `git`.
     """
     return ("diff", "--no-ext-diff", "--no-textconv", "--no-renames", "--name-only", "-z", fork, head)
+
+
+def numstat_args(fork: str, head: str) -> tuple[str, ...]:
+    """The `git` arguments that count each file's lines in the diff `diff_args` takes, each entry ending in a NUL.
+
+    Returns:
+        The arguments after `git`.
+    """
+    return ("diff", "--no-ext-diff", "--no-textconv", "--find-renames", "--numstat", "-z", fork, head)
+
+
+def counts(text: str) -> list[Count]:
+    """Read what `numstat_args` printed: a file's lines added and removed, and its paths, made printable.
+
+    Each entry is `added<TAB>removed<TAB>path<NUL>`, or for a rename an empty path then `old<NUL>new<NUL>`; a binary
+    file counts `-` for each. An entry cut short, at the end of output git was stopped reading, is left out.
+
+    Returns:
+        A count per file, in git's order.
+    """
+    found: list[Count] = []
+    # What follows the last NUL is an entry cut short, or nothing.
+    fields = text.split("\0")[:-1]
+    at = 0
+    while at < len(fields) and fields[at]:
+        added, tab, rest = fields[at].partition("\t")
+        removed, tab2, path = rest.partition("\t")
+        at += 1
+        old: str | None = None
+        if not (tab and tab2):
+            break
+        if not path:
+            if at + 1 >= len(fields):
+                break
+            old, path = fields[at], fields[at + 1]
+            at += 2
+        found.append(
+            Count(_clean(path), _clean(old) if old is not None else None, _lines(added), _lines(removed)),
+        )
+    return found
 
 
 def keep(path: Path, diff: str) -> None:
@@ -337,6 +389,11 @@ class _Parser:
         self.lines += 1
         self.old += kind != "add"
         self.new += kind != "del"
+
+
+def _lines(count: str) -> int | None:
+    # A binary file's count is `-`.
+    return int(count) if count.isdigit() else None
 
 
 def _from_header(raw: str) -> str:

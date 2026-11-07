@@ -3,9 +3,11 @@
 `runs.changes` reads each slot as the run ends, after its push and before a flaky kick (§8 step 5): the commit the run
 started from, the commit it left on origin, and the merge base with its base, and keeps two diffs beside the run's
 log, as a review keeps its one: the run's own change (`change_path`) and the branch against its base
-(`review_diff.run_path_for`, with the commit it was taken at beside it). This records them, a row per repository, in
-the transaction that closes the run, and reads them back. The commits are the harness's own reads, never the agent's
-word; the diffs are the branch's text, untrusted, read back within `review_diff`'s bounds. The rows are never removed:
+(`review_diff.run_path_for`, with the commit it was taken at beside it). It counts the run's own change's lines too,
+per file, so a page names its size without reading a diff. This records them, a row per repository and one per file
+counted, in the transaction that closes the run, and reads them back. The commits are the harness's own reads, never
+the agent's word; the diffs and the paths counted are the branch's text, untrusted, the diffs read back within
+`review_diff`'s bounds. The rows are never removed:
 the files go with the run's others after `run_files_days` (§26).
 """
 
@@ -19,13 +21,41 @@ from canopy.core import records, review_diff
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Collection, Iterable
+    from collections.abc import Collection, Iterable, Sequence
 
 #: Why a run that crashed keeps nothing: no git runs in a slot whose links may point at a git directory the worker made
 #: (§8 step 5), and a setup failure or a signal ends the run before its slot is read.
 CRASHED = "the run crashed, so canopy read nothing of its slot and kept no diff"
 #: The tables of the runs that record what they changed: a worker's, and a one-off task's (DESIGN §36).
 type RunTable = Literal["runs", "task_runs"]
+
+
+@dataclass(frozen=True)
+class Counted:
+    """How much a run's own change touched in one repository, as `git diff --numstat` counted it."""
+
+    #: The files, in git's order, at most a review diff's many (`review_diff.MAX_FILES`).
+    files: Sequence[review_diff.Count]
+    #: How many files it touched, those past the bound included.
+    files_changed: int
+    #: The lines it added, a binary file's counting none.
+    lines_added: int
+    #: The lines it removed.
+    lines_removed: int
+
+
+def counted(found: Sequence[review_diff.Count]) -> Counted:
+    """Total what git counted of each file, keeping the files a review diff would.
+
+    Returns:
+        The files within the bound, and the totals over every one.
+    """
+    return Counted(
+        files=tuple(found[: review_diff.MAX_FILES]),
+        files_changed=len(found),
+        lines_added=sum(c.added or 0 for c in found),
+        lines_removed=sum(c.removed or 0 for c in found),
+    )
 
 
 @dataclass(frozen=True)
@@ -50,6 +80,8 @@ class Change:
     branch_kept: bool = False
     #: Why a diff was not kept; None when both were.
     missing: str | None = None
+    #: How much the run's own change touched; None when canopy counted nothing.
+    counted: Counted | None = None
 
 
 def crashed(repos: Iterable[str]) -> tuple[Change, ...]:
@@ -85,7 +117,11 @@ def files(log_path: str | Path, repos: Iterable[str]) -> list[Path]:
 
 
 def record(conn: sqlite3.Connection, run_id: int, changes: Iterable[Change], *, table: RunTable = "runs") -> None:
-    """Record what run `run_id` of `table` changed, a row per repository, in the transaction that closes it."""
+    """Record what run `run_id` of `table` changed, a row per repository and one per file counted.
+
+    In the transaction that closes it.
+    """
+    changes = tuple(changes)
     rows = [
         (
             run_id,
@@ -98,6 +134,9 @@ def record(conn: sqlite3.Connection, run_id: int, changes: Iterable[Change], *, 
             c.change_kept,
             c.branch_kept,
             c.missing,
+            c.counted.files_changed if c.counted is not None else None,
+            c.counted.lines_added if c.counted is not None else None,
+            c.counted.lines_removed if c.counted is not None else None,
         )
         for c in changes
     ]
@@ -114,8 +153,20 @@ def record(conn: sqlite3.Connection, run_id: int, changes: Iterable[Change], *, 
         "change_kept",
         "branch_kept",
         "missing",
+        "files_changed",
+        "lines_added",
+        "lines_removed",
     ]
     records.insert_rows(records.RunChange, columns).many(conn, rows)
+    files = [
+        (run_id, c.repo, f.path, f.old_path, f.added, f.removed)
+        for c in changes
+        if c.counted is not None
+        for f in c.counted.files
+    ]
+    if files:
+        file_columns: list[LiteralString] = [_column(table), "repo", "path", "old_path", "added", "removed"]
+        records.insert_rows(records.RunChangeFile, file_columns).many(conn, files)
 
 
 def of_run(conn: sqlite3.Connection, run_id: int, *, table: RunTable = "runs") -> list[records.RunChange]:
@@ -133,6 +184,30 @@ def of_run(conn: sqlite3.Connection, run_id: int, *, table: RunTable = "runs") -
         case _:
             assert_never(table)
     return query.order_by("repo").all(conn)
+
+
+def files_of(
+    conn: sqlite3.Connection,
+    run_id: int,
+    repo: str,
+    *,
+    table: RunTable = "runs",
+) -> list[records.RunChangeFile]:
+    """Return the files run `run_id` of `table` changed in `repo`, as git counted them.
+
+    Returns:
+        A row per file counted, in git's order; none for a repository canopy counted nothing of.
+    """
+    query = records.select(records.RunChangeFile).where("repo = ?", repo)
+    match table:
+        case "runs":
+            query = query.where("run_id = ?", run_id)
+        case "task_runs":
+            query = query.where("task_run_id = ?", run_id)
+        case _:
+            assert_never(table)
+    # Inserted in git's order, so the rowid keeps it.
+    return query.order_by("rowid").all(conn)
 
 
 def of_runs(conn: sqlite3.Connection, run_ids: Collection[int]) -> dict[int, list[records.RunChange]]:

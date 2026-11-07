@@ -4,7 +4,8 @@ After the push check (`checkpoint.ensure_pushed`) and before a flaky kick rewrit
 reads one slot: the commit the branch is at on origin as the push check read it, not again, since someone else may
 have moved it since, and for a slot left unpushed the last commit the run made there (`checkpoint.left_work`), and the
 merge base of the one it diffs with the base as the slot last fetched it. It keeps two diffs beside the run's log: the
-run's own change, from the commit it started from, and the branch against its base, with the commit it was taken at.
+run's own change, from the commit it started from, and the branch against its base, with the commit it was taken at;
+and it counts each file's lines in the run's own change, which a run's page and its ticket's runs list name.
 Each is kept then or never: the slot is returned, a kick may rewrite the branch, and the run's objects are deleted with
 it.
 
@@ -66,6 +67,9 @@ def keep(
     change = _keep(git, start.commit, head, run_changes.change_path(log_path, repo))
     if change is not None:
         log.warning("run's change not kept", extra={**fields, "error": change})
+    counted = _count(git, start.commit, head)
+    if isinstance(counted, str):
+        log.warning("run's change not counted", extra={**fields, "error": counted})
     try:
         fork = _merge_base(git, base, head)
     except checkpoint.SetupError as e:
@@ -84,6 +88,7 @@ def keep(
         change_kept=change is None,
         branch_kept=against is None,
         missing="; ".join(missing) or None,
+        counted=counted if not isinstance(counted, str) else None,
     )
 
 
@@ -135,6 +140,25 @@ def _keep(git: checkpoint.Git, fork: str, head: str, path: Path, *, at: str | No
     except (checkpoint.SetupError, OSError) as e:
         return _cut(str(e))
     return None
+
+
+def _count(git: checkpoint.Git, fork: str, head: str) -> run_changes.Counted | str:
+    """Count each file's lines in the diff of `head` against `fork`, as git's `--numstat` does.
+
+    Read no further than a kept diff is: a change whose count runs past that is not counted, rather than counted short.
+
+    Returns:
+        The count, or why there is none.
+    """
+    try:
+        found = git.result(*review_diff.numstat_args(fork, head), max_stdout=review_diff.KEPT_CHARS)
+    except checkpoint.SetupError as e:
+        return _cut(str(e))
+    if not found.ok:
+        return _cut(f"git diff --numstat exited {found.returncode}: {found.stderr.strip()}")
+    if len(found.stdout) >= review_diff.KEPT_CHARS:
+        return "git's count ran past what canopy reads"
+    return run_changes.counted(review_diff.counts(found.stdout))
 
 
 def _cut(text: str) -> str:

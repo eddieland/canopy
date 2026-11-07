@@ -177,8 +177,10 @@ class TaskRunDetail(Model):
     checklist_stretches_left_out: int = 0
     """How many stretches after the first five the page is not sent: `canopy show task:N` names them all."""
     changes: list[RunChange] = []
-    """What it changed in its repository (DESIGN §45), as a worker run's page has it: its range and its kept diffs.
+    """What it changed in its repository (DESIGN §45), as a worker run's page has it: its range and its files.
     Empty for a run still running, and one that recorded none."""
+    records_changes: bool = False
+    """Whether it ended, every task run recording what it changed, so its page says so when it recorded nothing."""
 
 
 class TaskReport(Model):

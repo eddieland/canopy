@@ -238,3 +238,30 @@ class RunChange(Row):
     branch_kept: bool
     #: Why a diff was not kept; None when both were.
     missing: str | None
+    #: How many files the run's own change touched, by git's count; None when canopy counted nothing.
+    files_changed: int | None
+    #: The lines it added, a binary file's counting none; None as `files_changed` is.
+    lines_added: int | None
+    #: The lines it removed; None as `files_changed` is.
+    lines_removed: int | None
+
+
+@dataclass(frozen=True)
+class RunChangeFile(Row):
+    """One file a worker's or a task's run changed in one repository (DESIGN §45), as git counted its lines.
+
+    It names one run, as its `RunChange` does. The path is the branch's text, untrusted. Never removed (§26).
+    """
+
+    TABLE: ClassVar[LiteralString] = "run_change_files"
+
+    run_id: int | None
+    task_run_id: int | None
+    repo: str
+    path: str
+    #: The path it had before, when git found it renamed.
+    old_path: str | None
+    #: The lines added; None for a binary file.
+    added: int | None
+    #: The lines removed; None for a binary file.
+    removed: int | None

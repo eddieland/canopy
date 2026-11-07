@@ -177,9 +177,18 @@ def test_a_task_runs_page_carries_what_it_pushed_after_its_list_as_a_worker_runs
 
 
 def test_a_task_runs_page_carries_what_it_changed_as_a_worker_runs_does(backend: Backend) -> None:
-    """Its range and its own change, read as a review's diff is (DESIGN §45); a kept file since gone is no diff."""
+    """Its range and files on its page, its own diff on its own, read as a review's diff is (DESIGN §45)."""
     start_sha, end_sha = "a1" * 20, "b2" * 20
-    change = Change("web", start_sha, start_on_base=True, end=end_sha, change_kept=True, branch_kept=True)
+    counted = run_changes.counted([review_diff.Count("x.py", None, 1, 1)])
+    change = Change(
+        "web",
+        start_sha,
+        start_on_base=True,
+        end=end_sha,
+        change_kept=True,
+        branch_kept=True,
+        counted=counted,
+    )
     with backend.open() as ctx:
         task = submit(ctx)
         run_id = start(ctx, task)
@@ -189,10 +198,19 @@ def test_a_task_runs_page_carries_what_it_changed_as_a_worker_runs_does(backend:
     kept.parent.mkdir(parents=True, exist_ok=True)
     review_diff.keep(kept, "diff --git a/x.py b/x.py\n--- a/x.py\n+++ b/x.py\n@@ -1 +1 @@\n-a\n+b\n")
     c = client(None, backend)
-    [found] = c.get(f"/api/tasks/{task.id}/runs/{run_id}").json()["changes"]
+    page = c.get(f"/api/tasks/{task.id}/runs/{run_id}").json()
+    [found] = page["changes"]
     assert (found["range"]["start_on_base"], found["range"]["end_sha"]) == (True, end_sha)
-    assert [f["path"] for f in found["diff"]["files"]] == ["x.py"]
-    assert found["branch_diff"] is None
+    assert (found["range"]["lines_added"], [f["path"] for f in found["files"]], found["diff_kept"]) == (
+        1,
+        ["x.py"],
+        True,
+    )
+    assert page["records_changes"] is True
+    diff = c.get(f"/api/tasks/{task.id}/runs/{run_id}/changes/web").json()
+    assert [f["path"] for f in diff["files"]] == ["x.py"]
+    # Found only under its own task.
+    assert c.get(f"/api/tasks/{task.id + 1}/runs/{run_id}/changes/web").status_code == 404
 
 
 def test_a_task_runs_transcript_is_read_back_from_its_log(backend: Backend) -> None:
