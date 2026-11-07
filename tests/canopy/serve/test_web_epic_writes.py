@@ -10,11 +10,11 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from canopy.core import epics
-from canopy.core.vocab import PlanStatus
+from canopy.core import db, epics, plans, records
+from canopy.core.vocab import PlanStatus, RunStatus
 from canopy.serve.backend import Backend
 from canopy.serve.mock import epics as mock_epics
-from tests.canopy.helpers import in_run, present
+from tests.canopy.helpers import in_run, present, proposed
 from tests.canopy.web_helpers import client, refused, replan_epic, signed_in_to, start_epic_run
 
 APPROVED, PROPOSED, PLANNING = mock_epics.APPROVED, mock_epics.PROPOSED, mock_epics.PLANNING
@@ -30,8 +30,13 @@ def test_the_mock_epics_plan_is_approved_from_the_web_and_its_breakdown_is_the_b
     assert c.post(route, json={"read_sha256": read["sha256"]}).status_code == 403
 
     approved = c.post(route, json={"read_sha256": read["sha256"]}, headers=headers)
-    # Its first approved plan: nothing to compare it with.
-    assert approved.json() == {"plan": read["plan"]["id"], "run_id": read["plan"]["run_id"], "change": None}
+    # Its first approved plan: nothing to compare it with, and no member it reached.
+    assert approved.json() == {
+        "plan": read["plan"]["id"],
+        "run_id": read["plan"]["run_id"],
+        "change": None,
+        "reached": {"stale": [], "held": [], "told": []},
+    }
     found = c.get(f"/api/epics/{PROPOSED}").json()
     assert (found["epic"]["standing"], found["plan"]["status"], found["plan"]["approved_channel"]) == (
         "approved",
@@ -91,6 +96,38 @@ def test_a_re_approval_says_the_ids_it_added_removed_and_changed(backend: Backen
     read = c.get(f"/api/epics/{APPROVED}/plans").json()["plans"][-1]
     approved = c.post(f"/api/epics/{APPROVED}/plan/approval", json={"read_sha256": read["sha256"]}, headers=headers)
     assert approved.json()["change"] == {"added": ["R4"], "removed": ["B2"], "changed": ["R1"]}
+    # Each member has a branch, so each is left as it is, told at its next plan, in the order they were added.
+    assert approved.json()["reached"] == {"stale": [], "held": [], "told": ["ABC-103", "ABC-104", "ABC-100"]}
+
+
+def test_a_re_approval_names_the_members_it_reached_each_way(backend: Backend) -> None:
+    """A proposed plan is superseded as stale, an approved one's `implement` held, and one with a branch only told."""
+    c, headers = signed_in_to(backend)
+    with backend.open() as ctx:
+        for key in ("ABC-201", "ABC-202"):
+            run_id = proposed(ctx.conn, ctx.state_dir, key=key)
+            records.update(records.Run).set(status=RunStatus.DONE).where("id = ?", run_id).run(ctx.conn)
+        plan = present(plans.current(ctx.conn, "ABC-202"))
+        approve = records.update(records.Plan).set(
+            status=PlanStatus.APPROVED,
+            approved_sha256=plan.sha256,
+            approved_at=db.now(),
+            approved_channel="web",
+        )
+        approve.where("id = ?", plan.id).run(ctx.conn)
+    for key, entry in (("ABC-201", "B3"), ("ABC-202", "B4")):
+        added = c.post(f"/api/epics/{APPROVED}/members", json={"key": key, "entries": [entry]}, headers=headers)
+        assert added.status_code == 200, added.text
+    with backend.open() as ctx:
+        old = present(epics.current_plan(ctx.conn, APPROVED))
+        text = epics.plan_path(ctx.state_dir, APPROVED, old.run_id).read_text()
+        # B3's text and R3's, which B4 covers: ABC-100, of no entry, is reached by every change.
+        new = text.replace("Mobile's billing screens on v2", "Mobile's billing screens on v2, offline too")
+        replan_epic(ctx, APPROVED, new.replace("api no longer serves it.", "api no longer serves it anywhere."))
+    read = c.get(f"/api/epics/{APPROVED}/plans").json()["plans"][-1]
+    approved = c.post(f"/api/epics/{APPROVED}/plan/approval", json={"read_sha256": read["sha256"]}, headers=headers)
+    assert approved.json()["change"] == {"added": [], "removed": [], "changed": ["B3", "R3"]}
+    assert approved.json()["reached"] == {"stale": ["ABC-201"], "held": ["ABC-202"], "told": ["ABC-100"]}
 
 
 def test_a_plan_file_changed_since_the_page_read_it_is_refused_not_approved_unseen(backend: Backend) -> None:

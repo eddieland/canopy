@@ -181,7 +181,12 @@ While the plan waits on you, its foot, stuck to the bottom of the window as you 
   say in your own editor, canopy refuses (`stale`) and the page reads it again, so you approve what you read and
   nothing else. It also refuses a plan whose ids won't read (`bad_outline`) or that brings back an id an earlier
   approval dropped (`reused_id`). Approved, it says what changed since the plan you approved before, by id: added,
-  removed, changed. Then the epic's board leads with the approved breakdown.
+  removed, changed. Under that it names the members the change reached, each linked to its ticket, by what it did to
+  them: a member's plan still waiting on you is superseded as stale and planned again; an approved one whose ticket
+  has no branch yet has its implement held (`epic_changed`) until you approve that plan again or ask for a new one;
+  and the rest, at work or with a branch, are left as they are and told at their next plan. Nothing built is
+  rewritten: a branch already pushed hears the news rather than getting a surprise refactor. A change that reached no
+  member names none. Then the epic's board leads with the approved breakdown.
 - **Ask for changes** sends the note you write beside it as a reply, which the next plan run reads. It says what that
   starts: the next tick's plan run, the next one after the run at work, or none at all once the epic has had
   `policy.max_plan_attempts`. Until a run picks it up, a band under the title says you asked. Approving in the

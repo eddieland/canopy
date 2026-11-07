@@ -13,6 +13,7 @@ import type {
     EpicMemberAdded,
     EpicMemberRemoved,
     EpicPlanApproved,
+    EpicPlanReached,
     EpicReplied,
     EpicStopped,
     EpicSubmitted,
@@ -648,6 +649,22 @@ export function epicApprovedText(id: number, approved: EpicPlanApproved): string
         .filter(([, ids]) => ids.length > 0)
         .map(([word, ids]) => `${word}: ${ids.join(', ')}`)
     return listed.length === 0 ? head : `${head} ${listed.join('; ')}.`
+}
+
+/**
+ * The members a change of an epic's plan reached, each way it met them, in the words `canopy plan epic:N --approve`
+ * names them (canopy/cli/epics.py): plans superseded as stale, implements held, and members left as they are. A way
+ * that reached none is left out, so none at all is an empty list.
+ */
+export function epicReachedWays(reached: EpicPlanReached): { what: string; keys: string[] }[] {
+    return [
+        { what: 'Plans superseded as stale, to be planned again', keys: reached.stale },
+        {
+            what: 'Implements held until you approve the plan again or ask for a new one (epic_changed)',
+            keys: reached.held,
+        },
+        { what: 'Left as they are, each told at its next plan', keys: reached.told },
+    ].filter(({ keys }) => keys.length > 0)
 }
 
 /**

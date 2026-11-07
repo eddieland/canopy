@@ -169,12 +169,15 @@ describe("an epic's plan page", () => {
 
     it('approves a plan that waits by the hash the page read, and marks the moment in the CLI words', async () => {
         const approved = plansOf(2)
-        answers['POST /api/epics/2/plan/approval'] = () => Response.json({ plan: 3, run_id: 3, change: null })
+        answers['POST /api/epics/2/plan/approval'] = () =>
+            Response.json({ plan: 3, run_id: 3, change: null, reached: { stale: [], held: [], told: [] } })
         answers['GET /api/epics/2/plans'] = () => Response.json(approvedPlans(approved))
         await renderPage('2')
         fireEvent.click(await screen.findByRole('button', { name: 'Approve' }))
         const moment = await screen.findByTestId('plan-approved')
         expect(within(moment).getByRole('status').textContent).toBe("Approved epic:2's plan, written by run 3.")
+        // It reached no member: nothing names one.
+        expect(screen.queryByRole('list', { name: 'Members reached' })).toBeNull()
         expect(sent[0]).toEqual({
             method: 'POST',
             path: '/api/epics/2/plan/approval',
@@ -185,6 +188,38 @@ describe("an epic's plan page", () => {
         expect(within(screen.getByTestId('epic-plan')).getByText('approved')).toBeTruthy()
         expect(screen.getByTestId('plan-approved')).toBeTruthy()
         expect(screen.queryByRole('button', { name: 'Ask for changes' })).toBeNull()
+    })
+
+    it('names the members a change of the plan reached, each way in the CLI words, linked to its ticket', async () => {
+        const change = { added: [], removed: [], changed: ['B3', 'R3'] }
+        const reached = { stale: ['ABC-201'], held: ['ABC-202', 'ABC-203'], told: ['ABC-100'] }
+        answers['POST /api/epics/2/plan/approval'] = () => Response.json({ plan: 4, run_id: 5, change, reached })
+        answers['GET /api/epics/2/plans'] = () => Response.json(approvedPlans(plansOf(2)))
+        await renderPage('2')
+        fireEvent.click(await screen.findByRole('button', { name: 'Approve' }))
+        expect(within(await screen.findByTestId('plan-approved')).getByRole('status').textContent).toBe(
+            "Approved epic:2's plan, written by run 5. changed: B3, R3.",
+        )
+        const list = screen.getByRole('list', { name: 'Members reached' })
+        expect(
+            within(list)
+                .getAllByRole('listitem')
+                .map((item) => item.textContent),
+        ).toEqual([
+            'Plans superseded as stale, to be planned again: ABC-201',
+            'Implements held until you approve the plan again or ask for a new one (epic_changed): ABC-202, ABC-203',
+            'Left as they are, each told at its next plan: ABC-100',
+        ])
+        const links = within(list).getAllByRole('link')
+        expect(links.map((link) => [link.textContent, link.getAttribute('href')])).toEqual([
+            ['ABC-201', '/tickets/ABC-201'],
+            ['ABC-202', '/tickets/ABC-202'],
+            ['ABC-203', '/tickets/ABC-203'],
+            ['ABC-100', '/tickets/ABC-100'],
+        ])
+        // Read again, the plan no longer waits, and what the approval reached stays with the moment.
+        await waitFor(() => expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull())
+        expect(screen.getByRole('list', { name: 'Members reached' })).toBeTruthy()
     })
 
     it.each([
