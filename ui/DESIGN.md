@@ -333,8 +333,10 @@ Rules:
   of their own under that one, a row an item, too many for a field, `held` in `status-blocked`, since a reviewer reads
   its reason under it; each stretch it pushed after a list follows them, a panel naming its repository and commits as
   a readout, then its diff's file panels (`DiffPanels`), so the answers and the fix are read together. A worker's or a
-  task's run that ended has its Diff next, the same way, a panel per repository with a segmented control between the
-  run's own change and the branch against its base, and a sentence where a diff is missing, never an empty panel. Then
+  task's run that ended has its Diff next, a panel per repository that sums up rather than shows: the range, files, and
+  lines in its header's readout, the files with theirs under it, and the diff's file panels only once `Show diff` opens
+  them, read then, so the transcript stays on the first screen; a sentence where a diff is missing, never an empty
+  panel. Then
   the thread the operator came to answer, with its form, then the ticket's actions; a page with no thread has its main
   content there instead: a transcript, a chore's open findings and runs, a tick's decisions, a review's findings and
   diff, a PR's reviews. A chore's notes are a thread nothing waits on, so they follow
