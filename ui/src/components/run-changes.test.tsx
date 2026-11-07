@@ -1,7 +1,10 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { QueryClient, queryOptions } from '@tanstack/react-query'
+import { cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import type { ReviewDiff, RunChange, RunRange } from '@/api/types'
+import { ApiError } from '@/api/client'
+import type { ChangedFile, ReviewDiff, RunChange, RunRange } from '@/api/types'
+import { renderRouted, tipOf } from '@/test-utils'
 
 import { RunChangesPanel } from './run-changes'
 
@@ -12,6 +15,7 @@ afterEach(() => {
 const START = '5b1e0c47aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 const END = 'c9d24f83bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
 const LEFT = 'd8e61b30cccccccccccccccccccccccccccccccc'
+const PR = 'https://github.com/acme/web/pull/88'
 
 // The branch's text, in a language canopy does not highlight: markup in it stays its characters.
 function diffOf(...paths: string[]): ReviewDiff {
@@ -34,115 +38,179 @@ function diffOf(...paths: string[]): ReviewDiff {
     }
 }
 
+function file(path: string, added: number | null = 1, removed: number | null = 1): ChangedFile {
+    return { path, old_path: null, added, removed }
+}
+
 function range(repo: string, fields: Partial<RunRange> = {}): RunRange {
-    return { repo, start_sha: START, start_on_base: false, end_sha: END, unpushed_sha: null, ...fields }
+    return {
+        repo,
+        start_sha: START,
+        start_on_base: false,
+        end_sha: END,
+        unpushed_sha: null,
+        files_changed: 1,
+        lines_added: 1,
+        lines_removed: 1,
+        ...fields,
+    }
 }
 
 function change(repo: string, fields: Partial<RunChange> = {}, ranged: Partial<RunRange> = {}): RunChange {
     return {
         range: range(repo, ranged),
-        merge_base_sha: null,
-        diff: diffOf('own.txt'),
-        branch_diff: diffOf('earlier.txt', 'own.txt'),
+        files: [file('own.txt')],
+        diff_kept: true,
         missing: null,
         removed_after_days: null,
+        pr_url: null,
         ...fields,
     }
 }
 
-function files(): string[] {
+interface Rendered {
+    /** The repositories whose diff was read, in order. */
+    read: string[]
+    /** What the panel rendered into. */
+    container: HTMLElement
+    /** Takes it down again. */
+    unmount: () => void
+}
+
+// Each repository's diff as the server keeps it; one it has none of is a 404, as the server sends.
+async function render(
+    changes: RunChange[],
+    {
+        records = true,
+        at = '/',
+        diffs = {},
+    }: { records?: boolean; at?: string; diffs?: Record<string, ReviewDiff> } = {},
+): Promise<Rendered> {
+    const read: string[] = []
+    const diff = (repo: string) =>
+        queryOptions({
+            queryKey: ['run-change', 1, repo] as const,
+            queryFn: () => {
+                read.push(repo)
+                const found = diffs[repo]
+                if (found === undefined) {
+                    throw new ApiError(404, `run 1 kept no diff of its change to ${repo}`)
+                }
+                return found
+            },
+            retry: false,
+        })
+    const client = new QueryClient()
+    const { container, unmount } = await renderRouted(
+        <RunChangesPanel changes={changes} records={records} diff={diff} />,
+        { at, client },
+    )
+    return { read, container, unmount }
+}
+
+function shownFiles(): string[] {
     return screen.getAllByTestId('diff-file').map((f) => within(f).getAllByTitle(/\.txt$/u)[0]?.title ?? '')
 }
 
 describe('RunChangesPanel', () => {
-    it('shows the run’s own change, its repository and commits in the readout, and toggles to the branch', () => {
-        render(<RunChangesPanel changes={[change('web')]} records />)
+    it('summarizes a change, its repository, commits, and size, and reads no diff until it is shown', async () => {
+        const changed = change(
+            'web',
+            { files: [file('src/own.txt', 20, 3), { ...file('logo.png', null, null), old_path: 'old.png' }] },
+            { files_changed: 2, lines_added: 20, lines_removed: 3 },
+        )
+        const { read } = await render([changed], { diffs: { web: diffOf('own.txt') } })
         const shown = screen.getByRole('region', { name: 'Diff: web · 5b1e0c4..c9d24f8' })
         expect(within(shown).getByTestId('run-change-range').textContent).toBe('web · 5b1e0c4..c9d24f8')
-        expect(within(shown).getByText(/^What this run changed, from the commit origin's branch/u)).toBeDefined()
-        expect(files()).toEqual(['own.txt'])
+        expect(within(shown).getByTestId('run-change-range').title).toBe(
+            'From where origin’s branch was when the run started, to where the run left it on origin.',
+        )
+        expect(within(shown).getByTestId('run-change-size').textContent).toBe('2 files · +20 −3')
+        const rows = within(screen.getByTestId('run-change-files')).getAllByRole('listitem')
+        expect(rows.map((r) => r.textContent)).toEqual(['src/own.txt+20 −3', 'old.png → logo.pngbinary'])
+        // No diff is drawn, nor read, until asked for.
+        expect(screen.queryAllByTestId('diff-file')).toHaveLength(0)
+        expect(read).toEqual([])
+        expect(screen.queryByText('branch vs base')).toBeNull()
+
+        fireEvent.click(screen.getByRole('button', { name: 'Show diff' }))
+        expect(await screen.findAllByTestId('diff-file')).toHaveLength(1)
+        expect(read).toEqual(['web'])
         // The branch's text stays text.
         expect(screen.getByText('own.txt <img src=x onerror=alert(1)>')).toBeDefined()
         expect(document.querySelector('img')).toBeNull()
-        expect(screen.queryByTestId('run-change-unpushed')).toBeNull()
-
-        fireEvent.click(screen.getByRole('radio', { name: 'Branch vs base' }))
-        expect(files()).toEqual(['earlier.txt', 'own.txt'])
-        expect(screen.getByText(/^The whole branch against its base/u)).toBeDefined()
-        // Pressing the one shown keeps it.
-        fireEvent.click(screen.getByRole('radio', { name: 'Branch vs base' }))
-        expect(files()).toEqual(['earlier.txt', 'own.txt'])
-        fireEvent.click(screen.getByRole('radio', { name: 'This run' }))
-        expect(files()).toEqual(['own.txt'])
+        fireEvent.click(within(screen.getByTestId('run-change')).getByRole('button', { name: 'Hide diff' }))
+        expect(screen.queryAllByTestId('diff-file')).toHaveLength(0)
     })
 
-    it('says an unpushed run’s diff is of work not on origin, its range running to the commit it left', () => {
-        render(<RunChangesPanel changes={[change('web', {}, { end_sha: START, unpushed_sha: LEFT })]} records />)
+    it('opens the diff a link names, `#diff-web`, and links to the PR’s page for the whole branch', async () => {
+        await render([change('api'), change('web', { pr_url: PR })], {
+            at: '/#diff-web',
+            diffs: { api: diffOf('api.txt'), web: diffOf('web.txt') },
+        })
+        await screen.findAllByTestId('diff-file')
+        expect(shownFiles()).toEqual(['web.txt'])
+        const web = screen.getByRole('region', { name: /^Diff: web/u })
+        expect(web.id).toBe('diff-web')
+        expect(within(web).getByRole('link', { name: 'branch vs base' }).getAttribute('href')).toBe(
+            `/pull-requests/pr?url=${encodeURIComponent(PR)}`,
+        )
+    })
+
+    it('marks an unpushed slot’s change not on origin, once, saying why in its tip', async () => {
+        await render([change('web', {}, { end_sha: START, unpushed_sha: LEFT })])
         expect(screen.getByTestId('run-change-range').textContent).toBe('web · 5b1e0c4..d8e61b3')
-        expect(screen.getByText('not on origin')).toBeDefined()
-        expect(screen.getByTestId('run-change-unpushed').textContent).toMatch(/^Work not on origin/u)
-        expect(screen.getByText(/to the last commit it made in its slot\.$/u)).toBeDefined()
-        expect(files()).toEqual(['own.txt'])
+        // Said once, in the chip, not again in a paragraph or a sentence under it.
+        expect(screen.getAllByText(/unpushed|not on origin/u)).toHaveLength(1)
+        expect(tipOf(screen.getByText('not on origin'))).toContain('left this commit unpushed in its slot')
     })
 
-    it('puts a joint run’s changes each under its repository, only the unpushed one marked', () => {
-        render(
-            <RunChangesPanel
-                changes={[change('api'), change('web', {}, { end_sha: START, unpushed_sha: LEFT })]}
-                records
-            />,
-        )
-        expect(screen.getAllByTestId('run-change-range').map((r) => r.textContent)).toEqual([
-            'api · 5b1e0c4..c9d24f8',
-            'web · 5b1e0c4..d8e61b3',
+    it('names a range with nothing pushed so it does not look cut off', async () => {
+        await render([change('web', {}, { end_sha: null })])
+        expect(screen.getByRole('region', { name: 'Diff: web · 5b1e0c4 → nothing pushed' })).toBeDefined()
+    })
+
+    it('says why a diff was not kept, or that retention removed it, rather than offering it', async () => {
+        await render([
+            change(
+                'api',
+                { files: [], diff_kept: false, missing: 'the run crashed, so canopy kept no diff' },
+                { start_sha: null, end_sha: null, files_changed: null, lines_added: null, lines_removed: null },
+            ),
+            change('mobile', { diff_kept: false, removed_after_days: 30 }),
         ])
-        const api = screen.getByRole('region', { name: 'Diff: api · 5b1e0c4..c9d24f8' })
-        expect(within(api).queryByText('not on origin')).toBeNull()
-        expect(screen.getAllByTestId('run-change-unpushed')).toHaveLength(1)
-        // Each toggles alone.
-        fireEvent.click(within(api).getByRole('radio', { name: 'Branch vs base' }))
-        expect(files()).toEqual(['earlier.txt', 'own.txt', 'own.txt'])
-    })
-
-    it('says why a diff was not kept, or that retention removed it, rather than showing nothing', () => {
-        render(
-            <RunChangesPanel
-                changes={[
-                    change(
-                        'api',
-                        { diff: null, branch_diff: null, missing: 'the run crashed, so canopy kept no diff' },
-                        { start_sha: null, end_sha: null },
-                    ),
-                    change('mobile', { diff: null, branch_diff: null, removed_after_days: 30 }),
-                    change('web', { diff: null, missing: 'its own change: git diff exited 128: bad object' }),
-                ]}
-                records
-            />,
-        )
-        const [crashed, removed, half] = screen.getAllByTestId('run-change')
+        const [crashed, removed] = screen.getAllByTestId('run-change')
         expect(within(crashed as HTMLElement).getByTestId('run-change-range').textContent).toBe('api · nothing read')
         expect(crashed?.textContent).toContain('no diff kept: the run crashed, so canopy kept no diff')
-        // Nothing to toggle to.
-        expect(within(crashed as HTMLElement).queryByRole('radio')).toBeNull()
+        // Its files were counted as it ended, so they outlive the diff.
+        expect(removed?.textContent).toContain('own.txt')
         expect(removed?.textContent).toContain('removed after 30 days, as your [retention] keeps it')
-        expect(half?.textContent).toContain('no diff kept: its own change: git diff exited 128: bad object')
-        expect(screen.queryAllByTestId('diff-file')).toHaveLength(0)
-        // The branch's diff was kept: a toggle away.
-        fireEvent.click(within(half as HTMLElement).getByRole('radio', { name: 'Branch vs base' }))
-        expect(files()).toEqual(['earlier.txt', 'own.txt'])
+        expect(screen.queryByRole('button', { name: 'Show diff' })).toBeNull()
     })
 
-    it('says a kept diff with no files is no change', () => {
-        render(<RunChangesPanel changes={[change('web', { diff: { truncated: false, files: [] } })]} records />)
+    it('says a diff it opened and could not read was not there to read', async () => {
+        await render([change('web')])
+        fireEvent.click(screen.getByRole('button', { name: 'Show diff' }))
+        expect(
+            await screen.findByText('the diff could not be read: its file is gone, or not a regular file'),
+        ).toBeDefined()
+    })
+
+    it('says a change that touched no file is no change, and one canopy did not count was not counted', async () => {
+        await render([
+            change('api', { files: [] }, { files_changed: 0, lines_added: 0, lines_removed: 0 }),
+            change('web', { files: [] }, { files_changed: null, lines_added: null, lines_removed: null }),
+        ])
         expect(screen.getByText('no change: the run left the branch where it started')).toBeDefined()
-        expect(screen.queryAllByTestId('diff-file')).toHaveLength(0)
+        expect(screen.getByText(/^canopy counted no files for this run/u)).toBeDefined()
+        expect(screen.queryAllByTestId('run-change-size')).toHaveLength(0)
     })
 
-    it('says a run that recorded nothing did so when a run like it records, and is nothing otherwise', () => {
-        const { container, unmount } = render(<RunChangesPanel changes={[]} records={false} />)
+    it('says a run that recorded nothing did so when a run like it records, and is nothing otherwise', async () => {
+        const { container, unmount } = await render([], { records: false })
         expect(container.innerHTML).toBe('')
         unmount()
-        render(<RunChangesPanel changes={[]} records />)
+        await render([])
         expect(screen.getByTestId('run-change').textContent).toContain(
             'canopy recorded nothing of what this run changed',
         )

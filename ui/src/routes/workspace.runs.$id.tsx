@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 
 import { ApiError } from '@/api/client'
-import { loopQuery, runMemoryQuery, runQuery, runTranscriptQuery } from '@/api/queries'
+import { loopQuery, runChangeQuery, runMemoryQuery, runQuery, runTranscriptQuery } from '@/api/queries'
 import type { Run, Transcript } from '@/api/types'
 import { Copyable, CopyablePath } from '@/components/copy-button'
 import { Cost } from '@/components/cost'
@@ -31,7 +31,6 @@ import { useTranscriptView } from '@/hooks/use-transcript-view'
 import { runDescription } from '@/lib/descriptions'
 import { readNothingText } from '@/lib/memory'
 import { runRef } from '@/lib/refs'
-import { recordsChanges } from '@/lib/run-changes'
 import { tickId } from '@/lib/ticks'
 import { RUN_TOKENS_TITLE, runTokens } from '@/lib/transcript'
 
@@ -106,7 +105,11 @@ function Loaded({ id }: { id: number }) {
                     leftOut={data.checklist_stretches_left_out}
                     shownBy={runRef(data.id)}
                 />
-                <RunChangesPanel changes={data.changes} records={data.ended_at !== null && recordsChanges(data.kind)} />
+                <RunChangesPanel
+                    changes={data.changes}
+                    records={data.records_changes}
+                    diff={(repo) => runChangeQuery(data.id, repo)}
+                />
                 <TranscriptPanel
                     transcript={transcript}
                     running={data.state === 'running'}

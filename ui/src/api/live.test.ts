@@ -309,10 +309,12 @@ describe('applyStreamEvent', () => {
             start_on_base: false,
             end_sha: 'e4f5a6b',
             unpushed_sha: null,
+            files_changed: 1,
+            lines_added: 2,
+            lines_removed: 0,
         }
-        const changes = [
-            { range, merge_base_sha: null, diff: null, branch_diff: null, missing: 'gone', removed_after_days: null },
-        ]
+        const files = [{ path: 'a.ts', old_path: null, added: 2, removed: 0 }]
+        const changes = [{ range, files, diff_kept: false, missing: 'gone', removed_after_days: null, pr_url: null }]
         client.setQueryData(keys.run(first.id), {
             ...first,
             checklist: answers,
