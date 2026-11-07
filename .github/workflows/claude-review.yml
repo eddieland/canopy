@@ -72,9 +72,14 @@ jobs:
         # every command bwrap starts into a profile that denies all capabilities, even inside a namespace it makes.
         # Every other process stays restricted, unlike the CI canary's sysctl, since this job holds the subscription
         # token.
+        # Ubuntu 26.04 ships the profile in /etc/apparmor.d, loaded at boot; 24.04 only in apparmor-profiles' extras.
         run: |
-          sudo apt-get install -y apparmor-profiles
-          sudo apparmor_parser -r /usr/share/apparmor/extra-profiles/bwrap-userns-restrict
+          profile=/etc/apparmor.d/bwrap-userns-restrict
+          if [ ! -e "$profile" ]; then
+            sudo apt-get install -y apparmor-profiles
+            profile=/usr/share/apparmor/extra-profiles/bwrap-userns-restrict
+          fi
+          sudo apparmor_parser -r "$profile"
 
       - name: Review with Claude
         # Pinned to a commit, not the movable v1 tag, because this step holds the subscription token.
