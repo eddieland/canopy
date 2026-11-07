@@ -30,7 +30,7 @@ def test_a_stop_from_the_web_ends_the_epics_planning_and_leaves_its_plan_and_mem
     assert c.post(route, json={"now": False}).status_code == 403
 
     stopped = c.post(route, json={"now": False}, headers=headers).json()
-    assert stopped == {"already": False, "running_run": None, "ended": False}
+    assert stopped == {"already": False, "running_run": None, "ended": False, "kept": False}
     listed = {e["id"]: e for e in c.get("/api/epics").json()}
     assert (listed[PROPOSED]["standing"], listed[PROPOSED]["stopped_at"] is not None) == ("stopped", True)
     assert listed[APPROVED]["stopped_at"] is None
@@ -40,7 +40,7 @@ def test_a_stop_from_the_web_ends_the_epics_planning_and_leaves_its_plan_and_mem
     assert said.startswith("stopped: epic:2 is stopped")
 
     again = c.post(route, json={"now": True}, headers=headers).json()
-    assert again == {"already": True, "running_run": None, "ended": False}
+    assert again == {"already": True, "running_run": None, "ended": False, "kept": False}
     sha256 = c.get(f"/api/epics/{PROPOSED}/plans").json()["plans"][-1]["sha256"]
     approval = c.post(f"/api/epics/{PROPOSED}/plan/approval", json={"read_sha256": sha256}, headers=headers)
     assert approval.status_code == 200
@@ -56,12 +56,12 @@ def test_stop_lets_the_plan_run_finish_and_stop_now_ends_it(backend: Backend) ->
         [run] = [r for r in epic_runs.runs_of(ctx.conn, PLANNING) if r.status is RunStatus.RUNNING]
 
     graceful = c.post(route, json={"now": False}, headers=headers).json()
-    assert graceful == {"already": False, "running_run": run.id, "ended": False}
+    assert graceful == {"already": False, "running_run": run.id, "ended": False, "kept": False}
     found = c.get(f"/api/epics/{PLANNING}").json()["epic"]
     assert (found["standing"], found["stopped_at"] is not None) == ("planning", True)
 
     now = c.post(route, json={"now": True}, headers=headers).json()
-    assert now == {"already": True, "running_run": run.id, "ended": True}
+    assert now == {"already": True, "running_run": run.id, "ended": True, "kept": False}
     assert c.get(f"/api/epics/{PLANNING}").json()["epic"]["standing"] == "stopped"
     with backend.open() as ctx:
         assert present(epic_runs.get_run(ctx.conn, run.id)).status is RunStatus.STOPPED
@@ -94,7 +94,7 @@ def test_stop_now_from_the_web_ends_the_plan_run_and_returns_its_slots_as_canopy
         [started] = epic_starts.start_due(ctx, tick_id, logs.for_tick(tick_id))
 
     now = c.post("/api/epics/1/stop", json={"now": True}, headers=headers).json()
-    assert now == {"already": False, "running_run": started.run_id, "ended": True}
+    assert now == {"already": False, "running_run": started.run_id, "ended": True, "kept": False}
     run = present(epic_runs.get_run(ctx.conn, started.run_id))
     assert run.status is RunStatus.STOPPED
     assert json.loads(present(run.result_json))["harness"] == epic_runs.STOP_NOTE

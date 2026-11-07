@@ -6,6 +6,7 @@
     "\\.gen\\.ts$",
     "^docs/ui-explorations/",
     "/__snapshots__/",
-    "/recorded/.*\\.jsonl$"
+    "/recorded/.*\\.jsonl$",
+    "^\\.claude/skills/impeccable/"
   ]
 }

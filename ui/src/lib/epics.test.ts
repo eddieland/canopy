@@ -49,17 +49,12 @@ describe('entriesFiled', () => {
             '0 of 3 entries filed',
             '2 of 4 entries filed',
         ])
-        expect(entriesFiled({ entries: 1, entries_with_members: 1, standing: 'approved' })).toBe('1 of 1 entry filed')
+        expect(entriesFiled({ entries: 1, entries_with_members: 1, planned: true })).toBe('1 of 1 entry filed')
     })
 
-    it('tells a plan whose breakdown cannot be read from no plan at all', () => {
-        expect(entriesFiled({ entries: null, entries_with_members: 0, standing: 'proposed' })).toBe(
-            'breakdown unreadable',
-        )
-        expect(entriesFiled({ entries: null, entries_with_members: 0, standing: 'approved' })).toBe(
-            'breakdown unreadable',
-        )
-        expect(entriesFiled({ entries: null, entries_with_members: 0, standing: 'unplanned' })).toBe('no breakdown')
+    it('tells a plan whose breakdown cannot be read from no plan at all, whatever the epic stands at', () => {
+        expect(entriesFiled({ entries: null, entries_with_members: 0, planned: true })).toBe('breakdown unreadable')
+        expect(entriesFiled({ entries: null, entries_with_members: 0, planned: false })).toBe('no breakdown')
     })
 })
 

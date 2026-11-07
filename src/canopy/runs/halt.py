@@ -2,8 +2,9 @@
 
 `canopy stop` marks the start record stopped first, so no dispatch starts another run. Ending the running one kills its
 `_run`, which leads its own process group, and its worker's, then closes the run `stopped` as reconcile closes a run
-whose `_run` is gone: its slots returned and its desk removed. `stopped` raises no attention item and counts toward
-attempt limits like any ended run.
+whose `_run` is gone: its slots returned and its desk removed. That it was asked is recorded before the kill, so a stop
+that dies after it leaves reconcile to close the run `stopped`, not `crashed`. `stopped` raises no attention item and
+counts toward attempt limits like any ended run.
 
 Asking it to wrap up writes a file in the run's answers directory, which canopy's plugin reads after each tool call: the
 agent is told once to keep its work and print its result line, and the run ends as any run does, on its own or at its
@@ -25,8 +26,6 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
     from canopy.infra import logs
 
-NOTE = "the operator stopped the ticket with `canopy stop --now`"
-
 
 def end(ctx: Context, run: records.Run, log: logs.TickAdapter) -> bool:
     """Kill run `run`'s processes and close it `stopped`.
@@ -37,14 +36,15 @@ def end(ctx: Context, run: records.Run, log: logs.TickAdapter) -> bool:
     Raises:
         pools.PoolError: a slot could not be returned; the next tick's reconcile returns it.
     """
-    for pid in (run.pid, run.worker_pid):
+    # Read again first: a run that ended since the stop read it signals nothing, so no pid it held, since reused, is.
+    current = db.get_run(ctx.conn, run.id)
+    if current is None or current["status"] != "running" or not db.ask_stop(ctx.conn, "runs", run.id):
+        return False
+    for pid in (current["pid"], current["worker_pid"]):
         # Never this process's own group: a `_run` claimed in-process, as tests run it, has this pid.
         if pid is not None and pid not in (os.getpid(), os.getpgid(0)):
-            procs.kill_group(pid)
-    current = db.get_run(ctx.conn, run.id)
-    if current is None or current["status"] != "running":
-        return False
-    reconcile.end_run(ctx, current, RunStatus.STOPPED, NOTE, log)
+            procs.kill_group(int(pid))
+    reconcile.end_run(ctx, current, RunStatus.STOPPED, reconcile.STOP_NOTE, log)
     return True
 
 

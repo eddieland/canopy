@@ -147,9 +147,9 @@ the planner, the first first: how it ended, `epic:N#M`, cost, how long it took, 
 replies. It asks once more first, since nothing undoes a stop, and says that its members and their work are left as
 they are: a stop ends no member's run and removes no member. Its waiting plan may still be approved, and its members
 still added and removed. While a plan run of it works, that run finishes its work unless you also press **Stop now**,
-which asks once more too, then ends the run and returns its slots. Stopped with its run still working, the epic keeps
-**Stop now** alone. What the stop did is said under the buttons, in the command's words; it refuses inside a tick or a
-run, as the command does:
+which asks once more too, then ends the run and returns its slots, or says it couldn't return one. Stopped with its
+run still working, the epic keeps **Stop now** alone. What the stop did is said under the buttons, in the command's
+words; it refuses inside a tick or a run, as the command does:
 
 ```sh
 canopy stop epic:3        # its plan run at work finishes

@@ -107,6 +107,9 @@ class TaskRun(Row):
     #: whether its card as it stands, or the run with none yet, has been counted stale.
     card_lapses: int
     card_stale: bool
+    #: When the operator asked to end it now (`canopy stop --now`), before its processes were killed: reconcile closes
+    #: it `stopped` should it find it gone; None when no one did.
+    stop_asked_at: str | None
 
 
 @dataclass(frozen=True)

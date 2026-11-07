@@ -64,6 +64,8 @@ type TicketChange = Literal["phase", "title", "done", "plan_setting"]
 # has the same lifecycle, written once below over a table from this closed set: claimed by its process's pid, its
 # agent's pid recorded, its report, and its close. A table name in SQL comes from here, never from input.
 type RunTable = Literal["runs", "chore_runs", "review_runs", "task_runs", "epic_runs"]
+#: The run tables whose running run the operator can end with `canopy stop --now`, each recording that it was asked.
+type StoppableTable = Literal["runs", "task_runs", "epic_runs"]
 # The rows whose agent's progress `set_progress` records as it prints; a worker run's is `set_run_progress`.
 type ProgressTable = Literal["ticks", "chore_runs", "task_runs", "review_runs"]
 RUN_TABLES: tuple[RunTable, ...] = ("runs", "chore_runs", "review_runs", "task_runs", "epic_runs")
@@ -726,6 +728,21 @@ def claim_run(conn: sqlite3.Connection, table: RunTable, run_id: int, pid: int) 
         .where("id = ? AND status = 'running' AND (pid IS NULL OR pid = ?)", run_id, pid)
     )
     return claim.run(conn).rowcount == 1
+
+
+def ask_stop(conn: sqlite3.Connection, table: StoppableTable, run_id: int) -> bool:
+    """Record that the operator asked to end running run `run_id` in `table` now, before its processes are killed.
+
+    Should the stop that kills them not live to close the run, reconcile finds it gone and closes it `stopped` rather
+    than `crashed` (DESIGN §22).
+
+    Returns:
+        True if the run was still running; False if it had ended, and nothing was recorded.
+    """
+    ask = (
+        records.update(records.of_table(table)).set(stop_asked_at=now()).where("id = ? AND status = 'running'", run_id)
+    )
+    return ask.run(conn).rowcount == 1
 
 
 def set_agent_pid(conn: sqlite3.Connection, table: RunTable, run_id: int, pid: int) -> None:

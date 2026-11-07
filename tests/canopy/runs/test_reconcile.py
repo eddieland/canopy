@@ -16,6 +16,7 @@ from canopy.core import config, db, definitions
 from canopy.core.vocab import RunStatus, StartStatus, TickStatus
 from canopy.infra import lock, procs
 from canopy.loop import attention
+from canopy.runs import reconcile
 from tests.canopy.helpers import (
     DEAD_PID,
     READ_PR,
@@ -130,6 +131,26 @@ def test_a_run_never_claimed_is_crashed_and_its_slot_returned(
     assert json.loads(run["result_json"]) == {"harness": "the worker process is gone"}
     assert [s["status"] for s in pool(treehouse_state)] == ["available"]
     assert last_tick_decisions(conn)[0][:2] == ("PROJ-1", "attention:crashed")
+
+
+def test_a_run_a_stop_killed_is_closed_stopped_though_the_stop_died_before_closing_it(
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
+    conn: sqlite3.Connection,
+) -> None:
+    """`canopy stop --now` records that it was asked before it kills: a run it killed but never closed is no crash."""
+    with overseer_does(*waits("PROJ-1")):
+        killed = add_run(conn, "PROJ-1", lease(treehouse_state, "PROJ-1"), pid=DEAD_PID)
+        assert db.ask_stop(conn, "runs", killed)
+        assert main(["tick"]) == 0
+    run = present(db.get_run(conn, killed))
+    assert run["status"] == "stopped"
+    assert json.loads(run["result_json"]) == {"harness": reconcile.STOP_NOTE}
+    assert [s["status"] for s in pool(treehouse_state)] == ["available"]
+    assert attention.from_runs(conn) == []
+    # Asked of a run that has ended, it records nothing.
+    assert not db.ask_stop(conn, "runs", killed)
 
 
 def test_a_worker_is_alive_while_it_holds_its_lifelock_whatever_its_pid(

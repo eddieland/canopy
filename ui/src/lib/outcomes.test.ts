@@ -127,13 +127,21 @@ describe('outcomes', () => {
     })
 
     it("say what a task's stop did, as canopy stop task:N does", () => {
-        const stop = { already: false, dropped: false, running_run: null, ended: false }
+        const stop = { already: false, dropped: false, running_run: null, ended: false, kept: false }
         expect(taskStoppedText(7, { ...stop, dropped: true }, false)).toBe(
             'task:7 is stopped; it had not started, and nothing starts it now.',
         )
         expect(taskStoppedText(3, { ...stop, already: true }, false)).toBe('task:3 was already stopped.')
         expect(taskStoppedText(6, { ...stop, already: true, running_run: 6 }, true)).toBe(
             'task:6 was already stopped. Its run 6 had already ended.',
+        )
+        expect(taskStoppedText(6, { ...stop, running_run: 6, ended: true }, true)).toBe(
+            'task:6 is stopped; nothing starts it again. Its run 6 was ended and its slot returned.',
+        )
+        // A slot it could not tidy or return is said so, never reported returned.
+        expect(taskStoppedText(6, { ...stop, running_run: 6, ended: true, kept: true }, true)).toBe(
+            'task:6 is stopped; nothing starts it again. Its run 6 was ended, but its slot was not returned; the ' +
+                'next tick returns it, or one canopy could not tidy stays leased for you: canopy.log says which',
         )
     })
 
@@ -404,13 +412,17 @@ describe('outcomes', () => {
     })
 
     it('says what a stop did to an epic, as `canopy stop epic:N` does', () => {
-        const stopped = { already: false, running_run: null, ended: false }
+        const stopped = { already: false, running_run: null, ended: false, kept: false }
         expect(epicStoppedText(4, stopped, false)).toBe(
             'epic:4 is stopped; no plan run of it starts again. Its members are left as they are.',
         )
         expect(epicStoppedText(4, { ...stopped, already: true }, true)).toBe('epic:4 was already stopped.')
         expect(epicStoppedText(3, { ...stopped, already: true, running_run: 4 }, true)).toBe(
             'epic:3 was already stopped. Its plan run 4 had already ended.',
+        )
+        expect(epicStoppedText(3, { ...stopped, already: true, running_run: 4, ended: true, kept: true }, true)).toBe(
+            'epic:3 was already stopped. Its plan run 4 was ended, but a slot it held was not returned; the next ' +
+                'tick returns it, or one canopy could not tidy stays leased for you: canopy.log says which',
         )
     })
 

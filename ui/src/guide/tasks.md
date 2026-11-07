@@ -135,7 +135,8 @@ later run gets a copy in its worktree, and the ✕ beside a file removes it. It 
 
 Stop ends the task, and it asks once more first, because nothing starts a stopped task again: there is no Start for a
 task, only a new one. A queued run is dropped, and a running one finishes its work. Stop now, there while a run
-works, ends that run too and gives its slot back, after its own second click. A stopped task takes no more replies,
+works, ends that run too and gives its slot back, after its own second click; a slot canopy couldn't tidy stays leased,
+and the stop says so rather than claim otherwise. A stopped task takes no more replies,
 so its page has no box; it is never deleted, so its runs, its report, and what it cost stay there to read.
 
 From the shell, `canopy show task:N` prints the task, each run, the tickets it filed, and its latest report, and

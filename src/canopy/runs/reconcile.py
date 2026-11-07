@@ -29,6 +29,10 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
     from canopy.core.workspace import Workspace
 
+#: The note a ticket's run ended by the operator's `canopy stop --now` is closed with, by the stop or, should the stop
+#: not live to close it, by reconcile.
+STOP_NOTE = "the operator stopped the ticket with `canopy stop --now`"
+
 
 @dataclass(frozen=True)
 class Capacity:
@@ -146,19 +150,22 @@ def shadow(
 
 
 def _close_dead_runs(ctx: Context, log: logs.TickAdapter) -> set[str]:
-    """Mark running runs whose `_run` is gone `crashed` and return all their slots.
+    """Mark running runs whose `_run` is gone `crashed`, or `stopped` if a stop killed them, and return their slots.
 
     Returns:
         The lease ids returned, or kept for the operator.
     """
     returned: set[str] = set()
     for run in dead_runs.find(ctx.conn, "runs"):
-        returned |= end_run(ctx, run, RunStatus.CRASHED, "the worker process is gone", log)
+        if run["stop_asked_at"] is not None:
+            returned |= end_run(ctx, run, RunStatus.STOPPED, STOP_NOTE, log)
+        else:
+            returned |= end_run(ctx, run, RunStatus.CRASHED, "the worker process is gone", log)
     return returned
 
 
 def _close_dead_task_runs(ctx: Context, log: logs.TickAdapter) -> set[str]:
-    """Mark running task runs whose `_task` is gone `crashed`, and return their slots (DESIGN §36).
+    """Mark running task runs whose `_task` is gone `crashed`, or `stopped` if a stop killed them (DESIGN §36).
 
     Returns:
         The lease ids returned, or kept for the operator.
@@ -166,13 +173,15 @@ def _close_dead_task_runs(ctx: Context, log: logs.TickAdapter) -> set[str]:
     returned: set[str] = set()
     for row in dead_runs.find(ctx.conn, "task_runs"):
         run = tasks.get_run(ctx.conn, int(row["id"]))
-        if run is not None:
+        if run is not None and run.stop_asked_at is not None:
+            returned |= task_run.end(ctx, run, RunStatus.STOPPED, task_run.STOP_NOTE, log)
+        elif run is not None:
             returned |= task_run.end(ctx, run, RunStatus.CRASHED, "the task's process is gone", log)
     return returned
 
 
 def _close_dead_epic_runs(ctx: Context, log: logs.TickAdapter) -> set[str]:
-    """Mark running epic plan runs whose process is gone `crashed`, and return their slots (DESIGN §43).
+    """Mark running epic plan runs whose process is gone `crashed`, or `stopped` if a stop killed them (DESIGN §43).
 
     Returns:
         The lease ids returned, or kept for the operator.
@@ -180,7 +189,9 @@ def _close_dead_epic_runs(ctx: Context, log: logs.TickAdapter) -> set[str]:
     returned: set[str] = set()
     for row in dead_runs.find(ctx.conn, "epic_runs"):
         run = epic_runs.get_run(ctx.conn, int(row["id"]))
-        if run is not None:
+        if run is not None and run.stop_asked_at is not None:
+            returned |= epic_runs.end(ctx, run, RunStatus.STOPPED, epic_runs.STOP_NOTE, log)
+        elif run is not None:
             returned |= epic_runs.end(ctx, run, RunStatus.CRASHED, "the plan run's process is gone", log)
     return returned
 

@@ -19,11 +19,12 @@ from canopy.core import conversation, db, pools, records, sql
 from canopy.core.items import Item
 from canopy.core.vocab import PlanStatus, RunStatus
 from canopy.infra import procs
-from canopy.runs import desks, tidy
+from canopy.runs import desks, ending, tidy
 
 if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Sequence
+    from collections.abc import Set as AbstractSet
 
     from canopy.core.context import Context
     from canopy.core.vocab import PoolKind
@@ -151,6 +152,16 @@ def due(conn: sqlite3.Connection, max_attempts: int) -> list[records.Epic]:
 
 
 @dataclass(frozen=True)
+class Released:
+    """What became of a plan run's slots once it ended."""
+
+    #: The lease ids it dealt with, returned or kept.
+    dealt: AbstractSet[str]
+    #: Whether every one of them went back to its pool.
+    returned: bool
+
+
+@dataclass(frozen=True)
 class WaitingPlan:
     """An epic's plan waiting on the operator, which raises `plan_review` about `epic:<id>` (DESIGN §43)."""
 
@@ -257,56 +268,53 @@ def end(ctx: Context, run: records.EpicRun, status: RunStatus, note: str, log: l
         The lease ids it dealt with, returned or kept, which reconcile then leaves alone; none when the run's own
         process closed it first.
     """
-    fields = {"epic_run_id": run.id, "epic": run.epic_id, "pid": run.pid}
-    # Its process is gone, but a planner it started may not be. Stop it before its slots go back to their pools.
-    if run.agent_pid is not None and procs.kill_group(run.agent_pid):
-        log.warning("killed the agent a gone process left behind", extra={**fields, "agent_pid": run.agent_pid})
-    if not close_run(ctx.conn, run.id, status, json.dumps({"harness": note})):
-        # Its own process closed it first, and returned its slots.
-        return set()
-    procs.drop_lifelock(Path(run.log_path))
-    dealt = release(ctx, run, log)
-    log.warning("epic plan run closed without its process", extra={**fields, "status": status, "note": note})
-    return dealt
+    released = _close(ctx, run, status, note, log)
+    return set() if released is None else set(released.dealt)
 
 
-def stop_now(ctx: Context, run: records.EpicRun, log: logs.TickAdapter) -> bool:
+def stop_now(ctx: Context, run: records.EpicRun, log: logs.TickAdapter) -> ending.Ending:
     """Kill plan run `run`'s processes and close it `stopped`, its slots returned: `canopy stop epic:N --now`.
 
+    That it was asked is recorded first, so a stop that dies after the kill leaves reconcile to close it `stopped`.
+
     Returns:
-        True once the run is closed, or False if it had already ended: nothing changes.
+        How it ended: `GONE` if it had already ended, and nothing changed; `KEPT` if a slot could not be returned.
     """
     # Read again first: a run that ended since the stop read it signals nothing, so no pid it held, since reused, is.
     current = get_run(ctx.conn, run.id)
-    if current is None or current.status is not RunStatus.RUNNING:
-        return False
+    if current is None or current.status is not RunStatus.RUNNING or not db.ask_stop(ctx.conn, "epic_runs", run.id):
+        return ending.Ending.GONE
     for pid in (current.pid, current.agent_pid):
         # Never this process's own group: an `_epic` claimed in-process, as tests run it, has this pid.
         if pid is not None and pid not in (os.getpid(), os.getpgid(0)):
             procs.kill_group(pid)
-    return bool(end(ctx, current, RunStatus.STOPPED, STOP_NOTE, log))
+    released = _close(ctx, current, RunStatus.STOPPED, STOP_NOTE, log)
+    if released is None:
+        return ending.Ending.GONE
+    return ending.Ending.ENDED if released.returned else ending.Ending.KEPT
 
 
-def release(ctx: Context, run: records.EpicRun, log: logs.TickAdapter) -> set[str]:
+def release(ctx: Context, run: records.EpicRun, log: logs.TickAdapter) -> Released:
     """Remove the run's desk, then tidy each of its slots as a worker run's is (DESIGN §8), and return it.
 
     A slot that could not be tidied is not returned, and the object directory is kept, so its objects can be read. A
     return that fails is left to the next tick's reconcile, which returns a canopy lease no running run holds.
 
     Returns:
-        The lease ids it dealt with, returned or kept.
+        The lease ids it dealt with, returned or kept, and whether every one went back to its pool.
     """
     desks.remove(Path(run.desk_path))
     objects = objects_dir(Path(run.log_path))
     dealt: set[str] = set()
     tidied = True
+    returned = True
     for slot in slots_of(ctx.conn, run.id):
         fields = {"epic_run_id": run.id, "slot": slot.slot_path, "repo": slot.repo, "lease_id": slot.lease_id}
         dealt.add(slot.lease_id)
         link = slot.git_link
         path = Path(slot.slot_path)
         if not tidy.tidy(ctx.runner, path, link=link, base=slot.base_branch, objects=objects, log=log, fields=fields):
-            tidied = False
+            tidied = returned = False
             continue
         try:
             outcome = ctx.pool_of(slot.pool, slot.repo).return_slot(
@@ -316,8 +324,29 @@ def release(ctx: Context, run: records.EpicRun, log: logs.TickAdapter) -> set[st
             )
         except pools.PoolError as e:
             log.error("epic plan run's slot not returned", extra={**fields, "error": str(e)})  # noqa: TRY400
+            returned = False
             continue
         log.info("epic plan run's slot returned", extra={**fields, "outcome": outcome.value})
+        returned = returned and outcome is pools.ReturnOutcome.RETURNED
     if tidied:
         tidy.remove_objects(objects, log)
-    return dealt
+    return Released(frozenset(dealt), returned=returned)
+
+
+def _close(ctx: Context, run: records.EpicRun, status: RunStatus, note: str, log: logs.TickAdapter) -> Released | None:
+    """Close plan run `run` without its process, as `end` says, and return its slots.
+
+    Returns:
+        What became of its slots; None when its own process closed it first, and returned them.
+    """
+    fields = {"epic_run_id": run.id, "epic": run.epic_id, "pid": run.pid}
+    # Its process is gone, but a planner it started may not be. Stop it before its slots go back to their pools.
+    if run.agent_pid is not None and procs.kill_group(run.agent_pid):
+        log.warning("killed the agent a gone process left behind", extra={**fields, "agent_pid": run.agent_pid})
+    if not close_run(ctx.conn, run.id, status, json.dumps({"harness": note})):
+        # Its own process closed it first, and returned its slots.
+        return None
+    procs.drop_lifelock(Path(run.log_path))
+    released = release(ctx, run, log)
+    log.warning("epic plan run closed without its process", extra={**fields, "status": status, "note": note})
+    return released

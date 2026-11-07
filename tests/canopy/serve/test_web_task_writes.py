@@ -5,13 +5,14 @@ refuse them as they refuse the CLI's.
 """
 
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
 from canopy.core.context import Context
 from canopy.core.vocab import RunStatus
 from canopy.infra import logs
-from canopy.runs import task_starts, tasks
+from canopy.runs import task_starts, tasks, tidy
 from tests.canopy.helpers import in_run, in_tick, inline_context, pool_statuses, present
 from tests.canopy.web_helpers import refused, signed_in_client
 from tests.conftest import CanopyEnv, GitPool
@@ -90,10 +91,10 @@ def test_a_stop_from_the_web_drops_a_queued_task_and_a_reply_to_it_is_refused(ct
     assert c.post("/api/tasks", json={"text": TEXT}, headers=headers).status_code == 200
 
     stopped = c.post("/api/tasks/1/stop", json={"now": False}, headers=headers).json()
-    assert stopped == {"already": False, "dropped": True, "running_run": None, "ended": False}
+    assert stopped == {"already": False, "dropped": True, "running_run": None, "ended": False, "kept": False}
     assert tasks.queued(ctx.conn) == []
     again = c.post("/api/tasks/1/stop", json={"now": True}, headers=headers).json()
-    assert again == {"already": True, "dropped": False, "running_run": None, "ended": False}
+    assert again == {"already": True, "dropped": False, "running_run": None, "ended": False, "kept": False}
     assert refused(c.post("/api/tasks/1/replies", json=REPLY, headers=headers)).startswith("stopped")
 
 
@@ -112,12 +113,37 @@ def test_stop_now_from_the_web_ends_the_run_and_returns_its_slot_as_canopy_stop_
     reply = c.post("/api/tasks/1/replies", json=REPLY, headers=headers).json()
     assert reply["running_run"] == started.run_id
     graceful = c.post("/api/tasks/1/stop", json={"now": False}, headers=headers).json()
-    assert graceful == {"already": False, "dropped": False, "running_run": started.run_id, "ended": False}
+    assert graceful == {
+        "already": False,
+        "dropped": False,
+        "running_run": started.run_id,
+        "ended": False,
+        "kept": False,
+    }
     assert present(tasks.get_run(ctx.conn, started.run_id)).status is RunStatus.RUNNING
 
     now = c.post("/api/tasks/1/stop", json={"now": True}, headers=headers).json()
-    assert now == {"already": True, "dropped": False, "running_run": started.run_id, "ended": True}
+    assert now == {"already": True, "dropped": False, "running_run": started.run_id, "ended": True, "kept": False}
     run = present(tasks.get_run(ctx.conn, started.run_id))
     assert run.status is RunStatus.STOPPED
     assert "canopy stop --now" in str(run.result_json)
     assert set(pool_statuses(treehouse_state)) == {"available"}
+
+
+def test_stop_now_from_the_web_says_a_slot_it_could_not_return_was_kept(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    treehouse_state: Path,
+) -> None:
+    """Ended, but its slot could not be tidied: `kept` says so, as `canopy stop --now` does."""
+    assert git_pool.slots
+    ctx = inline_context(canopy_env)
+    c, headers = signed_in_client(ctx)
+    assert c.post("/api/tasks", json={"text": TEXT}, headers=headers).status_code == 200
+    with in_tick(ctx.conn) as tick_id:
+        [started] = task_starts.start_queued(ctx, tick_id, logs.for_tick(tick_id))
+    with mock.patch.object(tidy, "tidy", autospec=True, return_value=False):
+        now = c.post("/api/tasks/1/stop", json={"now": True}, headers=headers).json()
+    assert now == {"already": False, "dropped": False, "running_run": started.run_id, "ended": True, "kept": True}
+    assert present(tasks.get_run(ctx.conn, started.run_id)).status is RunStatus.STOPPED
+    assert "leased" in pool_statuses(treehouse_state)
