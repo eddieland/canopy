@@ -235,10 +235,8 @@ jobs:
 
   # The sandbox canary (DESIGN §24, The canary): the shipped wrapper and policy templates under the real srt, with
   # bubblewrap, set up the way docs/SANDBOX.md tells the operator to. Linux only: macOS is the operator's to check.
-  # Pinned to 24.04: on the ubuntu-26.04 image the sandbox cannot write /proc/self/setgroups in its nested user
-  # namespace, even with the sysctl below. Back to ubuntu-latest once the sandbox setup supports 26.04.
   sandbox-canary:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.code != 'false' && needs.changes.outputs.python != 'false' }}
     timeout-minutes: 15
@@ -263,9 +261,15 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y bubblewrap socat ripgrep
 
       # Ubuntu 24.04 restricts unprivileged user namespaces through AppArmor, which leaves bubblewrap without the
-      # capabilities it needs. docs/SANDBOX.md gives the operator the same command.
+      # capabilities it needs. Ubuntu 26.04 also loads the bwrap-userns-restrict profile, which lets bubblewrap make
+      # its namespace but denies every capability to what it starts, so srt's seccomp helper cannot make the nested
+      # one it needs. ubuntu-latest is either. docs/SANDBOX.md gives the operator the same commands.
       - name: Allow unprivileged user namespaces
-        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          if sudo grep -q '^bwrap ' /sys/kernel/security/apparmor/profiles; then
+            sudo apparmor_parser -R /etc/apparmor.d/bwrap-userns-restrict
+          fi
 
       - name: Install dependencies
         run: uv sync --locked
