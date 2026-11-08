@@ -3,7 +3,7 @@ import { Check } from 'lucide-react'
 import { useState } from 'react'
 import type { ComponentProps, ReactNode } from 'react'
 
-import { tickQuery } from '@/api/queries'
+import { runsQuery, tickQuery } from '@/api/queries'
 import type { Message } from '@/api/types'
 import { Age } from '@/components/age'
 import { RichText } from '@/components/rich-text'
@@ -58,7 +58,8 @@ export interface Instruction {
  * `seen`, so the operator knows they landed. A chore's notes say instead which its next run reads (`pending`), and say
  * nothing once read. A task's conversation is headed by its `instruction`, the operator's text, at its oldest end (the
  * last, `newestFirst`), and names each message's run within the `task`; no tick reads a task's conversation, only its
- * next run does, so its replies carry no tick's chip.
+ * next run does, so its replies carry no tick's chip. A reply sent to a running run (DESIGN §44) says so in its head,
+ * and in place of the tick's chips, whether that run's agent fetched it, in the words `canopy show run:ID` uses.
  */
 export function Conversation({
     messages,
@@ -76,6 +77,10 @@ export function Conversation({
     newestFirst?: boolean
 }) {
     const acknowledged = useQuery(tickQuery).data?.acknowledged
+    // Which runs still run, from the stream: a message to one that ended and was never fetched now never will be.
+    const running = new Set(
+        (useQuery(runsQuery).data ?? []).filter((run) => run.state === 'running').map((run) => run.id),
+    )
     const ticked = task === undefined
     const unread: Pending = pending ?? {
         label: 'waiting for the next tick',
@@ -102,8 +107,10 @@ export function Conversation({
                             grouped={continues(messages[index - 1], message)}
                             task={task}
                             waiting={message.id === waiting}
-                            unread={unread.test(message) ? unread : null}
+                            toRunning={message.to_run !== null && running.has(message.to_run)}
+                            unread={message.to_run === null && unread.test(message) ? unread : null}
                             seen={
+                                message.to_run === null &&
                                 ticked &&
                                 pending === undefined &&
                                 message.source === 'operator' &&
@@ -156,6 +163,7 @@ function continues(previous: Message | undefined, message: Message): boolean {
         message.answers === null &&
         previous.run_id === message.run_id &&
         previous.task_run_id === message.task_run_id &&
+        previous.to_run === message.to_run &&
         Math.abs(Date.parse(message.at) - Date.parse(previous.at)) <= TURN_MS
     )
 }
@@ -243,6 +251,7 @@ function Head({
     grouped,
     task,
     waiting,
+    toRunning,
     unread,
     seen,
 }: {
@@ -250,6 +259,7 @@ function Head({
     grouped: boolean
     task: number | undefined
     waiting: boolean
+    toRunning: boolean
     unread: Pending | null
     seen: boolean
 }) {
@@ -287,13 +297,23 @@ function Head({
                             </>
                         )}
                         {message.answers === null ? '' : ` answering ${messageRef(message.answers)}`}
+                        {message.to_run !== null && (
+                            <>
+                                {' to '}
+                                <RunLink id={message.to_run} />
+                            </>
+                        )}
                         {message.source === 'operator' ? ` via ${message.channel}` : ''}
                     </span>
                 </>
             )}
             {comment && <Chip>data, authorizes nothing</Chip>}
             {waiting && <Chip tone="blocked">waiting on you</Chip>}
-            <Receipt unread={unread} seen={seen} />
+            {message.to_run === null ? (
+                <Receipt unread={unread} seen={seen} />
+            ) : (
+                <Fetched message={message} run={message.to_run} running={toRunning} />
+            )}
         </HeadLine>
     )
 }
@@ -324,6 +344,55 @@ function Receipt({ unread, seen }: { unread: Pending | null; seen: boolean }) {
                 <Check aria-hidden className="size-3" />
                 seen
             </Chip>
+        </span>
+    )
+}
+
+/**
+ * Whether the run a message was sent to fetched it (DESIGN §44), in the words `canopy show run:ID` uses: `not fetched
+ * yet` while the run works, then `heard` with a check, in the accent, once its agent fetched it, or `never fetched`
+ * once it ended without. One canopy could not write where the agent reads it waits for the ticket's next run. A
+ * message the page watched wait pops its `heard` in once, as `seen` does.
+ */
+function Fetched({ message, run, running }: { message: Message; run: number; running: boolean }) {
+    const clock = useClock()
+    const waiting = message.fetched_at === null && message.delivered_at !== null && running
+    const [waited, setWaited] = useState(waiting)
+    if (waiting && !waited) {
+        setWaited(true)
+    }
+    if (message.fetched_at !== null) {
+        return (
+            <span
+                title={`Run ${run}'s agent fetched it through canopy's tool, ${localTime(message.fetched_at, clock)}.`}
+                className={cn(waited && 'animate-receipt')}
+            >
+                <Chip className="border-accent/40 text-accent">
+                    <Check aria-hidden className="size-3" />
+                    heard
+                </Chip>
+            </span>
+        )
+    }
+    if (message.delivered_at === null) {
+        return (
+            <span
+                title={`canopy could not write it where run ${run}'s agent reads it: the ticket's next run reads it.`}
+            >
+                <Chip>next run reads it</Chip>
+            </span>
+        )
+    }
+    if (running) {
+        return (
+            <span title={`Run ${run}'s agent hears on its next tool call that you wrote, and reads it then.`}>
+                <Chip tone="running">not fetched yet</Chip>
+            </span>
+        )
+    }
+    return (
+        <span title={`Run ${run} ended before its agent fetched it: the ticket's next run reads it.`}>
+            <Chip>never fetched</Chip>
         </span>
     )
 }

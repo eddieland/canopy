@@ -25,6 +25,9 @@ const QUESTION: Message = {
     answers: null,
     run_id: null,
     task_run_id: null,
+    to_run: null,
+    delivered_at: null,
+    fetched_at: null,
     comment: null,
 }
 

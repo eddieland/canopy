@@ -985,8 +985,9 @@ def message(row: records.Message) -> Message:
     """One message, its body without control characters.
 
     Returns:
-        The message as the API sends it, with the tracker comment it came from, if any. A source or kind the schema
-        does not know reads as a tracker comment.
+        The message as the API sends it, with the tracker comment it came from, if any, and for one sent to a running
+        run, that run, when canopy wrote it where the run's agent reads it, and when the agent fetched it (DESIGN §44).
+        A source or kind the schema does not know reads as a tracker comment.
     """
     comment = None
     if row.comment_id is not None:
@@ -1008,4 +1009,7 @@ def message(row: records.Message) -> Message:
         answers=row.answers,
         body=conversation.printable(row.body),
         comment=comment,
+        to_run=row.to_run_id,
+        delivered_at=db.parse_time(row.delivered_at) if row.delivered_at else None,
+        fetched_at=db.parse_time(row.fetched_at) if row.fetched_at else None,
     )

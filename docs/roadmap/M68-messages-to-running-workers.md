@@ -20,13 +20,13 @@ and 2 are stage 1's.
   for a later stage, never for stage 1: it gives the plugin a power T4 says it has not, and the server route is a T8
   listener, which the deferred list already holds.
 - **Stage 1, the message, told and fetched.** The operator sends a message to a running worker's, planner's, or
-  one-off task's run (§36), from `canopy reply run:ID "..."`, which today takes only a letter, and from the run's page
-  in the web UI. It is recorded as an operator message on the run's subject, as any reply is (§22), through the one
-  function every channel calls, with its guards, refused inside a tick or any run (T1). canopy writes it to the run's
-  answers directory (§41), the file the sandbox lets the run read and not write (§24). Canopy's plugin (§33) gets a
-  job: after each tool call, for a message this session has not been told of, it adds one `[canopy]` line saying a
-  message from the operator waits and naming the tool to read it, nothing of its text; it keeps what it last told each
-  session, as the answer's job does. The tool is `messages`, served to the run by `canopy_run`, beside `status`,
+  one-off task's run (§36), from `canopy reply run:ID "..."`, which today takes only a letter, and from its ticket's
+  page in the web UI. It is recorded as an operator message on the run's subject, as any reply is (§22), through the
+  one function every channel calls, with its guards, refused inside a tick or any run (T1). canopy writes it to the
+  run's answers directory (§41), the file the sandbox lets the run read and not write (§24). Canopy's plugin (§33)
+  gets a job: after each tool call, for a message this session has not been told of, it adds one `[canopy]` line
+  saying a message from the operator waits and naming the tool to read it, nothing of its text; it keeps what it last
+  told each session, as the answer's job does. The tool is `messages`, served to the run by `canopy_run`, beside `status`,
   allowed by exact name in the same definitions and denied to every other agent (§27). It returns the messages sent to
   this run since it started, oldest first, marked as the operator's, and the harness records the fetch from the call in
   the events it already reads, so the journal knows when the run heard it. A review's run gets none in this milestone.
@@ -66,7 +66,7 @@ and 2 are stage 1's.
   the plugin's own tests for the line's wording, that it carries none of the text, that it is told once per session,
   and its place in a built-in and an MCP result.
 
-Accept: Stage 0 recorded. Live: a worker on a toy ticket, sandboxed and not, sent a message from its run's page that
+Accept: Stage 0 recorded. Live: a worker on a toy ticket, sandboxed and not, sent a message from its ticket's page that
 narrows the ticket hears of it on its next tool call, fetches it, as its transcript shows, and its PR reflects the
 narrower scope; the same message sent as its run ends reaches the next run's prompt and no `resume` is dispatched twice
 for it. Over a week of real use, `canopy show` of the runs sent a message says how many were fetched before the run
@@ -106,4 +106,9 @@ mark; the `messages` tool reads the messages' file, not the journal, which a san
 events; the loop reads past one fetched by a run that ended `done` or `blocked` (`run_inbox.HEARD`); `canopy show
 run:ID` lists them. Chosen conservatively, for the operator to change: a run takes at most 20 messages; a message to a
 run answers no earlier question; a message sent before the run's directory exists is written there as the run starts;
-one sent as it ends is told to nothing and waits for the next run.
+one sent as it ends is told to nothing and waits for the next run. The web UI's channel built 2026-11-07, on the
+operator's word as the ticket's reply form rather than a panel on the run's page, so the conversation stays one record:
+while a worker or planner runs on the ticket, a box beside Reply, off by default and after each send, sends the reply
+to that run through `conversation.reply` as `canopy reply run:ID` does; the conversation says on each such message
+which run it went to and whether its agent fetched it, in `canopy show`'s words. A form's submission recorded one way
+records nothing new sent the other. A task's own reply form already reached its running run.

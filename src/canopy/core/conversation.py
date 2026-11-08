@@ -432,6 +432,10 @@ def reply(
         return _message_run(conn, ref, text, channel=channel, submission=submission, event=event, state_dir=state_dir)
     with db.transaction(conn):
         check_subject(conn, ref)
+        # A form sent first to the ticket's running run, and again to the ticket once the run ended (§44).
+        sent = _sent_by_form(conn, ref, channel, submission, to_run=True) if ref.kind == TICKET else None
+        if sent is not None:
+            return sent
         replied = write_reply(conn, ref, text, channel=channel, submission=submission)
         built = event(replied.message_id) if event is not None and replied.new else None
         if built is not None:
@@ -497,6 +501,10 @@ def _message_run(
         # Its own submission for each run, so the same words sent to the ticket's next run are a message of their own.
         stored = submission or hashlib.sha256(f"{ref}\0{text}".encode()).hexdigest()[:32]
         ticket = Ref(TICKET, run.ticket_key)
+        # A form sent first to the ticket, and again to its run: the reply it recorded is the message.
+        sent = _sent_by_form(conn, ticket, channel, submission, to_run=False)
+        if sent is not None:
+            return sent
         # Recorded before the run's guards are held, so a retry finds the message it recorded; a new one they refuse
         # rolls back with the transaction.
         replied = write_reply(conn, ticket, text, channel=channel, submission=stored, answers=False)
@@ -511,6 +519,39 @@ def _message_run(
         return replied
     told = run_inbox.deliver(conn, "runs", run_id, cards.answers_dir(state_dir, str(run_id)))
     return dataclasses.replace(replied, told=told)
+
+
+def _sent_by_form(
+    conn: sqlite3.Connection,
+    ticket: Ref,
+    channel: str,
+    submission: str | None,
+    *,
+    to_run: bool,
+) -> Replied | None:
+    """The message a form's `submission` recorded on `ticket` the other way: as a message to its run, or a reply to it.
+
+    The ticket's reply form sends to its running run or to the ticket, as the operator chooses (§44), with one
+    submission id until one is recorded: sent again after an uncertain result, the other way, it records nothing new.
+    With `to_run`, it looks for the message to a run of the ticket; without, for the reply to it. A reply with no
+    form's submission finds nothing.
+
+    Returns:
+        The message, not new, with what it answered; None when the form recorded none the other way.
+    """
+    if submission is None:
+        return None
+    stored = f"{channel}:{submission}"
+    found = records.select(records.Message).where(
+        "subject_kind = ? AND subject_id = ? AND submission = ?",
+        ticket.kind,
+        ticket.id,
+        f"{INSTRUCTION}{stored}" if to_run else stored,
+    )
+    if to_run:
+        found = found.where("to_run_id IS NOT NULL")
+    row = found.one(conn)
+    return None if row is None else Replied(message_id=row.id, answers=row.answers, new=False)
 
 
 def _check_run_takes(conn: sqlite3.Connection, ref: Ref, run: records.Run) -> None:

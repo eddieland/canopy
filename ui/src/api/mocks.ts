@@ -553,6 +553,9 @@ export const mockEpicDetails: EpicDetail[] = [
                 channel: 'web',
                 run_id: null,
                 task_run_id: null,
+                to_run: null,
+                delivered_at: null,
+                fetched_at: null,
                 answers: null,
                 body:
                     'Drop the web half: the account page already reads the same API, so the two cannot drift. Keep ' +
