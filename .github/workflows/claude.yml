@@ -66,9 +66,14 @@ jobs:
       - name: Let bwrap create user namespaces
         # Ubuntu 24.04's AppArmor denies unprivileged user namespaces; this profile grants them to /usr/bin/bwrap alone.
         # Claude Review's workflow says why it is this and not the sysctl.
+        # Ubuntu 26.04 ships the profile in /etc/apparmor.d, loaded at boot; 24.04 only in apparmor-profiles' extras.
         run: |
-          sudo apt-get install -y apparmor-profiles
-          sudo apparmor_parser -r /usr/share/apparmor/extra-profiles/bwrap-userns-restrict
+          profile=/etc/apparmor.d/bwrap-userns-restrict
+          if [ ! -e "$profile" ]; then
+            sudo apt-get install -y apparmor-profiles
+            profile=/usr/share/apparmor/extra-profiles/bwrap-userns-restrict
+          fi
+          sudo apparmor_parser -r "$profile"
 
       - name: Run Claude
         # Pinned to a commit, not the movable v1 tag, because this step holds the subscription token.
