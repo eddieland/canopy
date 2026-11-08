@@ -17,7 +17,9 @@ Read from the definitions, the prompts, and the servers (`cli/mcp.py`, `loop/mcp
 
 - **The overseer** reads the journal alone: the state block, OpenCode's `read` and `grep` for an output it cut, and
   canopy's eleven verbs and one read (§27), 9.3k characters of schema in a prefix the provider caches warm. Nothing
-  left to move: M37 to M40 did it. What remains is the schema's size on a cold tick, and it is small.
+  left to move: M37 to M40 did it. What remains is its prompt's restatement of its tools' fields, `dispatch`'s
+  `label`, `repos`, `slug`, `reasons`, `review_run`, and `base` and `ticket-set`'s `title`, which each schema already
+  describes where the model reads it as it builds the call.
 - **The workers**, `implement`, `resume`, a task's, public and private, have a shell, with OpenCode's cut of a long
   output to a file, the tracker's and GitHub's servers, and `canopy_run_status` and `canopy_run_messages`. A
   `resume` is dispatched with a context that names comment ids and check names and never quotes them (§8): the
@@ -56,7 +58,12 @@ allow, or a narrower form of a read a run already has.
   - `status` takes a partial update: a field left out keeps its last value, and a step named by its title updates
     that step alone, since the harness keeps the last card and merges in code; the server validates the merged card to
     the same bounds, and a first call still needs `summary` and `now`. The prompts say so in a clause, no more.
-  - The overseer's schema is trimmed where its prompt's table already says the same, so a cold tick reads it once.
+  - The overseer's prompt drops what its tools' schemas already say, field by field, and keeps the policy around
+    them: which reason each cursor needs, never pasting read text into a field, every decision in one call. The
+    schema is read as the call is built and a refusal names its field, so the field's words stay there, once; thinning
+    the schema instead would risk a malformed call, which costs a round trip, to save characters a warm tick reads
+    from cache. Judged as a prompt change is, by `canopy tick --dry-run`'s decisions, with its size in
+    `.agents/sizes.toml`.
 - **Stage 2, the feedback a `resume` is for, if stage 0 says so.** One tool, `feedback`, served by the run's own
   server `canopy_run` beside `status` and `messages` (§41, §44): the review items and failed checks the dispatch's
   cursors and reasons name, as the journal observed them, each item its number, its author's trust as the harness
@@ -96,7 +103,8 @@ allow, or a narrower form of a read a run already has.
   marked, `--json` held by a snapshot; `show` with a range and without, a range past the file's end refused by name;
   each cut result's steer naming its field, held by snapshots; a partial `status` merged and validated, a first call
   without `summary` refused, a step updated by title, an unknown title refused, the card shown as before; the
-  overseer's trimmed schema under `test_prompt_sizes.py` if its text is bundled; `feedback` answering a run its own
+  overseer's prompt under `test_prompt_sizes.py`, and its decisions compared on `canopy tick --dry-run`; `feedback`
+  answering a run its own
   items and checks, empty for a dispatch with no cursor, refused in a run of another kind, absent from the overseer and
   a chore, a sandboxed run reading the file and unable to write it (the sandbox's tests), the `scenario` fixture for a
   `resume` whose worker reads its feedback and pushes; stage 3's digest bounded and marked, from a fake log with a
