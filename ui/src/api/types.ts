@@ -386,8 +386,13 @@ export type EpicPlanFile = Schemas['EpicPlanFile']
  * next tick's plan run reads.
  */
 export type EpicPlans = Schemas['EpicPlans']
-/** What approving an epic's plan did: the plan, and the ids it added, removed, and changed since the last approved. */
+/**
+ * What approving an epic's plan did: the plan, the ids it added, removed, and changed since the last approved, and the
+ * members that change reached.
+ */
 export type EpicPlanApproved = Schemas['EpicPlanApproved']
+/** The members a change of an epic's plan reached, by ticket key, each way: stale, held, or told. */
+export type EpicPlanReached = Schemas['EpicPlanReached']
 /**
  * What a reply to an epic recorded, and what starts its next plan run: the next tick, after the run at work, or none.
  */

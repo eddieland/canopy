@@ -273,8 +273,23 @@ class EpicPlanChange(Model):
     """The ids whose text it changed."""
 
 
+class EpicPlanReached(Model):
+    """The members a change of an epic's plan reached, by ticket key, each way (DESIGN §43, When its plan changes).
+
+    `canopy plan epic:N --approve` names them too, after the ids; every list is empty when it reached none.
+    """
+
+    stale: list[str]
+    """Those whose plan waited on the operator, superseded as stale, to be planned again."""
+    held: list[str]
+    """Those whose approved plan's `implement` is held, `epic_changed`, until the operator approves it again or asks
+    for a new one."""
+    told: list[str]
+    """Those left as they are, at work, with a branch, or waiting to be planned again, each told at its next plan."""
+
+
 class EpicPlanApproved(Model):
-    """What approving an epic's plan did: the plan approved, and what it changed from the one approved before."""
+    """What approving an epic's plan did: the plan approved, what it changed, and the members the change reached."""
 
     plan: int
     """The plan approved."""
@@ -282,6 +297,8 @@ class EpicPlanApproved(Model):
     """The plan run that wrote it."""
     change: EpicPlanChange | None = None
     """What it changed from the plan approved before it; None for the epic's first approved plan."""
+    reached: EpicPlanReached
+    """The members the change reached, each way; none for the epic's first approved plan."""
 
 
 class EpicReplied(Model):

@@ -13,6 +13,7 @@ import type {
     EpicMemberAdded,
     EpicMemberRemoved,
     EpicPlanApproved,
+    EpicPlanReached,
     EpicReplied,
     EpicStopped,
     EpicSubmitted,
@@ -679,6 +680,41 @@ export function epicApprovedText(id: number, approved: EpicPlanApproved): string
         .filter(([, ids]) => ids.length > 0)
         .map(([word, ids]) => `${word}: ${ids.join(', ')}`)
     return listed.length === 0 ? head : `${head} ${listed.join('; ')}.`
+}
+
+/** A way a change of an epic's plan met a member (DESIGN §43, When its plan changes), as `EpicPlanReached` names it. */
+export type EpicReachedWay = 'held' | 'stale' | 'told'
+
+/** The members a change of an epic's plan met one way, and what that way means. */
+export interface EpicReached {
+    /** How the change met them. */
+    way: EpicReachedWay
+    /** What that way did, in the CLI's words, less the guard it prints in parentheses. */
+    what: string
+    /** The guard the CLI names after the words, set apart on the page as every guard is; none for most ways. */
+    guard?: string
+    /** The members it met so, by ticket key. */
+    keys: string[]
+}
+
+/**
+ * The members a change of an epic's plan reached, each way it met them, in the words `canopy plan epic:N --approve`
+ * names them (canopy/cli/epics.py), the guard it prints in parentheses set apart. In the order the operator reads
+ * them, not the CLI's: held first, the one way that waits on the operator, then stale, which the loop plans again, then
+ * told, which needs nobody. A way that reached none is left out, so none at all is an empty list.
+ */
+export function epicReachedWays(reached: EpicPlanReached): EpicReached[] {
+    const ways: EpicReached[] = [
+        {
+            way: 'held',
+            what: 'Implements held until you approve the plan again or ask for a new one',
+            guard: 'epic_changed',
+            keys: reached.held,
+        },
+        { way: 'stale', what: 'Plans superseded as stale, to be planned again', keys: reached.stale },
+        { way: 'told', what: 'Left as they are, each told at its next plan', keys: reached.told },
+    ]
+    return ways.filter(({ keys }) => keys.length > 0)
 }
 
 /**

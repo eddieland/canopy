@@ -120,7 +120,7 @@ test("a proposed epic's plan is approved from its page, and the board then shows
     const approvals: unknown[] = []
     await page.route('**/api/epics/2/plan/approval', async (route) => {
         approvals.push(route.request().postDataJSON())
-        await route.fulfill({ json: { plan: 3, run_id: 3, change: null } })
+        await route.fulfill({ json: { plan: 3, run_id: 3, change: null, reached: { stale: [], held: [], told: [] } } })
     })
     await page.route('**/api/epics/2', async (route) => {
         const detail = (await (await route.fetch()).json()) as {
