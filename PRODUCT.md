@@ -69,8 +69,9 @@ to do, not just faster.
 - Local only. No requests to another origin at run time: no CDN fonts, analytics, or remote images.
 - Journal content (tracker comments, agent output) is untrusted and is rendered as text, never as HTML.
 - A running worker's events are known only once it ends; live data arrives over the server's event stream.
-- No pages or features beyond what a ROADMAP milestone lists or the operator asks for. Prompting a running worker
-  is parked on the roadmap; the operator reads its transcript and answers once it asks.
+- No pages or features beyond what a ROADMAP milestone lists or the operator asks for. A reply on a ticket
+  goes to its next worker, unless the operator checks the box to tell the running one now, which hears of it on its
+  next tool call (ROADMAP M68).
 - The stack and engineering rules are in `ui/AGENTS.md`. The visual system is `ui/DESIGN.md`, which is normative.
 
 ## Brand Commitments

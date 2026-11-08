@@ -1,9 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { api } from '@/api/client'
+import { mockRuns } from '@/api/mocks'
+import { keys } from '@/api/queries'
+import type { Run } from '@/api/types'
 
 import { ReplyForm } from './reply-form'
 import type { ReplyTarget } from './reply-form'
@@ -40,12 +43,20 @@ afterEach(() => {
     cleanup()
 })
 
-function renderForm(target: ReplyTarget, waiting: number | null = null, untrusted = false) {
-    return render(
-        <QueryClientProvider client={new QueryClient()}>
+// Run 41 working ABC-1 now, as the stream lists it.
+const RUNNING = { ...mockRuns[0], id: 41, state: 'running', ticket_key: 'ABC-1' } as Run
+
+function renderForm(target: ReplyTarget, waiting: number | null = null, untrusted = false, runs: Run[] = []) {
+    const client = new QueryClient()
+    // The runs come from the stream, never a read of the form's own.
+    client.setQueryDefaults(keys.runs, { enabled: false })
+    client.setQueryData(keys.runs, runs)
+    const rendered = render(
+        <QueryClientProvider client={client}>
             <ReplyForm target={target} waiting={waiting} untrusted={untrusted} />
         </QueryClientProvider>,
     )
+    return { ...rendered, client }
 }
 
 function type(label: string, text: string) {
@@ -201,6 +212,84 @@ describe('ReplyForm', () => {
 
         renderForm(TICKET)
         expect(screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Reply' }).value).toBe('')
+    })
+
+    it('offers to tell the ticket’s running run now, off by default, and only while nothing waits on an answer', () => {
+        renderForm(TICKET, null, false, [RUNNING])
+        const box = screen.getByRole('checkbox', { name: 'Tell run:41 now' })
+        expect(box.getAttribute('aria-checked')).toBe('false')
+        const field = screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Reply' })
+        expect(field.placeholder).toBe('The next worker reads it as an instruction.')
+        fireEvent.click(box)
+        expect(field.placeholder).toBe(
+            "Run 41 hears on its next tool call that you wrote, and reads it through canopy's tool.",
+        )
+        cleanup()
+
+        // Not while the form answers a question, nor with no run working the ticket, nor on a run of another ticket.
+        renderForm(TICKET, 3, false, [RUNNING])
+        expect(screen.queryByRole('checkbox')).toBeNull()
+        cleanup()
+        renderForm(TICKET, null, false, [{ ...RUNNING, ticket_key: 'ABC-2' }])
+        expect(screen.queryByRole('checkbox')).toBeNull()
+        cleanup()
+        renderForm(TASK, null, false, [RUNNING])
+        expect(screen.queryByRole('checkbox')).toBeNull()
+    })
+
+    it('sends to the run when told to, then to the ticket again, the box cleared after each send', async () => {
+        answers = [Response.json({ message_id: 9, new: true, told: true })]
+        renderForm(TICKET, null, false, [RUNNING])
+        type('Reply', 'Drop the logout half')
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Tell run:41 now' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Reply' }))
+        expect((await screen.findByRole('status')).textContent).toBe(
+            'Recorded message 9 to run:41. Its agent hears that it waits on its next tool call, and reads it through ' +
+                "canopy's tool.",
+        )
+        expect(screen.getByRole('checkbox', { name: 'Tell run:41 now' }).getAttribute('aria-checked')).toBe('false')
+
+        type('Reply', 'And keep the old form')
+        fireEvent.click(screen.getByRole('button', { name: 'Reply' }))
+        await screen.findByText('Recorded message 2 on ABC-1. The next tick reads it.')
+        expect(sent.map((request) => [request.path, request.body.body])).toEqual([
+            ['/api/runs/41/messages', 'Drop the logout half'],
+            ['/api/tickets/ABC-1/replies', 'And keep the old form'],
+        ])
+    })
+
+    it('keeps the draft when the run ended first, and sends it to the ticket as the same submission', async () => {
+        answers = [
+            Response.json(
+                // Its reason names no run, which `Notice` would link, and this test has no router.
+                {
+                    detail: {
+                        guard: 'ended',
+                        reason: 'the run has ended (done); its agent can no longer hear a message',
+                    },
+                },
+                { status: 409 },
+            ),
+        ]
+        const { client } = renderForm(TICKET, null, false, [RUNNING])
+        type('Reply', 'Drop the logout half')
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Tell run:41 now' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Reply' }))
+        expect((await screen.findByRole('alert')).textContent).toBe(
+            'refused (ended): the run has ended (done); its agent can no longer hear a message',
+        )
+        expect(screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Reply' }).value).toBe('Drop the logout half')
+
+        // The stream says the run ended: the box goes, and the same reply goes to the ticket.
+        client.setQueryData(keys.runs, [{ ...RUNNING, status: 'done', state: 'done' }])
+        await waitFor(() => {
+            expect(screen.queryByRole('checkbox')).toBeNull()
+        })
+        fireEvent.click(screen.getByRole('button', { name: 'Reply' }))
+        await screen.findByText('Recorded message 2 on ABC-1. The next tick reads it.')
+        const [tried, replied] = sent
+        expect([tried?.path, replied?.path]).toEqual(['/api/runs/41/messages', '/api/tickets/ABC-1/replies'])
+        expect(replied?.body.submission).toBe(tried?.body.submission)
     })
 
     it('says a reply that reached no server in canopy’s words, not the browser’s', async () => {

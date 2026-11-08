@@ -426,6 +426,18 @@ class Answered(Model):
     """Whether it was written where the agent hears it on its next tool call: false once the agent has ended."""
 
 
+class RunMessaged(Model):
+    """The operator's message to a running run, as recorded: what `canopy reply run:ID "..."` says (DESIGN §44)."""
+
+    message_id: int
+    """The message, on the run's ticket."""
+    new: bool
+    """Whether it was recorded now, rather than by an earlier submission with the same id."""
+    told: bool
+    """Whether it was written where the run's agent hears that it waits, on its next tool call: false when the run is
+    ending or its answers directory could not be written, so the ticket's next run reads it."""
+
+
 class RunCard(Model):
     """Where a worker's, planner's, or reviewer's work stands, in its own words: its progress (DESIGN §41).
 
@@ -640,6 +652,13 @@ class Message(Model):
     """Its text, control characters dropped and line breaks kept: untrusted."""
     comment: Comment | None = None
     """The tracker comment it mirrors, for one that came from the tracker."""
+    to_run: int | None = None
+    """The running worker's or planner's run the operator sent it to, as `canopy reply run:ID` does (DESIGN §44)."""
+    delivered_at: datetime | None = None
+    """When canopy first wrote it where that run's agent reads it, for one sent to a run; None when it never could, so
+    the subject's next run reads it."""
+    fetched_at: datetime | None = None
+    """When that run's agent first fetched it through canopy's tool; None while it has not, or never did."""
 
 
 class Attachment(Model):

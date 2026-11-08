@@ -46,6 +46,7 @@ import type {
     PlanThreadView,
     Reaction,
     Replied,
+    RunMessaged,
     ReviewDetail,
     ReviewDismissed,
     ReviewDraft,
@@ -427,6 +428,18 @@ export async function refreshAnswered(client: QueryClient, target: AnswerTarget)
         client.invalidateQueries({ queryKey: keys.runs }),
         client.invalidateQueries({ predicate: ({ queryKey }) => queryKey[0] === keys.ticket('')[0] }),
     ])
+}
+
+/**
+ * `canopy reply run:ID "..."`: the operator's message to a running worker or planner, in their own words (DESIGN §44),
+ * which the ticket's reply form sends when told to. It is recorded on the run's ticket, and its agent hears that it
+ * waits on its next tool call. Refused `ended` once the run has ended, whose ticket takes the reply instead.
+ * `submission` makes a resend a no-op, a resend to the ticket's reply included.
+ */
+export async function messageRun(id: number, body: string, submission: string): Promise<RunMessaged> {
+    return unwrap(
+        await api.POST('/api/runs/{run_id}/messages', { params: { path: { run_id: id } }, body: { body, submission } }),
+    )
 }
 
 /** A note to a chore, as `canopy reply chore:NAME`: its next runs read it (DESIGN §19). */

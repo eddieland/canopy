@@ -1162,6 +1162,7 @@ def test_openapi_names_the_stream_event_and_every_route() -> None:
         "/api/runs/{run_id}/output",
         "/api/runs/{run_id}/changes/{repo}",
         "/api/runs/{run_id}/answers",
+        "/api/runs/{run_id}/messages",
         "/api/runs/{run_id}/memory",
         "/api/memory",
         "/api/memory/search",

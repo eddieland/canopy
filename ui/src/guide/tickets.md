@@ -78,7 +78,8 @@ Below:
   named no model: the override's bill, itemized. At its foot, once the ticket has a branch, its **desk**: see
   [Editing the branch yourself](#editing-the-branch-yourself).
 - **Conversation**: every message, the box to reply in, and under it the ticket's actions.
-  [Attention](attention#replying) covers how a reply works. When one of the ticket's attention items clears while
+  [Attention](attention#replying) covers how a reply works, and [below](#a-message-to-a-running-run) how one reaches
+  a run while it works. When one of the ticket's attention items clears while
   you're here, a leaf drifts off the panel, the same one the attention list drops.
 - **Left feedback**: the reviewers' comments the loop read and chose not to send a worker, with how many. See
   [Feedback left with no worker](#feedback-left-with-no-worker).
@@ -110,6 +111,29 @@ spend a panel telling you so. On a wide screen the conversation moves to the rig
 Memory.
 
 A key canopy has never seen gets a page too, saying so, with the form to start it.
+
+## A message to a running run
+
+Scope moved while a worker was halfway through it? Tell it, without ending the run. While a worker or a planner works
+the ticket, the reply box has **Tell `run:41` now** beside **Reply**. Check it, write what changed, `only the parser,
+please`, and reply. From a terminal it's `canopy reply run:41 'only the parser, please'`, words rather than a letter.
+A review takes none, and a [task](tasks)'s reply already reaches its running run on its own.
+
+The box starts unchecked and clears after each send, and the page never remembers it for you. A reply mid-run is
+usually meant for the next run, and redirecting an agent halfway through an edit should be something you meant to
+do. It isn't offered while the box answers a question, since the run is waiting on a letter, not an essay.
+
+Either way it's one message in one conversation, recorded on the ticket. On its next tool call the agent hears that
+you wrote, never what: it reads your words through canopy's own tool, so a line dressed up as canopy's can at worst send
+it to check an empty inbox. Its head says `to run:41`, and in place of `waiting for the next tick` and `seen` it wears
+what `canopy show run:41` says: `not fetched yet` while the run works, `heard` once its agent fetched it, `never
+fetched` if the run ended first, and `next run reads it` when canopy couldn't write it where the agent reads it, usually
+because the run was in the middle of ending. One it reads and then reports on is handled. One it never reads, or reads
+just before falling over, waits for the next run's prompt like any reply, so nothing you said goes missing.
+
+If the run ends between you checking the box and sending, canopy refuses with `ended` and keeps what you wrote. The box
+goes as the run does, so **Reply** again sends the same words to the ticket, once: the retry is the same submission, so
+it never lands twice.
 
 ## Acting on a ticket
 

@@ -319,12 +319,7 @@ still ends the run as `blocked`, as before. A task's run asks none here: its que
 starts the next. While a question waits, it's an item on [the attention list](attention#the-list) too, answerable
 right there, the rail's row for the run reads `asks you` in amber, and the tab's title and icon count it.
 
-Words, not a letter, are a message: `canopy reply run:ID 'only the parser, please'` tells a running worker or planner
-that its scope moved without ending its run, and a reply to a task while its run works reaches that run too. On its
-next tool call the agent hears that you wrote, never what; it reads your words through canopy's own tool, so a line
-dressed up as canopy's can at worst send it to check an empty inbox. One it reads and then reports on is handled. One
-it never reads, or reads just before falling over, waits for the next run's prompt like any reply, so nothing you said
-goes missing. A run that already ended takes none: reply to its ticket instead.
+Words, not a letter, are a message, sent from the ticket's reply box: [Tickets](tickets#a-message-to-a-running-run).
 
 A run's page, a review's, and a task run's lead with the whole of it; the runs list shows what it's doing now, `asks
 you` while a question waits, and when it was last updated, after a small meter when it has steps; a ticket's page shows

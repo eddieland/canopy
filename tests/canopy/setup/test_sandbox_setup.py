@@ -124,7 +124,7 @@ def test_setup_installs_what_it_can_and_keeps_it_on_the_next_run(machine: Machin
     lock = canopy_sandbox.RUNTIME_SPEC / "package-lock.json"
     assert (runtime(canopy_env) / "package-lock.json").read_bytes() == lock.read_bytes()
     assert (runtime(canopy_env) / sandbox.INSTALLED_LOCK).read_bytes() == lock.read_bytes()
-    assert machine.calls("bwrap")[-1]["argv"] == ["bwrap", "--ro-bind", "/", "/", "true"]
+    assert machine.calls("bwrap")[-1]["argv"] == list(sandbox.USERNS_PROBE)
 
     again = sandbox.run_setup(SubprocessRunner(), "linux")
 
@@ -278,25 +278,46 @@ def test_a_failed_npm_install_is_reported(machine: Machine) -> None:
     assert todo.endswith("npm error 404 Not Found")
 
 
-@pytest.mark.parametrize(("restricted", "says"), [("1", "AppArmor restricts unprivileged ones"), ("0", "no userns")])
+@pytest.mark.parametrize(
+    ("restricted", "profile", "says"),
+    [
+        ("1", None, "AppArmor restricts unprivileged ones"),
+        ("0", None, "no userns"),
+        ("1", "loaded", "bwrap-userns-restrict profile denies every"),
+        ("0", "loaded", "bwrap-userns-restrict profile denies every"),
+        ("1", "disabled", "AppArmor restricts unprivileged ones"),
+    ],
+)
 def test_bubblewrap_that_cannot_make_a_sandbox_says_why(
     machine: Machine,
     tmp_path: Path,
     restricted: str,
+    profile: str | None,
     says: str,
 ) -> None:
+    """Ubuntu 24.04 restricts user namespaces by a sysctl; 26.04 also by a profile for bwrap, which the fix disables."""
     machine.install(*LINUX_COMMANDS)
     setting = tmp_path / "apparmor_restrict_unprivileged_userns"
     setting.write_text(f"{restricted}\n")
+    apparmor = tmp_path / "apparmor.d"
+    (apparmor / "disable").mkdir(parents=True)
+    if profile is not None:
+        (apparmor / "bwrap-userns-restrict").touch()
+    if profile == "disabled":
+        (apparmor / "disable" / "bwrap-userns-restrict").symlink_to(apparmor / "bwrap-userns-restrict")
     with (
         mock.patch.object(sandbox, "APPARMOR_USERNS", setting),
+        mock.patch.object(sandbox, "BWRAP_PROFILE", apparmor / "bwrap-userns-restrict"),
+        mock.patch.object(sandbox, "BWRAP_PROFILE_DISABLED", apparmor / "disable" / "bwrap-userns-restrict"),
         mock.patch.dict(os.environ, {"FAKE_EXIT_BWRAP": "1", "FAKE_STDERR": "bwrap: no userns\n"}),
     ):
         report = sandbox.run_setup(SubprocessRunner(), "linux")
 
     [todo] = [t for t in report.todo if "bubblewrap" in t]
     assert says in todo
-    assert ("sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0" in todo) is (restricted == "1")
+    lifts = "sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0" in todo
+    assert lifts is (restricted == "1" or profile == "loaded")
+    assert ("sudo apparmor_parser -R" in todo) is (profile == "loaded")
 
 
 @pytest.mark.parametrize(
