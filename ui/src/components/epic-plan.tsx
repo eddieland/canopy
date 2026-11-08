@@ -7,6 +7,7 @@ import { keys } from '@/api/queries'
 import type { EpicPlanFile, EpicPlanReached, EpicPlans } from '@/api/types'
 import { Age } from '@/components/age'
 import { ApprovedBand } from '@/components/approved-band'
+import { Code } from '@/components/code'
 import { Disclosure } from '@/components/disclosure'
 import { EpicPlanSha } from '@/components/epic-plan-sha'
 import { Notice } from '@/components/notice'
@@ -171,10 +172,9 @@ function NewestPlan({
             // Kept once the plan no longer waits, so the approval that ended its waiting still says what it did.
             outcome={
                 approved && said !== null && failure === null ? (
-                    <>
-                        <ApprovedBand key={approvals} text={said} />
+                    <ApprovedBand key={approvals} text={said}>
                         {reached !== null && <EpicReached reached={reached} />}
-                    </>
+                    </ApprovedBand>
                 ) : said !== null || failure !== null ? (
                     <Notice error={failure}>{said}</Notice>
                 ) : undefined
@@ -183,9 +183,17 @@ function NewestPlan({
     )
 }
 
+// Each way's chip: held waits on the operator, as a blocked run does; stale is the loop's to plan again, next; told
+// needs nobody.
+const REACHED_TONE = { held: 'blocked', stale: 'running', told: 'plain' } as const
+// Past this many members, a way's keys fold behind a count, so the plan's sticky foot stays two lines tall.
+const REACHED_SHOWN = 6
+
 /**
- * The members an approval's change reached (DESIGN §43, When its plan changes), under the moment: a line for each way
- * it met them, in the CLI's words, each member linked to its ticket's page. Nothing when it reached none, as the CLI
+ * The members an approval's change reached (DESIGN §43, When its plan changes), part of the moment under its band: a
+ * line for each way it met them, the way's chip first, held before the rest since only held members wait on the
+ * operator, then the members, then the CLI's words, quieter, with their guard set as code. A held member links to its
+ * plan's page, where its plan is approved again; the rest to their tickets. Nothing when it reached none, as the CLI
  * prints nothing then.
  */
 function EpicReached({ reached }: { reached: EpicPlanReached }) {
@@ -194,19 +202,48 @@ function EpicReached({ reached }: { reached: EpicPlanReached }) {
         return null
     }
     return (
-        <ul aria-label="Members reached" data-testid="epic-reached" className="flex flex-col gap-1 text-sm">
-            {ways.map(({ what, keys: members }) => (
-                <li key={what}>
-                    {what}:{' '}
-                    {members.map((key, i) => (
-                        <span key={key}>
-                            {i > 0 && ', '}
-                            <TicketLink ticketKey={key} />
-                        </span>
-                    ))}
+        <ul aria-label="Members reached" data-testid="epic-reached" className="flex max-w-3xl flex-col gap-1.5">
+            {ways.map((reach) => (
+                <li key={reach.way} className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    <Chip tone={REACHED_TONE[reach.way]} word={reach.way} className="self-center" />
+                    <ReachedKeys keys={reach.keys} plan={reach.way === 'held'} />
+                    <span className="text-xs text-muted-foreground">
+                        {reach.what}
+                        {reach.guard !== undefined && (
+                            <>
+                                {' '}
+                                <Code>{reach.guard}</Code>
+                            </>
+                        )}
+                    </span>
                 </li>
             ))}
         </ul>
+    )
+}
+
+/** A way's members, comma-separated, without the tracker's icon on each; past a few, behind their count. */
+function ReachedKeys({ keys: members, plan }: { keys: string[]; plan: boolean }) {
+    const [open, setOpen] = useState(false)
+    const links = (
+        <span>
+            {members.map((key, i) => (
+                <span key={key}>
+                    {i > 0 && ', '}
+                    <TicketLink ticketKey={key} plan={plan} tracker={false} />
+                </span>
+            ))}
+        </span>
+    )
+    if (members.length <= REACHED_SHOWN) {
+        return links
+    }
+    return (
+        <Collapsible open={open} onOpenChange={setOpen} className="contents">
+            <span className="readout text-xs">{members.length} members</span>
+            <Disclosure open={open} what="them" className="-my-1" />
+            <CollapsibleContent className="order-last basis-full">{links}</CollapsibleContent>
+        </Collapsible>
     )
 }
 

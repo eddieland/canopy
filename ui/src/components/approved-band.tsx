@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { Check } from 'lucide-react'
+import type { ReactNode } from 'react'
 
 import { Leaf } from '@/components/leaf'
 
@@ -8,11 +9,11 @@ import { Leaf } from '@/components/leaf'
  * a feedback plan. It says so in the CLI's words on the accent's tint, as decided proposals do, rises in, and drops a
  * leaf, as a cleared attention item does, since approving clears the plan's item; then the way back to what else needs
  * the operator. Show it only once the approval is in the journal, so it never celebrates one that was refused; a new
- * `key` plays it again.
+ * `key` plays it again. `children`, what the approval went on to do, rise in just after the band, part of the moment.
  */
-export function ApprovedBand({ text }: { text: string }) {
+export function ApprovedBand({ text, children }: { text: string; children?: ReactNode }) {
     return (
-        <div className="stagger">
+        <div className="stagger flex flex-col gap-2">
             <div
                 data-testid="plan-approved"
                 className="relative flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md bg-accent/14 px-2.5 py-1.5"
@@ -24,6 +25,7 @@ export function ApprovedBand({ text }: { text: string }) {
                     Back to Attention
                 </Link>
             </div>
+            {children}
         </div>
     )
 }

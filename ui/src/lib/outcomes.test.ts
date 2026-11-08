@@ -394,13 +394,16 @@ describe('outcomes', () => {
 
     it("names the members an epic's plan change reached each way, as `canopy plan epic:N --approve` does", () => {
         const reached = { stale: ['ABC-201'], held: ['ABC-202', 'ABC-203'], told: ['ABC-100'] }
+        // Held first, the one way that waits on the operator; its guard set apart from the CLI's words.
         expect(epicReachedWays(reached)).toEqual([
-            { what: 'Plans superseded as stale, to be planned again', keys: ['ABC-201'] },
             {
-                what: 'Implements held until you approve the plan again or ask for a new one (epic_changed)',
+                way: 'held',
+                what: 'Implements held until you approve the plan again or ask for a new one',
+                guard: 'epic_changed',
                 keys: ['ABC-202', 'ABC-203'],
             },
-            { what: 'Left as they are, each told at its next plan', keys: ['ABC-100'] },
+            { way: 'stale', what: 'Plans superseded as stale, to be planned again', keys: ['ABC-201'] },
+            { way: 'told', what: 'Left as they are, each told at its next plan', keys: ['ABC-100'] },
         ])
         // A way that reached none is left out, and none at all says nothing.
         expect(epicReachedWays({ stale: [], held: [], told: ['ABC-100'] }).map(({ what }) => what)).toEqual([
