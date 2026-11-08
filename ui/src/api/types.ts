@@ -213,6 +213,12 @@ export type ChecklistWeek = Schemas['ChecklistWeek']
 export type ChecklistAnswer = Schemas['ChecklistAnswer']
 /** What a run pushed after being shown a repository's checklist: the two commits, and the diff kept between them. */
 export type ChecklistStretch = Schemas['ChecklistStretch']
+/** The commits a worker's or a task's run went from and to in one repository, and how much changed between them. */
+export type RunRange = Schemas['RunRange']
+/** What a run changed in one repository: its range and size, and the files it touched, with no diff. */
+export type RunChange = Schemas['RunChange']
+/** One file a run changed, with its lines added and removed as git counted them. */
+export type ChangedFile = Schemas['ChangedFile']
 /** A worker's answer to a checklist item: pass, fixed, held, n/a, or unanswered. */
 export type ItemAnswer = Schemas['ItemAnswer']
 /** How the last days' runs ended, the newest failures, what the guards refused, and each day's counts. */

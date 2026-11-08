@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 from canopy.core import contract, conversation, db, plans, run_models, sql
 from canopy.core.vocab import RunStatus
 from canopy.runs import task_tickets, tasks
-from canopy.serve import checklist_views, views
+from canopy.serve import change_views, checklist_views, views
 from canopy.serve.schema.task import TaskDetail, TaskReport, TaskRun, TaskRunDetail, TaskSummary, TaskTicket
 from canopy.serve.transcript_views import removed_after, session_transcript
 from canopy.serve.views import lines, message, models_served, new_tokens, run_state, said, shown_path
@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 
     from canopy.core import records
     from canopy.core.context import Context
+    from canopy.serve.schema import ReviewDiff
     from canopy.serve.schema.task import TaskStanding
     from canopy.serve.schema.transcript import Transcript
 
@@ -123,12 +124,14 @@ def task_run_detail(ctx: Context, task_id: int, run_id: int) -> TaskRunDetail | 
 
     Returns:
         The run, its whole summary and question, the harness's note, the tickets recorded from it, its models, and
-        what it answered of its repository's checklist (DESIGN §42), with what it pushed after being shown it.
+        what it answered of its repository's checklist (DESIGN §42), with what it pushed after being shown it, and
+        what it changed, with the files it touched (§45).
     """
     row = _run_of(ctx.conn, task_id, run_id)
     if row is None:
         return None
     stored = contract.stored_object(row.result_json)
+    prs = tasks.prs(stored)
     question = lines(str(stored.get("question") or "")) if row.status is RunStatus.BLOCKED else ""
     stretches, left_out = checklist_views.run_stretches(
         ctx.conn,
@@ -160,6 +163,16 @@ def task_run_detail(ctx: Context, task_id: int, run_id: int) -> TaskRunDetail | 
         checklist=checklist_views.run_answers(ctx.conn, run_id, table="task_runs"),
         checklist_stretches=stretches,
         checklist_stretches_left_out=left_out,
+        changes=change_views.run_changes_of(
+            ctx.conn,
+            run_id,
+            log_path=row.log_path,
+            ended_at=row.ended_at,
+            # A task works in one repository, so a PR of its run's is that one's.
+            prs={row.repo: prs[0]} if len(prs) == 1 else None,
+            table="task_runs",
+        ),
+        records_changes=row.ended_at is not None,
     )
 
 
@@ -258,6 +271,19 @@ def _run_counts(conn: sqlite3.Connection) -> dict[int, int]:
 
 def _ticket(row: records.TaskTicket) -> TaskTicket:
     return TaskTicket(key=row.key, run_id=row.task_run_id, at=db.parse_time(row.at))
+
+
+def task_run_change_diff(ctx: Context, task_id: int, run_id: int, repo: str) -> ReviewDiff | None:
+    """The diff of what run `run_id` of task `task_id` changed in `repo`, kept beside its log (DESIGN §45).
+
+    Returns:
+        The diff, within a review's diff's bounds; None if the task has no such run, or it kept no diff of `repo` that
+        is still there to read.
+    """
+    row = _run_of(ctx.conn, task_id, run_id)
+    if row is None:
+        return None
+    return change_views.run_diff(ctx.conn, run_id, repo, log_path=row.log_path, table="task_runs")
 
 
 def _run_of(conn: sqlite3.Connection, task_id: int, run_id: int) -> records.TaskRun | None:

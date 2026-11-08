@@ -16,8 +16,8 @@ from canopy.core import conversation
 from canopy.infra import logs
 from canopy.serve import views
 from canopy.serve.api.deps import BackendDep
-from canopy.serve.api.refs import REFUSED, WEB, RefusedError, RunId, not_found
-from canopy.serve.schema import Answered, AnswerRequest, ReplyRequest, Run, RunMessaged, RunsSince
+from canopy.serve.api.refs import REFUSED, WEB, RefusedError, RepoName, RunId, not_found
+from canopy.serve.schema import Answered, AnswerRequest, ReplyRequest, ReviewDiff, Run, RunMessaged, RunsSince
 from canopy.serve.schema.transcript import RawOutput, Transcript
 
 TAG = "runs"
@@ -82,6 +82,22 @@ def run_output(run_id: RunId, backend: BackendDep) -> RawOutput:
         found = views.run_raw_output(ctx, run_id)
     if found is None:
         raise HTTPException(status_code=404, detail=f"no run {run_id}")
+    return found
+
+
+# A kept diff, read on each request within a review's diff's bounds, when the run's page opens it (DESIGN §45).
+@router.get(
+    "/runs/{run_id}/changes/{repo}",
+    operation_id="getRunChange",
+    summary="Get the diff of what a run changed in a repository",
+    responses=not_found("diff of this run's change"),
+)
+def run_change(run_id: RunId, repo: RepoName, backend: BackendDep) -> ReviewDiff:
+    """The diff of the run's own change to `repo`, from the commit it started from to the one it left: untrusted."""
+    with backend.open() as ctx:
+        found = views.run_change_diff(ctx, run_id, repo)
+    if found is None:
+        raise HTTPException(status_code=404, detail=f"run {run_id} kept no diff of its change to {repo}")
     return found
 
 

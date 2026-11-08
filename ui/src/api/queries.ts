@@ -22,6 +22,9 @@ export const keys = {
     // A run's and a tick's transcripts: read again only when the stream says the run's status or the tick changed.
     runTranscript: (id: number) => ['transcript', 'run', id] as const,
     runOutput: (id: number) => ['transcript', 'run', id, 'output'] as const,
+    // Not under the run's transcript or its task, whose invalidations would read a kept file again that never changes.
+    runChange: (id: number, repo: string) => ['run-change', id, repo] as const,
+    taskRunChange: (id: number, run: number, repo: string) => ['task-run-change', id, run, repo] as const,
     tickTranscript: (id: number) => ['transcript', 'tick', id] as const,
     // Under its transcript's key, so the invalidation that marks the transcript stale marks the output too.
     tickOutput: (id: number) => ['transcript', 'tick', id, 'output'] as const,
@@ -213,6 +216,38 @@ export function runOutputQuery(id: number) {
         queryKey: keys.runOutput(id),
         queryFn: async ({ signal }) =>
             unwrap(await api.GET('/api/runs/{run_id}/output', { params: { path: { run_id: id } }, signal })),
+        placeholderData: undefined,
+        staleTime: Number.POSITIVE_INFINITY,
+    })
+}
+
+/**
+ * The diff of what a run changed in one repository (DESIGN §45), read when its Diff panel is opened. The kept file
+ * never changes, so it is read once.
+ */
+export function runChangeQuery(id: number, repo: string) {
+    return queryOptions({
+        queryKey: keys.runChange(id, repo),
+        queryFn: async ({ signal }) =>
+            unwrap(
+                await api.GET('/api/runs/{run_id}/changes/{repo}', { params: { path: { run_id: id, repo } }, signal }),
+            ),
+        placeholderData: undefined,
+        staleTime: Number.POSITIVE_INFINITY,
+    })
+}
+
+/** The diff of what a task's run changed in its repository, read when its Diff panel is opened, once, as a run's. */
+export function taskRunChangeQuery(id: number, run: number, repo: string) {
+    return queryOptions({
+        queryKey: keys.taskRunChange(id, run, repo),
+        queryFn: async ({ signal }) =>
+            unwrap(
+                await api.GET('/api/tasks/{task_id}/runs/{run_id}/changes/{repo}', {
+                    params: { path: { task_id: id, run_id: run, repo } },
+                    signal,
+                }),
+            ),
         placeholderData: undefined,
         staleTime: Number.POSITIVE_INFINITY,
     })

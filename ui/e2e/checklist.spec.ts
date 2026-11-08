@@ -146,11 +146,12 @@ test('a run held by its list shows what it pushed after it under its answers, in
     await expect(stretch.getByTestId('checklist-stretch-range')).toHaveText('web · 5b1e0c4..c9d24f8')
     await expect(stretch.getByTestId('diff-file')).toHaveCount(2)
     await expect(stretch.getByTestId('diff-file').last()).toContainText('useQuery(invoiceLinesQuery(id))')
-    // Right under the answers, which name the fix, and over the transcript.
+    // Right under the answers, which name the fix, and over the run's whole Diff and the transcript. The mock's run 38
+    // recorded nothing of what it changed, which its Diff panel says.
     const panels = await page.locator('main h2').allTextContents()
     const at = panels.indexOf('Checklist')
     expect(panels.slice(at, at + 4)).toEqual(['Checklist', 'Pushed after the list', 'File', 'File'])
-    expect(panels[at + 4]).toBe('Transcript')
+    expect(panels.slice(at + 4, at + 6)).toEqual(['Diff', 'Transcript'])
 
     // A run whose push was never held has none.
     await page.goto('workspace/runs/39')

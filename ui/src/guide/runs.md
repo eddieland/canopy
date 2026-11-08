@@ -130,6 +130,26 @@ the run ended, or that [garbage collection](running-the-loop#garbage-collection)
 panel rather than quietly leaving the stretch out. Past five stretches, which takes some doing, the page shows the
 first five and `canopy show run:ID` names the rest.
 
+Then the **Diff**: what the run changed, read by canopy from the run's own worktree as it ended, after its push and
+before a flaky kick, canopy's rebase to rerun a flaky check, could rewrite the branch. It's a summary, a few lines
+tall, so the transcript below stays where you can see it. The header names the repository, the two commits, and the
+size, `web · 5b1e0c4..c9d24f8 · 2 files · +21 −3`: from where origin's branch was when the run started (or the base's
+commit, for a first `implement` with no branch yet) to where the run left it; hover the commits for that in words.
+Under it, each file the run touched with its lines added and removed. **Show diff** opens the diff itself under the
+panel, a panel per file, drawn as a review's is. So a `resume` that answered one review comment shows the three lines
+it touched, not the four hundred the branch has piled up since `implement`. When you do want the whole branch, **branch
+vs base** takes you to the PR's page, which has it as the branch stands now, with its threads on it. A run across
+several repositories has a Diff panel for each.
+
+A run that ended `unpushed` still shows what it did: the change up to the last commit it made in its worktree, with a
+**not on origin** chip, since the commits themselves went with the slot. It's the closest you'll get to the work the
+push check caught, so read it before deciding whether to send the ticket round again. A diff canopy couldn't keep says
+why, a `crashed` run's included (no git runs in a slot canopy can't trust), and one [garbage
+collection](running-the-loop#garbage-collection) has removed says when; an ended run that recorded nothing at all, such
+as one reconcile closed, says that too. None of them shows a blank panel and lets you assume the run did nothing. A plan
+run pushes nothing and has no Diff panel; nor does a run still working. `canopy show run:ID --diff` prints the same diff
+for your pager.
+
 The **Transcript** is the run's session, from its log, oldest first:
 
 - its text, with its reasoning set in italics and marked `thinking`. Long thinking shows its first four lines and

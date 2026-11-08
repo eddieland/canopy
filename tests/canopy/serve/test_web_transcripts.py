@@ -28,6 +28,9 @@ def test_a_run_page_is_the_run_as_the_runs_list_shows_it(backend: Backend) -> No
         # The checklist's answers are the page's alone: the list sends none.
         assert listed[run_id].pop("checklist") == []
         page.pop("checklist")
+        # And what it changed.
+        assert listed[run_id].pop("changes") == []
+        page.pop("changes")
         # So are an ended run's worktrees: the list names a run's only while it holds them.
         if listed[run_id]["ended_at"] is not None:
             assert listed[run_id].pop("worktrees") == []
