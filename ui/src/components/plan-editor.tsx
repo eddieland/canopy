@@ -259,6 +259,8 @@ export function PlanEditor({
             return {
                 // Where each found thread starts, in plan order: what the list's order and its `passage gone` follow.
                 starts: [...(highlights?.ranges ?? new Map<string, Range>())].map(([id, range]) => [id, range.from]),
+                // The words each thread found on a reworded passage was written on, which its card names.
+                reworded: [...(highlights?.reworded ?? new Map<string, string>())],
                 active: highlights?.active,
                 // Where the comment being written starts, which places it among the threads.
                 draftFrom: highlights?.draft?.from,
@@ -269,6 +271,7 @@ export function PlanEditor({
         },
     })
     const starts = new Map(seen.starts as [string, number][])
+    const reworded = new Map(seen.reworded)
     const ordered = inPlanOrder(threads, starts)
     const draftFrom = seen.draftFrom
     const draftAt =
@@ -686,6 +689,7 @@ export function PlanEditor({
                         <PlanThreads
                             threads={ordered}
                             found={new Set(starts.keys())}
+                            reworded={reworded}
                             active={seen.active}
                             draft={draftFloats ? undefined : draft}
                             draftAt={draftAt}
@@ -723,7 +727,14 @@ export function PlanEditor({
             )}
             {!draftFloats && floating !== undefined && (
                 <div ref={float} data-testid="plan-float" className={FLOAT}>
-                    <ThreadCard thread={floating} lost={false} active editable={editable} {...threadActions} />
+                    <ThreadCard
+                        thread={floating}
+                        lost={false}
+                        reworded={reworded.get(floating.id)}
+                        active
+                        editable={editable}
+                        {...threadActions}
+                    />
                 </div>
             )}
         </div>
