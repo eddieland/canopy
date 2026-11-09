@@ -50,6 +50,8 @@ describe('blocking', () => {
         expect(blocking(item('a', 'lodash-advisory', '2026-10-08T12:00:00Z', true))).toBe(false)
         // A warning holds nothing up: the implement goes ahead on the plan approved.
         expect(blocking(item('a', 'ticket_changed', '2026-10-08T12:00:00Z'))).toBe(false)
+        // A held implement is no warning: nothing of the ticket goes ahead until the operator answers.
+        expect(blocking(item('a', 'epic_changed', '2026-10-08T12:00:00Z'))).toBe(true)
     })
 })
 
@@ -79,6 +81,8 @@ describe('severity', () => {
         expect(severity(item('a', 'untrusted_artifact_comment', '2026-10-08T12:00:00Z'))).toBe('waiting')
         expect(severity(item('a', 'drafts_waiting', '2026-10-08T12:00:00Z'))).toBe('waiting')
         expect(severity(item('a', 'plan_review', '2026-10-08T12:00:00Z'))).toBe('waiting')
+        // A member's implement, held until the operator approves its plan again since its epic's plan changed.
+        expect(severity(item('a', 'epic_changed', '2026-10-08T12:00:00Z'))).toBe('waiting')
         expect(severity(item('a', 'review_waiting', '2026-10-08T12:00:00Z'))).toBe('waiting')
         expect(severity(item('a', 'review_unsettled', '2026-10-08T12:00:00Z'))).toBe('waiting')
         expect(severity(item('a', 'review_rebuttal', '2026-10-08T12:00:00Z'))).toBe('waiting')
@@ -197,6 +201,7 @@ describe('ask', () => {
         expect(ask(item('a', 'plan_review', at))).toBe('plan')
         // A ticket changed since its plan was approved is answered on the plan's card, by approving it again.
         expect(ask(item('a', 'ticket_changed', at))).toBe('plan')
+        expect(ask(item('a', 'epic_changed', at))).toBe('plan')
         expect(ask(item('a', 'drafts_waiting', at))).toBe('drafts')
         expect(ask(item('a', 'memory_proposal', at))).toBe('memory')
         expect(ask({ ...item('a', 'lesson_review', at), ticket_key: null })).toBe('memory')

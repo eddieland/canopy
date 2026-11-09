@@ -41,7 +41,7 @@ import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { PendingWork, usePending, usePendingWork } from '@/hooks/use-pending'
 import { planText } from '@/lib/outcomes'
 import { planDecisions } from '@/lib/plan-decisions'
-import { approvedChanged, planNeededWhy, planWaits } from '@/lib/plan-state'
+import { approvedChanged, epicHeld, epicHeldNote, planNeededWhy, planWaits } from '@/lib/plan-state'
 import { fromServer, MAX_NOTES, movedAnchors, threadChanges, unread } from '@/lib/plan-threads'
 import type { PlanThread, ThreadChange } from '@/lib/plan-threads'
 import { isApple } from '@/lib/send-key'
@@ -155,6 +155,9 @@ export function PlanState({ plans }: { plans: TicketPlans }) {
     }
     if (planWaits(plans)) {
         next.push(['waits', 'It waits on you: read it, comment, then approve it or ask for changes.'])
+    }
+    if (epicHeld(newest)) {
+        next.push(['held', epicHeldNote(newest.epic_changed)])
     }
     if (needless) {
         next.push([

@@ -67,10 +67,11 @@ There, the plan opens in an editor. The page's title names the plan and its tick
 run wrote it, when you approved it and how, whether its file was edited since, and its effort. A member of an epic
 gets one more line: `follows epic:2's plan`, the start of that plan's hash, and when you approved it, since its planner
 read the epic's approved plan beside the ticket. When you've approved a newer plan of the epic since, the line says so
-and when, and leaves what changed for you to read on [the epic's plan page](epics#an-epics-plan). The **Plan** panel's
-header says where it stands and how old it is. Under the plan, **Persona** names the persona its planner wrote in,
-with the start of its text's digest, and **Show instructions** opens exactly what that persona told it: canopy keeps
-each persona's text once per digest, so editing the file later doesn't rewrite history. See
+and when, and leaves what changed for you to read on [the epic's plan page](epics#an-epics-plan). If that change held
+its implement, the plan says `held (epic_changed)` and why: see [When its plan changes](epics#when-its-plan-changes).
+The **Plan** panel's header says where it stands and how old it is. Under the plan, **Persona** names the persona its
+planner wrote in, with the start of its text's digest, and **Show instructions** opens exactly what that persona told
+it: canopy keeps each persona's text once per digest, so editing the file later doesn't rewrite history. See
 [Choosing a persona](tickets#choosing-a-persona). Older plans are folded under **Earlier plans**, read only, each
 with its own Persona panel. The trail at the top leads back to the ticket.
 

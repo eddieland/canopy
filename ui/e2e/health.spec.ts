@@ -12,8 +12,8 @@ test("the nav opens Health under Reports, the week's runs by how they ended", as
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Health' }).click()
     await expect(page).toHaveURL(/\/reports\/health$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Health')
-    // The mock's week: twenty-seven runs ended, a worker's, a review's, and a task's failed (canopy/serve/mock).
-    await expect(page.locator('main header p')).toHaveText('3 of 27 runs failed over 7 days')
+    // The mock's week: twenty-eight runs ended, a worker's, a review's, and a task's failed (canopy/serve/mock).
+    await expect(page.locator('main header p')).toHaveText('3 of 28 runs failed over 7 days')
     await expect(page.getByTestId('health-window-7')).toHaveAttribute('data-state', 'on')
     // Each kind heads its sorts, with its failed runs' share; each sort's statuses are chips on its one row.
     const workers = page.getByTestId('health-kind-workers')
@@ -24,7 +24,7 @@ test("the nav opens Health under Reports, the week's runs by how they ended", as
         'done2blocked1failed1stopped1',
     )
     await expect(page.getByTestId('health-unpriced')).toHaveText(
-        'No cost reported: 2 of 8 worker runs, 1 of 3 plan runs, 2 of 6 review runs.',
+        'No cost reported: 2 of 8 worker runs, 2 of 4 plan runs, 2 of 6 review runs.',
     )
 })
 
@@ -48,7 +48,7 @@ test('the failures chart stacks each day by kind, with a table of the same numbe
     await expect(rows).toHaveCount(7)
     // The newest day first, its failed runs out of its ended ones.
     await expect(rows.first().locator('td').nth(6)).toHaveText('3')
-    await expect(rows.first().locator('td').nth(7)).toHaveText('27')
+    await expect(rows.first().locator('td').nth(7)).toHaveText('28')
     await expect(rows.first().locator('td').nth(8)).toHaveText('11%')
 })
 
@@ -98,7 +98,7 @@ test('the window switches to 30 days and back, and the guards say what they refu
     await expect(page.getByTestId('health-ask').getByRole('link', { name: 'ABC-104', exact: true })).toBeVisible()
     await page.getByTestId('health-window-30').click()
     await expect(page).toHaveURL(/\/reports\/health\?days=30$/u)
-    await expect(page.locator('main header p')).toHaveText('3 of 48 runs failed over 30 days')
+    await expect(page.locator('main header p')).toHaveText('3 of 49 runs failed over 30 days')
     await expect(page.getByTestId('health-table').locator('tbody tr')).toHaveCount(30)
     // The week, the default, needs no search.
     await page.getByTestId('health-window-7').click()
@@ -109,5 +109,5 @@ test('a window the page does not offer reads as the week', async ({ page }) => {
     await page.goto('reports/health?days=14')
     await settled(page)
     await expect(page.getByTestId('health-window-7')).toHaveAttribute('data-state', 'on')
-    await expect(page.locator('main header p')).toHaveText('3 of 27 runs failed over 7 days')
+    await expect(page.locator('main header p')).toHaveText('3 of 28 runs failed over 7 days')
 })

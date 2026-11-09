@@ -210,6 +210,7 @@ describe('ticketDescription', () => {
             edited: false,
             changed_since_approval: false,
             ticket_changed: [],
+            epic_changed: [],
             persona: null,
         }
         const plans: TicketPlans = { ...NO_PLAN, needed: true, plans: [plan], newest: file }

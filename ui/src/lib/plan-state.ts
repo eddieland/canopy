@@ -6,8 +6,8 @@ export function planWaits(plans: TicketPlans): boolean {
 }
 
 /**
- * Whether the newest plan can be approved as its file stands: one proposed, or one approved whose file or ticket
- * changed since, while no planner writes another.
+ * Whether the newest plan can be approved as its file stands: one proposed, or one approved whose file, ticket, or
+ * epic's plan changed since, while no planner writes another.
  */
 export function planApprovable(plans: TicketPlans): boolean {
     const newest = plans.newest
@@ -17,9 +17,28 @@ export function planApprovable(plans: TicketPlans): boolean {
     return newest.plan.status === 'proposed' || (newest.plan.status === 'approved' && approvedChanged(newest))
 }
 
-/** Whether an approved plan's file, or its ticket's title or description, changed since it was approved. */
+/**
+ * Whether an approved plan's file, its ticket's title or description, or its epic's plan changed since it was approved,
+ * so approving it again means something.
+ */
 export function approvedChanged(newest: PlanFile): boolean {
-    return newest.changed_since_approval || newest.ticket_changed.length > 0
+    return newest.changed_since_approval || newest.ticket_changed.length > 0 || epicHeld(newest)
+}
+
+/**
+ * Whether a change of its epic's plan holds a member's implement (`epic_changed`, DESIGN §43): its plan was approved
+ * before the change reached it, and its ticket has no branch yet. Approving again, or asking for a new plan, lifts it.
+ */
+export function epicHeld(newest: PlanFile): boolean {
+    return newest.plan.status === 'approved' && newest.epic_changed.length > 0
+}
+
+/** Why a member's implement is held, in a sentence naming `ids`, the epic plan's ids whose change reached it. */
+export function epicHeldNote(ids: readonly string[]): string {
+    return (
+        `Its epic’s plan changed ${ids.join(', ')} since you approved this plan, so its implement waits: approve ` +
+        'it again if it still fits, or ask for a new one.'
+    )
 }
 
 /**

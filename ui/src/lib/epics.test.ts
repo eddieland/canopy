@@ -117,6 +117,7 @@ function member(key: string, entries: string[], dropped: string[] = []): EpicMem
         phase: null,
         prs: [],
         latest_run: null,
+        epic_changed: [],
     }
 }
 
