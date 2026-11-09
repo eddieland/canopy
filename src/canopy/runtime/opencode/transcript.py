@@ -10,7 +10,8 @@ never show as the agent's. Each event is validated (D026), and each text cut to 
 
 `touched` says what a call did to files, from 1.19.3's tools: `read`, `edit`, and `write` name one by `filePath`,
 `apply_patch` each its patch adds, updates, deletes, or moves to, and `grep`, `glob`, and a `bash` command that searches
-(`report.shell_searches`) search.
+(`report.shell_searches`) search. `returned` says what a call put into the context, and whether OpenCode cut it, as
+the `truncated` its metadata holds says; `command`, what a `bash` call ran.
 
 `canopy.runtime.transcript` reads the file and bounds the transcript as a whole.
 """
@@ -28,7 +29,7 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, StrictFloat, Stric
 from canopy.runtime import entries
 from canopy.runtime.entries import MAX_INPUT, MAX_TEXT, Entry, Error, Step, Text, Tokens, ToolCall
 from canopy.runtime.opencode import events
-from canopy.runtime.report import MAX_COST_USD, MESSAGE_ID_RE, Called, Count, Touch, shell_searches
+from canopy.runtime.report import MAX_COST_USD, MESSAGE_ID_RE, Called, Count, Returned, Touch, shell_searches
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping
@@ -67,6 +68,8 @@ class _ToolState(_Part):
     input: dict[str, JsonValue] = {}
     output: StrictStr | None = None
     error: StrictStr | None = None
+    # What the runtime said of the call besides its output; read only for whether it cut the output.
+    metadata: JsonValue = None
     title: StrictStr | None = None
     time: _Time | None = None
 
@@ -155,6 +158,23 @@ def called(event: Mapping[str, object]) -> Called | None:
     return Called(tool.tool, completed=tool.state.status == "completed", input=tool.state.input, started_at=started)
 
 
+def returned(event: Mapping[str, object]) -> Returned | None:
+    """What the call a `tool_use` event ended returned: its output's characters, or its error's, and whether it was cut.
+
+    Returns:
+        Them, cut as the call's metadata says (`_cut`), None when it says nothing; or None when `event` is not a
+        `tool_use` event that validates.
+    """
+    if event["type"] != events.TOOL_USE:
+        return None
+    try:
+        state = _Tool.model_validate(event.get("part")).state
+    except ValidationError:
+        return None
+    said = state.output if state.status == "completed" else state.error
+    return Returned(len(said or ""), _cut(state.metadata))
+
+
 def in_session(line: str, session_id: str) -> bool:
     """Whether `line` is an event of session `session_id`, as `read` keeps only those.
 
@@ -188,6 +208,16 @@ def touched(call: Called) -> Touch:
         if isinstance(command, str) and shell_searches(command):
             return Touch("search")
     return Touch("other")
+
+
+def command(call: Called) -> str | None:
+    """The command a call of the shell ran, as the agent gave it.
+
+    Returns:
+        It, or None for a call of any other tool, or one whose command is not a string.
+    """
+    given = call.input.get("command")
+    return given if call.tool == _SHELL and isinstance(given, str) else None
 
 
 def _entry(event: Mapping[str, object]) -> Entry | None:
@@ -241,4 +271,11 @@ def _entry(event: Mapping[str, object]) -> Entry | None:
 def _at(value: object) -> datetime | None:
     if isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= _MAX_MS:
         return datetime.fromtimestamp(value / 1000, UTC)
+    return None
+
+
+# Whether a call's `metadata` says its output was cut, as its `truncated` does; None when it does not say.
+def _cut(metadata: JsonValue) -> bool | None:
+    if isinstance(metadata, dict) and isinstance(truncated := metadata.get("truncated"), bool):
+        return truncated
     return None

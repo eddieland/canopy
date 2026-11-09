@@ -14,8 +14,10 @@ regular file and not a symlink, at most `MAX_BYTES` of it; each event is validat
 dropped; and each text, the transcript's entries, and their characters altogether are cut at a bound, with
 `truncated` saying something was. An event of a known type that does not validate is counted in `unreadable`.
 
-`uses` reads the same file for a measurement (ROADMAP M70): each tool call of the session, in order, with what it did
-to files (`report.Touch`) and what the session had spent when it ended.
+`uses` reads the same file for a measurement (ROADMAP M70, M71): each tool call of the session, in order, with what it
+did to files (`report.Touch`), what the session had spent when it ended, the command a shell call ran, and the
+characters of what the agent sent and of what the call returned, whole as the runtime printed it, and whether the
+runtime said it cut that.
 
 `tail` reads the end of such a file as written, for a tick's output shown whole: stderr and every line the transcript
 leaves out. The same checks hold, at most `MAX_TAIL` of it is read, and its control characters are dropped.
@@ -23,6 +25,7 @@ leaves out. The same checks hold, at most `MAX_TAIL` of it is read, and its cont
 
 from __future__ import annotations
 
+import json
 import os
 import stat
 from dataclasses import dataclass
@@ -109,6 +112,15 @@ class Use:
     #: What the session's model calls that ended before this call did had cost, in dollars: the calls before the one
     #: that made it. 0 before the first; None once one of them could not be priced.
     spent: float | None
+    #: The tool's name, as the runtime names it, and the command it ran when it is the runtime's shell; None for any
+    #: other tool.
+    tool: str = ""
+    command: str | None = None
+    #: The characters of its input as compact JSON, what the agent wrote to make the call, and of what it returned.
+    input_chars: int = 0
+    result_chars: int = 0
+    #: Whether the runtime said it cut what the call returned; None when it did not say.
+    cut: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -126,7 +138,8 @@ def uses(path: Path, session_id: str, *, version: Version) -> Uses | None:
     `read` leaves them out.
 
     Returns:
-        Each call in order, with what it did to files and the spend before it; or None for a file it refuses.
+        Each call in order, with what it did to files, the spend before it, and what it sent and returned; or None for
+        a file it refuses.
     """
     fd = _open(path)
     if fd is None:
@@ -145,8 +158,20 @@ def uses(path: Path, session_id: str, *, version: Version) -> Uses | None:
         printed = lines.read(line) if implementation.in_session(line, session_id) else None
         if printed is None:
             continue
-        if printed.call is not None:
-            found.append(Use(implementation.touched(printed.call), printed.call.completed, spent))
+        if (call := printed.call) is not None:
+            returned = printed.returned
+            found.append(
+                Use(
+                    implementation.touched(call),
+                    call.completed,
+                    spent,
+                    tool=call.tool,
+                    command=implementation.command(call),
+                    input_chars=len(json.dumps(call.input, ensure_ascii=False, separators=(",", ":"), default=str)),
+                    result_chars=returned.chars if returned is not None else 0,
+                    cut=returned.cut if returned is not None else None,
+                ),
+            )
         if printed.ended_call:
             # Unknown from the first model call whose cost could not be read on, rather than a sum short of it.
             spent = usage.cost_usd if (usage := lines.usage) is not None else None
