@@ -1,9 +1,9 @@
 /**
  * What a worker's or a task's run changed (DESIGN §45): each repository's range and size, as its page's Diff panel and
- * its ticket's runs list name them, and what the panel says where it has no diff to open.
+ * its ticket's and its PR's runs lists name them, and what the panel, or a PR's page, says where it has no diff.
  */
 
-import type { ChangedFile, RunChange, RunRange } from '@/api/types'
+import type { ChangedFile, MissingDiff, RunChange, RunRange } from '@/api/types'
 import { goneText } from '@/lib/retention'
 import { shortSha } from '@/lib/reviews'
 
@@ -80,6 +80,16 @@ export function missingText(change: RunChange): string {
         return `no diff kept: ${change.missing ?? 'canopy read nothing of the run’s slot'}`
     }
     return goneText(change.removed_after_days, 'no diff kept: its file is missing, or not a regular file')
+}
+
+/**
+ * What a PR's page says of the latest run that left its work on origin, when no run kept a diff its threads could sit
+ * on: why its end kept none, or that retention removed it, in the words its own Diff panel uses.
+ */
+export function missingDiffText(missing: MissingDiff): string {
+    return missing.missing === null
+        ? goneText(missing.removed_after_days, 'no diff kept: its file is missing, or not a regular file')
+        : `no diff kept: ${missing.missing}`
 }
 
 /** What a Diff panel says of a change git counted no file in. */

@@ -128,7 +128,7 @@ def seed(conn: sqlite3.Connection) -> None:
                 merge_base=_MAIN,
                 change_kept=True,
                 branch_kept=True,
-                counted=_counted(_DEBOUNCE),
+                counted=counted(_DEBOUNCE),
             ),
         ],
     )
@@ -144,7 +144,7 @@ def seed(conn: sqlite3.Connection) -> None:
                 unpushed=_UNPUSHED_86,
                 change_kept=True,
                 branch_kept=True,
-                counted=_counted(_RETRY),
+                counted=counted(_RETRY),
             ),
         ],
     )
@@ -165,14 +165,14 @@ def seed(conn: sqlite3.Connection) -> None:
                 merge_base=_MAIN_TASK,
                 change_kept=True,
                 branch_kept=True,
-                counted=_counted(_BUNDLE),
+                counted=counted(_BUNDLE),
             ),
         ],
         table="task_runs",
     )
 
 
-def _counted(diff: str) -> run_changes.Counted:
+def counted(diff: str) -> run_changes.Counted:
     """What git would count of `diff`, as `runs.changes` records it.
 
     Returns:

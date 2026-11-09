@@ -1,8 +1,9 @@
 # Prior art
 
 A survey of open-source projects that overlap with canopy, and what their issue trackers show they learned the hard
-way. Surveyed 2026-09-29, aide 2026-10-18, and shared plans across tickets 2026-11-02 ([Shared plans across
-tickets](#shared-plans-across-tickets)). Why canopy is built anyway is D050.
+way. Surveyed 2026-09-29, aide 2026-10-18, shared plans across tickets 2026-11-02 ([Shared plans across
+tickets](#shared-plans-across-tickets)), and tools for token efficiency 2026-11-08 ([Tools for token
+efficiency](#tools-for-token-efficiency)). Why canopy is built anyway is D050.
 
 The canopy statuses below are as of those dates and are not kept current. Check the code before acting on one.
 
@@ -105,6 +106,107 @@ source unless marked secondary; docs sites the session could not reach are so ma
 - A human approves at both levels; the defaults that approved alone (Hermes, Devin) are where the incidents are.
 - None pins the parent's version in the child. Staleness is ignored, frozen at dispatch, or a manual pause and rewrite.
   canopy's plan hashes and `plan_changed` guard (§25) would make that a guard in code; M67 says how.
+
+## Tools for token efficiency
+
+Surveyed 2026-11-08 for ROADMAP M71: what tools harnesses give coding agents to read less, and what anyone has measured
+of it. Read from the vendors' own posts and documentation, the papers' abstracts, and the tools' READMEs; a claim read
+only in a search excerpt or a secondary summary, where the site could not be reached, is marked secondary. The
+canopy comparisons are as of that date.
+
+### What is measured, by someone other than the vendor
+
+- **Symbol tools do not save a strong model tokens when grep is at hand.** A tokens-to-success ablation over Python and
+  TypeScript repositories ([arXiv 2608.13568](https://arxiv.org/abs/2608.13568), secondary): for finding a named
+  symbol a language server *adds* 6% to 118% tokens by model, since the agent still greps; only the weakest model
+  saved, by flailing less. canopy's M70 puts an outline in the prompt and measures a gate first, which this supports,
+  and offers lookups last, which it says not to expect much of.
+- **Compressing what a model reads costs accuracy.** A code-graph server ([arXiv 2603.27277](https://arxiv.org/abs/2603.27277))
+  read a tenth of the tokens and answered 83% against a plain file-reading agent's 92%; minified code in context cut
+  SWE-bench input tokens 42% and resolution 12 points ([arXiv 2606.01326](https://arxiv.org/abs/2606.01326)); compact
+  serializations of tool results (TOON, TRON) saved up to 27% tokens at 9 to 14 points of accuracy and parse failures
+  that compound over turns ([arXiv 2605.29676](https://arxiv.org/abs/2605.29676)). So a canopy tool answers in plain
+  text or JSON records, as `canopy_git_log` and `grep` do, and never a terser form.
+- **Compact records between agents halve what the next one reads.** PACT ([arXiv 2606.05304](https://arxiv.org/abs/2606.05304)),
+  one model on SWE-bench Verified: each turn kept in shared history as a fixed-field record (action, observed state,
+  planned effect) rather than its text halved SWE-agent's input tokens at the same resolve rate. canopy's result line,
+  card (§41), and state block are such records already; what a worker's prose `summary` carries into later runs'
+  prompts is the one place a fixed shape has not been tried.
+- **Every shipped harness retrieves code deterministically.** A source study of eleven coding harnesses
+  ([arXiv 2609.00006](https://arxiv.org/pdf/2609.00006), secondary): ripgrep and tree-sitter in all, vector search for
+  code in none; seven compact on a threshold, Codex instead writes a summary the harness restores on resume. M70's
+  rejection of embeddings stands.
+- **Code execution against MCP** ([arXiv 2602.15945](https://arxiv.org/abs/2602.15945), secondary) cuts tokens and
+  widens the attack surface, with worse fulfillment where several servers are orchestrated. D077 denies it.
+
+### What vendors measure of their own
+
+Upper bounds, each against a baseline the vendor chose.
+
+- Anthropic's [writing effective tools](https://www.anthropic.com/engineering/writing-tools-for-agents): a
+  `response_format` of `concise` or `detailed` answered in 72 against 206 tokens; names in place of ids cut
+  hallucinated follow-ups; a truncated result should say how to narrow the next call; errors should state the fix;
+  consolidate a workflow into one tool rather than overlapping getters; many redundant calls in an evaluation mean the
+  limits or the pagination are wrong, many invalid-parameter errors that the descriptions are. canopy's git tools
+  already page, bound, and refuse by field name; `show` and `diff` have no range, and no cut result says how to narrow.
+- Anthropic's [code execution with MCP](https://www.anthropic.com/engineering/code-execution-with-mcp): one example,
+  150k to 2k tokens, by filtering a result where it is made rather than in the model's context; the harness doing the
+  filtering, as canopy's connectors do (§30), is the same saving without the model writing the code.
+  [Advanced tool use](https://anthropic.com/engineering/advanced-tool-use): loading tool definitions on demand cut a
+  77k-token prefix to 8.7k and raised accuracy; OpenCode has no form of it, and a prefix the provider caches is cheap
+  on a warm run (MEASUREMENTS 2026-10-21).
+- Anthropic's [context engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)
+  and [multi-agent research](https://www.anthropic.com/engineering/multi-agent-research-system): a subagent spends
+  tens of thousands of tokens and returns one to two thousand; multi-agent work costs about fifteen times a chat; token
+  use explains most of the variance in task performance; the lead's plan goes to memory before the window fills.
+  canopy's runs are such subagents of a loop with no shared context, so each starts with the brief in its prompt and
+  returns a result line; the parallel is the brief's fields, an objective, an output shape, which tools, and bounds.
+- [Claude Code](https://code.claude.com/docs/en/tools-reference) caps a tool result at 25k tokens, saves a longer one to
+  a file and returns its path with a preview, pages `read` with an offset and a limit, defaults `grep` to file names,
+  and names the follow-up in each truncation notice ([costs](https://code.claude.com/docs/en/costs): a hook that keeps
+  only a test run's failures turns tens of thousands of tokens into hundreds, and a CLI such as `gh` is cheaper than
+  an MCP server because it lists no tools). OpenCode cuts a tool's output at 2,000 lines or 50 KiB to a file it names
+  ([PR #23770](https://github.com/anomalyco/opencode/pull/23770)), which canopy's overseer prompt already tells it to
+  page. Codex keeps a byte budget per exec with the head kept and a line count in the hint
+  ([exec.rs](https://github.com/openai/codex/blob/main/codex-rs/core/src/exec.rs)).
+- Tool vendors: [jcodemunch](https://github.com/jgravelle/jcodemunch-mcp) "94.5% fewer tokens per lookup" against a
+  scripted grep that opens three files, success unmeasured; [agent-lsp](https://github.com/blackwell-systems/agent-lsp)
+  2 to 34 times by bytes, single runs; [rtk](https://github.com/rtk-ai/rtk) "up to 90%" of shell output, its own
+  table; [Serena](https://github.com/oraios/serena) claims and does not count, and turns its own file and shell tools
+  off under Claude Code and Codex because the harness has them. [aider's repo map](https://aider.chat/2023/10/22/repomap.html)
+  is tree-sitter and PageRank to a token budget, the model's one view of the repository, with no tools beside it.
+
+### Tools the harnesses give their agents
+
+- Progress and plans: Claude Code's task list, Codex's `update_plan`, Copilot's coding agent's `report_progress` with a
+  checklist in the PR body (secondary), Manus's `todo.md` recited each turn (secondary). canopy's card (§41) is the
+  same, with proof per step and a question the operator answers by letter.
+- Asking the user: Cline's and Roo's `ask_followup_question` with options (secondary); MCP's elicitation
+  (2025-06-18). canopy's card asks with lettered options and works around meanwhile; a message arrives through a tool
+  of canopy's, never a line (§44).
+- Subagents: Claude Code's Explore and Plan agents, Amp's Oracle and Librarian, each in its own context, returning a
+  summary (secondary); Amp replaced compaction with a hand-off thread that packages the relevant context and a goal.
+  Every canopy definition denies `task` (T1, spend); a run's hand-off is its result line and the next run's prompt.
+- Code structure: Cline's `list_code_definition_names`, a tree-sitter outline of one directory (secondary); Claude
+  Code's code-intelligence plugins for go-to-definition. M70.
+- Output filtering: Claude Code's hooks on a tool's result; rtk as a shell wrapper. canopy's plugin adds a line to a
+  result and never changes one (T4), and OpenCode's cut to a file already keeps a long output out of the context.
+
+### What held up as design, and what did not
+
+- Return high-signal fields, cap every result, keep the full text in a file the agent can page, and say in the cut how
+  to narrow the next call. Every shipped harness converged here, and it is where the independent savings are.
+- Keep the tool set small, stable through a run, and not overlapping the runtime's own `read`, `grep`, and shell:
+  changing the tools mid-run invalidates the cache behind them (Claude Code, Manus's "mask, don't remove", secondary).
+- MCP's annotations (`readOnlyHint` and the rest) are hints a client must treat as untrusted, never a guard; canopy's
+  `Hints` sets them so a client can skip a prompt, and its guards stay in code (D020). `structuredContent` saves no
+  tokens, since the spec has the text carry the same JSON and OpenCode reads the text alone (§27); it saves re-parsing.
+- Block rebuilt a tracker server from thirty tools to two, by workflow (secondary,
+  [recap](https://www.plushcap.com/content/workos/blog/workos-mcp-night-20-demo-recap-blocks-goose-the-layered-tool-pattern)).
+  canopy's overseer has one verb per decision on purpose, for spend by tool (§27); a worker's one read of its
+  feedback (M71 stage 2) follows Block's shape, one tool for what three getters would return.
+- Not to copy: a terser result format than JSON; minified code in a result; a runner tool whose commands skip the
+  shell's rules; the log or the thread pasted into the prompt (What not to copy, below).
 
 ## Lessons canopy's design already answers
 

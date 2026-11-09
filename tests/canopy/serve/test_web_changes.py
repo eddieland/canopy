@@ -1,20 +1,29 @@
-"""What a worker's or a task's run changed, on its page and its ticket's runs list (DESIGN §45).
+"""What a worker's or a task's run changed, on its page and its ticket's and its PR's runs lists (DESIGN §45).
 
 The rows are recorded as `_run` and `_task` record them when a run ends, and the diffs kept beside the run's log as
 `runs.changes` keeps them. A page reads the journal alone, each repository's range and the files git counted; the
-run's own diff is sent on its own when the page opens it, read within a review's diff's bounds.
+run's own diff is sent on its own when the page opens it, read within a review's diff's bounds. A PR's threads sit on
+the branch's diff the latest run that pushed kept, or say why there is none.
 """
 
+from __future__ import annotations
+
+import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 from unittest import mock
 
 from canopy.core import db, gc_passes, records, review_diff, run_changes
-from canopy.core.context import Context
 from canopy.core.run_changes import Change
 from canopy.core.vocab import RunKind, RunStatus
 from tests.canopy.helpers import KEY, present, running_run
 from tests.canopy.web_helpers import signed_in_client
+
+if TYPE_CHECKING:
+    from fastapi.testclient import TestClient
+
+    from canopy.core.context import Context
 
 #: A run's own change, as `runs.changes` keeps it: the branch's text, a control character in its last line.
 CHANGE = """\
@@ -38,6 +47,7 @@ COUNTED = run_changes.counted(
     ],
 )
 PR = "https://github.com/acme/api/pull/7"
+WEB_PR = "https://github.com/acme/web/pull/8"
 
 
 def test_a_runs_page_carries_its_range_and_files_as_counted_and_no_diff(ctx: Context) -> None:
@@ -223,6 +233,86 @@ def test_a_tickets_runs_list_names_each_runs_range_and_size_without_its_files(ct
     assert runs[bare]["ranges"] == []
 
 
+def test_a_prs_runs_list_names_each_runs_range_in_the_prs_repository_alone(ctx: Context) -> None:
+    """A joint run pushed to a PR in each repository: each PR's page names the run's range in its own."""
+    left = "d4" * 20
+    joint = ended_run(ctx, prs={"api": PR, "web": WEB_PR})
+    run_changes.record(ctx.conn, joint, [kept("api"), kept("web", end=START, unpushed=left)])
+    bare = ended_run(ctx, prs={"api": PR})
+    db.set_unit(ctx.conn, KEY, ctx.repo, "api", pr_url=PR)
+    db.set_unit(ctx.conn, KEY, ctx.repo, "web", pr_url=WEB_PR)
+    c, _ = signed_in_client(ctx)
+    on_api = {r["id"]: r for r in c.get("/api/pull-request", params={"url": PR}).json()["runs"]}
+    assert [(g["repo"], g["end_sha"], g["lines_added"]) for g in on_api[joint]["ranges"]] == [("api", END, 1)]
+    assert on_api[bare]["ranges"] == []
+    on_web = {r["id"]: r for r in c.get("/api/pull-request", params={"url": WEB_PR}).json()["runs"]}
+    assert [(g["repo"], g["unpushed_sha"]) for g in on_web[joint]["ranges"]] == [("web", left)]
+    assert bare not in on_web
+    # Neither list carries a run's files: its page does.
+    assert all(r["changes"] == [] for r in [*on_api.values(), *on_web.values()])
+
+
+def test_a_prs_threads_sit_on_the_latest_pushed_diff_or_say_why_there_is_none(ctx: Context) -> None:
+    """Without a diff to show, the latest run that left its work on origin says why it kept none."""
+    db.set_unit(ctx.conn, KEY, ctx.repo, "api", pr_url=PR)
+    records.insert(
+        records.ObservedPr,
+        url=PR,
+        repository="acme/api",
+        number=7,
+        head_sha=END,
+        draft=False,
+        observed_at=db.now(),
+    ).run(ctx.conn)
+    c, _ = signed_in_client(ctx)
+    # No run recorded what it left: nothing to say why.
+    found = threads_of(c)
+    assert (found["diff"], found["diff_missing"]) == (None, None)
+
+    # A run kept the branch's diff, which is gone since: retention removed it.
+    removed = ended_run(ctx, prs={"api": PR})
+    run_changes.record(ctx.conn, removed, [kept("api")])
+    gc_passes.record(
+        ctx.conn,
+        tick_id=None,
+        started_at=datetime.now(UTC),
+        run_files_days=30,
+        tick_files_days=7,
+        run_cutoff=db.format_time(datetime.now(UTC) + timedelta(days=1)),
+        tick_cutoff=None,
+        removed={},
+        failures=0,
+        error=None,
+    )
+    assert threads_of(c)["diff_missing"] == {"run": removed, "missing": None, "removed_after_days": 30}
+
+    # A later run crashed, reading nothing, and one after it left its work unpushed: the crashed one says why.
+    crashed = ended_run(ctx, RunStatus.CRASHED)
+    run_changes.record(ctx.conn, crashed, run_changes.crashed(["api"]))
+    unpushed = ended_run(ctx, RunStatus.UNPUSHED)
+    keep(ctx, unpushed, "api", CHANGE, CHANGE)
+    run_changes.record(ctx.conn, unpushed, [kept("api", end=START, unpushed="d4" * 20)])
+    found = threads_of(c)
+    assert (found["diff"], found["diff_run"]) == (None, None)
+    assert found["diff_missing"] == {"run": crashed, "missing": run_changes.CRASHED, "removed_after_days": None}
+
+    # The next that pushed kept it: the threads sit on its diff, and nothing is missing.
+    pushed = ended_run(ctx, prs={"api": PR})
+    keep(ctx, pushed, "api", CHANGE, BRANCH)
+    run_changes.record(ctx.conn, pushed, [kept("api")])
+    found = threads_of(c)
+    assert (found["diff_run"], found["diff_missing"]) == (pushed, None)
+    assert [f["path"] for f in found["diff"]["files"]] == ["src/canopy/order.py", "src/canopy/earlier.py"]
+
+
+def threads_of(c: TestClient) -> dict[str, Any]:
+    """The threads `PR`'s page reads."""
+    response = c.get("/api/pull-request/threads", params={"url": PR})
+    assert response.status_code == 200, response.text
+    found: dict[str, Any] = response.json()
+    return found
+
+
 def kept(repo: str, *, end: str = END, unpushed: str | None = None) -> Change:
     """A change of `repo` from `START` to `end`, or left `unpushed`, both of whose diffs were kept, and counted."""
     return Change(
@@ -237,10 +327,11 @@ def kept(repo: str, *, end: str = END, unpushed: str | None = None) -> Change:
     )
 
 
-def ended_run(ctx: Context, status: RunStatus = RunStatus.DONE) -> int:
-    """Record a run of `KEY` that ended as `status`, and return its id."""
+def ended_run(ctx: Context, status: RunStatus = RunStatus.DONE, *, prs: dict[str, str] | None = None) -> int:
+    """Record a run of `KEY` that ended as `status`, reporting the `prs` it pushed to, and return its id."""
     run_id = running_run(ctx, KEY, private=False)
-    db.finish_run(ctx.conn, "runs", run_id, status, None)
+    result = json.dumps({"status": "done", "prs": prs}) if prs is not None else None
+    db.finish_run(ctx.conn, "runs", run_id, status, result)
     return run_id
 
 

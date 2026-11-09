@@ -115,5 +115,10 @@ says why or that retention removed it, and an ended run of a kind that records s
 list names each run's range with its lines added and removed, opening the run at that repository's diff (the stretches
 under the checklist came 2026-11-06). The mock's runs 39, 40, and 37 and task 1's run show the states, so the
 screenshots of `workspace/runs/39`, `tasks/1/runs/1`, and the attention page, whose ticket shows its runs list, are to
-be taken again. Left for a follow-up: the PR's page, its threads on the kept diff under every `trust.review_replies`
-setting and each run's range in its runs list, and its guide page.
+be taken again. The PR's page, 2026-11-09, against the fakes, which ends stage 2: its threads sit on the kept diff
+of the latest run that pushed under every `trust.review_replies` setting, which needed no change past stage 1's, so
+the build is the tests that hold it and the mock's ABC-130, whose `resume` worked under `post` and drafted nothing,
+on PR 61; with no diff kept, the page names the latest run that left its work on origin and why it kept none, in its
+Diff panel's words; its runs list names each run's range in the PR's repository alone, a joint run's other repository
+being its own PR's. The mock's run 45 now counts its change, so the screenshot of PR 88's page, whose runs list and
+threads panel both change, is to be taken again. Live check next: this milestone's Accept.

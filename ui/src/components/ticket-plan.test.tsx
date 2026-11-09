@@ -654,6 +654,20 @@ describe('TicketPlan', () => {
         expect(sent).toEqual([{ method: 'POST', path: '/api/tickets/ABC-1/plan', body: { action: 'approve' } }])
     })
 
+    it('marks a comment whose passage the plan has only reworded, and not one on its exact words', async () => {
+        renderPlan({
+            threads: [
+                { ...THREAD, quote: 'CSV writers' },
+                { ...THREAD, id: 10, quote: 'Add' },
+            ],
+        })
+        const card = screen.getByRole('article', { name: 'Comment on “CSV writers”' })
+        expect(await within(card).findByText('passage reworded')).toBeDefined()
+        expect(within(card).queryByText('passage gone')).toBeNull()
+        const exact = screen.getByRole('article', { name: 'Comment on “Add”' })
+        expect(within(exact).queryByText('passage reworded')).toBeNull()
+    })
+
     it('saves a change to a comment as it is made', async () => {
         renderPlan({ threads: [THREAD] })
         const card = screen.getByRole('article', { name: 'Comment on “CSV writer”' })

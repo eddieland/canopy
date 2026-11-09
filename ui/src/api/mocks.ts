@@ -995,6 +995,7 @@ export function pullRequestThreads(fields: Partial<PullRequestThreads> = {}): Pu
         diff_run: null,
         diff_head: null,
         diff: null,
+        diff_missing: null,
         threads: [reviewThread()],
         pr_drafts: [],
         unplaced: [],

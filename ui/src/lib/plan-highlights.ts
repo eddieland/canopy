@@ -2,12 +2,14 @@
 // They are decorations, never part of the document, so the plan's Markdown holds nothing of them; the threads keep
 // their places as anchors (`src/lib/plan-anchors.ts`), and this plugin turns those into ranges and back. A range moves
 // with the edits around it; one whose text is deleted whole is lost, and found again if its passage comes back, as an
-// undo brings it, or, for an open thread, if words much like it come back, nearest where it was. A resolved thread asks
-// nothing more of its passage, so as Gerrit carries only unresolved comments to a new patchset, only its exact words
-// find it. The open thread closes when the cursor leaves its passage, or on Escape, as a click elsewhere in a
-// shared document closes a comment there. The plugin says what the operator does with the comments through the editor's
-// own events, so the component listens in an effect rather than handing the plugin callbacks. The cursor in a passage,
-// put there by a click or the keyboard, opens its thread, as the cursor in commented text does in a shared document.
+// undo brings it, or, for an open thread, if words much like it come back, nearest where it was; such a thread keeps
+// the words it was written on, so its card can say its passage was reworded rather than pass it off as the same words.
+// A resolved thread asks nothing more of its passage, so as Gerrit carries only unresolved comments to a new patchset,
+// only its exact words find it. The open thread closes when the cursor leaves its passage, or on Escape, as a click
+// elsewhere in a shared document closes a comment there. The plugin says what the operator does with the comments
+// through the editor's own events, so the component listens in an effect rather than handing the plugin callbacks. The
+// cursor in a passage, put there by a click or the keyboard, opens its thread, as the cursor in commented text does in
+// a shared document.
 import { Extension } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import type { EditorState, Transaction } from '@tiptap/pm/state'
@@ -55,6 +57,11 @@ export interface Highlights {
      * is looked for first.
      */
     lost: ReadonlyMap<string, number>
+    /**
+     * The words each thread found on other words, as a passage lightly reworded, was written on: its anchor's quote
+     * when it was found, kept as its anchor follows the new words.
+     */
+    reworded: ReadonlyMap<string, string>
     /** The thread whose passage is drawn as the one open, if any. */
     active: string | undefined
     /** The selection a comment is being written on, drawn as the active one is. */
@@ -85,7 +92,7 @@ export const PlanHighlights = Extension.create({
             new Plugin<Highlights>({
                 key: highlightsKey,
                 state: {
-                    init: (_, state) => build(state, [], new Map(), new Map(), undefined, undefined),
+                    init: (_, state) => build(state, [], new Map(), new Map(), new Map(), undefined, undefined),
                     apply: (tr, prev, _, state) => next(tr, prev, state),
                 },
                 props: {
@@ -167,6 +174,7 @@ function next(tr: Transaction, prev: Highlights, state: EditorState): Highlights
     let { threads, active, draft } = prev
     let ranges = new Map<string, Range>()
     let lost = new Map(prev.lost)
+    let reworded = new Map(prev.reworded)
     let before: ReturnType<typeof docText> | undefined
     for (const [id, range] of prev.ranges) {
         const mapped = mapRange(tr, range)
@@ -184,10 +192,12 @@ function next(tr: Transaction, prev: Highlights, state: EditorState): Highlights
             const ids = new Set(threads.map((thread) => thread.id))
             ranges = new Map([...ranges].filter(([id]) => ids.has(id)))
             lost = new Map([...lost].filter(([id]) => ids.has(id)))
+            reworded = new Map([...reworded].filter(([id]) => ids.has(id)))
             break
         }
         case 'add': {
             ranges.set(action.id, action.range)
+            reworded.delete(action.id)
             draft = undefined
             active = action.id
             break
@@ -218,15 +228,17 @@ function next(tr: Transaction, prev: Highlights, state: EditorState): Highlights
     if (threads.some((thread) => thread.id === active && thread.resolved)) {
         active = undefined
     }
-    return build(state, threads, ranges, lost, active, draft)
+    return build(state, threads, ranges, lost, reworded, active, draft)
 }
 
-// The state with every thread the ranges lack looked for again, and the decorations drawn.
+// The state with every thread the ranges lack looked for again, and the decorations drawn. A thread found on words
+// other than those it was written on is `reworded`, until it is found on those words again.
 function build(
     state: EditorState,
     threads: Placed[],
     ranges: Map<string, Range>,
     lost: Map<string, number>,
+    reworded: Map<string, string>,
     active: string | undefined,
     draft: Range | undefined,
 ): Highlights {
@@ -236,9 +248,15 @@ function build(
         for (const thread of missing) {
             const span = locate(text, thread.anchor, { approximate: !thread.resolved, near: lost.get(thread.id) })
             const range = span && rangeOf(positions, span.start, span.end)
-            if (range !== undefined) {
+            if (span !== undefined && range !== undefined) {
                 ranges.set(thread.id, range)
                 lost.delete(thread.id)
+                const was = reworded.get(thread.id) ?? thread.anchor.quote
+                if (anchorAt(text, span.start, span.end)?.quote === was) {
+                    reworded.delete(thread.id)
+                } else {
+                    reworded.set(thread.id, was)
+                }
             }
         }
     }
@@ -253,7 +271,7 @@ function build(
     if (draft !== undefined) {
         decorations.push(Decoration.inline(draft.from, draft.to, { class: 'plan-comment plan-comment-active' }))
     }
-    return { threads, ranges, lost, active, draft, decorations: DecorationSet.create(state.doc, decorations) }
+    return { threads, ranges, lost, reworded, active, draft, decorations: DecorationSet.create(state.doc, decorations) }
 }
 
 // A range through a transaction's edits: text typed at either end stays outside it, and a range whose text is all

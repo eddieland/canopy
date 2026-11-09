@@ -6,8 +6,8 @@ design; the [README](README.md) has the map. Previous: [Messages to running agen
 
 ## 45. What a run changed
 
-Partly built (ROADMAP M69): the record, the kept diffs, `canopy show`, and a run's page are; the PR's page of Where it
-shows and The commits are not, and the code does not follow those parts until they are.
+Partly built (ROADMAP M69): the record, the kept diffs, `canopy show`, a run's page, and its PR's are; The commits are
+not, and the code does not follow that part until it is.
 
 A run's result line says what its worker thinks it did; its branch on GitHub shows every commit anyone put there,
 rewritten by each flaky kick (§23). Neither says what this run changed. This section makes that a journal fact, read

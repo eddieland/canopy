@@ -2,8 +2,9 @@
 
 A PR is the subject here: the loop's own, by their tickets' units, every one canopy reviewed, and every one the operator
 asked canopy to review. Its page gathers what the journal holds about it from elsewhere: the operator's review request,
-the runs that pushed to it, canopy's reviews of it, which open the reviews pages (reviews.py), and the decisions naming
-it. Reads only; a rationale and a run's summary are untrusted text.
+the runs that pushed to it, each with its range in the PR's repository (§45), canopy's reviews of it, which open the
+reviews pages (reviews.py), and the decisions naming it. Reads only; a rationale and a run's summary are untrusted
+text.
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ from typing import TYPE_CHECKING, cast
 
 from canopy.core import contract, conversation, db, review_drafts, review_runs
 from canopy.reviews import review_requests
-from canopy.serve import pr_list, threads
+from canopy.serve import change_views, pr_list, threads
 from canopy.serve.reviews import summaries
 from canopy.serve.schema import CostTotal
 from canopy.serve.schema.review import (
@@ -53,6 +54,8 @@ def pull_requests(ctx: Context) -> list[PullRequest]:
 def pull_request(backend: Backend, ctx: Context, url: str) -> PullRequestDetail | None:
     """One PR: the runs that pushed to it, its review runs and limit, and the decisions naming it.
 
+    Each run names its range in the PR's repository, the commits it went from and to and its size (DESIGN §45).
+
     Returns:
         The PR's page, or None when no unit, review run, or decision names it. One that only decisions name, such as
         a `review.query` match no review has run on yet, has a page with its decisions alone.
@@ -68,12 +71,20 @@ def pull_request(backend: Backend, ctx: Context, url: str) -> PullRequestDetail 
         return None
     runs: list[sqlite3.Row] = _runs(ctx.conn, found.ticket_key, url) if found.ticket_key is not None else []
     shown = runs[:PR_RUNS]
+    ranges = change_views.ranges_of(ctx.conn, [int(r["id"]) for r in shown])
     reviewed = backend.review_limit(ctx, url)
     return PullRequestDetail(
         pull_request=found,
         review_limit=limit(reviewed, repo=found.repo) if reviewed is not None else None,
         runs=[
-            run(r, ctx.workspace.root, models=m, timeout_minutes=ctx.config.runtime.worker_timeout_minutes)
+            run(
+                r,
+                ctx.workspace.root,
+                models=m,
+                # A joint run's other repositories are their own PRs': this page names the range in its own.
+                ranges=[g for g in ranges.get(int(r["id"]), ()) if found.repo is None or g.repo == found.repo],
+                timeout_minutes=ctx.config.runtime.worker_timeout_minutes,
+            )
             for r, m in zip(shown, runs_served(ctx.conn, shown), strict=True)
         ],
         reviews=summaries(ctx.conn, reviews),

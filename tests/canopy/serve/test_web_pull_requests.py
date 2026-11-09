@@ -9,10 +9,11 @@ from unittest import mock
 import pytest
 
 from canopy.core import conversation, db
-from canopy.core.vocab import Phase, TickStatus
+from canopy.core.vocab import Phase, ReplyMode, TickStatus
 from canopy.infra import procs
 from canopy.serve import pull_requests
 from canopy.serve.backend import Backend
+from canopy.serve.mock import drafts as mock_drafts
 from canopy.serve.mock import feedback_plans as mock_feedback_plans
 from canopy.serve.mock import history as mock_history
 from canopy.serve.mock import reviews as mock_reviews
@@ -69,6 +70,42 @@ def test_a_prs_page_has_the_runs_that_pushed_to_it_its_reviews_and_its_decisions
     assert page["threads"]  # run 45 drafted replies to its threads, which canopy read
     assert {d["action"] for d in page["decisions"]} == {"wait", "attention:needs_reviewer"}
     assert all(d["pr"] == mock_reviews.PR_88 for d in page["decisions"])
+
+
+def test_a_prs_runs_list_names_each_runs_range_and_size_in_its_repository(backend: Backend) -> None:
+    page = client(None, backend).get("/api/pull-request", params={"url": mock_reviews.PR_88}).json()
+    # Run 39 opened the PR from main; run 45 went on from the head 39 left, the commits each one's alone.
+    assert [
+        [(g["repo"], g["start_sha"][:7], g["end_sha"][:7], g["lines_added"], g["lines_removed"]) for g in r["ranges"]]
+        for r in page["runs"]
+    ] == [
+        [("web", mock_reviews.SHA_88[:7], mock_drafts.SHA[:7], 26, 1)],
+        [("web", "71c3e0a", mock_reviews.SHA_88[:7], 21, 3)],
+    ]
+
+
+def test_a_prs_threads_sit_on_its_kept_diff_under_post_with_no_draft(backend: Backend) -> None:
+    """Every run keeps the branch's diff (DESIGN §45), so a PR's threads sit on it whatever `review_replies` says."""
+    trust = backend.config.trust.model_copy(update={"review_replies": ReplyMode.POST})
+    backend.use(backend.config.model_copy(update={"trust": trust}), backend.workspace)
+    c = client(None, backend)
+    # ABC-130's resume worked under post: it replied to dana itself, drafting nothing, and kept what it pushed.
+    url = mock_feedback_plans.STATES["spent"].url
+    page = c.get("/api/pull-request", params={"url": url}).json()
+    assert page["threads"]
+    [resumed] = page["runs"]
+    assert [(g["repo"], g["files_changed"]) for g in resumed["ranges"]] == [("mobile", 1)]
+    found = c.get("/api/pull-request/threads", params={"url": url}).json()
+    assert (found["review_replies"], found["diff_run"], found["diff_missing"]) == ("post", resumed["id"], None)
+    assert found["diff_head"] == found["head_sha"]  # read at the head it pushed: nothing moved past it
+    assert [(t["path"], t["file"], t["diff_line"], t["drafts"]) for t in found["threads"]] == [
+        ("app/notify/push.ts", 0, 27, []),
+    ]
+    assert (found["pr_drafts"], found["unplaced"]) == ([], [])
+    # PR 88's run drafted under approve: its drafts still sit on their threads, on the diff it kept.
+    ours = c.get("/api/pull-request/threads", params={"url": mock_reviews.PR_88}).json()
+    assert (ours["review_replies"], ours["diff_run"]) == ("post", 45)
+    assert [len(t["drafts"]) for t in ours["threads"]] == [1, 1, 1]
 
 
 def test_a_prs_cost_is_every_run_that_pushed_to_it_and_every_review_of_it(backend: Backend) -> None:

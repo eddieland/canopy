@@ -148,10 +148,11 @@ A comment's card says what it can do in words: **reply**, **edit**, **resolve** 
 which asks first. Comments hold onto
 their passage by its words, so they survive your edits, and they belong to the ticket, so they carry over to the next
 plan. A passage the planner only reworded keeps its open comments: a word swapped or a clause added, and the comment
-finds it anyway, as long as most of its words and the text around them are still there. When a new plan drops or
-rewrites a passage, its comments are marked `passage gone`, and **resolve all** clears them in one go. A resolved
-comment only finds its passage word for word: it's done asking for things, so it doesn't go looking. Resolved comments
-fold away under the open ones.
+finds it anyway, as long as most of its words and the text around them are still there. Its card then says
+`passage reworded`, and hovering the chip shows the words you commented on: a comment that moved says so, rather than
+vouch for words it never saw. When a new plan drops or rewrites a passage, its comments are marked `passage gone`, and
+**resolve all** clears them in one go. A resolved comment only finds its passage word for word: it's done asking for
+things, so it doesn't go looking. Resolved comments fold away under the open ones.
 
 Escape drops a comment you haven't written anything in. One with words in it stays open until you **Cancel** it.
 
