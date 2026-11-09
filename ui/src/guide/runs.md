@@ -192,10 +192,10 @@ lines** still searches every entry, drawn or not, so a search beats scrolling fo
 flip the order to newest first. All open opens only the rows drawn, and following an addition in the chart, or the
 error a run ended on, draws down to its row first.
 
-The session id in the transcript's header opens the same session in the runtime's own tools: `opencode session export
-ID`, or the deprecated OpenCode 1's `opencode export ID`. A
-transcript with nothing to show is its header alone, saying why in a word or two (`log gone`, `no session`,
-`no events yet`); hover it for the whole reason.
+The session id in the transcript's header opens the same session in the runtime's own tools:
+`opencode session export ID`, or the deprecated OpenCode 1's `opencode export ID`. A transcript with nothing to show
+is its header alone, saying why in a word or two (`log gone`, `no session`, `no events yet`); hover it for the whole
+reason.
 
 Under the transcript, **Prompt** is what canopy handed the worker, exactly as rendered: the instructions for its kind
 of run, then the ticket and whatever else canopy chose to tell it. It arrives folded, with its length; **Show prompt**

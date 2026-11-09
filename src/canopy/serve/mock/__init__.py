@@ -146,6 +146,10 @@ trusted_reviewers = ["canopy:review", "lint-bot"]
 # `web`'s and `api`'s lists; `mobile` keeps none.
 checklists = "{checklists}"
 
+[runtime]
+# The mock's transcripts are in the events of version 1 (`transcripts`), deprecated: it runs 1 until they are ported.
+version = 1
+
 [runtime.models]
 # Only the agents no ticket's page shows, so the settings page has models to name and each ticket keeps the default.
 overseer = "anthropic/claude-sonnet-4-5"
