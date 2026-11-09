@@ -87,6 +87,12 @@ approval's output. Chosen conservatively, for the operator to change: a member i
 and one of no entry every id; a member with no plan, run, branch, or notice is not reached, nothing of it being written
 against the older plan; a plan run at work when the plan changes lands its plan `proposed`, unmarked, its notice
 holding the `implement` until the operator approves a plan of it, a planner's approval not enough; a notice is spent
-when the plan run told it starts, whether or not it writes a plan; and no event when no member was reached. Left for
-this bullet: telling an `implement` or `resume` the ids, which waits on their reading the epic's copy; a trivial
+when the plan run told it starts, whether or not it writes a plan; and no event when no member was reached. Built
+2026-11-09: a member's `implement` and `resume` read the epic's approved plan as its planner does, from a copy checked
+against the approved hash where the worker starts, ignored by git, removed with the plan's copy before the slot goes
+back, and named in a harness note if pushed; their prompts name the entries the ticket fulfils and say to keep to the
+contracts it provides and uses; and the next of them takes the member's pending notice, told once that work done and
+its own approved plan stand. Chosen conservatively, for the operator to change: the copy is read as the run starts,
+as the planner's is, so a member removed between the dispatch and the start gets none though its prompt named it; and
+a worker override without `{{EPIC}}` is refused for a member, as a planner's is. Left for this bullet: a trivial
 member's re-approval; and the web UI's approval naming the members reached.

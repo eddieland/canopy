@@ -9,10 +9,10 @@ decides between the two:
   operator approves the plan again or asks for a new one;
 - a run in flight, or a ticket with a branch, is never paused or touched.
 
-Each keeps the ids that reached it as its pending notice, which its next plan run is told once, as data (`told`), and
-the operator's approval of its plan clears (`approved`). The ids are data read from plans the operator approved, never
-an instruction (TRUST_MODEL T1). A member with nothing written against the older plan, no plan, run, branch, or
-notice, is left as it is: its first plan reads the new one.
+Each keeps the ids that reached it as its pending notice, which its next plan, `implement`, or `resume` is told once, as
+data (`told`), and the operator's approval of its plan clears (`approved`). The ids are data read from plans the
+operator approved, never an instruction (TRUST_MODEL T1). A member with nothing written against the older plan, no
+plan, run, branch, or notice, is left as it is: its first plan reads the new one.
 """
 
 from __future__ import annotations

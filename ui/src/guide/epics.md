@@ -60,7 +60,8 @@ A member is a ticket you add to the epic, usually one you filed for an entry of 
 [the epic's page](#an-epics-page): **Register a ticket** beside an entry's `none yet`, or **Add a ticket** under the
 breakdown. A ticket is a member of one epic at most, and an epic holds `policy.max_epic_tickets` at most. Being a
 member authorizes no work: a member is worked once you label it or start it, like any other ticket, and then its
-planner reads the epic's approved plan beside its own ticket.
+planner reads the epic's approved plan beside its own ticket, and so does each worker after it, so the contracts its
+siblings build against are in front of the one doing the building.
 
 A member's own page says whose it is: its **Work** panel reads `member of epic:2 · B1`, or `of no entry`, one click
 from the epic. Its plan's page names the epic plan its planner read, by hash, and when you approved it, and says when
