@@ -5,14 +5,18 @@ Epic 1, over api, web, and mobile, was planned before its tickets existed: its p
 four entries, of which B4 is marked trivial. The operator filed tickets for two and registered each after the approval:
 ABC-103 fulfils B1, its PR 91 open, and ABC-104 fulfils B2, its resume running; ABC-100, a ticket the breakdown did not
 foresee, is a member of no entry. ABC-103 was planned first: its planner read the approved plan, so its own plan,
-approved, follows it. Epic 2, over mobile and web, had a plan the operator replied to, asking for changes; its second
-plan run wrote the plan that now waits on them. Epic 3, over api and web, was just submitted, and its first plan run
-works. Epic 4, over web, the operator stopped as soon as they submitted it, before a tick started its plan run: it has
-no plan, and none starts again.
+approved, follows it. ABC-107, B2's mobile half, was planned and approved too, before its first implement. Then the
+operator replied, asking that a refund take an idempotency key: a second plan run changed C1, and they approved it.
+The change reached every member: ABC-107, approved with no branch yet, has its implement held (`epic_changed`) until
+they approve its plan again or ask for a new one, and the rest, at work or with a branch, are only told. Epic 2, over
+mobile and web, had a plan the operator replied to, asking for changes; its second plan run wrote the plan that now
+waits on them. Epic 3, over api and web, was just submitted, and its first plan run works. Epic 4, over web, the
+operator stopped as soon as they submitted it, before a tick started its plan run: it has no plan, and none starts
+again.
 
-The plan runs, ABC-103's too, report no cost, so the spend page's totals are what they were without them. The running
-one holds no slot in the mock's pools, which show no lease for it. Every row and message here takes its id after every
-other fixture's: `seed` runs last.
+The plan runs, ABC-103's and ABC-107's too, report no cost, so the spend page's totals are what they were without
+them. The running one holds no slot in the mock's pools, which show no lease for it. Every row and message here takes
+its id after every other fixture's: `seed` runs last.
 """
 
 from __future__ import annotations
@@ -20,7 +24,8 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, epics, plans, records
+from canopy.core import conversation, db, epic_changes, epics, plans, records
+from canopy.core.items import Item
 from canopy.core.vocab import PlanEffort, PlannerApproval, PlanStatus, RunKind, RunStatus
 from canopy.runs import desks, epic_runs
 
@@ -223,6 +228,18 @@ The mobile app's order history reads from a local copy when it is offline, and t
 - Placing an order offline.
 """
 
+#: Epic 1's plan as approved the second time: C1's refund takes an idempotency key, which reaches every member.
+_BILLING_SECOND = _BILLING_PLAN.replace(
+    "each returning v2's types unchanged.\n",
+    "each returning v2's types unchanged.\n"
+    "  `refund` takes an idempotency key, so a refund the queue retries is made once.\n",
+)
+
+#: The operator's reply to epic 1's approved plan, which its second plan run answered.
+_BILLING_REPLY = (
+    "A refund retried from the queue must never be made twice: have `refund` take an idempotency key, and say so in C1."
+)
+
 # ABC-103's plan, for B1, written against epic 1's approved plan.
 _MEMBER_PLAN = """\
 # A v2 billing client in web
@@ -237,6 +254,31 @@ In **web**, a `BillingClient` for the v2 endpoint, as the epic's contract C1 nam
 - [ ] each method calls its v2 endpoint and returns its type unchanged
 - [ ] nothing in web imports the v1 client
 """
+
+# ABC-107's plan, for B2's mobile half, written against epic 1's first approved plan, before C1 changed.
+_HELD_PLAN = """\
+# Retry billing calls in mobile
+
+## What changes
+
+In **mobile**, a queue for billing calls that fail while v2 is down, retried with backoff through the epic's C1,
+`BillingClient`, and never shown to the customer as an error.
+
+## Tests
+
+- [ ] a call that fails is queued, and retried once v2 answers
+- [ ] the customer sees no error while it waits
+"""
+
+#: The member whose implement epic 1's second approval holds: approved before C1 changed, with no branch yet.
+HELD = "ABC-107"
+
+#: The members planned against epic 1's first approved plan: each one's plan, its run's summary, and when it was written
+#: and approved.
+_MEMBER_PLANS = {
+    "ABC-103": (_MEMBER_PLAN, "A v2 billing client in web, as the epic's C1.", -238, -200),
+    HELD: (_HELD_PLAN, "A retry queue in mobile, through the epic's C1.", -140, -120),
+}
 
 _EPICS = (
     # id, text, repositories, project, channel, submitted
@@ -254,21 +296,27 @@ type _Run = tuple[int, int, int, int | None, RunStatus, str | None, str | None]
 
 #: When the operator replied to epic 2's first plan, asking for changes.
 _REPLIED = -200
-#: The plan run whose plan the operator approved.
+#: When the operator replied to epic 1's approved plan, asking for C1's change.
+_BILLING_REPLIED = -80
+#: The plan run whose plan the operator approved first, and the one they approved since, with when they did.
 _APPROVED_RUN = 1
+_SECOND_RUN = 5
+_APPROVALS = ((_APPROVED_RUN, _BILLING_PLAN, -600), (_SECOND_RUN, _BILLING_SECOND, -55))
 
 _RUNS: tuple[_Run, ...] = (
     (_APPROVED_RUN, APPROVED, -715, -690, RunStatus.DONE, "A plan of four entries; B4 is trivial.", _BILLING_PLAN),
     (2, PROPOSED, -258, -240, RunStatus.DONE, "A plan of two entries, one per repository.", _OFFLINE_FIRST),
     (3, PROPOSED, -190, -170, RunStatus.DONE, "Kept it to mobile, and added clearing at sign-out.", _OFFLINE_SECOND),
     (4, PLANNING, -2, None, RunStatus.RUNNING, None, None),
+    (_SECOND_RUN, APPROVED, -75, -62, RunStatus.DONE, "C1's refund takes an idempotency key.", _BILLING_SECOND),
 )
 
-#: Epic 1's members: key, the entries each fulfils, and when it was added.
+#: Epic 1's members: key, the entries each fulfils, and when it was added. The second approval's C1 reached each.
 _MEMBERS = (
     ("ABC-103", ("B1",), -290),
     ("ABC-104", ("B2",), -285),
     ("ABC-100", (), -200),
+    (HELD, ("B2",), -170),
 )
 
 
@@ -296,7 +344,18 @@ def seed(conn: sqlite3.Connection, state_dir: Path, root: Path, at: Callable[[in
         body=_OFFLINE_REPLY,
     )
     reply_id = int(reply.run(conn).lastrowid or 0)
-    approved: plans.Written | None = None
+    billing = records.insert(
+        records.Message,
+        subject_kind=conversation.EPIC,
+        subject_id=str(APPROVED),
+        at=at(_BILLING_REPLIED),
+        source="operator",
+        kind="reply",
+        channel="web",
+        body=_BILLING_REPLY,
+    )
+    billing_id = int(billing.run(conn).lastrowid or 0)
+    written_by: dict[int, plans.Written] = {}
     for run_id, epic_id, started, ended, status, summary, plan in _RUNS:
         records.insert(
             records.EpicRun,
@@ -311,16 +370,45 @@ def seed(conn: sqlite3.Connection, state_dir: Path, root: Path, at: Callable[[in
             log_path=str(state_dir / epic_runs.RUNS_DIR / f"{run_id}.log"),
             session_id=f"ses_epic{run_id}",
             # The run after the operator's reply carried it, so the reply is answered and no run is due for it.
-            message_id=reply_id if started > _REPLIED and epic_id == PROPOSED else None,
+            message_id=_answered(epic_id, started, reply_id, billing_id),
         ).run(conn)
         if plan is not None and ended is not None:
-            written = _plan(conn, state_dir, (epic_id, run_id), plan, at(ended))
-            approved = written if epic_id == APPROVED else approved
-    if approved is not None:
-        _approve(conn, state_dir, approved.sha256, at(-600))
+            written_by[run_id] = _plan(conn, state_dir, (epic_id, run_id), plan, at(ended))
+    for run_id, text, approved in _APPROVALS:
+        _approve(conn, state_dir, (run_id, text), written_by[run_id].sha256, at(approved))
     records.update(records.Epic).set(stopped_at=at(_STOPPED_AT)).where("id = ?", STOPPED).run(conn)
+    _held_ticket(conn, root, at)
     _members(conn, at)
-    _member_plan(conn, state_dir, at)
+    for key in _MEMBER_PLANS:
+        _member_plan(conn, state_dir, at, key)
+
+
+def attention(conn: sqlite3.Connection) -> list[Item]:
+    """The epics' members' `epic_changed` items, as the harness raises them from the journal (DESIGN §43).
+
+    Returns:
+        One for each member whose implement a change of its epic's plan holds, open since that plan's approval.
+    """
+    found: list[Item] = []
+    for member in records.select(records.EpicMember).where("removed_at IS NULL").order_by("id").all(conn):
+        held = epic_changes.held(conn, member.ticket_key)
+        since = epics.approved_plan(conn, member.epic_id)
+        if held is not None and since is not None and since.approved_at is not None:
+            found.append(Item(held.key, epic_changes.REASON, held.detail(), since.approved_at))
+    return found
+
+
+def _answered(epic_id: int, started: int, *replies: int) -> int | None:
+    """The reply a plan run of epic `epic_id`, started at `started`, carried: the operator's last before it.
+
+    Returns:
+        Its message's id, of `replies`, epic 2's then epic 1's; None for a run before any reply.
+    """
+    if epic_id == PROPOSED and started > _REPLIED:
+        return replies[0]
+    if epic_id == APPROVED and started > _BILLING_REPLIED:
+        return replies[1]
+    return None
 
 
 def _plan(conn: sqlite3.Connection, state_dir: Path, ran: tuple[int, int], text: str, at: str) -> plans.Written:
@@ -344,20 +432,28 @@ def _plan(conn: sqlite3.Connection, state_dir: Path, ran: tuple[int, int], text:
     return written
 
 
-def _approve(conn: sqlite3.Connection, state_dir: Path, sha256: str, at: str) -> None:
-    """Approve epic 1's plan, whose file hashes to `sha256`, as its planner wrote it, keeping `epics.approve`'s copy."""
-    path = epics.approved_path(state_dir, APPROVED, _APPROVED_RUN, sha256)
-    plans.write_new(state_dir / epics.PLANS_DIR, str(APPROVED), path.name, _BILLING_PLAN)
+def _approve(conn: sqlite3.Connection, state_dir: Path, ran: tuple[int, str], sha256: str, at: str) -> None:
+    """Approve the plan epic 1's run wrote, `ran` its run and text, hashing to `sha256`, keeping `epics.approve`'s copy.
+
+    The newest stays approved; one a newer plan superseded keeps its approval, as what the next was compared with.
+    """
+    run_id, text = ran
+    path = epics.approved_path(state_dir, APPROVED, run_id, sha256)
+    plans.write_new(state_dir / epics.PLANS_DIR, str(APPROVED), path.name, text)
+    newest = run_id == _SECOND_RUN
     records.update(records.EpicPlan).set(
-        status=PlanStatus.APPROVED,
+        status=PlanStatus.APPROVED if newest else PlanStatus.SUPERSEDED,
         approved_sha256=sha256,
         approved_at=at,
         approved_channel="web",
-    ).where("run_id = ?", _APPROVED_RUN).run(conn)
+    ).where("run_id = ?", run_id).run(conn)
 
 
 def _members(conn: sqlite3.Connection, at: Callable[[int], str]) -> None:
-    """Make epic 1's members, each registered against its entries, as `epics.add` does after the approval."""
+    """Make epic 1's members, each registered against its entries, as `epics.add` does after the approval.
+
+    Each keeps C1, which the second approval reached it by, as its pending notice (`epic_changes.reach`).
+    """
     for key, entries, added in _MEMBERS:
         member = records.insert(
             records.EpicMember,
@@ -365,26 +461,29 @@ def _members(conn: sqlite3.Connection, at: Callable[[int], str]) -> None:
             ticket_key=key,
             added_at=at(added),
             added_channel="cli",
+            changed_ids="C1",
         )
         member_id = int(member.run(conn).lastrowid or 0)
         _register(conn, member_id, entries)
 
 
-def _member_plan(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str]) -> None:
-    """Plan ABC-103 against epic 1's approved plan, as its planner's run records it, approve it via web, and follow it.
+def _member_plan(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str], key: str) -> None:
+    """Plan `key` against epic 1's first approved plan, as its planner's run records it, and approve it via web.
 
-    Its run takes an id after every other fixture's, and reports no cost, so the spend page's totals stay as they were.
+    ABC-103's implement follows it; HELD has none yet. Its run takes an id after every other fixture's, and reports no
+    cost, so the spend page's totals stay as they were.
     """
+    text, summary, written_at, approved_at = _MEMBER_PLANS[key]
     run = records.insert(
         records.Run,
         tick_id=1,
-        ticket_key="ABC-103",
+        ticket_key=key,
         kind=RunKind.PLAN,
         branch="",
-        started_at=at(-250),
-        ended_at=at(-238),
+        started_at=at(written_at - 12),
+        ended_at=at(written_at),
         status=RunStatus.DONE,
-        result_json=json.dumps({"status": "done", "summary": "A v2 billing client in web, as the epic's C1."}),
+        result_json=json.dumps({"status": "done", "summary": summary}),
         log_path="",
         private=0,
         # Before ABC-105's, so at the level its plans were offered too, before the operator turned the key off.
@@ -393,18 +492,18 @@ def _member_plan(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], 
     run_id = db.rowid(run.run(conn))
     log = state_dir / "runs" / f"{run_id}.log"
     records.update(records.Run).set(log_path=str(log)).where("id = ?", run_id).run(conn)
-    written = plans.write(state_dir, "ABC-103", run_id, _MEMBER_PLAN)
+    written = plans.write(state_dir, key, run_id, text)
     followed = records.select(records.EpicPlan).where("run_id = ?", _APPROVED_RUN).one(conn)
     plan = records.insert(
         records.Plan,
-        ticket_key="ABC-103",
+        ticket_key=key,
         run_id=run_id,
-        created_at=at(-238),
+        created_at=at(written_at),
         status=PlanStatus.APPROVED,
         sha256=written.sha256,
         size=written.size,
         approved_sha256=written.sha256,
-        approved_at=at(-200),
+        approved_at=at(approved_at),
         approved_channel="web",
         effort=PlanEffort.SMALL,
         epic_plan_id=followed.id if followed is not None else None,
@@ -414,8 +513,22 @@ def _member_plan(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], 
     implement = records.update(records.Run).set(plan_id=plan_id)
     implement.where(
         "id = (SELECT min(id) FROM runs WHERE ticket_key = ? AND kind = ?)",
-        "ABC-103",
+        key,
         RunKind.IMPLEMENT,
+    ).run(conn)
+
+
+def _held_ticket(conn: sqlite3.Connection, root: Path, at: Callable[[int], str]) -> None:
+    """Insert HELD, a ticket held for canopy and planned, its implement not yet dispatched: no branch, so `ready`."""
+    records.insert(
+        records.Ticket,
+        key=HELD,
+        repo=str(root),
+        first_seen_at=at(-175),
+        last_seen_at=at(-8),
+        changed_at=at(-55),
+        title="Retry billing calls in mobile",
+        phase="ready",
     ).run(conn)
 
 

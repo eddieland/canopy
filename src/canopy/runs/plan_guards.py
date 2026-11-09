@@ -128,23 +128,24 @@ def planned_refusal(
             f"plan {plan.id} of {key}, {path}, is no longer the text the operator approved; they approve it again, "
             f"or ask for a new one or skip it"
         )
-    if kind == RunKind.IMPLEMENT and plan is not None and approved and not (ticket is not None and ticket.branch):
-        return _epic_changed(ctx, key, plan.id)
+    if kind == RunKind.IMPLEMENT:
+        return _epic_changed(ctx, key)
     return None
 
 
-def _epic_changed(ctx: Context, key: str, plan_id: int) -> tuple[str, str] | None:
+def _epic_changed(ctx: Context, key: str) -> tuple[str, str] | None:
     """Refuse a member's `implement` while a change of its epic's plan reached its approved plan (DESIGN §43).
 
     Returns:
-        `epic_changed` and why, until the operator approves the plan again or asks for a new one; or None.
+        `epic_changed` and why, while `epic_changes.held` says so, as the attention item and the web UI read it: until
+        the operator approves the plan again or asks for a new one; or None.
     """
-    found = epic_changes.pending(ctx.conn, key)
+    found = epic_changes.held(ctx.conn, key)
     if found is None:
         return None
-    return "epic_changed", (
-        f"epic:{found.epic_id}'s plan changed {', '.join(found.ids)} since plan {plan_id} of {key} was approved; the "
-        "operator approves the plan again, or asks for a new one"
+    return epic_changes.REASON, (
+        f"epic:{found.epic_id}'s plan changed {', '.join(found.ids)} since plan {found.plan_id} of {key} was "
+        "approved; the operator approves the plan again, or asks for a new one"
     )
 
 

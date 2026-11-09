@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 
 def test_the_plans_report_reads_the_mocks_week_and_months(backend: Backend) -> None:
-    """The week holds ABC-105's two plans and ABC-103's; 30 days September's too; 90 one from before levels."""
+    """The week holds ABC-105's two plans, ABC-107's, and ABC-103's; 30 days September's too; 90 one before levels."""
     c = client(None, backend)
     week = c.get("/api/reports/plans").json()
     assert (week["days"], week["since"], week["until"], week["level"]) == (
@@ -29,16 +29,17 @@ def test_the_plans_report_reads_the_mocks_week_and_months(backend: Backend) -> N
     assert [(p["ticket_key"], p["level"], p["outcome"]) for p in week["plans"]] == [
         ("ABC-105", "strict", "waiting"),
         ("ABC-105", "strict", "replaced"),
+        ("ABC-107", "strict", "as_written"),
         ("ABC-103", "strict", "as_written"),
     ]
-    # ABC-103's, the epic member's, approved as written, and its implement followed it.
-    assert [(g["outcome"], g["plans"], g["implemented"]) for g in week["groups"]] == [("as_written", 1, 1)]
-    assert [(n["low"], n["high"], n["plans"]) for n in week["lengths"]] == [(0, 50, 1)]
+    # The epic's members', approved as written: ABC-103's implement followed it, and ABC-107's waits on the epic.
+    assert [(g["outcome"], g["plans"], g["implemented"]) for g in week["groups"]] == [("as_written", 2, 1)]
+    assert [(n["low"], n["high"], n["plans"]) for n in week["lengths"]] == [(0, 50, 2)]
 
     month = c.get("/api/reports/plans", params={"days": 30}).json()
     assert month["outcomes"] == {
         "planner": 2,
-        "as_written": 2,
+        "as_written": 3,
         "revised": 2,
         "replaced": 2,
         "dropped": 0,
@@ -48,15 +49,15 @@ def test_the_plans_report_reads_the_mocks_week_and_months(backend: Backend) -> N
     assert rows == [
         ("off", "revised", 1, 1, 0),
         ("strict", "planner", 2, 2, 1),
-        ("strict", "as_written", 2, 2, 0),
+        ("strict", "as_written", 3, 2, 0),
         ("strict", "revised", 1, 1, 1),
     ]
     # ABC-091's second plan replaced one sent back with a comment; approved four hours after it was written.
     # Each plan measured from its original; the operator's approvals by length, cut at whole pages.
     assert all(p["metrics"]["lines"] > 0 for p in month["plans"])
     assert month["page_lines"] == plan_report.PAGE_LINES
-    # ABC-103's under a page; ABC-079's and ABC-085's two to four pages; ABC-091's second, four to six.
-    assert [(n["low"], n["high"], n["plans"]) for n in month["lengths"]] == [(0, 50, 1), (100, 200, 2), (200, 300, 1)]
+    # ABC-103's and ABC-107's under a page; ABC-079's and ABC-085's two to four pages; ABC-091's second, four to six.
+    assert [(n["low"], n["high"], n["plans"]) for n in month["lengths"]] == [(0, 50, 2), (100, 200, 2), (200, 300, 1)]
     second = next(p for p in month["plans"] if p["ticket_key"] == "ABC-091" and p["outcome"] == "revised")
     assert (second["earlier"], second["hours_to_approve"], second["resumes"], second["done"]) == (1, 4.0, 1, True)
 

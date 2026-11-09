@@ -1,6 +1,6 @@
 """The attention items the harness raises from their causes (DESIGN §14, §37, ROADMAP M38).
 
-Each of the eleven reasons over a journal written by hand, its observations fresh at `NOW`: raised while its cause
+Each of the twelve reasons over a journal written by hand, its observations fresh at `NOW`: raised while its cause
 holds, and gone once the journal or a fresh observation shows the cause gone. One that rests on an observation is kept
 while that observation is stale, or when the derivation could not run. Then through ticks: kept across a `skipped`
 tick, an `overseer_failed` one, and an outage, and gone once a read shows its cause gone; and the overseer refused one
@@ -219,6 +219,32 @@ def ticket_edited(env: CanopyEnv, conn: sqlite3.Connection) -> None:
     records.update(records.ObservedTicket).set(body="Retry twice, not three times.").where("key = ?", KEY).run(conn)
 
 
+def epic_changed(env: CanopyEnv, conn: sqlite3.Connection) -> None:
+    """The operator approved the plan before the ticket's first implement; a change of its epic's plan reached it."""
+    plan_waits(env, conn)
+    plan_approved(env, conn)
+    # The plan's run, a stand-in, named a branch: the ticket has none before its implement.
+    records.update(records.Ticket).set(branch=None).where("key = ?", KEY).run(conn)
+    epic = records.insert(
+        records.Epic,
+        text="Move sessions to the new store.",
+        project=None,
+        tracker_epic=None,
+        channel="cli",
+        submitted_at=FRESH,
+    )
+    epic_id = db.rowid(epic.run(conn))
+    member = records.insert(
+        records.EpicMember,
+        epic_id=epic_id,
+        ticket_key=KEY,
+        added_at=FRESH,
+        added_channel="cli",
+        changed_ids="C1 R2",
+    )
+    member.run(conn)
+
+
 def queue_stuck(env: CanopyEnv, conn: sqlite3.Connection) -> None:
     """The PR's build passed two hours ago, and its merge queue's status still waits, as CI."""
     green(env, conn)
@@ -258,6 +284,7 @@ CAUSES: dict[str, tuple[Callable[[CanopyEnv, sqlite3.Connection], None], Found, 
     "plan_review": (plan_waits, (KEY, "plan_review", None), plan_approved),
     "plan_changed": (plan_changed, (KEY, "plan_changed", None), plan_approved),
     "ticket_changed": (ticket_edited, (KEY, "ticket_changed", None), plan_approved),
+    "epic_changed": (epic_changed, (KEY, "epic_changed", None), plan_approved),
     "check_stuck": (queue_stuck, (KEY, "check_stuck", "repo"), queue_given_a_role),
     "unobserved_pr": (names_no_pr, (KEY, "unobserved_pr", "repo"), forgotten),
 }
@@ -324,6 +351,25 @@ def test_ready_to_merge_counts_the_feedback_left_with_no_worker(
             f"would_reset_approval): canopy show {KEY}"
         ),
     }
+
+
+def test_a_held_member_names_the_ids_that_reached_it_and_one_with_a_branch_is_only_told(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+) -> None:
+    """The item reads the dispatch guard's own test: once the ticket has a branch, nothing holds, and none is raised."""
+    epic_changed(canopy_env, observed)
+    observed.commit()
+    ctx = context(canopy_env)
+    [plan] = plans.history(observed, KEY)
+    found = {i.reason: i.detail for i in harness_items.raised(ctx, phases.derive(ctx, NOW), NOW)}
+    assert found["epic_changed"] == (
+        f"epic:1's plan changed C1, R2 since you approved plan {plan.id} of {KEY}, so its implement waits: approve the "
+        f"plan again if it still fits (canopy plan {KEY} --approve), or ask for a new one (canopy plan {KEY})"
+    )
+    records.update(records.Ticket).set(branch=f"agent/{KEY}-work").where("key = ?", KEY).run(observed)
+    observed.commit()
+    assert "epic_changed" not in reasons(canopy_env)
 
 
 def test_a_unit_whose_pr_no_source_reads_names_its_url(canopy_env: CanopyEnv, observed: sqlite3.Connection) -> None:

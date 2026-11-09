@@ -383,6 +383,7 @@ export const mockEpicDetails: EpicDetail[] = [
                     status: 'done',
                     state: 'done',
                 },
+                epic_changed: [],
             },
             {
                 key: 'ABC-104',
@@ -399,6 +400,7 @@ export const mockEpicDetails: EpicDetail[] = [
                     status: 'running',
                     state: 'running',
                 },
+                epic_changed: [],
             },
             {
                 key: 'ABC-100',
@@ -415,6 +417,7 @@ export const mockEpicDetails: EpicDetail[] = [
                     status: 'failed',
                     state: 'failed',
                 },
+                epic_changed: [],
             },
         ],
         bound: 8,

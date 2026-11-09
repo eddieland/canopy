@@ -263,7 +263,7 @@ test("each ticket's and PR's own runs, the costliest first, open their pages bes
     await expect(page.getByTestId('spend-day-2026-10-08').locator('td').last()).toHaveText('0')
 
     const tickets = page.getByTestId('spend-ticket-table').locator('tbody tr')
-    await expect(tickets).toHaveCount(7)
+    await expect(tickets).toHaveCount(8)
     // ABC-099's two runs and the two reviews of its PR.
     await expect(tickets.first()).toHaveAttribute('data-testid', 'spend-ticket-ABC-099')
     await expect(tickets.first().locator('td').nth(1)).toHaveText('$3.50')

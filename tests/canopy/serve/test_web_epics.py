@@ -12,7 +12,7 @@ from tests.canopy.helpers import present
 from tests.canopy.web_helpers import client, replan_epic, start_epic_run
 
 APPROVED, PROPOSED, PLANNING = mock_epics.APPROVED, mock_epics.PROPOSED, mock_epics.PLANNING
-STOPPED = mock_epics.STOPPED
+STOPPED, HELD = mock_epics.STOPPED, mock_epics.HELD
 
 
 def test_the_mock_epics_are_listed_newest_first_each_where_it_stands(backend: Backend) -> None:
@@ -32,7 +32,7 @@ def test_the_mock_epics_are_listed_newest_first_each_where_it_stands(backend: Ba
     assert (proposed["entries"], proposed["entries_with_members"]) == (3, 0)
     # Only the two with a plan are planned.
     assert [e["planned"] for e in listed] == [False, False, True, True]
-    assert (approved["repos"], approved["project"], approved["members"]) == (["api", "web", "mobile"], "ABC", 3)
+    assert (approved["repos"], approved["project"], approved["members"]) == (["api", "web", "mobile"], "ABC", 4)
     assert (approved["entries"], approved["entries_with_members"]) == (4, 2)
 
 
@@ -45,7 +45,12 @@ def test_an_approved_epic_leads_with_its_breakdown_beside_its_members(backend: B
     assert [r["id"] for r in outline["requirements"]] == ["R1", "R2", "R3"]
     assert [c["id"] for c in outline["contracts"]] == ["C1"]
     entries = {e["id"]: e for e in outline["entries"]}
-    assert {i: e["members"] for i, e in entries.items()} == {"B1": ["ABC-103"], "B2": ["ABC-104"], "B3": [], "B4": []}
+    assert {i: e["members"] for i, e in entries.items()} == {
+        "B1": ["ABC-103"],
+        "B2": ["ABC-104", HELD],
+        "B3": [],
+        "B4": [],
+    }
     assert (entries["B2"]["uses"], entries["B2"]["repos"], entries["B2"]["after"]) == (
         ["C1"],
         ["mobile", "web"],
@@ -54,7 +59,7 @@ def test_an_approved_epic_leads_with_its_breakdown_beside_its_members(backend: B
     assert entries["B4"]["trivial"] is not None
     assert all(e["trivial"] is None for i, e in entries.items() if i != "B4")
     members = {m["key"]: m for m in found["members"]}
-    assert list(members) == ["ABC-103", "ABC-104", "ABC-100"]
+    assert list(members) == ["ABC-103", "ABC-104", "ABC-100", HELD]
     # One with a PR, one running, one registered against no entry.
     assert (members["ABC-103"]["entries"], members["ABC-103"]["prs"]) == (
         ["B1"],
@@ -63,7 +68,15 @@ def test_an_approved_epic_leads_with_its_breakdown_beside_its_members(backend: B
     assert (members["ABC-104"]["entries"], members["ABC-104"]["latest_run"]["state"]) == (["B2"], "running")
     assert (members["ABC-100"]["entries"], members["ABC-100"]["dropped"]) == ([], [])
     assert members["ABC-103"]["phase"] == "review_pending"
-    assert [r["plan_id"] for r in found["runs"]] == [outline["plan_id"]]
+    # The second approval changed C1, which reached every member: the one approved with no branch yet is held.
+    assert {k: m["epic_changed"] for k, m in members.items()} == {
+        "ABC-103": [],
+        "ABC-104": [],
+        "ABC-100": [],
+        HELD: ["C1"],
+    }
+    first, second = found["runs"]
+    assert (first["plan_id"] < second["plan_id"], second["plan_id"]) == (True, outline["plan_id"])
 
 
 def test_a_proposed_epic_shows_its_plan_marked_proposed_and_the_reply_it_answers(backend: Backend) -> None:
@@ -107,7 +120,8 @@ def test_an_epics_plans_are_each_as_its_file_stands(backend: Backend) -> None:
         plan = present(epics.current_plan(ctx.conn, APPROVED))
         path = epics.plan_path(ctx.state_dir, APPROVED, plan.run_id)
     path.write_text(f"{path.read_text()}\nAn edit after the approval.\n")
-    [approved] = c.get(f"/api/epics/{APPROVED}/plans").json()["plans"]
+    first, approved = c.get(f"/api/epics/{APPROVED}/plans").json()["plans"]
+    assert (first["plan"]["status"], first["changed_since_approval"]) == ("superseded", False)
     assert (approved["edited"], approved["changed_since_approval"]) == (True, True)
     assert c.get(f"/api/epics/{APPROVED}").json()["outline"]["problem"] is None
 
@@ -136,9 +150,14 @@ def test_an_approved_copy_changed_since_is_its_problem_and_keeps_every_registrat
         copy = epics.approved_path(ctx.state_dir, APPROVED, plan.run_id, present(plan.approved_sha256))
     copy.write_text(copy.read_text().replace("Retire", "Keep"))
     found = c.get(f"/api/epics/{APPROVED}").json()
-    assert "is not the plan approved by run 1" in found["outline"]["problem"]
+    assert f"is not the plan approved by run {plan.run_id}" in found["outline"]["problem"]
     assert found["outline"]["entries"] == []
-    assert {m["key"]: m["entries"] for m in found["members"]} == {"ABC-103": ["B1"], "ABC-104": ["B2"], "ABC-100": []}
+    assert {m["key"]: m["entries"] for m in found["members"]} == {
+        "ABC-103": ["B1"],
+        "ABC-104": ["B2"],
+        "ABC-100": [],
+        HELD: ["B2"],
+    }
 
 
 def test_a_member_whose_entry_a_later_approval_dropped_comes_back_as_such(backend: Backend) -> None:
@@ -158,7 +177,7 @@ def test_a_member_whose_entry_a_later_approval_dropped_comes_back_as_such(backen
         )
     found = client(None, backend).get(f"/api/epics/{APPROVED}").json()
     members = {m["key"]: (m["entries"], m["dropped"]) for m in found["members"]}
-    assert members == {"ABC-103": (["B1"], []), "ABC-104": ([], ["B2"]), "ABC-100": ([], [])}
+    assert members == {"ABC-103": (["B1"], []), "ABC-104": ([], ["B2"]), "ABC-100": ([], []), HELD: ([], ["B2"])}
     assert [e["id"] for e in found["outline"]["entries"]] == ["B1", "B3", "B4"]
     assert (found["epic"]["entries"], found["epic"]["entries_with_members"]) == (3, 1)
 

@@ -86,7 +86,7 @@ member, of no entry. Each reached member, by where it stands:
 
 - a plan still `proposed` is superseded as stale, and the next `plan` is told the changed ids;
 - an approved plan with no branch yet has its `implement` refused, `epic_changed`, until the operator approves it again
-  or asks for a new one;
+  or asks for a new one; the harness raises `epic_changed` (§14) about it while it holds, from the guard's own test;
 - a run in flight, or a ticket with a branch or a PR, is never touched: its next run is told the changed ids once, as
   data. Nothing built is rewritten;
 - a trivial member with no branch yet is approved again while the new plan still marks it trivial.

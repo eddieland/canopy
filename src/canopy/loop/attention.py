@@ -46,6 +46,7 @@ from canopy.core import (
     contract,
     conversation,
     db,
+    epic_changes,
     kept_items,
     memory,
     sql,
@@ -124,9 +125,13 @@ UNOBSERVED_PR = "unobserved_pr"
 #: A ticket whose title or description, as observed, changed since its current plan was approved: the harness warns of
 #: it from its cause beside `FROM_CAUSES` and refuses nothing on it (`loop.harness_items`, DESIGN §25).
 TICKET_CHANGED = "ticket_changed"
+#: A member ticket whose `implement` a change of its epic's plan holds, its approved plan reached and no branch yet:
+#: the harness raises it from its cause beside `FROM_CAUSES` while the dispatch guard refuses one (`loop.harness_items`,
+#: DESIGN §43).
+EPIC_CHANGED = epic_changes.REASON
 #: What the harness raises from its causes beside `FROM_CAUSES`, which the overseer never recorded: its attention tool
 #: refuses each as it does those.
-ONLY_FROM_CAUSES: frozenset[str] = frozenset({CHECK_STUCK, UNOBSERVED_PR, TICKET_CHANGED})
+ONLY_FROM_CAUSES: frozenset[str] = frozenset({CHECK_STUCK, UNOBSERVED_PR, TICKET_CHANGED, EPIC_CHANGED})
 #: What the harness raises from its causes in the journal (`loop.harness_items`, DESIGN §14, §37), which the overseer
 #: recorded until the harness held them: its attention tool refuses each.
 FROM_CAUSES: frozenset[str] = frozenset(

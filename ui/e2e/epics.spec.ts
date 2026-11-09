@@ -3,8 +3,9 @@ import type { Page } from '@playwright/test'
 
 import { holdStreamEvents, settled, signIn } from './helpers.ts'
 
-// An epic's page (ui/DESIGN.md, "An epic"), over the mock journal's epics: epic 1 approved, with members; epic 2
-// proposed, after a reply; epic 3 just submitted, its plan run at work; epic 4 stopped before any plan run started.
+// An epic's page (ui/DESIGN.md, "An epic"), over the mock journal's epics: epic 1 approved twice, with members, one
+// of them held by the second approval; epic 2 proposed, after a reply; epic 3 just submitted, its plan run at work;
+// epic 4 stopped before any plan run started.
 
 test.beforeEach(async ({ page }) => {
     // The tests answer epics' reads as their writes would have left them; the stream would send the journal's instead.
@@ -48,6 +49,10 @@ test("the list opens an epic's page, which leads with its breakdown beside its m
     await expect(
         page.getByTestId('members-of-no-entry').getByRole('link', { name: 'ABC-100', exact: true }),
     ).toBeVisible()
+    // The second approval changed C1 under ABC-107's approved plan, before its implement: its row says it is held.
+    const b2 = page.getByTestId('entry-B2')
+    await expect(b2.getByText('held (epic_changed)')).toHaveCount(1)
+    await expect(page.getByText('held (epic_changed)')).toHaveCount(1)
 })
 
 test('pointing at a requirement lights the entries that cover it, and the id wherever it shows', async ({ page }) => {
@@ -399,8 +404,16 @@ test("a member's ticket page names its epic, one click from it, and its plan the
     await expect(followed).toContainText('follows')
     await expect(followed).toContainText('epic:1’s plan')
     await expect(followed).toContainText(/approved \S+ ago/u)
-    // The mock's epic has approved no plan since.
-    await expect(page.getByTestId('plan-epic-newer')).toHaveCount(0)
+    // The mock's epic approved a newer plan since, which only tells ABC-103, whose work has a branch.
+    await expect(page.getByTestId('plan-epic-newer')).toContainText('A newer epic plan was approved')
+    await expect(page.getByText('held (epic_changed)')).toHaveCount(0)
+
+    // ABC-107's implement is held: its plan says so, and why, and offers Approve again.
+    await page.goto('tickets/ABC-107/plan')
+    await settled(page)
+    await expect(page.getByText('held (epic_changed)')).toBeVisible()
+    await expect(page.getByRole('main')).toContainText('Its epic’s plan changed C1 since you approved this plan')
+    await expect(page.getByTestId('plan-actions').getByRole('button', { name: 'Approve' })).toBeVisible()
 
     // A member of no entry says so; a ticket of no epic names none.
     await page.goto('tickets/ABC-100')

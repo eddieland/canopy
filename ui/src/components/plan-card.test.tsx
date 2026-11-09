@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, screen } from '@testing-library/react'
+import { cleanup, fireEvent, screen, within } from '@testing-library/react'
 import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
@@ -36,6 +36,7 @@ const PLANS: TicketPlans = {
         edited: false,
         changed_since_approval: false,
         ticket_changed: [],
+        epic_changed: [],
         persona: null,
     },
     threads: [
@@ -146,6 +147,22 @@ describe('PlanCard', () => {
         const card = await screen.findByTestId('plan-card')
         expect(card.textContent).toContain(
             'Its ticket’s title and description changed since you approved it: approve it again if it still fits.',
+        )
+        fireEvent.click(await screen.findByRole('button', { name: 'Approve' }))
+        await screen.findByRole('status')
+        expect(sent).toEqual([{ path: '/api/tickets/ABC-1/plan', body: { action: 'approve' } }])
+    })
+
+    it('says a change of its epic held its implement, and offers Approve again, which lifts it', async () => {
+        const approved = { ...PLAN, status: 'approved' as const, approved_at: '2026-10-08T11:30:00Z' }
+        const newest = PLANS.newest === null ? null : { ...PLANS.newest, plan: approved, epic_changed: ['C1', 'R2'] }
+        await renderCard({ newest })
+        const card = await screen.findByTestId('plan-card')
+        expect(within(card).getByText('held (epic_changed)')).toBeTruthy()
+        expect(within(card).queryByText('approved')).toBeNull()
+        expect(card.textContent).toContain(
+            'Its epic’s plan changed C1, R2 since you approved this plan, so its implement waits: approve it again ' +
+                'if it still fits, or ask for a new one.',
         )
         fireEvent.click(await screen.findByRole('button', { name: 'Approve' }))
         await screen.findByRole('status')

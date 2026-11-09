@@ -15,6 +15,8 @@ export const REASON_MEANINGS: Readonly<Record<string, string>> = {
     plan_changed: 'An approved plan’s file changed: approve it again, plan anew, or skip the plan.',
     ticket_changed:
         'A ticket changed since you approved its plan, which goes ahead: approve it again, plan anew, or skip.',
+    epic_changed:
+        'Its epic’s plan changed since you approved its plan, so its implement waits: approve it again, or plan anew.',
     drafts_waiting: 'A run drafted replies for you: edit, drop, or send each.',
     review_waiting: 'A review you asked for is done: read its draft, then publish or discard it.',
     review_unsettled: 'A review you staged waits for you to submit or delete it on GitHub, or its publish is unknown.',

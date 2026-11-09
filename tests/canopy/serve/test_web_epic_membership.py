@@ -13,13 +13,14 @@ from canopy.serve.mock import epics as mock_epics
 from tests.canopy.helpers import present
 from tests.canopy.web_helpers import replan_epic, signed_in_to
 
-APPROVED = mock_epics.APPROVED
+APPROVED, HELD = mock_epics.APPROVED, mock_epics.HELD
 
 
 def test_a_member_names_its_epic_and_entries_and_its_plan_the_epic_plan_it_follows(backend: Backend) -> None:
     c, _ = signed_in_to(backend)
     with backend.open() as ctx:
-        followed = present(epics.approved_plan(ctx.conn, APPROVED))
+        # Its planner read the epic's first approved plan; the operator approved a second since.
+        followed, newer = epics.plans_of(ctx.conn, APPROVED)
     membership = c.get("/api/tickets/ABC-103").json()["membership"]
     assert {k: membership[k] for k in ("epic_id", "entries", "dropped")} == {
         "epic_id": APPROVED,
@@ -32,10 +33,31 @@ def test_a_member_names_its_epic_and_entries_and_its_plan_the_epic_plan_it_follo
         "plan_id": followed.id,
         "sha256": followed.approved_sha256,
         "approved_at": followed.approved_at,
-        "newer_approved_at": None,
+        "newer_approved_at": newer.approved_at,
     }
     assert _timed(plans["newest"]["plan"]["epic_plan"]) == epic_plan
     assert [_timed(p["epic_plan"]) for p in plans["plans"]] == [epic_plan]
+    # With a branch, it is only told of the change: nothing holds its work.
+    assert plans["newest"]["epic_changed"] == []
+
+
+def test_a_held_members_plan_names_the_ids_that_hold_its_implement_until_approved_again(backend: Backend) -> None:
+    """The plan page and the epic's board read the dispatch guard's own test, so neither says more than it refuses."""
+    c, headers = signed_in_to(backend)
+    plans = c.get(f"/api/tickets/{HELD}/plans").json()
+    assert (plans["newest"]["plan"]["status"], plans["newest"]["epic_changed"]) == ("approved", ["C1"])
+    members = {m["key"]: m for m in c.get(f"/api/epics/{APPROVED}").json()["members"]}
+    assert members[HELD]["epic_changed"] == ["C1"]
+    [item] = [i for i in c.get("/api/attention").json() if i["reason"] == "epic_changed"]
+    assert item["ticket_key"] == HELD
+    assert item["detail"].startswith(f"epic:{APPROVED}'s plan changed C1 since you approved plan ")
+
+    # Approving it again, as its file stands, is the operator's word that it still fits.
+    approval = c.post(f"/api/tickets/{HELD}/plan", json={"action": "approve"}, headers=headers)
+    assert approval.status_code == 200, approval.text
+    assert c.get(f"/api/tickets/{HELD}/plans").json()["newest"]["epic_changed"] == []
+    members = {m["key"]: m for m in c.get(f"/api/epics/{APPROVED}").json()["members"]}
+    assert members[HELD]["epic_changed"] == []
 
 
 def test_a_member_of_no_entry_names_its_epic_alone(backend: Backend) -> None:
@@ -54,6 +76,7 @@ def test_a_ticket_of_no_epic_and_its_plans_name_none(backend: Backend) -> None:
 def test_a_plan_written_against_an_older_epic_plan_says_a_newer_one_was_approved(backend: Backend) -> None:
     c, headers = signed_in_to(backend)
     with backend.open() as ctx:
+        followed = epics.plans_of(ctx.conn, APPROVED)[0]
         old = present(epics.approved_plan(ctx.conn, APPROVED))
         text = epics.plan_path(ctx.state_dir, APPROVED, old.run_id).read_text()
         # The next plan drops B2, which nothing else waited on: ABC-104 was registered against it.
@@ -67,8 +90,8 @@ def test_a_plan_written_against_an_older_epic_plan_says_a_newer_one_was_approved
 
     # ABC-103's plan still names the plan its planner read, and says a newer one was approved since.
     epic_plan = _timed(c.get("/api/tickets/ABC-103/plans").json()["newest"]["plan"]["epic_plan"])
-    assert (epic_plan["plan_id"], epic_plan["sha256"]) == (old.id, old.approved_sha256)
-    assert (epic_plan["approved_at"], epic_plan["newer_approved_at"]) == (old.approved_at, newer.approved_at)
+    assert (epic_plan["plan_id"], epic_plan["sha256"]) == (followed.id, followed.approved_sha256)
+    assert (epic_plan["approved_at"], epic_plan["newer_approved_at"]) == (followed.approved_at, newer.approved_at)
     # B1 is still the newer plan's; B2 is not, so ABC-104 is a member of the entries left, none.
     assert c.get("/api/tickets/ABC-103").json()["membership"]["entries"] == ["B1"]
     membership = c.get("/api/tickets/ABC-104").json()["membership"]

@@ -177,6 +177,7 @@ The overseer may record other reasons; the detail says what it wants.
 | `plan_review` | A plan waits: `canopy show KEY`, then `canopy plan KEY --approve` or `canopy reply KEY`. |
 | `plan_changed` | An approved plan's file changed: approve it again, `canopy plan KEY` for a new one, or `--skip`. |
 | `ticket_changed` | The ticket's title or description changed since you approved its plan, whose work goes ahead anyway: if the plan still fits, approve it again; else `canopy plan KEY` for a new one, or `--skip`. |
+| `epic_changed` | A change of its epic's plan holds the member's implement: if its approved plan still fits, approve it again; else `canopy plan KEY` for a new one. |
 | `attempt_limit` | The ticket used up its attempts of one kind: take it over, or `canopy grant KEY KIND`. |
 | `crashed`, `unpushed`, `unknown_result`, `worker_failed` | A run went wrong: read the run log the detail names. |
 | `chore_failed` | A chore's latest run could not check (failed, timed out, crashed): read its log. |

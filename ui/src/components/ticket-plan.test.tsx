@@ -33,6 +33,7 @@ const NEWEST: PlanFile = {
     edited: false,
     changed_since_approval: false,
     ticket_changed: [],
+    epic_changed: [],
     persona: null,
 }
 const PLANS: TicketPlans = {
@@ -261,6 +262,19 @@ describe('TicketPlan', () => {
             const newest = { ...NEWEST, plan: { ...approved, approved_channel: 'web' } }
             expect(await state({ newest: { ...newest, ticket_changed: ['title', 'description'] } })).toMatch(
                 /^Written by run:50, approved \S+ ago via web, its ticket’s title and description changed since\. $/u,
+            )
+        })
+
+        it('says a change of its epic holds its implement until it is approved again', async () => {
+            const approved = { ...PLAN, status: 'approved' as const, approved_at: '2026-10-08T11:30:00Z' }
+            const newest = { ...NEWEST, plan: { ...approved, approved_channel: 'web' } }
+            expect(await state({ newest: { ...newest, epic_changed: ['C1'] } })).toMatch(
+                new RegExp(
+                    '^Written by run:50, approved \\S+ ago via web\\. Its epic’s plan changed C1 since you ' +
+                        'approved this plan, so its implement waits: approve it again if it still fits, or ask for a ' +
+                        'new one\\.$',
+                    'u',
+                ),
             )
         })
 

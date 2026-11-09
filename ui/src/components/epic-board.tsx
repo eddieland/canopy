@@ -10,6 +10,7 @@ import { OutlineId } from '@/components/epic-ids'
 import { MemberForm, RemoveButton, RemoveQuestion } from '@/components/epic-members'
 import { Notice } from '@/components/notice'
 import { Empty, Panel, PanelFooter, PanelHeader } from '@/components/panel'
+import { EpicHeldChip } from '@/components/plan-card'
 import { Chip, RunDot, Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
@@ -350,8 +351,9 @@ function Ids({ ids }: { ids: readonly string[] }) {
 }
 
 /**
- * A member as the board names it: its latest run's dot, its key opening its page, and its phase, muted, then `remove`,
- * its Remove, where the operator may remove it. One with no run yet keeps the dot's room, so the keys line up.
+ * A member as the board names it: its latest run's dot, its key opening its page, its phase, muted, and, while a change
+ * of the epic's plan holds its implement, `held (epic_changed)`, as its plan's page says it, then `remove`, its Remove,
+ * where the operator may remove it. One with no run yet keeps the dot's room, so the keys line up.
  */
 function MemberLine({ member, remove = null }: { member: EpicMember; remove?: ReactNode }) {
     return (
@@ -370,6 +372,7 @@ function MemberLine({ member, remove = null }: { member: EpicMember; remove?: Re
             {member.phase !== null && (
                 <Word word={member.phase} meaning={phaseMeaning(member.phase)} className="text-muted-foreground" />
             )}
+            {member.epic_changed.length > 0 && <EpicHeldChip ids={member.epic_changed} />}
             {remove}
         </span>
     )
@@ -461,5 +464,6 @@ function stranger(key: string): EpicMember {
         phase: null,
         prs: [],
         latest_run: null,
+        epic_changed: [],
     }
 }

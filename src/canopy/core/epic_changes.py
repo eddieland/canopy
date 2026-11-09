@@ -5,8 +5,9 @@ the change reaches where it stands, in the approval's own transaction, with the 
 decides between the two:
 
 - a plan still `proposed` is superseded as stale, naming the ids that reached it;
-- an approved plan whose ticket has no branch yet holds its `implement` (`epic_changed`, checked at dispatch) until the
-  operator approves the plan again or asks for a new one;
+- an approved plan whose ticket has no branch yet holds its `implement` (`epic_changed`) until the operator approves the
+  plan again or asks for a new one: `held` says so, the one test the dispatch guard, the attention item, and the web UI
+  read;
 - a run in flight, or a ticket with a branch, is never paused or touched.
 
 Each keeps the ids that reached it as its pending notice, which its next plan run is told once, as data (`told`), and
@@ -30,6 +31,8 @@ if TYPE_CHECKING:
 
 #: How an approval met a member it reached, as `Reached` names the ways.
 type Way = Literal["stale", "held", "told"]
+#: The guard that refuses a held member's `implement`, and the attention item the harness raises while it holds.
+REASON = "epic_changed"
 
 
 @dataclass(frozen=True)
@@ -54,6 +57,26 @@ class Pending:
 
     epic_id: int
     ids: Sequence[str]
+
+
+@dataclass(frozen=True)
+class Held:
+    """A member's `implement` a change of its epic's plan holds (`epic_changed`), and what holds it."""
+
+    key: str
+    epic_id: int
+    #: The ids of the epic's plan whose change reached it, in the plan's order.
+    ids: Sequence[str]
+    #: The ticket's approved plan they reached.
+    plan_id: int
+
+    def detail(self) -> str:
+        """Return what the operator is told of it, in the harness's own words: the attention item's detail."""
+        return (
+            f"epic:{self.epic_id}'s plan changed {', '.join(self.ids)} since you approved plan {self.plan_id} of "
+            f"{self.key}, so its implement waits: approve the plan again if it still fits (canopy plan {self.key} "
+            f"--approve), or ask for a new one (canopy plan {self.key})"
+        )
 
 
 def reach(
@@ -95,6 +118,23 @@ def pending(conn: sqlite3.Connection, key: str) -> Pending | None:
     return Pending(epic_id=member.epic_id, ids=epic_outline.ordered(_split(member.changed_ids)))
 
 
+def held(conn: sqlite3.Connection, key: str) -> Held | None:
+    """Return what holds ticket `key`'s `implement` (`epic_changed`), or None while nothing does.
+
+    Its pending notice holds it while the ticket's current plan is approved and the ticket has no branch: a plan
+    waiting on the operator is theirs to approve anyway, and a ticket with a branch keeps to its own approved plan, only
+    told. The one test the dispatch guard, the attention item, and the web UI read, so none says what another does not.
+    """
+    found = pending(conn, key)
+    if found is None:
+        return None
+    ticket = db.get_ticket(conn, key)
+    plan = _current_plan(conn, key)
+    if (ticket is not None and ticket.branch) or plan is None or plan.status is not PlanStatus.APPROVED:
+        return None
+    return Held(key=key, epic_id=found.epic_id, ids=found.ids, plan_id=plan.id)
+
+
 def told(conn: sqlite3.Connection, key: str, ids: Iterable[str]) -> None:
     """Take `ids` out of ticket `key`'s pending notice: a run was told them. Call inside the run's insert.
 
@@ -124,7 +164,7 @@ def _meet(conn: sqlite3.Connection, member: records.EpicMember, ids: AbstractSet
     """
     key = member.ticket_key
     ticket = db.get_ticket(conn, key)
-    plan = records.select(records.Plan).where("ticket_key = ? AND status != ?", key, PlanStatus.SUPERSEDED).one(conn)
+    plan = _current_plan(conn, key)
     notice = _split(member.changed_ids)
     way: Way | None
     if db.running_run_of(conn, key) is not None or (ticket is not None and ticket.branch):
@@ -141,6 +181,11 @@ def _meet(conn: sqlite3.Connection, member: records.EpicMember, ids: AbstractSet
     if way is not None:
         _set_pending(conn, member, notice | ids)
     return way
+
+
+def _current_plan(conn: sqlite3.Connection, key: str) -> records.Plan | None:
+    """Return ticket `key`'s plan not superseded, waiting or approved, as `plans.current` does, which imports this."""
+    return records.select(records.Plan).where("ticket_key = ? AND status != ?", key, PlanStatus.SUPERSEDED).one(conn)
 
 
 def _membership(conn: sqlite3.Connection, key: str) -> records.EpicMember | None:

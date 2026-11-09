@@ -74,6 +74,20 @@ canopy epic add epic:2 ABC-140 --entry B1
 canopy epic remove epic:2 ABC-140
 ```
 
+### When its plan changes
+
+Approving a newer plan of the epic rewrites nothing built. canopy compares its ids with the plan you approved before,
+and meets each member the change reaches where it stands: a plan of its still waiting on you is set aside as stale and
+planned again, told which ids changed; a run at work, or a ticket with a branch, is left alone and told at its next
+run. You hear once, as an `epic.changed` notification naming them.
+
+A member whose plan you approved, and whose implement hasn't started, is held: canopy refuses its implement until you
+approve its plan again or ask for a new one. Its plan's page and its row on the epic's board say
+`held (epic_changed)`, with the ids that reached it on hover, and an `epic_changed` item on [Attention](attention)
+waits on you until you decide. **Approve** on its plan says the plan still fits the epic as it is now; asking for a
+new plan sends its planner back, told what changed. It is the one place canopy asks you to approve a plan you already
+approved, on purpose: the ground moved under it, and only you know whether it still stands.
+
 ## The list
 
 [Epics](/epics) lists every epic you submitted, the newest first. Each row leads with where the epic stands, in the
@@ -113,9 +127,10 @@ beside it [stops the epic](#stopping-one).
 **Breakdown** leads, at the page's width: a row per entry, in the plan's order. Each row has the entry's `B` id and
 title, `trivial` when the plan marks it so (hover it for why), the requirements it covers, the contracts it provides
 and uses, its repositories, the entries it comes after, and its members: each ticket's key, opening its page, with
-the dot of its latest run and its phase. An entry with no member says `none yet`: that is what's left to file. Before
-you approve a plan, the board is the proposed plan's, marked `proposed`, and every entry is still to file. The mark,
-`proposed` or `approved`, opens the plan it names. With no
+the dot of its latest run and its phase, then `held (epic_changed)` while
+[a change of the epic's plan](#when-its-plan-changes) holds its implement. An entry with no member says `none yet`:
+that is what's left to file. Before you approve a plan, the board is the proposed plan's, marked `proposed`, and every
+entry is still to file. The mark, `proposed` or `approved`, opens the plan it names. With no
 plan yet, the board is one line: the plan run writing it, or what starts the next. A plan canopy can't read says why
 in place of the rows. Under the board come the members it has no row for: those of no entry, with their titles, and
 those registered against an entry the approved plan has since dropped.

@@ -16,7 +16,7 @@ import { RunLink } from '@/components/run-link'
 import { Chip } from '@/components/status'
 import { Button } from '@/components/ui/button'
 import { planText } from '@/lib/outcomes'
-import { planApprovable, planNeededWhy, planWaits, ticketChangedNote } from '@/lib/plan-state'
+import { epicHeld, epicHeldNote, planApprovable, planNeededWhy, planWaits, ticketChangedNote } from '@/lib/plan-state'
 import { planRef } from '@/lib/refs'
 import { cn } from '@/lib/utils'
 
@@ -124,8 +124,9 @@ export function PlanCard({
 /**
  * Where a ticket's plan stands, in words, as a chip: `waiting on you` in the blocked tone while its newest plan waits
  * on the operator, as everything that waits on them reads; `changes asked` in the running tone while a proposed plan
- * waits on the planner for the changes the operator asked; else its status. With no plan at all, whether the ticket
- * needs one, and why (its own setting or `policy.plan`) on hover.
+ * waits on the planner for the changes the operator asked; `held (epic_changed)` in the blocked tone while a change of
+ * its epic's plan holds its implement; else its status. With no plan at all, whether the ticket needs one, and why
+ * (its own setting or `policy.plan`) on hover.
  */
 export function PlanChip({ plans }: { plans: TicketPlans }) {
     const newest = plans.newest?.plan
@@ -140,10 +141,27 @@ export function PlanChip({ plans }: { plans: TicketPlans }) {
     if (planWaits(plans)) {
         return <Chip tone="blocked">waiting on you</Chip>
     }
+    if (plans.newest !== null && epicHeld(plans.newest)) {
+        return <EpicHeldChip ids={plans.newest.epic_changed} />
+    }
     return changesAsked(plans) && newest.status === 'proposed' ? (
         <Chip tone="running">changes asked</Chip>
     ) : (
         <Chip>{newest.status}</Chip>
+    )
+}
+
+/**
+ * `held (epic_changed)` in the blocked tone, as everything that waits on the operator reads: a change of its epic's
+ * plan reached a member's approved plan, by `ids`, before its ticket had a branch, so its implement waits until they
+ * approve the plan again or ask for a new one (DESIGN §43). Why, on hover. The member's plan page and its row on the
+ * epic's board both show it.
+ */
+export function EpicHeldChip({ ids }: { ids: readonly string[] }) {
+    return (
+        <span title={epicHeldNote(ids)} className="inline-flex">
+            <Chip tone="blocked">held (epic_changed)</Chip>
+        </span>
     )
 }
 
@@ -221,6 +239,9 @@ function cardNote(plans: TicketPlans, open: number): string | null {
     }
     if (!planApprovable(plans)) {
         return 'Read it and its earlier plans on its page.'
+    }
+    if (epicHeld(plans.newest)) {
+        return epicHeldNote(plans.newest.epic_changed)
     }
     const ticketChanged = ticketChangedNote(plans.newest)
     if (ticketChanged !== null) {

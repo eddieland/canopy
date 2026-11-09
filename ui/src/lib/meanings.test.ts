@@ -20,6 +20,7 @@ describe('meanings', () => {
         expect(reasonMeaning('review_late')).toMatch(/unchanged since the PR’s first review/u)
         expect(reasonMeaning('unobserved_pr')).toMatch(/no source reads it/u)
         expect(reasonMeaning('ticket_changed')).toMatch(/which goes ahead/u)
+        expect(reasonMeaning('epic_changed')).toMatch(/its implement waits/u)
         expect(reasonMeaning('the_overseers_own')).toBeNull()
         expect(phaseMeaning('ci_red')).toBe('Its PR’s checks failed.')
         expect(phaseMeaning('not_a_phase')).toBeNull()

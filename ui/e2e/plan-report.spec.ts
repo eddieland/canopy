@@ -12,10 +12,10 @@ test("the nav opens Plans under Reports, September's plans split by level", asyn
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Plans', exact: true }).click()
     await expect(page).toHaveURL(/\/reports\/plans$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Plans')
-    // The mock's 30 days: September's planned tickets, at off and strict, ABC-105's two, and ABC-103's
+    // The mock's 30 days: September's planned tickets, at off and strict, ABC-105's two, and ABC-103's and ABC-107's
     // (canopy/serve/mock/).
     await expect(page.locator('main header p')).toHaveText(
-        '9 plans · 6 approved, 2 by the planner · 2 of 6 PRs needed a resume over 30 days',
+        '10 plans · 7 approved, 2 by the planner · 2 of 6 PRs needed a resume over 30 days',
     )
     await expect(page.getByTestId('plans-window-30')).toHaveAttribute('data-state', 'on')
     await expect(page.getByTestId('plans-group-table').getByTestId('plans-group')).toHaveCount(4)

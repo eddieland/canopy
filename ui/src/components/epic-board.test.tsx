@@ -78,6 +78,18 @@ describe('EpicBoard', () => {
         expect(within(screen.getByTestId('entry-B1')).queryByText('ABC-104')).toBeNull()
     })
 
+    it("marks a member whose implement a change of the epic's plan holds, on its row, and no other", async () => {
+        const shown = detail(1)
+        const members = shown.members.map((m) => (m.key === 'ABC-104' ? { ...m, epic_changed: ['C1'] } : m))
+        await board({ ...shown, members })
+        const held = within(screen.getByTestId('entry-B2')).getByText('held (epic_changed)')
+        expect(held.closest('[title]')?.getAttribute('title')).toBe(
+            'Its epic’s plan changed C1 since you approved this plan, so its implement waits: approve it again if ' +
+                'it still fits, or ask for a new one.',
+        )
+        expect(screen.getAllByText('held (epic_changed)')).toHaveLength(1)
+    })
+
     it('marks a trivial entry, with the reason in its tip', async () => {
         await board(detail(1))
         const mark = within(screen.getByTestId('entry-B4')).getByText('trivial')
