@@ -397,7 +397,8 @@ or **90 days** were approved, and whether the PR that followed each one needed a
 [`policy.planner_may_approve`](plans#when-the-planner-says-a-plan-needs-no-review): a plan you approved in a minute
 without a word says little about the plan, and a lot about your Tuesday. Whether its PR then needed three resumes says
 more. The line under the title is the window at a glance, `9 plans · 5 approved, 2
-by the planner · 2 of 5 PRs needed a resume over 30 days`.
+by the planner · 2 of 5 PRs needed a resume over 30 days`. `canopy plans` prints the same tables in the terminal, and
+`canopy plans --json` every plan as data, for when the numbers are going into a write-up rather than a glance.
 
 Each plan went one of six ways: approved **by the planner**, on its word that it needs no review; approved by you
 **as written**, the ticket's first plan with no edit and no comment; **revised**, approved after you edited it,

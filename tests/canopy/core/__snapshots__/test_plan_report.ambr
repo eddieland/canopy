@@ -1,0 +1,22 @@
+# serializer version: 1
+# name: test_the_report_is_printed_as_tables
+  '''
+  Plans written over 7 days, since 2026-10-02 UTC: how they were approved, and what their PRs needed after.
+  6 plans: 3 approved, 1 by the planner; 1 sent back, 1 dropped, 1 waiting on you.
+  
+  Approved, by the level their planner was offered and how they went:
+  level       how         plans  edited  commented  replanned  to approve  lines  words  built  resumed  resumes  done
+  off         as written      1       0          0          0       1h00m     71    121      1        0        0     1
+  strict      planner         1       0          0          0           -      3      3      1        1        2     0
+  unrecorded  revised         1       1          0          1       3h00m    232   4005      0        0        0     0
+  
+  Approved by you, by length in the plan editor's lines (50 a page):
+  lines    plans  to approve  as written
+  50-99        1       1h00m           1
+  200-299      1       3h00m           0
+  
+  Built counts the plans an implement followed; resumed, those of them whose ticket then needed a resume. A
+  ticket's resumes keep coming until it is done: done counts the plans whose resumes are final.
+  policy.planner_may_approve is strict now.
+  '''
+# ---

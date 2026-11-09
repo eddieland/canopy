@@ -78,6 +78,22 @@ def render(found: Latencies) -> list[str]:
     return lines
 
 
+def duration_text(seconds: float | None) -> str:
+    """A duration to the second, as the reports print it: `45s`, `2m05s`, or `1h02m`.
+
+    Returns:
+        The text; `-` for none.
+    """
+    if seconds is None:
+        return "-"
+    sign, whole = ("-" if seconds < 0 else ""), round(abs(seconds))
+    if whole < _MINUTE:
+        return f"{sign}{whole}s"
+    if whole < _HOUR:
+        return f"{sign}{whole // _MINUTE}m{whole % _MINUTE:02d}s"
+    return f"{sign}{whole // _HOUR}h{whole % _HOUR // _MINUTE:02d}m"
+
+
 def _name(row: KindLatency) -> str:
     # The kind as the table names it.
     return _KIND_NAMES.get(row.kind, row.kind)
@@ -90,19 +106,7 @@ def _cells(row: KindLatency) -> tuple[str, ...]:
         str(row.acted),
         str(row.by_poll),
         str(row.not_acted),
-        _duration(row.median),
-        _duration(row.p90),
-        _duration(row.observed_median),
+        duration_text(row.median),
+        duration_text(row.p90),
+        duration_text(row.observed_median),
     )
-
-
-def _duration(seconds: float | None) -> str:
-    # A duration to the second, `45s`, `2m05s`, or `1h02m`; `-` for none.
-    if seconds is None:
-        return "-"
-    sign, whole = ("-" if seconds < 0 else ""), round(abs(seconds))
-    if whole < _MINUTE:
-        return f"{sign}{whole}s"
-    if whole < _HOUR:
-        return f"{sign}{whole // _MINUTE}m{whole % _MINUTE:02d}s"
-    return f"{sign}{whole // _HOUR}h{whole % _HOUR // _MINUTE:02d}m"
