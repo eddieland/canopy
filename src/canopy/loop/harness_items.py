@@ -13,9 +13,11 @@ the derivation's rows and the journal, and records it marked as its own, so no i
 - `plan_review`, while a plan waits on the operator, and `plan_changed`, while an approved plan's file is no longer the
   text they approved (§25, §32).
 
-Beside them it raises three the overseer never recorded (`attention.ONLY_FROM_CAUSES`): `ticket_changed`, a warning
+Beside them it raises four the overseer never recorded (`attention.ONLY_FROM_CAUSES`): `ticket_changed`, a warning
 that refuses nothing, while a ticket's title or description as observed is not what it was when its current plan was
-approved, until the plan is approved again, superseded, or skipped (§25); `check_stuck`, for a unit
+approved, until the plan is approved again, superseded, or skipped (§25); `epic_changed`, while a change of a member's
+epic's plan holds its `implement`, as the dispatch guard reads it (`epic_changes.held`), until the operator approves
+the plan again or asks for a new one, the ticket gets a branch, or it leaves the epic (§43); `check_stuck`, for a unit
 `ci_running` on one check alone, still pending `STUCK_AFTER` past every other check at its head finishing, which may not
 be CI, until it completes, the head moves, or its repository's map gives it a role (§30); and `unobserved_pr`, for a
 unit whose PR URL names no PR, which no source reads, so the harness waits on its ticket (§39), until the unit names a
@@ -41,7 +43,7 @@ from datetime import timedelta
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit, urlunsplit
 
-from canopy.core import conversation, db, observe, passed_reviews, plans, records, review_runs, sql
+from canopy.core import conversation, db, epic_changes, observe, passed_reviews, plans, records, review_runs, sql
 from canopy.core.vocab import CheckStatus, Phase, PlanStatus, PrState, ResumeReason, ReviewRunStatus, RunKind
 from canopy.core.workspace import CheckRole
 from canopy.loop import attention
@@ -69,6 +71,7 @@ PLAN_CHANGED = "plan_changed"
 CHECK_STUCK = attention.CHECK_STUCK
 UNOBSERVED_PR = attention.UNOBSERVED_PR
 TICKET_CHANGED = attention.TICKET_CHANGED
+EPIC_CHANGED = attention.EPIC_CHANGED
 #: Every reason this module raises: those of `attention.FROM_CAUSES`, and those only the harness has ever recorded.
 REASONS: frozenset[str] = attention.FROM_CAUSES | attention.ONLY_FROM_CAUSES
 #: The reasons whose cause rests on what a connector observed, so a stale observation keeps their item.
@@ -509,7 +512,7 @@ def _from_journal(ctx: Context, subjects: _Subjects, now: datetime) -> Iterator[
 
 
 def _plans(ctx: Context, ticket: records.Ticket) -> Iterator[Raised]:
-    """A ticket's `plan_review`, `plan_changed`, and `ticket_changed`: its plans waiting or changed, or it (§25, §32).
+    """A ticket's plan items: `plan_review`, `plan_changed`, `ticket_changed`, and `epic_changed` (§25, §32, §43).
 
     Yields:
         Each.
@@ -531,6 +534,9 @@ def _plans(ctx: Context, ticket: records.Ticket) -> Iterator[Raised]:
             "or skip it (--skip)"
         )
         yield Raised(key, TICKET_CHANGED, detail)
+    held = epic_changes.held(conn, key)
+    if held is not None:
+        yield Raised(key, EPIC_CHANGED, held.detail())
     if ctx.config.policy.feedback_plan != "approve":
         return
     found = feedback_plans.current(conn, key)
