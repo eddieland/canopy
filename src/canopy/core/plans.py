@@ -37,7 +37,7 @@ from canopy.infra import lock
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
     from pathlib import Path
 
     from canopy.core.config import Policy
@@ -908,6 +908,21 @@ def outline(text: str) -> list[str]:
         At most `MAX_OUTLINE` heading lines, each cut at `MAX_HEADING` characters, without control characters.
     """
     found: list[str] = []
+    for line in unfenced(text):
+        heading = heading_of(line)
+        if heading is not None:
+            found.append(heading[:MAX_HEADING])
+            if len(found) == MAX_OUTLINE:
+                break
+    return found
+
+
+def unfenced(text: str) -> Iterator[str]:
+    """Yield a plan's lines outside fenced code blocks, as written, the fences' own lines left out too.
+
+    Yields:
+        Each line that is not in a fenced code block, nor opens or closes one, in order.
+    """
     fence = ""
     for line in text.splitlines():
         stripped = line.lstrip(" ")
@@ -920,12 +935,20 @@ def outline(text: str) -> list[str]:
         if marker is not None:
             fence = marker.group(1)
             continue
-        if indent <= _MAX_INDENT and _HEADING_RE.match(stripped):
-            heading = "".join(c if c.isprintable() else " " for c in stripped.rstrip())
-            found.append(heading[:MAX_HEADING])
-            if len(found) == MAX_OUTLINE:
-                break
-    return found
+        yield line
+
+
+def heading_of(line: str) -> str | None:
+    """Return a line outside fenced code as a markdown heading, if it is one.
+
+    Returns:
+        The heading, its `#`s included, its indent and trailing spaces dropped and every control character a space;
+        None when the line is no heading.
+    """
+    stripped = line.lstrip(" ")
+    if len(line) - len(stripped) > _MAX_INDENT or not _HEADING_RE.match(stripped):
+        return None
+    return "".join(c if c.isprintable() else " " for c in stripped.rstrip())
 
 
 def supersede(conn: sqlite3.Connection, key: str) -> int | None:

@@ -150,6 +150,15 @@ as one reconcile closed, says that too. None of them shows a blank panel and let
 run pushes nothing and has no Diff panel; nor does a run still working. `canopy show run:ID --diff` prints the same diff
 for your pager.
 
+An `implement` that followed an approved [plan](plans) gets one more panel under its diff, **Against the plan**: the
+files it touched that no step of the plan names, and the steps that name files the run never touched. canopy works it
+out in plain code, no model: a step names a file by putting its path in backticks, `src/export/csv.py` or
+`src/export/csv.py:12`, so prose and diagrams don't count, and a step that names no file is never listed. A path
+without a directory, `README.md`, only counts when the run touched it, so a module's dotted name can't flag a step.
+Treat it as a pointer, not a verdict: a test file the plan forgot to mention is fine, a step the run skipped is worth a
+look. Both lists empty says so; a plan file changed since you approved it, or a change too big for canopy to have
+named every file, says why it couldn't check. `canopy show run:ID` prints the same under **Against plan N**.
+
 The **Transcript** is the run's session, from its log, oldest first:
 
 - its text, with its reasoning set in italics and marked `thinking`. Long thinking shows its first four lines and

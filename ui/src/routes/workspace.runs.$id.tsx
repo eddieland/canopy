@@ -22,6 +22,7 @@ import { RichText } from '@/components/rich-text'
 import { RunChangesPanel } from '@/components/run-changes'
 import { ChecklistPanel } from '@/components/run-checklist'
 import { RunDoing } from '@/components/run-doing'
+import { PlanCheckPanel } from '@/components/run-plan-check'
 import { ProgressPanel } from '@/components/run-progress'
 import { Chip } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
@@ -110,6 +111,7 @@ function Loaded({ id }: { id: number }) {
                     records={data.records_changes}
                     diff={(repo) => runChangeQuery(data.id, repo)}
                 />
+                <PlanCheckPanel check={data.plan_check} ticketKey={data.ticket_key} />
                 <TranscriptPanel
                     transcript={transcript}
                     running={data.state === 'running'}

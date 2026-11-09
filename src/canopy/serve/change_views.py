@@ -2,21 +2,23 @@
 
 Each repository's range, the commits the harness read as the run ended, and its size, the files and lines git counted
 of the run's own change then (`run_changes`): a summary read from the journal alone, no kept diff read. The run's own
-diff is sent on its own when the page opens it, read within a review's diff's bounds (`review_diff.read`).
+diff is sent on its own when the page opens it, read within a review's diff's bounds (`review_diff.read`). An
+`implement`'s files are held to the steps of the approved plan it followed, read from the plan's file (`plan_files`).
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from canopy.core import review_diff, run_changes
+from canopy.core import plan_files, review_diff, run_changes
 from canopy.serve.diff_views import diff_view
-from canopy.serve.schema import ChangedFile, ReviewDiff, RunChange, RunRange
+from canopy.serve.schema import ChangedFile, PlanCheck, PlanCheckFile, PlanCheckStep, ReviewDiff, RunChange, RunRange
 from canopy.serve.transcript_views import removed_after
 
 if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Collection, Mapping
+    from pathlib import Path
 
     from canopy.core import records
     from canopy.core.run_changes import RunTable
@@ -59,6 +61,25 @@ def run_changes_of(
             ),
         )
     return found
+
+
+def plan_check(conn: sqlite3.Connection, state_dir: Path, run_id: int) -> PlanCheck | None:
+    """What `implement` run `run_id` touched, held to the approved plan it followed (DESIGN §25, §45), in code.
+
+    Returns:
+        The files it touched that no step names, and the steps that name files none of which it touched, or why they
+        could not be held; None for a run that followed no plan, or recorded no count of its files.
+    """
+    checked = plan_files.of_run(conn, state_dir, run_id)
+    if checked is None:
+        return None
+    if checked.held is None:
+        return PlanCheck(plan_id=checked.plan_id, unchecked=checked.unchecked)
+    return PlanCheck(
+        plan_id=checked.plan_id,
+        unnamed=[PlanCheckFile(repo=t.repo, path=t.path) for t in checked.held.unnamed],
+        untouched=[PlanCheckStep(number=s.number, title=s.title) for s in checked.held.untouched],
+    )
 
 
 def run_diff(

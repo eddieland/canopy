@@ -121,4 +121,11 @@ the build is the tests that hold it and the mock's ABC-130, whose `resume` worke
 on PR 61; with no diff kept, the page names the latest run that left its work on origin and why it kept none, in its
 Diff panel's words; its runs list names each run's range in the PR's repository alone, a joint run's other repository
 being its own PR's. The mock's run 45 now counts its change, so the screenshot of PR 88's page, whose runs list and
-threads panel both change, is to be taken again. Live check next: this milestone's Accept.
+threads panel both change, is to be taken again. Stage 4, 2026-11-09, on the operator's go-ahead, against the fakes:
+an `implement` that followed an approved plan has its counted files held, on read, to the files its plan's `### Step
+N` sections name in code spans, on its page under its Diff panels and in `canopy show run:ID`, the operator's alone;
+no migration and no attention item. Chosen conservatively, for the operator to change: a step flags only on a span
+with a directory and an extension, or a directory, and any other span only matches; a `resume`, though it follows the
+plan, is not held to it, since its change is a fix, not the plan's work; a run whose files canopy counted past its
+bound, or whose plan's file is no longer as approved, says why it was not held. The mock is unchanged, so no
+screenshot is to be taken again. Live check next: this milestone's Accept.

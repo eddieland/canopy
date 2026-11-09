@@ -6,8 +6,8 @@ design; the [README](README.md) has the map. Previous: [Messages to running agen
 
 ## 45. What a run changed
 
-Partly built (ROADMAP M69): the record, the kept diffs, `canopy show`, a run's page, and its PR's are; The commits are
-not, and the code does not follow that part until it is.
+Partly built (ROADMAP M69): the record, the kept diffs, `canopy show`, a run's page, its PR's, and the files held to
+the plan are; The commits are not, and the code does not follow that part until it is.
 
 A run's result line says what its worker thinks it did; its branch on GitHub shows every commit anyone put there,
 rewritten by each flaky kick (§23). Neither says what this run changed. This section makes that a journal fact, read
@@ -48,6 +48,14 @@ marked as work not on origin, and a diff that was not kept is said to be missing
 draws is `ui/DESIGN.md`'s. Nothing here reaches the overseer's state block (§6) or any agent's prompt: the reviewer and
 the planner read git themselves (§27).
 
+### Against the plan
+
+Whether an `implement` followed its approved plan (§25) is not left to its worker's word alone. In code, with no model,
+its page and `canopy show run:ID` hold the files its own change touched to the files the plan's `### Step N` sections
+name in code spans, and list the files no step names and the steps none of whose files were touched; a step that names
+no file is neither. It is the operator's reading, deciding and raising nothing, and an agent's report of the run
+leaves it out, since it names the plan's steps.
+
 ### The commits
 
 With the range, the harness records the commits in it, bounded: each one's id, its subject, cut and every hidden
@@ -82,6 +90,5 @@ lacks a mark stays, for the report.
 ### Open
 
 - Whether the kept range should serve a review's late findings (§21), which diff two commits of their own today.
-- The files a run touched against its plan's steps (§25), in code, once the diff is kept.
 - Whether reconcile keeps the range and the diff of a run it closes after `_run` was killed (§6 step 3), which today
   returns the slot and keeps nothing.

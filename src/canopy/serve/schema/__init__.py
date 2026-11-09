@@ -364,6 +364,41 @@ class RunChange(Model):
     """The PR of the run's ticket in this repository, whose page shows the branch against its base; None for none."""
 
 
+class PlanCheckFile(Model):
+    """A file a run touched in one repository. The path is the branch's text, untrusted."""
+
+    repo: str
+    """The repository."""
+    path: str
+    """The file's path."""
+
+
+class PlanCheckStep(Model):
+    """A step of a plan, by its heading: `### Step 2: Wire the button`. The title is the planner's text."""
+
+    number: int
+    """Its number."""
+    title: str
+    """Its title, as its heading has it."""
+
+
+class PlanCheck(Model):
+    """An `implement`'s files held to the approved plan it followed (DESIGN §25, §45): in code, no model.
+
+    A step names a file in a code span; one that names none is neither flagged nor matched.
+    """
+
+    plan_id: int
+    """The plan the run followed."""
+    unnamed: list[PlanCheckFile] = []
+    """The files it touched that no step names, by repository, in git's order."""
+    untouched: list[PlanCheckStep] = []
+    """The steps that name files, none of which it touched, in the plan's order."""
+    unchecked: str | None = None
+    """Why its files could not be held to the plan, its file no longer as approved, or more files touched than canopy
+    names; None when they were."""
+
+
 class CardStep(Model):
     """A finished step in a running agent's progress, with what shows it is done."""
 
@@ -569,6 +604,9 @@ class Run(Model):
     elsewhere."""
     records_changes: bool = False
     """Whether it ended as a kind of run that records what it changed, so its page says so when it recorded nothing."""
+    plan_check: PlanCheck | None = None
+    """For an `implement` that followed an approved plan, on its page alone, the files it touched held to the plan's
+    steps (DESIGN §25, §45); None for any other run, one that recorded no count of its files, and in the lists."""
 
 
 class WaitingFeedbackPlan(Model):

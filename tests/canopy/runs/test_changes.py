@@ -21,13 +21,14 @@ from tests.canopy.helpers import (
     WORKER_DONE,
     InlineRunner,
     context,
+    in_run,
     in_tick,
     inline_context,
     present,
     private_worker_does,
     worker_does,
 )
-from tests.canopy.scenario_helpers import dispatches
+from tests.canopy.scenario_helpers import dispatches, plan_approved
 from tests.conftest import executable, git
 
 if TYPE_CHECKING:
@@ -41,6 +42,11 @@ if TYPE_CHECKING:
 BRANCH = "agent/PROJ-1-work"
 #: The branch task 1 works on, under the test operator's `agent/` prefix.
 TASK_BRANCH = "agent/task/1"
+#: A plan whose first step names the page, and whose second a doc no worker here writes.
+PLANNED_FILES = (
+    "# Plan for PROJ-1\n\n## Steps\n\n### Step 1: Add the page\n\nIn `repo`, `src/page.py`.\n\n"
+    "### Step 2: Document the page\n\n`docs/page.md`.\n"
+)
 
 
 def writes(name: str, text: str, *, repo: str | None = None) -> list[list[str]]:
@@ -106,6 +112,28 @@ def test_an_implement_records_the_bases_commit_origins_head_and_the_merge_base_a
     assert f"\nChanged:\n  repo  {base[:12]}..{head[:12]}, from its base, merge base {base[:12]}\n" in shown
     assert f"\n    its change {run_changes.change_path(ran.row['log_path'], 'repo')}\n" in shown
     assert f"\n    against its base {review_diff.run_path_for(ran.row['log_path'], 'repo')}\n" in shown
+
+
+def test_an_implement_of_an_approved_plan_shows_the_files_no_step_names_and_the_steps_it_touched_none_of(
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    """Held in code to the plan's steps, as `canopy show run:ID` prints them for the operator (DESIGN §25, §45)."""
+    planned = plan_approved(scenario, PLANNED_FILES)
+    commands = [["mkdir", "-p", "src"], *writes("src/page.py", "the page"), *writes("extra.txt", "more"), push()]
+    ran = scenario.run(worker=worker_does(*commands))
+    assert ran.status == RunStatus.DONE, ran
+    plan_id = present(present(db.get_run(scenario.conn, ran.id))["plan_id"])
+    shown = scenario.operator("show", f"run:{ran.id}").out
+    assert (
+        f"\nAgainst plan {plan_id}:\n  touched, named by no step:\n    repo  extra.txt\n"
+        "  steps none of whose files it touched:\n    Step 2: Document the page\n"
+    ) in shown
+    # A plan run followed no plan, so it says nothing of one.
+    assert "Against plan" not in scenario.operator("show", f"run:{planned}").out
+    # Inside one of canopy's runs, as a chore's agent reads it through its report, it names none of the plan's steps.
+    with in_run("chore-2"):
+        assert "Against plan" not in scenario.operator("show", f"run:{ran.id}").out
 
 
 def test_a_resume_starts_from_origins_previous_head_and_its_own_diff_holds_the_fix_alone(

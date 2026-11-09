@@ -14,10 +14,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from unittest import mock
 
-from canopy.core import db, gc_passes, records, review_diff, run_changes
+from canopy.core import db, gc_passes, plans, records, review_diff, run_changes
+from canopy.core.context import DISPATCH_LOCK
 from canopy.core.run_changes import Change
 from canopy.core.vocab import RunKind, RunStatus
-from tests.canopy.helpers import KEY, present, running_run
+from tests.canopy.helpers import KEY, present, proposed, running_run
 from tests.canopy.web_helpers import signed_in_client
 
 if TYPE_CHECKING:
@@ -47,6 +48,11 @@ COUNTED = run_changes.counted(
     ],
 )
 PR = "https://github.com/acme/api/pull/7"
+#: A plan whose first step names the file `CHANGE` touches, and whose second a doc no run here writes.
+PLANNED = (
+    "# Plan: PROJ-1\n\n## Steps\n\n### Step 1: Move main up\n\n`src/canopy/order.py`\n\n"
+    "### Step 2: Document the order\n\n`docs/order.md`\n"
+)
 WEB_PR = "https://github.com/acme/web/pull/8"
 
 
@@ -192,6 +198,37 @@ def test_a_kept_diff_retention_removed_says_after_how_many_days(ctx: Context) ->
     assert (change["diff_kept"], change["removed_after_days"]) == (False, 30)
     # Its size is the journal's, so it outlives the file.
     assert (change["range"]["files_changed"], len(change["files"])) == (2, 2)
+
+
+def test_an_implements_page_holds_its_files_to_the_steps_of_the_plan_it_followed(ctx: Context) -> None:
+    """In code, from the plan's file as approved: a file no step names, and a step none of whose files was touched."""
+    proposed(ctx.conn, ctx.state_dir, PLANNED)
+    plan = plans.approve(ctx.conn, ctx.state_dir, KEY, channel="cli", dispatch_lock=ctx.state_dir / DISPATCH_LOCK)
+    tick_id = db.start_tick(ctx.conn, dry_run=False)
+    run_id = db.insert_run(
+        ctx.conn,
+        tick_id=tick_id,
+        key=KEY,
+        kind=RunKind.IMPLEMENT,
+        branch=f"agent/{KEY}-work",
+        slots=[],
+        runs_dir=ctx.state_dir / "runs",
+        plan_id=plan.id,
+    )
+    db.finish_run(ctx.conn, "runs", run_id, RunStatus.DONE, None)
+    run_changes.record(ctx.conn, run_id, [kept("api")])
+    c, _ = signed_in_client(ctx)
+    assert c.get(f"/api/runs/{run_id}").json()["plan_check"] == {
+        "plan_id": plan.id,
+        "unnamed": [{"repo": "api", "path": "logo.png"}],
+        "untouched": [{"number": 2, "title": "Document the order"}],
+        "unchecked": None,
+    }
+    # A run that followed no plan holds nothing to one, and the list sends none.
+    other = ended_run(ctx)
+    run_changes.record(ctx.conn, other, [kept("api")])
+    assert c.get(f"/api/runs/{other}").json()["plan_check"] is None
+    assert all(r["plan_check"] is None for r in c.get("/api/runs").json())
 
 
 def test_a_joint_runs_page_carries_a_change_per_repository_one_of_them_unpushed(ctx: Context) -> None:

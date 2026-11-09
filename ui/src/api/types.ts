@@ -219,6 +219,10 @@ export type RunRange = Schemas['RunRange']
 export type RunChange = Schemas['RunChange']
 /** One file a run changed, with its lines added and removed as git counted them. */
 export type ChangedFile = Schemas['ChangedFile']
+/** An `implement`'s files held to its plan's steps: the files no step names, and the steps it touched none of. */
+export type PlanCheck = Schemas['PlanCheck']
+/** A file a run touched that no step of its plan names. */
+export type PlanCheckFile = Schemas['PlanCheckFile']
 /** A worker's answer to a checklist item: pass, fixed, held, n/a, or unanswered. */
 export type ItemAnswer = Schemas['ItemAnswer']
 /** How the last days' runs ended, the newest failures, what the guards refused, and each day's counts. */

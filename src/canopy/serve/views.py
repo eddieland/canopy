@@ -60,6 +60,7 @@ from canopy.serve.schema import (
     NoticeChannel,
     Pause,
     PauseChannel,
+    PlanCheck,
     ReviewDiff,
     Run,
     RunActivity,
@@ -296,6 +297,7 @@ def run_detail(ctx: Context, run_id: int) -> Run | None:
         stretches=stretches,
         stretches_left_out=left_out,
         changes=changed,
+        plan_check=change_views.plan_check(ctx.conn, ctx.state_dir, run_id),
         timeout_minutes=limit,
     )
 
@@ -465,6 +467,7 @@ def run(
     stretches_left_out: int = 0,
     changes: Sequence[RunChange] = (),
     ranges: Sequence[RunRange] = (),
+    plan_check: PlanCheck | None = None,
     timeout_minutes: int | None = None,
 ) -> Run:
     """One run's row, with the `worktrees` it leased, its paths from the workspace `root`.
@@ -472,7 +475,8 @@ def run(
     On the run's own page it carries `models`, the models that served it, for a `feedback-plan` run `feedback_plan`,
     the plan it wrote, `checklist`, what it answered of its repositories' lists, and `stretches`, what it pushed after
     being shown them, with how many more it pushed, `stretches_left_out`, and `changes`, what it changed in each
-    repository with the files it touched; in its ticket's runs list, `ranges`, the commits and their size alone.
+    repository with the files it touched, and for an `implement`, `plan_check`, those files held to its plan's steps; in
+    its ticket's runs list, `ranges`, the commits and their size alone.
     `timeout_minutes`, a worker's time limit, says when a step in its progress is stuck; with None, none is.
 
     Returns:
@@ -514,6 +518,7 @@ def run(
         changes=list(changes),
         ranges=list(ranges),
         records_changes=row["ended_at"] is not None and changes_kept.recorded(str(row["kind"])),
+        plan_check=plan_check,
     )
 
 

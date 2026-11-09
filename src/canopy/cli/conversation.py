@@ -1170,8 +1170,10 @@ def _echo_message(m: records.Message) -> None:
 
 def _show_run(ctx: Context, run_id: int) -> None:
     try:
-        # A run's progress is the operator's alone (DESIGN §41): not printed inside one of canopy's ticks or runs.
-        click.echo(readback.read_run(ctx, readback.ShowRun(run=run_id), card=conversation.is_operator()))
+        # A run's progress, and its files held to its plan, are the operator's alone (DESIGN §41, §25): not printed
+        # inside one of canopy's ticks or runs.
+        operator = conversation.is_operator()
+        click.echo(readback.read_run(ctx, readback.ShowRun(run=run_id), card=operator, plan=operator))
     except reports.Refused as e:
         raise CliError(str(e)) from None
 

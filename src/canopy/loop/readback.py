@@ -26,6 +26,7 @@ from canopy.core import (
     contract,
     conversation,
     db,
+    plan_files,
     reports,
     review_diff,
     run_changes,
@@ -130,10 +131,12 @@ def read_decisions(ctx: Context, request: Decisions) -> str:
     return "\n".join(lines)
 
 
-def read_run(ctx: Context, request: ShowRun, *, card: bool = False) -> str:
+def read_run(ctx: Context, request: ShowRun, *, card: bool = False, plan: bool = False) -> str:
     """Print a run, as `canopy show run:ID` prints it, with its agent's progress when `card` says so.
 
-    A run's progress is the operator's alone (DESIGN §41): the report a chore's agent reads leaves it out.
+    A run's progress is the operator's alone (DESIGN §41): the report a chore's agent reads leaves it out. So are an
+    `implement`'s files held to its approved plan's steps, printed when `plan` says so, since they name the plan's
+    steps, which only the ticket's own workers see (§25).
 
     Returns:
         The run's lines and its messages.
@@ -167,6 +170,7 @@ def read_run(ctx: Context, request: ShowRun, *, card: bool = False) -> str:
     changed = change_lines(run_changes.of_run(ctx.conn, run_id), log_path=str(run["log_path"]))
     if changed:
         lines.extend(["\nChanged:", *(f"  {line}" for line in changed)])
+    lines.extend(_against_plan(ctx, run_id, shown=plan))
     # Its agent's progress, while it runs and its last once it ends (DESIGN §41).
     running = run["status"] == RunStatus.RUNNING
     standing = cards.of(run)
@@ -246,6 +250,39 @@ def change_lines(changes: Sequence[records.RunChange], *, log_path: str) -> list
             lines.append(f"  against its base {_kept(review_diff.run_path_for(log_path, c.repo))}")
         if c.missing is not None:
             lines.append(f"  not kept: {one_line(c.missing)}")
+    return lines
+
+
+def _against_plan(ctx: Context, run_id: int, *, shown: bool) -> list[str]:
+    """Return an `implement`'s files held to its approved plan under a heading, when `shown`; none for another run."""
+    checked = plan_files.of_run(ctx.conn, ctx.state_dir, run_id) if shown else None
+    if checked is None:
+        return []
+    return [f"\nAgainst plan {checked.plan_id}:", *(f"  {line}" for line in plan_lines(checked))]
+
+
+def plan_lines(checked: plan_files.Checked) -> list[str]:
+    """What an `implement` touched, held to its approved plan's steps (DESIGN §25, §45), or why it could not be.
+
+    `canopy show run:ID` prints them under a heading. A path is the branch's text and a step's title the planner's,
+    each printed on one line with every control character dropped.
+
+    Returns:
+        The lines, unindented: the files touched that no step names, then the steps that name files none of which
+        was touched; one line when both are none, or when the files could not be held to the plan, with why.
+    """
+    if checked.held is None:
+        return [f"not held to it: {one_line(checked.unchecked or '')}"]
+    held = checked.held
+    if not held.unnamed and not held.untouched:
+        return ["every file it touched is named by a step, and every step that names a file had one touched"]
+    lines: list[str] = []
+    if held.unnamed:
+        lines.append("touched, named by no step:")
+        lines.extend(f"  {one_line(t.repo)}  {one_line(t.path)}" for t in held.unnamed)
+    if held.untouched:
+        lines.append("steps none of whose files it touched:")
+        lines.extend(f"  Step {s.number}: {one_line(s.title)}" for s in held.untouched)
     return lines
 
 

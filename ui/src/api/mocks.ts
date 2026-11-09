@@ -93,6 +93,7 @@ export const mockRuns: Run[] = [
         changes: [],
         ranges: [],
         records_changes: false,
+        plan_check: null,
     },
     {
         id: 42,
@@ -132,6 +133,7 @@ export const mockRuns: Run[] = [
         changes: [],
         ranges: [],
         records_changes: false,
+        plan_check: null,
     },
 ]
 
