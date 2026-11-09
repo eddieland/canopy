@@ -79,6 +79,10 @@ class PlanFile(Model):
     """For an approved plan, what of its ticket's text, as last observed, differs from when it was approved: `title`,
     `description`, or both; empty when neither, or for a plan not approved. A warning, which refuses nothing: approving
     the plan again says it still fits (`ticket_changed`)."""
+    epic_changed: list[str] = []
+    """For a member ticket's approved plan, the ids of its epic's plan whose change reached it since, while they hold
+    its implement, its ticket having no branch yet: until the operator approves the plan again or asks for a new one
+    (`epic_changed`, DESIGN §43). Empty while nothing holds it."""
 
 
 class PlanReplyView(Model):

@@ -524,8 +524,9 @@ def _attention(ctx: Context) -> list[Item]:
     """The fixtures' list, less a finding the operator dismissed, as `loop.attention.listed` leaves one out.
 
     Returns:
-        `ATTENTION` without the findings dismissed in the mock journal, the tasks' items and the epics' plans waiting
-        as the journal has them, and the running runs' questions unanswered, as `loop.attention.shown` adds them.
+        `ATTENTION` without the findings dismissed in the mock journal, the tasks' items, the epics' plans waiting, and
+        their members' implements held, as the journal has them, and the running runs' questions unanswered, as
+        `loop.attention.shown` adds them.
     """
     dismissed = {
         (f"chore:{f.chore}", f.finding.id)
@@ -533,7 +534,7 @@ def _attention(ctx: Context) -> list[Item]:
         if f.dismissed
     }
     listed = [i for i in ATTENTION if (i.ticket_key, i.reason) not in dismissed] + tasks.attention(ctx.conn)
-    listed += epic_runs.review_items(ctx.conn)
+    listed += epic_runs.review_items(ctx.conn) + epics.attention(ctx.conn)
     return listed + cards.questions(ctx.conn)
 
 

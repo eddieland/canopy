@@ -103,6 +103,10 @@ class EpicMember(Model):
     """Its ticket's PRs, one per repository it has one in."""
     latest_run: EpicRunLatest | None = None
     """Its ticket's newest worker run; None before its first."""
+    epic_changed: list[str] = []
+    """The ids of the epic's plan whose change reached its approved plan, while they hold its implement, its ticket
+    having no branch yet: until the operator approves its plan again or asks for a new one (`epic_changed`). Empty while
+    nothing holds it."""
 
 
 class EpicId(Model):

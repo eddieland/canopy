@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, assert_never
 
-from canopy.core import contract, conversation, db, epic_outline, epics, plans
+from canopy.core import contract, conversation, db, epic_changes, epic_outline, epics, plans
 from canopy.core.vocab import PlanStatus, RunStatus
 from canopy.runs import epic_runs
 from canopy.serve.schema.epic import (
@@ -258,6 +258,7 @@ def _member(
 ) -> EpicMember:
     ticket = db.get_ticket(conn, member.ticket_key)
     entries = [e for e in registered if held is None or e in held]
+    waits = epic_changes.held(conn, member.ticket_key)
     return EpicMember(
         key=member.ticket_key,
         title=ticket_title(ticket.title) if ticket is not None else None,
@@ -275,6 +276,7 @@ def _member(
         )
         if latest is not None
         else None,
+        epic_changed=list(waits.ids) if waits is not None else [],
     )
 
 

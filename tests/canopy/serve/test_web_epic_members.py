@@ -66,7 +66,7 @@ def test_a_member_is_removed_from_the_web_and_its_ticket_left_as_it_is(backend: 
     assert c.delete(route, headers=headers).json() == {"key": "ABC-104"}
     assert "ABC-104" not in members(backend, APPROVED)
     found = c.get(f"/api/epics/{APPROVED}").json()
-    assert {e["id"]: e["members"] for e in found["outline"]["entries"]}["B2"] == []
+    assert {e["id"]: e["members"] for e in found["outline"]["entries"]}["B2"] == [mock_epics.HELD]
     # Its membership ended, its ticket stays.
     assert c.get("/api/tickets/ABC-104").status_code == 200
     assert refused(c.delete(route, headers=headers)) == f"not_member: ABC-104 is not a member of epic:{APPROVED}"
@@ -86,8 +86,8 @@ def test_each_add_is_refused_naming_its_guard(backend: Backend) -> None:
     )
     assert add(APPROVED, "abc 105").startswith("bad_key: 'abc 105' is not a ticket key")
     assert add(99, "ABC-105") == "unknown_epic: canopy has no epic:99"
-    # The mock's bound is policy.max_epic_tickets' default, 8: epic 1 holds 3.
-    for n in range(5):
+    # The mock's bound is policy.max_epic_tickets' default, 8: epic 1 holds 4.
+    for n in range(4):
         c.post(f"/api/epics/{APPROVED}/members", json={"key": f"WEB-{n}", "entries": []}, headers=headers)
     assert add(APPROVED, "ABC-105") == (
         f"epic_full: epic:{APPROVED} has 8 members, and policy.max_epic_tickets lets it hold 8"
@@ -116,4 +116,5 @@ def test_adding_and_removing_are_refused_inside_a_run(backend: Backend) -> None:
         "ABC-100": ([], "cli"),
         "ABC-103": (["B1"], "cli"),
         "ABC-104": (["B2"], "cli"),
+        mock_epics.HELD: (["B2"], "cli"),
     }

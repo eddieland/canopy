@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from canopy.core import db, epics, personas, plan_threads, plans, records
+from canopy.core import db, epic_changes, epics, personas, plan_threads, plans, records
 from canopy.core.vocab import PlanStatus, RunKind
 from canopy.serve.schema.persona import RunPersona
 from canopy.serve.schema.plan import (
@@ -72,6 +72,7 @@ def plan_file(ctx: Context, plan: records.Plan) -> PlanFile:
         edited=reading.sha256 != plan.sha256,
         changed_since_approval=plan.status is PlanStatus.APPROVED and reading.sha256 != plan.approved_sha256,
         ticket_changed=plans.ticket_changed(ctx.conn, plan),
+        epic_changed=_held_by_epic(ctx.conn, plan),
     )
 
 
@@ -162,3 +163,13 @@ def thread_view(found: plan_threads.Thread) -> PlanThreadView:
         read=found.read,
         replies=[PlanReplyView(id=r.id, body=r.body, at=db.parse_time(r.created_at)) for r in found.replies],
     )
+
+
+def _held_by_epic(conn: sqlite3.Connection, plan: records.Plan) -> list[str]:
+    """The ids of its epic's plan that hold the implement `plan` would govern, as the dispatch guard reads them (§43).
+
+    Returns:
+        The ids, in the epic plan's order; none for a plan other than the one they hold, or when nothing holds.
+    """
+    found = epic_changes.held(conn, plan.ticket_key)
+    return list(found.ids) if found is not None and found.plan_id == plan.id else []
