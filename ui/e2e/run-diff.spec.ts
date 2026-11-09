@@ -2,8 +2,9 @@ import { expect, test } from '@playwright/test'
 
 import { settled, signIn } from './helpers.ts'
 
-// What a run changed (DESIGN §45), on its page and its ticket's runs list, as the mock records it: run 39 kept its
-// diff, run 40 left its fix unpushed, run 37 kept none, and task 1's run kept its own change.
+// What a run changed (DESIGN §45), on its page and its ticket's and its PR's runs lists, as the mock records it: run
+// 39 kept its diff, run 40 left its fix unpushed, run 37 kept none, task 1's run kept its own change, and ABC-130's
+// resume, under `post`, kept the diff PR 61's threads sit on.
 
 test.beforeEach(async ({ page }) => {
     await signIn(page)
@@ -55,8 +56,22 @@ test("a ticket's runs list names each run's range and size, opening the run at i
     await page.goto('tickets/ABC-099')
     await settled(page)
     const ranges = page.getByTestId('ticket-runs').getByTestId('run-range')
-    await expect(ranges).toHaveText(['web 9b2f4c6..e3a7d91', 'web 71c3e0a..9b2f4c6 +21 −3'])
+    await expect(ranges).toHaveText(['web 9b2f4c6..e3a7d91 +26 −1', 'web 71c3e0a..9b2f4c6 +21 −3'])
     await ranges.last().click()
     await expect(page).toHaveURL(/\/workspace\/runs\/39#diff-web$/u)
     await expect(page.getByRole('region', { name: /^Diff: web/u }).getByTestId('diff-file')).toHaveCount(2)
+})
+
+test("a PR's runs list names each run's range, and its threads sit on the kept diff, no draft", async ({ page }) => {
+    await page.goto(`pull-requests/pr?url=${encodeURIComponent('https://github.com/acme/mobile/pull/61')}`)
+    await settled(page)
+    const ranges = page.getByTestId('pull-request-runs').getByTestId('run-range')
+    await expect(ranges).toHaveText(['mobile 6161616..61a61a6 +23 −8'])
+    const replies = page.getByTestId('review-replies')
+    await expect(replies.getByTestId('diff-run')).toHaveText('Its threads sit on the branch as run:51 left it.')
+    await expect(replies.getByTestId('draft-list')).toHaveCount(0)
+    const file = page.getByTestId('diff-file').filter({ hasText: 'app/notify/push.ts' })
+    await expect(file.getByTestId('review-thread')).toContainText('Back off between tries')
+    await ranges.click()
+    await expect(page).toHaveURL(/\/workspace\/runs\/51#diff-mobile$/u)
 })

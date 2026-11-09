@@ -565,7 +565,8 @@ class Run(Model):
     Empty for a run still running, one that recorded none, and in the lists."""
     ranges: list[RunRange] = []
     """The commits it went from and to in each repository (DESIGN §45), and how much changed, by repository, in its
-    ticket's runs list alone: its page has them in `changes`. Empty elsewhere."""
+    ticket's runs list, and in its PR's, the PR's repository's alone: its page has them in `changes`. Empty
+    elsewhere."""
     records_changes: bool = False
     """Whether it ended as a kind of run that records what it changed, so its page says so when it recorded nothing."""
 

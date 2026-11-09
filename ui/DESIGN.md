@@ -1351,17 +1351,20 @@ reader, so no table repeats them.
   with it, and for a PR canopy only reviews, `canopy only reviews it`, said there alone. A link out follows, saying
   where it goes rather than repeating the title. Then panels: its fields, with a grant of another review in its foot
   when it is at its review limit; its review threads when canopy has read them or holds a draft for it, led by its
-  feedback plan while that waits on the operator; then its reviews, the runs that pushed to it, and its decisions, each
-  a `ListPanel`, and no Runs at all on a PR with no ticket, since runs are a ticket's.
+  feedback plan while that waits on the operator; then its reviews, the runs that pushed to it, each with its range in
+  the PR's repository as a ticket's runs list names it, and its decisions, each a `ListPanel`, and no Runs at all on a
+  PR with no ticket, since runs are a ticket's.
 - **A PR's threads** (`ReviewThreads`, DESIGN §29) are its coworkers' review threads, as canopy's reader last read
-  them, on the diff the latest run kept, with the replies runs drafted under them. The PR's detail says up front whether
-  there are any, so their place is held before they arrive. A `Review threads` panel leads: what `trust.review_replies`
-  means for them in a line, when the PR was read and at which head, a `status-blocked` line when the PR's head is past
-  the kept diff's commit, a `Drafts` list of every draft in the order their cards show, whose links open the card's
-  file as a review's findings list does, and in its foot `Send N waiting`, which sends every waiting draft as one
-  comment review, and an outline `Start a review on GitHub` beside it, which stages them in a pending review instead,
-  with a muted line saying what each does; while the PR holds a staged review, neither shows, and a line links to the
-  PR's files on GitHub to finish it. While its ticket has a current feedback plan (docs/design §32), a `Feedback plan`
+  them, on the diff the latest run kept, under every `trust.review_replies` setting, with the replies runs drafted under
+  them. The PR's detail says up front whether there are any, so their place is held before they arrive. A `Review
+  threads` panel leads: what `trust.review_replies` means for them in a line, when the PR was read and at which head,
+  the run whose diff they sit on, or, with none kept, why its latest run kept none in its Diff panel's words, a
+  `status-blocked` line when the PR's head is past the kept diff's commit, a `Drafts` list of every draft in the order
+  their cards show, whose links open the card's file as a review's findings list does, and in its foot `Send N waiting`,
+  which sends every waiting draft as one comment review, and an outline `Start a review on GitHub` beside it, which
+  stages them in a pending review instead, with a muted line saying what each does; while the PR holds a staged review,
+  neither shows, and a line links to the PR's files on GitHub to finish it. While its ticket has a current feedback plan
+  (docs/design §32), a `Feedback plan`
   panel (`FeedbackPlanPanel`) comes before the `Review threads` panel while the plan waits on the operator, so its
   Approve is in the first screen, and after it once approved or spent; where it sits is settled as each plan is first
   read, so one approved meanwhile stays put. The panel: `feedback-plan:N` and its status as a chip in its header

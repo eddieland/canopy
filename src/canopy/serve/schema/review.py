@@ -497,7 +497,8 @@ class PullRequestDetail(Model):
     review_limit: Limit | None = None
     """Its review runs against its limit (DESIGN §21); None when canopy has never reviewed it."""
     runs: list[Run]
-    """Its ticket's runs that reported this PR, and any of its ticket's runs working now, newest first; at most 20."""
+    """Its ticket's runs that reported this PR, and any of its ticket's runs working now, newest first; at most 20.
+    Each names its range in the PR's repository (DESIGN §45), when it recorded one."""
     reviews: list[ReviewSummary]
     """Every review run of it, newest first; each opens its own page, with its findings on its diff."""
     decisions: list[Decision]
