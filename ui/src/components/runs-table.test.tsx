@@ -118,6 +118,24 @@ describe('RunsTable', () => {
         ])
     })
 
+    it('names a run’s range on its PR’s page, where the PR it pushed to is the page’s own', async () => {
+        const range = {
+            repo: 'web',
+            start_sha: 'a'.repeat(40),
+            start_on_base: false,
+            end_sha: 'b'.repeat(40),
+            unpushed_sha: null,
+            files_changed: 1,
+            lines_added: 4,
+            lines_removed: 1,
+        }
+        await renderRuns([run({ prs: [PR_A], ranges: [range] })], { ticket: false, ownPr: PR_A })
+        expect(screen.queryByRole('link', { name: 'acme/web#88' })).toBeNull()
+        const [named] = screen.getAllByTestId('run-range')
+        expect(named?.textContent).toBe('web aaaaaaa..bbbbbbb +4 −1')
+        expect(named?.getAttribute('href')).toBe('/workspace/runs/42#diff-web')
+    })
+
     it('names up to four worktrees, and counts the rest past three, every one in a tip', async () => {
         const four = ['w/1', 'w/2', 'w/3', 'w/4']
         const { unmount } = await renderRuns([run({ worktrees: four.map((path) => slot(path)) })])

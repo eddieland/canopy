@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, override
 
 from canopy.core import db, records, review_diff, run_changes, sql
 from canopy.infra import procs
+from canopy.serve.mock import run_diffs
 from canopy.serve.mock.reviews import PR_88, SHA_88
 
 if TYPE_CHECKING:
@@ -186,18 +187,23 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str], sl
     kept = review_diff.run_path_for(log_path, "web")
     review_diff.keep(kept, DIFF)
     review_diff.keep_head(kept, SHA)
-    # The PR's page shows its threads on the diff of a run that recorded it pushed (DESIGN §45). The mock keeps the
-    # branch's whole diff as the run's own change too.
+    # The PR's page shows its threads on the diff of a run that recorded it pushed (DESIGN §45), and its runs list the
+    # run's range and size. The mock keeps the branch's whole diff as the run's own change too, and counts it.
     review_diff.keep(run_changes.change_path(log_path, "web"), DIFF)
-    records.insert(
-        records.RunChange,
-        run_id=RUN,
-        repo="web",
-        start_sha=SHA_88,
-        end_sha=SHA,
-        change_kept=True,
-        branch_kept=True,
-    ).run(conn)
+    run_changes.record(
+        conn,
+        RUN,
+        [
+            run_changes.Change(
+                "web",
+                SHA_88,
+                end=SHA,
+                change_kept=True,
+                branch_kept=True,
+                counted=run_diffs.counted(DIFF),
+            ),
+        ],
+    )
     _read(conn, at)
     for number, kind, comment, stance, text, edit, reaction in _DRAFTS:
         thread = next((t[0] for t in _THREADS if t[1] == comment), None)
