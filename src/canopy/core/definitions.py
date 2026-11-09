@@ -76,7 +76,7 @@ def sources(
 
 # The runtime `config` runs, or the default without one.
 def _version(config: Config | None) -> Version:
-    return Version.ONE if config is None else config.runtime.version
+    return Version.TWO if config is None else config.runtime.version
 
 
 def rules(

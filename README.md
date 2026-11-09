@@ -79,8 +79,9 @@ workspace to a first dry tick, with the sandbox if you want it: [docs/QUICKSTART
 
 3. **Connect your MCP servers.** In your agent runtime (OpenCode), connect the GitHub MCP server and your tracker's MCP
    server (Jira, Linear, anything with one; for GitHub Issues the GitHub server is both). Your runtime holds the
-   tokens; canopy never sees them. To run OpenCode 2 (2.1.4 or later), set `version = 2` under `[runtime]` in your
-   user config, and give each of those servers `"codemode": false`, since canopy's agents are denied code mode.
+   tokens; canopy never sees them. canopy runs OpenCode 2 (2.1.4 or later): give each of those servers
+   `"codemode": false`, since canopy's agents are denied code mode. OpenCode 1 is deprecated; to keep it for now, set
+   `version = 1` under `[runtime]` in your user config.
 
    Grant only what the agents need. Workers need write tools to comment on a ticket, edit its labels, and open PRs;
    the reviewer needs only read tools. canopy's agent definitions deny the dangerous tools by name, but names differ by

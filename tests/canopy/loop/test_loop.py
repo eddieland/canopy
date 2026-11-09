@@ -971,6 +971,33 @@ def test_canopy_pause_and_resume_say_what_they_did_and_status_shows_the_pause(
     assert "Loop paused" not in capsys.readouterr().out
 
 
+@pytest.mark.opencode1  # a workspace that names the deprecated version
+def test_status_and_the_loop_warn_that_runtime_version_1_is_deprecated(
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    warning = "Warning: runtime.version 1 is deprecated"
+    assert main(["status"]) == 0
+    assert warning in capsys.readouterr().out
+    # To stderr, which the daemon's log keeps, so the loop's own lines read as before.
+    with overseer_does():
+        assert main(["loop", "--dry-run", "--ticks", "1", "--no-serve"]) == 0
+    printed = capsys.readouterr()
+    assert warning in printed.err
+    assert warning not in printed.out
+
+
+def test_status_says_nothing_of_the_runtime_version_2(
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"version": 2}})
+    assert main(["status"]) == 0
+    assert "deprecated" not in capsys.readouterr().out
+
+
 @pytest.mark.parametrize("env", [conversation.TICK_ID_ENV, conversation.RUN_ID_ENV])
 @pytest.mark.parametrize("verb", ["pause", "resume"])
 def test_an_agent_can_neither_pause_nor_resume_the_loop(
