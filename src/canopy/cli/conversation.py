@@ -1018,10 +1018,16 @@ def _show_plans(ctx: Context, ticket: records.Ticket, *, every: bool) -> None:
     key = ticket.key
     found = plans.history(ctx.conn, key)
     policy_plan = ctx.config.policy.plan
-    needed = plans.needed(policy_plan, ticket.plan_setting)
-    if not found and not needed:
+    trivial = epics.trivial(ctx.conn, ctx.state_dir, key, ctx.config.policy.planner_may_approve)
+    needed = plans.needed(policy_plan, ticket.plan_setting, trivial=trivial is not None)
+    if not found and not needed and trivial is None:
         return
-    why = f"your word, `{ticket.plan_setting}`" if ticket.plan_setting is not None else f"policy.plan {policy_plan}"
+    if ticket.plan_setting is not None:
+        why = f"your word, `{ticket.plan_setting}`"
+    elif trivial is not None and policy_plan == "approve":
+        why = f"its epic's approved plan, which marks it trivial ({conversation.printable(one_line(trivial))})"
+    else:
+        why = f"policy.plan {policy_plan}"
     click.echo(f"\nPlan: {'needed' if needed else 'not needed'}, by {why}")
     if not found:
         click.echo("  none yet: the next tick dispatches a planner")

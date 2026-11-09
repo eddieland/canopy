@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from canopy.core import db, epic_changes, plans, prompts, sql
+from canopy.core import db, epic_changes, epics, plans, prompts, sql
 from canopy.core.vocab import PlanStatus, ReplyMode, RunKind
 from canopy.runs import feedback_plans, policy
 
@@ -119,7 +119,8 @@ def planned_refusal(
     plan = plans.current(ctx.conn, key)
     approved = plan is not None and plan.status is PlanStatus.APPROVED
     setting = ticket.plan_setting if ticket is not None else None
-    if kind == RunKind.IMPLEMENT and not approved and plans.needed(ctx.config.policy.plan, setting):
+    needed = epics.plan_needed(ctx.conn, ctx.state_dir, ctx.config.policy, key, setting)
+    if kind == RunKind.IMPLEMENT and not approved and needed:
         waiting = "its plan waits on the operator's approval" if plan is not None else "it has no plan approved"
         return "unplanned", f"{key} needs a plan before its implement, and {waiting}; dispatch `plan` or wait for it"
     if plan is not None and approved and plans.approved_text(ctx.state_dir, plan) is None:

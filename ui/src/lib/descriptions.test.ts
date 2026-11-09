@@ -166,6 +166,7 @@ describe('ticketDescription', () => {
         plans: [],
         policy: 'off',
         setting: null,
+        trivial: null,
         threads: [],
     }
 

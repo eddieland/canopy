@@ -42,7 +42,8 @@ def ticket_plans(ctx: Context, key: str) -> TicketPlans | None:
     planning = running.id if running is not None and running.kind == RunKind.PLAN else None
     asked = plans.changes_asked(ctx.conn, ticket)
     return TicketPlans(
-        needed=plans.needed(ctx.config.policy.plan, ticket.plan_setting),
+        needed=epics.plan_needed(ctx.conn, ctx.state_dir, ctx.config.policy, key, ticket.plan_setting),
+        trivial=epics.trivial(ctx.conn, ctx.state_dir, key, ctx.config.policy.planner_may_approve),
         setting=ticket.plan_setting.value if ticket.plan_setting is not None else None,
         policy=ctx.config.policy.plan,
         planning=planning,

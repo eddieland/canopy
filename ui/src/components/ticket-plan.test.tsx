@@ -39,6 +39,7 @@ const PLANS: TicketPlans = {
     needed: true,
     policy: 'approve',
     setting: null,
+    trivial: null,
     planning: null,
     changes_asked: null,
     threads: [],
