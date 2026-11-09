@@ -163,8 +163,9 @@ If code and the design disagree, the design doc wins until a decision entry says
   `list`, `dict`, or `set` field.
 - Deterministic core. The Python code never calls an LLM. It runs agent processes and reads their output.
 - Everything canopy knows of the agent runtime, OpenCode, lives in its implementations, `src/canopy/runtime/opencode/`
-  (OpenCode 1, the default) and `src/canopy/runtime/opencode2/` (OpenCode 2, when `runtime.version` is 2) (D009): its
-  command line and variables, the events it prints, the format of canopy's agent definitions, and its config files.
+  (OpenCode 1, deprecated, when `runtime.version` is 1) and `src/canopy/runtime/opencode2/` (OpenCode 2, the default)
+  (D009): its command line and variables, the events it prints, the format of canopy's agent definitions, and its
+  config files.
   Code elsewhere calls the `runtime` package's surface, which names no runtime and takes the version from config; only
   `runtime/implementation.py` imports the implementations. `tests/canopy/test_layers.py` fails on a string outside
   them that names OpenCode, or an import past it.
@@ -259,8 +260,8 @@ If code and the design disagree, the design doc wins until a decision entry says
   agent can call canopy's tools through the server its inline config names (`FAKE_AGENT_TOOLS`), which is how a test
   plays an overseer calling `canopy_decide`, and run commands (`FAKE_AGENT_COMMANDS`). Beside them are the plain
   helpers every test may need: `git`, and `executable` for a script a test puts on a path.
-- A test's workspace runs the runtime version `--runtime` names, 1 by default (`make test RUNTIME=2`), and CI runs the
-  suite under each, so OpenCode 2 meets the whole suite before it is the only runtime. An expectation that differs
+- A test's workspace runs the runtime version `--runtime` names, 2 by default (`make test RUNTIME=1`), and CI runs the
+  suite under each, so the deprecated OpenCode 1 meets the whole suite until it is dropped. An expectation that differs
   by version follows `canopy_env.runtime`, as the helpers that know each shape take it (`given_server`,
   `model_list`). A test that tells OpenCode 1's own story, its commands or the shapes its fakes play, is marked
   `opencode1` and runs on 1 under either; those marked are what is left to port before 1 is dropped.

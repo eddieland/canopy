@@ -13,10 +13,10 @@ from pathlib import Path
 import pytest
 
 from canopy.runtime import implementation
-from canopy.runtime.implementation import Version, pick
+from canopy.runtime.implementation import Version, deprecation, pick
 
 RUNTIME = Path(implementation.__file__).parent
-#: Each runtime canopy can run: OpenCode 1's, the default, and OpenCode 2's.
+#: Each runtime canopy can run: OpenCode 1's, deprecated, and OpenCode 2's, the default.
 IMPLEMENTATIONS = ("canopy.runtime.opencode", "canopy.runtime.opencode2")
 #: The names the binding gives the implementations.
 BOUND = frozenset({"one", "two"})
@@ -63,3 +63,12 @@ def test_an_implementation_has_every_name_the_surface_reads(package: str) -> Non
 def test_each_version_runs_its_own_implementation() -> None:
     assert pick(Version.ONE, implementation.one, implementation.two) is implementation.one
     assert pick(Version.TWO, implementation.one, implementation.two) is implementation.two
+
+
+def test_only_version_1_is_deprecated() -> None:
+    """Version 1 tells the operator how to leave it; the default, 2, tells them nothing."""
+    assert deprecation(Version.TWO) is None
+    told = deprecation(Version.ONE)
+    assert told is not None
+    assert "deprecated" in told
+    assert "remove `version = 1` from [runtime]" in told

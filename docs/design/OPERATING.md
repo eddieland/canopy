@@ -296,14 +296,14 @@ collector adds up across canopy's many short processes, to `<state_dir>/metrics.
 
 ## 13. Agent runtime
 
-OpenCode: OpenCode 1 by default, or OpenCode 2, 2.1.4 or later, when `runtime.version` is 2. The harness depends on
-one capability: run a named agent non-interactively in a given cwd with a prompt and read its stdout. MCP connectivity,
-OAuth, and tool permissions are the runtime's job. The runtime is swappable by editing the command templates (§12) and
-the `runtime` package (§5). Its surface, which the rest of canopy calls, names no runtime, and holds what any runtime's
-output is bounded by; its implementations alone know OpenCode, one per major version: its events, the format of
-canopy's definitions, and the config files the shadowing check reads (D009). `runtime.version` chooses which one every
-call goes to, and the default templates are that version's. A new runtime is a new implementation beside them. No
-interface: one runtime at a time.
+OpenCode: OpenCode 2, 2.1.4 or later, by default, or OpenCode 1, deprecated, when `runtime.version` is 1. The harness
+depends on one capability: run a named agent non-interactively in a given cwd with a prompt and read its stdout. MCP
+connectivity, OAuth, and tool permissions are the runtime's job. The runtime is swappable by editing the command
+templates (§12) and the `runtime` package (§5). Its surface, which the rest of canopy calls, names no runtime, and
+holds what any runtime's output is bounded by; its implementations alone know OpenCode, one per major version: its
+events, the format of canopy's definitions, and the config files the shadowing check reads (D009). `runtime.version`
+chooses which one every call goes to, and the default templates are that version's. A new runtime is a new
+implementation beside them. No interface: one runtime at a time.
 
 Agent definitions ship in `agents/`:
 

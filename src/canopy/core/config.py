@@ -765,7 +765,7 @@ class Pools(Section):
     backend: Annotated[PoolKind, Scope.PRIVATE] = PoolKind.TREEHOUSE
 
 
-def _default_cmd(agent: str, version: Version = Version.ONE) -> str:
+def _default_cmd(agent: str, version: Version = Version.TWO) -> str:
     return invocation.default_template(agent, version=version, definitions_dir=DEFINITIONS_DIR, title=TITLE)
 
 
@@ -790,9 +790,9 @@ _AGENT_CMDS = {
 class Runtime(Section):
     """The `[runtime]` table: agent command templates and timeouts."""
 
-    #: The major version of the runtime canopy runs: 1, or 2 to run OpenCode 2, 2.1.4 or later (DESIGN §13). The
-    #: default templates are the version's. Private: it decides what runs on the operator's machine.
-    version: Annotated[Version, Scope.PRIVATE, BeforeValidator(_plain_version)] = Version.ONE
+    #: The major version of the runtime canopy runs: 2, OpenCode 2.1.4 or later, or 1, which is deprecated (DESIGN
+    #: §13). The default templates are the version's. Private: it decides what runs on the operator's machine.
+    version: Annotated[Version, Scope.PRIVATE, BeforeValidator(_plain_version)] = Version.TWO
     overseer_cmd: Annotated[AgentTemplate, Scope.PRIVATE, _no_model("overseer")] = _default_cmd(agents.OVERSEER)
     #: The overseer's temperature, or -1 to set none and leave the model's own: set -1 when the overseer runs on a
     #: model that refuses one, such as OpenAI's reasoning models.
@@ -855,7 +855,7 @@ class Runtime(Section):
         if not isinstance(data, Mapping):
             return data
         try:
-            version = Version(data.get("version", Version.ONE))
+            version = Version(data.get("version", Version.TWO))
         except (TypeError, ValueError):
             return data
         defaults = {key: _default_cmd(agent, version) for key, agent in _AGENT_CMDS.items() if key not in data}

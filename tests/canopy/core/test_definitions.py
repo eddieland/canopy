@@ -54,7 +54,7 @@ def test_the_snapshot_is_unwritable_by_anyone_its_owner_included(tmp_path: Path)
     assert {p.relative_to(snapshot).as_posix() for p in found} >= {".", "plugins", "plugins/canopy.js"}
     # Its links lead to the operator's own config, which stays theirs to change; a link's own mode means nothing.
     links = [p for p in found if p.is_symlink()]
-    assert {p.name: p.readlink() for p in links} == runtime_definitions.links(version=Version.ONE)
+    assert {p.name: p.readlink() for p in links} == runtime_definitions.links(version=Version.TWO)
     owned = [p for p in found if not p.is_symlink()]
     assert [p for p in owned if p.lstat().st_mode & 0o222] == []
     assert all(p.lstat().st_mode & stat.S_IRUSR for p in owned)

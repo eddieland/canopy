@@ -654,24 +654,32 @@ def test_a_chore_of_an_agent_of_the_operators_own_may_approve_what_its_rules_ask
     assert load(canopy_env.root, canopy_env.user_file).chores["triage"].cmd == cmd
 
 
-@pytest.mark.opencode1  # from OpenCode 1, the default, to 2
-def test_runtime_version_2_runs_opencode_2_and_its_default_templates(canopy_env: CanopyEnv) -> None:
+def test_runtime_version_2_is_the_default_and_1_runs_opencode_1s_default_templates(canopy_env: CanopyEnv) -> None:
+    """With no `runtime.version`, canopy runs OpenCode 2; the deprecated 1 runs OpenCode 1's own default templates."""
     canopy_env.write_user(
-        "\n".join(line for line in canopy_env.user_file.read_text().splitlines() if "_cmd" not in line),
-    )
-    assert load(canopy_env.root, canopy_env.user_file).runtime.version == Version.ONE
-    canopy_env.configure(
-        canopy_env.user_file,
-        {"runtime": {"version": 2, "review_cmd": REVIEW_CMD}},
+        "\n".join(
+            line
+            for line in canopy_env.user_file.read_text().splitlines()
+            if "_cmd" not in line and not line.startswith("version")
+        ),
     )
     runtime = load(canopy_env.root, canopy_env.user_file).runtime
     assert runtime.version == Version.TWO
-    # Each on a private server of its own, but the one the operator set, which stays as they wrote it.
+    # Each on a private server of its own.
     for template in (runtime.overseer_cmd, runtime.worker_cmd, runtime.private_worker_cmd, runtime.plan_cmd):
         assert template.startswith(
             "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --standalone --agent canopy-",
         )
     assert runtime.chore_cmd.startswith("env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --standalone ")
+    canopy_env.configure(
+        canopy_env.user_file,
+        {"runtime": {"version": 1, "review_cmd": REVIEW_CMD}},
+    )
+    runtime = load(canopy_env.root, canopy_env.user_file).runtime
+    assert runtime.version == Version.ONE
+    # The one the operator set stays as they wrote it.
+    for template in (runtime.overseer_cmd, runtime.worker_cmd, runtime.private_worker_cmd, runtime.plan_cmd):
+        assert template.startswith("env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-")
     assert runtime.review_cmd == REVIEW_CMD
 
 

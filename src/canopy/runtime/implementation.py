@@ -14,16 +14,30 @@ from typing import assert_never
 from canopy.runtime import opencode as one
 from canopy.runtime import opencode2 as two
 
-__all__ = ["Version", "one", "pick", "two"]
+__all__ = ["Version", "deprecation", "one", "pick", "two"]
 
 
 class Version(IntEnum):
     """The major version of the runtime canopy runs, as config's `runtime.version` names it."""
 
-    #: The default: OpenCode 1.
+    #: OpenCode 1, which the operator asks for. Deprecated: it is to be dropped (`deprecation`).
     ONE = 1
-    #: OpenCode 2, which the operator asks for.
+    #: The default: OpenCode 2.
     TWO = 2
+
+
+def deprecation(version: Version) -> str | None:
+    """Return what to tell the operator of `version` if it is deprecated, or None if it is not."""
+    match version:
+        case Version.ONE:
+            return (
+                "runtime.version 1 is deprecated, and a later release drops it: remove `version = 1` from [runtime] "
+                "to run version 2 (2.1.4 or later), the default"
+            )
+        case Version.TWO:
+            return None
+        case _:
+            assert_never(version)
 
 
 def pick[T](version: Version, first: T, second: T) -> T:

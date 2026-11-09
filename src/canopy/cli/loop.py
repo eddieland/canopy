@@ -47,6 +47,7 @@ from canopy.loop.render import (
 from canopy.notify import deliver
 from canopy.reviews import evals, review_requests
 from canopy.runs import drafted, tasks
+from canopy.runtime.implementation import deprecation
 
 if TYPE_CHECKING:
     import sqlite3
@@ -91,6 +92,10 @@ def cmd_loop(
     SIGHUP reads the config again, once the running tick ends.
     """
     ctx = open_context(click_ctx, migrate=False)  # the loop migrates under its own lock
+    # To stderr, so the daemon's log keeps it too.
+    deprecated = deprecation(ctx.config.runtime.version)
+    if deprecated is not None:
+        click.echo(f"Warning: {deprecated}", err=True)
     stop = repeat.Stop()
     reload = reread.Reload()
     # Drawn only to a terminal, whatever FORCE_COLOR or TTY_COMPATIBLE say: the daemon's output is a file, read as a
@@ -151,6 +156,9 @@ def cmd_status(click_ctx: click.Context) -> int:
         doing = _doing(last) if last.status is TickStatus.RUNNING else ""
         if doing:
             click.echo(f"  overseer{doing}")
+    deprecated = deprecation(ctx.config.runtime.version)
+    if deprecated is not None:
+        click.echo(f"Warning: {deprecated}")
     held = pause.paused(ctx.conn)
     if held is not None:
         click.echo(f"Loop paused {attention.age(held.since)} ago ({held.channel}): no tick until `canopy resume`.")
