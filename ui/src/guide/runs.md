@@ -138,8 +138,8 @@ commit, for a first `implement` with no branch yet) to where the run left it; ho
 Under it, each file the run touched with its lines added and removed. **Show diff** opens the diff itself under the
 panel, a panel per file, drawn as a review's is. So a `resume` that answered one review comment shows the three lines
 it touched, not the four hundred the branch has piled up since `implement`. When you do want the whole branch, **branch
-vs base** takes you to the PR's page, which has it as the branch stands now, with its threads on it. A run across
-several repositories has a Diff panel for each.
+vs base** takes you to the PR's page, which has it as the latest run that pushed left it, with its threads on it. A
+run across several repositories has a Diff panel for each.
 
 A run that ended `unpushed` still shows what it did: the change up to the last commit it made in its worktree, with a
 **not on origin** chip, since the commits themselves went with the slot. It's the closest you'll get to the work the
