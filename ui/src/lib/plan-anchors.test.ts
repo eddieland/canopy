@@ -150,6 +150,14 @@ describe('locate, approximately', () => {
         expect(locate(text, anchor, { approximate: true })?.start).toBe(text.lastIndexOf('streams rows'))
     })
 
+    it('of reworded copies, picks the one whose surrounding text the anchor kept, wherever it was', () => {
+        const text =
+            '## Upload\nRetry the upload twice, then stop.\n\n## Download\nRetry the upload twice, then log it.'
+        const anchor = anchored(text, 'Retry the upload twice', text.indexOf('## Download'))
+        const reworded = text.replaceAll('twice', 'two times')
+        expect(locate(reworded, anchor, { approximate: true, near: 0 })?.start).toBe(reworded.lastIndexOf('Retry'))
+    })
+
     it('of reworded copies that match alike, picks the one nearest where the passage was', () => {
         const block = `${'x'.repeat(40)}\nRetry the upload twice.\n`
         const text = block.repeat(4)
