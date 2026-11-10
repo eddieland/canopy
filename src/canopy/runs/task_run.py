@@ -349,7 +349,7 @@ def _work(ctx: Context, run: records.TaskRun, link: bytes | None, out: TextIO, l
     elif parsed is None:
         status, note = RunStatus.UNKNOWN, "the worker's last line was not a valid result"
     else:
-        status, note = RunStatus(parsed.status), ""
+        status, note = RunStatus(parsed.status), contract.REPAIRED if contract.repaired(text) else ""
     # Each entry checked alone, on its text (D003), whatever the rest of the result says.
     tickets = task_tickets.check(
         follow_ups.parse(text),

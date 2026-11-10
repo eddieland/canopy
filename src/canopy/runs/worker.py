@@ -1045,7 +1045,7 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     elif parsed is None:
         status, note = RunStatus.UNKNOWN, "the worker's last line was not a valid result"
     else:
-        status, note = RunStatus(parsed.status), ""
+        status, note = RunStatus(parsed.status), contract.REPAIRED if contract.repaired(text) else ""
 
     rewritten = [(slot, path) for slot in slots if (path := slot.rewritten()) is not None]
     if rewritten:

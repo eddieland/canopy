@@ -345,6 +345,8 @@ Every agent's output is read the same way, whether the template asks for plain t
 contract (§8, §18, §19, §21) is the last line of the text that starts with `{`; lines after it that do not are passed
 over, since a runtime or plugin may print after the agent's last word. A last object that does not validate is no
 result: canopy never falls back to an earlier one, which may be an example the agent quoted or a result it took back.
+One slip is repaired, and the run's note says so: a line that is not JSON only for a few closing brackets, outside any
+string, is read with them put right, since no value changes and the result is validated as any other.
 The overseer's done token is a plain line anywhere in its final message (§6).
 
 From the events the harness also reads, each validated (D026), the session id, the cost, the context used, and the

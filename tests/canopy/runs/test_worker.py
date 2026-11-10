@@ -19,7 +19,7 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import cards, config, db, definitions, prompts, run_models, workspace
+from canopy.core import cards, config, contract, db, definitions, prompts, run_models, workspace
 from canopy.core.vocab import FlakyCause, RunStatus
 from canopy.runs import worker
 from canopy.runtime import servers
@@ -476,6 +476,16 @@ def test_bad_result_line_is_unknown(scenario: Scenario, git_pool: GitPool, last_
     run = scenario.run(worker=worker_does(result=last_line, exit_code=exit_code))
     assert run.status == "unknown"
     assert json.loads(run.row["result_json"]) == {"harness": "the worker's last line was not a valid result"}
+
+
+def test_result_line_with_an_unclosed_array_is_read_and_noted(scenario: Scenario, git_pool: GitPool) -> None:
+    line = '{"status": "blocked", "question": "which API?", "review_answers": [{"review": 1, "finding": 1}}'
+    run = scenario.run(worker=worker_does(result=line))
+    assert run.status == "blocked"
+    result = json.loads(run.row["result_json"])
+    assert result["question"] == "which API?"
+    assert result["harness"] == contract.REPAIRED
+    assert git_pool.remote_head("agent/PROJ-1-work") is None
 
 
 def test_result_text_is_bounded(scenario: Scenario, git_pool: GitPool) -> None:
