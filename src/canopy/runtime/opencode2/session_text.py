@@ -61,8 +61,10 @@ SELECT count(*) FROM session WHERE id NOT IN (SELECT id FROM session_v2)
 EARLIER_ALL_SQL = "SELECT count(*) FROM session"
 #: Each part of every session's text, as `TextRow` reads it: its session, which part, and the text, none empty, among
 #: the parts a JSON array names, `?2`, that holds every pattern of `LIKE` another names, `?1`: every part, read whole,
-#: when the first names none, and a plain scan of the record in place, with no index, when it names some. A message
-#: whose data is not JSON is read as an empty object, so SQLite takes nothing out of it and raises nothing.
+#: when the first names none, and a plain scan of the record in place, with no index, when it names some. With `?3`
+#: false, as a scan is run, the text itself is left behind, so the scan is timed as an index's search is, on what it
+#: finds, not on carrying it out; and only a part that is text is found. A message whose data is not JSON is read as an
+#: empty object, so SQLite takes nothing out of it and raises nothing.
 PARTS_SQL = """
 WITH message AS (
     SELECT session_id, type, CASE WHEN json_valid(data) THEN data ELSE '{}' END AS data FROM session_message
@@ -98,12 +100,16 @@ parts (session_id, part, text) AS (
     UNION ALL
     SELECT session_id, 'returned', json_extract(data, at || '.state.error.message') FROM content WHERE kind = 'tool'
 )
-SELECT session_id, part, text FROM parts
+SELECT session_id, part, CASE WHEN ?3 THEN text ELSE '' END FROM parts
 WHERE text IS NOT NULL AND text != '' AND part IN (SELECT value FROM json_each(?2))
+  AND (?3 OR typeof(text) = 'text')
   AND NOT EXISTS (SELECT 1 FROM json_each(?1) w WHERE text NOT LIKE w.value ESCAPE '\\')
 """
-#: What `PARTS_SQL` takes to read every part whole: no pattern, and every part.
-EVERY_PART = ("[]", json.dumps(TEXT_PARTS))
+#: `PARTS_SQL`'s `?3`: whether it reads each part's text, or leaves it behind.
+WITH_TEXT = 1
+WITHOUT_TEXT = 0
+#: What `PARTS_SQL` takes to read every part whole: no pattern, every part, and its text.
+EVERY_PART = ("[]", json.dumps(TEXT_PARTS), WITH_TEXT)
 
 
 def record() -> SessionRecord:
@@ -193,7 +199,9 @@ def scan(words: Sequence[str], parts: Collection[TextPart]) -> list[tuple[str, T
             with sessions.opened(path, seconds=READ_SECONDS) as conn:
                 if "session_v2" not in {row[0] for row in sessions.query(conn, TABLES_SQL)}:
                     continue
-                found.update(h for row in sessions.each(conn, PARTS_SQL, patterns, named) if (h := _hit(row)))
+                found.update(
+                    h for row in sessions.each(conn, PARTS_SQL, patterns, named, WITHOUT_TEXT) if (h := _hit(row))
+                )
         except sqlite3.Error:
             if n == 0:
                 raise
