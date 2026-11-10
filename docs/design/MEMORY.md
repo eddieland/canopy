@@ -31,7 +31,9 @@ With both off, every shipped prompt is as before memory existed, and what a work
 The `implement` and `resume` prompts ask, after the result line, for each optional memory field only while its tier
 allows it: `notes` and `proposals` while their tier is not off; `drop_notes`, `memory_used`, and `memory_wrong` at
 `use`. A prompt override that lacks what its mode needs is refused. At `use` they carry the ticket's notes, capped,
-framed as its previous runs are: data to check against the branch, kept off the tracker, the PRs, and commits.
+framed as its previous runs are: data to check against the branch, kept off the tracker, the PRs, and commits. A plan's
+and a feedback plan's ask only for `memory_used` and `memory_wrong`, at `use`: a planner pushes nothing a merge can
+check.
 
 ### Writing
 
@@ -46,10 +48,9 @@ What a run had refused is recorded in the harness's words, never its text.
 
 Enforced in code at write, and for a lesson's text at promotion. Each entry is refused alone, never cut or cleaned, so
 one bad entry costs only itself. Texts and their number a run are bounded, so one run cannot fill the queue. A text is
-plain text, its lines broken sparingly, with no character that can hide text from the operator while a model still
-reads it; a prompt quotes each of its lines, so a line break cannot end the quote. A text that looks like a secret is
-refused (a hexadecimal word never does, since notes name commits), and so is one that repeats a note in force, a
-pending proposal, or a lesson.
+plain text, its lines broken sparingly, with no character that can hide text from the operator while a model still reads
+it; a prompt quotes each of its lines, so a line break cannot end the quote. A text that looks like a secret is refused,
+and so is one that repeats a note in force or a lesson.
 
 ### Retention
 
@@ -61,6 +62,9 @@ replaced, keeps its text until the operator forgets it.
 ### Proposals and lessons
 
 - Past a cap on pending proposals a new one is refused, so a flood cannot push older ones out.
+- A proposal under a pending one's key and repository, or in its words, seconds it and writes no row, so a second
+  never counts against the cap: independent tickets reaching one lesson is the best evidence it holds, so each ticket
+  counts once and the proposal's own never does, and the operator's lists put the most seconded first.
 - The operator promotes a proposal or a note into a lesson, under the same bounds, or rejects a proposal; both work at
   `record`. Promoting a private ticket's run's own words warns that they come from a conversation kept off the
   tracker, which a lesson would carry into public tickets' runs.
@@ -68,9 +72,9 @@ replaced, keeps its text until the operator forgets it.
   would leave a run's citations naming words it never read. An edit may give a lesson a new key. One that changes only
   the key is the same words to the same runs, so it keeps the review date, any report, the reads and citations, and a
   run's citation of the old version reaches it. An old key is free for another lesson to take.
-- At `use`, lessons are in every worker prompt that carries the standing instructions (§8),
-  framed as the operator's words that the prompt's obligations come before; capped, pinned lessons kept first, and a
-  lesson naming a repository only in runs that lease it.
+- At `use`, lessons are in the prompts of `implement`, `resume`, `plan`, and `feedback-plan` runs (§8), framed as the
+  operator's words that the prompt's obligations come before; capped, pinned lessons kept first, and a lesson naming a
+  repository only in runs that lease it.
 - A lesson unused for a while comes up for review: the operator renews it, pins it, graduates it into a repository's
   AGENTS.md or a skill through a PR they merge, or forgets it. A pinned lesson never comes up for review, and keeps its
   pin through each new version under its key until the operator unpins it; a run's report that it is wrong still
@@ -80,13 +84,12 @@ replaced, keeps its text until the operator forgets it.
 
 ### Search
 
-`canopy memory search` finds memories by their words, past what the digests' caps leave out, and replaces none of
-them. In a worker's run it finds only what that run's prompt could be served: its ticket's notes and its leased
-repositories' lessons, each tier only at `use`. An ended run finds nothing, a review or a chore no memory, and the
-overseer is refused. The operator finds every memory that keeps its text; the index holds no copy of one. It is the one
-`canopy` command the worker definitions allow (§13); a sandboxed worker's policy denies the journal (§24). A steered
-worker that searches as another run reaches no more than its bash could read anyway (D076), so the definitions' rules
-are defense in depth (T4). Rejected: embeddings, weakest on facts that changed.
+`canopy memory search` finds memories by their words, past what the digests' caps leave out, and replaces none of them.
+In a worker's run it finds only what that run's prompt could be served: its ticket's notes and its leased repositories'
+lessons, each tier only at `use`. An ended run finds nothing, a review or a chore no memory, and the overseer is
+refused. The operator finds every memory that keeps its text; the index holds no copy of one. It is the one `canopy`
+command the worker definitions allow (§13); a sandboxed worker's policy denies the journal (§24). Rejected: embeddings,
+weakest on facts that changed.
 
 ### Commands
 
@@ -95,10 +98,10 @@ delete text, leaving no copy in free pages, so a purged poison or leaked secret 
 inside a tick or a run (T1).
 
 The web UI takes every verb but `purge` through the same functions and guards, as the web channel (§22, T8). A promote
-that would replace a lesson in force or promote a private ticket's run's own words is never one click. Forget shows on
-a ticket's notes even with proposals off, so a leaked secret can leave from where the operator sees it (operator's
-decision, 2026-10-18). Recorded memory never reads as memory in use, and a worker's text shows as plain text, never
-Markdown or a link (D113), every character the bounds refuse named.
+that would replace a lesson in force or promote a private ticket's run's own words is never one click. Forget shows on a
+ticket's notes even with proposals off, so a leaked secret can leave from where the operator sees it. Recorded memory
+never reads as memory in use, and a worker's text shows as plain text, never Markdown or a link (D113), every character
+the bounds refuse named.
 
 ### Open
 

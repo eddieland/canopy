@@ -4,8 +4,10 @@ Run 39, ABC-099's implement in web, started from main, origin having no branch y
 diffs are kept, so its page names the files it changed and shows their diff when opened. Its second commit was left
 unpushed by its worker and pushed by canopy. Run 40, ABC-100's fix-ci, failed with its fix still in its slot: its
 diffs, and its commit, are of work not on origin. Run 37, ABC-100's implement, kept neither, and its page says why.
-Task 1's run in web kept both, as a worker run's do, one of its commits made around canopy's hooks. Run 45's record is
-`drafts`'s, whose PR page reads its branch's diff and lists both runs' commits as its branch's history.
+Run 38, ABC-103's implement, was held by web's checklist: what it changed holds the stretch it pushed after the list
+(`checklists`) and the v1 client it deleted before, so its page shows the one inside the other. Task 1's run in web
+kept both, as a worker run's do, one of its commits made around canopy's hooks. Run 45's record is `drafts`'s, whose
+PR page reads its branch's diff and lists both runs' commits as its branch's history.
 """
 
 from __future__ import annotations
@@ -13,6 +15,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from canopy.core import records, review_diff, run_changes
+from canopy.serve.mock import checklists
 from canopy.serve.mock.reviews import SHA_88, SHA_88_FIRST
 
 if TYPE_CHECKING:
@@ -108,14 +111,38 @@ index 0b4e6f2..c71a9d8 100644
  }
 """
 
+#: Run 38's whole change: the v1 client it deleted before it was shown web's list, then the stretch it pushed after.
+_BILLING = (
+    """\
+diff --git a/src/billing/v1.ts b/src/billing/v1.ts
+deleted file mode 100644
+index 4c2e8b1..0000000
+--- a/src/billing/v1.ts
++++ /dev/null
+@@ -1,9 +0,0 @@
+-// The v1 billing client: retired with the v1 endpoint.
+-export async function fetchInvoices(account: string): Promise<Invoice[]> {
+-    const response = await fetch(`/v1/billing/${account}/invoices`)
+-    return (await response.json()) as Invoice[]
+-}
+-
+-export async function fetchInvoiceLines(id: string): Promise<Line[]> {
+-    return (await (await fetch(`/v1/billing/invoices/${id}/lines`)).json()) as Line[]
+-}
+"""
+    + checklists.STRETCH
+)
+
 
 def seed(conn: sqlite3.Connection) -> None:
     """Record what each ended run changed, as `_run` and `_task` record it when they end, and keep its diffs."""
     run_39 = records.select(records.Run).where("id = ?", 39).one(conn)
     run_40 = records.select(records.Run).where("id = ?", 40).one(conn)
+    run_38 = records.select(records.Run).where("id = ?", checklists.HELD_RUN).one(conn)
     task_run = records.select(records.TaskRun).where("id = ?", 1).one(conn)
-    if run_39 is None or run_40 is None or task_run is None:
+    if run_39 is None or run_40 is None or run_38 is None or task_run is None:
         return
+    _keep(run_38.log_path, "web", _BILLING, _BILLING)
     _keep(run_39.log_path, "web", _DEBOUNCE, _DEBOUNCE)
     _keep(run_40.log_path, "web", _RETRY, _RETRY)
     _keep(task_run.log_path, "web", _BUNDLE, _BUNDLE)
@@ -166,6 +193,22 @@ def seed(conn: sqlite3.Connection) -> None:
                     ),
                 ),
                 commit_count=1,
+            ),
+        ],
+    )
+    run_changes.record(
+        conn,
+        checklists.HELD_RUN,
+        [
+            run_changes.Change(
+                "web",
+                _MAIN,
+                start_on_base=True,
+                end=checklists.PUSHED,
+                merge_base=_MAIN,
+                change_kept=True,
+                branch_kept=True,
+                counted=counted(_BILLING),
             ),
         ],
     )

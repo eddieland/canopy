@@ -99,16 +99,14 @@ function Loaded({ id }: { id: number }) {
                     />
                 )}
                 <RunPanel run={data} transcript={transcript} onShow={view.show} />
-                <ChecklistPanel
-                    answers={data.checklist}
-                    stretches={data.checklist_stretches}
-                    leftOut={data.checklist_stretches_left_out}
-                    shownBy={runRef(data.id)}
-                />
+                <ChecklistPanel answers={data.checklist} />
                 <RunChangesPanel
                     changes={data.changes}
                     records={data.records_changes}
                     diff={(repo) => runChangeQuery(data.id, repo)}
+                    stretches={data.checklist_stretches}
+                    leftOut={data.checklist_stretches_left_out}
+                    shownBy={runRef(data.id)}
                 />
                 <TranscriptPanel
                     transcript={transcript}

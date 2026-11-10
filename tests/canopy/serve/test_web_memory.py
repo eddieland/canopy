@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from canopy.core import db
+from canopy.core import db, records
 from canopy.core.vocab import RunKind
 from canopy.infra import resources
 from tests.canopy.helpers import BRANCH, KEY, context, in_run, in_tick, with_memory
@@ -102,6 +102,8 @@ def test_the_overview_counts_the_notes_in_force_by_ticket_and_holds_the_proposal
         (5, "implement", False, False),
         (6, "implement", True, False),
     ]
+    # ABC-102's run made proposal 5 again: a second, not a row of its own.
+    assert [p["seconds"] for p in overview["proposals"]] == [[{"ticket_key": "ABC-102", "run_id": 42}], []]
     # Each proposal lapses PROPOSAL_DAYS after it was written, unless decided.
     for p in overview["proposals"]:
         lapses = datetime.fromisoformat(p["expires_at"]) - datetime.fromisoformat(p["entry"]["created_at"])
@@ -205,6 +207,16 @@ PINNED = [10, 9]
 def lesson_of(c: TestClient, lesson_id: int) -> dict[str, Any]:
     """The lesson in force with `lesson_id`, as the memory page reads it."""
     return {m["id"]: m for m in c.get("/api/memory").json()["lessons"]}[lesson_id]
+
+
+def test_the_overview_lists_the_most_seconded_proposal_first(backend: Backend) -> None:
+    with backend.open() as ctx, db.transaction(ctx.conn):
+        records.insert_rows(records.ProposalSecond, ("memory_id", "ticket_key", "run_id")).many(
+            ctx.conn,
+            [(6, "ABC-100", 40), (6, "ABC-103", 38)],
+        )
+    proposals = client(None, backend).get("/api/memory").json()["proposals"]
+    assert [(p["entry"]["id"], len(p["seconds"])) for p in proposals] == [(6, 2), (5, 1)]
 
 
 def test_promote_makes_a_proposal_a_lesson_recorded_and_served_to_no_run(backend: Backend) -> None:

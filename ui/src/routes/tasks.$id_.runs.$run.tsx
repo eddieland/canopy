@@ -98,16 +98,14 @@ function Loaded({ task, run }: { task: number; run: number }) {
             <div className="flex stagger flex-col gap-6">
                 {data.run.card !== null && <ProgressPanel card={data.run.card} running={data.run.ended_at === null} />}
                 <RunPanel detail={data} transcript={transcript} onShow={view.show} />
-                <ChecklistPanel
-                    answers={data.checklist}
-                    stretches={data.checklist_stretches}
-                    leftOut={data.checklist_stretches_left_out}
-                    shownBy={taskRef(data.task_id)}
-                />
+                <ChecklistPanel answers={data.checklist} />
                 <RunChangesPanel
                     changes={data.changes}
                     records={data.records_changes}
                     diff={(repo) => taskRunChangeQuery(task, run, repo)}
+                    stretches={data.checklist_stretches}
+                    leftOut={data.checklist_stretches_left_out}
+                    shownBy={taskRef(data.task_id)}
                 />
                 <TranscriptPanel
                     transcript={transcript}

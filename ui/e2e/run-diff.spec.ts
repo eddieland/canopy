@@ -13,7 +13,8 @@ test.beforeEach(async ({ page }) => {
 test("a run's page sums up what it changed, over its transcript, and shows the diff when asked", async ({ page }) => {
     await page.goto('workspace/runs/39')
     await settled(page)
-    const diff = page.getByRole('region', { name: /^Diff: web · 71c3e0a\.\.9b2f4c6$/u })
+    const diff = page.getByRole('region', { name: "web's diff" })
+    await expect(diff.getByTestId('run-change-range')).toHaveText('web · 71c3e0a..9b2f4c6')
     await expect(diff.getByTestId('run-change-size')).toHaveText('2 files · +21 −3')
     await expect(diff.getByTestId('run-change-files').getByRole('listitem')).toHaveCount(2)
     await expect(diff.getByTestId('diff-file')).toHaveCount(0)
@@ -34,7 +35,7 @@ test("a run's page sums up what it changed, over its transcript, and shows the d
         'https://github.com/acme/web/pull/88/commits/5e1c0d2a77777777777777777777777777777777',
     )
 
-    await diff.getByRole('button', { name: 'Show diff' }).click()
+    await diff.getByRole('button', { name: 'Show diff of web' }).click()
     await expect(diff.getByTestId('diff-file')).toHaveCount(2)
     await expect(diff.getByTestId('diff-file').first()).toContainText('controller.abort()')
 })
@@ -81,7 +82,7 @@ test("a ticket's runs list names each run's range and size, opening the run at i
     await expect(ranges).toHaveText(['web 9b2f4c6..e3a7d91 +26 −1', 'web 71c3e0a..9b2f4c6 +21 −3'])
     await ranges.last().click()
     await expect(page).toHaveURL(/\/workspace\/runs\/39#diff-web$/u)
-    await expect(page.getByRole('region', { name: /^Diff: web/u }).getByTestId('diff-file')).toHaveCount(2)
+    await expect(page.getByRole('region', { name: "web's diff" }).getByTestId('diff-file')).toHaveCount(2)
 })
 
 test("a PR's runs list names each run's range, and its threads sit on the kept diff, no draft", async ({ page }) => {

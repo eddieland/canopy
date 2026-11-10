@@ -35,6 +35,12 @@ def test_the_memory_contract(markdown_snapshot: SnapshotAssertion, notes: Memory
     assert memory.memory_contract(memory.Modes(ticket_notes=notes, proposals=proposals)) == markdown_snapshot
 
 
+def test_the_memory_contract_of_a_plan(markdown_snapshot: SnapshotAssertion) -> None:
+    """A planner, served lessons at `use`, is asked only which it relied on or found wrong."""
+    modes = memory.Modes(ticket_notes=MemoryMode.OFF, proposals=MemoryMode.USE)
+    assert memory.memory_contract(modes, writes=False) == markdown_snapshot
+
+
 def test_the_ticket_digest_of_a_ticket_with_notes(
     conn: sqlite3.Connection,
     markdown_snapshot: SnapshotAssertion,
@@ -77,7 +83,7 @@ def test_the_ticket_digest_of_a_ticket_without_notes(
 @pytest.mark.parametrize(
     ("repos", "cite"),
     [(("api",), True), (("web",), False)],
-    ids=["a-run-in-api-that-cites", "a-plan-in-web"],
+    ids=["a-run-in-api-that-cites", "the-operators-digest-of-web"],
 )
 def test_the_lessons_digest(
     conn: sqlite3.Connection,
