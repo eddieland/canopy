@@ -326,7 +326,7 @@ function FunPanel() {
                         step={1}
                         defaultValue={gap}
                         disabled={!on}
-                        className="readout w-20 text-right"
+                        className="w-20 text-right readout"
                         data-testid="ticker-gap"
                         onChange={(event) => {
                             const value = event.currentTarget.value

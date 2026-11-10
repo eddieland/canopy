@@ -16,7 +16,7 @@ const buttonVariants = cva(
         'transition-[color,background-color,border-color,box-shadow,translate]',
         'focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
         // Pressed, it moves by its palette's shift (`--press-x`, `--press-y`): a pixel down, or into its hard shadow.
-        'active:not-aria-[haspopup]:translate-x-(--press-x) active:not-aria-[haspopup]:translate-y-(--press-y)',
+        'not-aria-[haspopup]:active:translate-x-(--press-x) not-aria-[haspopup]:active:translate-y-(--press-y)',
         'disabled:pointer-events-none disabled:opacity-50',
         "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
     ],

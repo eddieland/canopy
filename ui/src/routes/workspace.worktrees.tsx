@@ -335,7 +335,7 @@ function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: 
             </Tip>
             <span className="flex items-center">
                 <Tip fact={w.path} mono>
-                    <span className="readout w-8 text-xs text-muted-foreground">{slotRef(w.name)}</span>
+                    <span className="w-8 readout text-xs text-muted-foreground">{slotRef(w.name)}</span>
                 </Tip>
                 {whole && <CopyButton text={whole(w.path)} label={`slot ${w.name}'s path`} reveal />}
             </span>
@@ -374,11 +374,11 @@ function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: 
             {(w.note || w.branch_error) && (
                 <RowLine from="holder" className="flex flex-wrap gap-x-4 font-mono text-xs">
                     {w.branch_error && (
-                        <span className="min-w-0 break-words text-status-failed">
+                        <span className="min-w-0 wrap-break-word text-status-failed">
                             branch unreadable: {w.branch_error}
                         </span>
                     )}
-                    {w.note && <span className="min-w-0 break-words text-status-blocked">{w.note}</span>}
+                    {w.note && <span className="min-w-0 wrap-break-word text-status-blocked">{w.note}</span>}
                 </RowLine>
             )}
         </ListRow>

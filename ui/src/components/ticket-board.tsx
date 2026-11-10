@@ -34,7 +34,7 @@ export function TicketBoard({ tickets }: { tickets: Iterable<TicketSummary> }) {
             // A scrolling region takes focus so the keyboard can scroll it (axe's scrollable-region-focusable).
             // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex
             tabIndex={0}
-            className="overflow-x-auto p-3 [scrollbar-width:thin] focus-visible:-outline-offset-2"
+            className="scrollbar-thin overflow-x-auto p-3 focus-visible:-outline-offset-2"
             data-testid="ticket-board"
         >
             <div className="grid auto-cols-[minmax(11rem,1fr)] grid-flow-col gap-3">

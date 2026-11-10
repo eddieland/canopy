@@ -163,7 +163,7 @@ export function PlanThreads({
             )}
             {lost.map((thread) => card(thread))}
             {resolved.length > 0 && (
-                <Collapsible open={showResolved} onOpenChange={setShowResolved} className="border-t px-1 py-1">
+                <Collapsible open={showResolved} onOpenChange={setShowResolved} className="border-t p-1">
                     <Disclosure open={showResolved} what={`${resolved.length} resolved`} />
                     <CollapsibleContent className="-mx-1 mt-1 border-t">
                         {resolved.map((thread) => (
@@ -577,7 +577,7 @@ function ConfirmDelete({ replies, onDelete, onKeep }: { replies: number; onDelet
 function Quote({ text, onClick }: { text: string; onClick?: (() => void) | undefined }) {
     const css = cn(
         'line-clamp-2 min-w-0 flex-1 border-l-2 border-accent/60 pl-2 text-left text-xs text-muted-foreground',
-        'break-words',
+        'wrap-break-word',
     )
     if (onClick === undefined) {
         return (

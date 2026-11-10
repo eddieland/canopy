@@ -101,7 +101,7 @@ export function StreamReadout({ stream }: { stream: StreamStatus }) {
     const tone = since === null ? (stream === 'open' ? 'open' : 'waiting') : 'down'
     return (
         <span
-            className="readout inline-flex items-center gap-1.5 text-2xs whitespace-nowrap uppercase"
+            className="inline-flex items-center gap-1.5 readout text-2xs whitespace-nowrap uppercase"
             title={since === null ? undefined : `Down since ${localTime(since, clock)}: the loop isn't answering.`}
             data-testid="stream-status"
             data-status={since === null ? stream : 'down'}
@@ -183,7 +183,7 @@ function TickCard({ tick }: { tick: Tick }) {
             }
         >
             {tick.summary !== null && (
-                <p className="line-clamp-4 whitespace-pre-line wrap-break-word text-muted-foreground">
+                <p className="line-clamp-4 wrap-break-word whitespace-pre-line text-muted-foreground">
                     <LinkedText text={tick.summary} />
                 </p>
             )}
@@ -262,7 +262,7 @@ function BudgetReadout({ month }: { month: SpendMonth }) {
             <Link
                 to="/reports/spend"
                 className={cn(
-                    'readout inline-flex items-center gap-1.5 text-xs whitespace-nowrap underline-offset-4',
+                    'inline-flex items-center gap-1.5 readout text-xs whitespace-nowrap underline-offset-4',
                     'hover:underline',
                     BUDGET_TONE[state],
                 )}

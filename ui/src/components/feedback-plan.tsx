@@ -427,7 +427,7 @@ function ItemRows({
                                 className="mt-0.5"
                             />
                         )}
-                        <span className="readout shrink-0 text-xs text-muted-foreground" title={`id ${item.item_id}`}>
+                        <span className="shrink-0 readout text-xs text-muted-foreground" title={`id ${item.item_id}`}>
                             {item.number}.
                         </span>
                         <span className="min-w-0 grow" data-testid="feedback-plan-said">
@@ -451,7 +451,7 @@ function ItemRows({
                                 <MemoryText text={item.rationale} />
                             </span>
                         )}
-                        <span className="readout ml-auto">id {item.item_id}</span>
+                        <span className="ml-auto readout">id {item.item_id}</span>
                     </span>
                     {item.thread_id === null && item.reply !== null && (
                         <span className="flex flex-col gap-0.5" data-testid="feedback-plan-reply">

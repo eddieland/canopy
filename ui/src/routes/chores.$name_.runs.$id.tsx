@@ -90,7 +90,7 @@ function Loaded({ name, id }: { name: string; id: number }) {
             <PageHeader parents={<ChoreCrumb name={name} />} title={title} subject={data.title} help={HELP}>
                 {choreRunDescription(data.run, data.findings.length)}
             </PageHeader>
-            <div className="stagger flex flex-col gap-6">
+            <div className="flex stagger flex-col gap-6">
                 <RunPanel detail={data} transcript={transcript} onShow={view.show} />
                 {/* Left out with none: the description counts them (`no findings`), so a `0` would say it twice. */}
                 {data.findings.length > 0 && (

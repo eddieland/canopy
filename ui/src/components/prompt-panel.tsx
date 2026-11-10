@@ -68,7 +68,7 @@ export function PromptPanel({ transcript }: { transcript: Transcript | undefined
                         </p>
                     )}
                     <PanelScroll label="the prompt">
-                        <pre className="p-3 font-mono text-xs break-words whitespace-pre-wrap">
+                        <pre className="p-3 font-mono text-xs wrap-break-word whitespace-pre-wrap">
                             <LinkedText text={prompt.text} />
                         </pre>
                     </PanelScroll>

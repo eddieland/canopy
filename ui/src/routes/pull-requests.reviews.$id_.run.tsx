@@ -69,7 +69,7 @@ function Loaded({ id }: { id: number }) {
             <RunHeader id={id} subject={data.ticket_title}>
                 {reviewDescription(data.review)}
             </RunHeader>
-            <div className="stagger flex flex-col gap-6">
+            <div className="flex stagger flex-col gap-6">
                 <RunPanel detail={data} transcript={transcript} onShow={view.show} />
                 <TranscriptPanel
                     transcript={transcript}

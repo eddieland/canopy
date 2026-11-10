@@ -97,7 +97,7 @@ function Tree({ processes, loop, memory }: { processes: HostProcess[]; loop: num
             <table className="w-full border-collapse text-sm" data-testid="process-tree">
                 <thead>
                     <tr>
-                        <th className="panel-label w-full pt-3 pb-1.5 text-left font-normal">process</th>
+                        <th className="w-full pt-3 pb-1.5 text-left panel-label font-normal">process</th>
                         <th className={cn(HEAD, 'hidden pt-3 @2xl:table-cell')}>user</th>
                         <SortHead
                             order="cpu"
@@ -182,7 +182,7 @@ function Section({
         <tbody data-testid={section.heading === null ? undefined : `process-${section.heading}`}>
             {section.heading !== null && (
                 <tr className="border-t">
-                    <th colSpan={4} scope="colgroup" className="panel-label pt-3 pb-1.5 text-left font-normal">
+                    <th colSpan={4} scope="colgroup" className="pt-3 pb-1.5 text-left panel-label font-normal">
                         {section.heading}
                     </th>
                 </tr>
@@ -273,7 +273,7 @@ function Row({
                         <span aria-hidden className="w-6 shrink-0" />
                     )}
                     <span className="shrink-0 font-mono text-xs">{process.name}</span>
-                    <span className="readout shrink-0 text-xs text-muted-foreground">{process.pid}</span>
+                    <span className="shrink-0 readout text-xs text-muted-foreground">{process.pid}</span>
                     {process.pid === loop && (
                         <span className="shrink-0 text-xs text-accent" data-testid="process-loop">
                             the loop
@@ -324,7 +324,7 @@ function Figure({ share, hot, title, children }: { share: number; hot: boolean; 
                 className="absolute inset-y-1 right-0 rounded-sm bg-accent/15"
                 style={{ width: `${share * 100}%` }}
             />
-            <span className={cn('readout relative', hot ? 'text-foreground' : 'text-muted-foreground')}>
+            <span className={cn('relative readout', hot ? 'text-foreground' : 'text-muted-foreground')}>
                 {children}
             </span>
         </td>

@@ -242,7 +242,7 @@ export function MarkdownField({
                     onChange={(event) => onValueChange(event.target.value)}
                     onKeyDown={keyDown}
                     className={cn(
-                        'block w-full field-sizing-content resize-none bg-transparent px-2.5 outline-none',
+                        'block field-sizing-content w-full resize-none bg-transparent px-2.5 outline-none',
                         'placeholder:text-muted-foreground',
                         sized.text,
                         sized.most,

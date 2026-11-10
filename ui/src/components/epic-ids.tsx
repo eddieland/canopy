@@ -59,7 +59,7 @@ export function OutlineId({ id, fact, className }: { id: string; fact?: string; 
                     pointAt({ by: 'focus', id, on: false })
                 }}
                 className={cn(
-                    'readout inline-block rounded-xs px-1 text-xs',
+                    'inline-block rounded-xs px-1 readout text-xs',
                     'motion-safe:transition-colors motion-safe:duration-150 motion-safe:ease-out',
                     on ? 'bg-accent text-accent-foreground' : 'text-foreground',
                     className,

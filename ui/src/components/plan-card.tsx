@@ -227,7 +227,7 @@ export function ChangesAskedBand({
             )}
         >
             <MessageSquareReply aria-hidden className="mt-0.5 size-4 shrink-0 text-status-running" />
-            <p className="text-sm break-words">
+            <p className="text-sm wrap-break-word">
                 <span className="font-medium text-status-running">
                     You asked for changes <Age at={at} variant="ago" className="text-sm text-status-running" />:
                 </span>{' '}

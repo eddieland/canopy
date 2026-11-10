@@ -73,7 +73,7 @@ export function NoticeBanner() {
                     </NoticeForm>
                 ) : (
                     <>
-                        <p className="text-sm break-words">
+                        <p className="text-sm wrap-break-word">
                             <span className="font-medium text-status-blocked">Notice to workers: </span>
                             <LinkedText text={told.text} />
                         </p>

@@ -64,7 +64,7 @@ export function RunProgress({
                 <p className="flex items-baseline gap-2 text-sm" data-testid="run-progress-stuck">
                     <Hourglass aria-hidden className="size-3 shrink-0 translate-y-0.5 text-muted-foreground" />
                     <span className="shrink-0 text-xs text-muted-foreground">working around</span>
-                    <span className="min-w-0 break-words">
+                    <span className="min-w-0 wrap-break-word">
                         <LinkedText text={card.stuck} />
                     </span>
                 </p>
@@ -304,7 +304,7 @@ function Checklist({ items, now, counted }: { items: readonly Item[]; now: strin
                         <span className="flex min-w-0 flex-col">
                             <span
                                 className={cn(
-                                    'break-words',
+                                    'wrap-break-word',
                                     (item.status === 'not_started' || item.status === 'skipped') &&
                                         'text-muted-foreground',
                                 )}
@@ -404,7 +404,7 @@ function NoteLine({ label, children }: { label: string; children: React.ReactNod
     return (
         <p className="flex gap-2.5 text-sm">
             <span className="w-8 shrink-0 font-mono text-xs leading-5 text-muted-foreground">{label}</span>
-            <span className="min-w-0 break-words">{children}</span>
+            <span className="min-w-0 wrap-break-word">{children}</span>
         </p>
     )
 }

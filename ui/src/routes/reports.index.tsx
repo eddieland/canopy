@@ -563,7 +563,7 @@ function MonthLink({ month, picked }: { month: string; picked: string | undefine
             aria-current={month === picked ? 'true' : undefined}
             className={cn(
                 'rounded-sm px-1 text-accent underline-offset-4 hover:underline',
-                'aria-[current=true]:bg-accent/16 aria-[current=true]:text-foreground',
+                'aria-current:bg-accent/16 aria-current:text-foreground',
             )}
         >
             {monthLabel(month)}

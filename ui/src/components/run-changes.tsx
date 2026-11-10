@@ -101,7 +101,7 @@ function ChangeSummary<K extends QueryKey>({ change, diff }: { change: RunChange
                     <PanelHeader label="Diff">
                         <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
                             <span
-                                className="readout truncate text-xs text-muted-foreground"
+                                className="truncate readout text-xs text-muted-foreground"
                                 title={rangeTitle(range)}
                                 data-testid="run-change-range"
                             >

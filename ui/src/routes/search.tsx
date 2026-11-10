@@ -110,7 +110,7 @@ function Row({ hit, words }: { hit: SearchHit; words: string[] }) {
                 <Label hit={hit} />
             </span>
             {/* Text, never markup; its URLs are not linked, since a snippet may cut one short. */}
-            <p className="text-sm break-words">
+            <p className="text-sm wrap-break-word">
                 <MarkedText text={hit.snippet} words={words} />
             </p>
             <Age at={hit.at} variant="ago" className="text-right" />

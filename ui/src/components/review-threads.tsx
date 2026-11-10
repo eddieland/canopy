@@ -339,7 +339,7 @@ function DraftList({
     }
     return (
         <div className="border-t" data-testid="draft-list">
-            <span className="panel-label block px-3 pt-3">
+            <span className="block px-3 pt-3 panel-label">
                 Drafts <span className="readout text-muted-foreground">{listed.length}</span>
             </span>
             <RowList kind="thread-draft" as="ol" className="divide-y">

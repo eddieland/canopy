@@ -117,7 +117,7 @@ function Epic({ detail }: { detail: EpicDetail }) {
                 {/* The board first, at the page's width; then the story and the key to the board's ids, which the wide
                     layout sets side by side, and the plan runs under the story. The narrow order is the reading
                     order. */}
-                <div className="stagger flex flex-col gap-6">
+                <div className="flex stagger flex-col gap-6">
                     <EpicBoard detail={detail} />
                     <div
                         className={cn(

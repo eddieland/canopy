@@ -35,7 +35,7 @@ export function FirstCallChart({ weeks, fill }: { weeks: SpendFirstCallWeek[]; f
                         <span key={week.week} className="relative h-4 max-w-24 min-w-0 flex-1">
                             <span
                                 className={cn(
-                                    'readout absolute left-1/2 -translate-x-1/2',
+                                    'absolute left-1/2 -translate-x-1/2 readout',
                                     'text-2xs whitespace-nowrap text-muted-foreground',
                                 )}
                             >
@@ -139,7 +139,7 @@ function WeekBar({ week, fill }: { week: SpendFirstCallWeek; fill: string }) {
                 <span className={cn('min-h-0.5 w-full shrink-0 rounded-t-xs', fill)} style={{ height: `${height}%` }} />
             )}
             <span
-                className="readout absolute inset-x-0 flex justify-center pb-0.5 text-2xs whitespace-nowrap"
+                className="absolute inset-x-0 flex justify-center pb-0.5 readout text-2xs whitespace-nowrap"
                 style={{ bottom: `${height}%` }}
             >
                 {shareText(week.hit_rate)}

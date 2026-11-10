@@ -267,7 +267,7 @@ function Form({
                             clearOnEscape
                             end={
                                 q === undefined ? undefined : (
-                                    <span className="readout shrink-0 text-xs text-muted-foreground">
+                                    <span className="shrink-0 readout text-xs text-muted-foreground">
                                         {matching} of {settings.keys.length}
                                     </span>
                                 )
@@ -705,7 +705,7 @@ function ControlCell({ unit, children }: { unit?: string | undefined; children: 
     return (
         <div className="flex items-center gap-2 @xl:justify-end">
             {children}
-            <span className="readout w-8 shrink-0 text-xs text-muted-foreground">{unit}</span>
+            <span className="w-8 shrink-0 readout text-xs text-muted-foreground">{unit}</span>
         </div>
     )
 }
