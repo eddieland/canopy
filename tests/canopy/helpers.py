@@ -1647,3 +1647,78 @@ def write_file(path: Path, size: int, *, hours_old: float = 0) -> Path:
         moment = time.time() - hours_old * 3600
         os.utime(path, (moment, moment))
     return path
+
+
+#: OpenCode 2.1.4's tables of sessions and their messages: the columns `canopy sessions` reads, and those a row must
+#: fill. Its spend's reader reads other columns of the same tables, which its own tests write.
+RUNTIME_RECORD = """
+CREATE TABLE session_v2 (
+    id text PRIMARY KEY, project_id text NOT NULL, parent_id text, slug text NOT NULL, directory text NOT NULL,
+    title text, version text NOT NULL, time_created integer NOT NULL, time_updated integer NOT NULL,
+    time_archived integer
+);
+CREATE TABLE session_message (
+    id text PRIMARY KEY, session_id text NOT NULL, type text NOT NULL, seq integer NOT NULL,
+    time_created integer NOT NULL, time_updated integer NOT NULL, data text NOT NULL
+);
+"""
+
+
+class Kept(NamedTuple):
+    """A session a runtime record written by hand keeps: its id, where it ran, and what it holds."""
+
+    session_id: str
+    directory: str
+    title: str | None = None
+    parent_id: str | None = None
+    archived: bool = False
+    #: Its messages, each a type and its data, as JSON or as text that may not be JSON.
+    messages: Sequence[tuple[str, Mapping[str, object] | str]] = ()
+
+
+def runtime_database(home: Path | None = None) -> Path:
+    """Where the runtime keeps its record: under `home`, a sandbox role's data directory, or the operator's own."""
+    return (home or Path(os.environ["XDG_DATA_HOME"])) / "opencode" / "opencode.db"
+
+
+def runtime_record(*sessions: Kept, path: Path | None = None) -> Path:
+    """Write a runtime record that keeps `sessions`, at `path` or the operator's (`runtime_database`), closed after."""
+    at = path or runtime_database()
+    at.parent.mkdir(parents=True, exist_ok=True)
+    with closing(sqlite3.connect(at)) as conn, conn:
+        conn.executescript(RUNTIME_RECORD)
+        conn.executemany(
+            "INSERT INTO session_v2 VALUES (?, 'p', ?, 's', ?, ?, '2.1.4', 1, 1, ?)",
+            [(s.session_id, s.parent_id, s.directory, s.title, 2 if s.archived else None) for s in sessions],
+        )
+        conn.executemany(
+            "INSERT INTO session_message VALUES (?, ?, ?, ?, 1, 1, ?)",
+            [
+                (f"msg_{s.session_id}_{n}", s.session_id, kind, n, data if isinstance(data, str) else json.dumps(data))
+                for s in sessions
+                for n, (kind, data) in enumerate(s.messages)
+            ],
+        )
+    return at
+
+
+def sent(text: str) -> tuple[str, Mapping[str, object]]:
+    """A prompt a session was sent, as its record keeps it."""
+    return "user", {"text": text, "time": {"created": 1}}
+
+
+def replied(*content: Mapping[str, object]) -> tuple[str, Mapping[str, object]]:
+    """A reply its agent wrote, of `content`'s parts, as its record keeps it."""
+    model = {"providerID": "anthropic", "id": "claude"}
+    return "assistant", {"agent": "build", "model": model, "content": list(content), "time": {"created": 1}}
+
+
+def wrote(text: str) -> Mapping[str, object]:
+    """A part of a reply its agent wrote."""
+    return {"type": "text", "text": text}
+
+
+def called(tool: str, given: Mapping[str, object], returned: str) -> Mapping[str, object]:
+    """A part of a reply: a tool call given `given` that returned `returned`."""
+    state = {"status": "completed", "input": given, "content": [{"type": "text", "text": returned}]}
+    return {"type": "tool", "id": "call_1", "name": tool, "state": state, "time": {"created": 1}}
