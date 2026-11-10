@@ -134,3 +134,8 @@ did not form, since canopy knows no runtime's; a commit counts as canopy's push 
 kick's copy, which the kick's line names. The mock's runs 39 and 45 and task 1's run carry commits, so the screenshots
 of `workspace/runs/39`, `tasks/1/runs/1`, and PR 88's page are to be taken again. Stage 4 waits for its own go-ahead,
 after stages 1 to 3 have been in real use. Live check next: this milestone's Accept, stage 3's line included.
+Measured 2026-11-10 (MEASUREMENTS "2026-11-10: M69, the disk canopy's files take"): the journal's diff tables take about
+160 KiB for the 78 runs with changes recorded since 2026-11-09, and garbage collection does not count the kept diff
+files apart from the run's others. The operator's word (2026-11-10): a run's Diff page did replace GitHub's compare view
+for judging a run. A follow-up, not a blocker: its UI and UX still need polish, for example with Impeccable. Not yet
+measured: the kept diffs' disk per run and per day, how many runs kept none and why, and a full week of it.
