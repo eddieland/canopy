@@ -563,3 +563,38 @@ def test_the_memory_index_is_kept_in_step_with_every_write_and_delete(tmp_path: 
     conn.execute("DELETE FROM memories WHERE id = 1")
     # Raises if the index and the rows it is built from disagree.
     conn.execute("INSERT INTO memories_fts (memories_fts) VALUES ('integrity-check')")
+
+
+def test_models_served_at_a_variant_are_named_as_config_spells_them(tmp_path: Path, journals: Journals) -> None:
+    """0014 names OpenCode 2's `model#variant` as `model@variant`, so one variant is one model in every total."""
+    conn = journal_at(journals, tmp_path, 13)
+    conn.execute(
+        "INSERT INTO runtime_sessions (session_id, directory, started_at, updated_at, updated_ms, cost_usd, "
+        "tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write, read_at) "
+        "VALUES ('ses_1', '/w', 'x', 'x', 1, 1.0, 0, 0, 0, 0, 0, 'x')",
+    )
+    served = [
+        ("a/opus#high", 2, 0.5),
+        ("a/opus@high", 1, 0.25),
+        ("a/opus#low", 1, 0.125),
+        ("a/opus", 1, 0.0625),
+        # Not a variant canopy could have named: kept as it is.
+        ("a/x#y#z", 1, 0.0),
+    ]
+    conn.executemany(
+        "INSERT INTO run_models (run_table, run_id, model, replies, cost_usd) VALUES ('runs', 1, ?, ?, ?)",
+        served,
+    )
+    conn.executemany("INSERT INTO runtime_session_models VALUES ('ses_1', ?, ?, ?)", served)
+    conn.executemany(
+        "INSERT INTO run_reply_models VALUES ('runs', 1, ?, ?)",
+        [("msg_1", "a/opus#high"), ("msg_2", "a/opus")],
+    )
+
+    db.migrate(conn, resources.migrations_dir())
+
+    named = {("a/opus@high", 3, 0.75), ("a/opus@low", 1, 0.125), ("a/opus", 1, 0.0625), ("a/x#y#z", 1, 0.0)}
+    assert {tuple(r) for r in conn.execute("SELECT model, replies, cost_usd FROM run_models")} == named
+    assert {tuple(r) for r in conn.execute("SELECT model, replies, cost_usd FROM runtime_session_models")} == named
+    replies = conn.execute("SELECT message, model FROM run_reply_models ORDER BY message").fetchall()
+    assert [tuple(r) for r in replies] == [("msg_1", "a/opus@high"), ("msg_2", "a/opus")]

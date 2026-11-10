@@ -40,8 +40,9 @@ WHERE session_id IN (SELECT value FROM json_each(?))
   AND coalesce(json_type(data, '$.cost'), 'integer') IN ('integer', 'real')
 GROUP BY 1, 2, 3, 4
 """
-#: Between a model and its variant, as `canopy.runtime.opencode2.session_models` names a model run at one.
-VARIANT_MARK = "#"
+#: Between a model and its variant, as canopy's config spells one (`canopy.core.agent_models`), not as OpenCode 2's own
+#: `#`, so the same variant reads the same under either runtime (`canopy.runtime.opencode2.session_models`).
+VARIANT_MARK = "@"
 
 
 def updated_after(cursor: SessionCursor | None, *, limit: int = MAX_SESSIONS) -> SessionPage:

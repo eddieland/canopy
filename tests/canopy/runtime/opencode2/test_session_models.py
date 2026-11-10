@@ -116,7 +116,7 @@ def test_each_model_s_replies_and_cost_are_summed_the_most_costly_first_on_a_pri
     )
 
 
-def test_each_variant_of_a_model_is_counted_on_its_own_as_opencode_2_spells_it() -> None:
+def test_each_variant_of_a_model_is_counted_on_its_own_as_canopy_spells_it() -> None:
     export = runner(
         exported(
             assistant("anthropic", "claude-opus", 0.5, variant="high", message="msg_2"),
@@ -126,11 +126,11 @@ def test_each_variant_of_a_model_is_counted_on_its_own_as_opencode_2_spells_it()
     )
     assert read(export) == SessionModels(
         "found",
-        (ModelUse("anthropic/claude-opus#high", 2, 1.0), ModelUse("anthropic/claude-opus", 1, 0.25)),
+        (ModelUse("anthropic/claude-opus@high", 2, 1.0), ModelUse("anthropic/claude-opus", 1, 0.25)),
         replies={
-            "msg_2": "anthropic/claude-opus#high",
+            "msg_2": "anthropic/claude-opus@high",
             "msg_3": "anthropic/claude-opus",
-            "msg_4": "anthropic/claude-opus#high",
+            "msg_4": "anthropic/claude-opus@high",
         },
     )
 
@@ -147,8 +147,8 @@ def test_each_reply_names_its_model_by_its_message_once_more_than_one_model_serv
         ),
     )
     found = read(export)
-    assert found.replies == {"msg_a": "anthropic/claude-opus#high", "msg_b": "openai/gpt-5"}
-    assert [(m.model, m.replies) for m in found.models] == [("anthropic/claude-opus#high", 1), ("openai/gpt-5", 2)]
+    assert found.replies == {"msg_a": "anthropic/claude-opus@high", "msg_b": "openai/gpt-5"}
+    assert [(m.model, m.replies) for m in found.models] == [("anthropic/claude-opus@high", 1), ("openai/gpt-5", 2)]
     # One model names every reply: the session's models say it.
     one = exported(assistant("a", "x", 0.5, message="msg_a"), assistant("a", "x", 0.5, message="msg_b"))
     assert read(runner(one)).replies == {}
