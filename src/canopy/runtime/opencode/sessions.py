@@ -195,7 +195,7 @@ def sandbox_session(
 
 
 @contextlib.contextmanager
-def opened(path: Path, *, seconds: float = READ_SECONDS) -> Iterator[sqlite3.Connection]:
+def opened(path: Path, *, seconds: float | None = None) -> Iterator[sqlite3.Connection]:
     """Open the database at `path` read-only, as one a run may have written to harm its reader.
 
     SQLite's defensive mode keeps a query from changing it, its schema's functions are not trusted, and a query that
@@ -209,7 +209,7 @@ def opened(path: Path, *, seconds: float = READ_SECONDS) -> Iterator[sqlite3.Con
     try:
         conn.setconfig(sqlite3.SQLITE_DBCONFIG_DEFENSIVE, True)  # noqa: FBT003 # sqlite3's own positional flag
         query(conn, "PRAGMA trusted_schema = OFF")
-        deadline = time.monotonic() + seconds
+        deadline = time.monotonic() + (READ_SECONDS if seconds is None else seconds)
         conn.set_progress_handler(lambda: time.monotonic() > deadline, _STEPS)
         yield conn
     finally:
