@@ -63,6 +63,13 @@ it, `small`, `medium`, or `large`: a hint for your reading, which canopy acts on
 approves it as its file stands, for when you've already read it; **Open plan** opens its page, where the rest
 happens: comments, edits, asking for changes, skipping.
 
+A plan that leaves [decisions open](#approving-or-asking-for-changes) asks them on the card too, right over the
+button, each with the planner's choice picked. So the one part of a plan addressed to you is read before you approve
+it, even on the days you approve from Attention without opening anything. Pick another option and it goes with the
+approval, to the implement. While you've picked nothing, the button reads **Approve as planned**: it takes the
+planner's choices, and says so itself. In Attention, a `plan review` row says `2 decisions` beside its ticket's key,
+so you can tell a plan with questions from a rubber stamp before you open either.
+
 There, the plan opens in an editor. The page's title names the plan and its ticket, and the line under it says which
 run wrote it, when you approved it and how, whether its file was edited since, and its effort. A member of an epic
 gets one more line: `follows epic:2's plan`, the start of that plan's hash, and when you approved it, since its planner
@@ -219,18 +226,25 @@ the question along to the worker too only gets it done twice. If the answer fell
 it, and it goes with the notes again.
 
 Some of a plan is a question only you can answer. The planner writes each choice the ticket left open under
-Decisions, as a question with lettered options and the one it went with marked `(chosen)`, and the page asks it again
-under the plan, in **Open decisions**, drawn just as a worker's question is on its progress card: lettered options,
-the planner's marked `recommended` and picked. Pick another and that's your answer: a line such as
-`Decision 1 (Where a schedule keeps its hour): take B, not A.` joins your notes, so
-**Approve with notes** carries it to the implement, and **Ask for changes** to the planner. Leave the planner's choice
-picked and nothing is sent; agreeing needs no paperwork. Since the panel sits under the plan's last line, the foot says
-it's there from the moment the page opens: `↓ 2 open decisions` leads the line under the actions, and clicking it
-takes you to the panel. Once you've answered some it reads `1 of 2 answered`, and it counts the plan as it reads now,
-so editing its Decisions changes the count. It's a signpost, not a gate: **Approve** works without a visit, and takes
-the planner's choices. Your picks live on this page, not in the journal, so leaving
-asks first and a reload forgets them. A plan written before planners used this shape, or one that wanders from it,
-shows no panel, and its Decisions are still there to read and comment on.
+Decisions, as a question with lettered options and the one it went with marked `(chosen)`, and canopy asks it again
+wherever you approve the plan: under the plan on this page, and on the plan's card. **Open decisions** is drawn just
+as a worker's question is on its progress card: lettered options, the planner's marked `recommended` and picked. Pick
+another and that's your answer: a line such as `Decision 1 (Where a schedule keeps its hour): take B, not A.` joins
+your notes, so **Approve with notes** carries it to the implement, and **Ask for changes** to the planner. Leave the
+planner's choice picked and nothing is sent; agreeing needs no paperwork, but it does get named: with decisions open
+and no notes to send, the button reads **Approve as planned**, so you never take a planner's choice under a button
+that only said Approve.
+
+Since the panel sits under the plan's last line, the foot says it's there from the moment the page opens:
+`↓ 2 open decisions` leads the line under the actions, and clicking it takes you to the panel. Once you've answered
+some it reads `1 of 2 answered`, and it counts the plan as it reads now, so editing its Decisions changes the count.
+It's a signpost, not a gate: **Approve as planned** works without a visit.
+
+Your picks are kept in this browser until they're sent, not in the journal, so one made on the card is still picked
+when you open the plan, and survives a reload. They belong to the plan they answered, and each holds only while its
+decision reads as it did: a new plan starts clean, and so does a decision you or the planner reworded, since an
+answer to a question that changed isn't one. A plan written before planners used this shape, or one that wanders from
+it, shows no panel, and its Decisions are still there to read and comment on.
 
 After you ask, a green band under the plan's title says "You asked for changes", and when, until the next planner
 starts or you approve the plan after all; the ticket's Plan card carries the same band, and the plan's chip reads

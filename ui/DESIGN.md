@@ -346,11 +346,13 @@ Rules:
   `/tickets/$key/plan`; the ticket's page has its card (`PlanCard`): the plan's reference and status chip (`PlanChip`:
   `waiting on you` in `status-blocked` while the plan waits on the operator, `changes asked` in `status-running` while
   they wait on the next planner, else its status), the run that wrote it and its open comments as fields, and in its
-  foot `Approve`, the primary, while the plan can be approved, then `Open plan`, outlined. A ticket whose plan waits on
-  the operator leads with the card, above its Work panel, since the plan is what they came to answer; otherwise the
-  card follows the lists. Where it sits is settled as the page opens, so a plan approved meanwhile leaves its card
-  where it was read. A review's run is on a page of its own too, with a run's skeleton; the review's page is its
-  results, and links there from a `run` field.
+  foot `Approve`, the primary, while the plan can be approved, then `Open plan`, outlined. No `Approve` is offered
+  without the choices it takes in view: a plan's open decisions are asked on the card as on its page (A plan, below),
+  between the fields and the foot, and the line beside the button says what approving does with them. A ticket whose
+  plan waits on the operator leads with the card, above its Work panel, since the plan is what they came to answer;
+  otherwise the card follows the lists. Where it sits is settled as the page opens, so a plan approved meanwhile leaves
+  its card where it was read. A review's run is on a page of its own too, with a run's skeleton; the review's page is
+  its results, and links there from a `run` field.
 - **Every page header opens with its trail**, a breadcrumb in `panel-label` type: the section's name in its color, then
   the pages between it and this one, each a link ending in a small chevron, pointing at the title. A page in no section
   names itself there in the accent. A parent is a journal name, so it keeps its case and stays muted until hovered. The
@@ -835,8 +837,11 @@ reader, so no table repeats them.
   item open longest first. Settings can hide the findings, in this browser alone: the list, its count, and the nav's
   badge leave them out, and a muted line above the list counts what it hid, so a hidden finding never reads as none.
   A row reads as an inbox's: its reason, subject, and age, then its ticket's title or its task's first line as the
-  subject, then its detail, muted, as the preview. A reason chip takes `status-failed` or `status-blocked` for the
-  first two severities, plain otherwise. An item's detail is the harness's line, with its `code` spans set as code and
+  subject, then its detail, muted, as the preview. A plan waiting on the operator says after its subject how many
+  decisions it leaves open (`DecisionsCount`), in `status-blocked` as a counter of what waits on them, so a plan that
+  asks something is told from one that only wants approving before either is opened. A reason chip takes `status-failed`
+  or `status-blocked` for the first two severities, plain otherwise. An item's detail is the harness's line, with its
+  `code` spans set as code and
   nothing else read (`InlineCode`), but for a PR's address, which is a `PullRequestLink`, and a run named as
   `canopy show` reads one, which is a `RunLink`; the CLI's `answer with canopy reply KEY` is left off a question's
   detail, since the page's reply form is the answer. The list's panel header holds its count, after the longest wait
@@ -858,13 +863,15 @@ reader, so no table repeats them.
   limit, so why it failed is read and another try allowed without leaving the page. A PR that waits on someone else:
   the PR's `LinkOutButton`, so the PR is one tab stop. A wait on the operator's answer: the reply form is the action,
   and a question's head names it, `Waits on your answer to message 5, asked 3m ago`, rather than saying it, since the
-  conversation holds it. A plan: its card, with `Approve` and `Open plan`; a feedback plan's, a line naming it and an
-  outline link to the PR's page, where it is approved. A running run's question: the question as the run's page draws
-  it, each option a button that answers by letter; a toast says what the answer did, since the item leaves with it.
+  conversation holds it. A plan: its card, with its open decisions, `Approve`, and `Open plan`; a feedback plan's, a
+  line naming it and an outline link to the PR's page, where it is approved. A running run's question: the question as
+  the run's page draws it, each option a button that answers by letter; a toast says what the answer did, since the item
+  leaves with it.
   Memory's items: the proposals or lessons they name, with their verbs. Drafts a run left: an outline link to where
   they sit. A task's: `task:N` and its text's first line, then an outline link to the task's page, which holds its
   question and its answer, never the `canopy` commands its detail names. An epic's plan: `epic:N` and its goal's first
-  line, then an outline link to its plan's page, where it is read and approved. A ticket's run refused its model: the
+  line, then an outline link to its plan's page, where it is read and approved, and how many decisions it leaves open,
+  since that page is where they are answered. A ticket's run refused its model: the
   ticket's models, the runtime's list read fresh as the item opens, so the model it no longer lists is marked already.
   An item about nothing the page shows whose detail names a `canopy` command: the command, `Copyable`, and nothing to
   answer. A ticket's item then shows its answer (below), with the ticket's own verbs and any other limit as a quiet
@@ -1079,9 +1086,15 @@ reader, so no table repeats them.
   again under it, in its panel above its foot, each in a run's question's box (above), its options the radios of a
   `RadioGroup`, the planner's choice `recommended`: under the plan, not in the foot, so the decisions are read after the
   plan and answered just above the actions that send them; another pick is an answer, a line of the notes `Approve`
-  carries and of what `Ask for changes` sends. Since the panel is out of sight under a long plan, the line under the
-  foot's actions leads with a jump to it (`DecisionsJump`), which informs rather than gates: no status tone, nothing on
-  `Approve`. The plan's actions are its panel's sticky foot (`PanelFooter`), so a long plan is approved or sent back
+  carries and of what `Ask for changes` sends. The plan's card asks them the same way, so the picks are kept where both
+  read them, in this browser until they are sent (`src/lib/plan-picks.ts`), never the journal, each holding while its
+  decision reads as it did. An epic's plan asks them too, but its approval carries no note, so there an answer goes
+  with `Ask for changes` alone and `Approve` waits while one stands. Since the panel is out of sight under a long plan,
+  the line under the foot's actions leads with a jump to it (`DecisionsJump`), which informs rather than gates: no
+  status tone, and `Approve` is never held back. It is named, though: while a plan has open decisions and its approval
+  would carry no notes, the primary reads `Approve as planned` wherever it is offered, so its own words say whose
+  choices it takes. The plan's actions are its panel's sticky foot (`PanelFooter`), so a long plan is approved or sent
+  back
   from where it is read: the caller's own actions (a ticket's `Approve`, the foot's one primary, then `Save`, outlined,
   and `Skip the plan`, ghost), then a note on the whole plan and `Ask for changes`, outlined. The line under them says
   what goes with each; with open comments or a note, the primary reads `Approve with notes`. `Skip the plan` asks first

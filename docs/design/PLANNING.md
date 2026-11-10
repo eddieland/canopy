@@ -30,9 +30,9 @@ the plan it replaces, which its planner edits, so what it leaves is as the opera
 reply, it records no plan. An approval may carry the operator's notes, written with it as their message on the
 ticket, which the `implement` reads beside the plan, so a small point needs no re-plan. The planner writes each choice
 the ticket left open in one shape, a question with lettered options and its own choice marked, so the operator answers
-it on the plan's page by picking another: a line of the approval's notes, or of a request for changes. The approval
-authorizes the `implement`, not the plan's text as an instruction (TRUST_MODEL T1). Two guards hold it in code (§4,
-principle 2):
+it by picking another: a line of the approval's notes, or of a request for changes. The web UI asks each wherever it
+offers the approval, never the approval alone, so a planner's choice is not taken unread. The approval authorizes the
+`implement`, not the plan's text as an instruction (TRUST_MODEL T1). Two guards hold it in code (§4, principle 2):
 `unplanned` refuses an `implement` while the ticket needs a plan and has none approved;
 `plan_changed` refuses an `implement` or `resume` when the approved plan's file is missing or changed since approval.
 An approval records hashes of the ticket's title and description as observed (§30); while either differs, the harness

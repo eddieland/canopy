@@ -6,9 +6,9 @@ four entries, of which B4 is marked trivial. The operator filed tickets for two 
 ABC-103 fulfils B1, its PR 91 open, and ABC-104 fulfils B2, its resume running; ABC-100, a ticket the breakdown did not
 foresee, is a member of no entry. ABC-103 was planned first: its planner read the approved plan, so its own plan,
 approved, follows it. Epic 2, over mobile and web, had a plan the operator replied to, asking for changes; its second
-plan run wrote the plan that now waits on them. Epic 3, over api and web, was just submitted, and its first plan run
-works. Epic 4, over web, the operator stopped as soon as they submitted it, before a tick started its plan run: it has
-no plan, and none starts again.
+plan run wrote the plan that now waits on them, with an open decision for its page to offer. Epic 3, over api and web,
+was just submitted, and its first plan run works. Epic 4, over web, the operator stopped as soon as they submitted it,
+before a tick started its plan run: it has no plan, and none starts again.
 
 The plan runs, ABC-103's too, report no cost, so the spend page's totals are what they were without them. The running
 one holds no slot in the mock's pools, which show no lease for it. Every row and message here takes its id after every
@@ -157,7 +157,11 @@ The order history reads from a local copy when the app is offline.
 
 ## Decisions
 
-- Sync on launch and on pull to refresh only.
+### Decision 1: When the local copy syncs
+
+- **A (chosen):** On launch and on pull to refresh: nothing runs in the background, and the copy is as old as the last
+  visit.
+- **B:** Every hour in the background too: fresher offline, at a battery cost the goal does not ask for.
 
 ## Out of scope
 
@@ -216,7 +220,11 @@ The mobile app's order history reads from a local copy when it is offline, and t
 
 ## Decisions
 
-- The web account page is left as it is: it reads the same API the copy syncs from.
+### Decision 1: When the local copy syncs
+
+- **A (chosen):** On launch and on pull to refresh: nothing runs in the background, and the copy is as old as the last
+  visit.
+- **B:** Every hour in the background too: fresher offline, at a battery cost the goal does not ask for.
 
 ## Out of scope
 

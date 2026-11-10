@@ -1,5 +1,6 @@
 // A plan's open decisions (docs/design/PLANNING.md §25): the choices its ticket left open, which the planner writes
-// under `## Decisions` in one shape (.agents/prompts/worker-plan.md), so the plan's page can offer each as a choice:
+// under `## Decisions` in one shape (.agents/prompts/worker-plan.md), so the plan's page and its card can offer each as
+// a choice:
 //
 //     ### Decision 2: Where a schedule's hour is kept
 //
@@ -7,8 +8,9 @@
 //     - **B:** In UTC: simpler to store, but the hour moves when the clocks change.
 //
 // The operator answers one by picking another option, which goes with Approve to the implement, or with Ask for
-// changes to the planner, as a line of their notes (`decisionAnswers`). A plan written before this shape, or one that
-// strays from it, has fewer decisions or none: what does not parse is left out, and nothing here throws.
+// changes to the planner, as a line of their notes (`decisionAnswers`); the picks are kept in this browser until then
+// (src/lib/plan-picks.ts). A plan written before this shape, or one that strays from it, has fewer decisions or none:
+// what does not parse is left out, and nothing here throws.
 
 /** One option of an open decision. */
 export interface PlanOption {
@@ -32,6 +34,9 @@ export interface PlanDecision {
 
 /** How much of a decision's question an answer quotes: enough to tell it from the others beside its number. */
 export const MAX_QUESTION = 60
+
+// What a plan's decisions say while each has the planner's choice picked, before what an answer goes with.
+const UNANSWERED = "Each has the planner's choice picked. Pick another to answer it"
 
 // A heading, as CommonMark has it: one to six `#`, then a space or the line's end, indented at most three spaces.
 const HEADING = /^ {0,3}(#{1,6})(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$/u
@@ -90,6 +95,31 @@ export function decisionAnswers(decisions: readonly PlanDecision[], picks: Reado
             `Decision ${decision.number} (${cutQuestion(decision.question)}): take ${pick}, not ${decision.chosen}.`,
         ]
     })
+}
+
+/**
+ * What a plan's open decisions say under their heading, by how many are `answered` and what an answer `goes` with:
+ * `either` of Approve, to the implement, and Ask for changes, to the planner, on a ticket's plan's page; `ask` alone on
+ * an epic's plan, whose approval takes no note; and on a plan's card, `card`, only how to answer, since the line beside
+ * its one action, Approve, says what that does with them.
+ */
+export function decisionsTold(answered: number, goes: 'either' | 'ask' | 'card'): string {
+    const count = answered === 1 ? '1 answer goes' : `${answered} answers go`
+    switch (goes) {
+        case 'either': {
+            return answered === 0
+                ? `${UNANSWERED}: the answer goes with Approve or Ask for changes.`
+                : `${count} with Approve, to the implement, or with Ask for changes, to the planner.`
+        }
+        case 'ask': {
+            return answered === 0
+                ? `${UNANSWERED}: the answer goes with Ask for changes, to the planner.`
+                : `${count} with Ask for changes, to the planner. An approval takes none, so Approve waits.`
+        }
+        case 'card': {
+            return `${UNANSWERED}.`
+        }
+    }
 }
 
 // A decision as it is read, before its options are known to make one.

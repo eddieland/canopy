@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/api/client'
 import { keys } from '@/api/queries'
 import type { PlanFile, PlanSummary, PlanThreadView, TicketPlans } from '@/api/types'
+import { STORAGE_KEY as PICKS_KEY } from '@/lib/plan-picks'
 import { renderRouted } from '@/test-utils'
 
 import { PlanState, TicketPlan } from './ticket-plan'
@@ -383,6 +384,9 @@ describe('TicketPlan', () => {
         ].join('\n')
         const ANSWER = 'Decision 1 (Which encoding the file is in): take B, not A.'
 
+        // The picks are this browser's, kept until they are sent: none carries from one test to the next.
+        beforeEach(() => localStorage.clear())
+
         function renderDeciding(plans: Partial<TicketPlans> = {}) {
             return renderPlan({ newest: { ...NEWEST, text: DECIDING }, ...plans })
         }
@@ -396,9 +400,22 @@ describe('TicketPlan', () => {
             const radios = within(group).getAllByRole<HTMLButtonElement>('radio')
             expect(radios.map((radio) => radio.getAttribute('aria-checked'))).toEqual(['true', 'false'])
             expect(within(group).getByRole('radio', { name: /^A: UTF-8.*, recommended$/u })).toBe(radios[0])
-            fireEvent.click(button('Approve'))
+            // Its own words say it takes the planner's choices, as the plan's card says it.
+            fireEvent.click(button('Approve as planned'))
             await screen.findByTestId('plan-approved')
             expect(sent).toEqual([{ method: 'POST', path: '/api/tickets/ABC-1/plan', body: { action: 'approve' } }])
+        })
+
+        it("shows the picks made on the plan's card, and drops them once an approval sent them", async () => {
+            const { unmount } = renderDeciding()
+            fireEvent.click(screen.getByRole('radio', { name: /^B: Latin-1/u }))
+            unmount()
+            // Opened again, as from the card: the answer is still picked.
+            renderDeciding()
+            expect(screen.getByRole('radio', { name: /^B: Latin-1/u }).getAttribute('aria-checked')).toBe('true')
+            fireEvent.click(button('Approve with notes'))
+            await screen.findByTestId('plan-approved')
+            await waitFor(() => expect(localStorage.getItem(PICKS_KEY)).toBe('{}'))
         })
 
         it('approves with another option picked as a note for the implement', async () => {
