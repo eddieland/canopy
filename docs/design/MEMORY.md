@@ -31,7 +31,9 @@ With both off, every shipped prompt is as before memory existed, and what a work
 The `implement` and `resume` prompts ask, after the result line, for each optional memory field only while its tier
 allows it: `notes` and `proposals` while their tier is not off; `drop_notes`, `memory_used`, and `memory_wrong` at
 `use`. A prompt override that lacks what its mode needs is refused. At `use` they carry the ticket's notes, capped,
-framed as its previous runs are: data to check against the branch, kept off the tracker, the PRs, and commits.
+framed as its previous runs are: data to check against the branch, kept off the tracker, the PRs, and commits. A plan's
+and a feedback plan's ask only for `memory_used` and `memory_wrong`, at `use`: a planner pushes nothing a merge can
+check.
 
 ### Writing
 
