@@ -134,6 +134,13 @@ def test_a_heading_below_an_entry_s_is_part_of_it() -> None:
     assert "Steps" in outline.entries["B1"].text
 
 
+def test_a_diagram_before_the_first_entry_is_no_entry_s_text() -> None:
+    """The breakdown's order drawn before its first entry, as the epic planner's prompt asks, is read as nothing."""
+    diagram = "```mermaid\nflowchart LR\n  B1[B1. Move the store] -->|C1| B2[B2. Read from it]\n```\n\n"
+    outline = read(edited("## Breakdown\n\n", f"## Breakdown\n\n{diagram}"))
+    assert outline == read()
+
+
 # Comparing approvals
 
 

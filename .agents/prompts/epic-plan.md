@@ -51,6 +51,11 @@ from your file in exactly the shape below, and records no plan it cannot read so
   changes, by their names in your message, `After` the entries it must follow, and `Trivial` is `no`, or `yes,` and
   why, as below. A list is ids or names separated by commas, or `none`. Every requirement is covered by some entry,
   each contract has an entry that provides it, and an entry that provides an interface comes before one that uses it.
+
+  With three entries or more, open the section, before its first entry, with a ```` ```mermaid ```` `flowchart` of
+  the order, which canopy draws for the operator: a node for each entry, its id and a few words of its title, and an
+  arrow to it from each entry its `After` names, labeled with any contract it uses from that one. It draws what the
+  fields say, and never adds to them.
 - `## Decisions`: each choice the goal left open, a `### Decision N: <the question>` heading numbered from 1, then its
   options as `-` items, lettered from A and each with its why: `- **A (chosen):** <option>: <why>` for the one the plan
   follows, exactly one, and `- **B:** <option>: <why you rejected it>` for each other.
