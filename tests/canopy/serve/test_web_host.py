@@ -115,6 +115,11 @@ def test_the_mock_shows_a_fixed_machine_never_its_host(tmp_path: Path) -> None:
     assert (found["hostname"], found["cpu"]["cores"], found["read_at"]) == ("build-box", 12, "2026-10-08T12:30:00Z")
     assert [d["holds"] for d in found["disks"]] == [["workspace", "journal"], ["temp"]]
     assert found["memory"]["total"] == 64 * GIB
+    # Mid-build, the temporary directory nearly full, but the workspace's disk far above the tick's floor: the mock's
+    # journal shows ticks running the overseer, which none would under it.
+    [workspace, temp] = found["disks"]
+    assert workspace["free"] > 100 * workspace["floor"]
+    assert temp["free"] < GIB
 
 
 def test_the_server_keeps_the_last_readings_oldest_first(tmp_path: Path) -> None:
@@ -232,9 +237,11 @@ def test_the_mock_serves_a_fixed_hour_ending_with_its_machine(tmp_path: Path) ->
     samples = found["samples"]
     assert len(samples) == host.KEPT
     assert samples[-1]["at"] == "2026-10-08T12:30:00Z"
-    assert samples[-1]["load"] == 2.41
+    assert samples[-1]["load"] == 14.62
     # The mock's last reading measures its processors against the one before, as the server's do.
-    assert samples[-1]["cpu_busy"] == 0.15
+    assert samples[-1]["cpu_busy"] == 0.91
+    # The build drained the temporary directory over the hour.
+    assert samples[0]["disks"][1]["free"] > 25 * GIB > GIB > samples[-1]["disks"][1]["free"]
     assert [d["path"] for d in samples[0]["disks"]] == ["/home/operator/acme", "/tmp"]  # noqa: S108
 
 
