@@ -86,11 +86,14 @@ _ANSWERS: tuple[tuple[int, str, tuple[ItemAnswer, ...], str | None], ...] = (
     (42, "api", (_P, _H, _U, _NA), "The CSV writer sits beside the export route, as the module's other writers do."),
 )
 
-#: The run whose push was held, the commit the list was shown at, the commit it pushed next, and the diff between them.
-_HELD_RUN = 38
+#: The run whose push was held.
+HELD_RUN = 38
+#: The commit the held run's list was shown at.
 _SHOWN = "5b1e0c47" + "a" * 32
-_PUSHED = "c9d24f83" + "b" * 32
-_STRETCH = """\
+#: The commit it pushed next, which it left on origin.
+PUSHED = "c9d24f83" + "b" * 32
+#: The diff between the two: the `query-keys` fix, a part of what the run changed (`run_diffs`).
+STRETCH = """\
 diff --git a/src/api/queries.ts b/src/api/queries.ts
 index 1f0a3c2..8e4b7d5 100644
 --- a/src/api/queries.ts
@@ -142,10 +145,10 @@ def seed(conn: sqlite3.Connection) -> None:
             Answer(repo, item, answer, reason if answer is ItemAnswer.HELD else None)
             for item, answer in zip(_ITEMS[repo], answers, strict=True)
         )
-        pushed = (Pushed(repo, _SHOWN, _PUSHED),) if run_id == _HELD_RUN else ()
+        pushed = (Pushed(repo, _SHOWN, PUSHED),) if run_id == HELD_RUN else ()
         checklist_answers.record(conn, run_id, Checked(answers=given, pushes=pushed))
-    held = records.select(records.Run).where("id = ?", _HELD_RUN).one(conn)
+    held = records.select(records.Run).where("id = ?", HELD_RUN).one(conn)
     if held is not None:
         kept = checklist_answers.diff_path(held.log_path, "web", _SHOWN)
         kept.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        review_diff.keep(kept, _STRETCH)
+        review_diff.keep(kept, STRETCH)

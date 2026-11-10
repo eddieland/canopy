@@ -86,7 +86,7 @@ function shownPaths(): string[] {
 /** Folds the diff of the file at `i` on its header. */
 function hideDiff(i: number) {
     fireEvent.click(
-        within(screen.getAllByTestId('diff-file')[i] as HTMLElement).getByRole('button', { name: 'Hide diff' }),
+        within(screen.getAllByTestId('diff-file')[i] as HTMLElement).getByRole('button', { name: /^Hide diff of /u }),
     )
 }
 
@@ -133,14 +133,15 @@ describe('ReviewDiffPanels folds', () => {
         const panel = within(b as HTMLElement)
         expect(panel.getByText('src/b.py 2')).toBeDefined()
 
-        fireEvent.click(panel.getByRole('button', { name: 'Hide diff' }))
+        // Named for its file, among the others' alike.
+        fireEvent.click(panel.getByRole('button', { name: 'Hide diff of src/b.py' }))
         expect(panel.queryByText('src/b.py 2')).toBeNull()
         expect(panel.queryByRole('article')).toBeNull()
         expect(panel.getByText('3 lines and 1 finding folded away')).toBeDefined()
         // The others stay open.
         expect(screen.getByText('src/a.ts 1')).toBeDefined()
 
-        fireEvent.click(panel.getByRole('button', { name: 'Show diff' }))
+        fireEvent.click(panel.getByRole('button', { name: 'Show diff of src/b.py' }))
         expect(panel.getByText('src/b.py 2')).toBeDefined()
         expect(panel.getByRole('article').textContent).toContain('On b')
     })

@@ -333,12 +333,13 @@ Rules:
   ends keeps one order there, the page's answer first: `summary`; then what came of it; `when` (`WhenField`), started,
   ended, and how long it took in one field; `spent`; then the paths. A run given a checklist has its answers in a panel
   of their own under that one, a row an item, too many for a field, `held` in `status-blocked`, since a reviewer reads
-  its reason under it; each stretch it pushed after a list follows them, a panel naming its repository and commits as
-  a readout, then its diff's file panels (`DiffPanels`), so the answers and the fix are read together. A worker's or a
-  task's run that ended has its Diff next, a panel per repository that sums up rather than shows: the range, files, and
-  lines in its header's readout, the files with theirs under it, and the diff's file panels only once `Show diff` opens
-  them, read then, so the transcript stays on the first screen; a sentence where a diff is missing, never an empty
-  panel. Then
+  its reason under it. A worker's or a task's run that ended has its Diff next, a panel per repository that sums up
+  rather than shows: the range, files, and lines in its header's readout, the files with theirs under it, and the
+  diff's file panels, each an h3 naming its file, only once `Show diff` opens them, read then, so the transcript stays
+  on the first screen; a sentence where a diff is missing, never an empty panel. What a run pushed after a list is part
+  of that change, so it is a scope of its repository's Diff, not a panel beside it: a segmented control, `after the
+  list` and `whole run`, opens on the stretch, a dot in `answer-fixed` marks each file it touched, and a line under the
+  files names its commits, so the answers and the fix are read together and the stretch reads as inside the run. Then
   the thread the operator came to answer, with its form, then the ticket's actions; a page with no thread has its main
   content there instead: a transcript, a chore's open findings and runs, a tick's decisions, a review's findings and
   diff, a PR's reviews. A chore's notes are a thread nothing waits on, so they follow

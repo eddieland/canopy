@@ -125,13 +125,9 @@ test("a run's page lists what it answered of its list, a held item's reason unde
         /^heldno-any.*typing them by hand is ABC-112\.$/u,
         /^n\/ai18n-strings$/u,
     ])
-    // Under the run's facts, then what it pushed after the list (below).
+    // Under the run's facts, then the Diff that holds what it pushed after the list (below).
     const panels = await page.locator('main h2').allTextContents()
-    expect(panels.slice(panels.indexOf('Run'), panels.indexOf('Run') + 3)).toEqual([
-        'Run',
-        'Checklist',
-        'Pushed after the list',
-    ])
+    expect(panels.slice(panels.indexOf('Run'), panels.indexOf('Run') + 3)).toEqual(['Run', 'Checklist', 'Diff'])
 
     // A run given no list has no panel.
     await page.goto('workspace/runs/41')
@@ -139,25 +135,44 @@ test("a run's page lists what it answered of its list, a held item's reason unde
     await expect(page.getByTestId('run-checklist')).toHaveCount(0)
 })
 
-test('a run held by its list shows what it pushed after it under its answers, in the diff panels', async ({ page }) => {
+test('a run held by its list shows what it pushed after it in its Diff, open on it, its files marked', async ({
+    page,
+}) => {
     await page.goto('workspace/runs/38')
     await settled(page)
-    const stretch = page.getByRole('region', { name: /^Pushed after the list: web · 5b1e0c4\.\.c9d24f8$/u })
-    await expect(stretch.getByTestId('checklist-stretch-range')).toHaveText('web · 5b1e0c4..c9d24f8')
-    await expect(stretch.getByTestId('diff-file')).toHaveCount(2)
-    await expect(stretch.getByTestId('diff-file').last()).toContainText('useQuery(invoiceLinesQuery(id))')
-    // Right under the answers, which name the fix, and over the run's whole Diff and the transcript. The mock's run 38
-    // recorded nothing of what it changed, which its Diff panel says.
+    const diff = page.getByRole('region', { name: "web's diff" })
+    // The run's whole change in the header, the stretch inside it: its files marked, its commits under them.
+    await expect(diff.getByTestId('run-change-range')).toHaveText('web · 71c3e0a..c9d24f8')
+    await expect(diff.getByRole('radio', { name: 'after the list' })).toHaveAttribute('aria-checked', 'true')
+    await expect(diff.getByTestId('run-change-files').getByRole('listitem')).toHaveText([
+        /^src\/billing\/v1\.ts/u,
+        /^changed after the list: src\/api\/queries\.ts/u,
+        /^changed after the list: src\/billing\/InvoiceLines\.tsx/u,
+    ])
+    await expect(diff.getByTestId('run-change-stretch')).toHaveText('2 files changed after the list · 5b1e0c4..c9d24f8')
+    await expect(diff.getByTestId('diff-file')).toHaveCount(2)
+    await expect(diff.getByTestId('diff-file').last()).toContainText('useQuery(invoiceLinesQuery(id))')
+    // Each file is a heading under the Diff's, naming it.
+    await expect(diff.getByRole('heading', { level: 3 })).toHaveText([
+        'File src/api/queries.ts',
+        'File src/billing/InvoiceLines.tsx',
+    ])
+    // Right under the answers, which name the fix, and over the transcript.
     const panels = await page.locator('main h2').allTextContents()
     const at = panels.indexOf('Checklist')
-    expect(panels.slice(at, at + 4)).toEqual(['Checklist', 'Pushed after the list', 'File', 'File'])
-    expect(panels.slice(at + 4, at + 6)).toEqual(['Diff', 'Transcript'])
+    expect(panels.slice(at, at + 3)).toEqual(['Checklist', 'Diff', 'Transcript'])
 
-    // A run whose push was never held has none.
+    // The whole run is a scope away, its own diff read then: the v1 client it deleted before the list too.
+    await diff.getByRole('radio', { name: 'whole run' }).click()
+    await expect(diff.getByTestId('diff-file')).toHaveCount(3)
+    await expect(diff.getByTestId('diff-file').first()).toContainText('The v1 billing client')
+    await expect(diff.getByTestId('run-change-stretch')).toHaveCount(0)
+
+    // A run whose push was never held has no scope to choose.
     await page.goto('workspace/runs/39')
     await settled(page)
     await expect(page.getByTestId('run-checklist')).toBeVisible()
-    await expect(page.getByTestId('checklist-stretch')).toHaveCount(0)
+    await expect(page.getByRole('radiogroup')).toHaveCount(0)
 })
 
 test('the window and the repository filter narrow the counts, and keep each other', async ({ page }) => {

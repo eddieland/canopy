@@ -1,11 +1,83 @@
 /**
  * What a worker's or a task's run changed (DESIGN §45): each repository's range and size, as its page's Diff panel and
- * its ticket's and its PR's runs lists name them, and what the panel, or a PR's page, says where it has no diff.
+ * its ticket's and its PR's runs lists name them, and what the panel, or a PR's page, says where it has no diff. A run
+ * held by a checklist (DESIGN §42) has, inside that change, each stretch it pushed after the list: the panel's scopes.
  */
 
-import type { ChangedFile, MissingDiff, RunChange, RunRange } from '@/api/types'
+import type { ChangedFile, ChecklistStretch, MissingDiff, ReviewDiff, RunChange, RunRange } from '@/api/types'
 import { goneText } from '@/lib/retention'
 import { shortSha } from '@/lib/reviews'
+
+/** One repository's Diff panel on a run's page: what the run changed there, and what it pushed after its list. */
+export interface RepoDiff {
+    /** The repository. */
+    repo: string
+    /** What the run changed in it; null when it recorded nothing there but a stretch. */
+    change: RunChange | null
+    /** Each stretch it pushed after being shown the repository's list, in the order it was shown it. */
+    stretches: readonly ChecklistStretch[]
+}
+
+/**
+ * A run's changes and its stretches by repository, so each stretch sits in the panel of the change it is part of: the
+ * changes' repositories in their order, then any that only a stretch names, in the order the run was shown their lists.
+ */
+export function diffsByRepo(changes: readonly RunChange[], stretches: readonly ChecklistStretch[]): RepoDiff[] {
+    const repos: RepoDiff[] = changes.map((change) => ({ repo: change.range.repo, change, stretches: [] }))
+    for (const repo of new Set(stretches.map((s) => s.repo))) {
+        const at = repos.findIndex((r) => r.repo === repo)
+        const mine = stretches.filter((s) => s.repo === repo)
+        if (at === -1) {
+            repos.push({ repo, change: null, stretches: mine })
+        } else {
+            repos[at] = { ...(repos[at] as RepoDiff), stretches: mine }
+        }
+    }
+    return repos
+}
+
+/** A scope's name in its panel's control: `after the list`, or, of several, `after list 2`; `whole run` for none. */
+export function scopeName(stretch: number | null, of: number): string {
+    if (stretch === null) {
+        return 'whole run'
+    }
+    return of === 1 ? 'after the list' : `after list ${stretch + 1}`
+}
+
+/** A stretch's commits, short, as `git log` names a range: the one the list was shown at, then the one pushed after. */
+export function stretchSpan(stretch: ChecklistStretch): string {
+    return `${shortSha(stretch.shown_sha)}..${shortSha(stretch.pushed_sha)}`
+}
+
+/** The files a stretch's diff touched, each with the lines it added and removed, as a change's summary lists them. */
+export function stretchFiles(diff: ReviewDiff): ChangedFile[] {
+    return diff.files.map((file) => {
+        const lines = file.hunks.flatMap((hunk) => hunk.lines)
+        return {
+            path: file.path,
+            old_path: file.old_path,
+            added: file.binary ? null : lines.filter((line) => line.kind === 'add').length,
+            removed: file.binary ? null : lines.filter((line) => line.kind === 'del').length,
+        }
+    })
+}
+
+/** What a scope's line says of a stretch whose diff is drawn: `2 files changed after the list`. */
+export function changedAfterText(files: number): string {
+    return `${files} ${files === 1 ? 'file' : 'files'} changed after the list`
+}
+
+/** What a stretch is, on its scope's hover. */
+export const STRETCH =
+    'What the run changed from the commit it was shown the list at to the push after it: the fixes its answers ' +
+    'speak of, with whatever else it did in that stretch.'
+
+/** What a stretch's scope says when canopy kept no diff of it. */
+export const NO_STRETCH =
+    'no diff kept for this stretch: canopy could not read it as the run ended, or its file is not one'
+
+/** What a stretch's scope says when its diff changed no file. */
+export const NO_STRETCH_CHANGE = 'no change: the run pushed the commit it was shown the list at'
 
 /** The id of a repository's Diff panel on a run's page, which a runs list's range links to: `diff-web`. */
 export function diffAnchor(repo: string): string {
