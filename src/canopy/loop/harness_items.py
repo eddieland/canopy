@@ -41,7 +41,7 @@ from datetime import timedelta
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit, urlunsplit
 
-from canopy.core import conversation, db, observe, passed_reviews, plans, records, review_runs, sql
+from canopy.core import conversation, db, epics, observe, passed_reviews, plans, records, review_runs, sql
 from canopy.core.vocab import CheckStatus, Phase, PlanStatus, PrState, ResumeReason, ReviewRunStatus, RunKind
 from canopy.core.workspace import CheckRole
 from canopy.loop import attention
@@ -471,7 +471,8 @@ def _ready(ctx: Context, key: str, units: Sequence[Derived], limits: _Limits) ->
     """
     ticket = db.get_ticket(ctx.conn, key)
     setting = None if ticket is None else ticket.plan_setting
-    if plans.needed(ctx.config.policy.plan, setting) and plans.approved_of(ctx.conn, key) is None:
+    needed = epics.plan_needed(ctx.conn, ctx.state_dir, ctx.config.policy, key, setting)
+    if needed and plans.approved_of(ctx.conn, key) is None:
         detail = limits.plan(key)
         if detail is not None:
             yield Raised(key, ATTEMPT_LIMIT, detail)

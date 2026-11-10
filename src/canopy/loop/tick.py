@@ -28,6 +28,7 @@ from canopy.core import (
     conversation,
     db,
     definitions,
+    epics,
     hostgit,
     item_numbers,
     notice,
@@ -362,7 +363,16 @@ def _plans(ctx: Context, tickets: Iterable[records.Ticket]) -> dict[str, plans.P
     found: dict[str, plans.PlanState] = {}
     for t in tickets:
         limit = base + granted.get(t.key, 0)
-        section = plans.state_section(ctx.conn, ctx.config.policy, t, attempts=done.get(t.key, 0), limit=limit)
+        # A trivial member of an epic follows the epic's plan, approved, and needs none of its own (DESIGN §43).
+        trivial = epics.trivial(ctx.conn, ctx.state_dir, t.key, ctx.config.policy.planner_may_approve) is not None
+        section = plans.state_section(
+            ctx.conn,
+            ctx.config.policy,
+            t,
+            attempts=done.get(t.key, 0),
+            limit=limit,
+            trivial=trivial,
+        )
         if section is not None:
             found[t.key] = section
     return found

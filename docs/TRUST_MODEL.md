@@ -293,8 +293,11 @@ Controls:
   A member's planner, and its `implement` and `resume` after it, read its epic's approved plan from a copy checked
   against the hash the operator approved, ignored by git where the run starts and removed before its slot goes back,
   and none is run when it no longer matches; the epic's plan describes the work, as the ticket does, and widens nothing
-  a planner or a worker may do. A re-approval's ids are compared, as data, with the plan approved before it; a member
-  the change reaches is told the changed ids as data, never an instruction, and no run in flight is paused.
+  a planner or a worker may do. An entry's `trivial` mark is its planner's word, which counts only in a plan the
+  operator approved and while `policy.planner_may_approve` is on: a member whose every entry it marks skips a plan of
+  its own, the operator's approval of the epic's plan standing for it, never one the operator asked to plan. A
+  re-approval's ids are compared, as data, with the plan approved before it; a member the change reaches is told the
+  changed ids as data, never an instruction, and no run in flight is paused.
 - Attachments (DESIGN §22, ROADMAP M63) are written and removed only through `runs/attachments.py` by a channel that
   authenticated the operator: `canopy attach` and `canopy detach` in the operator's shell, or the web UI behind the
   listener secret (T8), each refused as `inside_run`, on a ticket canopy knows or a task not stopped. An attachment's

@@ -94,5 +94,11 @@ back, and named in a harness note if pushed; their prompts name the entries the 
 contracts it provides and uses; and the next of them takes the member's pending notice, told once that work done and
 its own approved plan stand. Chosen conservatively, for the operator to change: the copy is read as the run starts,
 as the planner's is, so a member removed between the dispatch and the start gets none though its prompt named it; and
-a worker override without `{{EPIC}}` is refused for a member, as a planner's is. Left for this bullet: a trivial
-member's re-approval; and the web UI's approval naming the members reached.
+a worker override without `{{EPIC}}` is refused for a member, as a planner's is. Built 2026-11-09, a trivial member:
+one whose every registered entry the approved epic plan marks trivial needs no plan of its own under `policy.plan`, so
+its `implement` follows the epic's copy alone, read from the plan as approved now, which is the re-approval too: a plan
+that still marks it keeps it so, one that drops the mark makes it wait on its own plan. The guard, the state block's
+`plan.needed`, the harness's `attempt_limit`, `canopy show`, and the plan's page read it in one place
+(`epics.plan_needed`). Chosen conservatively, for the operator to change: with `planner_may_approve` off no mark
+counts, whatever a plan says; a member registered against an entry the plan dropped is not trivial; and a plan of its
+own written before the mark is left as it is. Left for this bullet: the web UI's approval naming the members reached.

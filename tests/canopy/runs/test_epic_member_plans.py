@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from canopy.core import epics, plans
-from canopy.core.vocab import RunKind, RunStatus
+from canopy.core.vocab import PlannerApproval, RunKind, RunStatus
 from canopy.infra import procs
 from tests.canopy.helpers import (
     BRANCH,
@@ -248,3 +248,85 @@ def test_a_worker_override_without_the_epic_is_refused_once_its_plan_is_approved
     [(action, rationale)] = scenario.refuses(dispatches())
     assert action == "refused:bad_prompt"
     assert "missing required placeholder {{EPIC}}" in rationale
+
+
+#: `EPIC_PLAN` with `B1` marked trivial, which skips its member's own plan under `policy.plan`.
+TRIVIAL = EPIC_PLAN.replace("- Trivial: no", "- Trivial: yes, a one-line config change")
+
+
+def plans_by_approval(scenario: Scenario, *, planner_may_approve: bool = True) -> None:
+    """Every implement waits on a plan the operator approves, and planners may say one needs no review."""
+    scenario.configures("workspace", policy={"plan": "approve"})
+    scenario.configures("private", policy={"planner_may_approve": planner_may_approve})
+
+
+def trivial_epic(scenario: Scenario, plan: str = TRIVIAL) -> None:
+    """Submit epic:1, have its plan written and approved as `plan`, and register KEY against `B1`."""
+    scenario.operator("epic", "submit", "Move sessions to the new store.")
+    epic_planned(scenario.env, plan)
+    scenario.operator("plan", "epic:1", "--approve")
+    scenario.operator("epic", "add", "epic:1", KEY, "--entry", "B1")
+
+
+def test_a_trivial_member_is_implemented_on_its_epics_approval_alone(scenario: Scenario, git_pool: GitPool) -> None:
+    """The epic's plan marks its entry trivial: no plan of its own is needed, and its implement follows the epic's."""
+    assert git_pool.slots
+    plans_by_approval(scenario)
+    trivial_epic(scenario)
+    assert epics.trivial(scenario.conn, scenario.env.state_dir, KEY, PlannerApproval.STRICT) == (
+        "B1: a one-line config change"
+    )
+    scenario.seen()
+    shown = scenario.operator("show", KEY)
+    assert "Plan: not needed, by its epic's approved plan, which marks it trivial (B1: a one-line config change)" in (
+        shown.out
+    )
+
+    run = scenario.run(worker=worker_does(["cat", epics.EPIC_COPY], *commit_and_push(BRANCH)))
+    assert run.status is RunStatus.DONE, Path(run.row["log_path"]).read_text()
+    assert "This ticket is a member of epic:1" in run.prompt
+    assert "## The plan" not in run.prompt
+    *_, (cat, *_) = commands_run(scenario.agent_log)
+    assert cat["stdout"] == TRIVIAL
+    assert plans.history(scenario.conn, KEY) == []
+
+
+def test_a_member_is_never_trivial_with_planner_approval_off(scenario: Scenario, git_pool: GitPool) -> None:
+    """With `planner_may_approve` off, a trivial mark counts for nothing: its implement waits on a plan."""
+    assert git_pool.slots
+    plans_by_approval(scenario, planner_may_approve=False)
+    trivial_epic(scenario)
+    [(action, rationale), *_] = scenario.refuses(dispatches())
+    assert action == "refused:unplanned"
+    assert f"{KEY} needs a plan before its implement" in rationale
+
+
+def test_a_member_that_asked_for_a_plan_is_never_trivial(scenario: Scenario, git_pool: GitPool) -> None:
+    """The operator's own word for the ticket, `canopy plan KEY`, comes before the epic's mark."""
+    assert git_pool.slots
+    plans_by_approval(scenario)
+    trivial_epic(scenario)
+    scenario.seen()
+    scenario.operator("plan", KEY)
+    [(action, _), *_] = scenario.refuses(dispatches())
+    assert action == "refused:unplanned"
+
+
+def test_a_re_approval_that_no_longer_marks_it_trivial_plans_it_and_one_that_does_approves_it_again(
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    """Read from the plan as approved now: unmarked, the member waits on its own plan; marked again, it goes ahead."""
+    assert git_pool.slots
+    plans_by_approval(scenario)
+    trivial_epic(scenario)
+    scenario.operator("reply", "epic:1", "B1 touches the session schema after all.")
+    epic_planned(scenario.env, EPIC_PLAN)
+    scenario.operator("plan", "epic:1", "--approve")
+    [(action, _), *_] = scenario.refuses(dispatches())
+    assert action == "refused:unplanned"
+
+    scenario.operator("reply", "epic:1", "It does not: the schema stays.")
+    epic_planned(scenario.env, TRIVIAL)
+    scenario.operator("plan", "epic:1", "--approve")
+    assert scenario.run(worker=worker_does(*commit_and_push(BRANCH))).status is RunStatus.DONE

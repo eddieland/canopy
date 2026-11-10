@@ -23,6 +23,7 @@ const PLAN: PlanSummary = {
 const PLANS: TicketPlans = {
     needed: true,
     setting: null,
+    trivial: null,
     policy: 'approve',
     planning: null,
     changes_asked: null,
@@ -196,6 +197,21 @@ describe('PlanCard', () => {
             'policy.plan is approve: every implement waits on a plan you approve.',
         )
         expect(card.textContent).toContain('Run 7 is writing a new plan.')
+    })
+
+    it('says a trivial member of an epic needs no plan, and why on hover', async () => {
+        await renderCard({
+            newest: null,
+            plans: [],
+            threads: [],
+            needed: false,
+            trivial: 'B4: a one-line config change',
+        })
+        await screen.findByTestId('plan-card')
+        expect(screen.getByText('not needed').closest('[title]')?.getAttribute('title')).toBe(
+            "Its epic's plan marks it trivial (B4: a one-line config change): " +
+                'your approval of that plan stands for its own.',
+        )
     })
 
     it('says changes you asked for in a band of their own, until a planner starts on them', async () => {

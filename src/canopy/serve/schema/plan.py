@@ -120,7 +120,10 @@ class TicketPlans(Model):
     """A ticket's plans: whether it needs one, the newest as its file stands, the earlier ones, and the comments."""
 
     needed: bool
-    """Whether its implement waits on an approved plan, by its own setting or `policy.plan`."""
+    """Whether its implement waits on an approved plan, by its own setting, `policy.plan`, or its epic's plan."""
+    trivial: str | None = None
+    """Why its epic's approved plan marks it trivial, each entry's reason, which skips its own plan under
+    `policy.plan` (DESIGN §43); none when it does not."""
     setting: Literal["plan", "skip"] | None = None
     """The operator's own word for this ticket, which overrides the policy; none to follow it."""
     policy: Literal["off", "approve"]
