@@ -3,7 +3,8 @@
  * its ticket's and its PR's runs lists name them, and what the panel, or a PR's page, says where it has no diff.
  */
 
-import type { ChangedFile, MissingDiff, RunChange, RunRange } from '@/api/types'
+import type { ChangedFile, MissingDiff, RunChange, RunCommit, RunKick, RunRange } from '@/api/types'
+import { pullRequestUrl } from '@/lib/pull-request-label'
 import { goneText } from '@/lib/retention'
 import { shortSha } from '@/lib/reviews'
 
@@ -109,3 +110,63 @@ export const NOT_ON_ORIGIN =
 
 /** What a Diff panel says when the diff it opened could not be read. */
 export const DIFF_UNREAD = 'the diff could not be read: its file is gone, or not a regular file'
+
+/** One of canopy's marks on a commit, as a chip names it: its word, and what it means on its hover. */
+export interface CommitMark {
+    /** The chip's word. */
+    word: string
+    /** What it means. */
+    meaning: string
+}
+
+/**
+ * What canopy's marks say of a commit in a run's range (TRUST_MODEL T5), each a chip after its subject: a mark it
+ * lacks, a co-author not canopy's, and a commit canopy's own push put on origin, not the worker. None for a commit
+ * that carries every mark the run's config asked for and that its worker pushed.
+ */
+export function commitMarks(commit: RunCommit): CommitMark[] {
+    return [
+        ...(commit.canopy_trailer === false ? [{ word: 'no trailer', meaning: NO_TRAILER }] : []),
+        ...(commit.prefixed === false ? [{ word: 'no prefix', meaning: NO_PREFIX }] : []),
+        ...(commit.runtime_trailer ? [{ word: 'co-author', meaning: CO_AUTHOR }] : []),
+        ...(commit.harness_pushed ? [{ word: 'pushed by canopy', meaning: PUSHED_BY_CANOPY }] : []),
+    ]
+}
+
+/**
+ * A commit's page on GitHub, through the PR it went to: `https://github.com/org/repo/pull/88/commits/<sha>`, never a
+ * link of its own (D113); null for a PR not on GitHub, or no PR.
+ */
+export function commitUrl(prUrl: string | null | undefined, sha: string): string | null {
+    const pr = prUrl === null || prUrl === undefined ? null : pullRequestUrl(prUrl)
+    return pr === null ? null : `${pr}/commits/${sha}`
+}
+
+/** How many of a range's commits the run did not record, past the newest it keeps: `and 3 older commits`. */
+export function commitsLeftOutText(range: RunRange): string {
+    const more = (range.commit_count ?? 0) - range.commits.length
+    return more > 0 ? `and ${more} older ${more === 1 ? 'commit' : 'commits'}` : ''
+}
+
+/** A kick canopy pushed after a run, as a PR's runs list names it: `kicked 5b1e0c4 → 9d0a7e2`, the rebased copy. */
+export function kickText(kick: RunKick): string {
+    return `kicked ${shortSha(kick.from_head)} → ${shortSha(kick.to_head)}`
+}
+
+/** What a `no trailer` chip says on its hover. */
+export const NO_TRAILER = 'It lacks canopy’s co-author trailer: it was made around canopy’s hooks.'
+
+/** What a `no prefix` chip says on its hover. */
+export const NO_PREFIX = 'Its subject lacks canopy’s prefix: it was made around canopy’s hooks.'
+
+/** What a `co-author` chip says on its hover. */
+export const CO_AUTHOR = 'It carries a co-author trailer canopy did not add, as the agent runtime’s attribution is.'
+
+/** What a `pushed by canopy` chip says on its hover. */
+export const PUSHED_BY_CANOPY =
+    'The worker left it unpushed, and canopy’s push after the run put it on origin, as the run’s checkpoint.'
+
+/** What a kick's line says on its hover. */
+export const KICKED =
+    'canopy rebased the branch and pushed the copy to rerun checks the worker judged flaky: the commits above are ' +
+    'the run’s, the copy is canopy’s.'

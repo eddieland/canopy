@@ -8,12 +8,14 @@ import type { ChangedFile, ReviewDiff, RunChange, RunRange } from '@/api/types'
 import { Disclosure } from '@/components/disclosure'
 import { Empty, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { DiffPanels } from '@/components/review-diff'
+import { RunCommits } from '@/components/run-commits'
 import { Chip } from '@/components/status'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { pullRequestUrl } from '@/lib/pull-request-label'
 import type { Placed } from '@/lib/reviews'
 import {
     changedPath,
+    commitsLeftOutText,
     DIFF_UNREAD,
     diffAnchor,
     filesLeftOutText,
@@ -43,8 +45,9 @@ export type ChangeQuery<K extends QueryKey> = (repo: string) => UseQueryOptions<
  * links to the PR's page, where the branch against its base is; under it, each file with its lines. `Show diff` reads
  * the run's own diff (`diff`) and opens it under the panel, in the panels a review's diff has (`DiffPanels`); a page
  * opened at `#diff-<repo>` opens that one. A diff canopy did not keep says why, or that retention removed it, rather
- * than offering nothing. A run that recorded nothing says so when `records`, as an ended run of a kind that records
- * would have; otherwise, and while it runs, there is no panel.
+ * than offering nothing. Under the files, the commits in its range, each with canopy's marks on it (`RunCommits`),
+ * linked to its page on GitHub through the PR. A run that recorded nothing says so when `records`, as an ended run of
+ * a kind that records would have; otherwise, and while it runs, there is no panel.
  */
 export function RunChangesPanel<K extends QueryKey>({
     changes = NO_CHANGES,
@@ -143,6 +146,13 @@ function ChangeSummary<K extends QueryKey>({ change, diff }: { change: RunChange
                             )}
                         </>
                     )}
+                    <RunCommits
+                        commits={range.commits}
+                        prUrl={change.pr_url}
+                        onOrigin={range.unpushed_sha === null}
+                        leftOut={commitsLeftOutText(range)}
+                        className="border-t px-3 py-2"
+                    />
                 </Panel>
                 {change.diff_kept && (
                     <CollapsibleContent>

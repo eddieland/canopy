@@ -39,8 +39,11 @@ or, on a PR the loop doesn't own, **your review**, where your draft stands with 
 what it has cost, its coworkers' review threads when canopy has read them (below), canopy's reviews of it, the runs
 that pushed to it, and the decisions that named it. Each run names what it took the branch from and to in this PR's
 repository, in short commits, with its lines added and removed, `web 9b2f4c6..e3a7d91 +26 −1`; click it for the run's
-page with that diff open. It's the branch's history a run at a time, no squinting at force-push timestamps required. A
-list with nothing in it shows its header and a `0`, and nothing else: an empty list doesn't need a paragraph. A PR
+page with that diff open. Under it are the run's commits there, each opening on GitHub, with the same chips its page
+gives them (**pushed by canopy** for one canopy's own push put on origin), and, when canopy kicked the branch to rerun
+checks the worker called flaky, a **kicked** line from the run's head to the rebased copy. It's the branch's history a
+run at a time, no squinting at force-push timestamps required: who put what there survives every kick. A list with
+nothing in it shows its header and a `0`, and nothing else: an empty list doesn't need a paragraph. A PR
 with no ticket has no Runs at all, since runs belong to a ticket. When a PR has used every review it's allowed, its
 page shows **At its limit**, with **Allow one more**, and under it the same as a command, `canopy grant URL review`.
 The limit is `policy.max_reviews_per_pr`, three by default; a grant works as a ticket's does ([Allowing one more
