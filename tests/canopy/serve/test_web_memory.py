@@ -102,8 +102,8 @@ def test_the_overview_counts_the_notes_in_force_by_ticket_and_holds_the_proposal
         (5, "implement", False, False),
         (6, "implement", True, False),
     ]
-    # ABC-100's run made proposal 5 again: a second, not a row of its own.
-    assert [p["seconds"] for p in overview["proposals"]] == [[{"ticket_key": "ABC-100", "run_id": 40}], []]
+    # ABC-102's run made proposal 5 again: a second, not a row of its own.
+    assert [p["seconds"] for p in overview["proposals"]] == [[{"ticket_key": "ABC-102", "run_id": 42}], []]
     # Each proposal lapses PROPOSAL_DAYS after it was written, unless decided.
     for p in overview["proposals"]:
         lapses = datetime.fromisoformat(p["expires_at"]) - datetime.fromisoformat(p["entry"]["created_at"])
