@@ -19,6 +19,7 @@ export const ROUTES = [
     'attention',
     'workspace',
     'workspace/runs',
+    'workspace/runs/38',
     'workspace/runs/39',
     'workspace/runs/41',
     'workspace/worktrees',

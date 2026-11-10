@@ -121,17 +121,6 @@ run across several repositories lists each one's under its name, and counts the 
 arrive with the run's result, so a running run shows none yet, and a run given no list, or in a repository you keep
 none for, has no panel at all. It's what `canopy show run:ID` prints under `Checklist:`.
 
-When the list held the worker's push, what it pushed after reading the list sits right under the answers. A **Pushed
-after the list** panel names the repository and the two commits, `web · 5b1e0c4..c9d24f8`: the one the branch was at
-when canopy showed the list, and the next push. Then comes the diff between them, a panel per file, drawn as [a
-review's](pull-requests#a-reviews-page) is. This is where a `fixed` answer shows its work: the answer says the worker
-fixed it, the diff shows what it called a fix. It's everything the run changed in that stretch, not only the fix, so a
-worker that also tidied three files on the way gets the credit, or the blame, for those too. A run held more than once,
-or in several repositories, has a panel for each stretch, each naming its repository. A diff canopy couldn't keep as
-the run ended, or that [garbage collection](running-the-loop#garbage-collection) has since removed, says so in its
-panel rather than quietly leaving the stretch out. Past five stretches, which takes some doing, the page shows the
-first five and `canopy show run:ID` names the rest.
-
 Then the **Diff**: what the run changed, read by canopy from the run's own worktree as it ended, after its push and
 before a flaky kick, canopy's rebase to rerun a flaky check, could rewrite the branch. It's a summary, a few lines
 tall, so the transcript below stays where you can see it. The header names the repository, the two commits, and the
@@ -142,6 +131,19 @@ panel, a panel per file, drawn as a review's is. So a `resume` that answered one
 it touched, not the four hundred the branch has piled up since `implement`. When you do want the whole branch, **branch
 vs base** takes you to the PR's page, which has it as the latest run that pushed left it, with its threads on it. A
 run across several repositories has a Diff panel for each.
+
+When the list held the worker's push, that repository's Diff opens on what the worker pushed after reading the list,
+right under the answers. A switch beside **branch vs base** picks **after the list** or **whole run**, and starts on the
+first. After the list, a dot marks each file the stretch touched, and a line under the files names its two commits,
+`5b1e0c4..c9d24f8`: where the branch was when canopy showed the list, and the next push. Its diff is open under the
+panel. This is where a `fixed` answer shows its work: the answer says the worker fixed it, the diff shows what it called
+a fix. It's everything the run changed in that stretch, not only the fix, so a worker that also tidied three files on
+the way gets the credit, or the blame, for those too. **whole run** puts the rest back, read once you show it. A run
+held more than once has a stretch for each hold, `after list 1`, `after list 2`, and one held in several repositories
+has each stretch in its own repository's Diff. A stretch whose diff canopy couldn't keep as the run ended, or that
+[garbage collection](running-the-loop#garbage-collection) has since removed, says so on that line rather than quietly
+leaving it out. Past five stretches, which takes some doing, the page shows the first five and `canopy show run:ID`
+names the rest.
 
 A run that ended `unpushed` still shows what it did: the change up to the last commit it made in its worktree, with a
 **not on origin** chip, since the commits themselves went with the slot. It's the closest you'll get to the work the
