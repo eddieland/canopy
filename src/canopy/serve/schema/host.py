@@ -183,6 +183,34 @@ type ProcessState = Annotated[
 ]
 
 
+type WorkKind = Annotated[
+    Literal["run", "review", "chore", "task", "epic"],
+    Field(
+        description="What kind of canopy's work a process belongs to: a ticket's worker or plan run (`run:ID`), a "
+        "PR's review, a chore's run, a task's run, or an epic's plan run.",
+    ),
+]
+
+
+class ProcessWork(Model):
+    """The running work a process belongs to, by the pid its run recorded in the journal: its own, or its agent's."""
+
+    kind: WorkKind
+    """What kind of work it is."""
+    id: int
+    """The run's id, in its kind's own numbering: a review's id for a review."""
+    ticket_key: str | None = None
+    """The ticket a worker run works, or a review's PR is for; None for the rest."""
+    pr_url: str | None = None
+    """The PR a review reviews; None for the rest."""
+    chore: str | None = None
+    """The chore a chore run runs; None for the rest."""
+    task_id: int | None = None
+    """The task a task's run works; None for the rest."""
+    epic_id: int | None = None
+    """The epic an epic's plan run plans; None for the rest."""
+
+
 class HostProcess(Model):
     """One process on the machine, as Linux's `/proc` describes it."""
 
@@ -206,6 +234,9 @@ class HostProcess(Model):
     """How many threads it runs."""
     started_at: datetime | None
     """When it started; None when the machine's boot time could not be read."""
+    work: ProcessWork | None = None
+    """The running work whose process this is, by the pid the journal recorded for it; None for any other process,
+    those under a run's process included, which the tree shows under it."""
 
 
 class HostProcesses(Model):

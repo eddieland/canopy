@@ -782,6 +782,14 @@ reader, so no table repeats them.
   with no line of its own shows none. A counter counts what its line lists, and a line that splits the count names only
   the parts there are, never a `0 broken` among them. The attention page has none: the nav's badge, the rail, the tab's
   title, and its icon carry the glance, and tiles there only said their numbers again.
+- **The process tree** (the system resources page, `ProcessTree`) answers "is it canopy?" first: the loop's tree,
+  its parents named in one muted line over it, each run's process carrying its run as a link in the accent, its
+  reference and what it works on (`run:41 ABC-101`), and what the run and everything under it add up to, open or
+  folded; then what else is busy under an `elsewhere` heading, a run of idle parents on the way to one child drawn as
+  one muted line of their names. A figure sits over a thin bar of the accent's tint, the processors against one core
+  and the memory against all there is, for the eye alone. The **cpu** and **memory** heads are its order: a head is a
+  button, the column it orders in the foreground with a down arrow, `aria-sort` on its cell. **All**, the order, and
+  the folds are kept in this browser, so the page is as the operator left it.
 - **The spend chart** (the spend page) follows Charts: a bar per UTC day, the series stacked bottom up in `SERIES`
   order. Idle overseer spend sits on the baseline under the rest of the overseer's, a lighter shade of its hue, so the
   two read as one. A day with no cost is a 1px `border` stub on the baseline, so it reads as nothing spent, not a column
