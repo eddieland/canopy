@@ -49,25 +49,35 @@ test('the page says nothing is under pressure, then each disk canopy writes to w
     await expect(page.getByTestId('disk-fills')).toHaveCount(0)
 })
 
-test("the graphs draw the server's last hour of readings, and say the one under the pointer", async ({ page }) => {
+test("the graphs draw the server's last hour in two ranks, and point at one moment on every one", async ({ page }) => {
     await page.goto('system')
     await settled(page)
-    const graphs = page.getByTestId('host-graphs').getByTestId('trend-chart')
-    // The load, the processors busy, the memory, the swap, the two stalls, and the loop's own; a disk's is on its row.
+    const panel = page.getByTestId('host-graphs')
+    await expect(panel.getByTestId('host-graphs-read')).toHaveText(/^the last 60 min, read \d+s ago$/u)
+    const graphs = panel.getByTestId('trend-chart')
+    // The load, the memory, and the processors busy; then the swap, the two stalls, and the loop's own. A disk's is on
+    // its row.
     await expect(graphs).toHaveCount(7)
     const load = graphs.first()
     await expect(load.getByTestId('trend-value')).toHaveText(/^20% now · peak \d+%$/u)
-    await expect(load).toContainText('60 min ago')
-    await expect(graphs.nth(1)).toContainText('CPU busy')
-    await expect(graphs.nth(1).getByTestId('trend-value')).toHaveText(/^15% now · peak \d+%$/u)
+    await expect(graphs.nth(1)).toContainText('Memory used')
+    await expect(graphs.nth(1)).toContainText('15% left')
+    await expect(graphs.nth(2)).toContainText('CPU busy')
+    await expect(graphs.nth(2).getByTestId('trend-value')).toHaveText(/^15% now · peak \d+%$/u)
     await expect(graphs.nth(3)).toContainText('Swap used')
     await expect(graphs.nth(5)).toContainText('Disk stalls')
+    // The hour is said once, in the header, not under each graph.
+    await expect(panel.getByText('60 min ago')).toHaveCount(0)
 
     const plot = load.getByTestId('trend-plot')
     const box = await plot.boundingBox()
     expect(box).not.toBeNull()
     await plot.hover({ position: { x: (box?.width ?? 0) / 2, y: 10 } })
-    await expect(load.getByTestId('trend-value')).toHaveText(/ at \d{2}:\d{2}$/u)
+    const at = load.getByTestId('trend-value')
+    await expect(at).toHaveText(/ at \d{2}:\d{2}$/u)
+    // Every graph points at the same moment: "was it the build at 14:05?" reads the load and the stalls together.
+    const time = (await at.textContent())?.split(' at ')[1] ?? ''
+    await expect(graphs.nth(5).getByTestId('trend-value')).toHaveText(new RegExp(` at ${time}$`, 'u'))
 })
 
 test("the processes are the loop's, a run's tied to it, then what else is busy; every one on asking", async ({
