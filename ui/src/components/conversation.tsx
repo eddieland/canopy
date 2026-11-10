@@ -89,7 +89,7 @@ export function Conversation({
     }
     const lead = instruction && <InstructionBubble instruction={instruction} />
     return (
-        <ol className="stagger flex flex-col gap-3 p-3" data-testid="conversation">
+        <ol className="flex stagger flex-col gap-3 p-3" data-testid="conversation">
             {!newestFirst && lead}
             {messages.map((message, index) => (
                 <Bubble

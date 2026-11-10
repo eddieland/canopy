@@ -335,7 +335,7 @@ function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: 
             </Tip>
             <span className="flex items-center">
                 <Tip fact={w.path} mono>
-                    <span className="readout w-8 text-xs text-muted-foreground">{slotRef(w.name)}</span>
+                    <span className="w-8 readout text-xs text-muted-foreground">{slotRef(w.name)}</span>
                 </Tip>
                 {whole && <CopyButton text={whole(w.path)} label={`slot ${w.name}'s path`} reveal />}
             </span>

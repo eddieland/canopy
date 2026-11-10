@@ -32,7 +32,7 @@ export function EpicRow({ epic }: { epic: EpicSummary }) {
             <EpicLink id={epic.id} />
             <Clipped text={repos} mono className="text-xs text-muted-foreground" />
             <TicketTitle title={epicTitle(epic.text)} />
-            <span className="readout text-right text-xs text-muted-foreground">{filed}</span>
+            <span className="text-right readout text-xs text-muted-foreground">{filed}</span>
             <Age at={epic.submitted_at} variant="ago" className="text-right" />
             {epic.stopped_at !== null && (
                 <RowLine from="title" className="text-xs text-muted-foreground" data-testid="epic-stopped">

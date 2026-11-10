@@ -474,7 +474,7 @@ function AnswerCount({ item, column }: { item: ChecklistItemCounts; column: Answ
                     }
                 }}
             >
-                <p className="panel-label pb-2">
+                <p className="pb-2 panel-label">
                     {column.label} · {item.item}
                     {count > runs.length && ` · the newest ${runs.length} of ${count}`}
                 </p>

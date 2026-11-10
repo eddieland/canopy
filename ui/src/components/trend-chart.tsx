@@ -78,13 +78,13 @@ export function TrendChart({
         <figure className="flex min-w-0 flex-col gap-1.5 px-3 py-2.5" data-testid="trend-chart">
             <figcaption className="flex min-w-0 items-baseline justify-between gap-3">
                 <span className="flex min-w-0 items-baseline gap-2">
-                    <span className="panel-label shrink-0">{label}</span>
+                    <span className="shrink-0 panel-label">{label}</span>
                     {detail !== undefined && <span className="truncate text-xs text-muted-foreground">{detail}</span>}
                 </span>
                 {hovered === null ? (
                     <Resting latest={showLatest ? latest : undefined} format={format} resting={resting} />
                 ) : (
-                    <span className="readout shrink-0 text-xs" data-testid="trend-value">
+                    <span className="shrink-0 readout text-xs" data-testid="trend-value">
                         {format(hovered.value)}
                         <span className="text-muted-foreground"> at {clockTime(iso(hovered.at), clock)}</span>
                     </span>
@@ -174,7 +174,7 @@ function Resting({
     }
     return (
         <span
-            className={cn('readout shrink-0 text-xs', latest === undefined && 'text-muted-foreground')}
+            className={cn('shrink-0 readout text-xs', latest === undefined && 'text-muted-foreground')}
             data-testid="trend-value"
         >
             {latest === undefined ? null : format(latest.value)}

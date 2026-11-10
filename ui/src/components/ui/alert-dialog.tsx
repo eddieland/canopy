@@ -20,13 +20,13 @@ function AlertDialogContent({ className, ...props }: ComponentProps<typeof Alert
         <AlertDialogPrimitive.Portal>
             <AlertDialogPrimitive.Overlay
                 data-slot="alert-dialog-overlay"
-                className="fixed inset-0 z-50 bg-background/70 animate-scrim"
+                className="fixed inset-0 z-50 animate-scrim bg-background/70"
             />
             <AlertDialogPrimitive.Content
                 data-slot="alert-dialog-content"
                 className={cn(
                     'fixed top-1/2 left-1/2 z-50 flex w-[calc(100%-2rem)] max-w-sm -translate-1/2 flex-col gap-3',
-                    'rounded-md border border-edge bg-surface p-4 shadow-float outline-none animate-float',
+                    'animate-float rounded-md border border-edge bg-surface p-4 shadow-float outline-none',
                     className,
                 )}
                 {...props}

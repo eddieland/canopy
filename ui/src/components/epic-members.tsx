@@ -141,7 +141,7 @@ export function RemoveButton({ member, asking, onAsk }: { member: string; asking
             className={cn(
                 'text-muted-foreground hover:text-status-failed',
                 // Shown while its member's line is hovered or holds the focus, asked, or on a touch screen.
-                'opacity-0 group-hover/member:opacity-100 group-focus-within/member:opacity-100',
+                'opacity-0 group-focus-within/member:opacity-100 group-hover/member:opacity-100',
                 'pointer-coarse:opacity-100',
                 asking && 'text-status-failed opacity-100',
             )}

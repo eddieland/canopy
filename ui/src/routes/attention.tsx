@@ -237,7 +237,7 @@ function AttentionPage() {
                                     <PanelLoading query={attention} className="min-h-40" />
                                 ) : (
                                     <PanelScroll ref={scroller} label="Attention items" className="max-h-none min-h-0">
-                                        <ul className="stagger flex flex-col gap-0.5 p-1.5">
+                                        <ul className="flex stagger flex-col gap-0.5 p-1.5">
                                             {rows.map(({ item, leaving }) =>
                                                 leaving ? (
                                                     <Leaving
@@ -406,7 +406,7 @@ function Leaving({ item, asks, done, burst }: { item: AttentionItem; asks: Ask; 
     return (
         // Not the list's arrival (`stagger`), which would hold a new element hidden through its delay: it is leaving.
         <li aria-hidden inert data-leaving className="relative animate-none! motion-reduce:hidden">
-            <div className="animate-leave grid">
+            <div className="grid animate-leave">
                 <div className="min-h-0 overflow-hidden">
                     <div className="flex flex-col gap-1 rounded-sm px-2.5 py-2">
                         <RowContent item={item} asks={asks} done={done} />

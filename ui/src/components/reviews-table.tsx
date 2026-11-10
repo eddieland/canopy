@@ -110,7 +110,7 @@ function ReviewRow({
 }) {
     const sha = (
         <Tip fact={review.sha} mono>
-            <span className="readout shrink-0 text-xs text-muted-foreground">
+            <span className="shrink-0 readout text-xs text-muted-foreground">
                 {pr ? '' : 'at '}
                 {shortSha(review.sha)}
             </span>
@@ -120,7 +120,7 @@ function ReviewRow({
     // way before the PR's name does: it is cut first, and left out where the column has no room for it.
     const persona = review.persona !== null && (
         <Tip fact="The persona it wrote in">
-            <span className="readout hidden min-w-0 shrink-[999] truncate text-xs text-muted-foreground @3xl:inline">
+            <span className="hidden min-w-0 shrink-[999] truncate readout text-xs text-muted-foreground @3xl:inline">
                 as {review.persona}
             </span>
         </Tip>
@@ -144,7 +144,7 @@ function ReviewRow({
             </>
         ) : (
             <Tip fact={`Reviewed from the same request, of the same commit, as ${reviewRef(lead)}, in another persona`}>
-                <span className="readout min-w-0 truncate text-xs text-muted-foreground" data-testid="sibling-persona">
+                <span className="min-w-0 truncate readout text-xs text-muted-foreground" data-testid="sibling-persona">
                     as {review.persona ?? 'another persona'}
                 </span>
             </Tip>

@@ -209,7 +209,7 @@ function Tile({ value, fresh }: { value: number; fresh: boolean }) {
             data-tile={value > GOAL ? 'big' : value}
             data-fresh={fresh ? '' : undefined}
             className={cn(
-                'game-tile readout flex aspect-square items-center justify-center rounded-sm font-bold',
+                'flex aspect-square game-tile items-center justify-center rounded-sm readout font-bold',
                 digits <= 2 ? 'text-3xl' : digits === 3 ? 'text-2xl' : 'text-lg',
             )}
         >
@@ -249,8 +249,8 @@ function Scores({ saved }: { saved: Saved }) {
                 <ol className="mt-1.5 flex flex-col gap-0.5 text-xs">
                     {saved.scores.map((s, i) => (
                         <li key={`${s.at}:${s.score}`} className="flex items-center gap-3">
-                            <span className="readout w-5 text-muted-foreground">{i + 1}.</span>
-                            <span className="readout w-16 font-medium">{s.score}</span>
+                            <span className="w-5 readout text-muted-foreground">{i + 1}.</span>
+                            <span className="w-16 readout font-medium">{s.score}</span>
                             <span className="flex-1 text-muted-foreground">
                                 top tile <span className="readout">{s.tile}</span>
                             </span>

@@ -315,7 +315,7 @@ export function RailFooter() {
                 target="_blank"
                 rel="noreferrer noopener"
                 title={meta === undefined ? undefined : `canopy ${meta.version}: the releases on GitHub`}
-                className="readout min-h-4 min-w-0 truncate rounded-sm text-muted-foreground hover:text-foreground"
+                className="min-h-4 min-w-0 truncate rounded-sm readout text-muted-foreground hover:text-foreground"
                 data-testid="rail-version"
             >
                 {meta === undefined ? '' : `canopy ${meta.version}`}
@@ -448,7 +448,7 @@ function Spent({
             {window === undefined ? (
                 <Skeleton className="h-4 w-14 self-center" />
             ) : (
-                <span className="readout text-right text-xs text-foreground" data-testid={`rail-spend-${label}`}>
+                <span className="text-right readout text-xs text-foreground" data-testid={`rail-spend-${label}`}>
                     <Cost usd={cost} />
                 </span>
             )}

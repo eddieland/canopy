@@ -90,7 +90,7 @@ function Loaded({ id }: { id: number }) {
                 {/* Its state, kind, and ticket, each said here alone: the ticket's key opens it. */}
                 {runDescription(data)} · <TicketLink ticketKey={data.ticket_key} className="align-baseline" />
             </PageHeader>
-            <div className="stagger flex flex-col gap-6">
+            <div className="flex stagger flex-col gap-6">
                 {data.card !== null && (
                     <ProgressPanel
                         card={data.card}

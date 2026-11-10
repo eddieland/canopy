@@ -9,5 +9,8 @@
   "sortImports": {
     "groups": ["builtin", "external", ["internal", "subpath"], ["parent", "sibling", "index"], "style", "unknown"]
   },
+  // Tailwind classes in Tailwind's own order, read from our stylesheet so its utilities sort among the rest: in
+  // className, and in the arguments of cn() and cva().
+  "sortTailwindcss": { "stylesheet": "./src/index.css", "functions": ["cn", "cva"] },
   "ignorePatterns": ["src/routeTree.gen.ts", "src/api/schema.gen.ts", "package-lock.json", "**/*.md"]
 }

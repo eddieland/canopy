@@ -38,10 +38,10 @@ function Toast({ className, ...props }: ComponentProps<typeof ToastPrimitive.Roo
         <ToastPrimitive.Root
             data-slot="toast"
             className={cn(
-                'animate-toast flex items-start gap-2 rounded-md border border-edge bg-surface px-3 py-2',
+                'flex animate-toast items-start gap-2 rounded-md border border-edge bg-surface px-3 py-2',
                 'text-foreground shadow-float',
                 'outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
-                'data-[swipe=move]:translate-y-(--radix-toast-swipe-move-y) data-[swipe=cancel]:translate-y-0',
+                'data-[swipe=cancel]:translate-y-0 data-[swipe=move]:translate-y-(--radix-toast-swipe-move-y)',
                 'data-[swipe=end]:translate-y-(--radix-toast-swipe-end-y)',
                 className,
             )}

@@ -77,7 +77,7 @@ function Tree({ found, loop, all }: { found: HostProcesses; loop: number; all: b
             <table className="w-full border-collapse text-sm" data-testid="process-tree">
                 <thead>
                     <tr>
-                        <th className="panel-label w-full pt-3 pb-1.5 text-left font-normal">process</th>
+                        <th className="w-full pt-3 pb-1.5 text-left panel-label font-normal">process</th>
                         <th className={cn(HEAD, 'hidden pt-3 @2xl:table-cell')}>user</th>
                         <th className={cn(HEAD, 'pt-3')} title="Of one core: 100% is one core the whole time">
                             cpu
@@ -136,7 +136,7 @@ function Row({ row, loop, onFold }: { row: ProcessRow; loop: number; onFold: (pi
                         <span aria-hidden className="w-6 shrink-0" />
                     )}
                     <span className="shrink-0 font-mono text-xs">{process.name}</span>
-                    <span className="readout shrink-0 text-xs text-muted-foreground">{process.pid}</span>
+                    <span className="shrink-0 readout text-xs text-muted-foreground">{process.pid}</span>
                     {process.pid === loop && (
                         <span className="shrink-0 text-xs text-accent" data-testid="process-loop">
                             the loop
@@ -165,13 +165,13 @@ function Row({ row, loop, onFold }: { row: ProcessRow; loop: number; onFold: (pi
             </td>
             <td
                 className={cn(
-                    'readout py-1 pl-3 text-right text-xs whitespace-nowrap',
+                    'py-1 pl-3 text-right readout text-xs whitespace-nowrap',
                     cpu >= HOT_CPU ? 'text-foreground' : 'text-muted-foreground',
                 )}
             >
                 {cpuText(cpu)}
             </td>
-            <td className="readout py-1 pl-3 text-right text-xs whitespace-nowrap text-muted-foreground">
+            <td className="py-1 pl-3 text-right readout text-xs whitespace-nowrap text-muted-foreground">
                 {bytesText(rss)}
             </td>
         </tr>

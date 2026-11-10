@@ -82,7 +82,7 @@ function Row({ chore }: { chore: ChoreSummary }) {
                     at most {cadenceText(chore.every_minutes)} · {windowText(chore)}
                 </span>
                 <span
-                    className="readout ml-auto"
+                    className="ml-auto readout"
                     title="what its runs cost in the last 24 hours and the last 30 days"
                     data-testid="chore-spend"
                 >

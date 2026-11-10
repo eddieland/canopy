@@ -156,7 +156,7 @@ function Tiers({ overview, state, pastRead }: { overview: MemoryOverview; state:
                 Narrower, they stack under it, and the queue has the page's width. */}
             <div
                 className={cn(
-                    'stagger flex flex-col gap-6',
+                    'flex stagger flex-col gap-6',
                     // Two columns only while both tiers show a panel: with one off, the other has the width alone.
                     acting &&
                         state.ticket_notes.mode !== 'off' && [

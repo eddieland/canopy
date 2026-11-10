@@ -575,7 +575,7 @@ function BarLabel({
 }) {
     return (
         <span
-            className={cn('readout absolute text-2xs leading-none whitespace-nowrap text-muted-foreground', className)}
+            className={cn('absolute readout text-2xs leading-none whitespace-nowrap text-muted-foreground', className)}
             style={{ left: `${at}%`, transform: `translateX(-${at}%)` }}
             data-testid={testId}
         >

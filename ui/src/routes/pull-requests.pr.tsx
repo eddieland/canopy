@@ -107,7 +107,7 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
             >
                 {pullRequestDescription(pr, reviewLimit)}
             </PageHeader>
-            <div className="stagger flex flex-col gap-6">
+            <div className="flex stagger flex-col gap-6">
                 <Panel>
                     <PanelHeader label="Pull request">
                         <span className="text-xs text-muted-foreground">

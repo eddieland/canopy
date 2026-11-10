@@ -31,7 +31,7 @@ export function EpicStory({ detail }: { detail: EpicDetail }) {
                 </span>
             </PanelHeader>
             <ThreadScroll key={`thread-${epic.id}`} label="Conversation" end={order === 'oldest' ? 'bottom' : 'top'}>
-                <ol className="stagger flex flex-col gap-3 p-3" data-testid="conversation">
+                <ol className="flex stagger flex-col gap-3 p-3" data-testid="conversation">
                     {order === 'oldest' && <Goal detail={detail} />}
                     {ordered('conversation', order, turns).map((turn) =>
                         turn.message === undefined ? (
