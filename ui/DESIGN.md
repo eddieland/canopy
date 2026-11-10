@@ -184,7 +184,7 @@ Rules:
 - Radius: `rounded-md` for panels, buttons, and fields, `rounded-sm` for chips and nav items, `rounded-xs` for a mark
   smaller than a line of text, a checkbox or a slot's square, from the palette's `--radius`. The scale is in
   `tokens.css`; no arbitrary radius, which `npm run lint` refuses.
-- **The shell**: a 3rem header, a 13rem side nav, content capped at `max-w-[112rem]` with `p-6` and `gap-6` between
+- **The shell**: a 3rem header, a 13rem side nav, content capped at `max-w-shell` with `p-6` and `gap-6` between
   blocks. The header stays put and only what is under it scrolls (`page-scroll`), so a scrollbar, or the gutter kept
   for one, sits beside the rail and the page, never beside the header. The side rail runs the full height of the page,
   and what it holds sticks: a column as tall as the window under the header. Printed, the shell is not held to the

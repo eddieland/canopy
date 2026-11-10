@@ -561,8 +561,8 @@ export function PlanEditor({
                     // The comments take up to 24rem of what the page leaves beside the plan, and no less than 20; with
                     // none, the plan keeps the measure it has beside them.
                     comments
-                        ? '@min-[60rem]:grid-cols-[minmax(0,51rem)_minmax(20rem,24rem)]'
-                        : 'grid-cols-[minmax(0,51rem)]',
+                        ? '@min-[60rem]:grid-cols-[minmax(0,var(--container-plan))_minmax(20rem,24rem)]'
+                        : 'grid-cols-[minmax(0,var(--container-plan))]',
                 )}
             >
                 <Panel>
