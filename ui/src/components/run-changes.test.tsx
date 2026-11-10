@@ -162,13 +162,13 @@ describe('RunChangesPanel', () => {
         expect(read).toEqual([])
         expect(screen.queryByText('branch vs base')).toBeNull()
 
-        fireEvent.click(screen.getByRole('button', { name: 'Show diff' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Show diff of web' }))
         expect(await screen.findAllByTestId('diff-file')).toHaveLength(1)
         expect(read).toEqual(['web'])
         // The branch's text stays text.
         expect(screen.getByText('own.txt <img src=x onerror=alert(1)>')).toBeDefined()
         expect(document.querySelector('img')).toBeNull()
-        fireEvent.click(within(screen.getByTestId('run-change')).getByRole('button', { name: 'Hide diff' }))
+        fireEvent.click(within(screen.getByTestId('run-change')).getByRole('button', { name: 'Hide diff of web' }))
         expect(screen.queryAllByTestId('diff-file')).toHaveLength(0)
     })
 
@@ -214,12 +214,12 @@ describe('RunChangesPanel', () => {
         // Its files were counted as it ended, so they outlive the diff.
         expect(removed?.textContent).toContain('own.txt')
         expect(removed?.textContent).toContain('removed after 30 days, as your [retention] keeps it')
-        expect(screen.queryByRole('button', { name: 'Show diff' })).toBeNull()
+        expect(screen.queryByRole('button', { name: /^Show diff/u })).toBeNull()
     })
 
     it('says a diff it opened and could not read was not there to read', async () => {
         await render([change('web')])
-        fireEvent.click(screen.getByRole('button', { name: 'Show diff' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Show diff of web' }))
         expect(
             await screen.findByText('the diff could not be read: its file is gone, or not a regular file'),
         ).toBeDefined()
@@ -281,7 +281,7 @@ describe('RunChangesPanel', () => {
         expect(rowsOf(web)).toEqual(['notes.txt+1 −1', 'own.txt+1 −1'])
         expect(within(web).queryByTestId('run-change-stretch')).toBeNull()
         // The whole run folds away as the stretch did.
-        fireEvent.click(within(screen.getByTestId('run-change')).getByRole('button', { name: 'Hide diff' }))
+        fireEvent.click(within(screen.getByTestId('run-change')).getByRole('button', { name: 'Hide diff of web' }))
         expect(screen.queryAllByTestId('diff-file')).toHaveLength(0)
     })
 

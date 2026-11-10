@@ -24,7 +24,7 @@ test("a run's page sums up what it changed, over its transcript, and shows the d
     const panels = await page.locator('main h2').allTextContents()
     expect(panels.indexOf('Diff')).toBeLessThan(panels.indexOf('Transcript'))
 
-    await diff.getByRole('button', { name: 'Show diff', exact: true }).click()
+    await diff.getByRole('button', { name: 'Show diff of web' }).click()
     await expect(diff.getByTestId('diff-file')).toHaveCount(2)
     await expect(diff.getByTestId('diff-file').first()).toContainText('controller.abort()')
 })

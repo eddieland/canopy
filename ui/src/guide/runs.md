@@ -138,7 +138,7 @@ first. After the list, a dot marks each file the stretch touched, and a line und
 `5b1e0c4..c9d24f8`: where the branch was when canopy showed the list, and the next push. Its diff is open under the
 panel. This is where a `fixed` answer shows its work: the answer says the worker fixed it, the diff shows what it called
 a fix. It's everything the run changed in that stretch, not only the fix, so a worker that also tidied three files on
-the way gets the credit, or the blame, for those too. **whole run** puts the rest back, read when you pick it. A run
+the way gets the credit, or the blame, for those too. **whole run** puts the rest back, read once you show it. A run
 held more than once has a stretch for each hold, `after list 1`, `after list 2`, and one held in several repositories
 has each stretch in its own repository's Diff. A stretch whose diff canopy couldn't keep as the run ended, or that
 [garbage collection](running-the-loop#garbage-collection) has since removed, says so on that line rather than quietly

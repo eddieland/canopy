@@ -199,7 +199,7 @@ function RepoDiffSection<K extends QueryKey>({
                                     })}
                                 </ToggleGroup>
                             )}
-                            {drawable && <Disclosure open={open} what="diff" />}
+                            {drawable && <Disclosure open={open} what="diff" of={repo} />}
                         </span>
                     </PanelHeader>
                     {change === null ? (
