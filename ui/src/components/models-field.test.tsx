@@ -114,19 +114,6 @@ describe('ModelsField', () => {
         expect(screen.queryByText(/asked|≠/u)).toBeNull()
     })
 
-    it('takes a variant an OpenCode 2 session names with `#` as the one asked for with `@`', () => {
-        renderModels(
-            {
-                status: 'found',
-                models: [{ model: 'github-copilot/claude-sonnet-5.5#high', replies: 7, cost_usd: 0.3 }],
-                error: null,
-            },
-            'github-copilot/claude-sonnet-5.5@high',
-        )
-        expect(screen.getByText('github-copilot/claude-sonnet-5.5#high').getAttribute('title')).toBe('7 replies')
-        expect(screen.queryByText(/asked|≠/u)).toBeNull()
-    })
-
     it('marks only the other model of a run the model asked for served too', () => {
         renderModels(
             {

@@ -123,7 +123,7 @@ Diff panel's words; its runs list names each run's range in the PR's repository 
 being its own PR's. The mock's run 45 now counts its change, so the screenshot of PR 88's page, whose runs list and
 threads panel both change, is to be taken again. Stage 3, 2026-11-10, against the fakes: as stage 1 reads the range,
 `_run` and `_task` log its commits, the newest 100 a row each in `run_commits` and all counted on `run_changes`
-(migration 0014), each with its subject cut and every hidden character named, whether it carries canopy's trailers and
+(migration 0015), each with its subject cut and every hidden character named, whether it carries canopy's trailers and
 prefix and another co-author's, and whether the push check's own push put it on origin, which the check now reports;
 the note for a commit that lacks a mark stays. `canopy show run:ID` and `task:N` list them for the operator, and tell
 an agent reading the run, through `show-run` or inside a tick, only how many there were, since a subject is a worker's

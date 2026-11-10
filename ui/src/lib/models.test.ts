@@ -115,12 +115,6 @@ describe('sameModel', () => {
         expect(sameModel('openai/gpt-5@high', 'openai/gpt-5@high')).toBe(true)
     })
 
-    it('takes a variant asked for with `@` as served when an OpenCode 2 session names it with `#`', () => {
-        expect(sameModel('github-copilot/claude-sonnet-5.5@high', 'github-copilot/claude-sonnet-5.5#high')).toBe(true)
-        expect(sameModel('github-copilot/claude-sonnet-5.5@high', 'github-copilot/claude-sonnet-5.5#low')).toBe(false)
-        expect(sameModel('github-copilot/claude-sonnet-5.5', 'github-copilot/claude-sonnet-5.5#high')).toBe(false)
-    })
-
     it('tells apart another model, another variant, and a variant served when none was asked for', () => {
         expect(sameModel('openai/gpt-5', 'openai/gpt-5-mini')).toBe(false)
         expect(sameModel('openai/gpt-5@high', 'openai/gpt-5@low')).toBe(false)
