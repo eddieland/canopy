@@ -217,19 +217,19 @@ def opened(path: Path, *, seconds: float | None = None) -> Iterator[sqlite3.Conn
 
 
 def query(conn: sqlite3.Connection, statement: str, *values: object) -> list[tuple[object, ...]]:
-    """Every row of `statement`, with `values` bound, from a database `opened` gave.
-
-    `statement` is one of this module's literal queries, or of a caller's in the runtime package: with `each`, the one
-    place canopy runs SQL on the runtime's database, which is not the journal (D125).
+    """Every row of `statement`, with `values` bound, from a database `opened` gave, as `each` reads them.
 
     Returns:
         The rows, as SQLite gave them.
     """
-    return conn.execute(statement, values).fetchall()
+    return list(each(conn, statement, *values))
 
 
 def each(conn: sqlite3.Connection, statement: str, *values: object) -> Iterator[tuple[object, ...]]:
-    """Each row of `statement`, as `query` reads them, one at a time, so a long result is never held whole.
+    """Each row of `statement`, with `values` bound, one at a time, so a long result is never held whole.
+
+    `statement` is one of this module's literal queries, or of a caller's in the runtime package: the one place canopy
+    runs SQL on the runtime's database, which is not the journal (D125).
 
     Yields:
         Each row, as SQLite gives it.

@@ -18,7 +18,7 @@ EXEMPT = {
     ("core/db.py", "migrate", "executescript"),
     # The runtime's own databases, not the journal, which the runtime's layer, below `core`, reads with its literal
     # queries and bound values alone, through one function (`canopy.runtime.opencode.sessions`).
-    ("runtime/opencode/sessions.py", "_query", "execute"),
+    ("runtime/opencode/sessions.py", "each", "execute"),
 }
 
 

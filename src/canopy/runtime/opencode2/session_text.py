@@ -59,9 +59,11 @@ SELECT count(*) FROM session WHERE id NOT IN (SELECT id FROM session_v2)
 """
 #: How many sessions OpenCode 1's table holds, in a database that has no table of OpenCode 2's.
 EARLIER_ALL_SQL = "SELECT count(*) FROM session"
-#: The parts of every session's text, `parts (session_id, part, text)`, for a query after it to read. A message whose
-#: data is not JSON is read as an empty object, so SQLite takes nothing out of it and raises nothing.
-_PARTS = """
+#: Each part of every session's text, as `TextRow` reads it: its session, which part, and the text, none empty, among
+#: the parts a JSON array names, `?2`, that holds every pattern of `LIKE` another names, `?1`: every part, read whole,
+#: when the first names none, and a plain scan of the record in place, with no index, when it names some. A message
+#: whose data is not JSON is read as an empty object, so SQLite takes nothing out of it and raises nothing.
+PARTS_SQL = """
 WITH message AS (
     SELECT session_id, type, CASE WHEN json_valid(data) THEN data ELSE '{}' END AS data FROM session_message
 ),
@@ -96,21 +98,12 @@ parts (session_id, part, text) AS (
     UNION ALL
     SELECT session_id, 'returned', json_extract(data, at || '.state.error.message') FROM content WHERE kind = 'tool'
 )
-"""
-#: Every part of every session's text, as `TextRow` reads it: its session, which part, and the text, none empty.
-PARTS_SQL = (
-    _PARTS  # noqa: S608 # two of this module's literals joined
-    + "SELECT session_id, part, text FROM parts WHERE text IS NOT NULL AND text != ''"
-)
-#: Each session and part that holds every word a JSON array names, each a pattern of `LIKE`, among the parts a second
-#: JSON array names: a plain scan of the record in place, with no index.
-SCAN_SQL = (
-    _PARTS  # noqa: S608 # two of this module's literals joined; each value is bound
-    + """SELECT DISTINCT session_id, part FROM parts
-WHERE part IN (SELECT value FROM json_each(?2)) AND typeof(text) = 'text'
+SELECT session_id, part, text FROM parts
+WHERE text IS NOT NULL AND text != '' AND part IN (SELECT value FROM json_each(?2))
   AND NOT EXISTS (SELECT 1 FROM json_each(?1) w WHERE text NOT LIKE w.value ESCAPE '\\')
 """
-)
+#: What `PARTS_SQL` takes to read every part whole: no pattern, and every part.
+EVERY_PART = ("[]", json.dumps(TEXT_PARTS))
 
 
 def record() -> SessionRecord:
@@ -171,7 +164,7 @@ def rows() -> Generator[TextRow | None]:
             with sessions.opened(path, seconds=READ_SECONDS) as conn:
                 if "session_v2" not in {row[0] for row in sessions.query(conn, TABLES_SQL)}:
                     continue
-                for row in sessions.each(conn, PARTS_SQL):
+                for row in sessions.each(conn, PARTS_SQL, *EVERY_PART):
                     yield _row(row)
         except sqlite3.Error:
             if n == 0:
@@ -200,7 +193,7 @@ def scan(words: Sequence[str], parts: Collection[TextPart]) -> list[tuple[str, T
             with sessions.opened(path, seconds=READ_SECONDS) as conn:
                 if "session_v2" not in {row[0] for row in sessions.query(conn, TABLES_SQL)}:
                     continue
-                found.update(h for row in sessions.each(conn, SCAN_SQL, patterns, named) if (h := _hit(row)))
+                found.update(h for row in sessions.each(conn, PARTS_SQL, patterns, named) if (h := _hit(row)))
         except sqlite3.Error:
             if n == 0:
                 raise
@@ -243,7 +236,7 @@ def _row(row: Sequence[object]) -> TextRow | None:
 
 # The row as a session and a part found, or None when canopy cannot read it.
 def _hit(row: Sequence[object]) -> tuple[str, TextPart] | None:
-    found = _row((*row, ""))
+    found = _row(row)
     return (found.session_id, found.part) if found is not None else None
 
 

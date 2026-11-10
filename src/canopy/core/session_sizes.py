@@ -56,30 +56,28 @@ OWNERS: tuple[Owner, ...] = (*spend.KINDS, "epics", "state_dir")
 #: counted together, under `OTHER_DIRECTORIES`.
 DIRECTORIES = 10
 OTHER_DIRECTORIES = "(other directories)"
-#: How a trial index splits text into words: memory's tokenizer (`memories_fts`), so a word matches as memory's search
-#: matches it.
-TOKENIZER = "porter unicode61"
 #: The first SQLite that can delete a row from an index that holds no text, which stage 2's index needs.
 CONTENTLESS_DELETE = (3, 43, 0)
 #: How many rows a trial index takes in one transaction.
 BATCH = 1000
-# Each trial index's table, by whether it keeps word positions and whether rows can be deleted from it. Literal, as
-# every statement canopy runs is: the temporary file is not the journal, but nothing in it is built from input.
-_CREATE: Mapping[tuple[bool, bool], str] = {
-    (
-        True,
-        True,
-    ): f"CREATE VIRTUAL TABLE idx USING fts5(text, content='', contentless_delete=1, tokenize='{TOKENIZER}')",
-    (True, False): f"CREATE VIRTUAL TABLE idx USING fts5(text, content='', tokenize='{TOKENIZER}')",
-    (False, True): (
-        "CREATE VIRTUAL TABLE idx USING fts5(text, content='', contentless_delete=1, detail=none,"
-        f" tokenize='{TOKENIZER}')"
+# Each trial index's table, by whether it keeps word positions and whether rows can be deleted from it, splitting
+# text into words with memory's tokenizer (`memories_fts`), so a word matches as memory's search matches it. The
+# temporary file is not the journal, but its statements are built as the journal's are (D125).
+_CREATE: Mapping[tuple[bool, bool], sql.Fragment] = {
+    (True, True): sql.frag(
+        "CREATE VIRTUAL TABLE idx USING fts5(text, content='', contentless_delete=1, tokenize='porter unicode61')",
     ),
-    (False, False): f"CREATE VIRTUAL TABLE idx USING fts5(text, content='', detail=none, tokenize='{TOKENIZER}')",
+    (True, False): sql.frag("CREATE VIRTUAL TABLE idx USING fts5(text, content='', tokenize='porter unicode61')"),
+    (False, True): sql.frag(
+        "CREATE VIRTUAL TABLE idx USING fts5(text, content='', contentless_delete=1, detail=none,"
+        " tokenize='porter unicode61')",
+    ),
+    (False, False): sql.frag(
+        "CREATE VIRTUAL TABLE idx USING fts5(text, content='', detail=none, tokenize='porter unicode61')",
+    ),
 }
-_INSERT = "INSERT INTO idx (rowid, text) VALUES (?, ?)"
-_OPTIMIZE = "INSERT INTO idx (idx) VALUES ('optimize')"
-_MATCH = "SELECT rowid FROM idx WHERE idx MATCH ?"
+_INSERT = sql.frag("INSERT INTO idx (rowid, text) VALUES (?, ?)", sql.ROW, sql.ROW)
+_OPTIMIZE = sql.frag("INSERT INTO idx (idx) VALUES ('optimize')")
 
 
 @dataclass(frozen=True)
@@ -365,7 +363,7 @@ def _trial(directory: str, cut: Cut, *, positions: bool) -> Iterator[_Trial]:
     path = Path(directory) / f"{cut}-{'positions' if positions else 'rows'}.db"
     conn = sqlite3.connect(path)
     try:
-        conn.execute(_CREATE[positions, sqlite3.sqlite_version_info >= CONTENTLESS_DELETE])
+        sql.execute(conn, _CREATE[positions, sqlite3.sqlite_version_info >= CONTENTLESS_DELETE])
         conn.commit()
         yield _Trial(path, conn, positions)
     finally:
@@ -384,7 +382,7 @@ def _flush(trial: _Trial, clock: Callable[[], float]) -> None:
         return
     start = clock()
     with trial.conn:
-        trial.conn.executemany(_INSERT, trial.pending)
+        sql.execute_many(trial.conn, _INSERT, trial.pending)
     trial.seconds += clock() - start
     trial.pending.clear()
 
@@ -395,12 +393,13 @@ def _finished(trial: _Trial, words: Sequence[str], session_of: Sequence[str], cl
     _flush(trial, clock)
     start = clock()
     with trial.conn:
-        trial.conn.execute(_OPTIMIZE)
+        sql.execute(trial.conn, _OPTIMIZE)
     seconds = trial.seconds + clock() - start
     found: Found | None = None
     if words:
         start = clock()
-        hits = trial.conn.execute(_MATCH, (" AND ".join(f'"{w}"' for w in words),)).fetchall()
+        match = " AND ".join(f'"{w}"' for w in words)
+        hits = sql.execute(trial.conn, sql.select("rowid").from_("idx").where("idx MATCH ?", match)).fetchall()
         took = clock() - start
         found = Found(seconds=_seconds(took), sessions=len({session_of[int(r[0]) - 1] for r in hits}))
     return TrialIndex(
