@@ -629,7 +629,11 @@ is a capacity where the measure has one and the peak with `HEADROOM` where it ha
 is a muted line with its name at its right end, drawn only while it is under the top. The pointer snaps a crosshair to
 the nearest reading, whose value and time stand in the latest's place. Beside the latest value it names the peak, or
 the low for what runs out, such as free space; where the page says the latest beside the chart, it names only that
-extreme. A threshold's line and name are drawn over the area, never under its tint. The plot is `aria-hidden`, and a
+extreme. A threshold's line and name are drawn over the area, never under its tint. A measure under pressure draws its
+line and area in its pressure's color, `status-blocked` or `status-failed`, the accent otherwise. Charts over the same
+hour in one panel share one pointer, so pointing at any draws the crosshair on each, and the panel says the hour once,
+with how long ago it was read, in `status-blocked` once a read again failed, rather than an axis under each. A measure
+of the second rank, flat nearly always, is half as tall, in a row under the first. The plot is `aria-hidden`, and a
 screen reader hears its latest value, peak, and low in words in place of a table.
 
 The context chart differs where it must: its bars are its controls, each named for its call on hover and to a screen

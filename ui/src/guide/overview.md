@@ -204,15 +204,21 @@ Memory turns amber under 15% available and red under 5%. The load turns amber on
 the number of cores, where work starts queueing for a processor; it never turns red, since a busy machine still works,
 only slower.
 
-Under them, the last hour in graphs: the load over a minute as a share of your cores, how busy the cores were, the
-memory and swap in use against all there is, the stalls, and the loop's own memory. The load counts processes waiting
-on a disk as well as those waiting for a core, so a high load with idle cores is a machine stuck on I/O, not short of
+Under them, the last hour in graphs, in two rows. The first, full height: the load over a minute as a share of your
+cores, the memory in use against all there is, and how busy the cores were. The second, half height, since they're
+flat nearly always: the swap in use, the stalls, and the loop's own memory. The load counts processes waiting on a disk
+as well as those waiting for a core, so a high load with idle cores is a machine stuck on I/O, not short of
 processors. The stalls say it outright: the share of each ten seconds some process waited for memory, or on a disk,
-which Linux 4.20 and later keep. The swap has no graph on a machine with none. The server takes these readings itself,
-every ten seconds from the moment it starts, whether or not anyone is looking, and keeps them in memory only. A restart
-starts the graphs over, and a gap in a line is a stretch the server wasn't reading. Point at a line to read any moment
-of it; the number over the graph turns into that moment's. It's the quickest way to answer "was it the build at
-14:05?" without a monitoring stack you'd have to babysit too.
+which Linux 4.20 and later keep. The swap has no graph on a machine with none. A line under pressure takes its color,
+amber or red, and the memory's graph draws where it turns amber, `15% left`, as a disk's draws the tick's floor.
+
+The server takes these readings itself, every ten seconds from the moment it starts, whether or not anyone is looking,
+and keeps them in memory only. A restart starts the graphs over, and a gap in a line is a stretch the server wasn't
+reading. The panel's header says how long they cover and when the page last read them; if a read again fails, it
+turns amber and says so, so a page left open on a laptop that lost its network doesn't pass old figures off as live.
+Point at any graph and every one of them points at the same moment, each number turning into that moment's. It's the
+quickest way to answer "was it the build at 14:05?" across the load and the stalls at once, without a monitoring stack
+you'd have to babysit too.
 
 Last, folded until you open it, **Details**: what nothing above shows, the cores, the three load averages, the swap,
 the loop's peak memory, threads, and open files against its limit, and the Python and canopy it runs. The machine's
