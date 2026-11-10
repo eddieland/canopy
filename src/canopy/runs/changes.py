@@ -18,6 +18,7 @@ failure is logged and named in what the run records, and never ends the run othe
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
@@ -42,6 +43,8 @@ MAX_SUBJECT = 200
 #: How much of `git log`'s output the commits are read from: far more than `run_changes.MAX_COMMITS` subjects and
 #: their trailers fill. A commit cut off at the end is not recorded.
 _MAX_LOG_CHARS = 512 * 1024
+#: One piece of a subject with its hidden characters named: a name, `<U+200B>`, or any other character.
+_NAMED_RE = re.compile(r"<U\+[0-9A-F]{4,6}>|.", re.DOTALL)
 #: The trailer key of a co-author, as git matches it, ignoring case.
 _CO_AUTHOR = "co-authored-by"
 
@@ -205,10 +208,9 @@ def _commit(sha: str, subject: str, trailers: str, marks: commit_hooks.Marks, *,
         The commit as a run records it.
     """
     lines = [line.strip() for line in trailers.split("\n") if line.strip()]
-    named = visible(subject)
     return run_changes.Commit(
         sha.strip(),
-        named if len(named) <= MAX_SUBJECT else named[: MAX_SUBJECT - 3] + "...",
+        _cut_named(visible(subject)),
         canopy_trailer=set(marks.trailers) <= set(lines) if marks.trailers else None,
         prefixed=subject.startswith((marks.prefix, *AUTOSQUASH)) if marks.prefix else None,
         runtime_trailer=any(
@@ -216,6 +218,22 @@ def _commit(sha: str, subject: str, trailers: str, marks: commit_hooks.Marks, *,
         ),
         harness_pushed=harness,
     )
+
+
+def _cut_named(named: str) -> str:
+    """Return a subject, its hidden characters named, cut to `MAX_SUBJECT` between characters, never inside a name.
+
+    Returns:
+        `named` whole when it fits, else as many of its characters and names as fit, then "...".
+    """
+    if len(named) <= MAX_SUBJECT:
+        return named
+    kept = ""
+    for piece in _NAMED_RE.findall(named):
+        if len(kept) + len(piece) > MAX_SUBJECT - 3:
+            break
+        kept += piece
+    return kept + "..."
 
 
 def _merge_base(git: checkpoint.Git, base: str, head: str) -> str:

@@ -476,6 +476,15 @@ def test_a_subjects_hidden_characters_are_named_and_a_long_one_cut(scenario: Sce
     assert (len(cut.subject), cut.subject.endswith("...")) == (changes.MAX_SUBJECT, True)
 
 
+def test_a_long_subject_of_hidden_characters_is_cut_between_their_names(scenario: Scenario, git_pool: GitPool) -> None:
+    del git_pool
+    hidden = ["git", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: x" + "\u200b" * 100]
+    ran = scenario.run(worker=worker_does(hidden, push()))
+    [cut] = commits_of(scenario, ran)
+    assert cut.subject.endswith("<U+200B>...")
+    assert len(cut.subject) <= changes.MAX_SUBJECT
+
+
 def test_an_unpushed_run_records_the_commits_it_left_in_its_slot(scenario: Scenario, git_pool: GitPool) -> None:
     git_pool.reject_pushes()
     ran = scenario.run(worker=worker_does(*writes("a.txt", "the change")))

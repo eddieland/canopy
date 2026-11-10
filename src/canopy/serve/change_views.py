@@ -3,8 +3,8 @@
 Each repository's range, the commits the harness read as the run ended, and its size, the files and lines git counted
 of the run's own change then (`run_changes`): a summary read from the journal alone, no kept diff read. A run's page
 and its PR's list the commits in it too, the PR's with the kick canopy pushed after it, if any, as the branch's
-history. The run's own
-diff is sent on its own when the page opens it, read within a review's diff's bounds (`review_diff.read`).
+history. The run's own diff is sent on its own when the page opens it, read within a review's diff's bounds
+(`review_diff.read`).
 """
 
 from __future__ import annotations
