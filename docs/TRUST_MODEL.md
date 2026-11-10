@@ -161,7 +161,9 @@ Controls:
   shown to the operator as text, bounded and with every control character dropped, at the terminal (`canopy show
   --diff`) as on a page, and put in no agent's prompt or state block. Its range is the harness's own reads of commits,
   never the agent's word; `canopy show run:ID`, which an agent may read through `show-run`, names the commits and the
-  files' paths, never a diff's text.
+  files' paths, never a diff's text. Its commits' subjects are a worker's text too, kept cut with every hidden
+  character named and shown to the operator alone: `canopy show` run inside a tick or a run, and `show-run`, print
+  how many commits there were and no subject.
 - Review feedback from anyone not in `trust.trusted_reviewers` (private, empty by default) starts no run on its own
   (D089). The overseer records `untrusted_review` and keeps its `review` cursor before it until the operator answers in
   canopy, with `canopy reply` or the web UI; the `resume` worker addresses such a comment only as an operator message
@@ -714,8 +716,9 @@ Controls now:
   object directory is deleted and the slot returned, by `_run` or, for a `_run` that was killed, by reconcile (DESIGN
   §8, §15). What a run changed (DESIGN §45) is read in those steps, of every worker's and task's run: `ls-remote`,
   `rev-parse`, `merge-base`, and `diff` of commits the slot already holds, the reads a run under `approve` made before,
-  with no driver or textconv, and the push check's own reads for an unpushed slot. Nothing new is read from a slot,
-  and nothing there is fetched, pushed, or moved.
+  with no driver or textconv, the push check's own reads for an unpushed slot, and `log` and `rev-list` of the same
+  commits for their ids, subjects, and trailers, bounded, as the marks' check already read them. Nothing new is read
+  from a slot, and nothing there is fetched, pushed, or moved.
 - The sandbox canary (`tests/canopy_sandbox/test_sandbox_canary.py`, HOST_ISOLATION §6) runs a plain script, no model,
   through the real prefix and the shipped templates, and checks every sandbox denial above on the host, with positive controls
   so that a sandbox that refuses everything fails. CI runs it on Linux.
@@ -756,7 +759,9 @@ but must be distinguishable:
   checklist and no mark to add, since their `pre-push` holds the push for the list (T4, DESIGN §42); what they add to a
   commit is the marks alone, none in such a run. Each run's range of commits is a row (DESIGN §45), the harness's
   read of origin as the run ended and before any kick, kept for good, so who put which commits on a branch can be told
-  after a kick rewrites it.
+  after a kick rewrites it; so is each commit in it, with whether it carries canopy's marks and another co-author's,
+  and whether the harness's own push, not the worker, put it on origin. The report's note on a commit that lacks a
+  mark stays.
 - PRs labeled `agent` where the runtime gives the worker a GitHub tool that sets labels (D084); every PR title carries
   the ticket key, and its branch the prefix.
 - `decisions` and `runs` tables are a complete local audit log of what the

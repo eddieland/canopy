@@ -12,10 +12,10 @@ from typing import TYPE_CHECKING
 from unittest import mock
 
 from canopy.cli.main import main
-from canopy.core import db, review_diff, run_changes
+from canopy.core import commit_hooks, db, review_diff, run_changes
 from canopy.core.vocab import ResumeReason, RunKind, RunStatus
 from canopy.infra import logs
-from canopy.loop import gc_pass
+from canopy.loop import gc_pass, readback
 from canopy.runs import changes, checkpoint, task_starts, tasks
 from tests.canopy.helpers import (
     WORKER_DONE,
@@ -326,6 +326,7 @@ def test_the_end_is_the_head_the_push_check_read_though_someone_pushes_after_it(
         branch: str,
         start: checkpoint.Start,
         pushed: checkpoint.Pushed,
+        marks: commit_hooks.Marks,
         log_path: str | Path,
         log: logs.TickAdapter,
     ) -> run_changes.Change:
@@ -340,6 +341,7 @@ def test_the_end_is_the_head_the_push_check_read_though_someone_pushes_after_it(
             branch=branch,
             start=start,
             pushed=pushed,
+            marks=marks,
             log_path=log_path,
             log=log,
         )
@@ -390,3 +392,154 @@ def test_a_tasks_diff_passes_over_a_newer_run_that_kept_none_for_the_older_one_t
     printed = scenario.operator("show", "task:1", "--diff")
     assert "+the fix\n" in printed.out
     assert printed.err == ""
+
+
+def commits_of(scenario: Scenario, ran: Ran, repo: str = "repo") -> list[records.RunCommit]:
+    """The commits the run recorded in `repo`'s range, oldest first."""
+    return run_changes.commits_of(scenario.conn, ran.id).get(repo, [])
+
+
+def logged(origin: Path, *revisions: str) -> list[str]:
+    """The commits `git log` names of `revisions` in `origin`, oldest first."""
+    return git("log", "--reverse", "--format=%H", *revisions, cwd=origin).split()
+
+
+def test_an_implement_records_its_commits_oldest_first_with_canopys_marks_on_them(
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    base = main_head(git_pool.origin)
+    ran = scenario.run(worker=worker_does(*writes("a.txt", "first"), *writes("b.txt", "second"), push()))
+    head = present(git_pool.remote_head(BRANCH))
+    [row] = changed(scenario, ran)
+    assert row.commit_count == 2
+    first, second = commits_of(scenario, ran)
+    assert [first.sha, second.sha] == logged(git_pool.origin, head, f"^{base}")
+    assert [(c.position, c.subject) for c in (first, second)] == [(0, "PROJ-1: a.txt"), (1, "PROJ-1: b.txt")]
+    assert (first.canopy_trailer, first.runtime_trailer, first.harness_pushed) == (True, False, False)
+    shown = scenario.operator("show", f"run:{ran.id}").out
+    assert (
+        f"\n    commits (2):\n      {first.sha[:12]}  PROJ-1: a.txt\n      {second.sha[:12]}  PROJ-1: b.txt\n" in shown
+    )
+
+
+def test_a_resume_records_its_own_commits_alone(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.run(worker=worker_does(*writes("a.txt", "the change"), push()))
+    scenario.time_passes(minutes=31)
+    fixes = worker_does(*writes("b.txt", "the fix"), push())
+    ran = scenario.run(dispatches(kind=RunKind.RESUME, reasons=(ResumeReason.CI,)), worker=fixes)
+    [fix] = commits_of(scenario, ran)
+    assert (fix.sha, fix.subject) == (git_pool.remote_head(BRANCH), "PROJ-1: b.txt")
+
+
+def test_commits_the_worker_left_unpushed_are_marked_as_canopys_push(scenario: Scenario, git_pool: GitPool) -> None:
+    pushes_one = worker_does(*writes("a.txt", "first"), push(), *writes("b.txt", "second"))
+    ran = scenario.run(worker=pushes_one)
+    assert ran.status is RunStatus.DONE
+    first, second = commits_of(scenario, ran)
+    assert (first.subject, first.harness_pushed) == ("PROJ-1: a.txt", False)
+    assert (second.subject, second.harness_pushed) == ("PROJ-1: b.txt", True)
+    assert second.sha == git_pool.remote_head(BRANCH)
+    assert (
+        f"      {second.sha[:12]}  PROJ-1: b.txt  [pushed by canopy]\n"
+        in scenario.operator("show", f"run:{ran.id}").out
+    )
+
+
+def test_a_commit_made_around_the_hooks_and_one_with_another_co_author_are_marked(
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    del git_pool
+    around = ["git", "-c", "core.hooksPath=/dev/null", "commit", "--quiet", "--allow-empty", "-m", "around"]
+    authored = "\n\nCo-authored-by: the runtime <runtime@example.test>"
+    with_another = ["git", "commit", "--quiet", "--allow-empty", "-m", f"PROJ-1: with another{authored}"]
+    ran = scenario.run(worker=worker_does(around, with_another, push()))
+    hooked_around, with_runtime = commits_of(scenario, ran)
+    assert (hooked_around.subject, hooked_around.canopy_trailer, hooked_around.runtime_trailer) == (
+        "around",
+        False,
+        False,
+    )
+    assert (with_runtime.canopy_trailer, with_runtime.runtime_trailer) == (True, True)
+    # The note for the report stays.
+    assert "lacks canopy's trailer" in json.loads(ran.row["result_json"])["harness"]
+
+
+def test_a_subjects_hidden_characters_are_named_and_a_long_one_cut(scenario: Scenario, git_pool: GitPool) -> None:
+    del git_pool
+    hidden = ["git", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: a\u200bb\u202e"]
+    long = ["git", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: " + "x" * 300]
+    ran = scenario.run(worker=worker_does(hidden, long, push()))
+    named, cut = commits_of(scenario, ran)
+    assert named.subject == "PROJ-1: a<U+200B>b<U+202E>"
+    assert (len(cut.subject), cut.subject.endswith("...")) == (changes.MAX_SUBJECT, True)
+
+
+def test_an_unpushed_run_records_the_commits_it_left_in_its_slot(scenario: Scenario, git_pool: GitPool) -> None:
+    git_pool.reject_pushes()
+    ran = scenario.run(worker=worker_does(*writes("a.txt", "the change")))
+    assert ran.status is RunStatus.UNPUSHED
+    [row] = changed(scenario, ran)
+    [left] = commits_of(scenario, ran)
+    assert (left.sha, left.subject, left.harness_pushed) == (row.unpushed_sha, "PROJ-1: a.txt", False)
+
+
+def test_a_range_past_the_bound_records_its_newest_commits_and_counts_them_all(
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    commits = [c for name in ("a", "b", "c") for c in writes(f"{name}.txt", name)]
+    with mock.patch.object(run_changes, "MAX_COMMITS", 2):
+        ran = scenario.run(worker=worker_does(*commits, push()))
+    [row] = changed(scenario, ran)
+    assert row.commit_count == 3
+    assert [c.subject for c in commits_of(scenario, ran)] == ["PROJ-1: b.txt", "PROJ-1: c.txt"]
+    assert commits_of(scenario, ran)[-1].sha == git_pool.remote_head(BRANCH)
+    assert "    commits (3, the oldest 1 not recorded):\n" in scenario.operator("show", f"run:{ran.id}").out
+
+
+def test_a_kick_leaves_the_commits_each_run_recorded_as_they_were(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.configures(trust={"max_flaky_kicks": 1})
+    pushed = scenario.run(worker=worker_does(*writes("a.txt", "the change"), push()))
+    before = present(git_pool.remote_head(BRANCH))
+    moves = git_pool.slots[1]
+    git("fetch", "--quiet", "origin", cwd=moves)
+    git("checkout", "--quiet", "--detach", "origin/main", cwd=moves)
+    git("commit", "--quiet", "--allow-empty", "-m", "main moves", cwd=moves)
+    git("push", "--quiet", "origin", "HEAD:refs/heads/main", cwd=moves)
+    scenario.time_passes(minutes=31)
+    flaky = json.loads(WORKER_DONE) | {"branch": BRANCH, "summary": "unit-tests lost its runner", "flaky": True}
+    resume = dispatches(kind=RunKind.RESUME, reasons=(ResumeReason.CI,))
+    kicked = scenario.run(resume, worker=worker_does(result=json.dumps(flaky)))
+    assert git_pool.remote_head(BRANCH) != before
+    [mine] = commits_of(scenario, pushed)
+    assert mine.sha == before
+    # The kick's copy is the harness's, after the run's end, so the resume that kicked made no commit of its own.
+    [row] = changed(scenario, kicked)
+    assert (row.commit_count, commits_of(scenario, kicked)) == (0, [])
+
+
+def test_a_task_run_records_its_commits(scenario: Scenario, canopy_env: CanopyEnv, git_pool: GitPool) -> None:
+    scenario.operator("task", "submit", "Find out why the build is slow, and push a fix if one is small.")
+    ctx = inline_context(canopy_env)
+    with in_tick(ctx.conn) as tick_id:
+        [started] = task_starts.start_queued(ctx, tick_id, logs.for_tick(tick_id))
+    done: dict[str, object] = {"status": "done", "summary": "fixed", "branch": TASK_BRANCH, "prs": []}
+    with private_worker_does(*writes("fix.txt", "the fix"), push(TASK_BRANCH), result=done):
+        assert main(["_task", str(started.run_id)], runner=InlineRunner()) == 0
+    [fix] = run_changes.commits_of(ctx.conn, started.run_id, table="task_runs")["repo"]
+    assert (fix.task_run_id, fix.run_id, fix.sha) == (started.run_id, None, git_pool.remote_head(TASK_BRANCH))
+    assert f"\n          {fix.sha[:12]}  PROJ-1: fix.txt" in scenario.operator("show", "task:1").out
+
+
+def test_an_agent_reading_the_run_is_given_its_commits_count_and_not_their_subjects(
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    del git_pool
+    ran = scenario.run(worker=worker_does(*writes("a.txt", "the change"), push()))
+    # As the `show-run` tool reads it, for the overseer or a chore's agent.
+    shown = readback.read_run(context(scenario.env), readback.ShowRun(run=ran.id))
+    assert "\n    commits (1)\n" in shown
+    assert "PROJ-1: a.txt" not in shown
