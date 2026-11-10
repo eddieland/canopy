@@ -21,6 +21,7 @@ from canopy.serve.schema.memory import (
     MemoryOverview,
     MemoryProposal,
     MemoryRefusal,
+    MemorySecond,
     RunMemory,
     RunMemoryModes,
     TicketMemory,
@@ -28,6 +29,7 @@ from canopy.serve.schema.memory import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
     from datetime import datetime
 
     from canopy.core import records
@@ -71,7 +73,7 @@ def overview(ctx: Context, *, history: bool = False) -> MemoryOverview:
     return MemoryOverview(
         state=state(ctx),
         tickets=[_ticket_notes(t) for t in memory.ticket_notes(ctx.conn)],
-        proposals=[_proposal(ctx, p) for p in memory.pending_proposals(ctx.conn)],
+        proposals=_proposals(ctx),
         lessons=[entry(ctx, m) for m in sorted(memory.active_lessons(ctx.conn), key=_review_order)],
         lessons_digest=digest,
         repos=[r.name for r in ctx.ws.repos],
@@ -230,7 +232,13 @@ def _ticket_notes(found: memory.TicketNotes) -> TicketNotes:
     )
 
 
-def _proposal(ctx: Context, p: records.Memory) -> MemoryProposal:
+def _proposals(ctx: Context) -> list[MemoryProposal]:
+    waiting = memory.pending_proposals(ctx.conn)
+    seconded = memory.seconds(ctx.conn, [p.id for p in waiting])
+    return [_proposal(ctx, p, seconded.get(p.id, [])) for p in waiting]
+
+
+def _proposal(ctx: Context, p: records.Memory, seconds: Iterable[records.ProposalSecond]) -> MemoryProposal:
     run = db.get_run(ctx.conn, p.run_id) if p.run_id is not None else None
     ticket = db.get_ticket(ctx.conn, p.ticket_key) if p.ticket_key is not None else None
     return MemoryProposal(
@@ -240,6 +248,7 @@ def _proposal(ctx: Context, p: records.Memory) -> MemoryProposal:
         private=bool(run["private"]) if run is not None else False,
         ticket_done=bool(ticket.done) if ticket is not None else False,
         expires_at=db.parse_time(p.created_at) + timedelta(days=memory.PROPOSAL_DAYS),
+        seconds=[MemorySecond(ticket_key=s.ticket_key, run_id=s.run_id) for s in seconds],
     )
 
 

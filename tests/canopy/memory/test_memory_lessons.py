@@ -820,6 +820,101 @@ def test_the_queue_refuses_the_twenty_first_pending_proposal(scenario: Scenario,
     assert [r.why for r in memory.refused_of(rendered)] == ["20 proposals already wait on the operator"]
 
 
+#: The overseer dispatches PROJ-2's implement, a ticket other than KEY's.
+OTHER = "PROJ-2"
+WORK_OTHER = dispatches(OTHER, slug="work")
+
+
+def seconds_of(conn: sqlite3.Connection, proposal: int) -> list[tuple[str, int]]:
+    """The tickets that seconded `proposal`, each with the run that did."""
+    return [(s.ticket_key, s.run_id) for s in memory.seconds(conn, [proposal]).get(proposal, [])]
+
+
+def test_a_proposal_made_again_by_another_tickets_run_is_a_second_not_a_row(
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    conn = scenario.conn
+    scenario.configures("private", memory=memory_modes(proposals="record"))
+    proposal = proposed(conn, key="api-tests", repo="repo")
+    again = {"key": "api-tests", "text": "The API's tests need `make test-api`.", "repo": "repo"}
+    first = scenario.run(WORK_OTHER, worker=pushes(proposals=[again]))
+    assert [m.id for m in memory.pending_proposals(conn)] == [proposal]
+    assert seconds_of(conn, proposal) == [(OTHER, first.id)]
+    assert memory.refused_of(present(memory.run_memory(conn, first.id))) == []
+    # One ticket's runs count once, and the proposal's own ticket never seconds it.
+    later = scenario.run(WORK_OTHER, worker=pushes(proposals=[again]))
+    own = scenario.run(WORK, worker=pushes(proposals=[again]))
+    assert seconds_of(conn, proposal) == [(OTHER, first.id)]
+    assert [m.id for m in memory.pending_proposals(conn)] == [proposal]
+    assert [r.why for r in memory.refused_of(present(memory.run_memory(conn, later.id)))] == [
+        f"its ticket seconded proposal {proposal} already, in run {first.id}",
+    ]
+    assert [r.why for r in memory.refused_of(present(memory.run_memory(conn, own.id)))] == [
+        f"its ticket made proposal {proposal} already",
+    ]
+
+
+def test_a_proposal_in_a_pending_ones_words_seconds_it_but_another_repository_is_a_new_proposal(
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    conn = scenario.conn
+    scenario.configures("private", memory=memory_modes(proposals="record"))
+    proposal = proposed(conn, key="api-tests")
+    run = scenario.run(
+        WORK_OTHER,
+        worker=pushes(
+            proposals=[
+                {"key": "testing", "text": LESSON.upper()},
+                {"key": "api-tests", "text": "About this repository alone.", "repo": "repo"},
+            ],
+        ),
+    )
+    assert seconds_of(conn, proposal) == [(OTHER, run.id)]
+    assert [(m.key, m.repo, m.ticket_key) for m in memory.pending_proposals(conn)] == [
+        ("api-tests", None, KEY),
+        ("api-tests", "repo", OTHER),
+    ]
+
+
+def test_a_second_takes_no_place_in_the_full_queue(scenario: Scenario, git_pool: GitPool) -> None:
+    conn = scenario.conn
+    scenario.configures("private", memory=memory_modes(proposals="record"))
+    first, *_ = [proposed(conn, f"Proposal {i}.", key=f"p{i}") for i in range(memory.MAX_PENDING)]
+    run = scenario.run(WORK_OTHER, worker=pushes(proposals=[{"key": "p0", "text": "Proposal zero, again."}]))
+    assert memory.refused_of(present(memory.run_memory(conn, run.id))) == []
+    assert seconds_of(conn, first) == [(OTHER, run.id)]
+    assert len(memory.pending_proposals(conn)) == memory.MAX_PENDING
+
+
+def test_memory_proposals_lists_the_most_seconded_first_with_who_seconded_it(
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with_memory(canopy_env, proposals="record")
+    older = proposed(conn, key="older")
+    seconded = proposed(conn, "A lesson two tickets reached.", key="seconded", repo="repo")
+    others = [proposed(conn, "Another ticket's.", key="other", ticket=t) for t in ("PROJ-2", "PROJ-3")]
+    rows = [
+        (seconded, t, present(memory.get(conn, p)).run_id) for t, p in zip(("PROJ-2", "PROJ-3"), others, strict=True)
+    ]
+    with db.transaction(conn):
+        records.insert_rows(records.ProposalSecond, ("memory_id", "ticket_key", "run_id")).many(conn, rows)
+    assert [m.id for m in memory.pending_proposals(conn)][:2] == [seconded, older]
+    assert main(["memory", "proposals"]) == 0
+    out = capsys.readouterr().out
+    assert out.index(f"  {seconded}  `seconded`") < out.index(f"  {older}  `older`")
+    assert f"seconded by 2 tickets: PROJ-2 (run {rows[0][2]}), PROJ-3 (run {rows[1][2]})\n" in out
+    assert main(["memory", "proposals", "--json"]) == 0
+    listed = json.loads(capsys.readouterr().out)["proposals"]
+    assert [(p["id"], p["seconds"]) for p in listed][:2] == [
+        (seconded, [{"ticket": "PROJ-2", "run_id": rows[0][2]}, {"ticket": "PROJ-3", "run_id": rows[1][2]}]),
+        (older, []),
+    ]
+
+
 def test_a_proposal_nobody_reviews_expires_after_fourteen_days(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
     old, new = proposed(conn, key="old"), proposed(conn, "A newer one.", key="new")
     conn.execute(
@@ -906,6 +1001,7 @@ def test_the_memory_listings_print_json_for_an_agent_to_read(
         "run_status": "done",
         "private": False,
         "ticket_done": False,
+        "seconds": [],
         "text": LESSON,
     }
     assert main(["memory", "lessons", "--json"]) == 0

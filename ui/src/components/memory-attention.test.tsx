@@ -48,6 +48,7 @@ function proposal(entry: Partial<MemoryEntry>): MemoryProposal {
         private: false,
         ticket_done: true,
         expires_at: '2026-10-22T10:00:00Z',
+        seconds: [],
     }
 }
 
