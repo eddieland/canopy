@@ -269,6 +269,14 @@ export async function screenshotMain(page: Page, name: string): Promise<void> {
  */
 async function growToPage(page: Page): Promise<void> {
     await expect.poll(() => page.evaluate(readsInFlight)).toBe(0)
+    // A plan's Mermaid block shows its code until its diagram is drawn (src/lib/plan-diagram.ts), which loads mermaid
+    // first, then hides the code under the picture: taken before, under load, the pane changed size mid-capture.
+    await expect(page.locator('main [data-diagram=pending]')).toHaveCount(0)
+    await expect
+        .poll(() =>
+            page.locator('main img').evaluateAll((images: HTMLImageElement[]) => images.every((i) => i.complete)),
+        )
+        .toBe(true)
     const scroller = page.locator('[data-scroll-restoration-id=page]')
     const measure = (): Promise<{ height: number; scrolls: boolean }> =>
         scroller.evaluate((el) => ({
