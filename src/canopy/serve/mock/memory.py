@@ -3,9 +3,10 @@
 Ticket notes are in use and lessons recording, as the mock's config sets them. ABC-100's runs wrote notes, one
 superseded, and one written to the journal by hand past the bounds, with a link and a zero-width space, which every
 surface shows as plain text with the space named. Run 37 was rendered while notes were recording, so it read nothing;
-run 40 read run 37's note and had a secret refused. Two proposals wait, one from a private ticket's run, and one
-promoted earlier is a lesson, recorded and served to no run. Two lessons the operator wrote are pinned, one for every
-repository, so the memory page shows its pinned lessons apart from the rest.
+run 40 read run 37's note and had a secret refused. Two proposals wait, one from a private ticket's run and one that
+ABC-100's run seconded, so the memory page shows a proposal made again; one promoted earlier is a lesson, recorded and
+served to no run. Two lessons the operator wrote are pinned, one for every repository, so the memory page shows its
+pinned lessons apart from the rest.
 """
 
 from __future__ import annotations
@@ -224,3 +225,4 @@ def seed(conn: sqlite3.Connection, at: Callable[[int], str]) -> None:
         ],
     )
     records.insert(records.MemoryRead, run_id=40, memory_id=1, cited="used").run(conn)
+    records.insert(records.ProposalSecond, memory_id=5, ticket_key="ABC-100", run_id=40).run(conn)

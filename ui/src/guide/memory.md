@@ -63,9 +63,13 @@ notes. The lessons and the notes each open with a band that says the tier's mode
 `ticket notes: recording` beside "Recording only. Workers write these notes; no run reads them." Recorded memory and
 memory in use never share a label, so you never mistake one for the other.
 
-- **Proposals** are what workers suggested, oldest first, each with where it came from: its run's kind and how it ended,
-  whether its ticket is done, and when it lapses if you leave it, and Promote, Reject, and Forget under it. None reaches
-  a run until you promote it. The nav counts them beside **Memory** on every page, and so does the panel, so a proposal
+- **Proposals** are what workers suggested, the most seconded first, then oldest first, each with where it came from:
+  its run's kind and how it ended, whether its ticket is done, who seconded it, and when it lapses if you leave it, and
+  Promote, Reject, and Forget under it. None reaches a run until you promote it. A run on another ticket that proposes
+  under a waiting proposal's key and repository, or in its very words, seconds it instead of queueing a paraphrase:
+  `seconded by 2 tickets`, with the tickets and runs on hover. Two tickets hitting the same wall separately is the best
+  evidence you'll get that a lesson is real. A ticket counts once however many runs it takes, and a proposal's own
+  ticket can't second it. The nav counts them beside **Memory** on every page, and so does the panel, so a proposal
   doesn't quietly expire at 14 days because you never came looking. A long queue scrolls in its panel, so your lessons
   stay in reach under it. Clear the lot and the panel says so.
 - **Lessons** are the ones you promoted, each with Renew, Pin, Edit, and Forget. Pinned ones come first, under their
@@ -83,16 +87,16 @@ it keeps the proposals and lessons for the runs of the repositories you check, a
 repository included, since those runs read it too. Its list has a search box, so a workspace of forty repositories is a
 few keystrokes, not a wall of buttons. While lessons are in use, the Lessons header has `due` and `wrong` chips for the
 ones that need you. All of it lives in the URL, so a filtered page is a link you can keep. The proposals flip between
-oldest first, the nearest to lapsing, and newest first. For what notes say, the page runs `canopy memory search` for
-you, the same search your shell gets, and lists the notes that hold every word under the tickets, as the rows above hold
-them, so a note is found by what it says, not only by its ticket. One difference: the rows match part of a word and the
-search matches whole ones, endings aside, so `time` keeps a row about a timeout but finds no note that only says
-`timeout`, while `retry` finds one that says `retries`. The count in the Ticket notes header counts those notes while
-you search. It stops at the best fifty, and says so; another word narrows them faster than scrolling would. The
-repository picker doesn't narrow Ticket notes: a note is read by its own ticket's runs, whatever the repository. The
-**history** chip at the end of the filter bar lists what's no longer pending or in force under each panel: proposals
-rejected, lapsed, promoted, or forgotten, and lessons replaced or forgotten, the latest fifty of each, so you can see
-what happened to the one you rejected last week.
+oldest first, the nearest to lapsing, and newest first; the most seconded stay on top either way. For what notes say,
+the page runs `canopy memory search` for you, the same search your shell gets, and lists the notes that hold every word
+under the tickets, as the rows above hold them, so a note is found by what it says, not only by its ticket. One
+difference: the rows match part of a word and the search matches whole ones, endings aside, so `time` keeps a row about
+a timeout but finds no note that only says `timeout`, while `retry` finds one that says `retries`. The count in the
+Ticket notes header counts those notes while you search. It stops at the best fifty, and says so; another word narrows
+them faster than scrolling would. The repository picker doesn't narrow Ticket notes: a note is read by its own ticket's
+runs, whatever the repository. The **history** chip at the end of the filter bar lists what's no longer pending or in
+force under each panel: proposals rejected, lapsed, promoted, or forgotten, and lessons replaced or forgotten, the
+latest fifty of each, so you can see what happened to the one you rejected last week.
 
 ## Reading a memory
 
@@ -169,8 +173,8 @@ lessons off, the page shows only Ticket notes, and each note still has Forget.
 What it did shows at the top of its panel, in the CLI's words, including that a lesson promoted while recording is
 recorded and read by no run. Promoting a private ticket's run's words as they stand warns you, before you save and
 after: they come from a conversation you kept off the tracker, and a lesson hands them to every worker, public
-tickets' included. At most 20 proposals wait at once, and one nobody reviews expires after 14 days, so the queue
-can't bury you.
+tickets' included. At most 20 proposals wait at once, a second taking no place among them, and one nobody reviews
+expires after 14 days, so the queue can't bury you.
 
 In your shell, `canopy memory promote ID` takes `--text` for your words and `--repo` for the repository, and
 `canopy memory reject ID` rejects.

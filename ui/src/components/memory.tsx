@@ -539,10 +539,12 @@ export function MemoryDigestFold({ digest, who }: { digest: MemoryDigest; who: s
 
 /**
  * What a proposal's line of provenance adds, after the run that wrote it (`MemoryRows`' `facts`): how its run ended,
- * whether its ticket is done, and, for a private ticket's run, a `private` chip that says why on hover. When it lapses
- * is its standing's (`MemoryRows`' `lapses`).
+ * whether its ticket is done, how many other tickets' runs seconded it, naming each and its run on hover, and, for a
+ * private ticket's run, a `private` chip that says why on hover. When it lapses is its standing's (`MemoryRows`'
+ * `lapses`).
  */
 export function ProposalFacts({ proposal }: { proposal: MemoryProposal }) {
+    const { seconds } = proposal
     return (
         <>
             {proposal.run_kind !== null && (
@@ -551,6 +553,11 @@ export function ProposalFacts({ proposal }: { proposal: MemoryProposal }) {
                 </span>
             )}
             <span>{proposal.ticket_done ? 'ticket done' : 'ticket not done yet'}</span>
+            {seconds.length > 0 && (
+                <span title={seconds.map((s) => `${s.ticket_key} (run ${s.run_id})`).join(', ')}>
+                    seconded by {seconds.length} {seconds.length === 1 ? 'ticket' : 'tickets'}
+                </span>
+            )}
             {proposal.private && (
                 <span
                     title="its run worked a private ticket: its text may hold what you kept off the tracker"

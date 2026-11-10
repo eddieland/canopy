@@ -48,8 +48,8 @@ Enforced in code at write, and for a lesson's text at promotion. Each entry is r
 one bad entry costs only itself. Texts and their number a run are bounded, so one run cannot fill the queue. A text is
 plain text, its lines broken sparingly, with no character that can hide text from the operator while a model still
 reads it; a prompt quotes each of its lines, so a line break cannot end the quote. A text that looks like a secret is
-refused (a hexadecimal word never does, since notes name commits), and so is one that repeats a note in force, a
-pending proposal, or a lesson.
+refused (a hexadecimal word never does, since notes name commits), and so is one that repeats a note in force or a
+lesson.
 
 ### Retention
 
@@ -61,6 +61,9 @@ replaced, keeps its text until the operator forgets it.
 ### Proposals and lessons
 
 - Past a cap on pending proposals a new one is refused, so a flood cannot push older ones out.
+- A proposal under a pending one's key and repository, or in its words, seconds it and writes no row, so a second
+  never counts against the cap: independent tickets reaching one lesson is the best evidence it holds, so each ticket
+  counts once and the proposal's own never does, and the operator's lists put the most seconded first.
 - The operator promotes a proposal or a note into a lesson, under the same bounds, or rejects a proposal; both work at
   `record`. Promoting a private ticket's run's own words warns that they come from a conversation kept off the
   tracker, which a lesson would carry into public tickets' runs.

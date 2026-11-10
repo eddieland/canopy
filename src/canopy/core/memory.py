@@ -630,19 +630,28 @@ def _write_proposals(conn: sqlite3.Connection, writing: _Writing, entries: JsonV
 
 
 def _write_proposal(conn: sqlite3.Connection, writing: _Writing, key: str, text: str, repo: str | None) -> None:
-    """Write one pending proposal, refusing one past the queue's bound or that repeats a proposal or a lesson.
+    """Write one pending proposal, or second the one it makes again; refuse a repeat of a lesson, or one past the bound.
+
+    A proposal under a pending one's key and repository, or in its words, normalized, makes that one again: it seconds
+    it and writes no row, so a second never counts against `MAX_PENDING` (`_second`).
 
     Raises:
-        TextRefused: `MAX_PENDING` proposals are pending, or a pending proposal or an active lesson has the same text,
-            normalized.
+        TextRefused: The run's ticket made or seconded the proposal it makes again already, an active lesson has the
+            same text, normalized, or `MAX_PENDING` proposals are pending.
     """
-    waiting = pending_proposals(conn)
+    waiting = sorted(pending_proposals(conn), key=lambda p: p.id)
+    same = normalized(text)
+    under_key = [p for p in waiting if (p.key, p.repo) == (key, repo)]
+    in_words = [p for p in waiting if p.body is not None and normalized(p.body) == same]
+    again = next(iter([*under_key, *in_words]), None)
+    if again is not None:
+        _second(conn, writing, again)
+        return
+    for found in active_lessons(conn):
+        if found.body is not None and normalized(found.body) == same:
+            raise TextRefused(f"it repeats lesson {found.id}")
     if len(waiting) >= MAX_PENDING:
         raise TextRefused(f"{MAX_PENDING} proposals already wait on the operator")
-    same = normalized(text)
-    for found in [*waiting, *active_lessons(conn)]:
-        if found.body is not None and normalized(found.body) == same:
-            raise TextRefused(f"it repeats {found.scope} {found.id}")
     records.insert(
         records.Memory,
         scope=MemoryScope.PROPOSAL,
@@ -657,6 +666,37 @@ def _write_proposal(conn: sqlite3.Connection, writing: _Writing, key: str, text:
         head=writing.head,
         created_at=db.now(),
     ).run(conn)
+
+
+def _second(conn: sqlite3.Connection, writing: _Writing, proposal: records.Memory) -> None:
+    """Record the run's ticket as seconding `proposal`: independent runs reaching one lesson is evidence it holds.
+
+    One ticket's runs count once, and the ticket that made the proposal never seconds it, so the count is of tickets
+    that reached the lesson apart.
+
+    Raises:
+        TextRefused: The proposal is the ticket's own, or the ticket seconded it already.
+    """
+    if proposal.ticket_key == writing.ticket_key:
+        raise TextRefused(f"its ticket made proposal {proposal.id} already")
+    earlier = (
+        records.select(records.ProposalSecond)
+        .where("memory_id = ?", proposal.id)
+        .where("ticket_key = ?", writing.ticket_key)
+        .one(conn)
+    )
+    if earlier is not None:
+        raise TextRefused(f"its ticket seconded proposal {proposal.id} already, in run {earlier.run_id}")
+    records.insert(
+        records.ProposalSecond,
+        memory_id=proposal.id,
+        ticket_key=writing.ticket_key,
+        run_id=writing.run_id,
+    ).run(conn)
+    logs.for_tick(writing.tick_id).info(
+        "proposal seconded",
+        extra={"run_id": writing.run_id, "memory": proposal.id, "ticket": writing.ticket_key},
+    )
 
 
 def end_ticket_notes(conn: sqlite3.Connection, key: str, why: str) -> int:
@@ -737,13 +777,33 @@ def ticket_notes(conn: sqlite3.Connection) -> list[TicketNotes]:
 
 
 def pending_proposals(conn: sqlite3.Connection) -> list[records.Memory]:
-    """Return the proposals waiting on the operator, oldest first."""
+    """Return the proposals waiting on the operator, the most seconded first, then the oldest (`seconds`)."""
     return (
         _MEMORIES.where("scope = ?", MemoryScope.PROPOSAL)
         .where("status = ?", MemoryStatus.PENDING)
-        .order_by("id")
+        .order_by("(SELECT count(*) FROM proposal_seconds s WHERE s.memory_id = memories.id) DESC, id")
         .all(conn)
     )
+
+
+def seconds(conn: sqlite3.Connection, memory_ids: Collection[int]) -> dict[int, list[records.ProposalSecond]]:
+    """Return the tickets that seconded each proposal of `memory_ids`, in the order they did; one none did is left out.
+
+    Each is a ticket other than the proposal's own whose run made it again, under its key and repository or in its
+    words; one ticket's runs count once.
+    """
+    found: dict[int, list[records.ProposalSecond]] = {}
+    if not memory_ids:
+        return found
+    rows = (
+        records.select(records.ProposalSecond)
+        .where_in("memory_id", tuple(memory_ids))
+        .order_by("memory_id, run_id")
+        .all(conn)
+    )
+    for row in rows:
+        found.setdefault(row.memory_id, []).append(row)
+    return found
 
 
 def pending_count(conn: sqlite3.Connection) -> int:

@@ -88,6 +88,7 @@ from canopy.core.records.epics import (
 from canopy.core.records.memory import (
     Memory,
     MemoryRead,
+    ProposalSecond,
     RunMemory,
 )
 from canopy.core.records.notify import (
@@ -235,6 +236,7 @@ __all__ = [
     "PlanWaiver",
     "PoolSlot",
     "PrTitle",
+    "ProposalSecond",
     "Query",
     "Record",
     "RecordedRun",

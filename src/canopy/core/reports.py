@@ -39,7 +39,7 @@ from canopy.runtime import definitions as runtime_definitions
 from canopy.runtime import offerings, servers
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Iterable, Mapping, Sequence
 
     from canopy.core import records
     from canopy.core.context import Context
@@ -206,7 +206,9 @@ def read_proposals(ctx: Context, request: MemoryProposals) -> str:  # noqa: ARG0
         The tiers' modes and the proposals, as JSON.
     """
     waiting = memory.pending_proposals(ctx.conn)
-    return report_json({"modes": _modes(ctx), "proposals": [_proposal_json(ctx, p) for p in waiting]})
+    seconded = memory.seconds(ctx.conn, [p.id for p in waiting])
+    proposals = [_proposal_json(ctx, p, seconded.get(p.id, [])) for p in waiting]
+    return report_json({"modes": _modes(ctx), "proposals": proposals})
 
 
 def read_notes(ctx: Context, request: MemoryList) -> str:
@@ -387,8 +389,8 @@ def _text(entry: records.Memory) -> str | None:
     return quoted(entry.body, "") if entry.body is not None else None
 
 
-def _proposal_json(ctx: Context, p: records.Memory) -> dict[str, Any]:
-    """A proposal as `memory proposals --json` prints it, with its run and whether its ticket is done.
+def _proposal_json(ctx: Context, p: records.Memory, seconds: Iterable[records.ProposalSecond]) -> dict[str, Any]:
+    """A proposal as `memory proposals --json` prints it, with its run, whether its ticket is done, and its seconds.
 
     Returns:
         The proposal's fields.
@@ -406,6 +408,7 @@ def _proposal_json(ctx: Context, p: records.Memory) -> dict[str, Any]:
         "private": memory_manage.from_private_run(ctx.conn, p),
         "ticket_done": ticket is not None and ticket.done,
         "created_at": p.created_at,
+        "seconds": [{"ticket": s.ticket_key, "run_id": s.run_id} for s in seconds],
         "text": _text(p),
     }
 
