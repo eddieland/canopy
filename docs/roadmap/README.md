@@ -107,7 +107,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M68. Messages to running workers](M68-messages-to-running-workers.md): in progress.
 - [M69. What each run changed, kept and shown](M69-what-each-run-changed.md): in progress.
 - [M70. A code outline for agents](M70-a-code-outline-for-agents.md): in progress.
-- [M71. Leaner tool results for every agent](M71-leaner-tool-results.md): not started.
+- [M71. Leaner tool results for every agent](M71-leaner-tool-results.md): in progress.
 
 ## Deferred, with the trigger that would unblock each
 

@@ -1,0 +1,188 @@
+# serializer version: 1
+# name: test_the_report_is_printed_as_tables_and_as_json[json]
+  '''
+  {
+    "since": "2026-10-26T00:00:00.000Z",
+    "until": "2026-11-09T00:00:00.000Z",
+    "days": 14,
+    "log_bound_bytes": 33554432,
+    "roles": [
+      {
+        "role": "implement",
+        "runs": 3,
+        "read": 2,
+        "cut_logs": 0,
+        "calls": 10,
+        "result_chars": 1496,
+        "repeated_reads": 1,
+        "status": {
+          "runs": 2,
+          "calls": 3,
+          "chars": 113,
+          "median_chars": 56.5
+        },
+        "tools": [
+          {
+            "tool": "$ gh run view",
+            "calls": 1,
+            "result_chars": 1000,
+            "median_chars": 1000.0,
+            "share": 0.6684491978609626,
+            "cut": 1,
+            "cut_unknown": 0,
+            "repeated_reads": 0
+          },
+          {
+            "tool": "read",
+            "calls": 4,
+            "result_chars": 280,
+            "median_chars": 75.0,
+            "share": 0.18716577540106952,
+            "cut": 1,
+            "cut_unknown": 0,
+            "repeated_reads": 1
+          },
+          {
+            "tool": "$ gh pr view",
+            "calls": 1,
+            "result_chars": 200,
+            "median_chars": 200.0,
+            "share": 0.13368983957219252,
+            "cut": 0,
+            "cut_unknown": 0,
+            "repeated_reads": 0
+          },
+          {
+            "tool": "grep",
+            "calls": 1,
+            "result_chars": 10,
+            "median_chars": 10.0,
+            "share": 0.0066844919786096255,
+            "cut": 0,
+            "cut_unknown": 1,
+            "repeated_reads": 0
+          },
+          {
+            "tool": "canopy_run_status",
+            "calls": 3,
+            "result_chars": 6,
+            "median_chars": 2.0,
+            "share": 0.004010695187165776,
+            "cut": 0,
+            "cut_unknown": 3,
+            "repeated_reads": 0
+          }
+        ]
+      },
+      {
+        "role": "review",
+        "runs": 1,
+        "read": 1,
+        "cut_logs": 0,
+        "calls": 2,
+        "result_chars": 80,
+        "repeated_reads": 0,
+        "status": {
+          "runs": 0,
+          "calls": 0,
+          "chars": 0,
+          "median_chars": null
+        },
+        "tools": [
+          {
+            "tool": "read",
+            "calls": 2,
+            "result_chars": 80,
+            "median_chars": 40.0,
+            "share": 1.0,
+            "cut": 0,
+            "cut_unknown": 1,
+            "repeated_reads": 0
+          }
+        ]
+      },
+      {
+        "role": "chore",
+        "runs": 1,
+        "read": 1,
+        "cut_logs": 0,
+        "calls": 1,
+        "result_chars": 20,
+        "repeated_reads": 0,
+        "status": {
+          "runs": 0,
+          "calls": 0,
+          "chars": 0,
+          "median_chars": null
+        },
+        "tools": [
+          {
+            "tool": "$ rg",
+            "calls": 1,
+            "result_chars": 20,
+            "median_chars": 20.0,
+            "share": 1.0,
+            "cut": 0,
+            "cut_unknown": 0,
+            "repeated_reads": 0
+          }
+        ]
+      },
+      {
+        "role": "overseer",
+        "runs": 1,
+        "read": 1,
+        "cut_logs": 0,
+        "calls": 1,
+        "result_chars": 2,
+        "repeated_reads": 0,
+        "status": {
+          "runs": 0,
+          "calls": 0,
+          "chars": 0,
+          "median_chars": null
+        },
+        "tools": [
+          {
+            "tool": "canopy_decide",
+            "calls": 1,
+            "result_chars": 2,
+            "median_chars": 2.0,
+            "share": 1.0,
+            "cut": 0,
+            "cut_unknown": 1,
+            "repeated_reads": 0
+          }
+        ]
+      }
+    ]
+  }
+  '''
+# ---
+# name: test_the_report_is_printed_as_tables_and_as_json[text]
+  '''
+  Tool results over 14 days, since 2026-10-26 UTC, by role and tool: the characters calls returned.
+  Each log is read to its first 32 MiB; a run whose log holds more is read that far, as cut.
+  
+  implement: 3 runs, 2 read; 10 calls returned 1.5k characters.
+    status: 3 calls in 2 runs sent 113 characters, a median of 56 a run.
+    tool               calls  chars  median  share  cut  unknown  repeated
+    $ gh run view          1   1.0k    1.0k    67%    1        0         0
+    read                   4    280      75    19%    1        0         1
+    $ gh pr view           1    200     200    13%    0        0         0
+    grep                   1     10      10     1%    0        1         0
+    canopy_run_status      3      6       2     0%    0        3         0
+  
+  review: 1 run, 1 read; 2 calls returned 80 characters.
+    tool  calls  chars  median  share  cut  unknown  repeated
+    read      2     80      40   100%    0        1         0
+  
+  chore: 1 run, 1 read; 1 call returned 20 characters.
+    tool  calls  chars  median  share  cut  unknown  repeated
+    $ rg      1     20      20   100%    0        0         0
+  
+  overseer: 1 run, 1 read; 1 call returned 2 characters.
+    tool           calls  chars  median  share  cut  unknown  repeated
+    canopy_decide      1      2       2   100%    0        1         0
+  '''
+# ---

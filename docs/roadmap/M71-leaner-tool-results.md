@@ -118,7 +118,21 @@ resumed for a coworker's review comment reads it through `feedback` and not GitH
 and not, and the comment's text is in no prompt in the journal; two weeks more in `MEASUREMENTS.md`, with the operator's
 call on stage 3 recorded on the `Status:` line.
 
-Status: not started. Drafted 2026-11-08 at the operator's ask, from the definitions, prompts, and servers as they
-stood, and from the survey in `PRIOR_ART.md` (Tools for token efficiency). Open, for the operator before stage 0: the
-command's name; the threshold each stage needs, if not the draft's tenth; and whether the measurement reads every role
-at once or the workers first.
+Status: in progress. Drafted 2026-11-08 at the operator's ask, from the definitions, prompts, and servers as they
+stood, and from the survey in `PRIOR_ART.md` (Tools for token efficiency). On 2026-11-09 the operator had stage 0 go
+ahead on the draft's defaults. Stage 0's measurement built 2026-11-09 against the fakes: `canopy tool-results`, read
+only, over `--days` (14 by default) of ended runs by when they started (`core/tool_results.py`), per role and per tool,
+gives the calls, the characters of their results in total and at the median, each tool's share of its role's, the
+results the runtime said it cut and those it said nothing of, the repeated reads of one path, and the characters each
+run's `status` calls sent; `--json` for `MEASUREMENTS.md`. Each implementation reads what a call returned and whether it
+was cut from what its runtime prints (`returned`), and a shell call's command (`command`). Chosen conservatively, for
+the operator to change: the name `canopy tool-results`; every role read at once, each run kind, `review`, `task`,
+`epic-plan`, `chore`, and `overseer`; no threshold in the command, which only reports, the operator setting each before
+reading the numbers; a shell call named by its first stage past a `cd` or an `export`, its program without its
+directory, with subcommands for `gh`'s two words and git's one alone, so `uv run pytest` is `$ uv`; a result cut where
+the runtime's metadata says `truncated`, and unknown where it says nothing, as a failed call's does in OpenCode 2.1.4;
+a repeated read a completed `read` of a path the run had read before, whatever its range; a result's characters as the
+runtime printed it, whole, each log read to the transcript's bound, which the report names, and a run past it read that
+far and marked; and `status`'s characters its input as compact JSON, refused calls included. Open, for the operator
+before the measurement: the threshold each later stage needs, if not the draft's tenth. Next: two weeks of `canopy
+tool-results` on the operator's workspace, in `MEASUREMENTS.md`.

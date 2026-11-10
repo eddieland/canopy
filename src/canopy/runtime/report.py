@@ -275,6 +275,8 @@ class Printed:
     step: Call | None = None
     #: The tool call the line ended, as its span records it; None for any other line.
     tool: ToolEnded | None = None
+    #: What the tool call the line ended returned; None where `call` is.
+    returned: Returned | None = None
 
 
 @dataclass(frozen=True)
@@ -301,6 +303,17 @@ class Called:
     input: Mapping[str, object]
     #: When the runtime started it, as it printed it; None when it did not (DESIGN §44).
     started_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class Returned:
+    """What a tool call a running agent's line ended returned into its context, as the runtime printed it."""
+
+    #: The characters of its output, or of its error for one that failed.
+    chars: int
+    #: Whether the runtime said it cut the result, so the agent saw less than the whole; None when the call did not say
+    #: (ROADMAP M71).
+    cut: bool | None = None
 
 
 #: What a tool call did to the repository's files, as the outline's measurement counts it (ROADMAP M70): read a file,
@@ -339,18 +352,45 @@ def shell_searches(command: str) -> bool:
     return any(_line_searches(line) for line in command.splitlines())
 
 
+def shell_stages(command: str) -> list[list[str]]:
+    """The stages of a shell `command`, each the words it runs, past any `VAR=value` before its program.
+
+    Words are split as the shell splits them, line by line, so a separator inside quotes starts no stage; a line whose
+    quotes do not close has none, and nor does a stage of assignments alone. The program is the first word, as given,
+    path and all. Only a measurement reads this, never a guard.
+
+    Returns:
+        Each stage's words, in order.
+    """
+    return [stage for line in command.splitlines() for stage in _line_stages(line)]
+
+
 def _line_searches(line: str) -> bool:
     """Whether a stage of one line of a shell command starts a search, as `shell_searches` reads it.
 
     Returns:
         True when one does; False also when the line's quotes do not close.
     """
+    for words in _line_stages(line):
+        program = words[0].rsplit("/", 1)[-1]
+        if program in _SEARCH_PROGRAMS or " ".join([program, *words[1:2]]) in _TWO_WORD_SEARCHES:
+            return True
+    return False
+
+
+def _line_stages(line: str) -> list[list[str]]:
+    """The stages of one line of a shell command, as `shell_stages` reads them.
+
+    Returns:
+        Each stage's words past its assignments, none empty; none at all when the line's quotes do not close.
+    """
     lexer = shlex.shlex(line, posix=True, punctuation_chars=True)
     lexer.whitespace_split = True
     try:
         tokens = list(lexer)
     except ValueError:
-        return False
+        return []
+    found: list[list[str]] = []
     stage: list[str] = []
     for token in [*tokens, ";"]:
         if token not in _SEPARATORS:
@@ -358,12 +398,9 @@ def _line_searches(line: str) -> bool:
             continue
         words = list(itertools.dropwhile(_ASSIGNMENT_RE.fullmatch, stage))
         stage = []
-        if not words:
-            continue
-        program = words[0].rsplit("/", 1)[-1]
-        if program in _SEARCH_PROGRAMS or " ".join([program, *words[1:2]]) in _TWO_WORD_SEARCHES:
-            return True
-    return False
+        if words:
+            found.append(words)
+    return found
 
 
 def session_id(value: object) -> str | None:
@@ -412,6 +449,15 @@ def total(calls: Sequence[Call]) -> Usage:
     )
 
 
+def kept_name(tool: str) -> str:
+    """A tool's name as canopy keeps it: without control characters, on one line, and at most `MAX_TOOL_NAME` long.
+
+    Returns:
+        The name, or `?` when nothing is left of it.
+    """
+    return " ".join("".join(c for c in tool if c.isprintable()).split())[:MAX_TOOL_NAME] or "?"
+
+
 class Tools:
     """A run's tool calls rolled up by tool as they end, within `MAX_TOOLS` tools whose names are `MAX_TOOL_NAME`."""
 
@@ -425,7 +471,7 @@ class Tools:
         The tool's name is kept as the runtime gave it but for control characters, on one line and cut to
         `MAX_TOOL_NAME`, or `?` when nothing is left; past `MAX_TOOLS` tools, a new one counts under `OTHER_TOOLS`.
         """
-        name = " ".join("".join(c for c in tool if c.isprintable()).split())[:MAX_TOOL_NAME] or "?"
+        name = kept_name(tool)
         if name not in self._tools and len(self._tools) >= MAX_TOOLS:
             name = OTHER_TOOLS
         was = self._tools.get(name, ToolUse(name, 0, 0, 0))

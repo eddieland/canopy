@@ -4,7 +4,7 @@ import json
 from datetime import UTC, datetime
 
 from canopy.runtime.opencode import events, transcript
-from canopy.runtime.report import Called, Touch
+from canopy.runtime.report import Called, Returned, Touch
 
 BASH: dict[str, object] = {
     "status": "completed",
@@ -92,6 +92,29 @@ def test_what_a_tool_call_did_to_files_is_its_act_and_the_files_it_named() -> No
     assert touched("apply_patch", {"patchText": "nothing"}) == Touch("other")
     assert touched("read", {"path": "/w/a.py"}) == Touch("other")  # OpenCode 2's field, not 1's
     assert touched("canopy_run_status", {"summary": "s"}) == Touch("other")
+
+
+def test_what_a_call_returned_is_its_output_or_error_and_whether_its_metadata_says_it_was_cut() -> None:
+    def returned(line: str) -> Returned | None:
+        found = events.parse_event(line)
+        assert found is not None
+        return transcript.returned(found)
+
+    cut = {**BASH, "output": "x" * 50, "metadata": {"truncated": True, "outputPath": "/tool-output/1"}}
+    assert returned(tool("bash", cut)) == Returned(50, cut=True)
+    assert returned(tool("bash", {**BASH, "metadata": {"truncated": False}})) == Returned(9, cut=False)
+    assert returned(tool("bash", BASH)) == Returned(9, cut=None)  # its metadata says nothing of a cut
+    assert returned(tool("read", {"status": "error", "input": {}, "error": "no such file"})) == Returned(12)
+    assert returned(tool("bash", {**BASH, "metadata": {"truncated": "yes"}})) == Returned(9, cut=None)
+    assert returned(tool("bash", {"status": "running"})) is None
+    assert returned(event("text", {"type": "text", "text": "hi"})) is None
+
+
+def test_the_command_a_call_ran_is_its_bash_input() -> None:
+    assert transcript.command(Called("bash", completed=True, input={"command": "gh pr view 3"})) == "gh pr view 3"
+    assert transcript.command(Called("shell", completed=True, input={"command": "ls"})) is None  # 2's name
+    assert transcript.command(Called("bash", completed=True, input={"command": 3})) is None
+    assert transcript.command(Called("read", completed=True, input={"filePath": "a.py"})) is None
 
 
 def test_a_line_is_of_a_session_when_it_is_an_event_that_names_it() -> None:
