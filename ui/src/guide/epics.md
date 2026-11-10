@@ -196,8 +196,17 @@ While the plan waits on you, its foot, stuck to the bottom of the window as you 
   meantime still works, and is your later word. Approve stays off while a note is written, since an approval carries
   none, and a note you meant to send shouldn't vanish into a plan you approved instead.
 
+An epic's planner writes the choices your goal left open the way a ticket's does, under Decisions, and the page asks
+them the same way: **Open decisions**, under the plan, each with the planner's choice picked, and `↓ 2 open decisions`
+in the foot to take you there. The difference is where an answer goes. A ticket's approval can carry a note to its
+implement; an epic's can't, because the members' planners read the approved plan itself, and a plan that says A with
+a note that says B is how you get half of each. So picking another option is asking for a new plan: the answer goes
+with **Ask for changes**, and **Approve** waits until you send it or pick the planner's choice again. With nothing
+answered, the button reads **Approve as planned**. See [Approving, or asking for
+changes](plans#approving-or-asking-for-changes) for the rest.
+
 Both refuse inside a tick or a run, as the commands do. Once you've [stopped the epic](#stopping-one), its plan offers
-**Approve** alone: a stopped epic takes no reply, so nothing would plan it again.
+**Approve** alone, and asks no decisions: a stopped epic takes no reply, so nothing would plan it again.
 
 **Earlier plans** lists the plans this one replaced, the newest first, each folded. Open one to read it as it was, in
 the same editor.

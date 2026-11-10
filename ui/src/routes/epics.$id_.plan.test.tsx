@@ -41,6 +41,8 @@ beforeEach(() => {
     )
     sent = []
     api.use(server)
+    // The picks on a plan's open decisions are this browser's: none carries from one test to the next.
+    localStorage.clear()
 })
 
 afterEach(() => {
@@ -236,6 +238,85 @@ describe("an epic's plan page", () => {
             body: { body: 'Say how the copy clears offline.', submission: expect.any(String) as unknown },
         })
         expect(screen.queryByTestId('plan-approved')).toBeNull()
+    })
+
+    describe("the plan's open decisions", () => {
+        const DECIDING = [
+            '# Offline order history',
+            '',
+            '## Decisions',
+            '',
+            '### Decision 1: When the local copy syncs',
+            '',
+            '- **A (chosen):** On launch and on pull to refresh.',
+            '- **B:** Every hour in the background too.',
+            '',
+        ].join('\n')
+        const ANSWER = 'Decision 1 (When the local copy syncs): take B, not A.'
+
+        // Every mock epic's plans, epic 2's waiting plan asking a decision, as the server answers them too.
+        function deciding(): EpicPlans[] {
+            const plans = plansOf(2)
+            const newest = plans.plans.at(-1)
+            if (newest === undefined) {
+                throw new Error('no plan of epic:2')
+            }
+            const asking = { ...plans, plans: [...plans.plans.slice(0, -1), { ...newest, text: DECIDING }] }
+            answers['GET /api/epics/2/plans'] = () => Response.json(asking)
+            return [...mockEpicPlans.filter((other) => other.epic_id !== 2), asking]
+        }
+
+        it("asks each under the plan, the planner's choice picked, and approves as planned", async () => {
+            answers['POST /api/epics/2/plan/approval'] = () => Response.json({ plan: 3, run_id: 3, change: null })
+            await renderPage('2', deciding())
+            const decisions = await screen.findByRole('region', { name: 'Open decisions' })
+            expect(decisions.textContent).toContain('the answer goes with Ask for changes, to the planner.')
+            const group = within(decisions).getByRole('radiogroup', { name: 'Decision 1: When the local copy syncs' })
+            expect(
+                within(group)
+                    .getAllByRole('radio')
+                    .map((radio) => radio.getAttribute('aria-checked')),
+            ).toEqual(['true', 'false'])
+            expect(within(screen.getByTestId('plan-bar')).getByRole('button', { name: '1 open decision' })).toBeTruthy()
+            fireEvent.click(screen.getByRole('button', { name: 'Approve as planned' }))
+            await screen.findByTestId('plan-approved')
+            expect(sent[0]?.path).toBe('/api/epics/2/plan/approval')
+        })
+
+        it('sends an answer with Ask for changes alone, while Approve waits', async () => {
+            answers['POST /api/epics/2/replies'] = () =>
+                Response.json({ message_id: 21, new: true, running_run: null, plan_runs: 2, max_plan_attempts: 3 })
+            await renderPage('2', deciding())
+            fireEvent.click(await screen.findByRole('radio', { name: /^B: Every hour/u }))
+            const decisions = screen.getByRole('region', { name: 'Open decisions' })
+            expect(decisions.textContent).toContain(
+                '1 answer goes with Ask for changes, to the planner. An approval takes none, so Approve waits.',
+            )
+            // An epic's approval carries no note: its members' planners read the approved plan itself.
+            expect(screen.getByRole('button', { name: 'Approve' }).hasAttribute('disabled')).toBe(true)
+            fireEvent.click(screen.getByRole('button', { name: 'Ask for changes' }))
+            await screen.findByText(/^Recorded message 21/u)
+            expect(sent.find((request) => request.method === 'POST')).toEqual({
+                method: 'POST',
+                path: '/api/epics/2/replies',
+                body: { body: ANSWER, submission: expect.any(String) as unknown },
+            })
+            // Sent: the planner has it, and its choice is picked again.
+            expect(screen.getByRole('radio', { name: /^A: On launch/u }).getAttribute('aria-checked')).toBe('true')
+        })
+
+        it("asks none of a stopped epic's plan, which takes no reply to send an answer with", async () => {
+            const proposed = mockEpicDetails.find((detail) => detail.epic.id === 2)
+            if (proposed === undefined) {
+                throw new Error('no mock epic:2')
+            }
+            const epic = { ...proposed.epic, standing: 'stopped' as const, stopped_at: NOW.toISOString() }
+            const stopped = [...mockEpicDetails.filter((detail) => detail !== proposed), { ...proposed, epic }]
+            await renderPage('2', deciding(), stopped)
+            await screen.findByRole('textbox', { name: 'Plan' })
+            expect(screen.queryByRole('region', { name: 'Open decisions' })).toBeNull()
+            expect(screen.getByRole('button', { name: 'Approve' })).toBeTruthy()
+        })
     })
 
     it('says a reply refused, naming its guard', async () => {

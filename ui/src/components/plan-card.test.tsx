@@ -1,9 +1,10 @@
-import { cleanup, fireEvent, screen } from '@testing-library/react'
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { api } from '@/api/client'
 import type { PlanSummary, TicketPlans } from '@/api/types'
+import { STORAGE_KEY } from '@/lib/plan-picks'
 import { renderRouted } from '@/test-utils'
 
 import { PlanCard } from './plan-card'
@@ -82,6 +83,8 @@ const server: Middleware = {
 beforeEach(() => {
     sent = []
     api.use(server)
+    // The picks on a plan's open decisions are this browser's: none carries from one test to the next.
+    localStorage.clear()
 })
 
 afterEach(() => {
@@ -235,5 +238,108 @@ describe('PlanCard', () => {
         await renderCard({ changes_asked: '2026-10-08T11:40:00Z', needed: false, newest, plans: [superseded] })
         expect((await screen.findByTestId('plan-card')).textContent).toContain('superseded')
         expect(screen.queryByRole('region', { name: 'Changes asked' })).toBeNull()
+    })
+
+    describe("the plan's open decisions", () => {
+        const DECIDING = [
+            '# Plan',
+            '',
+            '## Decisions',
+            '',
+            '### Decision 1: Which encoding the file is in',
+            '',
+            '- **A (chosen):** UTF-8, as the other exports are.',
+            '- **B:** Latin-1, for the old spreadsheet.',
+            '',
+        ].join('\n')
+        const SECOND = [
+            '### Decision 2: Where the file is written',
+            '',
+            '- **A (chosen):** Beside the report.',
+            '- **B:** In the exports folder.',
+            '',
+        ].join('\n')
+        const ANSWER = 'Decision 1 (Which encoding the file is in): take B, not A.'
+
+        function deciding(text = DECIDING, plan = PLAN): Partial<TicketPlans> {
+            return { newest: PLANS.newest === null ? null : { ...PLANS.newest, plan, text }, plans: [plan] }
+        }
+
+        it("asks each over Approve, the planner's choice picked, and approves as planned with no note", async () => {
+            await renderCard(deciding())
+            const decisions = await screen.findByRole('region', { name: 'Open decisions' })
+            const group = within(decisions).getByRole('radiogroup', {
+                name: 'Decision 1: Which encoding the file is in',
+            })
+            const radios = within(group).getAllByRole('radio')
+            expect(radios.map((radio) => radio.getAttribute('aria-checked'))).toEqual(['true', 'false'])
+            expect(within(group).getByRole('radio', { name: /^A: UTF-8.*, recommended$/u })).toBe(radios[0])
+            // Its own words say whose choices it takes, and so does the line beside it.
+            expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull()
+            expect(screen.getByTestId('plan-card').textContent).toContain(
+                "Approving takes the planner's choice on its open decision. " +
+                    'Its 1 open comment is not sent: open the plan to ask for changes.',
+            )
+            fireEvent.click(screen.getByRole('button', { name: 'Approve as planned' }))
+            await screen.findByRole('status')
+            expect(sent).toEqual([{ path: '/api/tickets/ABC-1/plan', body: { action: 'approve' } }])
+        })
+
+        it('approves with another option picked as a note for the implement, and says it went', async () => {
+            await renderCard({ ...deciding(), threads: [] })
+            fireEvent.click(await screen.findByRole('radio', { name: /^B: Latin-1/u }))
+            expect(screen.getByTestId('plan-card').textContent).toContain(
+                'Approving sends your answer to the implement. Open the plan to ask the planner for changes instead.',
+            )
+            fireEvent.click(screen.getByRole('button', { name: 'Approve with notes' }))
+            expect((await screen.findByRole('status')).textContent).toBe(
+                'Plan 2 of ABC-1 is approved as its file stands now. The next tick can implement it. ' +
+                    'Your notes went with it, to its implement.',
+            )
+            expect(sent).toEqual([{ path: '/api/tickets/ABC-1/plan', body: { action: 'approve', message: ANSWER } }])
+            // Sent: the plan's page asks none of them again.
+            await waitFor(() => expect(localStorage.getItem(STORAGE_KEY)).toBe('{}'))
+        })
+
+        it("says whose choice stands on each decision left as the planner's", async () => {
+            await renderCard({ ...deciding(`${DECIDING}\n${SECOND}`), threads: [] })
+            const card = await screen.findByTestId('plan-card')
+            expect(card.textContent).toContain("Approving takes the planner's choice on each of its 2 open decisions.")
+            fireEvent.click(screen.getByRole('radio', { name: /^B: In the exports folder/u }))
+            expect(card.textContent).toContain(
+                "Approving sends your answer to the implement, and takes the planner's choice on the other.",
+            )
+        })
+
+        it("keeps a pick in this browser, for the plan's page and the next visit", async () => {
+            await renderCard(deciding())
+            fireEvent.click(await screen.findByRole('radio', { name: /^B: Latin-1/u }))
+            cleanup()
+            await renderCard(deciding())
+            const picked = await screen.findByRole('radio', { name: /^B: Latin-1/u })
+            expect(picked.getAttribute('aria-checked')).toBe('true')
+            expect(screen.getByRole('button', { name: 'Approve with notes' })).toBeTruthy()
+            cleanup()
+            // A new plan is asked afresh.
+            await renderCard(deciding(DECIDING, { ...PLAN, id: 3 }))
+            expect((await screen.findByRole('radio', { name: /^A: UTF-8/u })).getAttribute('aria-checked')).toBe('true')
+        })
+
+        it('asks none of a plan that waits on no answer: one approved, or one a planner is replacing', async () => {
+            const approved = { ...PLAN, status: 'approved' as const, approved_at: '2026-10-08T11:30:00Z' }
+            const changed =
+                PLANS.newest === null
+                    ? null
+                    : { ...PLANS.newest, plan: approved, text: DECIDING, ticket_changed: ['title' as const] }
+            await renderCard({ newest: changed, plans: [approved] })
+            await screen.findByTestId('plan-card')
+            expect(screen.queryByRole('region', { name: 'Open decisions' })).toBeNull()
+            expect(screen.getByRole('button', { name: 'Approve' })).toBeTruthy()
+            cleanup()
+
+            await renderCard({ ...deciding(), planning: 7 })
+            await screen.findByTestId('plan-card')
+            expect(screen.queryByRole('region', { name: 'Open decisions' })).toBeNull()
+        })
     })
 })

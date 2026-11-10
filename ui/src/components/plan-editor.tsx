@@ -82,6 +82,8 @@ import { cn } from '@/lib/utils'
 const APPLE = isApple(navigator.userAgent)
 // A plan that asks no open decision, or none the page answers.
 const NO_DECISIONS: readonly PlanDecision[] = []
+// A plan whose caller keeps no picks: each of its decisions has the planner's choice.
+const NO_PICKS: ReadonlyMap<number, string> = new Map()
 // The selection's bubble, by its key, so opening a comment can hide it.
 const BUBBLE = new PluginKey('planBubble')
 // How far below the top of the page the editor keeps what it scrolls into view, in pixels: the sticky header's height,
@@ -129,6 +131,9 @@ export function PlanEditor({
     onAskForChanges,
     asked = false,
     decisions = NO_DECISIONS,
+    picks = NO_PICKS,
+    onPick,
+    decisionsTold,
     actions,
     renderActions,
     actionsNote,
@@ -157,10 +162,20 @@ export function PlanEditor({
     /** Whether the operator asked for changes no planner has read yet, so that asking again is said as such. */
     asked?: boolean
     /**
-     * The plan's open decisions (`planDecisions`), answered under it while it may be edited (`PlanDecisions`): an
-     * answer goes with the approval's notes and with Ask for changes. None while the plan waits on no answer.
+     * The plan's open decisions (`planDecisions`), answered under it while its foot offers the operator's word on it
+     * (`PlanDecisions`): an answer goes with the approval's notes and with Ask for changes. None while the plan waits
+     * on no answer.
      */
     decisions?: readonly PlanDecision[]
+    /**
+     * The option the operator picked for each of those, by its number, the caller's to keep (`usePlanPicks`): those
+     * other than the planner's choice are answers. The caller drops them once an action sent them.
+     */
+    picks?: ReadonlyMap<number, string>
+    /** Called with a decision and the letter picked for it. */
+    onPick?: (decision: PlanDecision, letter: string) => void
+    /** What the decisions say under their heading, where an answer goes with one action alone (`decisionsTold`). */
+    decisionsTold?: string | undefined
     /** The caller's own word on the plan, such as Approve, at the start of the plan's foot. */
     actions?: ReactNode
     /**
@@ -232,9 +247,7 @@ export function PlanEditor({
     const [draft, setDraft] = useState<Draft | undefined>(undefined)
     // The note on the whole plan, which goes with Ask for changes or with Approve, whichever the operator presses.
     const [note, setNote] = useState('')
-    // The option picked for each of the plan's decisions, by its number: those other than the planner's choice are
-    // answers, which go with the note.
-    const [picks, setPicks] = useState<ReadonlyMap<number, string>>(new Map())
+    // The picks other than the planner's choice are answers, which go with the note.
     const answers = decisionAnswers(decisions, picks)
     // The open decisions' panel, under the plan, and the sticky header and foot it is brought into view between.
     const decisionsPanel = useRef<HTMLElement>(null)
@@ -532,7 +545,7 @@ export function PlanEditor({
     const onDraftLeave = () => backToPlan(highlightsKey.getState(editor.state)?.draft)
     // While the plan's open decisions sit under its last line, the foot says how many, and goes to them.
     const jump =
-        editable && decisions.length > 0 ? (
+        decides && decisions.length > 0 ? (
             <DecisionsJump decisions={decisions} picks={picks} onJump={goToDecisions} />
         ) : undefined
 
@@ -604,14 +617,15 @@ export function PlanEditor({
                             />
                         </div>
                     )}
-                    {editable && decisions.length > 0 && (
+                    {decides && decisions.length > 0 && (
                         // Under the plan, above its foot: read after the plan, as its Decisions are written to be,
                         // and answered just over the actions that send the answers.
                         <PlanDecisions
                             ref={decisionsPanel}
                             decisions={decisions}
                             picks={picks}
-                            onPick={(decision, letter) => setPicks(new Map(picks).set(decision, letter))}
+                            onPick={(decision, letter) => onPick?.(decision, letter)}
+                            told={decisionsTold}
                         />
                     )}
                     {editable && (
@@ -655,11 +669,7 @@ export function PlanEditor({
                                             edited={edited || changed}
                                             asked={asked}
                                             answers={answers}
-                                            onAsk={(message) => {
-                                                onAskForChanges(message)
-                                                // Sent: the planner has them, and the next plan answers them.
-                                                setPicks(new Map())
-                                            }}
+                                            onAsk={onAskForChanges}
                                             line={actionsNote}
                                             lead={jump}
                                             note={note}

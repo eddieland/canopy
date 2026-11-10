@@ -145,7 +145,8 @@ test("a plan that waits on the operator leads its ticket's page as a card, which
     await page.goto('tickets/ABC-105')
     const card = page.getByTestId('plan-card')
     await expect(card).toContainText('waiting on you')
-    await expect(card.getByRole('button', { name: 'Approve' })).toBeVisible()
+    // Its plan leaves a decision open, so Approve's own words say whose choice it takes.
+    await expect(card.getByRole('button', { name: 'Approve as planned' })).toBeVisible()
     await expect(card).toContainText('plan:2')
     await expect(card).toContainText(/open comments\s*2/u)
     const box = await card.boundingBox()
@@ -206,13 +207,62 @@ test("a plan review on the attention list shows the plan's card, which approves 
     const card = page.getByTestId('attention-detail').getByTestId('plan-card')
     await expect(card).toContainText('waiting on you')
     await expect(card).toContainText('plan:2')
-    await card.getByRole('button', { name: 'Approve' }).click()
+    await card.getByRole('button', { name: 'Approve as planned' }).click()
     await expect(card.getByRole('status')).toHaveText(
         'Plan 2 of ABC-105 is approved as its file stands now. The next tick can implement it.',
     )
     expect(approvals).toEqual([{ action: 'approve' }])
     await card.getByRole('link', { name: 'Open plan' }).click()
     await expect(page).toHaveURL(/tickets\/ABC-105\/plan$/u)
+})
+
+test('a plan review says how many decisions its plan leaves open, and its card asks each over Approve', async ({
+    page,
+}) => {
+    await listPlanReview(page)
+    const approvals: unknown[] = []
+    await page.route('**/api/tickets/ABC-105/plan', async (route) => {
+        approvals.push(route.request().postDataJSON())
+        await route.fulfill({ json: { action: 'approve', already: false, plan: 2, superseded: null } })
+    })
+    await page.goto('attention')
+    // Said in the list, before the item is opened: a plan that asks something is told from one that only waits.
+    await expect(page.getByTestId('attention-item-ABC-105:plan_review').getByTestId('decisions-count')).toHaveText(
+        '1 decision',
+    )
+    const card = page.getByTestId('attention-detail').getByTestId('plan-card')
+    const group = card.getByRole('radiogroup', { name: 'Decision 1: Where a schedule keeps its hour' })
+    await expect(group.getByRole('radio', { name: /^A: As the owner's local hour/u })).toBeChecked()
+    // Over the foot, so the choices Approve takes are read before it is pressed.
+    const approve = card.getByRole('button', { name: 'Approve as planned' })
+    const [asked, button] = await Promise.all([group.boundingBox(), approve.boundingBox()])
+    expect((asked?.y ?? 0) + (asked?.height ?? 0)).toBeLessThanOrEqual(button?.y ?? 0)
+    await expect(card).toContainText("Approving takes the planner's choice on its open decision.")
+    await group.getByText('As an hour in UTC').click()
+    await expect(card).toContainText('Approving sends your answer to the implement.')
+    await card.getByRole('button', { name: 'Approve with notes' }).click()
+    await expect(card.getByRole('status')).toHaveText(
+        'Plan 2 of ABC-105 is approved as its file stands now. The next tick can implement it. ' +
+            'Your notes went with it, to its implement.',
+    )
+    expect(approvals).toEqual([
+        { action: 'approve', message: 'Decision 1 (Where a schedule keeps its hour): take B, not A.' },
+    ])
+})
+
+test("an answer picked on the plan's card is still picked on its page", async ({ page }) => {
+    await page.goto('tickets/ABC-105')
+    const card = page.getByTestId('plan-card')
+    await card
+        .getByRole('radiogroup', { name: /^Decision 1/u })
+        .getByText('As an hour in UTC')
+        .click()
+    await expect(card.getByRole('button', { name: 'Approve with notes' })).toBeVisible()
+    await card.getByRole('link', { name: 'Open plan' }).click()
+    await expect(page).toHaveURL(/tickets\/ABC-105\/plan$/u)
+    const decisions = page.getByRole('region', { name: 'Open decisions' })
+    await expect(decisions.getByRole('radio', { name: /^B: As an hour in UTC/u })).toBeChecked()
+    await expect(page.getByTestId('plan-bar').getByRole('button', { name: '1 of 1 answered' })).toBeVisible()
 })
 
 test("a ticket changed since its plan was approved shows the plan's card, which approves it again", async ({

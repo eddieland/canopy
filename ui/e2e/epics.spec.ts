@@ -105,7 +105,7 @@ test("a proposed epic's mark opens its plan, read only, and Back returns to the 
     await expect(page.getByTestId('earlier-plans').getByRole('textbox')).toHaveCount(0)
     await page.getByRole('button', { name: 'Show plan 2' }).click()
     await expect(page.getByTestId('earlier-plans').getByRole('textbox', { name: 'Plan' })).toContainText(
-        'Sync on launch and on pull to refresh only.',
+        'A changes feed for the web account page and the app',
     )
     await page.goBack()
     await expect(page).toHaveURL(/\/epics\/2$/u)
@@ -157,6 +157,47 @@ test("a proposed epic's plan is approved from its page, and the board then shows
     await expect(page).toHaveURL(/\/epics\/2$/u)
     await expect(page.getByRole('link', { name: 'Open the approved plan' })).toBeVisible()
     await expect(page.getByTestId('breakdown')).toContainText('Clear the local copy at sign-out')
+})
+
+test("an epic's plan asks its open decisions under it, and an answer goes with Ask for changes alone", async ({
+    page,
+}) => {
+    const replies: unknown[] = []
+    await page.route('**/api/epics/2/replies', async (route) => {
+        replies.push(route.request().postDataJSON())
+        await route.fulfill({
+            json: { message_id: 21, new: true, running_run: null, plan_runs: 2, max_plan_attempts: 3 },
+        })
+    })
+    await page.goto('epics/2/plan')
+    await settled(page)
+    const bar = page.getByTestId('plan-bar')
+    const decisions = page.getByRole('region', { name: 'Open decisions' })
+    const group = decisions.getByRole('radiogroup', { name: 'Decision 1: When the local copy syncs' })
+    await expect(group.getByRole('radio', { name: /^A: On launch and on pull to refresh/u })).toBeChecked()
+    await expect(bar.getByRole('button', { name: 'Approve as planned' })).toBeEnabled()
+    await group.getByText('Every hour in the background too').click()
+    // An epic's approval carries no note, so an answer asks for a new plan, and Approve waits while one stands.
+    await expect(decisions).toContainText('1 answer goes with Ask for changes, to the planner.')
+    await expect(bar.getByRole('button', { name: 'Approve', exact: true })).toBeDisabled()
+    await bar.getByRole('button', { name: 'Ask for changes' }).click()
+    await expect(bar).toContainText('Recorded message 21 on epic:2.')
+    expect(replies).toEqual([
+        { body: 'Decision 1 (When the local copy syncs): take B, not A.', submission: expect.any(String) as unknown },
+    ])
+})
+
+test("an epic's plan review says in the list and on its item how many decisions its plan leaves open", async ({
+    page,
+}) => {
+    await page.goto('attention')
+    await settled(page)
+    const row = page.getByRole('link', { name: /epic:2/u }).filter({ has: page.getByTestId('decisions-count') })
+    await expect(row.getByTestId('decisions-count')).toHaveText('1 decision')
+    await row.click()
+    await expect(page.getByTestId('attention-epic')).toContainText(
+        "1 open decision: its page asks it, the planner's choice picked.",
+    )
 })
 
 test("asking for changes to an epic's plan is a reply, and says what it starts", async ({ page }) => {

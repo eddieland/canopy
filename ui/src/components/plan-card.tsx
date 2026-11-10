@@ -12,20 +12,40 @@ import { LinkedText } from '@/components/linked-text'
 import { None } from '@/components/none'
 import { Notice } from '@/components/notice'
 import { Panel, PanelFooter, PanelHeader } from '@/components/panel'
+import { PlanDecisions } from '@/components/plan-decisions'
 import { RunLink } from '@/components/run-link'
 import { Chip } from '@/components/status'
 import { Button } from '@/components/ui/button'
 import { planText } from '@/lib/outcomes'
-import { planApprovable, planNeededWhy, planWaits, ticketChangedNote } from '@/lib/plan-state'
+import { decisionAnswers, decisionsTold } from '@/lib/plan-decisions'
+import { clearPicks, pickOption, usePlanPicks } from '@/lib/plan-picks'
+import {
+    approveLabel,
+    openDecisions,
+    planApprovable,
+    planNeededWhy,
+    planWaits,
+    ticketChangedNote,
+} from '@/lib/plan-state'
 import { planRef } from '@/lib/refs'
 import { cn } from '@/lib/utils'
 
+// What an approval that carried answers says after the CLI's words, as the plan's page says of its notes.
+const NOTED = ' Your notes went with it, to its implement.'
+// What Approve does, on its hover, in the CLI's words: alone, or with the answers to the plan's open decisions.
+const APPROVE_TITLE = 'Approve the plan as its file stands, as canopy plan --approve does'
+const APPROVE_NOTED_TITLE =
+    'Approve the plan as its file stands, with your answers as its note, as canopy plan --approve --message does'
+
 /**
  * A ticket's plan in brief (docs/design/PLANNING.md §25): where the plan stands, which plan it is, the run that wrote
- * it and when, how many comments are open, Approve while it can be approved, and the link to the plan's own page, where
- * it is read, edited, commented on, and sent back. A ticket's page shows it, and so does a `plan_review` item on the
- * attention list, `bare` there: its parts without a panel of their own, inside the item's. It imports no editor, so
- * neither page loads one.
+ * it and when, how many comments are open, the decisions it leaves open, Approve while it can be approved, and the link
+ * to the plan's own page, where it is read, edited, commented on, and sent back. Approve is never offered without the
+ * plan's open decisions over it (`PlanDecisions`): each is asked here as its page asks it, the planner's choice picked,
+ * and another pick goes with the approval as its note, to the implement; while none is answered the button reads
+ * `Approve as planned`, so its own words say whose choices it takes. A ticket's page shows the card, and so does a
+ * `plan_review` item on the attention list, `bare` there: its parts without a panel of their own, inside the item's.
+ * It imports no editor, so neither page loads one.
  */
 export function PlanCard({
     ticketKey,
@@ -39,16 +59,23 @@ export function PlanCard({
     const client = useQueryClient()
     const [said, setSaid] = useState<string | null>(null)
     const decide = useMutation({
-        mutationFn: (action: PlanChanged['action']) => decidePlan(ticketKey, action),
-        onSuccess: (changed) => {
-            setSaid(planText(ticketKey, changed))
-            void refreshTicket(client, ticketKey)
+        mutationFn: ({ action, notes }: { action: PlanChanged['action']; notes: string }) =>
+            decidePlan(ticketKey, action, notes === '' ? undefined : notes),
+        onSuccess: (changed, { notes }) => {
+            setSaid(planText(ticketKey, changed) + (notes === '' ? '' : NOTED))
+            // Sent, or taken as the planner chose: the plan is decided, and its page asks none of them again. Dropped
+            // once the plan is read again as decided, so an answer just sent never shows as the planner's meanwhile.
+            void refreshTicket(client, ticketKey).finally(() => clearPicks(ticketKey))
         },
     })
     const newest = plans.newest?.plan
     const open = plans.threads.filter((thread) => !thread.resolved).length
     const approvable = planApprovable(plans)
-    const note = cardNote(plans, open)
+    // Asked while the plan waits on the operator, as its page asks them, and answered by the same picks.
+    const decisions = openDecisions(plans)
+    const picks = usePlanPicks(ticketKey, newest?.id ?? 0, decisions)
+    const answers = decisionAnswers(decisions, picks)
+    const note = cardNote(plans, open, decisions.length, answers.length)
     const parts = (
         <>
             <PanelHeader label="Plan">
@@ -87,16 +114,26 @@ export function PlanCard({
                 </Field>
             </Fields>
             <ChangesAsked plans={plans} className="mx-3 mb-3" />
+            {newest !== undefined && decisions.length > 0 && (
+                // Over the foot, so no Approve is pressed without the choices it takes in view.
+                <PlanDecisions
+                    decisions={decisions}
+                    picks={picks}
+                    onPick={(decision, letter) => pickOption(ticketKey, newest.id, decision, letter)}
+                    told={decisionsTold(answers.length, 'card')}
+                    className="p-3"
+                />
+            )}
             <PanelFooter>
                 <div className="flex flex-wrap items-center gap-2">
                     {approvable && (
                         <Button
-                            onClick={() => decide.mutate('approve')}
+                            onClick={() => decide.mutate({ action: 'approve', notes: answers.join('\n') })}
                             disabled={decide.isPending}
-                            title="Approve the plan as its file stands, as canopy plan --approve does"
+                            title={answers.length > 0 ? APPROVE_NOTED_TITLE : APPROVE_TITLE}
                         >
                             <Check />
-                            Approve
+                            {approveLabel({ noted: answers.length > 0, planned: decisions.length > 0 })}
                         </Button>
                     )}
                     {/* The one primary is Approve while there is one; the rest step back. */}
@@ -208,8 +245,9 @@ function changesAsked(plans: TicketPlans): plans is TicketPlans & { changes_aske
 }
 
 // What comes next for the plan, in a line beside its actions: a planner at work, or what the operator's word on it
-// does. Nothing while changes asked wait on a planner, which the card's band says.
-function cardNote(plans: TicketPlans, open: number): string | null {
+// does, its `decisions` open and those `answered` among them. Nothing while changes asked wait on a planner, which the
+// card's band says.
+function cardNote(plans: TicketPlans, open: number, decisions: number, answered: number): string | null {
     if (plans.planning !== null) {
         return `Run ${plans.planning} is writing a new plan.`
     }
@@ -226,9 +264,32 @@ function cardNote(plans: TicketPlans, open: number): string | null {
     if (ticketChanged !== null) {
         return ticketChanged
     }
+    if (decisions > 0) {
+        const takes = decisionsNote(decisions, answered)
+        if (open > 0) {
+            const comments = open === 1 ? '1 open comment is' : `${open} open comments are`
+            return `${takes} Its ${comments} not sent: open the plan to ask for changes.`
+        }
+        // An answer can go to the planner instead, for a new plan around it: only the plan's page asks for changes.
+        return answered > 0 ? `${takes} Open the plan to ask the planner for changes instead.` : takes
+    }
     if (open > 0) {
         const comments = open === 1 ? 'comment' : 'comments'
         return `${open} open ${comments}: approving sends none. Open the plan to ask for changes.`
     }
     return 'Approving takes it as its file stands and lets its implement go ahead.'
+}
+
+// What approving does with the plan's open decisions, `answered` of them the operator's: whose choice it takes on
+// each, said beside the button, since that is the last line read before it is pressed.
+function decisionsNote(decisions: number, answered: number): string {
+    if (answered === 0) {
+        return decisions === 1
+            ? "Approving takes the planner's choice on its open decision."
+            : `Approving takes the planner's choice on each of its ${decisions} open decisions.`
+    }
+    const answers = answered === 1 ? 'your answer' : `your ${answered} answers`
+    const left = decisions - answered
+    const rest = left === 0 ? '' : `, and takes the planner's choice on the ${left === 1 ? 'other' : 'rest'}`
+    return `Approving sends ${answers} to the implement${rest}.`
 }

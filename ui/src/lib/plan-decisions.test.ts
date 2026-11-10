@@ -1,7 +1,7 @@
 import { Editor } from '@tiptap/core'
 import { describe, expect, it } from 'vitest'
 
-import { decisionAnswers, MAX_QUESTION, planDecisions } from '@/lib/plan-decisions'
+import { decisionAnswers, decisionsTold, MAX_QUESTION, planDecisions } from '@/lib/plan-decisions'
 import type { PlanDecision } from '@/lib/plan-decisions'
 import { planExtensions } from '@/lib/plan-schema'
 
@@ -202,5 +202,33 @@ describe('decisionAnswers', () => {
         const [answer] = decisionAnswers([long], new Map([[4, 'B']]))
         expect(answer).toBe('Decision 4 (Whether the export job runs in the existing queue or in a…): take B, not A.')
         expect(answer?.indexOf('…')).toBeLessThanOrEqual('Decision 4 ('.length + MAX_QUESTION)
+    })
+})
+
+describe('decisionsTold', () => {
+    it("says how to answer while each has the planner's choice, and what an answer goes with there", () => {
+        expect(decisionsTold(0, 'either')).toBe(
+            "Each has the planner's choice picked. Pick another to answer it: the answer goes with Approve or Ask " +
+                'for changes.',
+        )
+        expect(decisionsTold(0, 'ask')).toBe(
+            "Each has the planner's choice picked. Pick another to answer it: the answer goes with Ask for changes, " +
+                'to the planner.',
+        )
+    })
+
+    it('counts the answers once there are some, and where each action takes them', () => {
+        expect(decisionsTold(1, 'either')).toBe(
+            '1 answer goes with Approve, to the implement, or with Ask for changes, to the planner.',
+        )
+        expect(decisionsTold(2, 'ask')).toBe(
+            '2 answers go with Ask for changes, to the planner. An approval takes none, so Approve waits.',
+        )
+    })
+
+    it("says only how to answer on a plan's card, whose foot says what approving does with them", () => {
+        const told = "Each has the planner's choice picked. Pick another to answer it."
+        expect(decisionsTold(0, 'card')).toBe(told)
+        expect(decisionsTold(2, 'card')).toBe(told)
     })
 })

@@ -41,7 +41,9 @@ import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { PendingWork, usePending, usePendingWork } from '@/hooks/use-pending'
 import { planText } from '@/lib/outcomes'
 import { planDecisions } from '@/lib/plan-decisions'
-import { approvedChanged, planNeededWhy, planWaits } from '@/lib/plan-state'
+import type { PlanDecision } from '@/lib/plan-decisions'
+import { clearPicks, pickOption, usePlanPicks } from '@/lib/plan-picks'
+import { approvedChanged, approveLabel, planNeededWhy, planWaits } from '@/lib/plan-state'
 import { fromServer, MAX_NOTES, movedAnchors, threadChanges, unread } from '@/lib/plan-threads'
 import type { PlanThread, ThreadChange } from '@/lib/plan-threads'
 import { isApple } from '@/lib/send-key'
@@ -52,6 +54,10 @@ const APPLE = isApple(navigator.userAgent)
 const SAVE_KEYS = 'Mod-s'
 // What Approve does, on its hover: the line under the actions is kept for what the comments open call for.
 const APPROVE_TITLE = 'Approving takes the plan as saved, your edits included, and lets its implement go ahead.'
+// The same, while the plan's open decisions all stand as its planner chose them.
+const APPROVE_PLANNED_TITLE = `${APPROVE_TITLE} It takes the planner's choice on each open decision.`
+// A plan that waits on no answer.
+const NO_DECISIONS: readonly PlanDecision[] = []
 
 /**
  * A ticket's plan (docs/design/PLANNING.md §25): its newest plan in the plan editor, where the operator edits it and
@@ -237,6 +243,10 @@ function NewestPlan({
     const dirty = markdown !== text
     usePending(dirty, 'edit')
     const approvable = status === 'proposed' || (status === 'approved' && (approvedChanged(newest) || dirty))
+    // Asked while the plan waits on the operator, as it reads now: an edit to its Decisions changes what is. The picks
+    // are this browser's, so the plan's card shows the same answers.
+    const decisions = status === 'proposed' ? planDecisions(markdown) : NO_DECISIONS
+    const picks = usePlanPicks(ticketKey, newest.plan.id, decisions)
     // Open comments go with Ask for changes, to the planner. Those no planner has read go with Approve instead, to the
     // implement, as notes: the foot's line says so.
     const open = held.filter((thread) => !thread.resolved)
@@ -246,13 +256,16 @@ function NewestPlan({
         return client.invalidateQueries({ queryKey: keys.ticketPlans(ticketKey) })
     }
 
-    // Runs `work` after every write before it, and reads the plans again once the last one ends.
-    function enqueue(work: () => Promise<unknown>) {
+    // Runs `work` after every write before it, and reads the plans again once the last one ends, then runs `after`.
+    function enqueue(work: () => Promise<unknown>, after?: () => void) {
         setBusy((n) => n + 1)
         const next = queue.current.then(work).catch((error: unknown) => setFailure(error))
         queue.current = next
         // Busy until the plans are read again: a save before then would send the hash of the file as it was.
-        void next.then(refresh).finally(() => setBusy((n) => n - 1))
+        void next.then(refresh).finally(() => {
+            after?.()
+            setBusy((n) => n - 1)
+        })
     }
 
     async function serverId(id: string): Promise<number> {
@@ -312,11 +325,11 @@ function NewestPlan({
         return 'Saved the plan.'
     }
 
-    function act(work: () => Promise<string>) {
+    function act(work: () => Promise<string>, after?: () => void) {
         setFailure(null)
         setSaid(null)
         setApproved(false)
-        enqueue(async () => setSaid(await work()))
+        enqueue(async () => setSaid(await work()), after)
     }
 
     const onSaveKey = useEffectEvent((event: KeyboardEvent) => {
@@ -340,23 +353,35 @@ function NewestPlan({
         setConfirming(false)
         // The comments the notes carry, resolved once they are sent: the implement has them, so they ask for nothing.
         const sent = notes === '' ? [] : notable.map((thread) => thread.id)
-        act(async () => {
-            if (dirty && action === 'approve') {
-                await save()
-            }
-            const decided = await decidePlan(ticketKey, action, notes === '' ? undefined : notes)
-            await Promise.all(
-                sent.map(async (id) => changePlanThread(ticketKey, await serverId(id), { resolved: true })),
-            )
-            const done =
-                planText(ticketKey, decided) + (notes === '' ? '' : ' Your notes went with it, to its implement.')
-            // Only once the journal holds it: the moment never shows for an approval that was refused.
-            if (action === 'approve') {
-                setApproved(true)
-                setApprovals((n) => n + 1)
-            }
-            return done
-        })
+        // Whether the journal holds the decision: a refused one keeps the picks it would have sent.
+        let made = false
+        act(
+            async () => {
+                if (dirty && action === 'approve') {
+                    await save()
+                }
+                const decided = await decidePlan(ticketKey, action, notes === '' ? undefined : notes)
+                made = true
+                await Promise.all(
+                    sent.map(async (id) => changePlanThread(ticketKey, await serverId(id), { resolved: true })),
+                )
+                const done =
+                    planText(ticketKey, decided) + (notes === '' ? '' : ' Your notes went with it, to its implement.')
+                // Only once the journal holds it: the moment never shows for an approval that was refused.
+                if (action === 'approve') {
+                    setApproved(true)
+                    setApprovals((n) => n + 1)
+                }
+                return done
+            },
+            // Sent with the notes, or taken as the planner chose. Dropped once the plan is read again as decided, so
+            // an answer just sent never shows as the planner's choice meanwhile.
+            () => {
+                if (made) {
+                    clearPicks(ticketKey)
+                }
+            },
+        )
     }
 
     function askForChanges(message: string) {
@@ -370,6 +395,8 @@ function NewestPlan({
                 await save()
             }
             const replied = await replyTicket(ticketKey, message, newSubmission())
+            // Sent: the planner has the answers, and the next plan follows them.
+            clearPicks(ticketKey)
             // The request is recorded whatever the marks do: one that fails costs only that Approve sends its comment
             // once more, where failing the request would have the operator send it again.
             await Promise.allSettled(
@@ -406,8 +433,9 @@ function NewestPlan({
             }
             onAskForChanges={status === 'proposed' ? askForChanges : undefined}
             asked={plans.changes_asked !== null}
-            // Asked while the plan waits on the operator, as it reads now: an edit to its Decisions changes what is.
-            decisions={status === 'proposed' ? planDecisions(markdown) : undefined}
+            decisions={decisions}
+            picks={picks}
+            onPick={(decision, letter) => pickOption(ticketKey, newest.plan.id, decision, letter)}
             renderActions={(notes) => (
                 // `contents`, so its buttons are items of the foot's line, with Ask for changes after them.
                 <div className="contents" data-testid="plan-actions">
@@ -419,10 +447,10 @@ function NewestPlan({
                         <Button
                             onClick={() => decide('approve', notes)}
                             disabled={busy > 0 || notes.length > MAX_NOTES}
-                            title={APPROVE_TITLE}
+                            title={notes === '' && decisions.length > 0 ? APPROVE_PLANNED_TITLE : APPROVE_TITLE}
                         >
                             <Check />
-                            {approveLabel(dirty, notes !== '')}
+                            {approveLabel({ saves: dirty, noted: notes !== '', planned: decisions.length > 0 })}
                         </Button>
                     )}
                     {!confirming && (
@@ -460,12 +488,6 @@ function NewestPlan({
             }
         />
     )
-}
-
-// What Approve reads: saving first when the plan has edits not yet saved, and sending notes when there are some.
-function approveLabel(dirty: boolean, noted: boolean): string {
-    const approve = dirty ? 'Save and approve' : 'Approve'
-    return noted ? `${approve} with notes` : approve
 }
 
 // What the line under the actions says of them, after how many comments go with Ask for changes: that Approve sends

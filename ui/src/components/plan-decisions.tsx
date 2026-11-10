@@ -5,47 +5,45 @@ import type { Ref } from 'react'
 import { LetteredOption } from '@/components/lettered-option'
 import { InlineCode } from '@/components/rich-text'
 import { RadioGroup, RadioGroupRow } from '@/components/ui/radio-group'
-import { usePending } from '@/hooks/use-pending'
 import { OPTION_HOVER, OPTION_ROW } from '@/lib/lettered-options'
-import { decisionAnswers } from '@/lib/plan-decisions'
+import { decisionAnswers, decisionsTold } from '@/lib/plan-decisions'
 import type { PlanDecision } from '@/lib/plan-decisions'
 import { cn } from '@/lib/utils'
 
-// What the panel says while every decision has the planner's choice picked.
-const UNANSWERED =
-    "Each has the planner's choice picked. Pick another to answer it: the answer goes with Approve or Ask for changes."
-
 /**
- * A plan's open decisions (`planDecisions`), answered where the plan is read rather than in a round of comments: each
- * drawn as a run's question is (`ProgressQuestion`), in its box, its question, then its lettered options
- * (`LetteredOption`), the planner's `recommended` and the one picked checked. Each decision is a radio group, the
- * planner's choice picked at first. Picking another answers it, a line that goes with Approve to the implement and with
- * Ask for changes to the planner (`decisionAnswers`); leaving the planner's choice sends nothing. The picks are the
- * caller's state, by decision number, kept on the page alone: while any answers, it holds words not yet sent, which
- * leaving the page asks about. The plan's words are the planner's, so they stay text, their code spans set as code
- * (`InlineCode`).
+ * A plan's open decisions (`planDecisions`), answered where the plan is approved rather than in a round of comments:
+ * under the plan on its page, and on its card. Each is drawn as a run's question is (`ProgressQuestion`), in its box,
+ * its question, then its lettered options (`LetteredOption`), the planner's `recommended` and the one picked checked.
+ * Each decision is a radio group, the planner's choice picked at first. Picking another answers it, a line the caller
+ * sends (`decisionAnswers`): with Approve to the implement, or with Ask for changes to the planner; leaving the
+ * planner's choice sends nothing. The picks are the caller's, by decision number, kept in this browser until they are
+ * sent (`src/lib/plan-picks.ts`), so the card and the page show the same. `told` says, under the heading, what an
+ * answer goes with there; without it, with either, as on a ticket's plan's page. The plan's words are the planner's, so
+ * they stay text, their code spans set as code (`InlineCode`).
  */
 export function PlanDecisions({
     decisions,
     picks,
     onPick,
+    told,
+    className = 'px-6 py-4',
     ref,
 }: {
     /** The plan's open decisions, in its order. */
     decisions: readonly PlanDecision[]
     /** The letter the operator picked for each decision, by its number; one not here is the planner's choice. */
     picks: ReadonlyMap<number, string>
-    /** Called with a decision's number and the letter picked for it. */
-    onPick: (decision: number, letter: string) => void
+    /** Called with a decision and the letter picked for it. */
+    onPick: (decision: PlanDecision, letter: string) => void
+    /** What the panel says under its heading, where an answer goes with one action alone (`decisionsTold`). */
+    told?: string | undefined
+    /** The panel's padding, its page's by default: a card sets its own. */
+    className?: string
     /** The panel, which `DecisionsJump` scrolls into view and focuses. */
     ref?: Ref<HTMLElement>
 }) {
     const id = useId()
     const answered = decisionAnswers(decisions, picks).length
-    usePending(answered > 0)
-    const goes = answered === 1 ? '1 answer goes' : `${answered} answers go`
-    const told =
-        answered === 0 ? UNANSWERED : `${goes} with Approve, to the implement, or with Ask for changes, to the planner.`
     return (
         <section
             ref={ref}
@@ -53,21 +51,21 @@ export function PlanDecisions({
             // Focused by the foot's jump (`DecisionsJump`), so the keyboard goes on from here to the first decision; a
             // place to stand, not a control, so it draws no ring.
             tabIndex={-1}
-            className="flex flex-col gap-3 border-t px-6 py-4 outline-none"
+            className={cn('flex flex-col gap-3 border-t outline-none', className)}
             data-testid="plan-decisions"
         >
             <div className="flex max-w-3xl flex-col gap-1">
                 <h3 id={id} className="panel-label font-medium text-foreground">
                     Open decisions
                 </h3>
-                <p className="text-xs text-muted-foreground">{told}</p>
+                <p className="text-xs text-muted-foreground">{told ?? decisionsTold(answered, 'either')}</p>
             </div>
             {decisions.map((decision) => (
                 <DecisionChoice
                     key={decision.number}
                     decision={decision}
                     picked={picks.get(decision.number) ?? decision.chosen}
-                    onPick={(letter) => onPick(decision.number, letter)}
+                    onPick={(letter) => onPick(decision, letter)}
                 />
             ))}
         </section>
@@ -116,6 +114,25 @@ export function DecisionsJump({
                 </span>
             )}
         </button>
+    )
+}
+
+/**
+ * How many decisions a plan leaves open, beside what names it in a list's row: `2 decisions`, in the color of what
+ * waits on the operator, since they are its question to them. Nothing for a plan that asks none.
+ */
+export function DecisionsCount({ count }: { count: number }) {
+    if (count === 0) {
+        return null
+    }
+    return (
+        <span
+            className="shrink-0 font-mono text-xs whitespace-nowrap text-status-blocked"
+            title="Choices its ticket left open: the plan's card asks each, the planner's choice picked"
+            data-testid="decisions-count"
+        >
+            {count} {count === 1 ? 'decision' : 'decisions'}
+        </span>
     )
 }
 
