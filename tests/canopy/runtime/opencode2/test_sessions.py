@@ -60,5 +60,5 @@ def test_a_session_is_read_with_its_totals_and_each_models_cost(tmp_path: Path) 
     [found] = page.sessions
     assert (found.session_id, found.parent_id, found.directory, found.cost_usd) == ("ses_2", "ses_1", "/work/web", 0.75)
     assert (found.input, found.output, found.reasoning, found.cache_read, found.cache_write) == (1, 2, 3, 4, 5)
-    assert found.models == (ModelUse("anthropic/claude-opus#high", 1, 0.5), ModelUse("openai/gpt-5", 1, 0.25))
+    assert found.models == (ModelUse("anthropic/claude-opus@high", 1, 0.5), ModelUse("openai/gpt-5", 1, 0.25))
     assert page.cursor == (2000, "ses_2")

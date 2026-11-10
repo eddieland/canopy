@@ -13,8 +13,7 @@ import { cn } from '@/lib/utils'
  * id. For a run that records the model canopy `asked` for, it says `asked X` until then instead, why none served yet
  * on hover. Once read, a run the model asked for served none of reads `asked Y ≠ served X`, and one it
  * served alongside another marks only the other `≠`: in the field's own color, since a model other than the one asked
- * for is worth knowing, not waiting on the operator. `X@variant` asked and `X` or `X#variant` served are the same
- * (`sameModel`).
+ * for is worth knowing, not waiting on the operator. `X@variant` asked and `X` served are the same (`sameModel`).
  */
 export function ModelsField({ models, asked = null }: { models: ModelsServed; asked?: string | null }) {
     return (

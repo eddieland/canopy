@@ -49,9 +49,7 @@ plan's, names no model at all. A run that got none of what it asked for says so,
 `asked claude-opus-4-1 ≠ claude-sonnet-4-5`, as [its page](#a-runs-page) does; one that got it and switched partway
 leads with it and sets the `+1` apart. Neither is amber: a run that went elsewhere waits on nothing, it just bears
 knowing. Asking for `openai/gpt-5@medium`, the default effort, and being served `openai/gpt-5` is no surprise either,
-since the session names a variant only when it isn't the default. Nor is `claude-sonnet-5.5#high` served for
-`claude-sonnet-5.5@high` asked: OpenCode 2's sessions spell a variant with `#`, canopy's config with `@`, and canopy
-knows they mean the same thing. A ticket's Runs panel shows the same line, so a
+since the session names a variant only when it isn't the default. A ticket's Runs panel shows the same line, so a
 ticket with a model override reads straight down its runs: opus, opus, opus, and not a sonnet slipped in where you
 weren't looking.
 

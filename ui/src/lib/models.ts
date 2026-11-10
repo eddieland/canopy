@@ -88,21 +88,16 @@ export function withVariant(model: string, variant: string | null): string {
 }
 
 /**
- * Whether a session naming `served` ran on the model canopy `asked` for, as `provider/model[@variant]`: the same id,
+ * Whether a session naming `served` ran on the model canopy `asked` for, as `provider/model[@variant]`: the same id, or
  * `asked` at a variant and `served` the model alone, since a session names a variant only when it is not the model's
- * default, and a run whose variant the runtime no longer lists is refused before it starts, or the same variant as
- * OpenCode 2's sessions spell it, `provider/model#variant`.
+ * default, and a run whose variant the runtime no longer lists is refused before it starts.
  */
 export function sameModel(asked: string, served: string): boolean {
     if (served === asked) {
         return true
     }
     const at = asked.lastIndexOf('@')
-    if (at <= asked.indexOf('/')) {
-        return false
-    }
-    const model = asked.slice(0, at)
-    return served === model || served === `${model}#${asked.slice(at + 1)}`
+    return at > asked.indexOf('/') && asked.slice(0, at) === served
 }
 
 /**
