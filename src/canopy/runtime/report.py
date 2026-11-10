@@ -243,6 +243,59 @@ class SessionPage:
     error: str | None = None
 
 
+#: The parts of the text the runtime keeps of a session (ROADMAP M72): its title; what it was sent, a prompt, or a
+#: message the runtime or a skill put in; what its agent wrote, and its reasoning; what its tool calls and shell
+#: commands were given, and what they returned; and the summaries that took the place of what it said before.
+type TextPart = Literal["title", "sent", "wrote", "reasoning", "given", "returned", "summary"]
+#: Every part, in the order `canopy sessions --sizes` lists them.
+TEXT_PARTS: tuple[TextPart, ...] = ("title", "sent", "wrote", "reasoning", "given", "returned", "summary")
+#: How measuring the runtime's record ended: read; the runtime has kept no session yet; its record could not be read;
+#: or the runtime canopy runs keeps its sessions where this measurement does not read.
+type RecordRead = Literal["found", "missing", "failed", "unsupported"]
+
+
+@dataclass(frozen=True)
+class KeptSession:
+    """A session the runtime keeps, as `canopy sessions --sizes` counts it: whose it is, and where it ran."""
+
+    session_id: str
+    #: The session it ran for, as a subagent; None for a session of its own.
+    parent_id: str | None
+    #: Where it ran, printable, at most `MAX_DIRECTORY` characters.
+    directory: str
+    #: Whether the runtime archived it, so its own list leaves it out.
+    archived: bool
+
+
+@dataclass(frozen=True)
+class SessionRecord:
+    """Every session the runtime keeps, read whole, and what its record is: how large, and what it could not read."""
+
+    outcome: RecordRead
+    #: Every session canopy could read, in its databases' order; empty unless `found`.
+    sessions: Sequence[KeptSession] = ()
+    #: How many databases the record is, the operator's and each sandbox role's that could be read, and their size.
+    databases: int = 0
+    size_bytes: int = 0
+    #: How many sessions only the runtime's earlier version's tables hold, which no reader of the text reads.
+    earlier_only: int = 0
+    #: How many sessions canopy passed over as ones it cannot read.
+    skipped: int = 0
+    #: How many sandbox roles' databases canopy could not read, and passed over whole.
+    passed_over: int = 0
+    #: Why it `failed` or is `unsupported`, in canopy's words, never what the runtime wrote.
+    error: str | None = None
+
+
+@dataclass(frozen=True)
+class TextRow:
+    """One part of one session's text, as the runtime's record keeps it: a title, or one message's part."""
+
+    session_id: str
+    part: TextPart
+    text: str
+
+
 @dataclass(frozen=True)
 class ModelList:
     """The models the runtime lists to run an agent on, the list it looks a run's model up in, or why it listed none."""

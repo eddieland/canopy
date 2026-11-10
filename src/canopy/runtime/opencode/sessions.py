@@ -186,20 +186,21 @@ def sandbox_session(
     for path in sandbox_databases():
         try:
             with opened(path) as conn:
-                found = _query(conn, session_sql, session_id)
+                found = query(conn, session_sql, session_id)
                 if found:
-                    return found[0][0], _query(conn, messages_sql, session_id, MAX_MESSAGES)
+                    return found[0][0], query(conn, messages_sql, session_id, MAX_MESSAGES)
         except sqlite3.Error:
             continue
     return None
 
 
 @contextlib.contextmanager
-def opened(path: Path) -> Iterator[sqlite3.Connection]:
+def opened(path: Path, *, seconds: float = READ_SECONDS) -> Iterator[sqlite3.Connection]:
     """Open the database at `path` read-only, as one a run may have written to harm its reader.
 
     SQLite's defensive mode keeps a query from changing it, its schema's functions are not trusted, and a query that
-    runs past `READ_SECONDS` is stopped, raising `sqlite3.OperationalError`.
+    runs past `seconds` from the opening, `READ_SECONDS` unless a caller reads more, is stopped, raising
+    `sqlite3.OperationalError`.
 
     Yields:
         The connection, closed when the block ends.
@@ -207,12 +208,33 @@ def opened(path: Path) -> Iterator[sqlite3.Connection]:
     conn = sqlite3.connect(f"{path.as_uri()}?mode=ro", uri=True, timeout=TIMEOUT_SECONDS)
     try:
         conn.setconfig(sqlite3.SQLITE_DBCONFIG_DEFENSIVE, True)  # noqa: FBT003 # sqlite3's own positional flag
-        _query(conn, "PRAGMA trusted_schema = OFF")
-        deadline = time.monotonic() + READ_SECONDS
+        query(conn, "PRAGMA trusted_schema = OFF")
+        deadline = time.monotonic() + seconds
         conn.set_progress_handler(lambda: time.monotonic() > deadline, _STEPS)
         yield conn
     finally:
         conn.close()
+
+
+def query(conn: sqlite3.Connection, statement: str, *values: object) -> list[tuple[object, ...]]:
+    """Every row of `statement`, with `values` bound, from a database `opened` gave.
+
+    `statement` is one of this module's literal queries, or of a caller's in the runtime package: with `each`, the one
+    place canopy runs SQL on the runtime's database, which is not the journal (D125).
+
+    Returns:
+        The rows, as SQLite gave them.
+    """
+    return conn.execute(statement, values).fetchall()
+
+
+def each(conn: sqlite3.Connection, statement: str, *values: object) -> Iterator[tuple[object, ...]]:
+    """Each row of `statement`, as `query` reads them, one at a time, so a long result is never held whole.
+
+    Yields:
+        Each row, as SQLite gives it.
+    """
+    yield from conn.execute(statement, values)
 
 
 def read(
@@ -281,10 +303,10 @@ def _rows(
 ) -> list[_Row]:
     try:
         with opened(path) as conn:
-            rows = _query(conn, sessions_sql, after[0], after[0], after[1], limit)
+            rows = query(conn, sessions_sql, after[0], after[0], after[1], limit)
             sessions = [_session(row) for row in rows]
             ids = json.dumps([s.id for s in sessions if s is not None])
-            replies = _replies(_query(conn, models_sql, ids)) if any(sessions) else []
+            replies = _replies(query(conn, models_sql, ids)) if any(sessions) else []
     except sqlite3.Error as e:
         raise _UnreadableError(f"OpenCode's database could not be read: {str(e)[:200]}") from None
     found: list[_Row] = []
@@ -295,12 +317,6 @@ def _rows(
         spend = _spend(session, [r for r in replies if r.session_id == session.id], variant_mark) if session else None
         found.append(_Row(updated, row_id, spend))
     return found
-
-
-# Every row of `query`, one of this module's literal queries, or of a caller's in the runtime package, with `values`
-# bound: the one place it runs SQL on the runtime's database, which is not the journal (D125).
-def _query(conn: sqlite3.Connection, query: str, *values: object) -> list[tuple[object, ...]]:
-    return conn.execute(query, values).fetchall()
 
 
 # The row as a session, or None when canopy cannot read it.
