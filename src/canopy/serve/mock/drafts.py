@@ -201,6 +201,15 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str], sl
                 change_kept=True,
                 branch_kept=True,
                 counted=run_diffs.counted(DIFF),
+                commits=(
+                    run_changes.Commit(
+                        SHA,
+                        "ABC-099: cancel the timer on unmount, as the review asks",
+                        canopy_trailer=True,
+                        runtime_trailer=True,
+                    ),
+                ),
+                commit_count=1,
             ),
         ],
     )
