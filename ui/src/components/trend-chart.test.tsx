@@ -74,4 +74,26 @@ describe('TrendChart', () => {
         fireEvent.pointerLeave(plot)
         expect(screen.getByTestId('trend-value').textContent).toBe('2.41 now · peak 3.40')
     })
+
+    it('names the low for what runs out, and leaves the latest to the page where asked', () => {
+        const { rerender } = render(<TrendChart label="Load" trend={loads()} top={5} format={loadText} extreme="low" />)
+        expect(screen.getByTestId('trend-value').textContent).toBe('2.41 now · low 1.20')
+        rerender(<TrendChart label="Load" trend={loads()} top={5} format={loadText} extreme="low" latest={false} />)
+        expect(screen.getByTestId('trend-value').textContent).toBe('low 1.20')
+    })
+
+    it('says nothing over the plot when the low it would name is the latest the page already says', () => {
+        const falling = loads()
+        render(
+            <TrendChart
+                label="Free"
+                trend={{ ...falling, low: 2.41 }}
+                top={5}
+                format={loadText}
+                extreme="low"
+                latest={false}
+            />,
+        )
+        expect(screen.queryByTestId('trend-value')).toBeNull()
+    })
 })

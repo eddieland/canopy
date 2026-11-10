@@ -21,6 +21,10 @@ export interface TrendReference {
  * how long ago the chart starts and `now` under it. A pointer over the plot snaps a crosshair to the nearest reading,
  * and the value over the chart says that reading's value and time in the latest's place. The plot is for the eye: a
  * screen reader reads what it shows in words, the latest value, the peak, and the low.
+ *
+ * Over the plot it names the latest value and the extreme that matters, the peak, or the low for what runs out, such
+ * as free space. Where the page already says the latest value beside it, `latest` false leaves it out, and the low
+ * too while it is the latest.
  */
 export function TrendChart({
     label,
@@ -29,6 +33,8 @@ export function TrendChart({
     top,
     format,
     reference,
+    extreme = 'peak',
+    latest: showLatest = true,
 }: {
     /** What it measures, as a panel's label: `Load`. */
     label: string
@@ -42,13 +48,22 @@ export function TrendChart({
     format: (value: number) => string
     /** A line it is read against, drawn while it is under `top`. */
     reference?: TrendReference
+    /** Which extreme it names beside the latest value: the peak, or the low for what runs out. */
+    extreme?: 'peak' | 'low'
+    /** Whether it names the latest value over the plot; false where the page says it beside the chart. */
+    latest?: boolean
 }) {
     const clock = useClock()
     const [hovered, setHovered] = useState<TrendPoint | null>(null)
     const latest = trend.points.at(-1)
     const minutes = Math.round((trend.end - trend.start) / 60_000)
     const drawn = reference !== undefined && reference.value > 0 && reference.value < top ? reference : undefined
-    const shown = hovered ?? latest
+    const far = extreme === 'peak' ? trend.peak : trend.low
+    // What it names with no pointer over it, after the latest value where it names that.
+    const resting =
+        latest === undefined || (!showLatest && far === latest.value)
+            ? null
+            : `${showLatest ? ' now · ' : ''}${extreme} ${format(far)}`
     const name =
         `${label}${detail === undefined ? '' : ` (${detail})`} over the last ${minutes} minutes: ` +
         `${format(latest?.value ?? 0)} now, peak ${format(trend.peak)}, low ${format(trend.low)}`
@@ -66,14 +81,12 @@ export function TrendChart({
                     <span className="panel-label shrink-0">{label}</span>
                     {detail !== undefined && <span className="truncate text-xs text-muted-foreground">{detail}</span>}
                 </span>
-                {shown !== undefined && (
+                {hovered === null ? (
+                    <Resting latest={showLatest ? latest : undefined} format={format} resting={resting} />
+                ) : (
                     <span className="readout shrink-0 text-xs" data-testid="trend-value">
-                        {format(shown.value)}
-                        <span className="text-muted-foreground">
-                            {hovered === null
-                                ? ` now · peak ${format(trend.peak)}`
-                                : ` at ${clockTime(iso(hovered.at), clock)}`}
-                        </span>
+                        {format(hovered.value)}
+                        <span className="text-muted-foreground"> at {clockTime(iso(hovered.at), clock)}</span>
                     </span>
                 )}
             </figcaption>
@@ -90,15 +103,6 @@ export function TrendChart({
             >
                 {/* The baseline, as the disks' bars sit on their track. */}
                 <div aria-hidden className="absolute inset-x-0 bottom-0 border-t" />
-                {drawn !== undefined && (
-                    <div
-                        aria-hidden
-                        className="absolute inset-x-0 border-t border-muted-foreground/40"
-                        style={{ bottom: pct(upTo(drawn.value, top)) }}
-                    >
-                        <span className="absolute right-0 bottom-0.5 text-xs text-muted-foreground">{drawn.label}</span>
-                    </div>
-                )}
                 <svg
                     aria-hidden
                     className="absolute inset-0 size-full overflow-visible"
@@ -119,6 +123,16 @@ export function TrendChart({
                         </g>
                     ))}
                 </svg>
+                {/* After the line, so its name sits over the area's fill rather than under it. */}
+                {drawn !== undefined && (
+                    <div
+                        aria-hidden
+                        className="absolute inset-x-0 border-t border-muted-foreground/40"
+                        style={{ bottom: pct(upTo(drawn.value, top)) }}
+                    >
+                        <span className="absolute right-0 bottom-0.5 text-xs text-muted-foreground">{drawn.label}</span>
+                    </div>
+                )}
                 {hovered !== null && (
                     <>
                         <div
@@ -142,6 +156,30 @@ export function TrendChart({
                 <span>now</span>
             </div>
         </figure>
+    )
+}
+
+// What the chart names over its plot with no pointer over it: the latest value, where it names that, then `resting`.
+function Resting({
+    latest,
+    format,
+    resting,
+}: {
+    latest: TrendPoint | undefined
+    format: (value: number) => string
+    resting: string | null
+}) {
+    if (resting === null) {
+        return null
+    }
+    return (
+        <span
+            className={cn('readout shrink-0 text-xs', latest === undefined && 'text-muted-foreground')}
+            data-testid="trend-value"
+        >
+            {latest === undefined ? null : format(latest.value)}
+            <span className="text-muted-foreground">{resting}</span>
+        </span>
     )
 }
 
