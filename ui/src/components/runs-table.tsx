@@ -451,7 +451,8 @@ function namesModel(run: Run): boolean {
  * The model that served a run, as its list names it (`modelNames`), and `+1` for each other it switched to, every one
  * whole in its tip with its cost. A run the model canopy asked for served none of says `asked Y ≠ X`, asked first;
  * one it served alongside another marks only the count of the others, `+1`, in the foreground, the rest muted: worth
- * knowing, not waiting on the operator, so no status color (`sameModel` takes `X@variant` asked and `X` served alike).
+ * knowing, not waiting on the operator, so no status color (`sameModel` takes `X@variant` asked and `X` or
+ * `X#variant` served alike).
  * Until its session is read, the model canopy asked for, else `model unread`, why in its tip, and `model none` once a
  * read named none, the word in muted sans as no id; a run with no session to read names no model.
  */
