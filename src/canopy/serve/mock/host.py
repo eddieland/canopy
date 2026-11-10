@@ -40,6 +40,9 @@ _CORES = 12
 _UP = timedelta(days=9, hours=4)
 #: The loop's process id, which its process and the processes' list share.
 _LOOP = 48213
+#: The pids of the running runs' processes in `_PROCESSES`, by run id: the run's own, then its agent's, as the mock's
+#: journal records them, so the page ties each to its run.
+RUN_PIDS: dict[int, tuple[int, int]] = {41: (50110, 50128), 43: (50140, 50152)}
 #: The mock's processes, parent first: pid, parent, name, user, state, processors kept busy, memory in MiB, threads,
 #: minutes since it started, and command line. Runs 41 and 43 are running in its journal; 41's agent is compiling.
 _PROCESSES: tuple[tuple[int, int, str, str, ProcessState, float, int, int, int, str], ...] = (

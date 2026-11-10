@@ -145,7 +145,9 @@ function Resources({ host }: { host: HostResources }) {
     const linux = onLinux(host)
     const disks = <Disks host={host} />
     // Off Linux nothing says what each process uses, which the line under the counters says once for all of it.
-    const processes = linux ? <ProcessTree loop={host.process.pid} cores={host.cpu.cores} /> : null
+    const processes = linux ? (
+        <ProcessTree loop={host.process.pid} cores={host.cpu.cores} memory={host.memory.total} />
+    ) : null
     const diskFirst = found[0]?.what === 'disk'
     return (
         <>

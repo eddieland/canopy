@@ -181,15 +181,26 @@ What comes next depends on what's wrong. A disk under pressure puts the disks ri
 what you came for; otherwise the processes come first.
 
 The processes are a tree: each under the process that started it, the busiest first, so a compiler three levels under
-a run's agent shows up under that agent rather than as a stray `rustc`. Each row has the process's name, its pid, its
-command line, the account it runs as, the processors it kept busy, and the memory it holds. CPU reads as `top` does, a
-share of one core: 100% is one core the whole time, so a parallel build can show 800%. It's measured since the
-server's last read of the processes, ten seconds while the page is open; opening the page takes a second, since
-there's nothing to measure against yet. A process the load counts but isn't computing says so: `running` is on a core
-or waiting for one, and `waiting on a disk` is stuck on I/O, which raises the load while the processors sit idle. At
-first only the busy ones show, using 1% of a core or more, with every parent above them and the loop's own process;
-**All** shows every one. Fold a parent and its row adds up everything under it, the quick way to see what one run is
-costing you. The kernel's own threads are left out.
+a run's agent shows up under that agent rather than as a stray `rustc`. It's the loop's tree: the loop at the top, the
+login it was started from named in one muted line over it, and under it each run's own process, tagged with its run
+and what it works on (`run:41 ABC-101`, `review:4 acme/web#88`, a chore's or a task's run), which opens the run. The
+journal records the pid of every run's process, so this is canopy's own word on which process is whose, not a guess
+from command lines. A run's row adds up everything under it, the agent, the build, every compiler, so you read what
+each run is costing you straight off it, and open or fold it for the detail. Whatever else on the machine is busy
+sits under **elsewhere**, where a stack of idle parents on the way to it is one muted line of names. If a compiler
+you don't recognise is eating the box, this is where you find out it isn't yours.
+
+Each row has the process's name, its pid, its command line, the account it runs as, the processors it kept busy, and
+the memory it holds, each over a thin bar: the processors against one core, the memory against all there is, so the
+hot rows stand out before you read a digit. CPU reads as `top` does, a share of one core: 100% is one core the whole
+time, so a parallel build can show 800%. Click the **cpu** or **memory** head to order each level by it. It's measured
+since the server's last read of the processes, ten seconds while the page is open; opening the page takes a second,
+since there's nothing to measure against yet. A process the load counts but isn't computing says so: `running` is on a
+core or waiting for one, and `waiting on a disk` is stuck on I/O, which raises the load while the processors sit idle.
+Only the busy ones show, using 1% of a core or more, with the parents above them, the loop, and every run's process
+however idle; **All** shows every one, in one tree. Fold a parent and its row adds up everything under it. The page
+remembers **All**, the order, and what you folded in this browser, so it's as you left it when you come back. The
+kernel's own threads are left out.
 
 Each disk canopy writes to has a row: the workspace's, where agents check out and build; the journal's, with the runs'
 logs; and the temporary directory, which builds fill when nobody's looking. Two on one filesystem share a row, so their

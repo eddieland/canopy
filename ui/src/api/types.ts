@@ -151,6 +151,8 @@ export type HostProcesses = Schemas['HostProcesses']
 export type HostProcess = Schemas['HostProcess']
 /** What a process was doing when read; the load average counts the `running` and `disk` ones. */
 export type ProcessState = Schemas['ProcessState']
+/** The running run a process is the process of, by the pid the journal recorded: what the run works on. */
+export type ProcessWork = Schemas['ProcessWork']
 /** What the last day and the last 30 days cost, read together, so a month never shows less than its day. */
 export type Spend = Schemas['Spend']
 /** What the agent runtime reported spending in the last `hours` hours (DESIGN §13). */
