@@ -348,7 +348,7 @@ export function ReviewRequestStatus({
             {request !== null && request.notes !== null && (
                 <div className="flex flex-col gap-1" data-testid="review-request-notes">
                     <span className="panel-label">Your notes for the reviewer</span>
-                    <p className="text-sm break-words whitespace-pre-wrap">{request.notes}</p>
+                    <p className="text-sm wrap-break-word whitespace-pre-wrap">{request.notes}</p>
                 </div>
             )}
             <Notice error={ask.error ?? stop.error}>{said}</Notice>

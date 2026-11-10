@@ -133,7 +133,7 @@ export function PageHeader({
                         is, so it never wraps differently (DESIGN.md, Type). */}
                     <h1
                         className={cn(
-                            'min-w-0 text-xl font-semibold break-words title-drop',
+                            'min-w-0 text-xl font-semibold wrap-break-word title-drop',
                             atSection ? 'section-title' : 'tracking-tight',
                         )}
                         title={help}

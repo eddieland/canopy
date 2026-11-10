@@ -177,7 +177,7 @@ export function TranscriptPanel({
                             <Copyable
                                 text={transcript.session_id}
                                 label="session id"
-                                className="readout hidden text-xs text-muted-foreground @lg:inline-flex"
+                                className="hidden readout text-xs text-muted-foreground @lg:inline-flex"
                             >
                                 <span title="open it with the runtime's tools too: opencode export <id>">
                                     session {transcript.session_id}
@@ -417,7 +417,7 @@ function Find({
                 clearLabel="Clear the transcript's search"
                 end={
                     lines !== null && (
-                        <span className="readout shrink-0 text-xs text-muted-foreground" data-testid="transcript-found">
+                        <span className="shrink-0 readout text-xs text-muted-foreground" data-testid="transcript-found">
                             {lines} {lines === 1 ? 'line' : 'lines'}, {rows} {rows === 1 ? 'row' : 'rows'}
                         </span>
                     )
@@ -458,7 +458,7 @@ function Entry({
                     {entry.reasoning ? (
                         <Thinking text={entry.text} open={open} words={words} />
                     ) : (
-                        <p className="min-w-0 flex-1 text-sm break-words whitespace-pre-wrap">
+                        <p className="min-w-0 flex-1 text-sm wrap-break-word whitespace-pre-wrap">
                             <MarkedText text={entry.text} words={words} />
                         </p>
                     )}
@@ -480,7 +480,7 @@ function Entry({
                     <span className="font-mono text-xs text-status-failed">
                         <MarkedText text={entry.name} words={words} />
                     </span>
-                    <p className="min-w-0 flex-1 text-sm break-words whitespace-pre-wrap">
+                    <p className="min-w-0 flex-1 text-sm wrap-break-word whitespace-pre-wrap">
                         <MarkedText text={entry.message} words={words} />
                     </p>
                 </Row>
@@ -503,8 +503,8 @@ function Thinking({ text, open, words }: { text: string; open: boolean; words: r
     const whole = toggled ?? (open || matches(said, words) > matches(shown, words))
     return (
         <div className="flex min-w-0 flex-1 flex-col gap-1.5 text-muted-foreground italic">
-            <p className="text-sm break-words whitespace-pre-wrap">
-                <span className="panel-label mr-2 not-italic">thinking</span>
+            <p className="text-sm wrap-break-word whitespace-pre-wrap">
+                <span className="mr-2 panel-label not-italic">thinking</span>
                 <MarkedText text={whole ? said : shown} words={words} />
             </p>
             {fold.hidden > 0 && <MoreLines hidden={fold.hidden} open={whole} onToggle={() => setToggled(!whole)} />}
@@ -556,7 +556,7 @@ function When({ at, start }: { at: string | null; start: string | null }) {
     const clock = useClock()
     return (
         <span
-            className="readout w-14 shrink-0 text-xs text-muted-foreground"
+            className="w-14 shrink-0 readout text-xs text-muted-foreground"
             title={at === null ? undefined : localTime(at, clock)}
         >
             {elapsed(at, start)}
@@ -629,7 +629,7 @@ function Tool({
                         <Chip tone="failed" className="min-w-0 shrink" word={`refused:${guard ?? ''}`} />
                     )}
                     {entry.cut && <Chip>cut</Chip>}
-                    <span className="readout w-14 shrink-0 text-right text-xs text-muted-foreground">
+                    <span className="w-14 shrink-0 text-right readout text-xs text-muted-foreground">
                         {entry.duration_ms === null ? '' : duration(entry.duration_ms)}
                     </span>
                     <ChevronRight
@@ -683,7 +683,7 @@ function ModelCall({
             <CallModel model={model} />
             {/* Every call but the last ends in tool calls: only another reason says something. */}
             {entry.reason && entry.reason !== 'tool-calls' && <Chip word={entry.reason} />}
-            <span className="readout ml-auto">
+            <span className="ml-auto readout">
                 {entry.split === null
                     ? ''
                     : `${tokenCount(sentTokens(entry.split))} in · ${tokenCount(wroteTokens(entry.split))} out`}
@@ -792,7 +792,7 @@ function CallRow({
                     {end === null && <Chip word="unfinished" />}
                     {end?.reason && end.reason !== 'tool-calls' && <Chip word={end.reason} />}
                     <span
-                        className="readout hidden shrink-0 text-xs text-muted-foreground @lg:inline"
+                        className="hidden shrink-0 readout text-xs text-muted-foreground @lg:inline"
                         title={step === null ? undefined : `in: ${signed(step)} on call ${call.n - 1}`}
                     >
                         {split === null
@@ -973,7 +973,7 @@ function Decisions({ decisions, words }: { decisions: readonly CallDecision[]; w
                         <span className="shrink-0 font-mono text-muted-foreground">
                             <MarkedText text={d.action} words={words} />
                         </span>
-                        <span className="min-w-0 flex-1 break-words">
+                        <span className="min-w-0 flex-1 wrap-break-word">
                             <MarkedText text={d.rationale} words={words} />
                         </span>
                     </li>
@@ -1010,7 +1010,7 @@ function Settings({ settings, words }: { settings: readonly CallSetting[]; words
                             </span>
                         ))}
                         {s.title !== null && (
-                            <span className="min-w-0 flex-1 break-words">
+                            <span className="min-w-0 flex-1 wrap-break-word">
                                 <MarkedText text={s.title} words={words} />
                             </span>
                         )}
@@ -1055,7 +1055,7 @@ function Pre({
         <pre
             className={cn(
                 'max-h-96 overflow-auto rounded-sm border bg-background p-2',
-                'font-mono text-xs break-words whitespace-pre-wrap',
+                'font-mono text-xs wrap-break-word whitespace-pre-wrap',
                 failed && 'border-status-failed/40',
             )}
         >

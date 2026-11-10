@@ -93,7 +93,7 @@ function Tick({ detail, transcript }: { detail: TickDetail; transcript: Transcri
             >
                 {tickDescription(tick, decisions.length)}
             </PageHeader>
-            <div className="stagger flex flex-col gap-6">
+            <div className="flex stagger flex-col gap-6">
                 {/* Its facts in the order a run's and a chore run's keep (ui/DESIGN.md, the detail skeleton): its
                     state is the header's, its session the transcript's, its output's path the Output panel's. */}
                 <Panel>

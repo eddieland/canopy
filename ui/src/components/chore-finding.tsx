@@ -48,14 +48,14 @@ function FindingRow({
              */}
             <span className="row-span-2 font-mono text-xs break-all text-muted-foreground">{finding.id}</span>
             {/* Whole, never cut: it is up to 200 characters, and the finding's name. */}
-            <span className="text-sm break-words">{finding.title}</span>
+            <span className="text-sm wrap-break-word">{finding.title}</span>
             <span className="flex items-center justify-end gap-3">
                 {open?.dismissed && <Chip>dismissed</Chip>}
                 {open && <Age at={open.since} />}
                 {action}
             </span>
             {finding.detail && (
-                <RowLine from="title" className="text-sm break-words whitespace-pre-wrap text-muted-foreground">
+                <RowLine from="title" className="text-sm wrap-break-word whitespace-pre-wrap text-muted-foreground">
                     <LinkedText text={finding.detail} pullRequests />
                 </RowLine>
             )}
@@ -79,9 +79,9 @@ function FindingRow({
 export function ChoreFindingText({ finding }: { finding: ChoreFinding }) {
     return (
         <div className="flex flex-col gap-1.5" data-testid="finding-text">
-            <p className="text-sm font-semibold break-words">{finding.title}</p>
+            <p className="text-sm font-semibold wrap-break-word">{finding.title}</p>
             {finding.detail && (
-                <p className="text-sm break-words whitespace-pre-wrap text-muted-foreground">
+                <p className="text-sm wrap-break-word whitespace-pre-wrap text-muted-foreground">
                     <LinkedText text={finding.detail} pullRequests />
                 </p>
             )}

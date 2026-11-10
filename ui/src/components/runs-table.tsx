@@ -283,7 +283,7 @@ function ReviewFound({ review }: { review: ReviewSummary }) {
     return (
         <>
             <Tip fact={review.sha} mono>
-                <span className="readout shrink-0 text-xs text-muted-foreground">at {shortSha(review.sha)}</span>
+                <span className="shrink-0 readout text-xs text-muted-foreground">at {shortSha(review.sha)}</span>
             </Tip>
             <Clipped text={verdictText(review)} className={cn('font-mono text-xs', verdictTone(review))} />
         </>

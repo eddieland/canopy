@@ -120,7 +120,7 @@ function Loaded({ id }: { id: number }) {
                     <ReviewDraftState draft={draft} />
                 </PageHeader>
             )}
-            <div className="stagger flex flex-col gap-6">
+            <div className="flex stagger flex-col gap-6">
                 {data.card !== null && (
                     <ProgressPanel
                         card={data.card}

@@ -70,6 +70,7 @@
     "oxc-transform-react": "0.152.0",
     "oxfmt": "0.75.0",
     "oxlint": "1.90.0",
+    "oxlint-tailwindcss": "1.17.1",
     "oxlint-tsgolint": "7.0.2005",
     "tailwindcss": "4.3.3",
     "typescript": "6.0.3",

@@ -69,7 +69,7 @@ export function EndedOnField({
                 )}
             >
                 {entry.at !== null && (
-                    <span className="readout shrink-0" title={localTime(entry.at, clock)}>
+                    <span className="shrink-0 readout" title={localTime(entry.at, clock)}>
                         {elapsed(entry.at, startOf(transcript.entries))}
                     </span>
                 )}

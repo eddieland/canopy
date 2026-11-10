@@ -211,14 +211,14 @@ export function Nav({ compact = false }: { compact?: boolean }) {
             >
                 <span
                     className={cn(
-                        'absolute inset-0 rounded-sm opacity-[var(--nav-block,0)]',
+                        'absolute inset-0 rounded-sm opacity-(--nav-block,0)',
                         SECTION_FILL[tone],
                         'motion-safe:transition-colors motion-safe:duration-300',
                     )}
                 />
                 <span
                     className={cn(
-                        'absolute inset-y-0 left-0 w-0.75 opacity-[var(--nav-hairline,1)]',
+                        'absolute inset-y-0 left-0 w-0.75 opacity-(--nav-hairline,1)',
                         SECTION_FILL[tone],
                         'motion-safe:transition-colors motion-safe:duration-300',
                     )}
@@ -245,7 +245,7 @@ export function Nav({ compact = false }: { compact?: boolean }) {
                             <Icon
                                 className={cn(
                                     'size-4 transition-transform group-hover:-rotate-6 motion-reduce:transition-none',
-                                    'group-data-[status=active]:[filter:var(--nav-on-glow,none)]',
+                                    'group-data-[status=active]:filter-(--nav-on-glow,none)',
                                     SECTION_TEXT[to],
                                     'group-data-[status=active]:text-current',
                                 )}

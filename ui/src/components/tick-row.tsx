@@ -29,7 +29,7 @@ export function TickRow({ tick }: { tick: Tick }) {
             </span>
             <TickLink id={tick.id} />
             <span className="flex">{tick.dry_run && <Chip>dry run</Chip>}</span>
-            <span className="readout text-right text-xs text-muted-foreground" data-testid="tick-decisions">
+            <span className="text-right readout text-xs text-muted-foreground" data-testid="tick-decisions">
                 {tick.decisions === 1 ? '1 decision' : `${tick.decisions} decisions`}
             </span>
             <Cost usd={tick.cost_usd} className="text-right text-xs text-muted-foreground" />
@@ -44,7 +44,7 @@ export function TickRow({ tick }: { tick: Tick }) {
 function TokensCell({ n, counts }: { n: number | null; counts: string }) {
     return (
         <span
-            className="readout text-right text-xs text-muted-foreground"
+            className="text-right readout text-xs text-muted-foreground"
             title={n === null ? 'none reported' : RUN_TOKENS_TITLE}
             data-testid={`tick-${counts}`}
         >

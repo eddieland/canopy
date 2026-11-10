@@ -611,7 +611,7 @@ export const SCENES: Record<SeasonId, Scene> = {
                         </g>
                     </g>
                 </svg>
-                <svg viewBox="0 0 24 12" className="animate-buddy-drift absolute top-3 left-1 h-4 w-8">
+                <svg viewBox="0 0 24 12" className="absolute top-3 left-1 h-4 w-8 animate-buddy-drift">
                     <g className="animate-buddy-flap fill-buddy-hat">
                         <path d={BAT_WING} />
                         <path d={BAT_WING} transform="translate(24 0) scale(-1 1)" />

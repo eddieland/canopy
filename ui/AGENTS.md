@@ -31,8 +31,9 @@ memory, and do not upgrade in passing.
 - jsdiff (`diff`) for a plan's word diff alone: only `src/lib/plan-diff.ts` imports it.
 - cmdk for the repository, model, and author pickers' and the jump palette's searchable lists, which Radix has no
   primitive for: only `src/components/ui/command.tsx` imports it, and the lint refuses it elsewhere.
-- oxlint (with the React Compiler's rules, eslint-plugin-jsdoc's, eslint-plugin-playwright's on `e2e/`, and
-  type-aware rules through oxlint-tsgolint) and oxfmt, Vitest, Playwright.
+- oxlint (with the React Compiler's rules, eslint-plugin-jsdoc's, eslint-plugin-playwright's on `e2e/`,
+  oxlint-tailwindcss's on Tailwind classes, and type-aware rules through oxlint-tsgolint) and oxfmt, Vitest,
+  Playwright.
 
 Add a library as the repository's `AGENTS.md` says, when it clearly beats the code we would write instead, and pin it
 exactly like the rest. One that only a few files need is held to them, as Tiptap (D120) and Shiki (D121) are.
@@ -122,6 +123,11 @@ dozen. When every screenshot differs, check the browser before the change.
   code as an image (D131), which runs no script and fetches nothing.
 - **Formatting:** oxfmt, 120 columns, 4-space indent (the repository's `.editorconfig`). A formatter does not split a
   long string: split class lists across `cn()` or `cva()` arguments. The lint fails on a line over 120.
+- **Classes are sorted and checked.** oxfmt sorts Tailwind classes in Tailwind's order, ours among them
+  (`sortTailwindcss` in `.oxfmtrc.json`), and the lint refuses a class Tailwind does not know, two that set the same
+  property, a class name built at run time, and a deprecated or non-canonical spelling (oxlint-tailwindcss). `cn()`
+  lets a later class override one of its kind; a theme size or shadow off Tailwind's scale is named in
+  `src/lib/utils.ts`, or it reads as a color.
 - **Imports are sorted, not arranged.** oxfmt sorts them by path in groups (`sortImports` in `.oxfmtrc.json`):
   node's, packages, the app's own (`@/`), relative, then stylesheets. `npm run fmt` first removes unused imports
   (`.oxlintrc.unused-imports.json`), so run it rather than tidying them by hand.
