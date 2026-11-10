@@ -106,7 +106,7 @@ export function TicketPlan({ ticketKey, plans }: { ticketKey: string; plans: Tic
             )}
             {newest !== null && newest.persona !== null && (
                 // As wide as the plan above it, as the earlier plans are.
-                <PersonaPanel persona={newest.persona} className="max-w-[51rem]" />
+                <PersonaPanel persona={newest.persona} className="max-w-plan" />
             )}
             {earlier.length > 0 && <EarlierPlans ticketKey={ticketKey} plans={earlier} />}
             <ConfirmLeave
@@ -546,7 +546,7 @@ function ConfirmSkip({ onConfirm, onKeep }: { onConfirm: () => void; onKeep: () 
 function EarlierPlans({ ticketKey, plans }: { ticketKey: string; plans: PlanSummary[] }) {
     return (
         // As wide as the plan above it, not the plan and its comments: its plans read in the plan's measure.
-        <Panel data-testid="earlier-plans" className="max-w-[51rem]">
+        <Panel data-testid="earlier-plans" className="max-w-plan">
             <PanelHeader label="Earlier plans">
                 <span className="readout text-xs text-muted-foreground">{plans.length}</span>
             </PanelHeader>

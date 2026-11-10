@@ -1226,4 +1226,10 @@
     /* Inline code's size and chip, as `text-code` and `bg-code-chip` (`--code-size`, `--code-chip`, above). */
     --text-code: var(--code-size);
     --color-code-chip: var(--code-chip);
+
+    /* Widths written in more than one place, as `max-w-*`: the shell's content (ui/DESIGN.md, "The shell"), and a
+     * plan's panel, its text's measure (`.plan-doc`'s max-w-3xl) and the panel's padding, which what sits beside or
+     * under a plan keeps. */
+    --container-shell: 112rem;
+    --container-plan: 51rem;
 }
