@@ -68,9 +68,9 @@ replaced, keeps its text until the operator forgets it.
   would leave a run's citations naming words it never read. An edit may give a lesson a new key. One that changes only
   the key is the same words to the same runs, so it keeps the review date, any report, the reads and citations, and a
   run's citation of the old version reaches it. An old key is free for another lesson to take.
-- At `use`, lessons are in every worker prompt that carries the standing instructions (§8),
-  framed as the operator's words that the prompt's obligations come before; capped, pinned lessons kept first, and a
-  lesson naming a repository only in runs that lease it.
+- At `use`, lessons are in the prompts of `implement`, `resume`, `plan`, and `feedback-plan` runs (§8), framed as the
+  operator's words that the prompt's obligations come before; capped, pinned lessons kept first, and a lesson naming a
+  repository only in runs that lease it.
 - A lesson unused for a while comes up for review: the operator renews it, pins it, graduates it into a repository's
   AGENTS.md or a skill through a PR they merge, or forgets it. A pinned lesson never comes up for review, and keeps its
   pin through each new version under its key until the operator unpins it; a run's report that it is wrong still

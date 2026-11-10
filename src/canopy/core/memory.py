@@ -35,9 +35,9 @@ if TYPE_CHECKING:
 NOTES_TIER = "ticket notes"
 LESSONS_TIER = "lessons"
 # The kinds whose prompts carry a ticket's notes and the memory contract; a review and a chore get no memory, and a
-# plan hears lessons only (DESIGN §28).
+# plan and a feedback plan hear lessons only (DESIGN §28).
 NOTE_KINDS = frozenset({RunKind.IMPLEMENT, RunKind.RESUME})
-LESSON_KINDS = frozenset({*NOTE_KINDS, RunKind.PLAN})
+LESSON_KINDS = frozenset({*NOTE_KINDS, RunKind.PLAN, RunKind.FEEDBACK_PLAN})
 # Bounds on what a run may write (DESIGN §28, Writing).
 MAX_NOTE_CHARS = 400
 MAX_NOTES_PER_RUN = 5
@@ -177,8 +177,8 @@ def modes_for(memory: Memory, kind: str) -> Modes:
     """Return the modes a `kind` run is rendered under now: each tier's, where it reaches the kind (DESIGN §28).
 
     Returns:
-        Ticket notes' mode for `implement` and `resume`, and the proposals' for those and `plan`; `off` for
-        every other kind and tier.
+        Ticket notes' mode for `implement` and `resume`, and the proposals' for those, `plan`, and
+        `feedback-plan`; `off` for every other kind and tier.
     """
     return Modes(
         ticket_notes=memory.ticket_notes if kind in NOTE_KINDS else MemoryMode.OFF,
