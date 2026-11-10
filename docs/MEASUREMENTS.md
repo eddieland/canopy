@@ -1046,3 +1046,442 @@ Cited by M66.
   hand it on: with the input dropped, prek's `pre-push` ran nothing and said nothing.
 - A marker cleared after the push it lets through holds every other push; once per stretch needs a window.
 - canopy's commit marks are still added under the prototype's hooks.
+
+## 2026-11-10: M72 stage 0, the runtime's record and what indexing it costs
+
+How much text the runtime's record holds, and what an index of each of M72's three cuts would cost to build, keep, and
+search, against the thresholds the operator set before the numbers were taken. Cited by M72.
+
+### Setup
+
+- canopy 0.0.1.dev1677+c6b8f773 and OpenCode v2.2.5, on the operator's own machine and record. The workspace has three
+  repositories: the monorepo, a cluster-config repository, and an infrastructure repository.
+- `canopy sessions --sizes --json`, run three times, once per word: a word of middling frequency, a common word, and a
+  rare word. Each run took about 6 minutes of wall time. The command reads OpenCode 2's record alone, not the tables
+  OpenCode 1 left.
+- The runtime's database holds 46,119,208,600 bytes of records.
+- Thresholds, set by the operator before the measurement, the draft's both: a search takes at most 0.25 s, and an index
+  is no larger than a quarter of the runtime's own database.
+
+### Sessions and their text
+
+canopy's sessions by root: overseer 2,378, workers 1,336, plans 307, chores 169, reviews 462, and the state directory
+29, so 4,681 in all. Outside canopy there are about 2,760, subagents' included, across the operator's other workspaces,
+a skills folder, and other directories.
+
+| part | canopy | outside |
+|---|---|---|
+| title | 216,420 | 192,756 |
+| sent | 148,063,047 | 13,491,453 |
+| wrote | 8,837,549 | 30,602,298 |
+| reasoning | 19,103,029 | 2,680,659 |
+| given | 21,087,100 | 47,676,509 |
+| returned | 346,942,705 | 400,475,156 |
+| summary | 7,537 | 2,171,998 |
+| all | 544,257,387 | 497,290,829 |
+
+Characters of text. What tool calls returned is 64% of canopy's text and 81% of the rest; what canopy's sessions were
+sent, their prompts, is 27% of theirs.
+
+### The cuts
+
+Each trial index was built twice, with word positions and without. "Search s" is the slowest search across the three
+words; "scan s" a plain scan of the record for the same words, with no index. Index bytes and characters are in
+millions.
+
+| cut | parts | rows | chars | index bytes (positions / none) | build s (positions / none) | search s | sessions found (mid / common / rare) | scan s |
+|---|---|---|---|---|---|---|---|---|
+| said | title, sent, wrote, summary | 78.5k | 55.5M | 26.2M / 10.5M | 2.8–2.9 / 1.9 | ≤0.0024 | 357 / 1747 / 287 | 72–77 |
+| did | said + given | 287k | 124.3M | 51.9–52.3M / 19.4–20.2M | 7.2–10.4 / 4.9–6.7 | ≤0.0106 | 462 / 2181 / 450 | 69–70 |
+| read | all parts | 516k | 894M | 275.7–276.2M / 62.6–63.2M | 37.8–46.8 / 22.3–25.5 | ≤0.0272 | 1898 / 4672 / 1445 | 68–70 |
+
+Each cut's characters are the parts' sums above less what canopy's own sessions were sent, so no cut holds canopy's
+prompts (arithmetic on the two tables).
+
+### Against the thresholds
+
+- Search: the slowest, `read`'s, took 0.0272 s, under 0.25 s. Every cut passes.
+- Size: the largest index, `read`'s with positions, is 276.2M bytes, 0.6% of the database; a quarter is about 11,530M.
+  Every cut passes.
+- A plain scan took 68 to 77 s, far past 0.25 s, so no cut can be searched in place without an index.
+- So every cut passes both, the widest, `read`, included, and `read` is the cut stage 0's rule gives stage 2 (the widest
+  that passes both).
+
+Not settled here: the operator's call on the cut, which M72's Accept asks for on its `Status:` line before stage 2; and
+how many sessions OpenCode 1's tables hold, since the command does not read them.
+
+## 2026-11-10: M70 stage 0, what runs do before the file they work on
+
+What canopy's runs do before their first read of the file their work is about, per role and repository, against M70's
+gate. Cited by M70.
+
+### Setup
+
+- canopy 0.0.1.dev1677+c6b8f773 and OpenCode v2.2.5, on the operator's workspace of three repositories: the monorepo, a
+  cluster-config repository, and an infrastructure repository.
+- `canopy orientation --json`, over 14 days, 2026-10-28T04:00Z to 2026-11-11T05:00Z.
+- The gate, set by the operator before the measurement, the draft's: stage 1 starts only if the median worker run in
+  the monorepo spends more than a quarter of its tool calls, or more than three searches, before its first read of the
+  file it edits.
+
+### By role and repository
+
+Calls, before, and searches are medians; before and searches count what a run did before its first read of the file it
+edits, and share is the median share of a run's calls that went before it. A run is anchored when that read was found.
+
+| role | repo | runs | anchored | calls | before | searches | share |
+|---|---|---|---|---|---|---|---|
+| implement | cluster-config | 18 | 5 | 13 | 4 | 0 | 0.30 |
+| implement | cluster-config + monorepo | 3 | 0 | 34 | – | – | – |
+| implement | monorepo | 126 | 36 | 26.5 | 6.5 | 0 | 0.244 |
+| implement | infrastructure | 9 | 2 | 11 | 2.5 | 0 | 0.291 |
+| resume | cluster-config | 6 | 0 | 10 | – | – | – |
+| resume | monorepo | 435 | 29 | 14 | 9 | 0 | 0.50 |
+| resume | infrastructure | 4 | 0 | 5.5 | – | – | – |
+| plan | cluster-config | 17 | 15 | 16 | 3 | 0 | 0.171 |
+| plan | cluster-config + monorepo | 4 | 4 | 19 | 1 | 0 | 0.054 |
+| plan | monorepo | 145 | 121 | 15 | 2 | 1 | 0.154 |
+| plan | infrastructure | 11 | 7 | 7 | 3 | 1 | 0.222 |
+| review | cluster-config | 17 | 16 | 49 | 18.5 | 2 | 0.396 |
+| review | monorepo | 226 | 215 | 54 | 16 | 1 | 0.288 |
+| review | infrastructure | 7 | 6 | 43 | 32 | 1.5 | 0.615 |
+
+### The gate
+
+On worker runs, `passed` meaning the gate is met:
+
+| repo | anchored | share | searches | passed |
+|---|---|---|---|---|
+| monorepo | 65 | 0.429 | 0 | true |
+| cluster-config | 5 | 0.30 | 0 | true |
+| infrastructure | 2 | 0.291 | 0 | true |
+| cluster-config + monorepo | 0 | – | – | false |
+
+- The monorepo's gate is met: its worker runs' median share is 0.429, above a quarter. Their median searches are 0, so
+  the share alone meets it.
+- 65 of the monorepo's 561 worker runs were anchored, 36 of 126 `implement` and 29 of 435 `resume`. The `implement`
+  runs alone have a median share of 0.244, just under a quarter; the `resume` runs' is 0.50.
+- Worker runs search little before their anchor: the median is 0 searches in every repository. Reviews make one to two.
+
+## 2026-11-10: M71 stage 0, where each role's tool results go
+
+Which tools fill each role's tool results, against the share M71's later stages need. Cited by M71.
+
+### Setup
+
+- canopy 0.0.1.dev1677+c6b8f773 and OpenCode v2.2.5, on the operator's workspace of three repositories.
+- `canopy tool-results --json`, over 14 days, 2026-10-28T04:00Z to 2026-11-11T05:00Z. No run's log was cut at the
+  transcript's bound.
+- The threshold, set by the operator before the measurement, the draft's: a later stage proceeds only for a tool whose
+  results are at least a tenth of its role's result characters.
+
+### By role
+
+| role | runs | calls | result chars | repeated reads |
+|---|---|---|---|---|
+| implement | 156 | 4,305 | 13,001,800 | 13 |
+| resume | 445 | 7,233 | 19,127,881 | 3 |
+| plan | 177 | 2,932 | 13,431,506 | 40 |
+| review | 250 | 14,083 | 81,369,483 | 467 |
+| chore | 68 | 807 | 4,973,358 | 6 |
+| overseer | 923 | 1,970 | 1,040,244 | 0 |
+
+Reviews are 61% of the 132.9M result characters of every role.
+
+Each tool's share of its role's result characters, its calls in brackets for those at or above a tenth, marked (P):
+
+- implement: bash 0.429 (2691) P, read 0.271 (318) P, skill 0.161 (317) P, atlassian_getJiraIssue 0.051,
+  atlassian_addCommentToJiraIssue 0.036
+- resume: bash 0.582 (4860) P, skill 0.126 (553) P, read 0.083, github_pull_request_read 0.078,
+  atlassian_getJiraIssue 0.061
+- plan: read 0.549 (927) P, grep 0.159 (623) P, canopy_git_show 0.072, atlassian_getJiraIssue 0.040, bash 0.038,
+  canopy_git_grep 0.032, glob 0.030, github_pull_request_read 0.020, canopy_git_diff 0.015, canopy_git_files 0.011
+- review: read 0.539 (6237) P, canopy_git_diff 0.181 (974) P, grep 0.067, github_pull_request_read 0.062,
+  canopy_git_show 0.050, atlassian_getJiraIssue 0.016, glob 0.015, canopy_git_grep 0.012, read_mcp_resource 0.011,
+  github_get_commit 0.011, skill 0.010
+- chore: atlassian_searchJiraIssuesUsingJql 0.337 (89) P, bash 0.193 (405) P, github_pull_request_read 0.113 (45) P,
+  github_search_pull_requests 0.085, canopy_reports_spend 0.069, read 0.037, the operator's CI triage script 0.028,
+  canopy_reports_health 0.028, canopy_chore_history 0.026, others under 0.02
+- overseer: canopy_decide 0.341 (600) P, grep 0.312 (18) P, canopy_review-items 0.122 (65) P, canopy_dispatch 0.113
+  (591) P, read 0.040, canopy_ticket-set 0.028, canopy_review-run 0.023, glob 0.011
+
+### Against the threshold
+
+The tools at or above a tenth of their role's result characters, the only ones a later stage proceeds for:
+
+- implement: bash, read, skill.
+- resume: bash, skill.
+- plan: read, grep.
+- review: read, canopy_git_diff.
+- chore: atlassian_searchJiraIssuesUsingJql, bash, github_pull_request_read.
+- overseer: canopy_decide, grep, canopy_review-items, canopy_dispatch.
+
+The reads the stages name as theirs, where these numbers show them: `canopy_git_show`, whose whole-file read stage 1's
+line range narrows, is 0.072 of the planner's and 0.050 of the reviewer's; `github_pull_request_read`, which stage 2's
+`feedback` replaces, is 0.078 of `resume`'s and 0.062 of the reviewer's. Each is under a tenth.
+
+Not settled here: the shell is one row, `bash`, so the share of `gh pr view` (stage 2) and `gh run view --log-failed`
+(stage 3) within it is not in these numbers.
+
+## 2026-11-10: M65, how often running cards went stale
+
+How often a running agent's card went stale over a week of real use, by role, as M65's Accept asks. Cited by M65.
+
+### Setup
+
+- canopy 0.0.1.dev1677+c6b8f773 and OpenCode v2.2.5, on the operator's workspace of three repositories.
+- `canopy cards --days 7 --json`, 2026-11-04T05:00Z to 2026-11-11T05:00Z, runs counted by when they started.
+- Carded is the runs that posted a card; lapsed, those whose card, or the run with none yet, went stale at least once;
+  lapses, each time a card went from fresh to stale; ended stale, the ended runs whose card was stale as they ended.
+
+### By role
+
+| role | runs | carded | lapsed | lapses | ended | ended stale |
+|---|---|---|---|---|---|---|
+| implement | 79 | 77 | 41 | 51 | 79 | 14 |
+| resume | 213 | 183 | 35 | 38 | 213 | 5 |
+| plan | 92 | 61 | 9 | 9 | 92 | 2 |
+| review | 112 | 112 | 47 | 65 | 112 | 0 |
+
+As shares of each role's runs:
+
+| role | carded | lapsed at least once | ended stale |
+|---|---|---|---|
+| implement | 97% | 52% | 18% |
+| resume | 86% | 16% | 2% |
+| plan | 66% | 10% | 2% |
+| review | 100% | 42% | 0% |
+
+### Verdict
+
+M65's Accept asks for this record and sets no threshold, and the operator set none. Stale cards were most common on
+`implement` runs, half of which lapsed at least once and nearly a fifth of which ended stale, and on reviews, which
+lapsed as often but never ended stale. `resume` and plan runs lapsed on one run in six and one in ten.
+
+## 2026-11-10: M66 stage 2, the checklist's two weeks
+
+How the worker runs given the monorepo's checklist answered each item over two weeks, and how many of those nits still
+reached a human reviewer. Cited by M66.
+
+### Setup
+
+- canopy 0.0.1.dev1677+c6b8f773 and OpenCode v2.2.5, on the operator's workspace of three repositories; only the
+  monorepo has a checklist.
+- `canopy checklist --days 14 --json`, 2026-10-28T04:00Z to 2026-11-11T05:00Z, runs counted by when they started.
+  `held_by` counts the tickets whose runs held the item. A run that never pushed, and so was never held, still counts
+  each item `unanswered` (M66, chosen conservatively).
+- The human side, counted by the operator from canopy's PRs in the window: about zero checklist-type nits reached a
+  human reviewer.
+
+### By item
+
+| item | reminded | pass | fixed | held | n/a | unanswered | held_by |
+|---|---|---|---|---|---|---|---|
+| parameter-types | 414 | 163 | 28 | 14 | 118 | 91 | 8 |
+| narrow-except | 357 | 151 | 6 | 0 | 130 | 70 | 0 |
+| trailing-commas | 347 | 213 | 9 | 0 | 61 | 64 | 0 |
+
+As shares of the runs reminded: n/a 28%, 36%, and 18%; fixed 6.8%, 1.7%, and 2.6%; unanswered 22%, 20%, and 18%; held
+3.4% for parameter-types, by 8 tickets, and none for the others.
+
+### Verdict
+
+Against stage 2's own tests: no item is mostly `n/a`, each was fixed at least 6 times, so none never failed, and only
+parameter-types was ever held. About zero checklist-type nits reached a human reviewer. The calls stage 2 leaves to the
+operator, whether to reword or drop an item and whether stage 3's review is needed, and for which items, are not made
+here.
+
+## 2026-11-10: M69, the disk canopy's files take
+
+What canopy's files take on disk, the kept diffs among them, and the operator's word on the run's Diff page, for M69's
+week of real use. Cited by M69.
+
+### Setup
+
+- canopy 0.0.1.dev1677+c6b8f773 and OpenCode v2.2.5, on the operator's workspace of three repositories.
+- `canopy gc --dry-run`, at 2026-11-10 23:00 UTC.
+
+### Disk
+
+| what | files | size |
+|---|---|---|
+| run files | 5,700 | 535.3 MiB |
+| review files | 1,389 | 354.0 MiB |
+| tick files | 1,251 | 38.2 MiB (a pass would free 5.4 MiB) |
+| chore run files | 338 | 29.4 MiB |
+| `canopy.log` | 1 | 18.2 MiB |
+
+- The journal: 138.0 MiB, of which connector runs are 41.6 MiB, status runs 6.3 MiB, harness attention 3.1 MiB,
+  derivations 1.9 MiB, and the overseer-attention corpus 516.9 KiB. Its WAL: 5.7 MiB. Memory's text: 60.6 KiB.
+- Git: 57,985 loose objects (338.6 MiB) and 306 packs (1.6 GiB). gc does not separate kept diffs from other objects.
+- The journal's own diff tables (`run_changes`, `run_change_files`, and `run_commits`, with their indexes) take about
+  160 KiB for the 78 runs since 2026-11-09 that have changes recorded, about 2 KiB a run.
+
+### The operator's word
+
+A run's Diff page did replace GitHub's compare view for judging a run. Its UI and UX still need polish, for example
+with Impeccable: a follow-up, not a blocker.
+
+### Verdict
+
+The operator's word, which M69's Accept asks for, is yes. Not settled here: the disk the kept diff files take per run
+and per day, since they sit among the run files and gc does not count them apart; how many runs kept no diff, and why,
+which this does not count; and a week of it, since the changes are recorded from 2026-11-09.
+
+## 2026-11-10: M38, the derivation against the overseer over two weeks
+
+How each row of the phase table agreed with the overseer over two weeks, against the bar the operator set for enabling
+a row in the harness. Cited by M38.
+
+### Setup
+
+- canopy 0.0.1.dev1677+c6b8f773 and OpenCode v2.2.5, on the operator's workspace of three repositories.
+- `canopy agreement --days 14 --json`, 2026-10-28T04:00Z to 2026-11-11T05:00Z: 917 ticks and 19,861 decisions.
+- The bar, set by the operator before the measurement: a row is enabled only with at least 3 distinct situations, and
+  every disagreement on it the overseer's mistake. And `ci_red`'s `resume` needs a shared list of PR labels that hold
+  a PR: yes.
+- Sources: `vcs` 926 tick polls, 7,963 polls, 7 failed, 21.6 s median; `tracker` 926 tick polls, 7,963 polls, 2,542
+  partial, 6.8 s median. Stale: 0.
+
+### By row
+
+Situations are the distinct tickets the row held for, a floor. The rows sum to 27,163: a ticket compared in a tick
+counts under each row that held for it.
+
+| row | decisions | agree | disagree | situations | disagreeing situations |
+|---|---|---|---|---|---|
+| ready | 895 | 448 | 447 | 155 | 136 |
+| blocked | 254 | 247 | 7 | 12 | 4 |
+| running | 57 | 20 | 37 | 32 | 25 |
+| pushed_no_pr | 23 | 0 | 23 | 11 | 11 |
+| conflicted | 1209 | 20 | 1189 | 40 | 36 |
+| ci_running | 2348 | 1991 | 357 | 138 | 70 |
+| ci_red | 1254 | 367 | 887 | 58 | 46 |
+| review_pending | 632 | 167 | 465 | 119 | 71 |
+| changes_requested | 1845 | 594 | 1251 | 104 | 97 |
+| untrusted_review | 1756 | 890 | 866 | 60 | 42 |
+| green_unreviewed | 10067 | 4670 | 5397 | 127 | 111 |
+| approved | 2471 | 1584 | 887 | 134 | 88 |
+| merged | 382 | 112 | 270 | 136 | 26 |
+| needs_human | 343 | 86 | 257 | 12 | 10 |
+| human_replied | 333 | 78 | 255 | 114 | 104 |
+| plan_proposed | 425 | 363 | 62 | 95 | 41 |
+| review_request | 5 | 5 | 0 | 5 | 0 |
+| closed | 5 | 5 | 0 | 5 | 0 |
+| none | 2859 | 2859 | 0 | 6 | 0 |
+
+### The disagreements
+
+1,090 disagreement records, each once per ticket and reason, by row and kind:
+
+- On `ready`, the overseer dispatched a plan (94) or an `implement` (91) where the harness allowed nothing. It also
+  waited (28) or decided nothing (24) where the harness allowed nothing.
+- On `ready` with `human_replied`, the overseer dispatched a plan or an `implement` (28) where the harness allowed
+  nothing.
+- On `ci_red`, alone or with `changes_requested` or `approved`, the overseer dispatched a `resume` where the harness
+  allowed nothing (about 45).
+- On `review_pending` with `changes_requested` or `green_unreviewed`, the overseer dispatched a `resume` or a review
+  where the harness allowed nothing (about 40).
+- On `green_unreviewed` with `human_replied`, the overseer dispatched a `resume` where the harness allowed a wait or
+  attention (about 35).
+- On `changes_requested` with `approved`, or `ci_running` with `approved`, the overseer waited where the harness allowed
+  attention or nothing (about 55).
+- On `merged`, the overseer marked the ticket done or recorded nothing where the harness allowed nothing (about 22).
+- About 200 records have no overseer decision for the row, mostly `approved`, `ready` with `plan_proposed`, and
+  `green_unreviewed` with `untrusted_review`.
+
+### Against the bar
+
+- The operator has not judged which side was right in any disagreement: there were too many to review. So every
+  disagreement is open, and no row with one can clear the bar yet.
+- Three rows have at least 3 situations and no disagreement, and so clear it: `review_request` (5), `closed` (5), and
+  `none` (6).
+- Every other row stays undecided until its disagreements are judged. This section enables no row.
+
+## 2026-11-10: M39, a day and a night of the loop
+
+SCENARIOS S27 re-measured: overseer spend and latency over two weeks of `canopy loop`, and over its longest stretch
+through the nights without a restart, against M39's Accept. Cited by M39.
+
+### Setup
+
+- canopy 0.0.1.dev1677+c6b8f773 and OpenCode v2.2.5, on the operator's workspace of three repositories.
+- `canopy spend --days 14 --json` and `canopy latency --days 14 --json`, 2026-10-28T04:00Z to 2026-11-11T05:00Z.
+- The stretch: the longest in which `canopy loop` ran through a night without a restart, about 3.6 days, from
+  2026-11-05T23:46Z to 2026-11-09T17:12Z (ticks 2158 to 2237), over a weekend with a light queue. Its figures were
+  computed with canopy's own latency code over that stretch, night being 20:00 to 08:00 local time.
+- Calls the operator made: `runtime.allow_bash`'s overseer entry goes with its MCP servers: yes.
+
+### The window
+
+| group | ticks | without overseer | cost |
+|---|---|---|---|
+| busy | 842 | 0 | $161.82 |
+| idle | 75 | 0 | $13.93 |
+| not ok | 8 | 3 | $0.99 |
+| dry run | 1 | 0 | $0.05 |
+
+Idle ticks were 7.9% of the live overseer's spend. Overseer spend was $176.74, about $12.62 a day; all spend was
+$915.55. Per local day from 10-28 to 11-10, in dollars: 32.77, 20.82, 8.91, 4.54, 2.29, 22.03, 21.78, 27.24, 21.25,
+2.79, 0.55, 0.54, 7.60, 3.63.
+
+| overseer model | runs | cost |
+|---|---|---|
+| github-copilot/claude-sonnet-5.5@xhigh | 344 | $95.94 |
+| github-copilot/claude-sonnet-5.5@high | 579 | $80.86 |
+
+Latency, the median and 90th percentile from the source's time:
+
+| kind | items | acted | by poll | not acted | median | p90 | median from observation |
+|---|---|---|---|---|---|---|---|
+| comment | 11 | 11 | 0 | 0 | 420 s | 108,074 s | 173 s |
+| review | 807 | 807 | 149 | 0 | 166 s | 396 s | 82 s |
+| review_comment | 798 | 798 | 139 | 0 | 169 s | 403 s | 82 s |
+| check_run | 0 | – | – | – | – | – | – |
+| all | 1616 | 1616 | 288 | 0 | 167 s | 401 s | 82 s |
+
+### The stretch
+
+| | ticks | without overseer | overseer spend | latency items | median | p90 | not acted | source poll failures |
+|---|---|---|---|---|---|---|---|---|
+| Day | 54 | 0 | $6.83 | 22 (3 by poll) | 108 s | 279 s | 0 | 0 of 2,434 |
+| Night | 26 | 0 | $3.53 | 6 (all by poll) | 99 s | 274 s | 0 | 0 of 2,860 |
+
+Overseer spend was about $2.9 a day over the stretch.
+
+Missed actions: 70 agreement records touch the stretch. In 19 of them the overseer dispatched an `implement`, plan,
+review, or `resume` where the harness's rows allowed nothing, a wait, or attention. A tick without the overseer would
+have missed those, unless they were the overseer's mistakes.
+
+### Sources and the log
+
+- No source failed during the stretch. Earlier in the window, the tracker returned partial results for 2,542 polls in a
+  row, from 2026-10-30T23:14Z to 2026-11-03T15:11Z: each time a single ticket could not be read in full, 5 distinct
+  tickets in all. `connector_failed` was raised on 143 ticks between 2026-10-30 and 2026-11-03, and on one tick each
+  on 2026-10-28 and 2026-11-10. The `vcs` source failed 3 polls on 2026-10-28.
+- `canopy.log` is one file of 18.2 MiB, not rotated, going back to 2026-10-12. It holds 2,390 `loop waits` lines; per
+  day from 10-27 to 11-10: 112, 93, 79, 50, 22, 15, 76, 101, 127, 154, 42, 5, 4, 77, 108. The loop restarted 54 times in
+  the window, mostly during working hours.
+
+### Against M39's Accept
+
+- Most ticks run no overseer: not met. None of the stretch's 80 ticks ran without one, and in the window only 3 of 926
+  did, each a tick that did not close `ok`.
+- Overseer spend per day at a quarter of the first day's for the same queue: the 2026-10-13 section's overseer spend
+  was $52.53 over its day (ticks 1 to 158, 2026-10-12T20:52Z to 2026-10-13T18:13Z, the loop down for about ten hours
+  of it), a quarter of which is about $13.13. The stretch's $2.9 a day is under it, and so is the window's $12.62, but
+  the stretch's queue was a light weekend one, not the same queue.
+- Median latency from an external event to the tick that acted on it under three minutes: met, by day (108 s) and by
+  night (99 s). Over the window it was 167 s in all; the window's 11 tracker comments took a median 420 s.
+- No action missed: open (below).
+
+### Not settled by this data
+
+- No action missed: the 19 dispatches above are either actions a tick without the overseer would miss or the
+  overseer's mistakes, and the operator has not decided which. This waits on the same calls as M38's disagreements.
+- The source outage Accept asks for: no source failed during the stretch. Outside it there was only the run of partial
+  tracker reads above, and whether that counts as a source stopped for a few polls is the operator's call, not made.
+- `loop waits` churn: the log was kept, and its counts are above; each line's `churn` field was not read for this
+  section, so whether the waits churned is not shown here.
+- No tick running the overseer with nothing listed to it: not counted by these commands.
+- M40's live checks, which need a watched run of the loop.

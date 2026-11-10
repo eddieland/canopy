@@ -193,3 +193,10 @@ folded into the sections it names.
 Open for the operator: the bar a row clears in the measurement (recommended: at least three distinct situations, each
 disagreement the overseer's mistake), and whether `ci_red`'s `resume` needs a shared list of PR labels that hold a PR
 (recommended: yes).
+Settled by the operator (2026-11-10), before the numbers were seen: a row clears the bar with at least three distinct
+situations and every disagreement on it the overseer's mistake; and `ci_red`'s `resume` needs a shared list of PR labels
+that hold a PR. Measured 2026-11-10 (MEASUREMENTS "2026-11-10: M38, the derivation against the overseer over two
+weeks"): of 19 rows, `review_request`, `closed`, and `none` clear the bar, with five, five, and six situations and no
+disagreement; every other row has disagreements, 1,090 records in all, and stays undecided. No row is enabled by it;
+each is a PR of its own. Open for the operator: which side was right in each disagreement, not yet judged, there being
+too many to review.

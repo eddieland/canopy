@@ -108,7 +108,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M69. What each run changed, kept and shown](M69-what-each-run-changed.md): in progress.
 - [M70. A code outline for agents](M70-a-code-outline-for-agents.md): in progress.
 - [M71. Leaner tool results for every agent](M71-leaner-tool-results.md): in progress.
-- [M72. Search across every session the runtime keeps](M72-search-across-every-session.md): not started.
+- [M72. Search across every session the runtime keeps](M72-search-across-every-session.md): in progress.
 
 ## Deferred, with the trigger that would unblock each
 
