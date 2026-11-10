@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from canopy.serve import process_work
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.schema.host import HostHistory, HostProcesses, HostResources
 
@@ -40,6 +41,9 @@ def processes(backend: BackendDep) -> HostProcesses:
     """The processes on the machine the loop runs on, read now, the kernel's own threads left out.
 
     Each with the processors it kept busy since the read before, the last ask's while a page asks every few seconds,
-    or a second's after none for a while; its memory, its state, and its command line. Off Linux, none are read.
+    or a second's after none for a while; its memory, its state, its command line, and the running run it is the
+    process of, by the pid the journal recorded for it. Off Linux, none are read.
     """
-    return backend.processes()
+    found = backend.processes()
+    with backend.open() as ctx:
+        return process_work.tagged(ctx.conn, found)

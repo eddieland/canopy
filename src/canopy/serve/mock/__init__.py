@@ -374,6 +374,7 @@ def seed(directory: Path) -> Backend:
         db.migrate(ctx.conn, resources.migrations_dir())
         with db.transaction(ctx.conn):
             _fixtures(ctx.conn, root)
+            _run_pids(ctx.conn)
             history.seed(ctx.conn, root)
             plans.seed(ctx.conn, ws.state_dir, at, root)
             memory.seed(ctx.conn, at)
@@ -705,6 +706,12 @@ def _add_a_cent(backend: Backend) -> None:
             .where("status = 'running'")
             .run(ctx.conn)
         )
+
+
+def _run_pids(conn: sqlite3.Connection) -> None:
+    # The running runs' processes are the mock machine's (host.py), so its system resources page ties them to the runs.
+    for run_id, (pid, worker_pid) in host.RUN_PIDS.items():
+        records.update(records.Run).set(pid=pid, worker_pid=worker_pid).where("id = ?", run_id).run(conn)
 
 
 def _fixtures(conn: sqlite3.Connection, root: Path) -> None:

@@ -70,27 +70,48 @@ test("the graphs draw the server's last hour of readings, and say the one under 
     await expect(load.getByTestId('trend-value')).toHaveText(/ at \d{2}:\d{2}$/u)
 })
 
-test('the processes show what keeps the machine busy as a tree, every one on asking, and fold under a parent', async ({
+test("the processes are the loop's, a run's tied to it, then what else is busy; every one on asking", async ({
     page,
 }) => {
     await page.goto('system')
     await settled(page)
     const panel = page.getByTestId('host-processes')
     await expect(panel).toContainText('2.2 of 12 cores busy over 10 s')
+    await expect(panel.getByTestId('process-above')).toHaveText('under systemd › sshd › sshd › sshd › bash')
     const rows = panel.getByTestId('process-row')
-    // The mock's twenty, but the four idle services: the build's compilers, the agents, and the parents above them.
-    await expect(rows).toHaveCount(16)
+    // The loop and its two runs' trees, then the editor's server elsewhere: the mock's twenty, but the loop's five
+    // parents, named in one line over it, and four idle services.
+    await expect(rows).toHaveCount(11)
     await expect(panel.getByTestId('process-hidden')).toHaveText('4 processes using under 1% of a core left out.')
+    await expect(rows.filter({ has: page.getByTestId('process-loop') })).toContainText('48213')
+    // Run 41's row is what the run costs: its agent, the build, and both compilers.
+    const run = rows.filter({ has: page.getByRole('link', { name: 'run:41 ABC-101' }) })
+    await expect(run).toContainText('python3')
+    await expect(run).toContainText('210%')
+    await expect(rows.filter({ has: page.getByRole('link', { name: 'run:43 ABC-104' }) })).toHaveCount(1)
     await expect(rows.filter({ hasText: 'rustc' }).first()).toContainText('running')
     await expect(rows.filter({ hasText: 'rg --line-number' })).toContainText('waiting on a disk')
-    await expect(rows.filter({ has: page.getByTestId('process-loop') })).toContainText('48213')
+    await expect(panel.getByTestId('process-elsewhere').getByTestId('process-row')).toContainText('vite')
+
+    await run.getByRole('link', { name: 'run:41 ABC-101' }).click()
+    await expect(page).toHaveURL(/\/workspace\/runs\/41$/u)
+    await page.goBack()
+    await settled(page)
 
     await panel.getByRole('button', { name: 'All' }).click()
     await expect(rows).toHaveCount(20)
     await expect(panel.getByTestId('process-hidden')).toHaveCount(0)
+    await expect(panel.getByTestId('process-elsewhere')).toHaveCount(0)
 
     await panel.getByRole('button', { name: 'Fold canopy 48213' }).click()
     await expect(rows).toHaveCount(11)
     await expect(rows.filter({ has: page.getByTestId('process-loop') })).toContainText('+9 under it')
     await expect(panel.getByRole('button', { name: 'Unfold canopy 48213' })).toHaveAttribute('aria-expanded', 'false')
+
+    // As the operator left it, on coming back.
+    await page.goto('attention')
+    await page.goto('system')
+    await settled(page)
+    await expect(panel.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true')
+    await expect(rows).toHaveCount(11)
 })
