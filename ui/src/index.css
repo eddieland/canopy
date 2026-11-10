@@ -1789,7 +1789,7 @@
     }
 
     .plan-doc {
-        @apply flex min-h-72 max-w-3xl flex-col gap-3 document-text break-words text-foreground outline-none;
+        @apply flex min-h-72 max-w-3xl flex-col gap-3 document-text wrap-break-word text-foreground outline-none;
 
         /* Styled by the level its Markdown says (`data-level`), not its tag, which sits two under it (PlanHeading). */
         & :is([data-level='1'], [data-level='2']) {

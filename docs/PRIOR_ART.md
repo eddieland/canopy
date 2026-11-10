@@ -2,8 +2,9 @@
 
 A survey of open-source projects that overlap with canopy, and what their issue trackers show they learned the hard
 way. Surveyed 2026-09-29, aide 2026-10-18, shared plans across tickets 2026-11-02 ([Shared plans across
-tickets](#shared-plans-across-tickets)), and tools for token efficiency 2026-11-08 ([Tools for token
-efficiency](#tools-for-token-efficiency)). Why canopy is built anyway is D050.
+tickets](#shared-plans-across-tickets)), tools for token efficiency 2026-11-08 ([Tools for token
+efficiency](#tools-for-token-efficiency)), and a session plugin's hooks 2026-11-10 ([Hooks inside a
+session](#hooks-inside-a-session)). Why canopy is built anyway is D050.
 
 The canopy statuses below are as of those dates and are not kept current. Check the code before acting on one.
 
@@ -207,6 +208,61 @@ Upper bounds, each against a baseline the vendor chose.
   feedback (M71 stage 2) follows Block's shape, one tool for what three getters would return.
 - Not to copy: a terser result format than JSON; minified code in a result; a runner tool whose commands skip the
   shell's rules; the log or the thread pasted into the prompt (What not to copy, below).
+
+## Hooks inside a session
+
+Surveyed 2026-11-10: [oh-my-opencode](https://github.com/opensoft/oh-my-opencode), read in source at
+[aead4ae](https://github.com/opensoft/oh-my-opencode/commit/aead4ae) (2026-01-25), a fork's snapshot that targets
+OpenCode 1. It is a plugin for the operator's own interactive session: some thirty hooks on the runtime's events, a
+planner and an orchestrator that delegates to subagents, web search servers, and loaders for Claude Code's files. It
+has no tracker, loop, PRs, or CI follow-up, so what it can teach is what a plugin does to a running agent, which
+canopy's own does in a line on a tool call's result (§33). The canopy comparisons are as of that date; none of the
+three things to measure was checked live.
+
+### Worth measuring
+
+- **Git that cannot wait on an editor or a pager.** Its hook puts `GIT_EDITOR=:`, `GIT_SEQUENCE_EDITOR=:`,
+  `GIT_MERGE_AUTOEDIT=no`, `GIT_PAGER=cat`, and `PAGER=cat` before every git command an agent runs outside a terminal
+  ([constants.ts](https://github.com/opensoft/oh-my-opencode/blob/aead4ae/src/hooks/non-interactive-env/constants.ts)). canopy sets `GIT_TERMINAL_PROMPT=0` for its own git
+  and none of these for an agent's, whose worker merges a moved base and may rebase (`trust.rebase`). Whether a merge
+  or a `rebase --continue` waits on an editor under the runtime's shell until the run's timeout is not known. canopy
+  starts the process, so the variables would go in its environment, not before each command.
+- **A line after an edit that failed.** When the `edit` tool reports its old text missing or found more than once, a
+  hook adds a line telling the agent to read the file again before another edit
+  ([edit-error-recovery](https://github.com/opensoft/oh-my-opencode/blob/aead4ae/src/hooks/edit-error-recovery/index.ts)). canopy counts each tool's errors by run, so the
+  journal says how often edits fail and how many more follow, before a line is written.
+- **What a compaction keeps.** It hands the runtime's summary a shape: the requests as written, the goal, the work
+  done, the work left, and what must not be done
+  ([compaction-context-injector](https://github.com/opensoft/oh-my-opencode/blob/aead4ae/src/hooks/compaction-context-injector/index.ts)). canopy records the context
+  overflow a run compacts after and says nothing to the agent then; its nudge already names the plan's file (§41).
+  How often a run compacts, and whether such a run still ends in a valid result line, is in the journal.
+
+### In prompts
+
+- **A critic bounded to what is missing.** Its plan reviewer simulates doing the work and rejects only where it
+  could not go on: a file reference that does not hold, a task with no acceptance criterion, an assumption about
+  business logic. Disagreeing with the approach, or preferring another architecture, is listed as no reason to reject
+  ([momus.ts](https://github.com/opensoft/oh-my-opencode/blob/aead4ae/src/agents/momus.ts)). canopy's planner checks its own plan for the first kind, and the operator
+  approves; the rule is one for a reviewer's or a persona's prompt, where a critic with no bound asks for another
+  round each time.
+
+### Already answered, or not to copy
+
+- A planner that writes only its plan, a plan file workers never edit, and a notepad of learnings per plan are
+  canopy's planner (§25) and proposals (§28). "Never trust an agent's report" is its orchestrator's prompt line;
+  canopy checks what was pushed (§8).
+- **Hooks that keep a session going.** One prompts the session again while its todo list has items open
+  ([todo-continuation-enforcer.ts](https://github.com/opensoft/oh-my-opencode/blob/aead4ae/src/hooks/todo-continuation-enforcer.ts)), and its `ralph-loop` again until the
+  agent prints a promise tag, up to 100 times. As aide's (What not to copy, below): a canopy run ends when it says so,
+  and another try is a new run D030 counts.
+- **Idle found by polling.** A background agent is done after three polls, two seconds apart, find its session
+  unchanged ([manager.ts](https://github.com/opensoft/oh-my-opencode/blob/aead4ae/src/features/background-agent/manager.ts)), and its own notes list the flaky tests around
+  it. canopy reads a process's exit and its result line.
+- **Repairing a session's stored messages** after a provider refuses them (a tool result missing, thinking blocks out
+  of order). canopy's run is `crashed` and the harness never restarts it (§15); each distinct error is kept, so the
+  journal can say whether these happen.
+- Subagents, web search and fetch, loaders for another tool's config files, and an update check when the plugin
+  loads: D077, TRUST_MODEL T4 and T7.
 
 ## Lessons canopy's design already answers
 

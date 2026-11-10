@@ -21,7 +21,7 @@ export function LoopDownBand() {
             aria-label="The loop isn't answering"
             data-testid="loop-down"
             className={cn(
-                'mx-auto mb-6 flex max-w-[112rem] items-start gap-3 rounded-md border px-3 py-2',
+                'mx-auto mb-6 flex max-w-shell items-start gap-3 rounded-md border px-3 py-2',
                 'border-status-blocked/40 bg-status-blocked/8',
             )}
         >

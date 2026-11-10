@@ -103,6 +103,14 @@ export function diskPressure(disk: Disk): Pressure {
     return disk.free < Math.max(2 * floor, DISK_HIGH) ? 'high' : 'ok'
 }
 
+/**
+ * The memory in use past which memory turns `high`, of `total` there is: what its graph draws a line at, as a disk's
+ * draws the tick's floor.
+ */
+export function memoryHighAt(total: number): number {
+    return total * (1 - MEMORY_HIGH)
+}
+
 /** How pressed memory is, by the share still available; fine when the operating system does not say. */
 export function memoryPressure(memory: HostResources['memory']): Pressure {
     if (memory.total === null || memory.available === null || memory.total <= 0) {

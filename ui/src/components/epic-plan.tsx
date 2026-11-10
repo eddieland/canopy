@@ -51,7 +51,7 @@ export function EpicPlan({ epic, plans, stopped = false }: { epic: number; plans
     return (
         <section aria-label="Plan" className="flex flex-col gap-3" data-testid="epic-plan">
             {newest.text === null ? (
-                <Panel className="max-w-[51rem]">
+                <Panel className="max-w-plan">
                     <Empty size="panel">
                         plan {newest.plan.id}&apos;s file is {newest.problem ?? 'unreadable'}: {newest.path}
                     </Empty>
@@ -306,7 +306,7 @@ export function EpicPlanHash({ plans }: { plans: EpicPlans }) {
 function EarlierPlans({ epic, plans }: { epic: number; plans: EpicPlanFile[] }) {
     return (
         // As wide as the plan above it: its plans read in the plan's measure.
-        <Panel data-testid="earlier-plans" className="max-w-[51rem]">
+        <Panel data-testid="earlier-plans" className="max-w-plan">
             <PanelHeader label="Earlier plans">
                 <span className="readout text-xs text-muted-foreground">{plans.length}</span>
             </PanelHeader>

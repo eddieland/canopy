@@ -184,7 +184,7 @@ Rules:
 - Radius: `rounded-md` for panels, buttons, and fields, `rounded-sm` for chips and nav items, `rounded-xs` for a mark
   smaller than a line of text, a checkbox or a slot's square, from the palette's `--radius`. The scale is in
   `tokens.css`; no arbitrary radius, which `npm run lint` refuses.
-- **The shell**: a 3rem header, a 13rem side nav, content capped at `max-w-[112rem]` with `p-6` and `gap-6` between
+- **The shell**: a 3rem header, a 13rem side nav, content capped at `max-w-shell` with `p-6` and `gap-6` between
   blocks. The header stays put and only what is under it scrolls (`page-scroll`), so a scrollbar, or the gutter kept
   for one, sits beside the rail and the page, never beside the header. The side rail runs the full height of the page,
   and what it holds sticks: a column as tall as the window under the header. Printed, the shell is not held to the
@@ -630,7 +630,11 @@ is a capacity where the measure has one and the peak with `HEADROOM` where it ha
 is a muted line with its name at its right end, drawn only while it is under the top. The pointer snaps a crosshair to
 the nearest reading, whose value and time stand in the latest's place. Beside the latest value it names the peak, or
 the low for what runs out, such as free space; where the page says the latest beside the chart, it names only that
-extreme. A threshold's line and name are drawn over the area, never under its tint. The plot is `aria-hidden`, and a
+extreme. A threshold's line and name are drawn over the area, never under its tint. A measure under pressure draws its
+line and area in its pressure's color, `status-blocked` or `status-failed`, the accent otherwise. Charts over the same
+hour in one panel share one pointer, so pointing at any draws the crosshair on each, and the panel says the hour once,
+with how long ago it was read, in `status-blocked` once a read again failed, rather than an axis under each. A measure
+of the second rank, flat nearly always, is half as tall, in a row under the first. The plot is `aria-hidden`, and a
 screen reader hears its latest value, peak, and low in words in place of a table.
 
 The context chart differs where it must: its bars are its controls, each named for its call on hover and to a screen
@@ -783,6 +787,14 @@ reader, so no table repeats them.
   with no line of its own shows none. A counter counts what its line lists, and a line that splits the count names only
   the parts there are, never a `0 broken` among them. The attention page has none: the nav's badge, the rail, the tab's
   title, and its icon carry the glance, and tiles there only said their numbers again.
+- **The process tree** (the system resources page, `ProcessTree`) answers "is it canopy?" first: the loop's tree,
+  its parents named in one muted line over it, each run's process carrying its run as a link in the accent, its
+  reference and what it works on (`run:41 ABC-101`), and what the run and everything under it add up to, open or
+  folded; then what else is busy under an `elsewhere` heading, a run of idle parents on the way to one child drawn as
+  one muted line of their names. A figure sits over a thin bar of the accent's tint, the processors against one core
+  and the memory against all there is, for the eye alone. The **cpu** and **memory** heads are its order: a head is a
+  button, the column it orders in the foreground with a down arrow, `aria-sort` on its cell. **All**, the order, and
+  the folds are kept in this browser, so the page is as the operator left it.
 - **The spend chart** (the spend page) follows Charts: a bar per UTC day, the series stacked bottom up in `SERIES`
   order. Idle overseer spend sits on the baseline under the rest of the overseer's, a lighter shade of its hue, so the
   two read as one. A day with no cost is a 1px `border` stub on the baseline, so it reads as nothing spent, not a column

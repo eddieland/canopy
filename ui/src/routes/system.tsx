@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import { Sprout, TriangleAlert } from 'lucide-react'
+import { useState } from 'react'
 
 import { HOST_REFRESH_MS, hostQuery, hostSamplesQuery, metaQuery } from '@/api/queries'
 import type { Disk, HostHistory, HostResources } from '@/api/types'
@@ -14,7 +15,7 @@ import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelSkeleton } fr
 import { ProcessTree } from '@/components/process-tree'
 import { InlineCode } from '@/components/rich-text'
 import { TrendChart } from '@/components/trend-chart'
-import type { TrendReference } from '@/components/trend-chart'
+import type { TrendReference, TrendTone } from '@/components/trend-chart'
 import { Skeleton } from '@/components/ui/skeleton'
 import { HEADROOM } from '@/lib/chart'
 import {
@@ -28,6 +29,7 @@ import {
     loadPressure,
     loadText,
     loadTrend,
+    memoryHighAt,
     memoryPressure,
     percentText,
     PRESSURE_TEXT,
@@ -53,6 +55,9 @@ const BAR: Record<Pressure, string> = {
     high: 'bg-status-blocked',
     critical: 'bg-status-failed',
 }
+
+// A graph's line, in its pressure's color, the accent while it is fine.
+const TONE: Record<Pressure, TrendTone> = { ok: 'accent', high: 'blocked', critical: 'failed' }
 
 // And the band's tint, in the worst pressure's color.
 const BAND: Record<Exclude<Pressure, 'ok'>, string> = {
@@ -140,7 +145,9 @@ function Resources({ host }: { host: HostResources }) {
     const linux = onLinux(host)
     const disks = <Disks host={host} />
     // Off Linux nothing says what each process uses, which the line under the counters says once for all of it.
-    const processes = linux ? <ProcessTree loop={host.process.pid} cores={host.cpu.cores} /> : null
+    const processes = linux ? (
+        <ProcessTree loop={host.process.pid} cores={host.cpu.cores} memory={host.memory.total} />
+    ) : null
     const diskFirst = found[0]?.what === 'disk'
     return (
         <>
@@ -329,6 +336,7 @@ function DiskRow({ disk, history }: { disk: Disk; history: HostHistory | undefin
                     format={bytesText}
                     extreme="low"
                     latest={false}
+                    tone={TONE[pressure]}
                     reference={
                         disk.floor === null ? undefined : { value: disk.floor, label: `floor ${bytesText(disk.floor)}` }
                     }
@@ -346,81 +354,123 @@ interface Graph {
     top: number
     format: (value: number) => string
     reference?: TrendReference
+    tone?: TrendTone
+}
+
+/** The last hour's graphs, in their two ranks. */
+interface Graphs {
+    /** The load, the memory, and the processors: what the operator reads first, at full height. */
+    primary: Graph[]
+    /** The swap, the stalls, and the loop's memory, flat nearly always: half as tall, under them. */
+    secondary: Graph[]
 }
 
 /**
- * The server's readings of the machine over the last hour, kept in memory since it started: the load, the processors
- * busy, the memory and swap in use, how long processes waited for memory and on disks, and the loop's own memory, each
- * a graph of its own. A measure the system gives no reading of draws none; each disk's is on its row.
+ * The server's readings of the machine over the last hour, kept in memory since it started, each a graph of its own: a
+ * first rank of the load, the memory in use, and the processors busy, and under it, half as tall, the swap, how long
+ * processes waited for memory and on disks, and the loop's own memory. They share one pointer and one hour, which the
+ * header says once with how long ago they were read, in amber once a read again failed. A measure the system gives no
+ * reading of draws none; each disk's is on its row.
  */
 function LastHour({ host }: { host: HostResources }) {
-    const { data } = useQuery(hostSamplesQuery)
+    const query = useQuery(hostSamplesQuery)
+    const { data } = query
     return (
         <Panel data-testid="host-graphs">
             <PanelHeader label="Last hour">
                 {data !== undefined && (
-                    <span className="text-xs text-muted-foreground">read every {data.every_seconds} seconds</span>
+                    <span
+                        className={cn(
+                            'text-xs',
+                            query.isRefetchError ? 'text-status-blocked' : 'text-muted-foreground',
+                        )}
+                        data-testid="host-graphs-read"
+                    >
+                        the last {Math.round(((data.kept - 1) * data.every_seconds) / 60)} min, read{' '}
+                        <Age at={new Date(query.dataUpdatedAt).toISOString()} variant="ago" className="text-inherit" />
+                        {query.isRefetchError && ', and the last read again failed'}
+                    </span>
                 )}
             </PanelHeader>
             {data === undefined ? (
                 <PanelSkeleton rows={3} className="min-h-32" />
             ) : (
-                <Graphs host={host} history={data} />
+                <GraphRanks host={host} history={data} />
             )}
         </Panel>
     )
 }
 
-/** Each graph of `history` there are readings for, or what says there are none yet. */
-function Graphs({ host, history }: { host: HostResources; history: HostHistory }) {
-    const graphs = graphsOf(host, history)
-    if (graphs.length === 0) {
+/** Each graph of `history` there are readings for, in their ranks, or what says there are none yet. */
+function GraphRanks({ host, history }: { host: HostResources; history: HostHistory }) {
+    const [at, setAt] = useState<number | null>(null)
+    const { primary, secondary } = graphsOf(host, history)
+    if (primary.length + secondary.length === 0) {
         return <Empty>no readings yet: the server reads the machine every {history.every_seconds} seconds</Empty>
     }
+    const pointer = { at, set: setAt }
     return (
-        <div className="grid divide-y sm:grid-cols-2 sm:divide-y-0 xl:grid-cols-3">
-            {graphs.map((g) => (
-                <TrendChart key={`${g.label} ${g.detail ?? ''}`} {...g} />
-            ))}
-        </div>
+        <>
+            <div className="grid divide-y sm:grid-cols-3 sm:divide-y-0">
+                {primary.map((g) => (
+                    <TrendChart key={g.label} {...g} axis={false} pointer={pointer} />
+                ))}
+            </div>
+            {secondary.length > 0 && (
+                <div className="grid border-t sm:grid-cols-2 xl:grid-cols-4">
+                    {secondary.map((g) => (
+                        <TrendChart key={g.label} {...g} axis={false} pointer={pointer} half />
+                    ))}
+                </div>
+            )}
+        </>
     )
 }
 
-// The graphs of `history`: the load as a share of the cores (the bare average where they are not known), the share of
-// the processors busy, the memory and the swap against all there is (none for a machine with no swap), the share of
-// the time a process waited for memory and on a disk, and the loop's own memory. The cores are counted in Details.
-function graphsOf(host: HostResources, history: HostHistory): Graph[] {
-    const graphs: Graph[] = []
+// The graphs of `history`. First: the load as a share of the cores (the bare average where they are not known), in
+// its pressure's color with where every core is busy, the memory against all there is, in its pressure's color with
+// where it turns amber, and the share of the processors busy. Then: the swap against all there is (none for a machine
+// with no swap), the share of the time a process waited for memory and on a disk, and the loop's own memory.
+function graphsOf(host: HostResources, history: HostHistory): Graphs {
+    const primary: Graph[] = []
+    const secondary: Graph[] = []
     const cores = host.cpu.cores
     const load = trend(history, (s) => (s.load === null ? null : (coreShare(s.load, cores) ?? s.load)))
     if (load !== null) {
-        graphs.push({
+        primary.push({
             label: 'Load',
             detail: cores === null ? 'over a minute' : 'of all cores, over a minute',
             trend: load,
             top: headroom(load.peak),
             format: cores === null ? loadText : percentText,
             reference: cores === null ? undefined : { value: 1, label: 'all busy' },
+            tone: TONE[loadPressure(host.cpu)],
+        })
+    }
+    const memory = trend(history, (s) => s.memory_used)
+    const total = host.memory.total
+    if (memory !== null) {
+        primary.push({
+            label: 'Memory used',
+            detail: total === null ? undefined : `of ${bytesText(total)}`,
+            trend: memory,
+            top: total ?? headroom(memory.peak),
+            format: bytesText,
+            reference:
+                total === null
+                    ? undefined
+                    : { value: memoryHighAt(total), label: `${percentText(1 - memoryHighAt(1))} left` },
+            tone: TONE[memoryPressure(host.memory)],
         })
     }
     const busy = trend(history, (s) => s.cpu_busy)
     if (busy !== null) {
-        graphs.push({ label: 'CPU busy', detail: 'of all cores', trend: busy, top: 1, format: percentText })
-    }
-    const memory = trend(history, (s) => s.memory_used)
-    if (memory !== null) {
-        graphs.push({
-            label: 'Memory used',
-            detail: host.memory.total === null ? undefined : `of ${bytesText(host.memory.total)}`,
-            trend: memory,
-            top: host.memory.total ?? headroom(memory.peak),
-            format: bytesText,
-        })
+        primary.push({ label: 'CPU busy', detail: 'of all cores', trend: busy, top: 1, format: percentText })
     }
     const swapTotal = host.memory.swap_total ?? 0
     const swap = swapTotal > 0 ? trend(history, (s) => s.swap_used) : null
     if (swap !== null) {
-        graphs.push({
+        secondary.push({
             label: 'Swap used',
             detail: `of ${bytesText(swapTotal)}`,
             trend: swap,
@@ -434,7 +484,7 @@ function graphsOf(host: HostResources, history: HostHistory): Graph[] {
     ]
     for (const [label, stalled] of stalls) {
         if (stalled !== null) {
-            graphs.push({
+            secondary.push({
                 label,
                 detail: 'time a process waited',
                 trend: stalled,
@@ -445,9 +495,9 @@ function graphsOf(host: HostResources, history: HostHistory): Graph[] {
     }
     const rss = trend(history, (s) => s.rss)
     if (rss !== null) {
-        graphs.push({ label: "Loop's memory", trend: rss, top: headroom(rss.peak), format: bytesText })
+        secondary.push({ label: "Loop's memory", trend: rss, top: headroom(rss.peak), format: bytesText })
     }
-    return graphs
+    return { primary, secondary }
 }
 
 // A graph's top over its peak, the room Charts keeps over a bar's; a peak of nothing still has a top.
