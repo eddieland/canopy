@@ -269,7 +269,9 @@ Rules:
   page's title), on the same tint, since only the operator can settle it, saying by how much and the two ways out, with
   no button, since both ways out are the operator's words; and changes asked of a plan that no planner has started on
   (`ChangesAsked`), on the `status-running` tint, since the loop acts on them next, never a muted line a request can
-  hide in.
+  hide in; and on the system resources page, what is under pressure, on the worst pressure's tint, each concern in its
+  own pressure's color with what it costs and the way out under it, since the operator arrives from the header's
+  readout to ask exactly that.
 - **Agent memory** (docs/design §28) shows only while a tier is on, and always says each tier's mode in words, never by
   color alone, so recorded memory is never taken for memory in use: the header's readout, `memory: recording` or
   `memory: in use`, opening the memory page, which is in no section; and a tier's band heading its panel, a chip naming
@@ -623,8 +625,10 @@ A measure over time (`TrendChart`, `src/lib/trend.ts`, the system resources page
 accent, the area under it the accent's tint, from zero, broken where no reading was taken rather than bridged. Its top
 is a capacity where the measure has one and the peak with `HEADROOM` where it has none. A threshold it is read against
 is a muted line with its name at its right end, drawn only while it is under the top. The pointer snaps a crosshair to
-the nearest reading, whose value and time stand in the latest's place. The plot is `aria-hidden`, and a screen reader
-hears its latest value, peak, and low in words in place of a table.
+the nearest reading, whose value and time stand in the latest's place. Beside the latest value it names the peak, or
+the low for what runs out, such as free space; where the page says the latest beside the chart, it names only that
+extreme. A threshold's line and name are drawn over the area, never under its tint. The plot is `aria-hidden`, and a
+screen reader hears its latest value, peak, and low in words in place of a table.
 
 The context chart differs where it must: its bars are its controls, each named for its call on hover and to a screen
 reader, so no table repeats them.
