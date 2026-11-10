@@ -88,6 +88,9 @@ REASON_CURSORS: Mapping[str, ResumeReason] = {
 RECORDED_PREFIX = "recorded:"
 #: The attention item a dispatch refused for a retired `fix-ci` prompt override records (DESIGN §8, §14).
 FIX_CI_OVERRIDE = "fix_ci_override"
+#: The kinds that read a member's epic's approved plan from a copy where they start, and are told what changed in it
+#: since (DESIGN §43): its plan, and the work that follows it.
+_WITHIN_EPIC: tuple[str, ...] = (policy.PLAN, RunKind.IMPLEMENT, RunKind.RESUME)
 
 
 class Refusal(Exception):  # noqa: N818  (a refusal is an outcome the overseer is told about, not an error)
@@ -1157,20 +1160,6 @@ def _spawn(
         # One prompt for public and private tickets: a private one's conversation holds the operator's messages, and
         # its start record, not a label, authorizes it (DESIGN §25).
         values["AUTHORIZATION"] = prompts.plan_authorization(cfg.tracker.labels, private=plan.private)
-        # A member of an epic with an approved plan plans within it, from a copy its run puts in its desk (DESIGN §43).
-        member = epics.member_epic(ctx.conn, ctx.state_dir, key) if kind == policy.PLAN else None
-        if member is not None:
-            # The ids changes of the epic's plan reached it by since its last plan, told once, as data (DESIGN §43).
-            pending = epic_changes.pending(ctx.conn, key)
-            told = tuple(pending.ids) if pending is not None else ()
-            values["EPIC"] = prompts.epic_note(
-                member.epic_id,
-                member.entries,
-                epics.EPIC_COPY,
-                dropped=member.dropped,
-                changed=told,
-            )
-            required = (*required, *prompts.REQUIRED_EPIC)
         values["OPERATOR_MESSAGES"] = (
             conversation.prompt_conversation(ctx.conn, key)
             if plan.private
@@ -1187,6 +1176,15 @@ def _spawn(
             required = (*required, *prompts.REQUIRED_OPERATOR)
     if review is not None:
         required = (*required, *prompts.REQUIRED_REVIEW)
+    # A member of an epic with an approved plan plans and works within it, from a copy its run puts where it starts.
+    member = epics.member_epic(ctx.conn, ctx.state_dir, key) if kind in _WITHIN_EPIC else None
+    if member is not None:
+        # The ids changes of the epic's plan reached it by since it was last told, told once, as data (DESIGN §43).
+        pending = epic_changes.pending(ctx.conn, key)
+        told = tuple(pending.ids) if pending is not None else ()
+        note = prompts.epic_note if kind == policy.PLAN else prompts.epic_work_note
+        values["EPIC"] = note(member.epic_id, member.entries, epics.EPIC_COPY, dropped=member.dropped, changed=told)
+        required = (*required, *prompts.REQUIRED_EPIC)
     # `_run` writes the copy where the worker starts: its desk, or its one worktree (DESIGN §25).
     followed = plan_guards.plan_note(ctx, key, kind, (desk or first.slot_path) / plans.COPY, reasons)
     if followed is not None:

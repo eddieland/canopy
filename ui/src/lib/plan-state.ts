@@ -34,7 +34,10 @@ export function ticketChangedNote(newest: PlanFile): string | null {
     return `Its ticket’s ${what} changed since you approved it: approve it again if it still fits.`
 }
 
-/** Why the ticket needs a plan or not, in a sentence for a hover: the operator's own word, or `policy.plan`. */
+/**
+ * Why the ticket needs a plan or not, in a sentence for a hover: the operator's own word, its epic's plan, which may
+ * mark it trivial, or `policy.plan`.
+ */
 export function planNeededWhy(plans: TicketPlans): string {
     switch (plans.setting) {
         case 'plan': {
@@ -44,6 +47,10 @@ export function planNeededWhy(plans: TicketPlans): string {
             return 'You waived its plan (canopy plan --skip): its implement goes ahead without one.'
         }
         case null: {
+            if (plans.policy === 'approve' && plans.trivial !== null) {
+                const why = `Its epic's plan marks it trivial (${plans.trivial})`
+                return `${why}: your approval of that plan stands for its own.`
+            }
             return plans.policy === 'approve'
                 ? 'policy.plan is approve: every implement waits on a plan you approve.'
                 : 'policy.plan is off: no ticket waits on a plan unless you ask for one.'

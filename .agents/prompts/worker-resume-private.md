@@ -177,6 +177,14 @@ section the step's stage, so the operator follows the plan they approved being d
 
 {{/PLAN}}
 
+{{#EPIC}}
+
+## The epic
+
+{{EPIC}}
+
+{{/EPIC}}
+
 ## Why you were resumed
 
 {{REASONS}}

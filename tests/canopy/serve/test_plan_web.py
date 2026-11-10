@@ -60,6 +60,7 @@ def test_a_tickets_plans_are_read_as_their_files_stand(ctx: Context) -> None:
     plan_id = proposed(ctx)
     listed = c.get(f"/api/tickets/{KEY}/plans").json()
     assert (listed["needed"], listed["setting"], listed["policy"], listed["planning"]) == (False, None, "off", None)
+    assert listed["trivial"] is None
     newest = listed["newest"]
     assert (newest["text"], newest["problem"], newest["sha256"]) == (TEXT, None, sha(TEXT))
     assert (newest["edited"], newest["changed_since_approval"]) == (False, False)

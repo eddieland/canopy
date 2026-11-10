@@ -811,14 +811,14 @@ def _written_plan(
 
 
 def _epic_copy(ctx: Context, member: epics.MemberEpic) -> str:
-    """Return the text of `member`'s epic's approved plan, read from its kept copy, for its planner's desk (§43).
+    """Return the text of `member`'s epic's approved plan, read from its kept copy, for its planner or worker (§43).
 
     Raises:
-        SetupError: the copy is missing or not what the operator approved: the planner is never run without it.
+        SetupError: the copy is missing or not what the operator approved: no agent is run without it.
     """
     text = epics.approved_text(ctx.state_dir, member.plan)
     if text is None:
-        msg = f"epic:{member.epic_id}'s approved plan is no longer as the operator approved it; no plan was run"
+        msg = f"epic:{member.epic_id}'s approved plan is no longer as the operator approved it; its agent did not start"
         raise SetupError(msg)
     return text
 
@@ -1000,9 +1000,10 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     starts = [checkpoint.check_out(slot.git, slot.base, branch) for slot in slots]
     for slot in slots:
         _run_setup(ctx, run, slot, out, log)
-    copy = _plan_copy(ctx, run)
+    # The plan the run follows, and its epic's, each as its own file where it starts (DESIGN §25, §43).
+    copies = {plans.COPY: _plan_copy(ctx, run), epics.EPIC_COPY: _work_epic_copy(ctx, run)}
     attached = _attachment_copies(ctx, run)
-    desk_files = _place_copy(run, slots, copy) | _place_attachments(run, slots, attached)
+    desk_files = _place_copies(run, slots, copies) | _place_attachments(run, slots, attached)
     runtime = ctx.config.runtime
     template = runtime.private_worker_cmd if run["private"] else runtime.worker_cmd
     # As the prompt names them: the run's model, and its planner's when it follows a plan (DESIGN §25).
@@ -1017,7 +1018,7 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
         template=template,
         desk_files=desk_files,
         marks=marks,
-        follows_plan=copy is not None,
+        follows_plan=copies[plans.COPY] is not None,
     )
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
 
@@ -1070,7 +1071,9 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     # Before a kick, which replaces the branch's commits with copies the run did not make (DESIGN §23).
     changed = _keep_changes(run, slots, starts, checked_pushes, log)
     listed = _keep_checklist_pushes(run, slots, branch, listed, log)
-    committed = [found for slot in slots if copy is not None and (found := _committed_copy(slot, branch))]
+    committed = [
+        found for s in slots for n, c in copies.items() if c is not None and (found := _committed_copy(s, branch, n))
+    ]
     committed += [found for slot in slots if attached and (found := _committed_attachments(slot, branch))]
     for slot, start in zip(slots, starts, strict=True):
         committed += checkpoint.unmarked(slot.git, branch, start, slot.base, marks)
@@ -1259,6 +1262,21 @@ def _plan_copy(ctx: Context, run: sqlite3.Row) -> str | None:
     return text
 
 
+def _work_epic_copy(ctx: Context, run: sqlite3.Row) -> str | None:
+    """Return the approved plan of the epic the run's ticket is a member of, for the worker to work within (§43).
+
+    Read as the run starts, as its planner's is: the prompt named the copy if the ticket was a member at the dispatch.
+
+    Returns:
+        The epic plan's text, or None when the ticket is a member of no epic, or its epic has no approved plan.
+
+    Raises:
+        SetupError: the copy is missing or not what the operator approved: the worker is never run without it.
+    """
+    member = epics.member_epic(ctx.conn, ctx.state_dir, str(run["ticket_key"]))
+    return _epic_copy(ctx, member) if member is not None else None
+
+
 def _feedback_plan_copy(ctx: Context, run: sqlite3.Row) -> str:
     """Return the approved feedback plan a `resume` follows, which it spent, read again from its file (DESIGN §32).
 
@@ -1284,36 +1302,38 @@ def _feedback_plan_copy(ctx: Context, run: sqlite3.Row) -> str:
     return text
 
 
-def _place_copy(run: sqlite3.Row, slots: Sequence[_Slot], copy: str | None) -> dict[str, str]:
-    """Put the worker's copy of the plan where it starts: in its desk, or at its one worktree's root (DESIGN §25).
+def _place_copies(run: sqlite3.Row, slots: Sequence[_Slot], copies: Mapping[str, str | None]) -> dict[str, str]:
+    """Put the worker's copies of its plans, each by its file's name, where it starts (DESIGN §25, §43).
+
+    That is in its desk, or at its one worktree's root. A plan of None is one the run does not follow.
 
     Returns:
-        The files `_run_agent` writes into the desk: the copy for a run in a desk, else none.
+        The files `_run_agent` writes into the desk: the copies for a run in a desk, else none.
     """
-    if copy is None:
-        return {}
+    found = {name: text for name, text in copies.items() if text is not None}
     if dispatch.in_desk(str(run["kind"]), slots):
-        return {plans.COPY: copy}
-    _write_copy(slots[0], copy)
+        return found
+    for name, text in found.items():
+        _write_copy(slots[0], name, text)
     return {}
 
 
-def _write_copy(slot: _Slot, text: str) -> None:
-    """Write the worker's copy of the plan at the root of its worktree, ignored by git there (DESIGN §25).
+def _write_copy(slot: _Slot, name: str, text: str) -> None:
+    """Write the worker's copy of a plan at the root of its worktree as `name`, ignored by git there (DESIGN §25).
 
     Raises:
         SetupError: git could not name the repository's git directory, or the exclude file or the copy could not be
             written.
     """
-    checkpoint.ignore(slot.git, plans.COPY)
+    checkpoint.ignore(slot.git, name)
     try:
-        logs.write_private(slot.path / plans.COPY, text)
+        logs.write_private(slot.path / name, text)
     except OSError as e:
-        raise SetupError(f"{slot.git.where}could not write the plan's copy: {e}") from e
+        raise SetupError(f"{slot.git.where}could not write the plan's copy, {name}: {e}") from e
 
 
-def _committed_copy(slot: _Slot, branch: str) -> str:
-    """Return a harness note when the branch pushed from `slot` holds the plan's copy at its root, else "".
+def _committed_copy(slot: _Slot, branch: str, name: str) -> str:
+    """Return a harness note when the branch pushed from `slot` holds a plan's copy, `name`, at its root, else "".
 
     Ignored is not untrackable: a worker can add the copy by name. canopy reports it and does not rewrite the branch
     (DESIGN §25, Workers follow the plan).
@@ -1321,10 +1341,11 @@ def _committed_copy(slot: _Slot, branch: str) -> str:
     remote = checkpoint.remote_head(slot.git, branch)
     if not remote:
         return ""
-    found = slot.git.result("ls-tree", "--name-only", remote, "--", plans.COPY)
+    found = slot.git.result("ls-tree", "--name-only", remote, "--", name)
     if not (found.ok and found.stdout.strip()):
         return ""
-    return f"{slot.git.where}the pushed {branch} holds {plans.COPY}, the plan's copy, committed by the worker"
+    what = "the epic plan's copy" if name == epics.EPIC_COPY else "the plan's copy"
+    return f"{slot.git.where}the pushed {branch} holds {name}, {what}, committed by the worker"
 
 
 def _attachment_copies(ctx: Context, run: sqlite3.Row) -> list[attachments.Copy]:

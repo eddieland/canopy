@@ -3,7 +3,7 @@
 import json
 
 from canopy.core import epic_changes, plans
-from canopy.core.vocab import PlanStatus, RunKind, RunStatus
+from canopy.core.vocab import PlanStatus, ResumeReason, RunKind, RunStatus
 from canopy.notify import message
 from tests.canopy.helpers import KEY, epic_planned, planner_does, present
 from tests.canopy.scenario_helpers import Printed, Scenario, dispatches, pushes
@@ -13,6 +13,7 @@ from tests.conftest import GitPool
 OTHER = "PROJ-2"
 PLAN = dispatches(kind=RunKind.PLAN)
 IMPLEMENT = dispatches(slug="work")
+RESUME = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CONFLICT])
 TEXT = "# Plan for PROJ-1\n\n## Goal\n\nRead sessions from the store.\n\n## Epic\n\nCovers R2; uses C1.\n"
 EPIC_PLAN = """\
 # Epic: sessions
@@ -168,7 +169,7 @@ def test_work_in_flight_or_built_is_left_alone_and_a_member_not_reached_is_untou
     planning = scenario.starts(dispatches(OTHER, RunKind.PLAN), worker=planner_does(plan=TEXT))
 
     approved = approved_again(scenario, C1_CHANGED)
-    assert f"Left as they are, each told at its next plan: {KEY}, {OTHER}\n" in approved.out
+    assert f"Left as they are, each told at its next run: {KEY}, {OTHER}\n" in approved.out
     assert "superseded as stale" not in approved.out
     assert planning.finishes().status is RunStatus.DONE
     # Its plan, landing after, waits on the operator as any does: nothing paused it or marked it.
@@ -178,6 +179,25 @@ def test_work_in_flight_or_built_is_left_alone_and_a_member_not_reached_is_untou
 
     # R1 is B1's alone: OTHER, which fulfils B2, is not reached, and its plan stays as it was.
     approved = approved_again(scenario, R1_CHANGED, "Workers restart too.")
-    assert f"Left as they are, each told at its next plan: {KEY}\n" in approved.out
+    assert f"Left as they are, each told at its next run: {KEY}\n" in approved.out
     assert present(plans.current(scenario.conn, OTHER)).status is PlanStatus.PROPOSED
     assert present(epic_changes.pending(scenario.conn, KEY)).ids == ["C1", "R1"]
+
+
+def test_a_member_with_a_branch_is_told_at_its_next_resume_once(scenario: Scenario, git_pool: GitPool) -> None:
+    """Work already built is left alone: its next `resume` hears the changed ids as data, and the one after does not."""
+    assert git_pool.slots
+    approved_epic(scenario, (KEY, "B1"))
+    assert scenario.run(IMPLEMENT, worker=pushes()).status is RunStatus.DONE
+    approved_again(scenario, C1_CHANGED)
+    assert present(epic_changes.pending(scenario.conn, KEY)).ids == ["C1"]
+
+    resumed = scenario.run(RESUME, worker=pushes())
+    assert "The operator approved the epic's plan again since this ticket was last told of it" in resumed.prompt
+    assert "changing `C1`" in resumed.prompt
+    assert "do not rewrite either for the change" in resumed.prompt
+    assert epic_changes.pending(scenario.conn, KEY) is None
+
+    again = scenario.run(RESUME, worker=pushes())
+    assert "This ticket is a member of epic:1" in again.prompt
+    assert "approved the epic's plan again" not in again.prompt

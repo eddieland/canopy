@@ -60,7 +60,15 @@ A member is a ticket you add to the epic, usually one you filed for an entry of 
 [the epic's page](#an-epics-page): **Register a ticket** beside an entry's `none yet`, or **Add a ticket** under the
 breakdown. A ticket is a member of one epic at most, and an epic holds `policy.max_epic_tickets` at most. Being a
 member authorizes no work: a member is worked once you label it or start it, like any other ticket, and then its
-planner reads the epic's approved plan beside its own ticket.
+planner reads the epic's approved plan beside its own ticket, and so does each worker after it, so the contracts its
+siblings build against are in front of the one doing the building.
+
+A member whose every entry the approved plan marks `trivial` skips its own plan: approving the epic's plan approved it,
+and its implement goes straight to work with the epic's copy. Its plan card says `not needed` and, on hover, the
+plan's reason. The mark only counts while `policy.planner_may_approve` is on, and never for a ticket you asked to plan
+(`canopy plan KEY`), a member of no entry, or one registered against an entry the plan no longer holds. Approve a plan
+that drops the mark and the member waits on a plan of its own again, which is the point: the epic planner's "it's only
+a config change" holds until you approve otherwise.
 
 A member's own page says whose it is: its **Work** panel reads `member of epic:2 · B1`, or `of no entry`, one click
 from the epic. Its plan's page names the epic plan its planner read, by hash, and when you approved it, and says when
