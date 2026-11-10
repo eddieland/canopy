@@ -31,7 +31,16 @@ from tests.canopy.helpers import (
     waits,
     with_memory,
 )
-from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
+from tests.canopy.scenario_helpers import (
+    ALICES_COMMENT,
+    FEEDBACK_PLANNED,
+    FEEDBACK_TEXT,
+    Scenario,
+    dispatches,
+    github_shows,
+    pushes,
+    with_a_pr,
+)
 
 if TYPE_CHECKING:
     from tests.conftest import CanopyEnv, GitPool
@@ -255,6 +264,24 @@ def test_a_plan_hears_lessons_but_what_it_sends_of_memory_changes_nothing(
     # Its prompt carries no contract, so it cites and proposes nothing (DESIGN §28, Proposals and lessons).
     assert memory.get(conn, lesson.id) == lesson
     assert [m.id for m in memories(conn) if m.status is MemoryStatus.PENDING] == []
+
+
+def test_a_feedback_plan_hears_lessons_as_the_resume_it_plans_does(
+    scenario: Scenario,
+    git_pool: GitPool,
+    github_state: Path,
+) -> None:
+    """A feedback plan's prompt carries the lessons, so it plans its resume knowing what the operator told every run."""
+    conn = scenario.conn
+    with_a_pr(scenario)
+    scenario.configures("private", memory=memory_modes(proposals="use"))
+    lesson = promoted(conn, scenario.env)
+    github_shows(github_state, ALICES_COMMENT)
+    planner = planner_does(plan=FEEDBACK_TEXT, result=FEEDBACK_PLANNED)
+    run = scenario.run(dispatches(kind=RunKind.FEEDBACK_PLAN), worker=planner)
+    assert f"{HEADING}\n\nLessons the operator promoted" in run.prompt
+    assert f"Lesson {lesson.id}, `api-tests`:\n> {LESSON}" in run.prompt
+    assert [m.id for m in memory.read_by(conn, run.id)] == [lesson.id]
 
 
 def test_a_used_lesson_is_pushed_back_from_review_and_a_wrong_one_raises_lesson_wrong(
