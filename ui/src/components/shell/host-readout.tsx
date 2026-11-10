@@ -43,7 +43,7 @@ export function HostReadout() {
             <Link
                 to="/system"
                 className={cn(
-                    'readout inline-flex items-center gap-1.5 text-xs whitespace-nowrap underline-offset-4',
+                    'inline-flex items-center gap-1.5 readout text-xs whitespace-nowrap underline-offset-4',
                     'hover:underline',
                     PRESSURE_TEXT[pressure],
                 )}

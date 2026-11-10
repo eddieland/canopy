@@ -779,7 +779,7 @@ export function PlanDocument({ markdown, label }: { markdown: string; label: str
 function ChangeSteps({ count, onStep }: { count: number; onStep: (step: 1 | -1) => void }) {
     return (
         <span className="flex items-center gap-0.5">
-            <span className="readout mr-1 text-xs text-muted-foreground">
+            <span className="mr-1 readout text-xs text-muted-foreground">
                 {count} {count === 1 ? 'change' : 'changes'}
             </span>
             <Button

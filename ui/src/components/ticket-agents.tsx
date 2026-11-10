@@ -55,12 +55,12 @@ export function TicketAgents({
                         <Fragment key={agent}>
                             <dt className="panel-label">{agent}</dt>
                             {persona !== undefined && (
-                                <dd className="min-w-0 break-words">
+                                <dd className="min-w-0 wrap-break-word">
                                     <PersonaChoice current={persona} names={names} choices={choices} />
                                 </dd>
                             )}
                             {model !== undefined && (
-                                <dd className="col-start-2 min-w-0 break-words @lg:col-start-3">
+                                <dd className="col-start-2 min-w-0 wrap-break-word @lg:col-start-3">
                                     <ModelChoice ticketKey={ticketKey} current={model} models={models} />
                                 </dd>
                             )}
@@ -68,7 +68,7 @@ export function TicketAgents({
                     )
                 })}
             </dl>
-            <Notice error={choices.error} className="col-span-full pt-1.5 pb-1.5">
+            <Notice error={choices.error} className="col-span-full py-1.5">
                 {choices.said}
             </Notice>
         </div>

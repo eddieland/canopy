@@ -180,7 +180,7 @@ function PressureBand({ found }: { found: readonly Concern[] }) {
             <ul className="flex min-w-0 flex-col gap-1.5">
                 {found.map((c) => (
                     <li key={c.text} className="flex flex-col gap-0.5">
-                        <span className={cn('text-sm font-medium break-words', PRESSURE_TEXT[c.pressure])}>
+                        <span className={cn('text-sm font-medium wrap-break-word', PRESSURE_TEXT[c.pressure])}>
                             {c.text}
                         </span>
                         <span className="text-xs text-muted-foreground">

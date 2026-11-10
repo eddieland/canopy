@@ -35,7 +35,7 @@ export function ReadoutCard({
         <div className="flex flex-col gap-2.5 text-xs">
             <div className="flex min-w-0 items-baseline justify-between gap-3">
                 <span className="truncate font-medium">{title}</span>
-                {aside !== undefined && <span className="readout shrink-0 text-muted-foreground">{aside}</span>}
+                {aside !== undefined && <span className="shrink-0 readout text-muted-foreground">{aside}</span>}
             </div>
             {children}
             <span className="text-muted-foreground">{foot}</span>

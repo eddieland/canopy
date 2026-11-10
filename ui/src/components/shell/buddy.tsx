@@ -281,11 +281,11 @@ function Bubble({
         <div
             data-testid="buddy-tip"
             className={cn(
-                'animate-buddy-tip pointer-events-auto relative w-full rounded-md border bg-surface-raised p-3 text-sm',
+                'pointer-events-auto relative w-full animate-buddy-tip rounded-md border bg-surface-raised p-3 text-sm',
                 !shown && 'invisible',
             )}
         >
-            <p className="panel-label mb-1">{name}</p>
+            <p className="mb-1 panel-label">{name}</p>
             <p>{tip}</p>
             <div className="mt-2.5 flex flex-col items-start gap-1 text-xs">
                 <button
@@ -318,7 +318,7 @@ function Bubble({
             {/* The tail: a square turned on its corner, its two outer edges bordered, tucked under the bubble's. */}
             <span
                 aria-hidden
-                className="absolute -bottom-[5px] left-6 size-2.5 rotate-45 border-r border-b bg-surface-raised"
+                className="absolute bottom-[-5px] left-6 size-2.5 rotate-45 border-r border-b bg-surface-raised"
             />
         </div>
     )

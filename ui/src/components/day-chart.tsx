@@ -67,7 +67,7 @@ export function DayChart({
                         {axisNames(i, bars.length, step) && (
                             <span
                                 className={cn(
-                                    'readout absolute left-1/2 -translate-x-1/2',
+                                    'absolute left-1/2 -translate-x-1/2 readout',
                                     'text-2xs whitespace-nowrap text-muted-foreground',
                                 )}
                                 data-testid={`${testId}-axis-${bar.key}`}
@@ -197,7 +197,7 @@ function Bar({
             {peak !== undefined && (
                 <span
                     className={cn(
-                        'readout absolute inset-x-0 flex pb-0.5 text-2xs whitespace-nowrap',
+                        'absolute inset-x-0 flex pb-0.5 readout text-2xs whitespace-nowrap',
                         PEAK_JUSTIFY[peak],
                     )}
                     style={{ bottom: `${height}%` }}

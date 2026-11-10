@@ -49,7 +49,7 @@ export function CellBar({
 export function CellBarHead({ className, children }: { className?: string; children: ReactNode }) {
     return (
         <>
-            <th className={cn('panel-label pb-1.5 pl-3 text-right font-normal whitespace-nowrap', className)}>
+            <th className={cn('pb-1.5 pl-3 text-right panel-label font-normal whitespace-nowrap', className)}>
                 {children}
             </th>
             <td aria-hidden />

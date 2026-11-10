@@ -17,7 +17,7 @@ export function EntriesFiled({ epic }: { epic: EpicSummary }) {
         <span
             data-testid="entries-filed"
             // Lit, it takes a hair of room either side for its tint and gives it back, so nothing beside it moves.
-            className={cn('relative', playing && '-mx-1 box-decoration-clone rounded-sm px-1 animate-lit')}
+            className={cn('relative', playing && '-mx-1 animate-lit rounded-sm box-decoration-clone px-1')}
         >
             {entriesFiled(epic)}
             {playing && <Leaf className="-top-2 -right-3" />}

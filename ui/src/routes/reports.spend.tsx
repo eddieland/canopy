@@ -519,7 +519,7 @@ function Budget({ month }: { month: SpendMonth | null }) {
             <p className="text-xs text-muted-foreground" data-testid="spend-budget-parts">
                 {budgetPartsText(month, clock)}
             </p>
-            <div aria-hidden className="relative pt-5 pb-5" data-testid="spend-budget-meter">
+            <div aria-hidden className="relative py-5" data-testid="spend-budget-meter">
                 {alertMarks(month).map((percent) => (
                     <BarLabel key={percent} at={percent} className="top-0" testId={`spend-budget-alert-${percent}`}>
                         {percent}%
@@ -575,7 +575,7 @@ function BarLabel({
 }) {
     return (
         <span
-            className={cn('readout absolute text-2xs leading-none whitespace-nowrap text-muted-foreground', className)}
+            className={cn('absolute readout text-2xs leading-none whitespace-nowrap text-muted-foreground', className)}
             style={{ left: `${at}%`, transform: `translateX(-${at}%)` }}
             data-testid={testId}
         >

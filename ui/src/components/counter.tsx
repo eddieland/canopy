@@ -58,7 +58,7 @@ export function Counter({
             data-testid={`counter-${testId ?? label.toLowerCase().split(/[ ,]+/u)[0]}`}
         >
             <span className="panel-label">{label}</span>
-            <span className="readout h-8 text-3xl leading-8 font-medium">
+            <span className="h-8 readout text-3xl leading-8 font-medium">
                 {value === undefined ? <Skeleton className="h-7 w-12" /> : <RollingNumber value={String(value)} />}
             </span>
             {/* Cut to fit, so a line that grows with the workspace (pools unread) is whole in its tip. */}

@@ -24,7 +24,7 @@ export function ChoreLimitBanner({ chore }: { chore: Pick<ChoreSummary, 'name' |
         >
             <ListFilter aria-hidden className="mt-0.5 size-4 shrink-0 text-status-blocked" />
             <div className="flex min-w-0 flex-col gap-0.5">
-                <p className="text-sm break-words">
+                <p className="text-sm wrap-break-word">
                     <span className="font-medium text-status-blocked">Over its finding limit: </span>
                     {overLimitText(chore.max_findings, chore.more_findings)}
                 </p>

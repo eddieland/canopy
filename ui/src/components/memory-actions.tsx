@@ -294,7 +294,7 @@ export function LessonActions({
                 'flex flex-col gap-2',
                 !shown && [
                     'pointer-fine:absolute pointer-fine:right-3 pointer-fine:bottom-1.5 pointer-fine:bg-surface',
-                    'pointer-fine:pl-2 opacity-0 group-hover/copy:opacity-100 focus-within:opacity-100',
+                    'opacity-0 group-hover/copy:opacity-100 focus-within:opacity-100 pointer-fine:pl-2',
                     'pointer-coarse:opacity-100',
                     // While the row's versions are open they are its end: the verbs keep to the row's flow above them.
                     'pointer-fine:group-data-[state=open]/copy:static',

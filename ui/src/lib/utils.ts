@@ -1,7 +1,19 @@
 import { clsx } from 'clsx'
 import type { ClassValue } from 'clsx'
 import type { ReactNode } from 'react'
-import { twMerge } from 'tailwind-merge'
+import { extendTailwindMerge } from 'tailwind-merge'
+
+// The theme's sizes and shadows that are not on Tailwind's t-shirt scale (`--text-*` and `--shadow-*` in
+// src/styles/tokens.css). Unknown to tailwind-merge, `text-code` would read as a color, so `cn('text-code',
+// 'text-muted-foreground')` would drop the size; utils.test.ts holds this list to the stylesheet.
+const twMerge = extendTailwindMerge({
+    extend: {
+        theme: {
+            text: ['code'],
+            shadow: ['panel', 'float', 'action', 'action-pressed', 'bubble', 'chip', 'selected'],
+        },
+    },
+})
 
 /** Joins class names, letting a later Tailwind utility override an earlier one of the same kind. */
 export function cn(...inputs: ClassValue[]): string {
