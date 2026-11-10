@@ -19,7 +19,7 @@ export function Rave() {
         >
             <div className="absolute inset-0 rave-dark" />
             {/* Wider than the window's diagonal every way, so its corners never show as it turns. */}
-            <div className="absolute -inset-[50vmax] rave-beams" />
+            <div className="absolute inset-[-50vmax] rave-beams" />
         </div>
     )
 }

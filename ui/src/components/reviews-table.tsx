@@ -120,7 +120,7 @@ function ReviewRow({
     // way before the PR's name does: it is cut first, and left out where the column has no room for it.
     const persona = review.persona !== null && (
         <Tip fact="The persona it wrote in">
-            <span className="hidden min-w-0 shrink-[999] truncate readout text-xs text-muted-foreground @3xl:inline">
+            <span className="hidden min-w-0 shrink-999 truncate readout text-xs text-muted-foreground @3xl:inline">
                 as {review.persona}
             </span>
         </Tip>

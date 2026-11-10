@@ -458,7 +458,7 @@ function Entry({
                     {entry.reasoning ? (
                         <Thinking text={entry.text} open={open} words={words} />
                     ) : (
-                        <p className="min-w-0 flex-1 text-sm break-words whitespace-pre-wrap">
+                        <p className="min-w-0 flex-1 text-sm wrap-break-word whitespace-pre-wrap">
                             <MarkedText text={entry.text} words={words} />
                         </p>
                     )}
@@ -480,7 +480,7 @@ function Entry({
                     <span className="font-mono text-xs text-status-failed">
                         <MarkedText text={entry.name} words={words} />
                     </span>
-                    <p className="min-w-0 flex-1 text-sm break-words whitespace-pre-wrap">
+                    <p className="min-w-0 flex-1 text-sm wrap-break-word whitespace-pre-wrap">
                         <MarkedText text={entry.message} words={words} />
                     </p>
                 </Row>
@@ -503,7 +503,7 @@ function Thinking({ text, open, words }: { text: string; open: boolean; words: r
     const whole = toggled ?? (open || matches(said, words) > matches(shown, words))
     return (
         <div className="flex min-w-0 flex-1 flex-col gap-1.5 text-muted-foreground italic">
-            <p className="text-sm break-words whitespace-pre-wrap">
+            <p className="text-sm wrap-break-word whitespace-pre-wrap">
                 <span className="mr-2 panel-label not-italic">thinking</span>
                 <MarkedText text={whole ? said : shown} words={words} />
             </p>
@@ -973,7 +973,7 @@ function Decisions({ decisions, words }: { decisions: readonly CallDecision[]; w
                         <span className="shrink-0 font-mono text-muted-foreground">
                             <MarkedText text={d.action} words={words} />
                         </span>
-                        <span className="min-w-0 flex-1 break-words">
+                        <span className="min-w-0 flex-1 wrap-break-word">
                             <MarkedText text={d.rationale} words={words} />
                         </span>
                     </li>
@@ -1010,7 +1010,7 @@ function Settings({ settings, words }: { settings: readonly CallSetting[]; words
                             </span>
                         ))}
                         {s.title !== null && (
-                            <span className="min-w-0 flex-1 break-words">
+                            <span className="min-w-0 flex-1 wrap-break-word">
                                 <MarkedText text={s.title} words={words} />
                             </span>
                         )}
@@ -1055,7 +1055,7 @@ function Pre({
         <pre
             className={cn(
                 'max-h-96 overflow-auto rounded-sm border bg-background p-2',
-                'font-mono text-xs break-words whitespace-pre-wrap',
+                'font-mono text-xs wrap-break-word whitespace-pre-wrap',
                 failed && 'border-status-failed/40',
             )}
         >

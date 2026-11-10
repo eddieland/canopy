@@ -501,7 +501,7 @@ function AnsweringRun({ run }: { run: ChecklistRun }) {
                 <Age at={run.started_at} variant="ago" />
             </span>
             {run.reason !== null && (
-                <span className="text-xs break-words text-muted-foreground">
+                <span className="text-xs wrap-break-word text-muted-foreground">
                     <LinkedText text={run.reason} />
                 </span>
             )}

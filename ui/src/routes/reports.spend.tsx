@@ -519,7 +519,7 @@ function Budget({ month }: { month: SpendMonth | null }) {
             <p className="text-xs text-muted-foreground" data-testid="spend-budget-parts">
                 {budgetPartsText(month, clock)}
             </p>
-            <div aria-hidden className="relative pt-5 pb-5" data-testid="spend-budget-meter">
+            <div aria-hidden className="relative py-5" data-testid="spend-budget-meter">
                 {alertMarks(month).map((percent) => (
                     <BarLabel key={percent} at={percent} className="top-0" testId={`spend-budget-alert-${percent}`}>
                         {percent}%

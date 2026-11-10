@@ -318,7 +318,7 @@ function Bubble({
             {/* The tail: a square turned on its corner, its two outer edges bordered, tucked under the bubble's. */}
             <span
                 aria-hidden
-                className="absolute -bottom-[5px] left-6 size-2.5 rotate-45 border-r border-b bg-surface-raised"
+                className="absolute bottom-[-5px] left-6 size-2.5 rotate-45 border-r border-b bg-surface-raised"
             />
         </div>
     )

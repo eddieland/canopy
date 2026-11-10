@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
  */
 export function MemoryText({ text, className, lines }: { text: string; className?: string; lines?: boolean }) {
     return (
-        <span className={cn('break-words whitespace-pre-wrap', className)}>
+        <span className={cn('wrap-break-word whitespace-pre-wrap', className)}>
             {memorySegments(text, { lines }).map((segment, i) =>
                 segment.hidden ? (
                     <span

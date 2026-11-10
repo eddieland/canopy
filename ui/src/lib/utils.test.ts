@@ -7,10 +7,13 @@ import { cn, isBlank } from './utils'
 
 const tokens = readFileSync(resolve(import.meta.dirname, '../styles/tokens.css'), 'utf8')
 
-/** The names the stylesheet's theme gives under `--{namespace}-*`, without their `--x--line-height` parts. */
-function themeNames(namespace: string): string[] {
+/** The utilities the stylesheet's theme makes from `--{namespace}-*`, without their `--x--line-height` parts. */
+function themeClasses(namespace: string): string[] {
     const pattern = new RegExp(String.raw`^\s*--${namespace}-([\w-]+?)\s*:`, 'gmu')
-    return [...tokens.matchAll(pattern)].map(([, name]) => name ?? '').filter((name) => !name.includes('--'))
+    return [...tokens.matchAll(pattern)]
+        .map(([, name]) => name ?? '')
+        .filter((name) => !name.includes('--'))
+        .map((name) => `${namespace}-${name}`)
 }
 
 describe('cn', () => {
@@ -18,14 +21,14 @@ describe('cn', () => {
         expect(cn('px-2 text-sm', 'px-3')).toBe('text-sm px-3')
     })
 
-    it.each(themeNames('text'))('reads text-%s as a size, not a color', (name) => {
-        expect(cn(`text-${name}`, 'text-muted-foreground')).toBe(`text-${name} text-muted-foreground`)
-        expect(cn(`text-${name}`, 'text-sm')).toBe('text-sm')
+    it.each(themeClasses('text'))('reads %s as a size, not a color', (size) => {
+        expect(cn(size, 'text-muted-foreground')).toBe(`${size} text-muted-foreground`)
+        expect(cn(size, 'text-sm')).toBe('text-sm')
     })
 
-    it.each(themeNames('shadow'))('reads shadow-%s as a shadow, not a color', (name) => {
-        expect(cn(`shadow-${name}`, 'shadow-accent')).toBe(`shadow-${name} shadow-accent`)
-        expect(cn(`shadow-${name}`, 'shadow-none')).toBe('shadow-none')
+    it.each(themeClasses('shadow'))('reads %s as a shadow, not a color', (shadow) => {
+        expect(cn(shadow, 'shadow-accent')).toBe(`${shadow} shadow-accent`)
+        expect(cn(shadow, 'shadow-none')).toBe('shadow-none')
     })
 })
 

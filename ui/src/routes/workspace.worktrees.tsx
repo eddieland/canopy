@@ -374,11 +374,11 @@ function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: 
             {(w.note || w.branch_error) && (
                 <RowLine from="holder" className="flex flex-wrap gap-x-4 font-mono text-xs">
                     {w.branch_error && (
-                        <span className="min-w-0 break-words text-status-failed">
+                        <span className="min-w-0 wrap-break-word text-status-failed">
                             branch unreadable: {w.branch_error}
                         </span>
                     )}
-                    {w.note && <span className="min-w-0 break-words text-status-blocked">{w.note}</span>}
+                    {w.note && <span className="min-w-0 wrap-break-word text-status-blocked">{w.note}</span>}
                 </RowLine>
             )}
         </ListRow>

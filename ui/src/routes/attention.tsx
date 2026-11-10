@@ -490,7 +490,7 @@ function RowContent({ item, asks, done }: { item: AttentionItem; asks: Ask; done
             {item.ticket_key !== null && <TicketTitle title={item.ticket_title} className="font-semibold" />}
             {item.task !== null && <TaskTitle id={item.task} />}
             {item.epic !== null && <EpicGoal id={item.epic} />}
-            <span className="line-clamp-2 text-sm break-words text-muted-foreground">
+            <span className="line-clamp-2 text-sm wrap-break-word text-muted-foreground">
                 <InlineCode text={shownDetail(item)} links={false} />
             </span>
         </>
@@ -688,7 +688,7 @@ function Head({
                 {action}
             </div>
             {body ?? (
-                <p className="text-sm break-words whitespace-pre-wrap">
+                <p className="text-sm wrap-break-word whitespace-pre-wrap">
                     <InlineCode text={shownDetail(item)} links={links} />
                 </p>
             )}
