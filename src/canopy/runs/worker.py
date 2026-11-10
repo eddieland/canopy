@@ -769,17 +769,20 @@ def _plan(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     result, text = _run_agent(ctx, run, slots, out, log, template=template, desk_files=desk_files)
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
     parsed = contract.last_line(PlanResult, text)
+    # The memories it cites are read only from a valid result line, as a worker's are, however it ended (DESIGN §28).
+    cited = memory.parse(text) if parsed is not None else None
     if result.timed_out:
-        return Outcome(RunStatus.TIMEOUT, parsed, f"the planner timed out after {timeout_minutes} minutes")
+        note = f"the planner timed out after {timeout_minutes} minutes"
+        return Outcome(RunStatus.TIMEOUT, parsed, note, memory=cited)
     if parsed is None:
         return Outcome(RunStatus.UNKNOWN, None, "the planner's last line was not a valid plan result")
     if parsed.status != "done":
-        return Outcome(RunStatus(parsed.status), parsed)
+        return Outcome(RunStatus(parsed.status), parsed, memory=cited)
     written = _written_plan(ctx, run, parsed, replaced, copy)
     if isinstance(written, Outcome):
-        return written
+        return replace(written, memory=cited)
     epic_plan_id = member.plan.id if member is not None else None
-    return _record_plan(ctx, run, parsed, written, log, epic_plan_id=epic_plan_id)
+    return replace(_record_plan(ctx, run, parsed, written, log, epic_plan_id=epic_plan_id), memory=cited)
 
 
 def _written_plan(
@@ -910,17 +913,21 @@ def _feedback_plan(
     result, text = _run_agent(ctx, run, slots, out, log, template=ctx.config.runtime.plan_cmd, desk_files=desk_files)
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
     parsed = contract.last_line(FeedbackPlanResult, text)
+    # As a plan's: what it cites, from a valid result line alone (DESIGN §28).
+    cited = memory.parse(text) if parsed is not None else None
     if result.timed_out:
-        return Outcome(RunStatus.TIMEOUT, parsed, f"the planner timed out after {timeout_minutes} minutes")
+        note = f"the planner timed out after {timeout_minutes} minutes"
+        return Outcome(RunStatus.TIMEOUT, parsed, note, memory=cited)
     if parsed is None:
         return Outcome(RunStatus.UNKNOWN, None, "the planner's last line was not a valid feedback plan result")
     if parsed.status != "done":
-        return Outcome(RunStatus(parsed.status), parsed)
+        return Outcome(RunStatus(parsed.status), parsed, memory=cited)
     written = _written_plan(ctx, run, parsed, replaced, desk_files.get(plans.WRITTEN))
     if isinstance(written, Outcome):
-        return written
+        return replace(written, memory=cited)
     matched = feedback_plans.match(offered, [feedback_plans.Named(i.id, i.proposal, i.reply) for i in parsed.items])
-    return _record_feedback_plan(ctx, run, parsed, written, matched=matched, snapshot=snapshot, log=log)
+    recorded = _record_feedback_plan(ctx, run, parsed, written, matched=matched, snapshot=snapshot, log=log)
+    return replace(recorded, memory=cited)
 
 
 def _feedback_desk(ctx: Context, key: str, offered: Sequence[feedback_items.Item]) -> dict[str, str]:

@@ -114,7 +114,19 @@ export function areaPath(t: Trend, run: readonly TrendPoint[], top: number): str
 
 /** The reading nearest `fraction` of the way across the chart, for the crosshair to snap to. */
 export function nearest(t: Trend, fraction: number): TrendPoint | undefined {
-    const at = t.start + fraction * (t.end - t.start)
+    return nearestAt(t, timeAt(t, fraction))
+}
+
+/** The time `fraction` of the way across the chart, in milliseconds since the epoch: what a pointer there points at. */
+export function timeAt(t: Trend, fraction: number): number {
+    return t.start + Math.min(1, Math.max(0, fraction)) * (t.end - t.start)
+}
+
+/**
+ * The reading nearest `at`, in milliseconds since the epoch: what each of several charts over the same hour snaps its
+ * crosshair to when the pointer is over any one of them.
+ */
+export function nearestAt(t: Trend, at: number): TrendPoint | undefined {
     let found: TrendPoint | undefined
     for (const point of t.points) {
         if (found === undefined || Math.abs(point.at - at) < Math.abs(found.at - at)) {

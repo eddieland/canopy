@@ -34,10 +34,11 @@ if TYPE_CHECKING:
 # a run reads.
 NOTES_TIER = "ticket notes"
 LESSONS_TIER = "lessons"
-# The kinds whose prompts carry a ticket's notes and the memory contract; a review and a chore get no memory, and a
-# plan hears lessons only (DESIGN §28).
+# The kinds whose prompts carry a ticket's notes and the whole memory contract; a review and a chore get no memory, and
+# a plan and a feedback plan hear lessons and may cite them, but write none: a planner pushes nothing a merge can check
+# (DESIGN §28).
 NOTE_KINDS = frozenset({RunKind.IMPLEMENT, RunKind.RESUME})
-LESSON_KINDS = frozenset({*NOTE_KINDS, RunKind.PLAN})
+LESSON_KINDS = frozenset({*NOTE_KINDS, RunKind.PLAN, RunKind.FEEDBACK_PLAN})
 # Bounds on what a run may write (DESIGN §28, Writing).
 MAX_NOTE_CHARS = 400
 MAX_NOTES_PER_RUN = 5
@@ -177,8 +178,8 @@ def modes_for(memory: Memory, kind: str) -> Modes:
     """Return the modes a `kind` run is rendered under now: each tier's, where it reaches the kind (DESIGN §28).
 
     Returns:
-        Ticket notes' mode for `implement` and `resume`, and the proposals' for those and `plan`; `off` for
-        every other kind and tier.
+        Ticket notes' mode for `implement` and `resume`, and the proposals' for those, `plan`, and
+        `feedback-plan`; `off` for every other kind and tier.
     """
     return Modes(
         ticket_notes=memory.ticket_notes if kind in NOTE_KINDS else MemoryMode.OFF,
@@ -203,7 +204,8 @@ def render(conn: sqlite3.Connection, config: Config, *, key: str, kind: str, rep
     the worker to write. At `use`, ticket notes render `key`'s digest into `{{TICKET_MEMORY}}`, and lessons the ones
     for `repos` into `{{WORKSPACE_LESSONS}}`; their ids are the ones the run may cite. A prompt for a kind the
     contract reaches must carry `{{MEMORY_CONTRACT}}`, and one served a digest its placeholder, so an override written
-    before memory existed fails to render rather than drop either.
+    before memory existed fails to render rather than drop either. A plan's contract asks only for its citations, so
+    it reaches a plan only at `use`.
 
     Returns:
         The modes the run is rendered under, the placeholders' values, the placeholders the prompt must carry, and the
@@ -215,8 +217,8 @@ def render(conn: sqlite3.Connection, config: Config, *, key: str, kind: str, rep
     values: dict[str, str] = {}
     required: list[str] = []
     ids: list[int] = []
-    if kind in NOTE_KINDS:
-        values[MEMORY_CONTRACT] = memory_contract(modes)
+    if kind in NOTE_KINDS or modes.proposals is MemoryMode.USE:
+        values[MEMORY_CONTRACT] = memory_contract(modes, writes=kind in NOTE_KINDS)
         required.append(MEMORY_CONTRACT)
     if modes.ticket_notes is MemoryMode.USE:
         digest = ticket_digest(conn, key)
@@ -226,7 +228,7 @@ def render(conn: sqlite3.Connection, config: Config, *, key: str, kind: str, rep
         required.append(TICKET_MEMORY)
         ids.extend(digest.ids)
     if modes.proposals is MemoryMode.USE:
-        lessons = lessons_digest(conn, repos, cite=kind in NOTE_KINDS)
+        lessons = lessons_digest(conn, repos, cite=True)
         # It ends the standing instructions' last line, so it starts with the blank line after them.
         values[WORKSPACE_LESSONS] = f"\n\n{lessons.text}"
         required.append(WORKSPACE_LESSONS)
@@ -234,11 +236,12 @@ def render(conn: sqlite3.Connection, config: Config, *, key: str, kind: str, rep
     return Rendered(modes=modes, values=values, required=tuple(required), ids=tuple(ids))
 
 
-def memory_contract(modes: Modes) -> str:
+def memory_contract(modes: Modes, *, writes: bool = True) -> str:
     """Return `{{MEMORY_CONTRACT}}`: the result fields the run's modes ask for, with their bounds (DESIGN §28).
 
     It follows the result line, which cannot carry fields that come and go with the config, so it says they go in the
-    same JSON object. It asks for each field only while the tier that owns it allows it.
+    same JSON object. It asks for each field only while the tier that owns it allows it, and without `writes`, a
+    planner's, for no proposal: only which memories it relied on or found wrong.
 
     Returns:
         The contract, starting with the blank line before it; "" when it asks for nothing.
@@ -263,7 +266,7 @@ def memory_contract(modes: Modes) -> str:
             "line, a test, a command and its outcome, or a commit>. Next: <what a later run should do or skip>.` "
             "Never ticket, PR, or log text copied in, never a secret, token, or password.",
         )
-    if modes.proposals is not MemoryMode.OFF:
+    if writes and modes.proposals is not MemoryMode.OFF:
         fields.append(
             f'- `"proposals":[{{"key":"<key>","text":"<lesson>","repo":"<repository>"}}]`: at most '
             f"{MAX_PROPOSALS_PER_RUN} lessons you propose for every later run in this workspace, not this ticket "
@@ -285,9 +288,9 @@ def memory_contract(modes: Modes) -> str:
         )
     if MemoryMode.USE in (modes.ticket_notes, modes.proposals):
         fields.append(
-            '- `"memory_used":[<id>]` and `"memory_wrong":[<id>]`: the ids of what was shown above that you relied '
-            "on, and of what you checked and found wrong. Cite only ids shown above, and leave out what you did not "
-            "use.",
+            '- `"memory_used":[<id>]` and `"memory_wrong":[<id>]`: the ids of the notes or lessons this prompt shows '
+            "that you relied on, and of those you checked and found wrong. Cite only ids it shows, and leave out what "
+            "you did not use.",
         )
     if not fields:
         return ""
@@ -386,7 +389,8 @@ def record_run(conn: sqlite3.Connection, run_id: int, fields: Fields | None, *, 
     Call inside the transaction that closes the run. The ticket is the run's own, read from its row, never from the
     result. A run rendered with every tier off has no `run_memory` row and writes nothing, whatever it sent; so does one
     whose result line was not a valid result, which is why `fields` is None. A field the run's modes did not ask for
-    changes nothing. `head` is the commit the run's branch was at when its worker ended.
+    changes nothing, and nor do a planner's proposals: a plan only cites. `head` is the commit the run's branch was at
+    when its worker ended.
 
     Returns:
         The entries refused, as recorded in the run's `run_memory.refused`.
@@ -394,7 +398,7 @@ def record_run(conn: sqlite3.Connection, run_id: int, fields: Fields | None, *, 
     rendered = run_memory(conn, run_id)
     if rendered is None or fields is None:
         return []
-    row = sql.execute(conn, sql.select("ticket_key, tick_id").from_("runs").where("id = ?", run_id)).fetchone()
+    row = sql.execute(conn, sql.select("ticket_key, tick_id, kind").from_("runs").where("id = ?", run_id)).fetchone()
     writing = _Writing(
         run_id=run_id,
         ticket_key=str(row["ticket_key"]),
@@ -418,7 +422,7 @@ def record_run(conn: sqlite3.Connection, run_id: int, fields: Fields | None, *, 
             _drop_notes(conn, writing, fields.drop_notes, shown.values())
     if writing.modes.ticket_notes is not MemoryMode.OFF:
         _write_notes(conn, writing, fields.notes)
-    if writing.modes.proposals is not MemoryMode.OFF:
+    if writing.modes.proposals is not MemoryMode.OFF and RunKind(row["kind"]) in NOTE_KINDS:
         slots = sql.execute(conn, sql.select("repo").from_("run_slots").where("run_id = ?", run_id))
         repos = {str(r["repo"]) for r in slots}
         _write_proposals(conn, writing, fields.proposals, repos)

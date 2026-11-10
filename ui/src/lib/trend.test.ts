@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { HostHistory, HostSample } from '@/api/types'
 
-import { areaPath, linePath, nearest, trend } from './trend'
+import { areaPath, linePath, nearest, nearestAt, timeAt, trend } from './trend'
 
 const T0 = Date.parse('2026-10-08T12:00:00Z')
 
@@ -77,5 +77,14 @@ describe('the paths', () => {
         }
         expect(nearest(t, 0.4)?.value).toBe(2)
         expect(nearest(t, 0.9)?.value).toBe(4)
+    })
+
+    it('snap to the reading nearest a time, so charts over the same hour point at one moment together', () => {
+        if (t === null) {
+            throw new Error('no trend')
+        }
+        const at = timeAt(t, 0.9)
+        expect(nearestAt(t, at)).toEqual(nearest(t, 0.9))
+        expect(timeAt(t, 2)).toBe(t.end)
     })
 })

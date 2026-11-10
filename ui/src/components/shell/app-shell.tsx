@@ -195,7 +195,7 @@ export function AppShell() {
                                 <LoopDownBand />
                                 <NoticeBanner />
                                 <ViewTransition update={{ [IN_PAGE]: 'none', default: 'auto' }}>
-                                    <div className="mx-auto flex max-w-[112rem] stagger flex-col gap-6">
+                                    <div className="mx-auto flex max-w-shell stagger flex-col gap-6">
                                         <Outlet />
                                     </div>
                                 </ViewTransition>
