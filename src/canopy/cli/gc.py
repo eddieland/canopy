@@ -43,9 +43,10 @@ def cmd_gc(
 
     For each kind: how many there are and their size, then how many a pass would remove and theirs, and the rule that
     removes them; then the remote branches canopy made that no open run, unit, or task names, for you to delete, since
-    gc deletes none. A live tick runs the pass once a day, removing the files and the journal's rows the report counts,
-    and rotates canopy.log. By hand, `--dry-run` removes nothing, and `--vacuum` shrinks the journal by its free pages:
-    it runs only while no tick is running and no run is live, and when the disk has room for a copy of the journal.
+    gc deletes none. A live tick runs the pass once a day, removing the files, the journal's rows, and the text of
+    notes and proposals out of force the report counts, and rotates canopy.log. By hand, `--dry-run` removes nothing,
+    and `--vacuum` shrinks the journal by its free pages: it runs only while no tick is running and no run is live,
+    and when the disk has room for a copy of the journal.
     `--git` packs each primary clone's loose objects and combines its small packs, pruning nothing, and skips a
     repository while a slot of its pool is leased; a dispatch waits for it (ROADMAP M47). `--caches` empties each
     sandbox role's cache under `$XDG_CACHE_HOME/canopy/sandbox/`, skipping one while a run of its role is live.

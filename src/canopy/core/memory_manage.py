@@ -3,7 +3,9 @@
 Each deletes bodies, never rows: a forgotten memory is a tombstone that keeps who wrote it and when. The delete runs
 with `PRAGMA secure_delete` on, the search index is merged after it so it keeps no word of the text, and the
 write-ahead log is checkpointed, so a purged poison or a leaked secret does not survive in free pages or the log. Only
-the operator runs these, from `canopy memory` or the web UI: they refuse inside canopy's ticks and runs. A lesson is
+the operator runs these, from `canopy memory` or the web UI: they refuse inside canopy's ticks and runs. The one
+delete that runs in a tick is `expire`, garbage collection's (DESIGN §26), which deletes the same way only the text of
+notes and proposals that left force before the cutoff the operator's `retention.memory_days` sets. A lesson is
 made only here, from a proposal or a ticket's note the operator promotes, or from a lesson they edit: no agent writes
 one. Neither changes a lesson's text in place: the new lesson supersedes the one before it, which keeps its text as
 the lesson's history. A pin is the operator's too, and stays with the lesson's key through each new version.
@@ -25,6 +27,17 @@ if TYPE_CHECKING:
 
     from canopy.core.config import Config
 
+#: The notes and proposals no longer in force: a lesson's text, its versions' included, is never expired.
+RETIRED = sql.all_of(
+    sql.frag("scope != ?", MemoryScope.LESSON),
+    sql.in_("status", (MemoryStatus.SUPERSEDED, MemoryStatus.INVALID)),
+)
+#: When a retired memory left force: when it was invalidated, else when the first memory to supersede it was written.
+_LEFT_FORCE_AT = sql.frag(
+    "coalesce(invalidated_at, (SELECT min(n.created_at) FROM memories n WHERE n.supersedes = memories.id))",
+)
+#: What an expiry adds to the reason a memory left force, which it keeps.
+EXPIRED_WHY = "text removed after retention.memory_days"
 #: The statement that sets `secure_delete` back to each value `PRAGMA secure_delete` reads, which a PRAGMA cannot bind.
 _SECURE_DELETE: Mapping[int, sql.Fragment] = {
     0: sql.frag("PRAGMA secure_delete = OFF"),
@@ -88,7 +101,33 @@ def purge(
     return _scrub(conn, sql.frag("1"), why="purged")
 
 
-def _scrub(conn: sqlite3.Connection, where: sql.Composable, *, why: str) -> Scrubbed:
+def expire(conn: sqlite3.Connection, cutoff: str) -> Scrubbed:
+    """Delete the text of every note and proposal that left force before `cutoff`, as `forget` deletes one.
+
+    Garbage collection's pass runs it inside a tick, so it takes no operator check: the cutoff is the operator's
+    `retention.memory_days`, and no memory in force is touched. Each keeps the reason it left force, with
+    `EXPIRED_WHY` after it.
+
+    Returns:
+        What was deleted.
+    """
+    why = sql.frag("coalesce(why || '; ', '') || ?", EXPIRED_WHY)
+    return _scrub(conn, retired_before(cutoff), why=why)
+
+
+def retired_before(cutoff: str) -> sql.Fragment:
+    """The condition naming the notes and proposals that left force before `cutoff`, a time as the journal stores it.
+
+    It names the `memories` table unaliased, so it serves a query of it and an UPDATE of it alike. A memory with no time
+    it left force, and every one for a cutoff of "", is never named.
+
+    Returns:
+        The condition, with its values.
+    """
+    return sql.all_of(RETIRED, sql.frag("{} < ?", _LEFT_FORCE_AT, cutoff))
+
+
+def _scrub(conn: sqlite3.Connection, where: sql.Composable, *, why: sql.Arg) -> Scrubbed:
     """Set the body of every memory `where` names to NULL, securely, and checkpoint the log after it.
 
     Returns:

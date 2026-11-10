@@ -55,8 +55,9 @@ pending proposal, or a lesson.
 
 A ticket's notes are invalidated when it is marked done and on `canopy forget`, as its previous runs are; `canopy stop`
 keeps them, since a stopped ticket may start again. A pending proposal nobody reviews expires (§6, step 3). §26's pass
-deletes the text of notes and proposals no longer in force, keeping the row; a lesson, and each version an edit
-replaced, keeps its text until the operator forgets it.
+deletes the text of notes and proposals `memory_days` after they left force, keeping the row, as `forget` does, so
+that also bounds how far back a worker's search reaches into its ticket's replaced notes; a lesson, and each version an
+edit replaced, keeps its text until the operator forgets it.
 
 ### Proposals and lessons
 
