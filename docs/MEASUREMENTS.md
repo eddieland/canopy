@@ -1120,6 +1120,7 @@ gate. Cited by M70.
 - canopy 0.0.1.dev1677+c6b8f773 and OpenCode v2.2.5, on the operator's workspace of three repositories: the monorepo, a
   cluster-config repository, and an infrastructure repository.
 - `canopy orientation --json`, over 14 days, 2026-10-28T04:00Z to 2026-11-11T05:00Z.
+  The window's end is the end of the operator's local day of 2026-11-10, past the time the command ran.
 - The gate, set by the operator before the measurement, the draft's: stage 1 starts only if the median worker run in
   the monorepo spends more than a quarter of its tool calls, or more than three searches, before its first read of the
   file it edits.
@@ -1172,6 +1173,7 @@ Which tools fill each role's tool results, against the share M71's later stages 
 - canopy 0.0.1.dev1677+c6b8f773 and OpenCode v2.2.5, on the operator's workspace of three repositories.
 - `canopy tool-results --json`, over 14 days, 2026-10-28T04:00Z to 2026-11-11T05:00Z. No run's log was cut at the
   transcript's bound.
+  The window's end is the end of the operator's local day of 2026-11-10, past the time the command ran.
 - The threshold, set by the operator before the measurement, the draft's: a later stage proceeds only for a tool whose
   results are at least a tenth of its role's result characters.
 
@@ -1231,6 +1233,7 @@ How often a running agent's card went stale over a week of real use, by role, as
 
 - canopy 0.0.1.dev1677+c6b8f773 and OpenCode v2.2.5, on the operator's workspace of three repositories.
 - `canopy cards --days 7 --json`, 2026-11-04T05:00Z to 2026-11-11T05:00Z, runs counted by when they started.
+  The window's end is the end of the operator's local day of 2026-11-10, past the time the command ran.
 - Carded is the runs that posted a card; lapsed, those whose card, or the run with none yet, went stale at least once;
   lapses, each time a card went from fresh to stale; ended stale, the ended runs whose card was stale as they ended.
 
@@ -1268,6 +1271,7 @@ reached a human reviewer. Cited by M66.
 - canopy 0.0.1.dev1677+c6b8f773 and OpenCode v2.2.5, on the operator's workspace of three repositories; only the
   monorepo has a checklist.
 - `canopy checklist --days 14 --json`, 2026-10-28T04:00Z to 2026-11-11T05:00Z, runs counted by when they started.
+  The window's end is the end of the operator's local day of 2026-11-10, past the time the command ran.
   `held_by` counts the tickets whose runs held the item. A run that never pushed, and so was never held, still counts
   each item `unanswered` (M66, chosen conservatively).
 - The human side, counted by the operator from canopy's PRs in the window: about zero checklist-type nits reached a
@@ -1337,6 +1341,7 @@ a row in the harness. Cited by M38.
 
 - canopy 0.0.1.dev1677+c6b8f773 and OpenCode v2.2.5, on the operator's workspace of three repositories.
 - `canopy agreement --days 14 --json`, 2026-10-28T04:00Z to 2026-11-11T05:00Z: 917 ticks and 19,861 decisions.
+  The window's end is the end of the operator's local day of 2026-11-10, past the time the command ran.
 - The bar, set by the operator before the measurement: a row is enabled only with at least 3 distinct situations, and
   every disagreement on it the overseer's mistake. And `ci_red`'s `resume` needs a shared list of PR labels that hold
   a PR: yes.
@@ -1407,6 +1412,7 @@ through the nights without a restart, against M39's Accept. Cited by M39.
 
 - canopy 0.0.1.dev1677+c6b8f773 and OpenCode v2.2.5, on the operator's workspace of three repositories.
 - `canopy spend --days 14 --json` and `canopy latency --days 14 --json`, 2026-10-28T04:00Z to 2026-11-11T05:00Z.
+  The window's end is the end of the operator's local day of 2026-11-10, past the time the command ran.
 - The stretch: the longest in which `canopy loop` ran through a night without a restart, about 3.6 days, from
   2026-11-05T23:46Z to 2026-11-09T17:12Z (ticks 2158 to 2237), over a weekend with a light queue. Its figures were
   computed with canopy's own latency code over that stretch, night being 20:00 to 08:00 local time.
@@ -1447,7 +1453,8 @@ Latency, the median and 90th percentile from the source's time:
 | Day | 54 | 0 | $6.83 | 22 (3 by poll) | 108 s | 279 s | 0 | 0 of 2,434 |
 | Night | 26 | 0 | $3.53 | 6 (all by poll) | 99 s | 274 s | 0 | 0 of 2,860 |
 
-Overseer spend was about $2.9 a day over the stretch.
+Overseer spend over the stretch was $10.36, given as about $2.9 a day for its 3.6 days. Its bounds span about 3.7 days,
+over which the same spend is about $2.8 a day; either way the verdict below is unchanged.
 
 Missed actions: 70 agreement records touch the stretch. In 19 of them the overseer dispatched an `implement`, plan,
 review, or `resume` where the harness's rows allowed nothing, a wait, or attention. A tick without the overseer would
@@ -1469,8 +1476,8 @@ have missed those, unless they were the overseer's mistakes.
   did, each a tick that did not close `ok`.
 - Overseer spend per day at a quarter of the first day's for the same queue: the 2026-10-13 section's overseer spend
   was $52.53 over its day (ticks 1 to 158, 2026-10-12T20:52Z to 2026-10-13T18:13Z, the loop down for about ten hours
-  of it), a quarter of which is about $13.13. The stretch's $2.9 a day is under it, and so is the window's $12.62, but
-  the stretch's queue was a light weekend one, not the same queue.
+  of it), a quarter of which is about $13.13. The stretch's $2.8 to $2.9 a day is under it, and so is the window's
+  $12.62, but the stretch's queue was a light weekend one, not the same queue.
 - Median latency from an external event to the tick that acted on it under three minutes: met, by day (108 s) and by
   night (99 s). Over the window it was 167 s in all; the window's 11 tracker comments took a median 420 s.
 - No action missed: open (below).

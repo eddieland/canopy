@@ -166,6 +166,7 @@ decides whether canopy vendors queries; and whether stage 1 renders the outline 
 first. The gate's threshold, set by the operator before the measurement, is the draft's: more than a quarter of the tool
 calls, or more than three searches, before the first read of the file the run edits. Measured 2026-11-10 (MEASUREMENTS
 "2026-11-10: M70 stage 0, what runs do before the file they work on"): the monorepo's worker runs meet the gate, their
-median share before the anchor 0.429 with a median of no searches, 65 of 561 runs anchored. Open for the operator: stage
-1's start, the gate being met; the monorepo's languages, with each grammar's query coverage; and whether stage 1 renders
-the outline for every role at once or the workers first.
+median share before the anchor 0.429 with a median of no searches, on the 65 of 561 runs anchored, the `implement` runs
+alone at 0.244, under a quarter, and the `resume` runs at 0.50. Open for the operator: stage 1's start, the gate being
+met; the monorepo's languages, with each grammar's query coverage; and whether stage 1 renders the outline for every
+role at once or the workers first.

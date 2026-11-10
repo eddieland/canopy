@@ -167,7 +167,7 @@ canopy's part of its wait is known. Settled by the operator (2026-11-10): `runti
 with its MCP servers. S27 re-measured 2026-11-10 (MEASUREMENTS "2026-11-10: M39, a day and a night of the loop"), over
 two weeks and a 3.6-day stretch with no restart, a weekend with a light queue, against Accept: most ticks running no
 overseer, not met (none of the stretch's 80 ticks); overseer spend per day at a quarter of 2026-10-13's $52.53, about
-$13.13, for the same queue: the stretch's $2.9 a day is under it, on a lighter queue; median latency under three
+$13.13, for the same queue: the stretch's $2.8 to $2.9 a day is under it, on a lighter queue; median latency under three
 minutes, met by day and by night (108 s and 99 s). Open for the operator: whether the stretch's 19 dispatches the
 harness's rows did not allow are actions a tick without the overseer would miss or the overseer's mistakes, which no
 action missed waits on; and whether the tracker's run of partial reads earlier in the window counts as a source outage,
