@@ -36,7 +36,7 @@ export const LISTS = {
     'tick-decisions': 'oldest',
     /** The tickets page, by latest activity. */
     tickets: 'newest',
-    /** The memory page's proposals, oldest first, the nearest to lapsing undecided, after the most seconded. */
+    /** The memory page's proposals, the most seconded, then the oldest, first; flipped, the newest by time alone. */
     'memory-proposals': 'oldest',
     /** The memory page's tickets with notes, the one whose newest note was written last first. */
     'memory-tickets': 'newest',

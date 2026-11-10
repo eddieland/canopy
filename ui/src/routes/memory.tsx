@@ -204,8 +204,9 @@ function Tiers({ overview, state, pastRead }: { overview: MemoryOverview; state:
 }
 
 /**
- * The proposals waiting on the operator, the most seconded first, then oldest first (the server's order; flipped, the
- * most seconded stay first), each with where it came from and its verbs. None reaches a run until it is promoted, at
+ * The proposals waiting on the operator, the most seconded first, then oldest first (the server's order); flipped, the
+ * newest first by time alone (a later id is a later proposal), so the flip always shows what came in last. Each with
+ * where it came from and its verbs. None reaches a run until it is promoted, at
  * any mode, so the panel says that rather than the tier's band, which heads the lessons. Its
  * count wears `status-blocked` while one waits, as the nav's does.
  */
@@ -260,9 +261,10 @@ function Proposals({
                 // so the lessons under them stay in reach.
                 <PanelScroll label="Proposals">
                     <MemoryRows
-                        entries={ordered('memory-proposals', order, proposals)
-                            .toSorted((a, b) => b.seconds.length - a.seconds.length)
-                            .map((p) => p.entry)}
+                        entries={(order === 'newest'
+                            ? proposals.toSorted((a, b) => b.entry.id - a.entry.id)
+                            : proposals
+                        ).map((p) => p.entry)}
                         ticket
                         facts={facts}
                         below={below}

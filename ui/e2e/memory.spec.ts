@@ -188,7 +188,8 @@ test('the memory page narrows every panel by words, repositories, and a lessonâ€
     await page.getByRole('button', { name: 'Clear the filter' }).click()
     await expect(proposals.getByTestId('memory-proposals-count')).toHaveText('2')
 
-    // The proposals flip, the newest first.
+    // The proposals flip, the newest first by time alone: proposal 5, seconded, leads only until then.
+    await expect(proposals.getByTestId('memory-5').getByText('seconded by 1 ticket')).toBeVisible()
     await expect(proposals.getByTestId(/^memory-\d+$/u).first()).toHaveAttribute('data-testid', 'memory-5')
     await proposals.getByTestId('order-memory-proposals').click()
     await expect(proposals.getByTestId(/^memory-\d+$/u).first()).toHaveAttribute('data-testid', 'memory-6')
