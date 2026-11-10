@@ -11,7 +11,7 @@ import pytest
 
 from canopy.infra import procs
 from canopy.runtime.opencode2 import models
-from canopy.runtime.report import ModelList
+from canopy.runtime.report import STDERR_CHARS, ModelList
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -23,9 +23,9 @@ RECORDED = Path(__file__).parent / "recorded" / "model-list.json"
 ARGV = ("opencode", "api", "--standalone", "model.list")
 
 
-def runner(stdout: str = "", *, code: int = 0, timed_out: bool = False) -> mock.NonCallableMagicMock:
+def runner(stdout: str = "", *, code: int = 0, timed_out: bool = False, stderr: str = "") -> mock.NonCallableMagicMock:
     def printed(args: Sequence[str], **_: object) -> procs.Result:
-        return procs.Result(tuple(args), code, stdout, "", timed_out=timed_out)
+        return procs.Result(tuple(args), code, stdout, stderr, timed_out=timed_out)
 
     found = mock.create_autospec(procs.SubprocessRunner, instance=True)
     found.run.side_effect = printed
@@ -94,6 +94,22 @@ def test_a_list_that_cannot_be_read_says_why_in_canopy_s_words(
     assert found.error is not None
     assert error in found.error
     assert "s3cret" not in found.error
+
+
+def test_a_list_that_failed_may_pass_and_keeps_the_end_of_its_stderr() -> None:
+    """A timeout or a nonzero exit may pass on another try, and what OpenCode said is kept, its end on one line."""
+    said = "".join(f"line {i}\n" for i in range(30)) + "\n  Error: \x1b[31mprovider fetch timed out\x1b[0m  \n"
+    found = models.listed(runner(code=1, stderr=said), cwd=Path("/ws"))
+    assert (found.error, found.transient) == ("`opencode api model.list` exited 1", True)
+    assert found.stderr == " | ".join(
+        [*(f"line {i}" for i in range(11, 30)), "Error: [31mprovider fetch timed out [0m"],
+    )
+    timed_out = models.listed(runner(listing(), timed_out=True, code=-9, stderr="x" * 5000), cwd=Path("/ws"))
+    assert timed_out.transient
+    assert timed_out.stderr == "..." + "x" * (STDERR_CHARS - 3)
+    # A list it printed but canopy cannot read would print alike again; it was read, so it keeps no stderr.
+    unread = models.listed(runner("not json", stderr="warn"), cwd=Path("/ws"))
+    assert (unread.transient, unread.stderr) == (False, "")
 
 
 def test_opencode_missing_from_path_fails() -> None:

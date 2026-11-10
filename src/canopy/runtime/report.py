@@ -46,6 +46,10 @@ MAX_MODEL_NAME = 200
 #: How long a runtime's version, as a session's record names it, may be: `1.19.3` and its like are far shorter.
 MAX_RUNTIME_VERSION = 40
 OTHER_MODELS = "(other models)"
+#: How much of the runtime's stderr a model list that failed keeps: its last lines, and at most so many characters of
+#: them, enough for an error and the lines that led to it.
+STDERR_LINES = 20
+STDERR_CHARS = 2000
 #: A message the runtime names in a session's record and on each event of a model call: the reply the call wrote, the
 #: key that joins a call in the run's log to the model the record names for it. As a session id is shaped.
 MESSAGE_ID_RE = SESSION_ID_RE
@@ -254,6 +258,12 @@ class ModelList:
     variants: Mapping[str, Sequence[str]] = field(default_factory=dict)
     #: Why the list could not be read, in canopy's words, never what the runtime printed; None when it was read.
     error: str | None = None
+    #: The list could not be read for a cause that may pass, the runtime timing out or exiting nonzero, so another
+    #: try may read it; False when it was read, or when trying again could not help, such as no runtime on PATH.
+    transient: bool = False
+    #: The end of what the runtime printed on stderr when it failed, on one line (`STDERR_LINES`, `STDERR_CHARS`);
+    #: empty when it printed none or did not fail. Never its stdout, which may hold a provider's key.
+    stderr: str = ""
 
 
 @dataclass(frozen=True)

@@ -20,7 +20,7 @@ from unittest import mock
 import pytest
 from click.testing import CliRunner, Result
 
-from canopy.core import db
+from canopy.core import agent_models, db
 from canopy.infra import metrics, resources, tracing
 from canopy.infra.procs import SubprocessRunner
 from canopy.runtime.implementation import Version
@@ -134,6 +134,13 @@ def hermetic_agent_env() -> Iterator[None]:
             yield
     finally:
         time.tzset()
+
+
+@pytest.fixture(autouse=True)
+def no_waits_between_model_lists() -> Iterator[None]:
+    """Read a runtime's model list again at once when it fails, not seconds later, in canopy's own process."""
+    with mock.patch.object(agent_models, "RETRY_SECONDS", (0, 0)):
+        yield
 
 
 @pytest.fixture(autouse=True)

@@ -15,6 +15,8 @@ Keys of the state besides `sessions`, each optional, each read by both versions 
 
     exit    the exit code of every command but `run`, with `stderr`, for an OpenCode that fails. Default none.
     stderr  text printed on stderr with `exit`.
+    exits   how many commands `exit` fails, counted down in the state file as each one does, for an OpenCode that
+            fails and then works. Default every one.
     config  the MCP servers of the operator's config, `{"mcp": {NAME: {...}}}` in OpenCode 1's shape, or, for 2, in
             its own, `{"mcp": {"servers": {NAME: {...}}}}`, 1's `"enabled": false` being 2's `"disabled": true`.
             Default `{"mcp": {}}`. 1's `debug config` prints it with the servers of an inline config in
@@ -94,9 +96,8 @@ def main() -> int:
 
 def debug(command: list[str]) -> int:
     state = read_state()
-    if "exit" in state:
-        sys.stderr.write(str(state.get("stderr", "")))
-        return int(state["exit"])
+    if (code := fails(state)) is not None:
+        return code
     match command:
         case ["config"]:
             printed: Any = state.get("config", {"mcp": {}})
@@ -121,9 +122,8 @@ def debug(command: list[str]) -> int:
 
 def models(*, verbose: bool) -> int:
     state = read_state()
-    if "exit" in state:
-        sys.stderr.write(str(state.get("stderr", "")))
-        return int(state["exit"])
+    if (code := fails(state)) is not None:
+        return code
     variants = state.get("variants", {})
     for line in state.get("models", []):
         print(line)
@@ -138,9 +138,8 @@ def models(*, verbose: bool) -> int:
 def export(session_id: str) -> int:
     state = read_state()
     sys.stderr.write(f"Exporting session: {session_id}\n")
-    if "exit" in state:
-        sys.stderr.write(str(state.get("stderr", "")))
-        return int(state["exit"])
+    if (code := fails(state)) is not None:
+        return code
     calls = state.get("sessions", {}).get(session_id)
     if calls is None:
         sys.stderr.write(f"Error: Session not found: {session_id}\n")
@@ -155,9 +154,8 @@ def export(session_id: str) -> int:
 
 def serve() -> int:
     state = read_state()
-    if "exit" in state:
-        sys.stderr.write(str(state.get("stderr", "")))
-        return int(state["exit"])
+    if (code := fails(state)) is not None:
+        return code
     print(f"opencode server listening on {URL}", flush=True)
     # Stopped by whoever started it, once its questions are answered.
     time.sleep(600)
@@ -166,9 +164,8 @@ def serve() -> int:
 
 def api(operation: str) -> int:
     state = read_state()
-    if "exit" in state:
-        sys.stderr.write(str(state.get("stderr", "")))
-        return int(state["exit"])
+    if (code := fails(state)) is not None:
+        return code
     match operation:
         case "agent.list":
             printed: Any = {
@@ -231,9 +228,8 @@ def servers(mcp: dict[str, Any]) -> dict[str, Any]:
 
 def session_export(session_id: str) -> int:
     state = read_state()
-    if "exit" in state:
-        sys.stderr.write(str(state.get("stderr", "")))
-        return int(state["exit"])
+    if (code := fails(state)) is not None:
+        return code
     calls = state.get("sessions", {}).get(session_id)
     if calls is None:
         sys.stderr.write(f"Error: Session not found: {session_id}\n")
@@ -257,6 +253,17 @@ def write(printed: str) -> None:
     os.set_blocking(sys.stdout.fileno(), False)
     with contextlib.suppress(BlockingIOError):
         os.write(sys.stdout.fileno(), printed.encode())
+
+
+def fails(state: dict[str, Any]) -> int | None:
+    """The exit code of a command the state fails, after printing its `stderr`, counting `exits` down; None if none."""
+    if "exit" not in state or state.get("exits", 1) < 1:
+        return None
+    sys.stderr.write(str(state.get("stderr", "")))
+    if "exits" in state:
+        state["exits"] -= 1
+        Path(os.environ["FAKE_OPENCODE_STATE"]).write_text(json.dumps(state))
+    return int(state["exit"])
 
 
 def read_state() -> dict[str, Any]:

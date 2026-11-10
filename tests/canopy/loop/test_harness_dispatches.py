@@ -147,8 +147,8 @@ def test_the_harnesss_chore_on_a_model_it_cannot_look_up_is_refused_with_an_atte
     canopy_env.configure(canopy_env.user_file, {"runtime": {"models": {"chore": "acme/fake-model-1"}}})
     reason = (
         "could not look up the model acme/fake-model-1 chosen in runtime.models: "
-        f"`{model_list(canopy_env.runtime)[1]}` exited 1. Nothing ran on another model; the work resumes once the "
-        "list can be read"
+        f"`{model_list(canopy_env.runtime)[1]}` exited 1 on the last of 3 tries; its stderr ended: Error: something "
+        "broke. Nothing ran on another model; the work resumes once the list can be read"
     )
     conn = canopy_env.journal()
     with overseer_does(chore_waits(THEIRS, "not a weekday")):

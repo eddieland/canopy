@@ -353,8 +353,9 @@ def test_the_commit_trailer_names_the_private_workers_chosen_model(
             {"exit": 1, "stderr": "Error: something broke\n"},
             "model_list_failed",
             (
-                "could not look up the model provider/model-a chosen in runtime.models: `{list}` exited 1. "
-                "Nothing ran on another model; the work resumes once the list can be read"
+                "could not look up the model provider/model-a chosen in runtime.models: `{list}` exited 1 on the "
+                "last of 3 tries; its stderr ended: Error: something broke. Nothing ran on another model; the work "
+                "resumes once the list can be read"
             ),
         ),
     ],

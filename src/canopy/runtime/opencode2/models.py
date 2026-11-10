@@ -25,10 +25,10 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field, StrictStr, ValidationError
 
-from canopy.infra import procs
+from canopy.infra import procs, text
 from canopy.runtime.opencode2.definitions import MODEL_RE
 from canopy.runtime.opencode2.invocation import STANDALONE
-from canopy.runtime.report import ModelList
+from canopy.runtime.report import STDERR_CHARS, STDERR_LINES, ModelList
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -73,10 +73,11 @@ def listed(runner: procs.Runner, *, cwd: Path, variants: bool = False) -> ModelL
         return ModelList(error="opencode is not on PATH")
     except procs.ProcError as e:
         return ModelList(error=f"`{COMMAND}` could not start: {e}")
-    if result.timed_out:
-        return ModelList(error=f"`{COMMAND}` took over {TIMEOUT_SECONDS} seconds")
     if not result.ok:
-        return ModelList(error=f"`{COMMAND}` exited {result.returncode}")
+        said = text.tail(result.stderr, lines=STDERR_LINES, chars=STDERR_CHARS)
+        if result.timed_out:
+            return ModelList(error=f"`{COMMAND}` took over {TIMEOUT_SECONDS} seconds", transient=True, stderr=said)
+        return ModelList(error=f"`{COMMAND}` exited {result.returncode}", transient=True, stderr=said)
     try:
         printed = _Models.model_validate_json(result.stdout)
     except ValidationError:

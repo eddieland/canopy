@@ -3,6 +3,7 @@
 import json
 import re
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -194,6 +195,71 @@ def test_a_model_not_listed_or_a_list_not_read_is_refused(opencode_state: Path, 
     with pytest.raises(agent_models.ModelError) as failed:
         agent_models.check(procs.SubprocessRunner(), tmp_path, Model(MODEL, "high"), version=Version.ONE)
     assert "`opencode models --verbose` exited 1" in failed.value.reason
+
+
+def test_a_list_that_fails_is_read_again_and_one_that_lacks_the_model_is_not(
+    opencode_state: Path,
+    tmp_path: Path,
+) -> None:
+    """A list the runtime failed on is read up to three times; a model a list read lacks is refused on the first."""
+    log = tmp_path / "opencode.jsonl"
+
+    def reads() -> int:
+        """How many times the list was read since the last call."""
+        count = sum("model.list" in json.loads(line)["argv"] for line in log.read_text().splitlines())
+        log.write_text("")
+        return count
+
+    def check() -> None:
+        agent_models.check(procs.SubprocessRunner(), tmp_path, Model(MODEL), version=Version.TWO)
+
+    # A failure that passes refuses nothing: the second read finds the model.
+    opencode_state.write_text(json.dumps({"exit": 1, "exits": 1, "models": [MODEL]}))
+    check()
+    assert reads() == 2
+
+    # One on every read refuses it, saying how many it took and how OpenCode's last stderr ended.
+    opencode_state.write_text(json.dumps({"exit": 1, "stderr": "loading config\nError: provider fetch timed out\n"}))
+    with pytest.raises(agent_models.ModelError) as failed:
+        check()
+    assert failed.value.guard == agent_models.LIST_FAILED
+    assert failed.value.reason == (
+        f"could not look up the model {MODEL} chosen in runtime.models: `opencode api model.list` exited 1 on the last "
+        "of 3 tries; its stderr ended: loading config | Error: provider fetch timed out. Nothing ran on another "
+        "model; the work resumes once the list can be read"
+    )
+    assert (len(failed.value.seconds), failed.value.stderr) == (3, "loading config | Error: provider fetch timed out")
+    assert reads() == 3
+
+    # A list read that lacks the model is a config problem, which no wait mends.
+    opencode_state.write_text(json.dumps({"models": [OTHER]}))
+    with pytest.raises(agent_models.ModelError) as missing:
+        check()
+    assert (missing.value.guard, missing.value.seconds) == (agent_models.MISSING, ())
+    assert reads() == 1
+
+
+def test_each_read_after_the_first_waits_its_own_time(tmp_path: Path) -> None:
+    """The reads after a failure wait `RETRY_SECONDS` in turn; one that cannot pass, no runtime on PATH, waits none."""
+    failed = ModelList(error="`opencode api model.list` exited 1", transient=True)
+    with (
+        mock.patch.object(agent_models, "RETRY_SECONDS", (5, 15)),
+        mock.patch.object(agent_models.runtime_models, "listed", autospec=True, return_value=failed) as listed,
+        mock.patch.object(agent_models.time, "sleep", autospec=True) as slept,
+        pytest.raises(agent_models.ModelError),
+    ):
+        agent_models.check(procs.SubprocessRunner(), tmp_path, Model(MODEL), version=Version.TWO)
+    assert (listed.call_count, slept.call_args_list) == (3, [mock.call(5), mock.call(15)])
+
+    gone = ModelList(error="opencode is not on PATH")
+    with (
+        mock.patch.object(agent_models.runtime_models, "listed", autospec=True, return_value=gone) as listed,
+        mock.patch.object(agent_models.time, "sleep", autospec=True) as slept,
+        pytest.raises(agent_models.ModelError) as refused,
+    ):
+        agent_models.check(procs.SubprocessRunner(), tmp_path, Model(MODEL), version=Version.TWO)
+    assert (listed.call_count, slept.call_count) == (1, 0)
+    assert "opencode is not on PATH. Nothing ran" in refused.value.reason
 
 
 CHORE_CMD = "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore --format json {prompt}"

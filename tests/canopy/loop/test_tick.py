@@ -697,20 +697,38 @@ def test_an_overseers_model_the_runtime_does_not_list_closes_the_tick_without_it
     raised = next(d for d in halted[0].decisions if d.action.startswith("attention:"))
     assert item.since == raised.created_at  # open since the first tick of the streak
 
-    # A list that cannot be read halts it too, with a status of its own.
+    # A list that cannot be read on any of its tries halts it too, with a status of its own, saying what the
+    # runtime said, there and in canopy.log.
     opencode_state.write_text(json.dumps({"exit": 1, "stderr": "Error: something broke\n"}))
     failed = scenario.tick(*waits(KEY), dry_run=True, code=1)
     assert failed.tick.status == TickStatus.MODEL_LIST_FAILED
     assert failed.tick.summary == (
         f"could not look up the model {model} chosen in runtime.models: `{model_list(scenario.env.runtime)[1]}` "
-        "exited 1. Nothing ran on another model; the work resumes once the list can be read"
+        "exited 1 on the last of 3 tries; its stderr ended: Error: something broke. Nothing ran on another model; the "
+        "work resumes once the list can be read"
     )
     assert scenario.attention() == [(None, "model_list_failed")]
+    [item] = attention.current(scenario.conn)
+    assert item.detail == f"{failed.tick.summary}; the overseer did not run. The next tick looks it up again"
+    logged = [json.loads(line) for line in (scenario.env.state_dir / "canopy.log").read_text().splitlines()]
+    [line] = [line for line in logged if line["tick_id"] == failed.tick.id and line["msg"] == "overseer not started"]
+    assert (line["reason"], len(line["seconds"]), line["stderr"]) == (failed.tick.summary, 3, "Error: something broke")
 
-    # Once the runtime lists it, the next tick runs the overseer, and the item is gone.
+    # One that fails and then reads halts nothing: the overseer runs once the runtime lists the model, and the item
+    # is gone.
     listed(opencode_state, "acme/fake-model-2", model)
+    opencode_state.write_text(json.dumps({**json.loads(opencode_state.read_text()), "exit": 1, "exits": 1}))
+    opencode_log = opencode_state.with_name("opencode.jsonl")
+
+    def reads() -> int:
+        """How many times the fake `opencode` was asked for its models so far."""
+        argv = model_list(scenario.env.runtime)[0]
+        return sum(json.loads(line)["argv"] == argv for line in opencode_log.read_text().splitlines())
+
+    before = reads()
     ran = scenario.tick(*waits(KEY), dry_run=True)
     assert len(agent_runs(scenario.agent_log)) == 2
+    assert reads() - before == 2  # the read that failed, and the one that did not
     assert scenario.attention() == []
     # It records the model its overseer asked for; a tick that halted before its overseer, or chose none, records none.
     assert ran.tick.model == model

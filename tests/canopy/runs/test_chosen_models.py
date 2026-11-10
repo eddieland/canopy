@@ -193,7 +193,8 @@ def test_a_list_that_cannot_be_read_refuses_the_run(scenario: Scenario, opencode
     scenario.configures(runtime={"models": {"worker": MODEL}})
     reason = (
         f"could not look up the model {MODEL} chosen in runtime.models: `{model_list(scenario.env.runtime)[1]}` "
-        "exited 1. Nothing ran on another model; the work resumes once the list can be read"
+        "exited 1 on the last of 3 tries; its stderr ended: Error: something broke. Nothing ran on another model; the "
+        "work resumes once the list can be read"
     )
     refused = scenario.refuses(dispatches())
     assert refused == [("refused:model_list_failed", reason), ("attention:model_list_failed", reason)]

@@ -43,8 +43,8 @@ class Models:
         raise AssertionError(args)
 
 
-def printing(stdout: str = "", *, code: int = 0, timed_out: bool = False) -> Models:
-    return Models(lambda args: procs.Result(tuple(args), code, stdout, "", timed_out=timed_out))
+def printing(stdout: str = "", *, code: int = 0, timed_out: bool = False, stderr: str = "") -> Models:
+    return Models(lambda args: procs.Result(tuple(args), code, stdout, stderr, timed_out=timed_out))
 
 
 def test_each_model_listed_is_read_and_any_other_line_passed_over() -> None:
@@ -106,6 +106,7 @@ def test_with_variants_each_models_json_is_read_for_them_in_its_order() -> None:
     assert runner.ran == [(("opencode", "models", "--verbose"), Path("/ws"), models.TIMEOUT_SECONDS, True)]
     assert models.listed(printing(code=1), cwd=Path("/ws"), variants=True) == ModelList(
         error="`opencode models --verbose` exited 1",
+        transient=True,
     )
 
 
@@ -116,12 +117,16 @@ def test_an_opencode_with_no_provider_lists_no_model() -> None:
 @pytest.mark.parametrize(
     ("runner", "error"),
     [
-        (printing(code=1), "`opencode models` exited 1"),
-        (printing("anthropic/claude-x\n", timed_out=True, code=-9), "`opencode models` took over 30 seconds"),
+        (printing(code=1, stderr="Error: auth\n"), "`opencode models` exited 1"),
+        (
+            printing("anthropic/claude-x\n", timed_out=True, code=-9, stderr="Error: auth\n"),
+            "`opencode models` took over 30 seconds",
+        ),
     ],
 )
 def test_a_list_that_cannot_be_read_says_why_in_canopy_s_words(runner: Models, error: str) -> None:
-    assert models.listed(runner, cwd=Path("/ws")) == ModelList(error=error)
+    """A timeout or a nonzero exit may pass on another try, and the end of what OpenCode said on stderr is kept."""
+    assert models.listed(runner, cwd=Path("/ws")) == ModelList(error=error, transient=True, stderr="Error: auth")
 
 
 def test_opencode_missing_from_path_fails() -> None:

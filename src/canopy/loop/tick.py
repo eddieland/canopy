@@ -1022,7 +1022,8 @@ def _check_model(ctx: Context, log: logs.TickAdapter) -> tuple[TickStatus, str] 
         refused = e
     else:
         return None
-    log.error("overseer not started", extra={"reason": refused.reason})
+    tries = {"seconds": [round(s, 1) for s in refused.seconds], "stderr": refused.stderr} if refused.seconds else {}
+    log.error("overseer not started", extra={"reason": refused.reason, **tries})
     missing = refused.guard == agent_models.MISSING
     return TickStatus.MODEL_MISSING if missing else TickStatus.MODEL_LIST_FAILED, refused.reason
 

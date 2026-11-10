@@ -24,9 +24,9 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, StrictStr
 
-from canopy.infra import procs
+from canopy.infra import procs, text
 from canopy.runtime.opencode.definitions import MODEL_RE
-from canopy.runtime.report import ModelList
+from canopy.runtime.report import STDERR_CHARS, STDERR_LINES, ModelList
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -63,10 +63,11 @@ def listed(runner: procs.Runner, *, cwd: Path, variants: bool = False) -> ModelL
         return ModelList(error="opencode is not on PATH")
     except procs.ProcError as e:
         return ModelList(error=f"`{command}` could not start: {e}")
-    if result.timed_out:
-        return ModelList(error=f"`{command}` took over {TIMEOUT_SECONDS} seconds")
     if not result.ok:
-        return ModelList(error=f"`{command}` exited {result.returncode}")
+        said = text.tail(result.stderr, lines=STDERR_LINES, chars=STDERR_CHARS)
+        if result.timed_out:
+            return ModelList(error=f"`{command}` took over {TIMEOUT_SECONDS} seconds", transient=True, stderr=said)
+        return ModelList(error=f"`{command}` exited {result.returncode}", transient=True, stderr=said)
     if variants:
         found = _verbose(result.stdout)
         return ModelList(frozenset(found), found)

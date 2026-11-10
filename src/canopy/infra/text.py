@@ -34,3 +34,15 @@ def one_line(text: str) -> str:
     """
     flat = " ".join("".join(c if c.isprintable() else " " for c in text).split())
     return flat if len(flat) <= SUMMARY_WIDTH else flat[: SUMMARY_WIDTH - 3] + "..."
+
+
+def tail(text: str, *, lines: int, chars: int) -> str:
+    """The end of another program's output, on one line, for a log or a message that says why it failed.
+
+    Returns:
+        The last `lines` lines of `text` that are not blank, each's control characters dropped and whitespace
+        collapsed, joined by ` | `, and cut to its last `chars` characters, opened with "..." when longer.
+    """
+    kept = [" ".join(line.split()) for line in printable(text).splitlines() if line.strip()][-lines:]
+    flat = " | ".join(kept)
+    return flat if len(flat) <= chars else "..." + flat[-(chars - 3) :]
