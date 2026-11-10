@@ -349,6 +349,12 @@ One slip is repaired, and the run's note says so: a line that is not JSON only f
 string, is read with them put right, since no value changes and the result is validated as any other.
 The overseer's done token is a plain line anywhere in its final message (§6).
 
+A worker reports its result by calling `result`, a tool of its run's own server beside `status` (§41), allowed by
+exact name in the workers' definitions alone, with the contract's fields as its arguments: the runtime writes the JSON,
+and the server refuses a result that does not validate while the worker can still send it again. The server writes
+nothing; the harness reads the last such call it took from the events, as it reads an update, and that is the run's
+result whatever its text ends with. A worker that calls none is read by its last line, as every other agent is.
+
 From the events the harness also reads, each validated (D026), the session id, the cost, the context used, and the
 tool calls by tool, a skill's by the skill it loaded, and records them on the tick or run (§11) with the digest of the
 definitions it loaded, so a prompt or definition change splits runs into before and after. Figures that do not

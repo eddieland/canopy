@@ -303,7 +303,8 @@ run. A `plan` writes the ticket's plan before its first `implement`, with guards
    slots share branch refs (D109), and put an approved plan in place (§25).
 3. Run the worker in the slot, or a joint run's desk (§18), until its timeout, recording its session, spend, and
    progress (§41).
-4. Parse the result contract (§13); missing or invalid is `unknown`. A plan (§25) pushes nothing.
+4. Read the result contract, a worker's from its `result` call, else the last line (§13); missing or invalid is
+   `unknown`. A plan (§25) pushes nothing.
 5. If a slot's git links changed, the run is `crashed` and no git runs in its slots, which may now point at a git
    directory the worker made. Otherwise push once where the branch is not on origin, never with force (with
    `trust.rebase`, leasing what origin held at step 2). A failed push or commits on no pushed branch is `unpushed`.
@@ -324,8 +325,9 @@ hook then runs the repository's own of its name, so the operator's hooks run as 
 run's own slots alone: a repository the worker's tools make elsewhere, as a test's, runs only its own hooks. Step 5
 names a pushed commit that lacks either in the run's note, and never rewrites it (TRUST_MODEL T5).
 
-Worker result contract, one JSON line, the last of the worker's text (§13); `prs` maps each repository the run worked
-in to its PR, and `pr_titles` is optional and for display only. An `implement` or `resume` may add `"created"`, the
+Worker result contract, the arguments of its `result` call, or else one JSON line, the last of its text (§13);
+`prs` maps each repository the run worked in to its PR, and `pr_titles` is optional and for display only. An
+`implement` or `resume` may add `"created"`, the
 follow-up tickets it filed, each with its repository or null, which authorize nothing (§18). `flaky` is a `resume`'s
 for `ci`, true when it left a failed check a rerun would pass, and `flaky_cause` (`test`, `runner`, or `service`) is
 where it judged the check failed, left out when unsure, with `flaky_detail` one line on why (§23):

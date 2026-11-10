@@ -17,6 +17,7 @@ from canopy.chores import history
 from canopy.core import cards, commit_hooks, config, definitions, git_tools, plans, prompts, reports, run_inbox
 from canopy.infra import resources
 from canopy.loop import mcp
+from canopy.runs import worker
 from canopy.runtime import agents, servers
 from canopy.runtime import definitions as runtime_definitions
 from canopy.runtime.implementation import Version
@@ -685,6 +686,27 @@ def test_no_other_agent_may_call_the_messages_tool(canopy_env: CanopyEnv, agent:
     """A reviewer keeps a card but takes no message, nor does any agent that keeps none."""
     _set_provider(canopy_env, provider)
     assert _opencode_disabled(_ruleset(canopy_env, agent), run_inbox.tool_name())
+
+
+#: The agents that report their result through canopy's `result` tool (DESIGN §8).
+RESULT_REPORTERS = {agents.WORKER, agents.PRIVATE_WORKER}
+
+
+@pytest.mark.parametrize("provider", ["github", "jira"])
+@pytest.mark.parametrize("agent", sorted(RESULT_REPORTERS))
+def test_workers_may_call_the_result_tool_by_name(canopy_env: CanopyEnv, agent: str, provider: str) -> None:
+    _set_provider(canopy_env, provider)
+    ruleset = _ruleset(canopy_env, agent)
+    assert _opencode_action(ruleset, worker.result_tool_name(), "*") == "allow"
+    assert _opencode_action(ruleset, "canopy_run_result2", "*") == "deny"
+
+
+@pytest.mark.parametrize("provider", ["github", "jira"])
+@pytest.mark.parametrize("agent", sorted(set(runtime_definitions.agent_names()) - RESULT_REPORTERS))
+def test_no_other_agent_may_call_the_result_tool(canopy_env: CanopyEnv, agent: str, provider: str) -> None:
+    """A planner's run is served the tool, as a worker's is, and its definition denies it."""
+    _set_provider(canopy_env, provider)
+    assert _opencode_disabled(_ruleset(canopy_env, agent), worker.result_tool_name())
 
 
 #: The artifact store's tools as the runtime names them on a server called `louvre` (DESIGN §38), the feed among them.

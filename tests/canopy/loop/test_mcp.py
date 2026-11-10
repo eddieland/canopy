@@ -727,11 +727,12 @@ def undescribed(schema: object, at: str = "") -> list[str]:
         mcp.OVERSEER,
         mcp.CHORE,
         mcp.REPORTS,
+        mcp.WORKER,
         mcp.STATUS,
         mcp.REVIEW_STATUS,
         mcp.git_mode(procs.SubprocessRunner(), {"api": Path("/a")}),
     ],
-    ids=["overseer", "chore", "reports", "status", "review-status", "git"],
+    ids=["overseer", "chore", "reports", "worker", "status", "review-status", "git"],
 )
 def test_each_mode_gives_its_instructions_at_initialize(mode: mcp.Mode) -> None:
     """Each mode says how its tools fit together, and that what they return is data, not instructions."""
@@ -1239,8 +1240,12 @@ def test_a_workers_or_a_reviews_run_is_served_its_status_tool_alone(overseen: Ca
             tool_call("decide", decisions=[{"key": "PROJ-1", "action": "wait", "rationale": "r"}]),
             status=True,
         )
-    # A review's run takes no message from the operator (DESIGN §44); the rest are served the tool that reads them.
-    assert served.listed() == (["status"] if run.startswith("review-") else ["status", "messages"])
+    # A review's run takes no message from the operator (DESIGN §44); the rest are served the tool that reads them,
+    # and a worker's the tool it reports its result with (§8).
+    assert served.listed() == {"7": ["status", "messages", "result"], "review-3": ["status"]}.get(
+        run,
+        ["status", "messages"],
+    )
     listed = served.responses[1]["result"]["tools"][0]
     assert "outputSchema" not in listed
     assert (listed["inputSchema"]["required"], listed["inputSchema"]["additionalProperties"]) == (
@@ -1351,6 +1356,40 @@ def test_a_reviews_run_is_not_served_the_messages_tool(tmp_path: Path) -> None:
     with in_run("review-3"), mock.patch.dict(os.environ, {cards.ANSWERS_ENV: str(tmp_path)}):
         served = mcp_session(tool_call("messages"), status=True)
     assert served.responses[1]["error"] == {"code": -32602, "message": "no tool named 'messages'"}
+
+
+def test_a_workers_run_reports_its_result_with_the_result_tool(overseen: CanopyEnv) -> None:
+    """A result that validates is taken, with the fields its message added; one that does not is a tool error."""
+    conn = overseen.journal()
+    before = recorded(conn)
+    answers = [{"review": 1, "finding": 1, "answer": "declined", "reason": "a } in [text"}]
+    with in_run("7"):
+        served = mcp_session(
+            LIST_TOOLS,
+            tool_call("result", status="blocked", question="Which API?", review_answers=answers),
+            tool_call("result", status="finished"),
+            tool_call("result", summary="no status"),
+            status=True,
+        )
+    listed = served.responses[1]["result"]["tools"][2]
+    assert (listed["name"], listed["inputSchema"]["required"]) == ("result", ["status"])
+    # Its message's other fields are arguments too, and the fields canopy sets itself are not the worker's to send.
+    assert listed["inputSchema"]["additionalProperties"] is True
+    assert not {"pr", "flaky_cause_other"} & set(listed["inputSchema"]["properties"])
+    text, error = served.said(2)
+    assert (text.startswith("Taken as your result when your run ends"), error) == (True, False)
+    assert [served.said(n)[1] for n in (3, 4)] == [True, True]
+    assert "status" in served.said(3)[0]
+    assert "status" in served.said(4)[0]
+    # The server writes nothing: the harness reads the result from the call the agent prints.
+    assert recorded(conn) == before
+
+
+@pytest.mark.parametrize("run", ["task-1", "review-3"])
+def test_a_tasks_or_a_reviews_run_is_not_served_the_result_tool(run: str) -> None:
+    with in_run(run):
+        served = mcp_session(tool_call("result", status="done"), status=True)
+    assert served.responses[1]["error"] == {"code": -32602, "message": "no tool named 'result'"}
 
 
 def test_the_status_server_serves_nothing_else() -> None:

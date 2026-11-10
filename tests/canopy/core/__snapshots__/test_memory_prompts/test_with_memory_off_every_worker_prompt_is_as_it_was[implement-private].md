@@ -116,8 +116,11 @@ The operator reads your `summary` and `question` in canopy as Markdown: paragrap
 fenced code, **bold**, *italics*, `>` quotes, `---` rules, and tables. Nothing else is read, and a link shows its
 address, so write a URL as itself.
 
-Your last line of stdout must be exactly one JSON object, with nothing after it, in the shape of the result line at the
-end of your message from canopy. Its summary is your report to the operator: what you did, every PR link, and anything
+Report your result by calling `canopy_run_result`, as the last thing you do. Its arguments are the fields of the result
+line at the end of your message from canopy, and each field that message asks you to add to it, as an argument of its
+own. If the call is refused, fix what the refusal names and call it again; once it is taken, end your run. Only if you
+have no such tool, print the result instead: your last line of stdout exactly one JSON object, in that line's shape,
+with nothing after it. Its summary is your report to the operator: what you did, every PR link, and anything
 a reviewer should look at first.
 
 <!-- canopy: run -->
