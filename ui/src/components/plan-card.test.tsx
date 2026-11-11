@@ -32,6 +32,7 @@ const PLANS: TicketPlans = {
     newest: {
         plan: PLAN,
         path: '/state/plans/ABC-1/41.md',
+        archive_name: '41-PROPOSED-a-plan.md',
         text: '# Plan\n',
         problem: null,
         sha256: 'abc',
