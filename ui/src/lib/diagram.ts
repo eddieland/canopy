@@ -105,6 +105,8 @@ let drawn = 0
 export async function drawDiagram(source: string): Promise<Drawn | NotDrawn> {
     mermaid.initialize(configuration())
     try {
+        // Measured in the face it is drawn in: a page that has set nothing in it yet has not loaded it.
+        await document.fonts.load(`${FONT_SIZE}px 'IBM Plex Mono'`)
         const read = await kindOf(source)
         if (typeof read !== 'string') {
             return read
@@ -273,5 +275,5 @@ function naturalWidth(svg: string): number | undefined {
 // The SVG with the face its labels are set in carried inside it, as the first thing in it: mermaid's own styles drop an
 // `@font-face`, and an image can use no font it does not carry.
 function withFace(svg: string): string {
-    return svg.replace(/^<svg\b[^>]*>/u, (open) => `${open}${FACE}`)
+    return svg.replace(/<svg\b[^>]*>/u, (open) => `${open}${FACE}`)
 }
