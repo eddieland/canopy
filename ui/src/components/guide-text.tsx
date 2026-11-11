@@ -7,7 +7,8 @@ import { CodeBlock } from '@/components/code-block'
 import { Mark } from '@/components/rich-text'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useDiagram } from '@/hooks/use-diagram'
-import { DIAGRAM_FENCE, anchor, diagramTitle, plainText } from '@/lib/guide'
+import { diagramTitle } from '@/lib/diagram-title'
+import { DIAGRAM_FENCE, anchor, plainText } from '@/lib/guide'
 import type { GuidePiece } from '@/lib/guide'
 import { markOverflowEdges } from '@/lib/overflow-edges'
 import { ALIGN } from '@/lib/rich-text'
@@ -182,17 +183,19 @@ function Diagram({ lines }: { lines: string[] }) {
     // As wide as it is drawn, or narrower to fit, but never so narrow its labels go unread: past that it scrolls, its
     // edges faded where there is more (`diagram-image`, `edge-fade`).
     const width = drawn.width === undefined ? undefined : ({ '--diagram-width': `${drawn.width}px` } as CSSProperties)
+    const title = diagramTitle(lines)
     return (
-        <figure className="rounded-md border bg-surface px-4 py-5">
+        <figure className="flex flex-col gap-3 rounded-md border bg-surface px-4 py-5">
             <div ref={(box) => (box === null ? undefined : markOverflowEdges(box))} className="edge-fade">
                 <img
                     src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(drawn.svg)}`}
-                    alt={diagramTitle(lines) ?? 'A diagram'}
+                    alt={title ?? 'A diagram'}
                     data-width={drawn.width === undefined ? undefined : ''}
                     style={width}
                     className="diagram-image"
                 />
             </div>
+            {title !== undefined && <figcaption className="text-sm text-muted-foreground">{title}</figcaption>}
         </figure>
     )
 }

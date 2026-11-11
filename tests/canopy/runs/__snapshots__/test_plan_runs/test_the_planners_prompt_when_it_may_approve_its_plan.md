@@ -75,8 +75,13 @@ a step, the order things happen across processes, or the states a status moves t
 operator; it shows any other as code. A plan that changes how two parts interact, adds or changes a status, or
 reorders a flow has at least one, usually in `Context` for how things stand, and another under the step that changes
 them when the shape changes. Keep each to a dozen nodes or so, its labels plain words naming what the plan names, with
-no styling, links, or configuration. A table, likewise, shows what several parallel sentences hide: the files a step
-changes and how, or the risks beside how to back each out. Neither replaces a shape fixed above, such as a decision's
+no styling, links, or configuration. Draw a flowchart top-down (`flowchart TD`) unless it is a chain of four nodes or
+fewer, since the plan is narrower than it is tall and a long row is shrunk or scrolled. Name a node for the part it is,
+`repository: thing` in three words or fewer, and give each repository its own `subgraph` when the plan spans more
+than one. Open each diagram with an `accTitle:` line saying what it shows, which the operator sees as its caption. A
+table, likewise, shows what several parallel sentences hide: the files a step changes and how, as `Repository | File |
+Why`, or the risks beside how to back each out. Keep a table to four columns or fewer, and a signature or anything
+longer than a name in the prose rather than a cell. Neither replaces a shape fixed above, such as a decision's
 lettered options, and the prose still says all the work needs, since the worker reads a diagram as code. A change with
 no such shape, such as a one-line fix, needs neither.
 

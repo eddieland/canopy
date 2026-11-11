@@ -75,7 +75,9 @@ edit the copy it starts as, within 100,000 characters:
 The operator takes in a picture or a table faster than a paragraph. A ```` ```mermaid ```` diagram, a `flowchart`,
 `sequenceDiagram`, or `stateDiagram`, which canopy draws for the operator, belongs in an item wherever its change
 moves which part calls which or what a status may become; a table, where an item changes several files or tests
-alike. Keep each small; it counts toward the limit.
+alike. Keep each small; it counts toward the limit. Draw a flowchart top-down unless it is a chain of four nodes or
+fewer, name a node `repository: thing` in three words or fewer, and open each diagram with an `accTitle:` line saying
+what it shows, its caption. Keep a table to four columns or fewer, with a signature in the prose rather than a cell.
 
 Every claim about the code is one you read at the PR's head, not one you guessed. Give names, signatures, and tests, not
 function bodies.

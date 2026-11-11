@@ -14,6 +14,7 @@ import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import type { EditorView, NodeView, ViewMutationRecord } from '@tiptap/pm/view'
 
 import type { Drawn, NotDrawn } from '@/lib/diagram'
+import { diagramTitle } from '@/lib/diagram-title'
 import { markOverflowEdges } from '@/lib/overflow-edges'
 
 // Kept in step with DIAGRAM_LANGUAGE in src/lib/diagram.ts, which loads only when a diagram is drawn.
@@ -217,11 +218,13 @@ class DiagramView implements NodeView {
             return
         }
         this.dom.dataset['diagram'] = 'drawn'
-        this.image.alt = `A ${KIND_NAMES[result.kind] ?? 'diagram'}, drawn from the Mermaid source beside it`
+        // Named by its `accTitle`, which the planner is asked for, and captioned with it; else by its kind.
+        const title = diagramTitle(source.split('\n'))
+        this.image.alt = title ?? `A ${KIND_NAMES[result.kind] ?? 'diagram'}, drawn from the Mermaid source beside it`
         showWidth(this.image, result.width)
         this.image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(result.svg)}`
         this.image.hidden = false
-        this.reason.textContent = ''
+        this.reason.textContent = title ?? ''
     }
 }
 

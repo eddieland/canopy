@@ -70,6 +70,12 @@ describe('a Mermaid code block', () => {
         expect(drawDiagram).toHaveBeenCalledTimes(1)
     })
 
+    it('is named and captioned by its accTitle, where it has one', async () => {
+        const { root } = open('```mermaid\nsequenceDiagram\n    accTitle: The export, row by row\n    A->>B: hi\n```')
+        expect(await within(root).findByRole('img', { name: 'The export, row by row' })).toBeTruthy()
+        expect(within(root).getByText('The export, row by row')).toBeTruthy()
+    })
+
     it('writes back as the Markdown it was, and another language stays a code block', async () => {
         const { editor, root } = open(PLAN)
         await within(root).findByRole('img')
