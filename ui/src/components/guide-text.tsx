@@ -126,11 +126,11 @@ function BlockView({ block, page }: { block: Block<GuidePiece>; page: string }) 
         case 'table': {
             return (
                 <div className="overflow-x-auto">
-                    <table className="border-collapse text-left">
+                    <table className="document-table">
                         <thead>
-                            <tr className="border-b">
+                            <tr>
                                 {block.head.map((line, i) => (
-                                    <th key={i} scope="col" className={cn(cellClass(block.align[i]), 'font-semibold')}>
+                                    <th key={i} scope="col" className={cellClass(block.align[i])}>
                                         <LineView line={line} />
                                     </th>
                                 ))}
@@ -138,7 +138,7 @@ function BlockView({ block, page }: { block: Block<GuidePiece>; page: string }) 
                         </thead>
                         <tbody>
                             {block.rows.map((row, i) => (
-                                <tr key={i} className="border-b last:border-b-0">
+                                <tr key={i}>
                                     {row.map((line, j) => (
                                         <td key={j} className={cellClass(block.align[j])}>
                                             <LineView line={line} />
@@ -161,9 +161,9 @@ function BlockView({ block, page }: { block: Block<GuidePiece>; page: string }) 
     }
 }
 
-// A table cell's class, set as its column's delimiter row asks.
-function cellClass(align: Align): string {
-    return cn('px-3 py-2 align-top first:pl-0 last:pr-0', align && ALIGN[align])
+// A table cell's alignment, as its column's delimiter row asks; the rest is the table's (`document-table`).
+function cellClass(align: Align): string | undefined {
+    return align ? ALIGN[align] : undefined
 }
 
 // A Mermaid fence, drawn as its diagram: an image named by its `accTitle`, drawn again when the theme or a palette

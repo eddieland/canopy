@@ -160,11 +160,11 @@ function BlockView({ block, prose, look }: { block: Block; prose: boolean; look:
         case 'table': {
             return (
                 <div className="overflow-x-auto">
-                    <table className="border-collapse text-left">
+                    <table className="document-table">
                         <thead>
-                            <tr className="border-b">
+                            <tr>
                                 {block.head.map((line, i) => (
-                                    <th key={i} scope="col" className={cn(cellClass(block.align[i]), 'font-medium')}>
+                                    <th key={i} scope="col" className={cellClass(block.align[i])}>
                                         <LineView line={line} look={look} />
                                     </th>
                                 ))}
@@ -172,7 +172,7 @@ function BlockView({ block, prose, look }: { block: Block; prose: boolean; look:
                         </thead>
                         <tbody>
                             {block.rows.map((row, i) => (
-                                <tr key={i} className="border-b last:border-b-0">
+                                <tr key={i}>
                                     {row.map((line, j) => (
                                         <td key={j} className={cellClass(block.align[j])}>
                                             <LineView line={line} look={look} />
@@ -200,9 +200,9 @@ function BlockView({ block, prose, look }: { block: Block; prose: boolean; look:
     }
 }
 
-// A table cell's class, set as its column's delimiter row asks.
-function cellClass(align: Align): string {
-    return cn('px-2 py-1 align-top first:pl-0 last:pr-0', align && ALIGN[align])
+// A table cell's alignment, as its column's delimiter row asks; the rest is the table's (`document-table`).
+function cellClass(align: Align): string | undefined {
+    return align ? ALIGN[align] : undefined
 }
 
 function LineView({ line, look }: { line: Line; look: Look }) {

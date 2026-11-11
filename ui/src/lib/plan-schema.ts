@@ -13,7 +13,7 @@ import type { AnyExtension, JSONContent, MarkdownToken } from '@tiptap/core'
 import { Heading } from '@tiptap/extension-heading'
 import { Link } from '@tiptap/extension-link'
 import { TaskItem, TaskList } from '@tiptap/extension-list'
-import { TableKit } from '@tiptap/extension-table'
+import { TableHeader, TableKit } from '@tiptap/extension-table'
 import { Markdown } from '@tiptap/markdown'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
@@ -44,9 +44,10 @@ export function planExtensions(more: AnyExtension[] = []): AnyExtension[] {
         PlanLink.configure({ openOnClick: false, autolink: false, linkOnPaste: false }),
         TaskList,
         PlanTaskItem.configure({ nested: true }),
-        // A table is ours, drawn with room for its actions; its rows and cells are the kit's.
-        TableKit.configure({ table: false }),
+        // A table is ours, drawn with room for its actions, as is its header cell; its rows and cells are the kit's.
+        TableKit.configure({ table: false, tableHeader: false }),
         PlanTable.configure({ resizable: false }),
+        PlanTableHeader,
         VerbatimBlock,
         VerbatimInline,
         ImageAsText,
@@ -442,4 +443,12 @@ const ImageAsText = Extension.create({
     name: 'imageAsText',
     markdownTokenName: 'image',
     parseMarkdown: (token, helpers) => helpers.createNode('verbatimInline', { raw: token.raw ?? '' }),
+})
+
+// A table's head cell, named as its column's head for a screen reader, as the guide's and a message's are: a Markdown
+// table's head is its first row, which Tiptap keeps in the table's body rather than a head of its own.
+const PlanTableHeader = TableHeader.extend({
+    renderHTML({ HTMLAttributes }) {
+        return ['th', mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, { scope: 'col' }), 0]
+    },
 })

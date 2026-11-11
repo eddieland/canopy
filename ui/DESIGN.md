@@ -510,8 +510,12 @@ whole either side.
   `####`, the body's size in semibold. Two steps of heading, so a section stands a quarter above the body and a
   subsection apart from it by weight alone. A plan's size is the operator's (Settings): Normal is these, and the other
   sizes move the body and both headings together, the one place a size outside the steps appears. The guide stays at
-  Normal. Code is set as everywhere else (`Code`, Rich text). Its measure is fixed, `max-w-3xl`. What lays a document
-  out, the guide's rules between sections or a plan's margin, is its surface's own; its type is not.
+  Normal. Code is set as everywhere else (`Code`, Rich text). A table is `document-table`, in a plan, the guide, and
+  rich text alike: the measure's full width at least, wider where what it holds needs it, a hairline under its head
+  and each row, no grid and no fill, its first column flush with the text, its head in `muted-foreground`, its figures
+  tabular, and a step under the text around it in `em`, so a plan's size moves it too. Its measure is fixed,
+  `max-w-3xl`. What lays a document out, the guide's rules between sections or a plan's margin, is its surface's own;
+  its type is not.
 - **`ReviewsTable`** and **`RunsTable`**: review runs and runs, one row each, on every page that lists them. On the
   page of what they belong to, the columns that would repeat it go, as a `ListRow` kind of their own. The reviews one
   request made of one commit, one per persona (DESIGN §31), are adjacent rows with no hairline between them, each with
@@ -1021,7 +1025,8 @@ reader, so no table repeats them.
 - **Rich text** (`RichText`, `src/lib/rich-text.ts`) lays out what an agent wrote, a summary, a rationale, and a
   conversation's message: line breaks kept, `-` and `1.` lists, headings as a `font-semibold` line, `#` and `##` a step
   over `###` (`text-base`, a small step, as the page's heading ladder does not apply inside a bubble), `>` quotes as
-  their own blocks, a `---` rule as a hairline, a pipe table with its columns aligned by their colons, fenced code as a
+  their own blocks, a `---` rule as a hairline, a pipe table as a document's (`document-table`, A document) with its
+  columns aligned by their colons, fenced code as a
   `surface-raised` block, colored as the guide's is in the language its fence names (`CodeBlock`), and `code`,
   **strong**, *emphasis*, and ~~struck~~ inline. Code, inline or fenced, is `text-code`: a step under its line on a sans
   palette, where the change of face sets it apart, and the line's own size on a mono one, where a smaller copy of the
