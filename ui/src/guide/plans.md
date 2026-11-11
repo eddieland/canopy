@@ -135,11 +135,14 @@ three tickets or more opens its breakdown with the order they're built in, drawn
 The code is still the plan. **Source**, under the diagram, shows it; so does putting the cursor in it, which the arrow
 keys do from the line above or below, and which is how you edit one, with the diagram redrawn under it as you stop
 typing. A comment or a change marked in the code shows it too, since that's where those live. A diagram Mermaid can't
-read, or one of a kind not drawn here, shows its code and, under it, `Not drawn:` and why.
+read, one of a kind not drawn here, or one whose picture your browser can't read, shows its code and, under it,
+`Not drawn:` and why.
 
 A planner's diagram comes from the ticket's text like the rest of the plan, so it's drawn as a picture and nothing
-more: its labels stay words, and nothing in it can run, click through, or load from anywhere. It can still be a
-confident drawing of the wrong thing, and so can a whiteboard.
+more: its labels stay words, and nothing in it can run, click through, or load from anywhere. A link written into one
+(`click A href "…"`) is dropped from the picture, its node drawn like the rest; the address is still there in the
+code, for whoever wants to read where it was pointing. A diagram can still be a confident drawing of the wrong thing,
+and so can a whiteboard.
 
 ## Commenting
 

@@ -131,6 +131,32 @@ test('a diagram mermaid cannot read, or of a kind not drawn here, shows its sour
     await expect(doc.getByRole('img')).toHaveCount(0)
 })
 
+test('a diagram that writes a link is drawn, its node as any other and no link in its picture', async ({ page }) => {
+    await write(
+        page,
+        [
+            '# Plan',
+            '',
+            '```mermaid',
+            'flowchart LR',
+            '  A[canopy docs] --> B[api]',
+            '  click A href "https://example.com/not-the-docs" "a tooltip"',
+            '  click B "https://example.org/other" _blank',
+            '```',
+            '',
+        ].join('\n'),
+    )
+    const diagram = plan(page).getByRole('img', { name: /^A flowchart/u })
+    await expect(diagram).toBeVisible()
+    await expect.poll(() => diagram.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(100)
+    const svg = decodeURIComponent((await diagram.getAttribute('src')) ?? '')
+    expect(svg).toContain('>canopy<')
+    expect(svg).not.toMatch(/<a\b/u)
+    expect(svg).not.toContain('example.com')
+    expect(svg).not.toContain('example.org')
+    await expect(plan(page).getByText(/^Not drawn/u)).toHaveCount(0)
+})
+
 test("what a diagram's labels write as HTML stays text, and its config cannot say otherwise", async ({ page }) => {
     const fetched: string[] = []
     page.on('request', (request) => {

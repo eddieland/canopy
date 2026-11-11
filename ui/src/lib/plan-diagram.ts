@@ -17,6 +17,8 @@ import type { Drawn, NotDrawn } from '@/lib/diagram'
 
 // Kept in step with DIAGRAM_LANGUAGE in src/lib/diagram.ts, which loads only when a diagram is drawn.
 const LANGUAGE = 'mermaid'
+// Why a picture is not shown when the browser cannot read it, as src/lib/diagram.ts says it too.
+const UNREADABLE = 'the browser cannot read its picture'
 // How long the code rests after a keystroke before its diagram is drawn again, in milliseconds.
 const REST_MS = 400
 // The class the code block holding the caret wears, which shows its code.
@@ -131,6 +133,13 @@ class DiagramView implements NodeView {
         this.image = child(this.figure, 'img')
         this.image.alt = 'A diagram'
         this.image.hidden = true
+        // A picture the browser cannot read is a diagram not drawn, shown as its code and why, not a broken image
+        // under a block that says it was drawn. Only the picture shown now can fail: a new one ends the old one's load.
+        this.image.addEventListener('error', () => {
+            if (this.image.hasAttribute('src')) {
+                this.fail(UNREADABLE)
+            }
+        })
         this.reason = child(this.figure, 'figcaption')
         this.toggle = child(this.figure, 'button')
         this.toggle.type = 'button'
@@ -202,10 +211,7 @@ class DiagramView implements NodeView {
             return
         }
         if ('error' in result) {
-            this.dom.dataset['diagram'] = 'failed'
-            this.image.hidden = true
-            this.image.removeAttribute('src')
-            this.reason.textContent = `Not drawn: ${result.error}.`
+            this.fail(result.error)
             return
         }
         this.dom.dataset['diagram'] = 'drawn'
@@ -214,6 +220,14 @@ class DiagramView implements NodeView {
         this.image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(result.svg)}`
         this.image.hidden = false
         this.reason.textContent = ''
+    }
+
+    // The diagram not drawn, for `reason`: its code shows, with why under it, and no picture.
+    private fail(reason: string): void {
+        this.dom.dataset['diagram'] = 'failed'
+        this.image.hidden = true
+        this.image.removeAttribute('src')
+        this.reason.textContent = `Not drawn: ${reason}.`
     }
 }
 

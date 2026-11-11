@@ -85,6 +85,15 @@ describe('a Mermaid code block', () => {
         expect(within(root).queryByRole('img')).toBeNull()
     })
 
+    it('shows its code, and why, when the browser cannot read the picture drawn', async () => {
+        const { root } = open(DIAGRAM)
+        const image = await within(root).findByRole('img')
+        image.dispatchEvent(new Event('error'))
+        expect(within(root).getByText('Not drawn: the browser cannot read its picture.')).toBeTruthy()
+        expect(within(root).queryByRole('img')).toBeNull()
+        expect(root.querySelector<HTMLElement>('.plan-diagram')?.dataset['diagram']).toBe('failed')
+    })
+
     it('is drawn again once its source rests after an edit, and when the theme changes', async () => {
         const { editor, root } = open(DIAGRAM)
         await within(root).findByRole('img')
