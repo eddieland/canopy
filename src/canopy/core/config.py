@@ -1200,6 +1200,32 @@ def _otlp_endpoint(value: str) -> str:
     return _ui_url(value).rstrip("/")
 
 
+#: How much of the runtime's sessions canopy lists and finds (ROADMAP M72): none; or each one's title.
+type SessionSearch = Literal["off", "titles"]
+
+
+def _directory_glob(value: str) -> str:
+    # `~` is the operator's home, as in a shell: the runtime records a session's directory as its real path. A trailing
+    # `/` is dropped, since a directory is recorded without one.
+    expanded = os.path.expanduser(value)  # noqa: PTH111 # a glob kept as written, which a Path would normalize
+    return expanded.rstrip("/") or "/"
+
+
+class Sessions(Section):
+    """The `[sessions]` table: whether canopy lists every session the runtime keeps, and finds one by its title.
+
+    Every key is private: a title is whatever a session was about, the operator's own work in any directory among it,
+    and listing them serves it on the web UI (TRUST_MODEL T6, T7, T8).
+    """
+
+    #: `off`, the default: no title is read, and no page or command lists a session. `titles`: the read that records
+    #: every session's spend (DESIGN §13) keeps its title and archive too, for `canopy sessions` and the web UI to list.
+    search: Annotated[SessionSearch, Scope.PRIVATE] = "off"
+    #: Globs of directories, such as `~/clients/*`, whose sessions canopy neither lists nor keeps a title of: one
+    #: matches a session's directory or a directory above it, as SQLite's GLOB reads it, `*` across a `/` too.
+    exclude: Annotated[tuple[Annotated[NonBlank, AfterValidator(_directory_glob)], ...], Scope.PRIVATE] = ()
+
+
 class Telemetry(Section):
     """The `[telemetry]` table: traces of what canopy does, through OpenTelemetry (DESIGN §12).
 
@@ -1705,6 +1731,7 @@ class Config(Section):
     personas: Personas
     artifacts: Artifacts
     spend: Spend
+    sessions: Sessions
     telemetry: Telemetry
     # Tables of tables, keyed by name; private as a whole (TABLE_SECTIONS).
     chores: Annotated[dict[ChoreName, Chore], Scope.PRIVATE] = {}
@@ -1746,6 +1773,7 @@ SECTIONS: dict[str, type[Section]] = {
     "personas": Personas,
     "artifacts": Artifacts,
     "spend": Spend,
+    "sessions": Sessions,
     "telemetry": Telemetry,
 }
 

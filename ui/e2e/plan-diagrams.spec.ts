@@ -80,17 +80,48 @@ test("the arrow keys go into a diagram's code from the line above and below it",
     await expect(markdown).toContainText('    end\nPage->>Page: done\n```')
 })
 
+test("a class diagram and an entity relationship diagram are drawn, for a plan's types and tables", async ({
+    page,
+}) => {
+    await writePlan(
+        page,
+        [
+            '# Plan',
+            '',
+            '```mermaid',
+            'classDiagram',
+            '  class Run {',
+            '    +str status',
+            '  }',
+            '  Run --> Ticket',
+            '```',
+            '',
+            '```mermaid',
+            'erDiagram',
+            '  TICKET ||--o{ RUN : has',
+            '```',
+            '',
+        ].join('\n'),
+    )
+    const doc = plan(page)
+    for (const name of [/^A class diagram/u, /^An entity relationship diagram/u]) {
+        const diagram = doc.getByRole('img', { name })
+        await expect(diagram).toBeVisible()
+        expect(await diagram.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(50)
+    }
+})
+
 test('a diagram mermaid cannot read, or of a kind not drawn here, shows its source and why', async ({ page }) => {
     await writePlan(
         page,
         '# Plan\n\n```mermaid\nflowchart LR\n  A -->\n```\n\n```mermaid\npie\n  "a": 1\n```\n\n' +
-            '```mermaid\nerDiagram\n  A ||--o{ B : has\n```\n',
+            '```mermaid\nrequirementDiagram\n  requirement r {\n    id: 1\n  }\n```\n',
     )
     const doc = plan(page)
     await expect(doc.getByText(/^Not drawn: Parse error on line/u)).toBeVisible()
     await expect(doc.getByText('Not drawn: pie is not drawn here, only flowchart, sequenceDiagram')).toBeVisible()
-    // Named as the planner wrote it, not as mermaid calls it inside (`er`).
-    await expect(doc.getByText('Not drawn: erDiagram is not drawn here', { exact: false })).toBeVisible()
+    // Named as the planner wrote it, not as mermaid calls it inside (`requirement`).
+    await expect(doc.getByText('Not drawn: requirementDiagram is not drawn here', { exact: false })).toBeVisible()
     await expect(doc.getByText('A -->')).toBeVisible()
     await expect(doc.getByText('"a": 1')).toBeVisible()
     await expect(doc.getByRole('img')).toHaveCount(0)

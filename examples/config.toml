@@ -324,6 +324,15 @@ cmd = "canopy-connect-jira --site acme.atlassian.net"
 # cmd = "canopy-connect-slack --channel C0123ABCD"
 # operators = ["U0123ABCD"]
 
+# Every session the agent runtime keeps, yours and canopy's, listed and found by its title (DESIGN §13): `canopy
+# sessions [WORDS]`. Off by default, and private. At "titles", the loop's wait between ticks reads each session's title
+# with its spend, from the first session again whenever either key changes; at "off" it keeps none, and drops any kept.
+# A directory exclude names, or any below it, keeps no title and is listed nowhere: a glob as SQLite's GLOB reads one,
+# `~` your home.
+# [sessions]
+# search = "off"                         # or "titles"
+# exclude = ["~/clients/*"]
+
 # Traces of what canopy does, as OpenTelemetry spans (DESIGN §12): each tick and its steps, and each run it starts.
 # Off by default, and private. `file` appends each span, as OTLP JSON, to .canopy/traces.jsonl, readable by you alone,
 # for a collector running as you to read. `otlp` posts them to an OTLP/HTTP endpoint, such as an OpenTelemetry
