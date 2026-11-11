@@ -29,29 +29,29 @@ afterEach(() => {
 describe('the edges of a box that scrolls sideways', () => {
     it('are left alone while what it holds fits', () => {
         const element = box(600, 600)
-        expect(element.hasAttribute('data-more-start')).toBe(false)
-        expect(element.hasAttribute('data-more-end')).toBe(false)
+        expect(element.dataset['moreStart'] !== undefined).toBe(false)
+        expect(element.dataset['moreEnd'] !== undefined).toBe(false)
     })
 
     it('mark the end at first, both while scrolled partway, and the start at the end', () => {
         const element = box(600, 1500)
-        expect(element.hasAttribute('data-more-start')).toBe(false)
-        expect(element.hasAttribute('data-more-end')).toBe(true)
+        expect(element.dataset['moreStart'] !== undefined).toBe(false)
+        expect(element.dataset['moreEnd'] !== undefined).toBe(true)
 
         scrollTo(element, 400)
-        expect(element.hasAttribute('data-more-start')).toBe(true)
-        expect(element.hasAttribute('data-more-end')).toBe(true)
+        expect(element.dataset['moreStart'] !== undefined).toBe(true)
+        expect(element.dataset['moreEnd'] !== undefined).toBe(true)
 
         scrollTo(element, 900)
-        expect(element.hasAttribute('data-more-start')).toBe(true)
-        expect(element.hasAttribute('data-more-end')).toBe(false)
+        expect(element.dataset['moreStart'] !== undefined).toBe(true)
+        expect(element.dataset['moreEnd'] !== undefined).toBe(false)
     })
 
     it('stop changing once stopped', () => {
         const element = box(600, 1500)
         stops.pop()?.()
         scrollTo(element, 900)
-        expect(element.hasAttribute('data-more-start')).toBe(false)
-        expect(element.hasAttribute('data-more-end')).toBe(true)
+        expect(element.dataset['moreStart'] !== undefined).toBe(false)
+        expect(element.dataset['moreEnd'] !== undefined).toBe(true)
     })
 })
