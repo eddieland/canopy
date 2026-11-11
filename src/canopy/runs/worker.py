@@ -1,7 +1,7 @@
 """`canopy _run <run_id>`: one worker execution in its leased slots (DESIGN §8, §18).
 
 Sets up the branch in each slot, runs the operator's `setup_cmd` there, makes the desk of a joint run, runs
-`worker_cmd` with a timeout, reads the result it reported with canopy's `result` tool, or else its result line,
+`worker_cmd` with a timeout, reads the result it reported with canopy's `result` tool (`core.run_result`),
 verifies the branch is pushed in each slot and keeps what the run changed there (`changes`, DESIGN §45), removes the
 desk, returns every slot, and closes the `runs` row, recording the follow-up tickets its result names that pass their
 checks (DESIGN §18). The slots are returned on every exit path this process can see: normal, exception, and SIGTERM,
@@ -303,13 +303,16 @@ class Outcome:
         return json.dumps(data)
 
 
-def parse_result(stdout: str) -> WorkerResult | None:
-    """Parse `stdout`'s result line (DESIGN §13) as the result contract. None if it is missing or invalid.
+def parse_result(reported: str) -> WorkerResult | None:
+    """Read `reported`, the result a worker reported as one line of JSON (DESIGN §13), as the result contract.
+
+    The reader is lenient where the tool was strict: it cuts a long text and drops what it does not know, so a stored
+    result reads the same.
 
     Returns:
         The worker's result, or None.
     """
-    return contract.last_line(WorkerResult, stdout)
+    return contract.last_line(WorkerResult, reported)
 
 
 #: What the tool says of a report's `summary` and `question`: how the operator reads them.
