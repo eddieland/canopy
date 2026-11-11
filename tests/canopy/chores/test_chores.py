@@ -848,7 +848,8 @@ def test_status_lists_each_chore(
     capsys.readouterr()
     assert main(["status"]) == 0
     out = capsys.readouterr().out
-    assert "\nChores (0/1 running):\n  build-health  last ok 0s ago, due in 1h\n" in out
+    # The run ended a moment ago: its age is whatever the second it ended in makes it.
+    assert re.search(r"\nChores \(0/1 running\):\n  build-health  last ok [0-5]s ago, due in 1h\n", out)
 
 
 def open_ids(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> list[str]:
