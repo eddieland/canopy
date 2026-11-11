@@ -110,6 +110,7 @@ class DiagramView implements NodeView {
     readonly contentDOM: HTMLElement
     private readonly figure: HTMLElement
     private readonly image: HTMLImageElement
+    private readonly label: HTMLElement
     private readonly reason: HTMLElement
     private readonly toggle: HTMLButtonElement
     private text: string
@@ -131,15 +132,20 @@ class DiagramView implements NodeView {
         this.figure = child(this.dom, 'figure')
         this.figure.className = 'plan-diagram-figure'
         this.figure.contentEditable = 'false'
+        // A head as a panel's section has: what the diagram is, in the app's label type, and Source at its right.
+        const head = child(this.figure, 'div')
+        head.className = 'plan-diagram-head'
+        this.label = child(head, 'figcaption')
         // The picture scrolls in a box of its own, so a diagram too wide to read narrowed scrolls rather than shrinks,
-        // and the caption and the toggle stay put.
+        // and the head stays put.
         const scroll = child(this.figure, 'div')
         scroll.className = 'plan-diagram-scroll'
         this.image = child(scroll, 'img')
         this.image.alt = 'A diagram'
         this.image.hidden = true
-        this.reason = child(this.figure, 'figcaption')
-        this.toggle = child(this.figure, 'button')
+        this.reason = child(this.figure, 'p')
+        this.reason.className = 'plan-diagram-reason'
+        this.toggle = child(head, 'button')
         this.toggle.type = 'button'
         this.toggle.className = 'plan-diagram-toggle'
         this.toggle.textContent = 'Source'
@@ -215,6 +221,7 @@ class DiagramView implements NodeView {
             this.image.hidden = true
             this.image.removeAttribute('src')
             this.reason.textContent = `Not drawn: ${result.error}.`
+            this.label.textContent = ''
             return
         }
         this.dom.dataset['diagram'] = 'drawn'
@@ -226,7 +233,8 @@ class DiagramView implements NodeView {
         showWidth(this.image, result.width)
         this.image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(result.svg)}`
         this.image.hidden = false
-        this.reason.textContent = title ?? ''
+        this.reason.textContent = ''
+        this.label.textContent = title ?? name
     }
 }
 

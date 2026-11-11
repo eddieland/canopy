@@ -263,7 +263,7 @@
  * A document's table, a plan's, a guide page's, or a message's (DESIGN.md, A document): as wide as what it holds, a
  * hairline under its head and each row but the last, no grid and no fill, its first column flush with the text's edge
  * and its last with the measure's. A step under the text around it, in `em`, so it moves with a plan's text size; its
- * head quieter than its rows, which are what is read; its figures tabular, so a column of numbers lines up. What
+ * head in the app's label type, as its own tables' are; its figures tabular, so a column of numbers lines up. What
  * holds it scrolls sideways (`edge-fade`) when it is still too wide.
  */
 @utility document-table {
@@ -276,8 +276,9 @@
     & tr:last-child > td {
         @apply border-b-0;
     }
+    /* Its head in the app's label type, as every table and field list in the app has it. */
     & th {
-        @apply font-medium text-muted-foreground;
+        @apply panel-label font-normal;
     }
     /* Code in a cell breaks where it must, so a path or a signature never holds its column wider than the rest and
      * pushes columns out of sight; and it drops its chip, which a code span broken over lines turns into a stack of
@@ -319,13 +320,13 @@
 /*
  * A diagram's picture, in a plan or the guide: as wide as it is drawn, narrower to fit what holds it, but never under
  * three quarters of that, past which its labels are too small to read; there, what holds it scrolls (`edge-fade`).
- * Centred while it fits. Its width is the diagram's, `--diagram-width`, set with `data-width` where the SVG says it.
+ * At the text's edge, as a table is. Its width is the diagram's, `--diagram-width`, set with `data-width` where the
+ * SVG says it.
  */
 @utility diagram-image {
     display: block;
     height: auto;
     max-width: 100%;
-    margin-inline: auto;
     &[data-width] {
         max-width: none;
         width: clamp(calc(var(--diagram-width) * 0.75), 100%, var(--diagram-width));
@@ -1965,11 +1966,30 @@
              * reader reads the code that draws the picture. */
             @apply sr-only;
         }
+        /* Shown, the code sits under its picture, so Source never moves the picture away from the pointer; one not
+         * drawn shows its code first and why under it. */
+        & .plan-diagram[data-diagram='drawn'] > pre {
+            @apply order-1;
+        }
+        /* A section of the plan's panel, as the app's panels have: a hairline, a head in the label type naming what
+         * it shows, and the picture under it, on the panel's own surface rather than a card of its own. */
         & .plan-diagram-figure {
-            @apply m-0 flex flex-col gap-2 rounded-md border bg-surface p-3;
+            @apply m-0 flex flex-col gap-3 border-t pt-2;
         }
         & .plan-diagram[data-diagram='pending'] .plan-diagram-figure {
             @apply hidden;
+        }
+        & .plan-diagram[data-diagram='failed'] .plan-diagram-figure {
+            @apply border-t-0 pt-0;
+        }
+        & .plan-diagram-head {
+            @apply flex items-baseline gap-3;
+        }
+        & .plan-diagram[data-diagram='failed'] .plan-diagram-head {
+            @apply hidden;
+        }
+        & .plan-diagram-head figcaption {
+            @apply min-w-0 panel-label;
         }
         & .plan-diagram-scroll {
             @apply edge-fade;
@@ -1978,24 +1998,22 @@
             @apply diagram-image;
         }
         /* In `em`, as a table is, so it keeps its step under the plan's text at every size (Settings). */
-        & .plan-diagram-figure figcaption {
-            @apply self-start text-muted-foreground empty:hidden;
+        & .plan-diagram-reason {
+            @apply text-muted-foreground empty:hidden;
             font-size: 0.875em;
         }
+        /* A control in a section's head, as a panel's are: quiet mono words, never a button's chip. */
         & .plan-diagram-toggle {
-            @apply self-end rounded-sm border bg-surface px-2 py-0.5 text-xs text-muted-foreground;
+            @apply ml-auto rounded-xs font-mono text-xs text-muted-foreground;
             &:hover {
-                @apply bg-surface-raised text-foreground;
+                @apply text-foreground;
             }
             &[aria-pressed='true'] {
-                @apply bg-surface-raised text-foreground;
+                @apply text-foreground;
             }
             &:focus-visible {
                 @apply ring-2 ring-ring outline-none;
             }
-        }
-        & .plan-diagram[data-diagram='failed'] .plan-diagram-toggle {
-            @apply hidden;
         }
         & .ProseMirror-selectednode {
             @apply ring-2 ring-ring;

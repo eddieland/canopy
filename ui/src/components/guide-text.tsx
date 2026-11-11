@@ -185,8 +185,19 @@ function Diagram({ lines }: { lines: string[] }) {
     const width = drawn.width === undefined ? undefined : ({ '--diagram-width': `${drawn.width}px` } as CSSProperties)
     const title = diagramTitle(lines)
     return (
-        <figure className="flex flex-col gap-3 rounded-md border bg-surface px-4 py-5">
-            <div ref={(box) => (box === null ? undefined : markOverflowEdges(box))} className="edge-fade">
+        // A panel of the app's own, as a figure on a page outside one: its title in the head a panel's label takes.
+        <figure className="flex flex-col rounded-md border border-edge bg-surface shadow-panel">
+            {title !== undefined && (
+                <figcaption
+                    className={cn(
+                        'flex min-h-9 items-center border-b bg-surface-raised/50 px-3',
+                        'panel-label font-medium text-foreground',
+                    )}
+                >
+                    {title}
+                </figcaption>
+            )}
+            <div ref={(box) => (box === null ? undefined : markOverflowEdges(box))} className="edge-fade p-4">
                 <img
                     src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(drawn.svg)}`}
                     alt={title ?? 'A diagram'}
@@ -195,7 +206,6 @@ function Diagram({ lines }: { lines: string[] }) {
                     className="diagram-image"
                 />
             </div>
-            {title !== undefined && <figcaption className="text-sm text-muted-foreground">{title}</figcaption>}
         </figure>
     )
 }

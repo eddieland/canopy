@@ -826,6 +826,9 @@ function OutlineMenu({ editor, ticket }: { editor: Editor; ticket: string | unde
     const marking = sections.length > 0
     const [chose, setChose] = useState(false)
     const [reading, setReading] = useState<number | undefined>(undefined)
+    // The heading last gone to, by its position: on a page too short to scroll a late section to the top, the line
+    // that says which section is read never reaches it, so while it is still in view it is the one being read.
+    const went = useRef<number | undefined>(undefined)
 
     function headingAt(entry: OutlineEntry): HTMLElement | undefined {
         const dom = editor.view.nodeDOM(entry.pos)
@@ -839,7 +842,22 @@ function OutlineMenu({ editor, ticket }: { editor: Editor; ticket: string | unde
         return sectionAt(tops, page + TOOLBAR_CLEARANCE)
     }
 
+    // The section gone to last, while its heading is still on screen and the page has not scrolled past it to a later
+    // one; else the one the page has scrolled to.
+    function sectionRead(): number | undefined {
+        const scrolled = sectionInView()
+        const index = outline.findIndex((entry) => entry.pos === went.current)
+        const heading = index === -1 ? undefined : headingAt(outline[index] as OutlineEntry)?.getBoundingClientRect()
+        const shown = heading !== undefined && heading.top >= 0 && heading.bottom <= globalThis.innerHeight
+        if (shown && (scrolled === undefined || scrolled < index)) {
+            return index
+        }
+        went.current = undefined
+        return scrolled
+    }
+
     function go(entry: OutlineEntry) {
+        went.current = entry.pos
         setChose(editor.isEditable)
         if (editor.isEditable) {
             // Inside the heading, at its start. The heading is scrolled to below, to the page's top rather than the
@@ -854,7 +872,7 @@ function OutlineMenu({ editor, ticket }: { editor: Editor; ticket: string | unde
             onOpenChange={(open) => {
                 if (open) {
                     setChose(false)
-                    setReading(sectionInView())
+                    setReading(sectionRead())
                 }
             }}
         >

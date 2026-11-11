@@ -70,6 +70,12 @@ describe('a Mermaid code block', () => {
         expect(drawDiagram).toHaveBeenCalledTimes(1)
     })
 
+    it('is labelled by its kind where it has no accTitle', async () => {
+        const { root } = open(PLAN)
+        await within(root).findByRole('img', { name: /^A sequence diagram/u })
+        expect(within(root).getByText('sequence diagram')).toBeTruthy()
+    })
+
     it('is named and captioned by its accTitle, where it has one', async () => {
         const { root } = open('```mermaid\nsequenceDiagram\n    accTitle: The export, row by row\n    A->>B: hi\n```')
         expect(await within(root).findByRole('img', { name: 'The export, row by row' })).toBeTruthy()

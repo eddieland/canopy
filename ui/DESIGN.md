@@ -512,11 +512,11 @@ whole either side.
   sizes move the body and both headings together, the one place a size outside the steps appears. The guide stays at
   Normal. Code is set as everywhere else (`Code`, Rich text). A table is `document-table`, in a plan, the guide, and
   rich text alike: as wide as what it holds, a hairline under its head and each row, no grid and no fill, its first
-  column flush with the text, its head in `muted-foreground`, its figures tabular, and a step under the text around it
-  in `em`, so a plan's size moves it too. Code in a cell breaks where it must, keeping room for a dozen characters,
-  and drops its chip; a table still too wide scrolls, its edges faded while there is more (`edge-fade`). Its measure
-  is fixed, `max-w-3xl`. What lays a document out, the guide's
-  rules between sections or a plan's margin, is its surface's own; its type is not.
+  column flush with the text, its head in `panel-label` as the app's own tables' are, its figures tabular, and a step
+  under the text around it in `em`, so a plan's size moves it too. Code in a cell breaks where it must, keeping room
+  for a dozen characters, and drops its chip; a table still too wide scrolls, its edges faded while there is more
+  (`edge-fade`). Its measure is fixed, `max-w-3xl`. What lays a document out, the guide's rules between sections or a
+  plan's margin, is its surface's own; its type is not.
 - **`ReviewsTable`** and **`RunsTable`**: review runs and runs, one row each, on every page that lists them. On the
   page of what they belong to, the columns that would repeat it go, as a `ListRow` kind of their own. The reviews one
   request made of one commit, one per persona (DESIGN §31), are adjacent rows with no hairline between them, each with
@@ -1052,7 +1052,8 @@ reader, so no table repeats them.
   `AGENTS.md` sets. An empty fence that names one of the repository's example files after its language (`EMBEDS`)
   shows that file whole, as it is when the guide is built, so a page never keeps a copy of one. A code block is colored
   as a diff's code is (A review), in the language its fence names, plain until its grammar has loaded. A
-  ```` ```mermaid ```` fence is drawn as its diagram, as a plan's is (D131), named and captioned by its `accTitle`, and
+  ```` ```mermaid ```` fence is drawn as its diagram, as a plan's is (D131), in a panel of its own whose head is its
+  `accTitle`, which names it, and
   `guide.test.ts` fails on one mermaid cannot read or with no `accTitle`. A diagram is for a shape the prose would take
   paragraphs to hold, beside the prose, never instead of it. A new page is a file there and a line in its group in
   `SOURCES`.
@@ -1072,13 +1073,15 @@ reader, so no table repeats them.
   so opening one never scrolls the page away from what it is on. The plan is laid out as a document (`.plan-doc`), in a
   document's type (A document, under Primitives). What the plan holds as characters (HTML, an image) is muted monospace;
   a link is underlined in `muted-foreground` with its address on hover, never a link. A Mermaid code block is drawn as
-  its diagram (`src/lib/plan-diagram.ts`), an image in a hairline box, drawn again when the theme or palette changes,
+  its diagram (`src/lib/plan-diagram.ts`), a section of the plan's panel rather than a card in it: a hairline, a head
+  in `panel-label` naming it, by its `accTitle` or else its kind, with `Source` at its right as a panel head's control
+  is, and the picture at the text's edge. It is drawn in the app's data dialect, Plex Mono at 13px and spaced densely,
+  the face carried inside the image since an image can use no other, and drawn again when the theme or palette changes,
   as wide as it is drawn or narrower to fit, but never under three quarters of that, past which its labels go unread:
   a wider one scrolls, each edge faded while there is more past it (`diagram-image`, `edge-fade`), as the guide's do,
   every kind drawn in one hand (`themeCss` in `src/lib/diagram.ts`): one label size, one corner, one line weight, a
-  subgraph dashed, a sequence's actors once, at its top, and its captions lifted off the lifelines they cross, named
-  and captioned by its `accTitle`, which the planner is asked for, else named by its kind,
-  with a `Source` toggle under it; its code shows while toggled on, while the cursor is in it, or while a comment or a
+  subgraph dashed, a sequence's actors once, at its top, and its captions lifted off the lifelines they cross. Its
+  code shows, under the picture, while `Source` is on, while the cursor is in it, or while a comment or a
   change is marked in it, and out of sight it is clipped, not removed, so a screen reader still reads it; one that
   cannot be drawn shows its code and why. The toolbar (`Toolbar`, below) is `icon-xs` toggles in groups split by
   hairlines, then `Comment`, enabled while text is selected; each control's tooltip names it and the shortcut the editor

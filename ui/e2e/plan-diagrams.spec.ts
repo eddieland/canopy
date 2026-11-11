@@ -30,6 +30,11 @@ test("the sample plan's Mermaid block is drawn as its diagram, its source under 
     await toggle.click()
     await expect.poll(() => inSight(source)).toBe(false)
 
+    // Drawn in the app's mono face, which the picture carries, since an image can use no other.
+    const svg = decodeURIComponent((await diagram.getAttribute('src')) ?? '')
+    expect(svg).toContain('@font-face')
+    expect(svg).toContain("'IBM Plex Mono'")
+
     // The block is still its Markdown, written back as it was read.
     await page.getByRole('button', { name: 'Show Markdown' }).click()
     await expect(page.getByLabel('Plan Markdown')).toContainText('```mermaid\nsequenceDiagram\n    participant Page')
