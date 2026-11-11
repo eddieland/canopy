@@ -167,6 +167,8 @@ test('a diagram that fits is drawn at its own size, not stretched', async ({ pag
 })
 
 test("a table's code breaks where it must, so a wide table's columns are all in view", async ({ page }) => {
+    // In the operator's window (PRODUCT.md), where the plan keeps its measure beside its comments.
+    await page.setViewportSize({ width: 1720, height: 1300 })
     const row = [
         'api',
         '`api/reports/query/iterators/paged_rows.py`',
