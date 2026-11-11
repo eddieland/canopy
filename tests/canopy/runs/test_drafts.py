@@ -6,16 +6,19 @@ import json
 import sqlite3
 from typing import TYPE_CHECKING
 
+import pydantic
 import pytest
 
-from canopy.core import replies
-from canopy.core.vocab import DraftKind, DraftStance, DraftStatus, Reaction, ReplyMode
-from canopy.runs import drafts
+from canopy.core import db, replies
+from canopy.core.vocab import DraftKind, DraftStance, DraftStatus, Reaction, ReplyMode, RunStatus
+from canopy.runs import drafts, worker
 from tests.canopy.helpers import APPROVE, DRAFTS_PR, KEY, TRACKER_POSTS, all_drafts, present, tracker_holds
 from tests.canopy.scenario_helpers import dispatches, sends_drafts
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    from pydantic import JsonValue
 
     from tests.canopy.scenario_helpers import Ran, Scenario
 
@@ -27,6 +30,22 @@ THREAD = {"on": "thread", "pr": PR, "comment": 501, "did": "changed", "text": RE
 WORK = dispatches(slug="work")
 #: Workers post their own replies, as before drafts (DESIGN §29); APPROVE has them draft replies for the operator.
 POST = {"review_replies": "post"}
+#: What the run's note says when its `result` tool took no result.
+NO_RESULT = "the worker reported no result"
+#: Drafts of the wrong shape, each with what the write behind the tool says of it, and a ticket's draft from a run
+#: asked for none.
+MISSHAPEN: list[tuple[JsonValue, str]] = [
+    ("a reply", "it is not an object"),
+    ({"on": "review", "pr": PR, "text": "x"}, "its `on` is not thread, pr, or ticket"),
+    ({**THREAD, "comment": "501"}, "its `comment` is not a review comment's id"),
+    ({**THREAD, "did": "maybe"}, "its `did` is not changed, declined, or answered"),
+    ({"on": "ticket", "url": ISSUE, "text": "Done."}, "no_post: this run was asked for no ticket's draft"),
+    ({**THREAD, "react": "thumbsup"}, "its `react` is not one of +1, -1, laugh, confused, heart, hooray, rocket, eyes"),
+    (
+        {"on": "pr", "pr": PR, "text": "Fixed CI.", "react": "+1"},
+        "its `react` is on a draft that is not a thread's; only a review comment takes one",
+    ),
+]
 
 
 @pytest.fixture(autouse=True)
@@ -48,8 +67,9 @@ def refused(conn: sqlite3.Connection, run: Ran) -> list[tuple[int, str]]:
 def test_under_post_a_workers_drafts_are_stored_nowhere(scenario: Scenario) -> None:
     conn = scenario.conn
     scenario.configures("private", trust=POST)
+    # A run that posts its own comments is asked for no draft, so its tool refuses a result that carries one.
     run = scenario.run(WORK, worker=sends_drafts([THREAD]))
-    assert run.status == "done"
+    assert (run.status, json.loads(run.row["result_json"])["harness"]) == (RunStatus.UNKNOWN, NO_RESULT)
     assert all_drafts(conn) == []
     assert present(replies.run_replies(conn, run.id)).mode is ReplyMode.POST
     assert "drafts" not in str(run.row["result_json"])
@@ -77,35 +97,47 @@ def test_each_draft_is_refused_alone(scenario: Scenario) -> None:
     conn = scenario.conn
     scenario.configures("private", trust=APPROVE)
     entries = [
-        "a reply",
-        {"on": "review", "pr": PR, "text": "x"},
         {**THREAD, "pr": "https://github.com/acme/web/pull/9"},
-        {**THREAD, "comment": "501"},
-        {**THREAD, "did": "maybe"},
         {**THREAD, "text": "  "},
         {**THREAD, "text": "x" * 4001},
         {**THREAD, "text": "Done\u200b."},
         {**THREAD, "text": "Use token ghp_abcdefghijklmnopqrstuvwxyz0123456789."},
-        {"on": "ticket", "url": ISSUE, "text": "Done."},
         {"on": "pr", "pr": PR, "text": "One."},
         {"on": "pr", "pr": PR, "text": "Two."},
         THREAD,
     ]
     run = scenario.run(WORK, worker=sends_drafts(entries))
-    assert [(d.number, d.kind) for d in all_drafts(conn)] == [(11, DraftKind.PR), (13, DraftKind.THREAD)]
+    assert [(d.number, d.kind) for d in all_drafts(conn)] == [(6, DraftKind.PR), (8, DraftKind.THREAD)]
     assert refused(conn, run) == [
-        (1, "it is not an object"),
-        (2, "its `on` is not thread, pr, or ticket"),
-        (3, "not_ours: its `pr` is not one of this run's PRs"),
-        (4, "its `comment` is not a review comment's id"),
-        (5, "its `did` is not changed, declined, or answered"),
-        (6, "its text is blank"),
-        (7, "its text is 4001 characters, over 4000"),
-        (8, "its text holds U+200B (ZERO WIDTH SPACE), a character that hides text"),
-        (9, "its text looks like it holds a secret"),
-        (10, "no_post: this run was asked for no ticket's draft"),
-        (12, f"a second draft for {PR}'s own comment; a PR takes one"),
+        (1, "not_ours: its `pr` is not one of this run's PRs"),
+        (2, "its text is blank"),
+        (3, "its text is 4001 characters, over 4000"),
+        (4, "its text holds U+200B (ZERO WIDTH SPACE), a character that hides text"),
+        (5, "its text looks like it holds a secret"),
+        (7, f"a second draft for {PR}'s own comment; a PR takes one"),
     ]
+
+
+@pytest.mark.parametrize("entry", [entry for entry, _ in MISSHAPEN], ids=[why for _, why in MISSHAPEN])
+def test_the_tool_refuses_a_draft_of_the_wrong_shape(entry: JsonValue) -> None:
+    """The run's tool holds each draft to its shape, so the worker is told while it can still send it again."""
+    asked = worker.WORKER.input([replies.DRAFTS_GROUP])
+    asked.model_validate({"status": "done", "drafts": [THREAD, {"on": "pr", "pr": PR, "text": "One."}]})
+    with pytest.raises(pydantic.ValidationError, match="drafts"):
+        asked.model_validate({"status": "done", "drafts": [entry]})
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_behind_the_tool_a_draft_of_the_wrong_shape_is_refused_alone(scenario: Scenario) -> None:
+    """The write checks each entry itself, whatever the tool let through: a bad one costs only itself."""
+    conn = scenario.conn
+    scenario.configures("private", trust=APPROVE)
+    run = scenario.run(WORK, worker=sends_drafts([]))
+    with db.transaction(conn):
+        found = drafts.record_run(conn, run.id, drafts.Fields(drafts=[*(entry for entry, _ in MISSHAPEN), THREAD]))
+    assert [(r.number, r.why) for r in found] == [(n, why) for n, (_, why) in enumerate(MISSHAPEN, start=1)]
+    assert refused(conn, run) == [(r.number, r.why) for r in found]
+    assert [(d.number, d.kind) for d in all_drafts(conn)] == [(len(MISSHAPEN) + 1, DraftKind.THREAD)]
 
 
 @pytest.mark.usefixtures("git_pool")
@@ -121,22 +153,18 @@ def test_a_threads_draft_stages_a_reaction_beside_its_text_or_alone(scenario: Sc
 
 
 @pytest.mark.usefixtures("git_pool")
-def test_a_reaction_github_does_not_offer_or_off_a_thread_is_refused(scenario: Scenario) -> None:
+def test_a_thread_draft_with_neither_words_nor_a_reaction_is_refused(scenario: Scenario) -> None:
     conn = scenario.conn
     scenario.configures("private", trust=APPROVE)
     entries = [
-        {**THREAD, "react": "thumbsup"},
-        {"on": "pr", "pr": PR, "text": "Fixed CI.", "react": "+1"},
         {"on": "thread", "pr": PR, "comment": 502, "did": "changed"},
         {**THREAD, "text": "  ", "react": "eyes"},
     ]
     run = scenario.run(WORK, worker=sends_drafts(entries))
     assert all_drafts(conn) == []
     assert refused(conn, run) == [
-        (1, "its `react` is not one of +1, -1, laugh, confused, heart, hooray, rocket, eyes"),
-        (2, "its `react` is on a draft that is not a thread's; only a review comment takes one"),
-        (3, "its text is not a string"),
-        (4, "its text is blank"),
+        (1, "its text is not a string"),
+        (2, "its text is blank"),
     ]
 
 
@@ -150,10 +178,17 @@ def test_a_run_drafts_at_most_thirty(scenario: Scenario) -> None:
 
 @pytest.mark.usefixtures("git_pool")
 def test_drafts_that_are_not_a_list_are_refused(scenario: Scenario) -> None:
+    conn = scenario.conn
     scenario.configures("private", trust=APPROVE)
+    # The tool takes a list alone, so a worker that never sends one reported no result.
     run = scenario.run(WORK, worker=sends_drafts({"on": "thread"}))
-    assert all_drafts(scenario.conn) == []
-    assert refused(scenario.conn, run) == [(0, "`drafts` is not a list")]
+    assert (run.status, json.loads(run.row["result_json"])["harness"]) == (RunStatus.UNKNOWN, NO_RESULT)
+    assert all_drafts(conn) == []
+    # Behind the tool, the write refuses it too.
+    with db.transaction(conn):
+        drafts.record_run(conn, run.id, drafts.Fields(drafts={"on": "thread"}))
+    assert all_drafts(conn) == []
+    assert refused(conn, run) == [(0, "`drafts` is not a list")]
 
 
 @pytest.mark.usefixtures("git_pool")
@@ -177,15 +212,15 @@ def test_with_a_tracker_that_posts_a_ticket_draft_waits_at_once(scenario: Scenar
         (1, "its `url` is not the ticket's https:// URL"),
         (3, "a second draft for the ticket; a run takes one"),
     ]
-    assert '"on":"ticket"' in run.prompt
+    assert "on its PRs and its ticket goes in your result's `drafts`" in run.prompt
 
 
 @pytest.mark.usefixtures("git_pool")
 def test_under_approve_the_prompt_asks_for_drafts_and_posts_nothing(scenario: Scenario) -> None:
     scenario.configures("private", trust=APPROVE)
     text = scenario.run(WORK, worker=sends_drafts([])).prompt
-    assert 'That JSON object also carries `"drafts"`' in text
-    assert '"on":"ticket"' not in text
+    assert "Each comment you would otherwise have posted on its PRs goes in your result's `drafts`" in text
+    assert "its PRs and its ticket" not in text
     # Without a tracker that posts, the worker still comments on the ticket itself, marked.
     assert "- Comment on the ticket: what you did" in text
     assert "In every comment and reply you post, on the ticket, start it with `CANOPY:`" in text

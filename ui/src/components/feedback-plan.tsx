@@ -15,6 +15,7 @@ import { MarkdownField } from '@/components/markdown-field'
 import { MemoryText } from '@/components/memory-text'
 import { Notice } from '@/components/notice'
 import { Panel, PanelFooter, PanelHeader } from '@/components/panel'
+import { PlanFileMenu } from '@/components/plan-file-menu'
 import { RunLink } from '@/components/run-link'
 import { SendKeycap } from '@/components/send-keycap'
 import { Chip } from '@/components/status'
@@ -77,6 +78,8 @@ export function FeedbackPlanPanel({ plan, onChange }: { plan: FeedbackPlan; onCh
     const open = plan.status !== 'spent'
     // Until it is approved, the line says what approving does; after, only where it stands.
     const deciding = plan.status === 'waiting' || plan.status === 'stale'
+    // Its file's text, or null where the file is gone or no longer a plan: then there is nothing to show or copy.
+    const text = plan.text
     return (
         <Panel id="feedback-plan" data-testid="feedback-plan" data-status={plan.status}>
             <PanelHeader label="Feedback plan">
@@ -95,7 +98,7 @@ export function FeedbackPlanPanel({ plan, onChange }: { plan: FeedbackPlan; onCh
                 {plan.status === 'stale' && <Stale plan={plan} />}
             </div>
             {open ? <Approve key={plan.id} plan={plan} onChange={onChange} /> : <ItemRows items={plan.items} />}
-            {plan.text === null ? (
+            {text === null ? (
                 <p className="border-t px-3 py-1.5 text-xs text-muted-foreground" data-testid="feedback-plan-no-file">
                     Its file is {plan.problem ?? 'unreadable'}:{' '}
                     <span data-testid="feedback-plan-path">{plan.path}</span>
@@ -105,10 +108,13 @@ export function FeedbackPlanPanel({ plan, onChange }: { plan: FeedbackPlan; onCh
                     <div className="flex items-center gap-2 px-3 py-1.5">
                         <Disclosure open={shown} what="the plan" />
                         <span className="text-xs text-muted-foreground">as its file stands now</span>
+                        <span className="ml-auto">
+                            <PlanFileMenu markdown={() => text} file={plan.archive_name} />
+                        </span>
                     </div>
                     <CollapsibleContent>
                         <div className="border-t px-3 py-2 font-mono text-xs" data-testid="feedback-plan-text">
-                            <MemoryText text={plan.text} lines />
+                            <MemoryText text={text} lines />
                         </div>
                     </CollapsibleContent>
                 </Collapsible>

@@ -13,7 +13,7 @@ from syrupy.assertion import SnapshotAssertion
 from canopy.core import conversation, db, plan_metrics, plans, records
 from canopy.core.vocab import PlanEffort, PlanStatus, RunKind, RunStatus
 from canopy.notify import message
-from canopy.runs import policy
+from canopy.runs import policy, worker
 from tests.canopy.helpers import (
     KEY,
     LABEL,
@@ -225,7 +225,9 @@ def test_a_revision_left_as_it_was_is_recorded_when_the_operator_asked_for_no_ch
             RunStatus.UNKNOWN,
             "but its .canopy-new-plan.md is over the bound; no plan was recorded",
         ),
-        ({"status": "maybe"}, TEXT, RunStatus.UNKNOWN, "the planner's last line was not a valid plan result"),
+        ({"status": "maybe"}, TEXT, RunStatus.UNKNOWN, "the planner reported no result"),
+        # A field a plan's result does not have: the tool refuses the call, so nothing was reported.
+        ({"status": "done", "summary": "s", "plan": TEXT}, TEXT, RunStatus.UNKNOWN, "the planner reported no result"),
         ({"status": "failed", "summary": "cannot plan this"}, TEXT, RunStatus.FAILED, ""),
     ],
 )
@@ -369,16 +371,13 @@ def test_under_tracker_private_a_tickets_first_plan_starts_it_privately(scenario
         ("large", PlanEffort.LARGE),
         ("small", PlanEffort.SMALL),
         (None, None),
-        ("huge", None),
-        (3, None),
-        (["large"], None),
     ],
 )
-def test_a_plans_effort_is_recorded_as_its_planner_judged_and_one_it_misspells_drops_alone(
+def test_a_plans_effort_is_recorded_as_its_planner_judged(
     scenario: Scenario,
     git_pool: GitPool,
     *,
-    said: object,
+    said: str | None,
     recorded: PlanEffort | None,
 ) -> None:
     result: dict[str, object] = {"status": "done", "summary": "planned it"}
@@ -386,12 +385,27 @@ def test_a_plans_effort_is_recorded_as_its_planner_judged_and_one_it_misspells_d
         result["effort"] = said
     run = scenario.run(PLAN, worker=planner_does(plan=TEXT, result=result))
     assert run.status == RunStatus.DONE
-    assert '"effort":"small|medium|large"' in run.prompt
     [plan] = plans.history(scenario.conn, KEY)
     assert (plan.status, plan.effort) == (PlanStatus.PROPOSED, recorded)
     shown = scenario.operator("show", KEY).out
     assert ("effort: large, as its planner judged" in shown) is (recorded is PlanEffort.LARGE)
     assert ("effort:" in shown) is (recorded is not None)
+
+
+@pytest.mark.parametrize("said", ["huge", 3, ["large"]])
+def test_an_effort_a_planner_misspells_is_refused_and_the_reader_drops_it_alone(
+    scenario: Scenario,
+    git_pool: GitPool,
+    said: object,
+) -> None:
+    """The tool refuses an estimate that is none of the three, and one read all the same costs the plan nothing."""
+    result = {"status": "done", "summary": "planned it", "effort": said}
+    run = scenario.run(PLAN, worker=planner_does(plan=TEXT, result=result))
+    assert run.status == RunStatus.UNKNOWN
+    assert json.loads(run.row["result_json"]) == {"harness": "the planner reported no result"}
+    assert plans.history(scenario.conn, KEY) == []
+    read = worker.PlanResult.model_validate(result)
+    assert (read.status, read.effort) == ("done", None)
 
 
 #: A planner's result saying its plan needs no review, with its reason (DESIGN §25).
@@ -483,7 +497,7 @@ def test_an_approval_with_a_note_reaches_the_implement_and_asks_no_new_plan(
 @pytest.mark.parametrize(
     ("on", "result"),
     [
-        (False, NO_REVIEW),
+        (False, {"status": "done", "summary": "planned it"}),
         (True, {**NO_REVIEW, "review": "needed"}),
         (True, {"status": "done", "summary": "planned it"}),
         (True, {**NO_REVIEW, "review_reason": " "}),
@@ -504,6 +518,26 @@ def test_a_plan_waits_on_the_operator_unless_the_key_is_on_and_its_planner_says_
     assert run.row["plan_review"] == ("strict" if on else "off")
     [plan] = plans.history(scenario.conn, KEY)
     assert (plan.status, plan.approved_channel, plan.approved_reason) == (PlanStatus.PROPOSED, None, None)
+
+
+def test_a_planner_that_may_not_approve_is_not_asked_whether_its_plan_needs_review(
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    """With the key off its result has no `review`, so one that says so is refused, and reports nothing."""
+    run = scenario.run(PLAN, worker=planner_does(plan=TEXT, result=NO_REVIEW))
+    assert run.status == RunStatus.UNKNOWN
+    assert json.loads(run.row["result_json"]) == {"harness": "the planner reported no result"}
+    assert "## Whether the operator reviews this plan" not in run.prompt
+    assert asked_of(scenario) == ["plan"]
+    assert plans.history(scenario.conn, KEY) == []
+    # And the reader, which takes the fields whatever the run was asked, approves nothing by itself.
+    assert worker.PlanResult.model_validate(NO_REVIEW).no_review() == "A one-line copy fix the ticket spells out."
+
+
+def asked_of(scenario: Scenario) -> list[str]:
+    """What each planner so far was told its `result` call reports: its contract, and the groups asked of it."""
+    return [str(run["env"]["CANOPY_RESULT"]) for run in agent_runs(scenario.agent_log)]
 
 
 @pytest.mark.parametrize(
@@ -540,7 +574,7 @@ def test_a_plan_the_operator_had_a_word_on_waits_on_them_whatever_its_planner_sa
     # One that replaces a plan the operator was asked to approve, and asked changes of.
     first = scenario.run(PLAN, worker=planner_does(plan=TEXT))
     scenario.operator("reply", KEY, "Blue, not red.")
-    second = scenario.run(PLAN, worker=planner_does(plan=TEXT.replace("red", "blue"), result=NO_REVIEW))
+    second = scenario.run(PLAN, worker=planner_does(plan=TEXT.replace("red", "blue")))
     assert [(p.run_id, p.status) for p in plans.history(scenario.conn, KEY)] == [
         (first.id, PlanStatus.SUPERSEDED),
         (second.id, PlanStatus.PROPOSED),
@@ -551,8 +585,10 @@ def test_a_plan_the_operator_had_a_word_on_waits_on_them_whatever_its_planner_sa
     assert (first.row["plan_review"], second.row["plan_review"]) == ("strict", "off")
     # One the operator asked for by name, with `canopy plan KEY`.
     scenario.operator("plan", KEY)
-    third = scenario.run(PLAN, worker=planner_does(plan=TEXT, result=NO_REVIEW))
+    third = scenario.run(PLAN, worker=planner_does(plan=TEXT))
     assert "## Whether the operator reviews this plan" not in third.prompt
+    # Nor is `review` a field of their result, so the tool would refuse it.
+    assert asked_of(scenario) == ["plan:review", "plan", "plan"]
     assert present(plans.current(scenario.conn, KEY)).run_id == third.id
     assert present(plans.current(scenario.conn, KEY)).status is PlanStatus.PROPOSED
 

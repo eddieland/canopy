@@ -148,7 +148,7 @@ attempt limits and the CI cooldown count per unit; capacity counts runs, not slo
 The branch has one name in every repository. Branch setup, push verification (§8 steps 2 and 5), and the shadowing check
 (§13) cover each worktree; the run is `unpushed` if any is. A joint run's worker runs in a desk of links to its
 worktrees (TRUST_MODEL T4); canopy makes desks only where no symlink redirects them, never follows their links on
-removal, and removes only desks it marked as its own. The result line names a PR per repository (§8), and each PR links
+removal, and removes only desks it marked as its own. The result names a PR per repository (§8), and each PR links
 its siblings and says which to merge first.
 
 ### The operator's desk

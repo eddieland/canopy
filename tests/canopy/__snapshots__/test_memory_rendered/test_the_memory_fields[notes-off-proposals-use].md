@@ -1,0 +1,6 @@
+- `memory_used`: The ids of the notes or lessons your message shows that you relied on. Cite only ids it shows, and leave out what you did not use.
+- `memory_wrong`: The ids of the notes or lessons your message shows that you checked and found wrong.
+- `proposals`: At most 3 lessons you propose for every later run in this workspace, not this ticket alone: what any worker here should know, whatever its ticket, such as how a repository's tests must be run, or what the tools, the tracker, or your access here cannot do. Propose only what this run showed, by a command you ran or a failure you saw, and what the repository's own docs, such as its `AGENTS.md`, do not already say. The operator reads each and may promote it; none reaches a run until then. Leave it out when you have none. Kept by canopy, never posted, and read by the operator: mention none of it on the ticket or a PR.
+  - `key`: Lowercase words joined by hyphens, naming the lesson's subject, as in `tests-need-docker`.
+  - `text`: Plain text, line breaks sparingly, at most 600 characters, in your own words, never a secret, in this shape: `<what to do or not do, as an instruction to any worker>. Why: <what showed it>. When: <the task, path, or step it applies to>.`
+  - `repo`: The repository the lesson is about, only for a lesson about one repository you worked in.

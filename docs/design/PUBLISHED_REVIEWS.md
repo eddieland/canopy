@@ -56,7 +56,7 @@ it ran makes no version: what the operator did meanwhile stands.
 
 It runs as the reviewer does, with `canopy-reviewer`, outside the checkout, and posts and writes nothing. Its prompt
 carries the review, the newest version, and the operator's notes since it, which are instructions; the PR and the
-draft are data. Its result line is a new version, validated (D026); anything else is `unknown` and leaves the newest
+draft are data. Its result is a new version, validated (D026); anything else is `unknown` and leaves the newest
 version standing. A revision that does not end `done` raises `review_failed`, as a review does.
 
 ### Publishing

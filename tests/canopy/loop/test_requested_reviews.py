@@ -32,7 +32,7 @@ ELSEWHERE = "https://example.test/acme/other/pull/3"
 HEAD = "a" * 40
 #: The tests' `vcs` source: the fake connector, playing GitHub.
 GITHUB = {"kind": "vcs", "cmd": "connector github", "timeout_minutes": 1}
-REVIEWER = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-reviewer {prompt}"
+REVIEWER = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-reviewer --format json {prompt}"
 
 
 def requested(conn: sqlite3.Connection, url: str = PR) -> records.ReviewRequest:

@@ -75,6 +75,9 @@ def test_a_prs_threads_carry_its_waiting_feedback_plan_each_item_on_its_thread(
     plan = plan_of(c)
     assert (plan["ticket_key"], plan["run"], plan["status"], plan["changes"]) == (KEY, run_id, "waiting", [])
     assert (plan["text"], plan["problem"], plan["spent_run"], plan["approved_at"]) == (FEEDBACK_TEXT, None, None, None)
+    # A copy saved from the page is named as `canopy archive` names it: run, status, `feedback`, then its title.
+    assert plan["archive_name"].startswith(f"{run_id}-PROPOSED-feedback")
+    assert plan["archive_name"].endswith(".md")
     assert [
         (i["number"], i["item_id"], i["thread_id"], i["author"], i["trusted"], i["proposal"], i["reply"])
         for i in plan["items"]

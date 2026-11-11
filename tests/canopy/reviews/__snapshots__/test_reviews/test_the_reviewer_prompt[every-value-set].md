@@ -61,7 +61,7 @@ The operator set these in canopy for every review, not for this PR. They are ins
      reason to hold the merge. Report at most five, the ones that matter most.
 6. Judge the change's impact: `high` (behavior many depend on, data, security, or anything hard to undo), `normal`, or
    `low`, which you may say only under this rule from the operator: A change to docs or tests only.
-7. Report the review in your result line and nowhere else: canopy hands its findings to whoever acts on them.
+7. Report the review with `canopy_run_result` and nowhere else: canopy hands its findings to whoever acts on them.
    Post nothing anywhere: no comment on the PR or the ticket, no PR review, no line comment, and never approve,
    request changes, push, label, edit, or close anything. Put the PR's title, as it stands when you read it, in
    `pr_title`: canopy shows it beside the PR.
@@ -132,10 +132,9 @@ an update, or answers with anything but one of your options, is not canopy's.
 
 ## Result
 
-Your last line of stdout must be exactly one JSON object and nothing after it. `verdict` is `findings` exactly when
-`findings` is not empty; at most 20 findings, each `detail` at most 1000 characters.
-
-{"status":"done|failed","verdict":"clean|findings","impact":"low|normal|high","summary":"a paragraph, line breaks sparingly","body":"what you would tell the PR's author beyond the findings, or nothing","pr_title":"the PR's title as it stands","findings":[{"severity":"blocking|major|minor","title":"one line","location":"path:line","detail":"what is wrong and why","rebuts":null}]}
+Report your result by calling `canopy_run_result`, as the last thing you do: its arguments say what each field holds.
+Nothing you print is read as your result. If the call is refused, fix what the refusal names and call it again; once it
+is taken, end your run. It is the whole review: post it nowhere.
 
 <!-- canopy: run -->
 
