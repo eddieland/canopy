@@ -231,7 +231,7 @@ def test_each_run_records_what_opencode_2_offered_its_agent(
 def command(agent: str, *, standalone: bool = False) -> str:
     """A command that runs `agent` through OpenCode, on a private server of its own under OpenCode 2 when `standalone`.
 
-    The fake hands it to the fake agent.
+    The fake hands it to the fake agent. It prints its events, as config has every agent but the overseer do.
     """
     server = " --standalone" if standalone else ""
-    return f"env OPENCODE_CONFIG_DIR={{definitions_dir}} opencode run{server} --agent {agent} {{prompt}}"
+    return f"env OPENCODE_CONFIG_DIR={{definitions_dir}} opencode run{server} --agent {agent} --format json {{prompt}}"

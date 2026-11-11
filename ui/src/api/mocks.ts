@@ -1042,6 +1042,7 @@ export function feedbackPlan(fields: Partial<FeedbackPlan> = {}): FeedbackPlan {
         approved_message: null,
         spent_run: null,
         path: '/home/op/acme/.canopy/plans/ABC-099/46.md',
+        archive_name: '46-PROPOSED-feedback-review-of-acme-web-88.md',
         text: '# Feedback plan: ABC-099\n\n### Item 2468013579: change\n\nMove it into a `finally`.\n',
         problem: null,
         items: [

@@ -17,8 +17,8 @@ const Canopy = canopy.server;
 /** The time the run's clock starts at in these tests, in milliseconds. */
 const START = 1_800_000_000_000;
 const FIRST =
-    " Wrap up now: finish what keeps your work (commit and push it, or record your decisions), then print your result" +
-    " line.";
+    " Wrap up now: finish what keeps your work (commit and push it, or record your decisions), then report your" +
+    " result.";
 
 beforeEach(() => {
     mock.timers.enable({ apis: ["Date"], now: START });

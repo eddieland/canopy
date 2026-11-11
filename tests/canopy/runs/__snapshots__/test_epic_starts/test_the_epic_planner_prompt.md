@@ -95,11 +95,12 @@ report `failed` with a summary saying why.
 
 ## Result
 
-Your last line of stdout must be exactly one JSON object and nothing after it. Only `done` records a plan, and only
-when `.canopy-new-plan.md` holds one canopy can read: not empty, at most 100000 characters, and its ids and
-breakdown in the shape above. The summary is your report to the operator: what the plan proposes, in a paragraph.
+Report your result by calling `canopy_run_result`, as the last thing you do: its arguments say what each field holds.
+Nothing you print is read as your result. If the call is refused, fix what the refusal names and call it again; once it
+is taken, end your run.
 
-{"status":"done|blocked|failed","summary":"<your report, line breaks sparingly>","question":"<only when blocked>"}
+Only `done` records a plan, and only when `.canopy-new-plan.md` holds one canopy can read: not empty, at most
+100000 characters, and its ids and breakdown in the shape above.
 
 <!-- canopy: run -->
 

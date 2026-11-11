@@ -44,6 +44,7 @@ from canopy.core import (
     review_runs,
     run_models,
     run_offers,
+    run_result,
     sandboxing,
 )
 from canopy.core import review_result as result
@@ -57,7 +58,6 @@ if TYPE_CHECKING:
     from canopy.core import records
     from canopy.core.context import Context
     from canopy.runtime.agents import Model
-    from canopy.runtime.report import AgentOutput
 
 _GIT_TIMEOUT_SECONDS = 300
 
@@ -214,14 +214,14 @@ def judged(ctx: Context, parsed: result.ReviewResult, changed: Collection[str] |
 
 
 def _revised(ctx: Context, run: records.ReviewRun, parsed: result.RevisionResult | None) -> Outcome:
-    """The outcome of a revision's result line: a `done` one made the draft's newest version, if the draft waited on it.
+    """The outcome of a revision's result: a `done` one made the draft's newest version, if the draft waited on it.
 
     Returns:
         `unknown` for no valid result, `failed` for a result that is not `done`, else `done`, with a note when the
         draft took no version from it.
     """
     if parsed is None:
-        return Outcome(ReviewRunStatus.UNKNOWN, None, "the reviser's last line was not a valid result")
+        return Outcome(ReviewRunStatus.UNKNOWN, None, f"the reviser {run_result.MISSING}")
     if parsed.status != "done":
         return Outcome(ReviewRunStatus.FAILED, parsed)
     made = review_revisions.revised(ctx.conn, run, parsed)
@@ -289,10 +289,12 @@ def reviewer(
     title: str,
     repo: str | None,
     run: str,
+    reports: run_result.Asked | None = None,
 ) -> Reviewer:
     """The reviewer's process for a review of the checkout in `slot`, named `run` to the agent, on `models`.
 
     Makes a review run's answers directory, where the operator's answer to its card's question reaches it (DESIGN §41).
+    `reports` is what it reports with canopy's `result` tool: a review if None, or a draft's new version (DESIGN §13).
 
     Returns:
         Its argv behind the sandbox, if `repo` is sandboxed, its stdin, its environment, and its definitions.
@@ -309,6 +311,7 @@ def reviewer(
     env = {
         conversation.RUN_ID_ENV: run,
         **servers.env(served, version=ctx.config.runtime.version, cwd=ctx.ws.root.absolute()),
+        **(reports or result.REVIEW.asked()).env(),
     }
     # An eval's review keeps no card, so it is asked nothing (DESIGN §21).
     if cards.may_ask(run):
@@ -318,20 +321,30 @@ def reviewer(
     return Reviewer(argv, command.stdin, env, snapshot)
 
 
+def reported(ctx: Context, done: procs.Result, reports: run_result.Asked | None = None) -> str:
+    """The result a reviewer's finished process reported: its last `result` call its server took (DESIGN §13).
+
+    `reports` is what it was told to report: a review if None.
+
+    Returns:
+        The result as one line of JSON; "" when it reported none.
+    """
+    asked = reports or result.REVIEW.asked()
+    return run_result.reported(done.stdout, asked, server=cards.SERVER, version=ctx.config.runtime.version)
+
+
 def reviewed(
     ctx: Context,
     done: procs.Result,
-    output: AgentOutput,
     *,
     changed: Collection[str] | None,
     repo: str | None,
 ) -> Outcome:
-    """The outcome of a reviewer's process: timed out, no valid result line, or what `judged` makes of its result.
+    """The outcome of a reviewer's process: timed out, no result reported, or what `judged` makes of its result.
 
     Args:
         ctx: The workspace's context.
         done: The reviewer's finished process.
-        output: What it printed, read.
         changed: The paths the reviewed change touches, as `judged` takes them.
         repo: The repository reviewed, whose high-impact paths apply.
 
@@ -341,9 +354,9 @@ def reviewed(
     if done.timed_out:
         minutes = ctx.config.runtime.review_timeout_minutes
         return Outcome(ReviewRunStatus.TIMEOUT, None, f"the reviewer timed out after {minutes} minutes")
-    parsed = result.parse(output.text)
+    parsed = result.parse(reported(ctx, done))
     if parsed is None:
-        return Outcome(ReviewRunStatus.UNKNOWN, None, "the reviewer's last line was not a valid result")
+        return Outcome(ReviewRunStatus.UNKNOWN, None, f"the reviewer {run_result.MISSING}")
     return judged(ctx, parsed, changed, repo)
 
 
@@ -362,7 +375,17 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
     prompt = start.prompt_file(ctx, run.id).read_text(encoding="utf-8")
     title = f"{'revise' if run.revises is not None else 'review'} {run.pr_url}"
     run_id = run.id
-    process = reviewer(ctx, prompt, slot, models=_models(ctx, run), title=title, repo=run.repo, run=f"review-{run_id}")
+    reports = (result.REVIEW if run.revises is None else result.REVISION).asked()
+    process = reviewer(
+        ctx,
+        prompt,
+        slot,
+        models=_models(ctx, run),
+        title=title,
+        repo=run.repo,
+        run=f"review-{run_id}",
+        reports=reports,
+    )
     argv, env, snapshot = process.argv, process.env, process.snapshot
     timeout_minutes = ctx.config.runtime.review_timeout_minutes
     log.info(
@@ -420,8 +443,8 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
         spent = output.usage.spent() if output.usage else {}
         log.info("reviewer reported", extra={"review_run_id": run_id, "session_id": output.session_id, **spent})
     if run.revises is not None and not done.timed_out:
-        return _revised(ctx, run, result.parse_revision(output.text))
-    outcome = reviewed(ctx, done, output, changed=changed, repo=run.repo)
+        return _revised(ctx, run, result.parse_revision(reported(ctx, done, reports)))
+    outcome = reviewed(ctx, done, changed=changed, repo=run.repo)
     parsed = outcome.result
     if outcome.status is ReviewRunStatus.DONE and isinstance(parsed, result.ReviewResult) and parsed.findings:
         # Read now, while the slot is at the reviewed commit: it goes back before the run closes.

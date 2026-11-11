@@ -152,6 +152,6 @@ For a `resume` it is not: its `gh pr view` reads are inside `bash`, as stage 3's
 waits the same way. This measurement cannot split them: the command names a shell call by its program where the
 runtime's reader hands it the command, and OpenCode 2's hands it for a tool named `shell` alone
 (`runtime/opencode2/transcript.py`), so the calls the operator's record names `bash` are one row. OpenCode 2.2.5's
-build, read and not run, takes `bash` as another name for its `shell`. So stages 2 and 3 wait on that reader taking
-`bash` for the shell too, then on a new measurement, in a section of its own, with the shell's rows and what `status`
-sent, read against the same threshold.
+build, read and not run, takes `bash` as another name for its `shell`. That reader takes `bash` for the shell too since
+2026-11-11, a call being printed under the name its agent gave. So stages 2 and 3 wait only on a new measurement, in a
+section of its own, with the shell's rows and what `status` sent, read against the same threshold.

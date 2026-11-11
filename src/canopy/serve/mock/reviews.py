@@ -42,7 +42,7 @@ SHA_14 = "a61f7c08" + "4" * 32
 DRAFTED = (2, 5, 6)
 #: The personas the operator asked Carol's PR to be reviewed in, one review each.
 PERSONAS_14 = ("canopy", "skeptic")
-_UNKNOWN = "the reviewer's last line was not a valid result"
+_UNKNOWN = "the reviewer reported no result"
 
 _STALE = ReviewResult(
     status="done",

@@ -81,7 +81,8 @@ Stop.
 **Report** is the page's main content: the newest report a run left, laid out as a document. It is the agent's
 Markdown, drawn as a plan is, so headings, lists, and code read as they should and anything else (HTML, an image, a
 link) stays its characters. The header names the run that left it, and says `edited` when the file changed since its
-run wrote it. Under it is the file's path, to open in your editor. When there is no report yet, or its file is gone,
+run wrote it, and its last button copies the report as Markdown or saves it as `task-4-report.md`. Under it is the
+file's path, to open in your editor. When there is no report yet, or its file is gone,
 the panel says so.
 
 **What it left** gathers the rest: the repository, the branch (with a link out once a run pushed it), each run's

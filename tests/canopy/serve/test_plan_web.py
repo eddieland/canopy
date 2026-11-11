@@ -69,6 +69,10 @@ def test_a_tickets_plans_are_read_as_their_files_stand(ctx: Context) -> None:
     assert [p["id"] for p in listed["plans"]] == [plan_id]
     assert listed["threads"] == []
 
+    # A copy saved from the page is named as `canopy archive` names the plan: its run, its status, its title.
+    run_id = newest["plan"]["run_id"]
+    assert newest["archive_name"] == f"{run_id}-PROPOSED-plan-for-proj-1.md"
+
     # The operator's own edit shows, and a file that is gone is said to be, never an empty plan.
     path = Path(newest["path"])
     path.write_text(TEXT + "\nBlue.\n")

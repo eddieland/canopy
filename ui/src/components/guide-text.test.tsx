@@ -1,4 +1,4 @@
-import { cleanup, screen } from '@testing-library/react'
+import { cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { drawDiagram } from '@/lib/diagram'
@@ -123,6 +123,16 @@ describe('a diagram in the guide', () => {
         await renderRouted(<GuideText blocks={[{ kind: 'code', lines, lang: 'mermaid' }]} page="overview" />)
 
         expect(await screen.findByText('Not drawn: Parse error on line 3.')).toBeDefined()
+        expect(screen.getByText('wait --> tick', { exact: false })).toBeDefined()
+        expect(screen.queryByRole('img')).toBeNull()
+    })
+
+    it('shows its code, and why, when the browser cannot read the picture drawn', async () => {
+        vi.mocked(drawDiagram).mockResolvedValue({ svg: '<svg><a xlink:href="x"/></svg>', kind: 'flowchart' })
+        await renderRouted(<GuideText blocks={[{ kind: 'code', lines, lang: 'mermaid' }]} page="overview" />)
+
+        fireEvent.error(await screen.findByRole('img', { name: 'A tick, then a wait' }))
+        expect(await screen.findByText('Not drawn: the browser cannot read its picture.')).toBeDefined()
         expect(screen.getByText('wait --> tick', { exact: false })).toBeDefined()
         expect(screen.queryByRole('img')).toBeNull()
     })

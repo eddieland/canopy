@@ -1,7 +1,7 @@
 """The tickets a one-off task's run reports it filed (DESIGN §36): checked on their text, and recorded against the task.
 
 A task whose submission names a tracker project may file tickets there, with no queue label, at most
-`policy.max_follow_ups` per run, and names them in its result line's `created`, a list of keys. `_task` checks each
+`policy.max_follow_ups` per run, and names them in its result's `created`, a list of keys. `_task` checks each
 entry alone, on its text, since the harness reads no tracker (D003): a ticket key, in the project as far as its shape
 shows (`follow_ups.project_of`), and among the first `limit` that pass. Those are recorded against the task, in
 `task_tickets`, never as a ticket of canopy's: no `tickets`, `follow_ups`, or `runs` row names one, and none is worked

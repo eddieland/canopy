@@ -68,7 +68,7 @@ def test_a_review_the_operator_asked_for_does_not_wait(
     scenario: Scenario,
     git_pool: GitPool,
 ) -> None:
-    template = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-reviewer {prompt}"
+    template = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-reviewer --format json {prompt}"
     scenario.configures(runtime={"review_cmd": template}, review={"settle_minutes": 30})
     scenario.operator("start", OTHER_PR, "--review")
     assert scenario.review(reviews(head(git_pool), OTHER_PR), reviewer=reviewer_reports(CLEAN)).status == "done"
