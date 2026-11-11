@@ -244,6 +244,8 @@ def cmd_sandbox_check(click_ctx: click.Context, repo: str | None, *, offline: bo
         click.echo(f"{did}  {attempt.name}{wrong}")
     for note in report.skipped:
         click.echo(f"Note: {note}")
+    for path in report.left:
+        click.echo(f"Left behind, for you to remove: {path}")
     if report.error:
         raise CliError(report.error)
     failed = [attempt for attempt in report.attempts if not attempt.ok]
@@ -252,6 +254,8 @@ def cmd_sandbox_check(click_ctx: click.Context, repo: str | None, *, offline: bo
             f"the sandbox did not hold at {len(failed)} of {len(report.attempts)} attempts. Check the worker template "
             "and what `canopy sandbox setup` says is left to do (docs/SANDBOX.md).",
         )
+    if report.left:
+        raise CliError("the sandbox held, but the check could not remove everything it made: see above.")
     click.echo(f"\nThe sandbox holds for a worker: {len(report.attempts)} of {len(report.attempts)} attempts.")
     return 0
 

@@ -192,10 +192,10 @@ closed" item. If they decline, note it in your summary and go to stage 8. If the
    `review_cmd`, and `setup_cmd` if one is set. Ask whether any chore sets a `cmd` of its own: each needs the
    `canopy-sandbox chore --` prefix there too, as step 5 shows, and the check below does not catch one that lacks it.
    Leave `overseer_cmd` as it is.
-4. Run `canopy sandbox check` (SANDBOX.md step 6) and show the result. Every line but the last two must say
-   `refused`, and the last two `allowed`; it exits 1 otherwise. If one does not, find which template entry lets it
-   through, fix it, and check again. Do not move on with a failing check unless the operator decides to leave the
-   sandbox off.
+4. Run `canopy sandbox check` (SANDBOX.md step 6) and show the result. The commit and the allowed host must say
+   `allowed`, and every other line `refused`; it exits 1 otherwise, and a `Note:` names what it left unchecked. If
+   one does not, find which template entry lets it through, fix it, and check again. Do not move on with a failing
+   check unless the operator decides to leave the sandbox off.
 5. Run `canopy status` again: the config must still load.
 
 ## 8. The operator's own agent sessions

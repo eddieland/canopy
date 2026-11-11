@@ -233,6 +233,8 @@ Rules:
 - `canopy sandbox setup` copies the sandbox templates to the user config directory, never over one there, installs the
   pinned `srt`, and checks what needs root to install; it exits 1 while anything left would make the sandbox weaker
   than §24 says. It writes no config (D117).
+- `canopy sandbox check` tries, through the wrapper and the operator's worker template, what a sandboxed worker must
+  not do and what it must still do, in a worktree it makes and removes, and exits 1 where the sandbox did not hold.
 - Pool sizes (`capacity.slots_per_repo`, `[capacity.repo_slots]`) are private, so a team's map cannot grow the
   operator's disk use; unset leaves pools unmanaged (§18). `pools.backend` may be switched with runs in flight.
 - Remotes should be HTTPS with a credential helper: a sandboxed worker cannot reach the SSH agent socket. `canopy

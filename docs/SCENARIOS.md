@@ -90,6 +90,11 @@ any OpenCode upgrade, and before relying on a permission they check.
   MCP server's, run the loop past the login's expiry. Expect a run's log to say `canopy-sandbox: copied back the
   refreshed tokens of ...`, and your own OpenCode, and the overseer's, still logged in after. After an OpenCode
   upgrade, check that `auth.json` and `mcp-auth.json` still have the shapes `canopy_sandbox/credentials.py` names.
+- **S77. The sandbox holds on this machine** (M26). `canopy sandbox check` has run under `srt` 0.0.81 and bubblewrap
+  on Linux, in CI's canary and a cloud container, never on macOS. After `canopy sandbox setup`, a change to
+  `worker.json`, or an upgrade of canopy or the OS, run it from the workspace root. Expect the commit and the allowed
+  host `allowed`, every other line `refused`, exit 0, and nothing of the check's left in your home directory or the
+  repository.
 
 ## Before a release
 

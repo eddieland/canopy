@@ -2,8 +2,11 @@
 
 It runs a plain script, no model, through `canopy-sandbox worker`, the operator's own `worker.json`, and the `srt`
 `canopy sandbox setup` installed, in a worktree of a repository's primary clone that it makes for the check and
-removes after: never one of canopy's slots, which nothing would tidy. The script tries what a sandboxed worker must
-not do, and what it must still do, so a sandbox that refuses everything fails as one that refuses nothing does.
+removes after: never one of canopy's slots, which nothing would tidy. The worktree has no files checked out, so
+making it runs no filter the repository's attributes name, and costs a large repository nothing.
+
+The script tries what a sandboxed worker must not do, and what it must still do, so a sandbox that refuses everything
+fails as one that refuses nothing does.
 
 A write is checked on the host, never by the script's own status: under a directory the policy denies, `srt` gives the
 command a `tmpfs` that takes the write and drops it when the run ends. Each thing the check plants, the file it tries
@@ -17,6 +20,7 @@ installed and no checkout of it: one role, the worker's, and the denials an oper
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import secrets
 import shutil
 import tempfile
@@ -26,7 +30,7 @@ from pathlib import Path
 
 import canopy_sandbox
 
-from canopy.core import hostgit, sandboxing
+from canopy.core import config, hostgit, sandboxing
 from canopy.infra import procs
 
 #: The role checked: the one whose template `worker_cmd`, `private_worker_cmd`, and `plan_cmd` run under.
@@ -40,7 +44,9 @@ PREFERRED_HOST = "github.com"
 _GIT_TIMEOUT = 60
 _RUN_TIMEOUT = 180
 # One line per attempt, `KEY 1` when the command succeeded inside the sandbox and `KEY 0` when it did not. Each
-# attempt's one path, name, or URL is `$1` of its own shell, so none is ever read as shell.
+# attempt's one path, name, or URL is `$1` of its own shell, so none is ever read as shell. The commit runs no hook:
+# one of the repository's could fail it for reasons of its own. `proxy-refused` asks whether srt's proxy answered the
+# host off the allowlist with its 403, which tells a refusal from a host that could not be reached anyway.
 _SCRIPT = """\
 try() { if sh -c "$2" sh "$3" >/dev/null 2>&1; then echo "$1 1"; else echo "$1 0"; fi; }
 try read-home 'cat "$1"' "$1"
@@ -48,9 +54,12 @@ try read-config 'cat "$1"' "$2"
 try write-home 'echo x > "$1"' "$3"
 try write-git 'echo x > "$1"' "$4"
 try move-ref 'git branch "$1"' "$5"
-try commit 'echo x > "$1" && git add -f "$1" &&
-    git -c user.name=canopy -c user.email=canopy@localhost -c commit.gpgsign=false commit -qm check' "$5"
-if [ -n "$6" ]; then try reach-denied 'curl -sS -m 10 -o /dev/null "$1"' "$6"; fi
+try commit 'echo x > "$1" && git add -f "$1" && git -c user.name=canopy -c user.email=canopy@localhost \
+    -c commit.gpgsign=false -c core.hooksPath=/dev/null commit -qm check' "$5"
+if [ -n "$6" ]; then
+    try reach-denied 'curl -sS -m 10 -o /dev/null "$1"' "$6"
+    try proxy-refused '[ "$(curl -sS -m 10 -o /dev/null -w "%{http_connect}" "$1")" = 403 ]' "$6"
+fi
 if [ -n "$7" ]; then try reach-allowed 'curl -sS -m 10 -o /dev/null "$1"' "$7"; fi
 """
 
@@ -82,6 +91,8 @@ class Report:
     skipped: Sequence[str] = ()
     #: Why the script never ran inside the sandbox, when it did not.
     error: str = ""
+    #: What the check made and could not remove, for the operator to remove by hand.
+    left: Sequence[str] = ()
 
     @property
     def ok(self) -> bool:
@@ -100,6 +111,13 @@ def run_check(runner: procs.Runner, repo: Path, *, network: bool = True) -> Repo
     Returns:
         Each attempt, or why the script never ran.
     """
+    try:
+        return _check(runner, repo, network=network)
+    except OSError as e:
+        return Report(error=f"the check could not be set up: {e}")
+
+
+def _check(runner: procs.Runner, repo: Path, *, network: bool) -> Report:
     token = secrets.token_hex(8)
     name = f"{PREFIX}{token}"
     common = _common_dir(runner, repo)
@@ -108,25 +126,38 @@ def run_check(runner: procs.Runner, repo: Path, *, network: bool = True) -> Repo
     hosts = _Hosts.choose(network=network)
     planted = _Planted(
         secret=Path.home() / f".{name}",
+        config=_config_file(),
         written=Path.home() / f".{name}.written",
         shared=common / name,
         branch=name,
     )
-    with _worktree(runner, repo) as made:
-        if isinstance(made, str):
-            return Report(error=made)
-        slot, objects = made
-        try:
+    left: list[str] = []
+    try:
+        with _worktree(runner, repo, left) as made:
+            if isinstance(made, str):
+                return Report(error=made)
+            slot, objects = made
             planted.secret.write_text(f"{token}\n", encoding="utf-8")
             planted.secret.chmod(0o600)
             outcome = _run_script(runner, slot, objects, planted, hosts)
             if isinstance(outcome, str):
-                return Report(skipped=hosts.skipped, error=outcome)
-            return Report(_attempts(runner, repo, planted, hosts, outcome), hosts.skipped)
-        except OSError as e:
-            return Report(error=f"the check could not be set up: {e}")
-        finally:
-            _clean(runner, repo, planted)
+                report = Report(skipped=hosts.skipped, error=outcome)
+            else:
+                attempts, unsure = _attempts(runner, repo, planted, hosts, outcome, objects=objects)
+                report = Report(attempts, (*hosts.skipped, *unsure))
+    finally:
+        left += _clean(runner, repo, planted)
+    return dataclasses.replace(report, left=tuple(left))
+
+
+def _config_file() -> Path:
+    """Return the file of canopy's config the script tries to read: the user file, or else the worker's template.
+
+    The template is always there, since the wrapper refuses to run without it; the user file is the one a worker that
+    read it would learn the most from.
+    """
+    user = config.user_config_path()
+    return user if user.is_file() else canopy_sandbox.template_path(ROLE)
 
 
 @dataclass(frozen=True)
@@ -135,6 +166,8 @@ class _Planted:
 
     #: A file in the operator's home that the script tries to read.
     secret: Path
+    #: A file of canopy's config that the script tries to read, which the check did not make and does not remove.
+    config: Path
     #: A file in the operator's home that the script tries to write.
     written: Path
     #: A file in the repository's common git directory, beside its hooks and config, that the script tries to write.
@@ -164,7 +197,7 @@ class _Hosts:
             return cls(skipped=("the network was not checked: curl is not on PATH.",))
         listed = _allowed_domains()
         skipped: list[str] = []
-        denied = "" if DENIED_HOST in listed else f"https://{DENIED_HOST}"
+        denied = "" if any(_matches(entry, DENIED_HOST) for entry in listed) else f"https://{DENIED_HOST}"
         if not denied:
             skipped.append(f"a host off the allowlist was not tried: the template allows {DENIED_HOST}.")
         named = [host for host in listed if "*" not in host]
@@ -172,6 +205,16 @@ class _Hosts:
         if not allowed:
             skipped.append("an allowed host was not tried: the template's allowedDomains names none without a `*`.")
         return cls(denied, f"https://{allowed}" if allowed else "", tuple(skipped))
+
+
+def _matches(entry: str, host: str) -> bool:
+    """Whether the allowlist entry `entry` allows `host`: by name, or as `*.name` allows every name under it.
+
+    Returns:
+        True when it does, on any port the entry names.
+    """
+    name = entry.rsplit(":", 1)[0] if entry.rsplit(":", 1)[-1].isdigit() else entry
+    return name in {host, "*"} or (name.startswith("*.") and host.endswith(name[1:]))
 
 
 def _allowed_domains() -> list[str]:
@@ -194,8 +237,11 @@ def _common_dir(runner: procs.Runner, repo: Path) -> Path | None:
 
 
 @contextlib.contextmanager
-def _worktree(runner: procs.Runner, repo: Path) -> Iterator[tuple[Path, Path] | str]:
-    """Make a detached worktree of `repo` and an object directory for the run, and remove both after.
+def _worktree(runner: procs.Runner, repo: Path, left: list[str]) -> Iterator[tuple[Path, Path] | str]:
+    """Make a detached worktree of `repo`, with no files checked out, and an object directory, and remove both after.
+
+    What could not be removed is added to `left`. Only this worktree's record is removed from the repository: pruning
+    would take every stale one with it.
 
     Yields:
         The worktree and the object directory, or why the worktree could not be made.
@@ -204,16 +250,19 @@ def _worktree(runner: procs.Runner, repo: Path) -> Iterator[tuple[Path, Path] | 
     slot, objects = root / "slot", root / "objects"
     try:
         objects.mkdir()
-        added = _git(runner, repo, "worktree", "add", "--quiet", "--detach", str(slot))
+        added = _git(runner, repo, "worktree", "add", "--quiet", "--no-checkout", "--detach", str(slot))
         if added is None or not added.ok:
             why = added.stderr.strip() if added is not None else "git is not on PATH"
             yield f"a worktree of {repo} could not be made for the check: {why}"
             return
         yield slot, objects
     finally:
-        _git(runner, repo, "worktree", "remove", "--force", str(slot))
+        removed = _git(runner, repo, "worktree", "remove", "--force", str(slot))
+        if slot.exists() and (removed is None or not removed.ok):
+            left.append(f"the worktree {slot}, and its record in {repo} (`git worktree prune`)")
         shutil.rmtree(root, ignore_errors=True)
-        _git(runner, repo, "worktree", "prune")
+        if root.exists():
+            left.append(str(root))
 
 
 def _run_script(
@@ -228,8 +277,7 @@ def _run_script(
     Returns:
         Whether each attempt's command succeeded inside the sandbox, by its key, or why the script did not run.
     """
-    template = canopy_sandbox.template_path(ROLE)
-    args = [str(planted.secret), str(template), str(planted.written), str(planted.shared), planted.branch]
+    args = [str(planted.secret), str(planted.config), str(planted.written), str(planted.shared), planted.branch]
     command = ["sh", "-c", _SCRIPT, "sh", *args, hosts.denied, hosts.allowed]
     env = {canopy_sandbox.OBJECTS_ENV: str(objects)}
     try:
@@ -238,7 +286,8 @@ def _run_script(
         return f"{sandboxing.WRAPPER} could not be run: {e}. It installs with canopy; run the install again."
     results = dict(line.split(" ") for line in done.stdout.splitlines() if line.count(" ") == 1)
     expected = {"read-home", "read-config", "write-home", "write-git", "move-ref", "commit"}
-    expected |= {key for key, url in (("reach-denied", hosts.denied), ("reach-allowed", hosts.allowed)) if url}
+    expected |= {"reach-denied", "proxy-refused"} if hosts.denied else set()
+    expected |= {"reach-allowed"} if hosts.allowed else set()
     if done.timed_out or not expected <= results.keys():
         said = done.stderr.strip() or done.stdout.strip() or f"it exited {done.returncode} and printed nothing"
         return f"the check did not run in the sandbox:\n    {'\n    '.join(said.splitlines()[-8:])}"
@@ -251,26 +300,36 @@ def _attempts(
     planted: _Planted,
     hosts: _Hosts,
     succeeded: Mapping[str, bool],
-) -> list[Attempt]:
+    *,
+    objects: Path,
+) -> tuple[list[Attempt], list[str]]:
     """Say what the sandbox let the script do: its reads and requests by their status, its writes by the host.
 
+    The commit counts when its objects are in the run's object directory on the host, where canopy reads them to push.
+    A host off the allowlist that could not be reached, and not because srt's proxy refused it, shows nothing either
+    way.
+
     Returns:
-        Each attempt, the denials first.
+        Each attempt, the denials first, and what could not be told, each as a sentence.
     """
     ref = _git(runner, repo, "show-ref", "--verify", "--quiet", f"refs/heads/{planted.branch}")
     attempts = [
         Attempt("read a file in your home directory", succeeded["read-home"], expected=False),
-        Attempt("read canopy's config directory", succeeded["read-config"], expected=False),
+        Attempt(f"read canopy's config, {planted.config.name}", succeeded["read-config"], expected=False),
         Attempt("write a file in your home directory", _there(planted.written), expected=False),
         Attempt("write beside the repository's hooks and git config", _there(planted.shared), expected=False),
         Attempt("make a branch, in the refs every slot shares", ref is not None and ref.ok, expected=False),
     ]
-    if hosts.denied:
+    unsure: list[str] = []
+    if hosts.denied and (succeeded["reach-denied"] or succeeded["proxy-refused"]):
         attempts.append(Attempt(f"reach {hosts.denied}, off the allowlist", succeeded["reach-denied"], expected=False))
-    attempts.append(Attempt("commit in the worktree", succeeded["commit"], expected=True))
+    elif hosts.denied:
+        unsure.append(f"{hosts.denied} could not be reached, and not because the sandbox refused it: not checked.")
+    committed = succeeded["commit"] and any(objects.iterdir())
+    attempts.append(Attempt("commit in the worktree, its objects in the run's own directory", committed, expected=True))
     if hosts.allowed:
         attempts.append(Attempt(f"reach {hosts.allowed}, on the allowlist", succeeded["reach-allowed"], expected=True))
-    return attempts
+    return attempts, unsure
 
 
 def _there(path: Path) -> bool:
@@ -278,12 +337,24 @@ def _there(path: Path) -> bool:
     return path.is_symlink() or path.exists()
 
 
-def _clean(runner: procs.Runner, repo: Path, planted: _Planted) -> None:
-    """Remove what the check planted, and what a sandbox that did not hold let the script leave."""
+def _clean(runner: procs.Runner, repo: Path, planted: _Planted) -> list[str]:
+    """Remove what the check planted, and what a sandbox that did not hold let the script leave.
+
+    Returns:
+        What is still there, for the operator to remove.
+    """
+    left: list[str] = []
     for path in (planted.secret, planted.written, planted.shared):
         with contextlib.suppress(OSError):
             path.unlink(missing_ok=True)
-    _git(runner, repo, "update-ref", "-d", f"refs/heads/{planted.branch}")
+        if _there(path):
+            left.append(str(path))
+    ref = f"refs/heads/{planted.branch}"
+    _git(runner, repo, "update-ref", "-d", ref)
+    kept = _git(runner, repo, "show-ref", "--verify", "--quiet", ref)
+    if kept is not None and kept.ok:
+        left.append(f"the branch {planted.branch} in {repo}")
+    return left
 
 
 def _git(runner: procs.Runner, repo: Path, *args: str) -> procs.Result | None:

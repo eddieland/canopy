@@ -293,25 +293,33 @@ canopy sandbox check
 ```
 
 It runs a plain script, no model, through `canopy-sandbox worker` and your `worker.json`, in a worktree of one of your
-repositories that it makes for the check and removes after, never one of canopy's slots. `--repo NAME` chooses the
-repository, and `--offline` leaves the network out. It prints what the sandbox did with each attempt:
+repositories that it makes for the check, with no files checked out, and removes after, never one of canopy's slots.
+`--repo NAME` chooses the repository, and `--offline` leaves the network out. It prints what the sandbox did with each
+attempt:
 
 ```text
 refused  read a file in your home directory
-refused  read canopy's config directory
+refused  read canopy's config, config.toml
 refused  write a file in your home directory
 refused  write beside the repository's hooks and git config
 refused  make a branch, in the refs every slot shares
 refused  reach https://example.com, off the allowlist
-allowed  commit in the worktree
+allowed  commit in the worktree, its objects in the run's own directory
 allowed  reach https://github.com, on the allowlist
 ```
 
-Every line but the last two should say `refused`, and the last two `allowed`; it marks a line that does not, and exits
+The commit and the host on the allowlist should say `allowed`, and every other line `refused`; it marks a line that
+does not, and exits 1. What it left unchecked is a `Note:` below them, as the network is with `--offline` or no curl.
 
-1. A write counts as allowed only when it reached your disk. The allowed host is `github.com` when your template lists
-it, or else the first it names without a `*`. It checks the worker's template alone. Then run `canopy loop --ticks 1`
-on a ticket and read the run's log, `.canopy/runs/<id>.log`: the worker should push and open its PR as before.
+- A write counts as allowed only when it reached your disk, and the commit only when its objects are where canopy
+  reads them to push.
+- The host off the allowlist counts as refused only when `srt`'s proxy refused it. One that could not be reached for
+  another reason is a `Note:`, not a pass.
+- The allowed host is `github.com` when your template lists it, or else the first it names without a `*`.
+- It checks the worker's template alone.
+
+Then run `canopy loop --ticks 1` on a ticket and read the run's log, `.canopy/runs/<id>.log`: the worker should push
+and open its PR as before.
 
 From a checkout of canopy, `make sandbox-canary` runs the whole canary against what `canopy sandbox setup` installed:
 every denial and positive control DESIGN §24 lists, with the shipped templates unchanged. It needs to reach
