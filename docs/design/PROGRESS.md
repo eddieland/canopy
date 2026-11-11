@@ -8,7 +8,7 @@ checklist](CHECKLIST.md).
 ## 41. Where a running agent stands
 
 A running run shows its session, what it has spent, and its latest tool call (§8); what the agent thinks of its work
-came only in its final line, once it exits. Its progress fills that gap: the agent says, while it runs, where its work
+came only in its result, as it ends. Its progress fills that gap: the agent says, while it runs, where its work
 stands, and the operator reads that instead of the transcript.
 
 ### Progress
@@ -38,8 +38,8 @@ each step was first seen working, on the update before, and one working longer t
 
 An update may ask the operator a question the agent can work around meanwhile, as the Progress plugin's "Work around"
 mode does: the question, two to five options lettered from A, and the one it recommends and works toward. One it cannot
-work around stays a `blocked` final line (§8). A task's run asks none, and the server refuses its update that does: its
-question is its final line's, which a reply to the task answers (§36). A question is as old as the first update that
+work around stays a `blocked` result (§8). A task's run asks none, and the server refuses its update that does: its
+question is its result's, which a reply to the task answers (§36). A question is as old as the first update that
 asked it, and the updates after it that ask the same keep it and its answer; another question starts over. The operator
 answers with one of its letters, `canopy reply run:ID` or `review:ID` or the run's progress in the web UI, only while
 the run runs, and a later letter replaces it. An answer is a letter, not words: the agent's own options are all an
@@ -84,7 +84,7 @@ a run that a chore's agent may read (§27) leaves its progress out, so none reac
 
 - A model summarising the transcript every few minutes: a run per summary, and it can misread what the agent knows.
 - A file in the worktree the agent writes: it can be committed, and a sandboxed run's writes outside it are refused.
-- The final line alone, as before: it says nothing while the run goes.
+- The result alone, as before: it says nothing while the run goes.
 - An answer in the operator's own words: the first operator text to reach a running agent, and one a line made to look
   like canopy's could forge to say anything; a letter can only choose one of the agent's own options. The operator's
   words reach a running agent through a tool of canopy's, never a line (§44).

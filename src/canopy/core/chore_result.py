@@ -13,7 +13,7 @@ from typing import Annotated, Literal, cast
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictInt, StrictStr, model_validator
 
-from canopy.core import contract
+from canopy.core import contract, run_result
 from canopy.core.contract import bounded, one_line
 
 MAX_SUMMARY = 2000
@@ -127,4 +127,55 @@ def stored(result_json: object) -> ChoreResult | None:
 CONTRACT = (
     '{"status":"ok|failed","summary":"a paragraph, line breaks sparingly",'
     '"findings":[{"id":"stable/id","title":"one line","detail":"a paragraph","link":"https://..."}],"more_findings":0}'
+)
+
+
+class FindingReport(BaseModel):
+    """One problem a chore found, as its agent's `result` call reports it."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
+
+    id: StrictStr = Field(
+        description="A stable id for the problem, the same in every run that finds it, such as `ci/main-red`: letters, "
+        f"digits, and `_.:/-`, at most {MAX_ID} characters. Report the `id` your run block lists under "
+        "`open_findings` for a problem that is still there, and leave out one that is gone.",
+    )
+    title: StrictStr = Field(description=f"The problem, in one line of at most {MAX_TITLE} characters.")
+    detail: StrictStr | None = Field(
+        default=None,
+        description=f"What the operator needs to act on it, in a paragraph of at most {MAX_DETAIL:,} characters.",
+    )
+    link: StrictStr | None = Field(default=None, description="An `https://` URL where the problem shows, if any.")
+
+
+class Report(BaseModel):
+    """What a chore's agent reports with its `result` call (DESIGN §19)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
+
+    status: Literal["ok", "failed"] = Field(
+        description="`ok` when you did the check, whatever it found; `failed` when you could not, with why in "
+        "`summary`.",
+    )
+    summary: StrictStr = Field(
+        default="",
+        description=f"What you checked and found, in a paragraph of at most {MAX_SUMMARY:,} characters, line breaks "
+        "sparingly.",
+    )
+    findings: list[FindingReport] = Field(
+        default_factory=list,
+        description="What needs the operator, the ones that most need them first, at most your run block's "
+        "`max_findings`: canopy keeps only that many. None means nothing needs a human.",
+    )
+    more_findings: StrictInt = Field(
+        default=0,
+        description="How many more findings you had than you listed, the least important ones.",
+    )
+
+
+#: What a chore's agent reports.
+CHORE = run_result.Contract(
+    "chore",
+    f"Report what this run of the chore found. {run_result.REPORTING}",
+    Report,
 )

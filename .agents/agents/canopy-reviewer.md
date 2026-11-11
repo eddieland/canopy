@@ -2,8 +2,8 @@
 # OpenCode agent definition. Agent runs load it from canopy's definitions directory (DESIGN §13, D040).
 # Rules follow D021: the last matching rule wins, and `deny` is enforced under `opencode run`. Scalars are used where a
 # whole tool is denied, since a repository's config cannot loosen a scalar canopy sets (D044).
-# The reviewer reads a PR and writes nothing anywhere: its result line is the review (DESIGN §21, D114, TRUST_MODEL T4,
-# T6). A revision of a review's draft runs as it, and its result line is the new version (DESIGN §34). It starts in a
+# The reviewer reads a PR and writes nothing anywhere: its result is the review (DESIGN §21, D114, TRUST_MODEL T4,
+# T6). A revision of a review's draft runs as it, and its result is the new version (DESIGN §34). It starts in a
 # directory of canopy's, outside the checkout, which it reads through the link `checkout`; reads outside that directory
 # are denied, as for a desk's links (the reviewer canary in tests/canopy/test_opencode_canary.py checks it).
 # Its temperature is rendered at the marked line from `runtime.review_temperature`, unless that is -1: the reviewer is
@@ -107,6 +107,8 @@ permission:
   "canopy_git_files": allow
   # canopy's `status` tool, the run's progress, which writes nothing (DESIGN §41), by exact name too.
   "canopy_run_status": allow
+  # And its `result` tool, which validates the run's result and writes nothing: canopy reads the call (DESIGN §13).
+  "canopy_run_result": allow
 ---
 
 <!-- canopy: prompt -->

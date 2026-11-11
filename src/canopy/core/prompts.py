@@ -130,8 +130,8 @@ _FEEDBACK_DATA = (
 )
 _UNSURE = "When unsure, it needs review."
 _REVIEW_RESULT = (
-    'Add `"review":"needed"` or `"review":"not_needed"` to your result, and with `not_needed`, `"review_reason"`: one '
-    "sentence saying why, which the operator reads beside the plan."
+    "Say which in your result's `review`, and with `not_needed`, why in its `review_reason`, one sentence the operator "
+    "reads beside the plan."
 )
 # Who approved the plan a worker follows, in `plan_note` and `feedback_plan_note`, when its planner did (DESIGN §25).
 _BY_PLANNER = (
@@ -166,9 +166,9 @@ NONE = "None."
 # Placeholders every worker prompt must use. `LABELS` carries the worker's own authorization check (D051); an override
 # written before it existed would silently drop that check, so it fails to render instead.
 REQUIRED_WORKER = ("LABELS",)
-# Placeholders a joint run's prompt must also use: its worker learns its repositories and the result's `prs` from them
-# (DESIGN §18). A prompt without them still serves a run in one repository.
-REQUIRED_JOINT = ("REPOSITORIES", "PRS")
+# The placeholder a joint run's prompt must also use: its worker learns its repositories, and so the keys of its
+# result's `prs`, from it (DESIGN §18). A prompt without it still serves a run in one repository.
+REQUIRED_JOINT = ("REPOSITORIES",)
 # Placeholders a plan's prompt must use (DESIGN §25), for a public ticket and a private one alike: its repositories, the
 # planner's own authorization check, which names the queue labels on a public ticket (D051), the operator's messages,
 # which carry a reply asking for changes to the plan it replaces, and the file the plan is written to, without which
@@ -273,9 +273,9 @@ REQUIRED_NO_TRAILER = ("COMMIT_ATTRIBUTION",)
 # default; once `trust.rebase` is set, it fails to render instead of making the merge commits the operator's
 # repositories refuse.
 REQUIRED_REBASE = ("BRANCH_UPDATE",)
-# Agent memory's placeholders (DESIGN §28): a ticket's notes, the operator's lessons, and the result fields memory adds.
-# Each renders as the empty string while its tier is off; the shipped prompts place them so that leaves nothing.
-MEMORY_PARTS = ("TICKET_MEMORY", "WORKSPACE_LESSONS", "MEMORY_CONTRACT")
+# Agent memory's placeholders (DESIGN §28): a ticket's notes and the operator's lessons. Each renders as the empty
+# string while its tier is off; the shipped prompts place them so that leaves nothing.
+MEMORY_PARTS = ("TICKET_MEMORY", "WORKSPACE_LESSONS")
 # The prompt files that carry `{{NOTICE}}`, and the run kinds each serves: every worker's, public and private, the
 # planner's, and the reviewer's.
 _HEARS_NOTICE: dict[str, list[str]] = {
@@ -364,9 +364,8 @@ def follow_ups(
         f"repository applies, names it on a line of its own, `canopy-repo: <name>`, one of {names}. A follow-up that "
         f"must land after another ticket, this one included, gets the tracker's blocker relation. {listed}\n\n"
         "A follow-up is a request, not work you start: canopy asks the operator about each one, and works it only once "
-        "they label it or start it, as any ticket. Name every ticket you created in your result line's object, also "
-        'when you report `blocked` or `failed`: `"created":{"<key>":"<repository or null>"}`, each with the repository '
-        "its body names, or null when it names none. Leave the field out when you created none."
+        "they label it or start it, as any ticket. Name every ticket you created in your result's `created`, also when "
+        "you report `blocked` or `failed`."
     )
 
 
@@ -400,8 +399,7 @@ def task_tickets(project: str, limit: int, *, needs_human: str, labels: Sequence
         "Creating them is the one thing you write to the tracker: no comment on any ticket, and no edit to any "
         "ticket that already exists, though the tool that creates tickets may be able to. A ticket you file is a "
         "request, not work you start: canopy works it only once the operator labels it or starts it. Name every "
-        "ticket you created in your result line's object, also when you report `blocked` or `failed`: "
-        '`"created":["<key>"]`. Leave the field out when you created none.'
+        "ticket you created in your result's `created`, also when you report `blocked` or `failed`."
     )
 
 
@@ -708,7 +706,7 @@ def feedback_plan_note(
 ) -> str:
     """Return a resume's `{{PLAN}}` when it follows a feedback plan (DESIGN §32): its copy, outline, and approved items.
 
-    The items are the harness's, from the plan's validated result line, each its number, PR, kind, id, and what the
+    The items are the harness's, from the plan's validated result, each its number, PR, kind, id, and what the
     plan proposes: those the approval named, which the run acts on, and the only ones. `left_out` names the plan's items
     the operator left out of their approval, each its number and id, whose sections its copy still holds, under
     `### Item <id>` headings as every item's are. `message_id` is the operator message their approval wrote, which the

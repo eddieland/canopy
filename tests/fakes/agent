@@ -3,8 +3,13 @@
 
 Prints a few lines of chatter, then a final line, then exits. Configured through the environment:
 
-    FAKE_AGENT_RESULT   the final stdout line, verbatim. Default: a `done` worker result. Set it to invalid JSON, or
-                        to the empty string for no final line, to exercise result parsing.
+    FAKE_AGENT_RESULT   the run's result. Default: a `done` worker result. A JSON object is reported as canopy's
+                        agents report, by calling `<server>_result` with it as the last thing the run does, where the
+                        run is told what it reports (CANOPY_RESULT), prints events, and its inline config names
+                        `canopy_run` or `canopy_chore`; the server refuses one that is not the run's result. Anywhere
+                        else, and for anything that is no JSON object, it is the final stdout line, verbatim, which
+                        canopy reads as no agent's result: set it to "not json", or to the empty string for no final
+                        line, for a run that reports nothing.
     FAKE_AGENT_SAYS     a line said before the commands run, so in a message of its own before the final line's.
                         Default none.
     FAKE_AGENT_EXIT     exit code. Default 0.
@@ -62,12 +67,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-DEFAULT_RESULT = {
-    "status": "done",
-    "branch": None,
-    "pr": None,
-    "summary": "fake agent: nothing to do",
-}
+DEFAULT_RESULT = {"status": "done", "summary": "fake agent: nothing to do"}
 STEP_TOKENS = {"input": 1000, "output": 200, "reasoning": 30, "cache": {"read": 4000, "write": 500}}
 # How long the agent waits for a local MCP server to answer.
 SERVER_TIMEOUT = 60
@@ -118,21 +118,33 @@ def calls_tools(argv: list[str]) -> bool:
     return bool(json.loads(setting(argv, "TOOLS", "[]")))
 
 
-def call_tools(argv: list[str], name: str = "TOOLS") -> list[dict[str, object]]:
-    """Call each tool the script's `name` setting names, through the server the inline config names for it.
+def inline_servers() -> dict[str, dict[str, Any]]:
+    mcp: dict[str, Any] = json.loads(os.environ.get("OPENCODE_CONFIG_CONTENT") or "{}").get("mcp", {})
+    # OpenCode 2's shape, `mcp.servers`, or 1's, the servers by name under `mcp`.
+    return mcp["servers"] if isinstance(mcp.get("servers"), dict) else mcp
+
+
+def result_tool(argv: list[str]) -> str | None:
+    """The tool this run reports its result with, or None for a run that is told of none or prints no events."""
+    if not os.environ.get("CANOPY_RESULT") or not events(argv):
+        return None
+    servers = inline_servers()
+    return next((f"{server}_result" for server in ("canopy_run", "canopy_chore") if server in servers), None)
+
+
+def call_tools(argv: list[str], name: str = "TOOLS", made: list[list[Any]] | None = None) -> list[dict[str, object]]:
+    """Call each tool the script's `name` setting names, or each of `made`, through the server the inline config names.
 
     One session for each run of calls to the same server, as OpenCode keeps one open for the whole run.
     """
-    calls: list[list[Any]] = json.loads(setting(argv, name, "[]"))
-    mcp: dict[str, Any] = json.loads(os.environ.get("OPENCODE_CONFIG_CONTENT") or "{}").get("mcp", {})
-    # OpenCode 2's shape, `mcp.servers`, or 1's, the servers by name under `mcp`.
-    servers: dict[str, dict[str, Any]] = mcp["servers"] if isinstance(mcp.get("servers"), dict) else mcp
+    calls: list[list[Any]] = made if made is not None else json.loads(setting(argv, name, "[]"))
+    servers = inline_servers()
 
     def owner(call: list[Any]) -> str | None:
         # The longest server name the tool's name starts with, as `<server>_<tool>`.
         return max((s for s in servers if call[0].startswith(f"{s}_")), key=len, default=None)
 
-    made: list[dict[str, object]] = []
+    done: list[dict[str, object]] = []
     for server, run in itertools.groupby(calls, key=owner):
         group = list(run)
         if server is None:
@@ -141,12 +153,12 @@ def call_tools(argv: list[str], name: str = "TOOLS") -> list[dict[str, object]]:
         else:
             answers = served(servers[server], [[tool.removeprefix(f"{server}_"), args] for tool, args in group])
         for (tool, arguments), (text, error, start, end) in zip(group, answers, strict=True):
-            made.append({"name": tool, "arguments": arguments, "text": text, "error": error})
+            done.append({"name": tool, "arguments": arguments, "text": text, "error": error})
             if events(argv):
                 outcome = {"status": "error", "error": text} if error else {"status": "completed", "output": text}
                 state = {**outcome, "input": arguments, "time": {"start": start, "end": end}}
                 emit(argv, "tool_use", {"type": "tool", "tool": tool, "state": state})
-    return made
+    return done
 
 
 def served(entry: dict[str, Any], calls: list[list[Any]]) -> list[tuple[str, bool, int, int]]:
@@ -203,6 +215,14 @@ def served(entry: dict[str, Any], calls: list[list[Any]]) -> list[tuple[str, boo
     return [*answers, *[("the MCP server did not answer", True, now, now)] * left]
 
 
+def as_object(text: str) -> dict[str, Any] | None:
+    try:
+        found = json.loads(text)
+    except ValueError:
+        return None
+    return found if isinstance(found, dict) else None
+
+
 @functools.cache
 def piped() -> str | None:
     """What was piped to it, read once: None from a terminal or when nothing was, as `opencode run` reads stdin."""
@@ -257,7 +277,11 @@ def main(argv: list[str]) -> int:
     time.sleep(float(setting(argv, "SLEEP", "0")))
 
     result = setting(argv, "RESULT", json.dumps(DEFAULT_RESULT))
-    if result:
+    tool = result_tool(argv)
+    reported = as_object(result) if tool else None
+    if reported is not None:
+        call_tools(argv, made=[[tool, reported]])
+    elif result:
         say(argv, result)
     step(argv, 2)
     for error in json.loads(setting(argv, "ERRORS", "[]")) if events(argv) else []:

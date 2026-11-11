@@ -135,6 +135,13 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
   commit. Expect canopy's wrap-up line once in its transcript, on the next tool call; the worker to push what it has,
   start nothing new, and print a result line naming what remains; and the run to end on its own, well before its
   timeout, with no attention item while the ticket stays stopped. Note how many tool calls it took to end.
+- **S76. A result reported by a tool call** (#2245, taken on request 2026-11-10). Run a toy ticket through a `plan`,
+  an `implement`, a review with findings, and a `resume` for it, then a one-off task and a chore of canopy's chore
+  agent, once under each runtime version and the workers once under `canopy-sandbox`, with memory and
+  `trust.review_replies = "approve"` on. Expect each agent to call its `result` tool last and once, with the fields its
+  run was asked for and no JSON printed, each run to end with the status it reported, and the resume's answers, the
+  drafts, and the notes recorded. Note a call the tool refused and what the agent did next, an agent that printed a
+  result instead, and one that went on working after its call was taken.
 
 ### Several repositories
 

@@ -69,6 +69,8 @@ permission:
   # runs (DESIGN §19, History), which refuses any other chore's, and the three listings of agent memory its prompt names
   # (DESIGN §27), which write nothing.
   "canopy_chore_history": allow
+  # And the `result` tool of the same server, which validates a result and writes nothing (DESIGN §13).
+  "canopy_chore_result": allow
   "canopy_reports_memory-lessons": allow
   "canopy_reports_memory-proposals": allow
   "canopy_reports_memory-list": allow

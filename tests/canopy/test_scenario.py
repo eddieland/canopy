@@ -189,7 +189,7 @@ def test_the_config_a_test_sets_is_a_move_and_lands_in_its_own_table(scenario: S
     user = tomllib.loads(scenario.env.user_file.read_text())
     assert user["policy"] == {"max_resume_attempts": 1, "max_implement_attempts": 3}
     assert (user["tracker"], user["paths"]) == ({"labels": ["mine"]}, {})
-    assert user["runtime"]["worker_cmd"].endswith("--agent canopy-worker --title={title} {prompt}")
+    assert user["runtime"]["worker_cmd"].endswith("--agent canopy-worker --format json --title={title} {prompt}")
     tracker = tomllib.loads(scenario.env.shared_file.read_text())["tracker"]
     assert tracker == {"provider": "jira", "query": "project = PROJ", "needs_human_label": "blocked-on-team"}
     assert scenario.told().splitlines()[:4] == [
@@ -256,7 +256,7 @@ def test_a_story_in_two_repositories_names_them_and_a_joint_worker_pushes_in_eac
 
 def reviews_on(scenario: Scenario) -> None:
     """Reviews on for the loop's own PRs, the reviewer running the fake agent, and PROJ-1's unit having opened PR."""
-    template = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-reviewer {prompt}"
+    template = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-reviewer --format json {prompt}"
     scenario.configures(runtime={"review_cmd": template}, review={"agent_prs": True})
     db.set_unit(scenario.conn, "PROJ-1", str(scenario.env.root), "repo", pr_url=PR)
 
@@ -324,7 +324,10 @@ def test_a_worker_sends_drafts_beside_its_pr(scenario: Scenario, git_pool: GitPo
     ran = scenario.run(worker=sends_drafts([{"on": "pr", "pr": DRAFTS_PR, "text": "Ready for review."}]))
     assert json.loads(ran.row["result_json"])["prs"] == {"repo": DRAFTS_PR}
     # What the worker reported, as the run log carries it; canopy keeps the drafts where `trust.review_replies` says.
-    [reported] = [json.loads(line) for line in ran.printed.out.splitlines() if line.startswith('{"status"')]
+    # It is the input of its `result` call, one of the events the worker printed.
+    events = [json.loads(line) for line in ran.printed.out.splitlines() if line.startswith('{"type"')]
+    called = [event["part"] for event in events if event["type"] == "tool_use"]
+    [reported] = [part["state"]["input"] for part in called if part["tool"] == "canopy_run_result"]
     assert reported["drafts"] == [{"on": "pr", "pr": DRAFTS_PR, "text": "Ready for review."}]
 
 

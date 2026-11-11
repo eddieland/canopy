@@ -4,7 +4,7 @@ A feedback plan is §25's plan written for what came back to a ticket's PRs, bef
 file is a plan's file (`plans.path_for`): the same operator-only directory, named for the run that wrote it, written
 once and read bounded, never through a link. The journal's `feedback_plans` row holds what canopy decides by, its
 status, the file's hash as written, and the hash the operator approved; `feedback_plan_items` holds the items its
-result line named, each a review or review comment by the id the `vcs` source observed (DESIGN §29), or a failed
+result named, each a review or review comment by the id the `vcs` source observed (DESIGN §29), or a failed
 check, a conflict with the base, or a merged blocker by the id canopy gave it (`feedback_items.check_id`). The
 repositories a plan covers are its run's slots, and what it saw of its PRs is recorded with it (`feedback_items`). A
 ticket has at most one feedback plan that is not superseded.
@@ -45,7 +45,7 @@ if TYPE_CHECKING:
     from canopy.core.workspace import Workspace
     from canopy.runs.feedback_items import Item
 
-#: The most items one plan's result line names; past it, the rest are refused, each with a harness note.
+#: The most items one plan's result names; past it, the rest are refused, each with a harness note.
 MAX_ITEMS = 100
 #: A drafted reply's bound, in characters, as a draft's (DESIGN §29).
 MAX_REPLY = replies.MAX_DRAFT_CHARS
@@ -65,7 +65,7 @@ _FENCE_RE = re.compile(r"(?:`{3,}|~{3,})")
 
 @dataclass(frozen=True)
 class Named:
-    """An item the planner's result line names: its id, what it proposes, and the reply it would draft."""
+    """An item the planner's result names: its id, what it proposes, and the reply it would draft."""
 
     id: int
     proposal: Proposal
@@ -247,7 +247,7 @@ def history(conn: sqlite3.Connection, key: str) -> list[records.FeedbackPlan]:
 
 
 def items(conn: sqlite3.Connection, plan_id: int) -> list[records.FeedbackPlanItem]:
-    """The items a feedback plan covers, in the order its result line named them.
+    """The items a feedback plan covers, in the order its result named them.
 
     Returns:
         The items' rows, by number.

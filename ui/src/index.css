@@ -260,6 +260,83 @@
 }
 
 /*
+ * A block's actions (src/components/block-actions.tsx): a diagram's, a code block's, in a row at the block's top right
+ * corner, over it, on its surface. Shown while the block, an ancestor marked `group/block`, is hovered, a plan's
+ * diagram holds the caret (`plan-diagram-editing`), an action holds the focus, or its menu is open, and always on a
+ * touch screen, which has no hover; kept in place out of sight, so nothing moves as they show. Never printed. The
+ * caret's rule is here, in the utility, since one in the components layer would lose to it.
+ */
+@utility block-actions {
+    @apply absolute top-1.5 right-1.5 z-10 flex items-center gap-0.5 rounded-md bg-surface p-0.5 opacity-0;
+    transition: opacity 150ms;
+    &:focus-within,
+    &:has([aria-expanded='true']),
+    :where(.group\/block:hover, .plan-diagram-editing) & {
+        opacity: 1;
+    }
+    @media (pointer: coarse) {
+        opacity: 1;
+    }
+    @media print {
+        display: none;
+    }
+}
+
+/*
+ * A plan printed, or saved as a PDF (src/lib/plan-print.ts): the plan alone, as a document, under the line naming it.
+ * The shell goes, and of the page everything but the plan and what holds it: its header, toolbar, foot, decisions,
+ * comments, and earlier plans, and a drawn diagram's code, which its picture stands for. A diagram, a table, and a
+ * code block each keep to one page where they fit; a table and a code block wrap rather than scroll; and a diagram's
+ * picture drawn dark is turned round, its light and dark swapped and its hues kept, since the print does not wait for
+ * it to be drawn again in the light theme the page takes.
+ */
+@media print {
+    @page {
+        margin: 16mm;
+    }
+    :root[data-printing='plan'] {
+        & [data-testid='app-header'],
+        & aside,
+        & main :not(:has([data-print-plan]), [data-print-plan], [data-print-plan] *),
+        & [data-print-plan] > :not([data-print-line], [data-print-body]),
+        & .plan-diagram-toggle,
+        & .plan-diagram[data-diagram='drawn'] > pre {
+            display: none;
+        }
+        & .page-scroll {
+            display: block;
+        }
+        & [data-print-plan] {
+            border: none;
+            box-shadow: none;
+            background: none;
+        }
+        & [data-print-body] {
+            padding: 0;
+        }
+        & :is(.plan-diagram-figure, .plan-table, .plan-code) {
+            break-inside: avoid;
+        }
+        & .plan-diagram-figure {
+            border: none;
+        }
+        & .plan-diagram-figure img[data-drawn-dark] {
+            filter: invert(1) hue-rotate(180deg);
+        }
+        & .tableWrapper {
+            overflow: visible;
+        }
+        & .plan-doc :is(th, td) {
+            overflow-wrap: anywhere;
+        }
+        & .plan-code pre {
+            overflow: visible;
+            white-space: pre-wrap;
+        }
+    }
+}
+
+/*
  * What the page scrolls in, everything under the header (AppShell), so a scrollbar never sits beside the header. Its
  * gutter is kept whether or not the page is long enough to need it: no layout shift when a page grows a scrollbar.
  * Positioned, so it is the containing block of what is absolute inside it, such as an `sr-only` file input, and clips
@@ -1898,8 +1975,12 @@
              * reader reads the code that draws the picture. */
             @apply sr-only;
         }
+        /* A code block and a table, positioned for their actions in their corner. */
+        & :is(.plan-code, .plan-table) {
+            @apply relative;
+        }
         & .plan-diagram-figure {
-            @apply m-0 flex flex-col items-center gap-2 rounded-md border bg-surface p-3;
+            @apply relative m-0 flex flex-col items-center gap-2 rounded-md border bg-surface p-3;
         }
         & .plan-diagram[data-diagram='pending'] .plan-diagram-figure {
             @apply hidden;
@@ -1908,7 +1989,8 @@
             @apply h-auto max-w-full;
         }
         & .plan-diagram-figure figcaption {
-            @apply self-start text-sm text-muted-foreground empty:hidden;
+            /* Clear of the actions in the figure's corner, when the caption is all the figure holds. */
+            @apply self-start pr-8 text-sm text-muted-foreground empty:hidden;
         }
         & .plan-diagram-toggle {
             @apply self-end rounded-sm border bg-surface px-2 py-0.5 text-xs text-muted-foreground;

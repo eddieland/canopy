@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router'
-import { Fragment } from 'react'
+import { Fragment, useState } from 'react'
 
+import { BlockActions, DiagramActions } from '@/components/block-actions'
 import { Code } from '@/components/code'
 import { CodeBlock } from '@/components/code-block'
 import { Mark } from '@/components/rich-text'
@@ -10,6 +11,7 @@ import { DIAGRAM_FENCE, anchor, diagramTitle, plainText } from '@/lib/guide'
 import type { GuidePiece } from '@/lib/guide'
 import { ALIGN } from '@/lib/rich-text'
 import type { Align, Block, Line } from '@/lib/rich-text'
+import { fileWords } from '@/lib/save-file'
 import { cn } from '@/lib/utils'
 import { usePalettes } from '@/theme/palette'
 import { useTheme } from '@/theme/use-theme'
@@ -19,6 +21,8 @@ const DEPTH: Record<number, string> = { 0: '', 1: 'ml-4', 2: 'ml-8', 3: 'ml-12' 
 const LINK = 'text-accent underline underline-offset-4 hover:decoration-2'
 // A code block's box on a guide page.
 const GUIDE_BLOCK = 'rounded-md border bg-surface-raised px-4 py-3 text-sm/6'
+// Why a diagram's picture is not shown when the browser cannot read it, as a plan's says (src/lib/plan-diagram.ts).
+const UNREADABLE = 'the browser cannot read its picture'
 
 /**
  * A page of the guide laid out as a documentation site's article (`src/lib/guide.ts`), in a document's type as a plan
@@ -147,7 +151,7 @@ function BlockView({ block, page }: { block: Block<GuidePiece>; page: string }) 
         }
         case 'code': {
             return block.lang === DIAGRAM_FENCE ? (
-                <Diagram lines={block.lines} />
+                <Diagram lines={block.lines} page={page} />
             ) : (
                 <CodeBlock lines={block.lines} lang={block.lang} className={GUIDE_BLOCK} />
             )
@@ -161,28 +165,49 @@ function cellClass(align: Align): string {
 }
 
 // A Mermaid fence, drawn as its diagram: an image named by its `accTitle`, drawn again when the theme or a palette
-// changes. A placeholder holds its place while mermaid loads; a diagram it cannot draw shows its code and why.
-function Diagram({ lines }: { lines: string[] }) {
+// changes. A placeholder holds its place while mermaid loads; a diagram it cannot draw, or whose picture the browser
+// cannot read, shows its code and why.
+function Diagram({ lines, page }: { lines: string[]; page: string }) {
     const { resolved } = useTheme()
     const { light, dark } = usePalettes()
-    const drawn = useDiagram(lines.join('\n'), `${resolved} ${light} ${dark}`)
+    const source = lines.join('\n')
+    const drawn = useDiagram(source, `${resolved} ${light} ${dark}`)
+    // The picture the browser could not read, by its SVG, so a new drawing is tried afresh.
+    const [unread, setUnread] = useState<string | undefined>(undefined)
     if (drawn === undefined) {
         return <Skeleton className="h-64 w-full rounded-md" />
     }
-    if ('error' in drawn) {
+    const title = diagramTitle(lines)
+    // Its source copied, however it is drawn, and its picture once it is: the actions go in the figure's corner, over
+    // the code or the picture. A file of the picture is named for its title, which every guide diagram has.
+    const actions = (
+        <BlockActions>
+            <DiagramActions
+                source={source}
+                drawn={'error' in drawn || unread === drawn.svg ? undefined : drawn}
+                name={fileWords(title ?? '') || `${page}-diagram`}
+            />
+        </BlockActions>
+    )
+    if ('error' in drawn || unread === drawn.svg) {
         return (
-            <figure className="flex flex-col gap-2">
-                <CodeBlock lines={lines} lang={DIAGRAM_FENCE} className={GUIDE_BLOCK} />
-                <figcaption className="text-sm text-muted-foreground">Not drawn: {drawn.error}.</figcaption>
+            <figure className="group/block relative flex flex-col gap-2">
+                {actions}
+                <CodeBlock lines={lines} lang={DIAGRAM_FENCE} className={GUIDE_BLOCK} copy={false} />
+                <figcaption className="text-sm text-muted-foreground">
+                    Not drawn: {'error' in drawn ? drawn.error : UNREADABLE}.
+                </figcaption>
             </figure>
         )
     }
     return (
-        <figure className="overflow-x-auto rounded-md border px-4 py-5">
+        <figure className="group/block relative overflow-x-auto rounded-md border px-4 py-5">
+            {actions}
             <img
                 src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(drawn.svg)}`}
-                alt={diagramTitle(lines) ?? 'A diagram'}
+                alt={title ?? 'A diagram'}
                 className="mx-auto h-auto max-w-full"
+                onError={() => setUnread(drawn.svg)}
             />
         </figure>
     )

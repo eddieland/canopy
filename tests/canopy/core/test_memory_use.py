@@ -6,17 +6,20 @@ import json
 import sqlite3
 from typing import TYPE_CHECKING
 
+import pydantic
 import pytest
 
 from canopy.cli.main import main
 from canopy.core import memory
 from canopy.core.vocab import MemoryCited, MemoryStatus, ResumeReason, RunKind
+from canopy.runs import worker
 from tests.canopy.helpers import (
     KEY,
     dispatch_in_tick,
     dispatch_refused,
     last_run,
     memories,
+    present,
     prompt_of,
     run_with,
     with_memory,
@@ -54,8 +57,12 @@ def test_a_note_reaches_its_tickets_next_run_and_no_other_tickets(
         f"Note {note.id}, `lint`, from run {first['id']} (`implement`, ended `done`), 1 run before this one, "
         f"against `{note.head}`:\n> {NOTE}"
     ) in text
-    assert '`"drop_notes":["<key>"]`' in text
-    assert '`"memory_used":[<id>]` and `"memory_wrong":[<id>]`' in text
+    # Shown its ticket's notes, the run is asked which it drops and which it relied on or found wrong.
+    rendered = present(memory.run_memory(conn, run_id))
+    groups = memory.asked_groups(memory.Modes(rendered.ticket_notes, rendered.proposals))
+    assert groups == ["notes", "drop_notes", "cited"]
+    asked = set(worker.WORKER.input(groups).model_fields) - set(worker.WORKER.input().model_fields)
+    assert asked == {"notes", "drop_notes", "memory_used", "memory_wrong"}
     assert [m.id for m in memory.read_by(conn, run_id)] == [note.id]
 
     assert not dispatch_in_tick(conn, dispatches(OTHER, slug="work")).said.error
@@ -91,7 +98,7 @@ def test_a_run_renews_drops_and_retires_only_what_it_was_shown(canopy_env: Canop
     run_with(
         conn,
         FIX_CI,
-        memory_used=[lint.id, cause.id, theirs.id, "x", True],
+        memory_used=[lint.id, cause.id, theirs.id],
         memory_wrong=[cause.id, theirs.id, 99_999],
         drop_notes=["stale", "theirs", "never-shown"],
     )
@@ -111,6 +118,19 @@ def test_a_run_renews_drops_and_retires_only_what_it_was_shown(canopy_env: Canop
     run_id = int(last_run(conn)["id"])
     assert memory.citations(conn, run_id) == {lint.id: MemoryCited.USED, cause.id: MemoryCited.WRONG}
     assert (memory.used_by(conn, lint.id), memory.used_by(conn, cause.id)) == ([run_id], [])
+
+
+@pytest.mark.parametrize(
+    "sent",
+    [{"memory_used": ["x"]}, {"memory_used": [True]}, {"memory_wrong": ["7"]}, {"memory_used": 7}, {"drop_notes": [7]}],
+    ids=["a-word", "a-boolean", "an-id-as-text", "not-a-list", "a-key-that-is-an-id"],
+)
+def test_the_tool_refuses_a_citation_that_is_no_id_and_a_drop_that_is_no_key(sent: dict[str, object]) -> None:
+    """The run's tool holds each citation to an id and each drop to a key, so the worker can send it again."""
+    asked = worker.WORKER.input(["drop_notes", "cited"])
+    asked.model_validate({"status": "done", "memory_used": [7], "memory_wrong": [8], "drop_notes": ["stale"]})
+    with pytest.raises(pydantic.ValidationError, match=next(iter(sent))):
+        asked.model_validate({"status": "done", **sent})
 
 
 def test_a_memory_names_the_latest_runs_that_relied_on_it_newest_first(
@@ -144,7 +164,7 @@ def test_at_use_an_override_without_the_notes_is_refused(canopy_env: CanopyEnv, 
     overrides = canopy_env.user_file.parent / "prompts"
     overrides.mkdir()
     (overrides / "worker-implement.md").write_text(
-        "Work on {{KEY}}, labels {{LABELS}}.\n{{MEMORY_CONTRACT}}{{DRAFTS}}\n",
+        "Work on {{KEY}}, labels {{LABELS}}.\n{{DRAFTS}}\n",
     )
     with_memory(canopy_env, ticket_notes="record")
     assert not dispatch_in_tick(conn, WORK).said.error
