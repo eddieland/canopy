@@ -60,7 +60,7 @@ def test_with_memory_off_a_note_a_worker_sends_is_stored_nowhere(
 ) -> None:
     """A run no tier reaches is asked for no memory field, so its tool refuses a result that carries one."""
     conn = scenario.conn
-    run = scenario.run(WORK, worker=pushes(**sent))
+    run = scenario.run(WORK, worker=worker_does(result=worker_result(**sent)))
     assert not set(memory.GROUPS) & set(asked_of(agent_log))
     assert (run.status, harness_note(run)) == (RunStatus.UNKNOWN, NO_RESULT)
     assert memories(conn) == []
@@ -110,7 +110,8 @@ def test_at_record_what_only_use_asks_for_is_refused_and_changes_nothing(
     scenario.configures("private", memory=RECORDING)
     scenario.run(WORK, worker=pushes(notes=[{"key": "lint", "text": NOTE}]))
     [note] = memories(scenario.conn)
-    run = scenario.run(FIX_CI, worker=pushes(**{field: ["lint"] if field == "drop_notes" else [note.id]}))
+    sent: dict[str, object] = {field: ["lint"] if field == "drop_notes" else [note.id]}
+    run = scenario.run(FIX_CI, worker=worker_does(result=worker_result(**sent)))
     assert not {"cited", "drop_notes"} & set(asked_of(agent_log))
     assert (run.status, harness_note(run)) == (RunStatus.UNKNOWN, NO_RESULT)
     [after] = memories(scenario.conn)

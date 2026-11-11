@@ -404,7 +404,7 @@ def test_a_resume_that_leaves_a_flaky_check_tells_the_overseer_one_bit(scenario:
     scenario.run(worker=pushes())
     summary = "Left unit-tests: the runner was lost before any test ran. Run 77 of main lost one the same way."
     # On a PR the `vcs` source reads, so the overseer is listed the ticket (DESIGN §39).
-    flaky = json.loads(WORKER_DONE) | {"branch": "agent/PROJ-1-work", "pr": READ_PR, "summary": summary, "flaky": True}
+    flaky = json.loads(WORKER_DONE) | {"prs": {"repo": READ_PR}, "summary": summary, "flaky": True}
     left = scenario.run(resumes(CI), worker=worker_does(result=json.dumps(flaky)))
     assert left.status == "done"  # it pushed nothing, and needed to push nothing
     assert contract.stored_object(left.row["result_json"])["flaky"] is True

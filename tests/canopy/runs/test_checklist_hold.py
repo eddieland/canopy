@@ -253,7 +253,6 @@ def test_a_joint_runs_slots_are_each_held_with_their_own_list(ws_scenario: Scena
     repos = ("api", "web")
     commands = [["git", "-C", name, *command[1:]] for name in repos for command in (COMMIT, PUSH, PUSH)]
     result = json.loads(WORKER_DONE) | {"prs": {name: f"https://example.test/{name}/pr/1" for name in repos}}
-    del result["pr"]
     ws_scenario.run(dispatches(repo=repos), worker=worker_does(*commands, result=json.dumps(result)))
     _, api_held, api_sent, _, web_held, web_sent = ran(ws_scenario.agent_log)
     api, web = str(api_held["stderr"]), str(web_held["stderr"])

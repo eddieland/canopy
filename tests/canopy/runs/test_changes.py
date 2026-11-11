@@ -137,7 +137,6 @@ def test_a_joint_run_records_a_row_and_its_diffs_per_repository(ws_scenario: Sce
     repos = ("api", "web")
     commands = [c for name in repos for c in (*writes(f"{name}.txt", name, repo=name), push(repo=name))]
     result = json.loads(WORKER_DONE) | {"prs": {name: f"https://example.test/{name}/pr/1" for name in repos}}
-    del result["pr"]
     ran = ws_scenario.run(dispatches(repo=repos), worker=worker_does(*commands, result=json.dumps(result)))
     rows = changed(ws_scenario, ran)
     assert [(r.repo, r.end_sha, r.change_kept, r.branch_kept) for r in rows] == [

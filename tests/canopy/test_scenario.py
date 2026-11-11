@@ -324,10 +324,10 @@ def test_a_worker_sends_drafts_beside_its_pr(scenario: Scenario, git_pool: GitPo
     ran = scenario.run(worker=sends_drafts([{"on": "pr", "pr": DRAFTS_PR, "text": "Ready for review."}]))
     assert json.loads(ran.row["result_json"])["prs"] == {"repo": DRAFTS_PR}
     # What the worker reported, as the run log carries it; canopy keeps the drafts where `trust.review_replies` says.
-    # It is the text of one of the events the worker printed.
+    # It is the input of its `result` call, one of the events the worker printed.
     events = [json.loads(line) for line in ran.printed.out.splitlines() if line.startswith('{"type"')]
-    said = [event["part"]["text"] for event in events if event["type"] == "text"]
-    [reported] = [json.loads(text) for text in said if text.startswith('{"status"')]
+    called = [event["part"] for event in events if event["type"] == "tool_use"]
+    [reported] = [part["state"]["input"] for part in called if part["tool"] == "canopy_run_result"]
     assert reported["drafts"] == [{"on": "pr", "pr": DRAFTS_PR, "text": "Ready for review."}]
 
 

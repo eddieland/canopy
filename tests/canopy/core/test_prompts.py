@@ -35,7 +35,8 @@ def test_shipped_worker_prompts_render_completely(canopy_env: CanopyEnv, kind: s
     # the tool and the branch, and holds no JSON to copy.
     assert "Report your result by calling `canopy_run_result`, as the last thing you do" in text
     assert text.rstrip().endswith(
-        "Its `branch` is `agent/PROJ-1-work`, and its `prs` and `pr_titles` have a key for each repository listed above.",
+        "Its `branch` is `agent/PROJ-1-work`, and its `prs` and `pr_titles` have a key for each repository listed "
+        "above.",
     )
     assert '{"status"' not in text
     assert "attempt 1 of 2" in text

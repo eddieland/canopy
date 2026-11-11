@@ -51,7 +51,8 @@ def test_a_run_is_told_what_it_reports_in_one_variable(groups: tuple[str, ...], 
 
 
 @pytest.mark.parametrize(
-    "value", ["", "task", "Worker", "worker:Notes", "worker:notes,", "worker:" + ",".join("a" * 21)]
+    "value",
+    ["", "task", "Worker", "worker:Notes", "worker:notes,", "worker:" + ",".join("a" * 21)],
 )
 def test_a_variable_that_names_no_contract_is_no_result_to_report(value: str) -> None:
     assert run_result.asked_of(value, CONTRACTS) is None

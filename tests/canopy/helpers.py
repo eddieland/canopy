@@ -1181,13 +1181,15 @@ def chore_reports(
     report: object,
     *commands: list[str],
     tools: Sequence[Called] = (),
+    then_tools: Sequence[Called] = (),
     **behavior: Unpack[Behavior],
 ) -> Iterator[None]:
-    """Until the block ends, the fake chore prints `report`, verbatim if it is a string.
+    """Until the block ends, the fake chore reports `report`, or prints it if it is a string, which reports nothing.
 
-    It prints it after making the calls `tools` names and running `commands`, if given.
+    It does so after making the calls `tools` names, running `commands`, and making the calls `then_tools` names, if
+    given.
     """
-    with scripted("CHORE", reported(report, commands, tools), behavior):
+    with scripted("CHORE", reported(report, commands, tools, then_tools), behavior):
         yield
 
 

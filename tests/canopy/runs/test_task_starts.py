@@ -440,7 +440,10 @@ def test_a_task_run_s_models_and_tool_calls_are_recorded_as_it_ends(
     assert [(m.model, m.runs, m.cost_usd) for m in spent.models if m.kind == "tasks"] == [
         ("anthropic/claude-x", 1, 0.25),
     ]
-    assert [(t.tool, t.runs, t.calls) for t in spent.tools if t.kind == "tasks"] == [("bash", 1, 1)]
+    assert [(t.tool, t.runs, t.calls) for t in spent.tools if t.kind == "tasks"] == [
+        ("canopy_run_result", 1, 1),
+        ("bash", 1, 1),
+    ]
 
 
 def test_a_task_run_keeps_its_workers_progress_but_never_a_question(

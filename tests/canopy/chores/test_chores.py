@@ -50,6 +50,7 @@ from tests.canopy.helpers import (
     overseer_calls,
     overseer_does,
     present,
+    scripted,
     state_block,
     tick_starts,
     tools_of,
@@ -195,7 +196,10 @@ def test_a_chore_run_records_its_findings(canopy_env: CanopyEnv, chores: Path, a
         assert (run["chore"], run["run_id"], run["context"]) == ("build-health", 1, "Look at build 90")
         assert run["previous_run"] is None
         assert run["open_findings"] == []
-        assert run["result_contract"] == result.CONTRACT
+        # canopy's chore agent reports with its `result` tool, whose input says what each field is (DESIGN §13).
+        assert run["result"] == "canopy_chore_result"
+        assert "result_contract" not in run
+        assert agent["env"]["CANOPY_RESULT"] == "chore"
         # A chore whose table sets no `max_findings` lists at most five.
         assert run["max_findings"] == 5
         # Run files are kept by chore, out of its working directory.
@@ -384,6 +388,60 @@ def test_an_invalid_result_is_unknown_and_records_no_findings(
     row = present(chore_runs.get_chore_run(conn, run_id))
     assert row.status == "unknown"
     assert result.stored(row.result_json) is None
+
+
+def test_the_last_result_a_chore_reported_is_its_result(canopy_env: CanopyEnv, chores: Path, agent_log: Path) -> None:
+    """A later `result` call corrects an earlier one, and one the tool refused replaces none."""
+    tool = "canopy_chore_result"
+    reported = [calls(tool, status="failed", summary="early"), calls(tool, **OK), calls(tool, status="done")]
+    conn = canopy_env.journal()
+    with in_tick(conn), chore_reports("", then_tools=reported):
+        assert not overseer_calls(chore_run("build-health"), runner=InlineRunner()).error
+        tick_starts(InlineRunner())
+        assert main(["_chore", "1"], runner=InlineRunner()) == 0
+    row = present(chore_runs.get_chore_run(conn, 1))
+    assert row.status == "ok"
+    assert result.stored(row.result_json) == result.ChoreResult.model_validate(OK)
+
+
+@pytest.mark.parametrize(
+    ("printed", "status"),
+    [
+        (json.dumps(OK), "ok"),
+        # Lines after it that are no JSON object, such as a plugin's notice, are passed over (DESIGN §13).
+        (f"chatter\n{json.dumps(OK)}\n[policy-plugin] session audited, 0 violations", "ok"),
+        # A line that is not JSON only for its closing brackets is read with them put right.
+        ('{"status": "ok", "summary": "one flaky test", "findings": [}', "ok"),
+        # An invalid last object is no result, even with a valid one before it.
+        (f'{json.dumps(OK)}\n{{"status": "done"}}', "unknown"),
+        ("chatter only", "unknown"),
+    ],
+)
+def test_a_chore_that_runs_the_operators_own_command_prints_its_result(
+    canopy_env: CanopyEnv,
+    agent_log: Path,
+    printed: str,
+    status: str,
+) -> None:
+    """Its last line that starts with `{` is its result, as its run block tells it (DESIGN §19)."""
+    prompt = canopy_env.home / "chores" / "build-health.md"
+    prompt.parent.mkdir()
+    prompt.write_text("# Build health\n")
+    table = chore_toml(extra='when = "Weekdays only."\n')
+    canopy_env.append_user(table.replace("agent run --agent canopy-chore --format json", "agent run"))
+    conn = canopy_env.journal()
+    with in_tick(conn), scripted("AGENT", {"RESULT": printed}):
+        assert not overseer_calls(chore_run("build-health"), runner=InlineRunner()).error
+        tick_starts(InlineRunner())
+        assert main(["_chore", "1"], runner=InlineRunner()) == 0
+    row = present(chore_runs.get_chore_run(conn, 1))
+    assert row.status == status
+    assert (result.stored(row.result_json) is not None) is (status == "ok")
+    # It is told the contract to print, and of no tool to report with.
+    [agent] = agent_runs(agent_log)
+    run = json_block(agent["argv"][-1])
+    assert run["result_contract"] == result.CONTRACT
+    assert "result" not in run
 
 
 @pytest.mark.parametrize("empty", [None, ""])
@@ -884,7 +942,7 @@ def test_try_works_with_chores_off_and_reports_a_bad_result(
     with chore_reports({"status": "done"}):
         assert main(["chore", "try", "build-health", "--no-record"]) == 1
         out = capsys.readouterr().out
-        assert "chore try build-health: unknown (the chore's last line was not a valid result" in out
+        assert "chore try build-health: unknown (the chore reported no result; its findings are not recorded)" in out
         assert "--- agent text ---" in out
         conn = canopy_env.journal()
         assert conn.execute("SELECT count(*) FROM chore_runs").fetchone()[0] == 0
@@ -1106,14 +1164,17 @@ def test_a_chore_run_records_what_it_cost(
         conn = canopy_env.journal()
         run_id = run_inline(conn, OK)
         row = present(chore_runs.get_chore_run(conn, run_id))
-        assert row.status == "ok"  # the result line is read from the text events
+        assert row.status == "ok"  # the result is read from the events: its `result` call
         assert row.session_id == "ses_chore"
         usage = present(db.usage_of(row))
         assert usage.cost_usd == 0.25  # two model calls at 0.125
         assert (usage.first_call, usage.first_cache_write, usage.first_cache_read) == (5500, 500, 4000)
         assert (canopy_env.state_dir / definitions.RUNTIME_DIR / row.definitions_digest).is_dir()
         assert db.spent_since(conn, "2000-01-01T00:00:00Z") == 0.25
-        assert tools_of(conn, "chore_runs", run_id) == [("bash", 1, 0, len("read it\n"))]
+        # Its `result` call is one of its tool calls.
+        [reporting, *ran] = tools_of(conn, "chore_runs", run_id)
+        assert reporting[:3] == ("canopy_chore_result", 1, 0)
+        assert ran == [("bash", 1, 0, len("read it\n"))]
         # Which models served it, read from its session as it ended (DESIGN §13).
         assert [(m.model, m.replies) for m in run_models.of_run(conn, "chore_runs", run_id)] == [
             ("anthropic/claude-x", 1),

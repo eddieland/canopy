@@ -1413,7 +1413,7 @@ def test_a_run_reports_its_result_with_the_result_tool(overseen: CanopyEnv) -> N
 
 @pytest.mark.parametrize("told", [None, "", "overseer", "worker:Notes", "worker:" + ",".join(["notes"] * 21)])
 def test_a_run_told_of_no_result_to_report_is_served_no_result_tool(told: str | None) -> None:
-    env = {} if told is None else {run_result.ENV: told}
+    env: dict[str, str] = {} if told is None else {run_result.ENV: told}
     with in_run("7"), mock.patch.dict(os.environ, env):
         served = mcp_session(LIST_TOOLS, tool_call("result", status="done"), status=True)
     assert served.listed() == ["status", "messages"]

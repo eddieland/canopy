@@ -73,6 +73,9 @@ from tests.canopy.scenario_helpers import Scenario, dispatches, plan_approved, p
 from tests.canopy.web_helpers import signed_in_client
 from tests.conftest import CanopyEnv, GitPool, git
 
+#: The tool a reviewer reports its result with, as the runtime names it.
+RESULT = "canopy_run_result"
+
 
 def test_with_reviews_off_nothing_about_them_reaches_the_overseer(scenario: Scenario) -> None:
     scenario.tick(*waits("PROJ-1"), dry_run=True)
@@ -131,7 +134,7 @@ def test_a_review_runs_outside_the_checkout_at_the_commit(
         assert rationale.startswith(f"review run 1: {sha} in ")
         assert rationale.endswith("; context=Start with src/retry.py")
 
-        # Its fixed instructions are its agent's body, which ends with the contract; it is sent the run's own.
+        # Its fixed instructions are its agent's body; it is sent the run's own.
         prompt = told(reviewer)
         assert prompt.startswith("# canopy reviewer\n")
         assert reviewer["argv"][-1].startswith("## Run\n\nThis is review 1 of at most ")
@@ -139,7 +142,9 @@ def test_a_review_runs_outside_the_checkout_at_the_commit(
         assert "Post nothing anywhere" in prompt
         assert "canopy-review" not in prompt
         assert "None: never report `low`." in prompt
-        assert prompt.index(result.CONTRACT) < prompt.index("\n## Run\n")
+        assert prompt.index("None: never report `low`.") < prompt.index("\n## Run\n")
+        # What its `result` call reports: a review's result (DESIGN §13).
+        assert reviewer["env"]["CANOPY_RESULT"] == "review"
 
 
 def test_a_review_hears_the_notice_in_force(reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool) -> None:
@@ -502,10 +507,14 @@ def test_a_dry_run_counts_its_reviews(reviewing: CanopyEnv, scenario: Scenario) 
 @pytest.mark.parametrize(
     ("report", "status", "note"),
     [
-        # A reviewer from before reviews stayed in canopy may still name a comment: it is ignored (D114).
-        ({**FINDINGS, "comment": f"{PR}#issuecomment-1"}, "done", ""),
+        (FINDINGS, "done", ""),
         (CLEAN, "done", "reported low impact, but review.low_impact is not set; recorded as normal"),
-        ({**CLEAN, "findings": FINDINGS["findings"]}, "unknown", "the reviewer's last line was not a valid result"),
+        # The tool takes it, each field being one of a review's, and canopy reads no result of it: clean, with findings.
+        ({**CLEAN, "findings": FINDINGS["findings"]}, "unknown", "the reviewer reported no result"),
+        # A field a review's result does not have, which the tool refuses: the comment a reviewer once posted (D114).
+        ({**FINDINGS, "comment": f"{PR}#issuecomment-1"}, "unknown", "the reviewer reported no result"),
+        # Printed, not reported: what a reviewer prints is nobody's result.
+        (f"chatter\n{json.dumps(FINDINGS)}", "unknown", "the reviewer reported no result"),
         ({"status": "failed", "summary": "cannot read the PR"}, "failed", ""),
     ],
 )
@@ -513,7 +522,7 @@ def test_the_harness_checks_what_it_can_of_a_result(
     reviewing: CanopyEnv,
     scenario: Scenario,
     git_pool: GitPool,
-    report: dict[str, object],
+    report: dict[str, object] | str,
     status: str,
     note: str,
 ) -> None:
@@ -526,19 +535,16 @@ def test_the_harness_checks_what_it_can_of_a_result(
         assert stored["impact"] == "normal"
 
 
-@pytest.mark.parametrize("events", [False, True])
-def test_a_plugin_notice_after_the_result_does_not_hide_it(
+def test_the_last_result_a_reviewer_reported_is_its_result_whatever_it_prints_after(
     reviewing: CanopyEnv,
     scenario: Scenario,
     git_pool: GitPool,
-    *,
-    events: bool,
 ) -> None:
+    """A later `result` call corrects an earlier one, one the tool refused replaces none, and text after hides none."""
+    reported = [calls(RESULT, **CLEAN), calls(RESULT, **FINDINGS), calls(RESULT, **{**FINDINGS, "status": "finished"})]
     # A plugin the operator must load prints after the agent's last word; it lands in the text (DESIGN §13).
-    if events:
-        with_events(reviewing, "canopy-reviewer")
-    reviewer = reviewer_reports(f"{json.dumps(FINDINGS)}\n[policy-plugin] session audited, 0 violations")
-    row = scenario.review(reviews(head(git_pool)), reviewer=reviewer).row
+    notice = "[policy-plugin] session audited, 0 violations"
+    row = scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(notice, then_tools=reported)).row
     assert row.status == "done"
     assert json.loads(row.result_json or "{}")["verdict"] == "findings"
 
@@ -746,14 +752,17 @@ def test_a_review_run_records_what_it_cost(
     reviewer = reviewer_reports(FINDINGS, ["echo", "read it"], session="ses_review")
     reviewed = scenario.review(reviews(head(git_pool)), reviewer=reviewer)
     conn, row, run_id = scenario.conn, reviewed.row, reviewed.id
-    assert row.status == "done", reviewed.printed.out  # the result line is read from the text events
+    assert row.status == "done", reviewed.printed.out  # the result is read from the events: its `result` call
     assert row.session_id == "ses_review"
     usage = present(db.usage_of(row))
     assert usage.cost_usd == 0.25  # two model calls at 0.125
     assert (usage.first_call, usage.first_cache_write, usage.first_cache_read) == (5500, 500, 4000)
     assert (reviewing.state_dir / definitions.RUNTIME_DIR / row.definitions_digest).is_dir()
     assert db.spent_since(conn, "2000-01-01T00:00:00Z") == 0.25
-    assert tools_of(conn, "review_runs", run_id) == [("bash", 1, 0, len("read it\n"))]
+    # Its `result` call is one of its tool calls.
+    [reporting, *ran] = tools_of(conn, "review_runs", run_id)
+    assert reporting[:3] == (RESULT, 1, 0)
+    assert ran == [("bash", 1, 0, len("read it\n"))]
     # Which models served it, read from its session as it ended (DESIGN §13).
     assert [(m.model, m.replies) for m in run_models.of_run(conn, "review_runs", run_id)] == [("anthropic/claude-x", 1)]
 
@@ -1302,14 +1311,13 @@ DECLINED = "It logs once per attempt, which the runbook asks for."
 
 
 def answers_to(review_id: int) -> list[dict[str, object]]:
-    """A worker's `review_answers` for review run `review_id`: 1 fixed, 2 declined, and three it may not give."""
+    """A worker's `review_answers` for review run `review_id`: 1 fixed, 2 declined, and three canopy does not record."""
     return [
         {"review": review_id, "finding": 1, "answer": "fixed"},
         {"review": review_id, "finding": 2, "answer": "declined", "reason": DECLINED},
         {"review": review_id, "finding": 3, "answer": "fixed"},
         {"review": 99, "finding": 1, "answer": "fixed"},
         {"review": review_id, "finding": 1, "answer": "declined"},
-        {"review": review_id, "finding": 1, "answer": ["fixed"]},
     ]
 
 
@@ -1327,7 +1335,7 @@ def test_a_declined_finding_reaches_the_next_review_and_its_rebuttal_waits_on_th
 
     # The resume is asked for an answer to each finding, and the answers `_run` can check are kept.
     ran = scenario.run(resume(first), worker=pushes(review_answers=answers_to(first)))
-    assert '"review_answers":[{"review":<review run id>' in ran.prompt
+    assert "in your result's `review_answers`, by the review run and the number it is listed under" in ran.prompt
     answered = review_answers.latest(conn, first)
     assert [(n, a.answer, a.reason) for n, a in answered.items()] == [
         (1, FindingAnswer.FIXED, None),
@@ -1336,8 +1344,12 @@ def test_a_declined_finding_reaches_the_next_review_and_its_rebuttal_waits_on_th
     note = json.loads(ran.row["result_json"])["harness"]
     assert note == (
         f"review answers not recorded: entry 3: review run {first} has no finding 3; entry 4: review run 99 is not a "
-        "done review of PROJ-1; entry 5: a decline gives no reason; entry 6: `answer` is not fixed or declined"
+        "done review of PROJ-1; entry 5: a decline gives no reason"
     )
+    # An answer that is neither is one the `result` tool refuses; the check, which reads what it took, records none.
+    misspelled = [{"review": first, "finding": 2, "answer": ["fixed"]}]
+    checked = review_answers.check(conn, misspelled, key="PROJ-1")
+    assert (list(checked.answers), list(checked.refused)) == ([], ["entry 1: `answer` is not fixed or declined"])
 
     # The next review reads them: it rebuts the decline, and repeats the fix's finding, which it may not rebut.
     rebuttal = {

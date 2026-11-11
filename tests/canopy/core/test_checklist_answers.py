@@ -12,15 +12,18 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import pydantic
+import pytest
+
 from canopy.cli import checklist
 from canopy.cli.main import main
 from canopy.core import checklist_answers, checklists
 from canopy.core.checklist_answers import Answer
 from canopy.core.vocab import ItemAnswer
+from canopy.runs import worker
 from tests.canopy.helpers import answered, earlier, in_zone, journal_of_answers
 
 if TYPE_CHECKING:
-    import pytest
     from syrupy.assertion import SnapshotAssertion
 
     from tests.conftest import CanopyEnv, Journals
@@ -93,6 +96,29 @@ def test_answers_the_lists_do_not_hold_are_dropped_and_named() -> None:
     assert checklist_answers.check([WEB], "all pass").note() == (
         "checklist answers dropped: checklist is not an object of repositories"
     )
+
+
+@pytest.mark.parametrize(
+    "reported",
+    [
+        "all pass",
+        {"web": "pass"},
+        {"web": {"no-any": "maybe"}},
+        {"web": {"no-any": {"answer": "held"}}},
+        {"web": {"no-any": {"answer": "pass", "reason": "It holds."}}},
+    ],
+    ids=["not-an-object", "a-repository-with-no-items", "no-such-answer", "held-without-a-reason", "a-reason-to-pass"],
+)
+def test_the_tool_refuses_answers_of_the_wrong_shape(reported: object) -> None:
+    """The run's tool holds each answer to its shape, so the worker is told while it can still send it again."""
+    asked = worker.WORKER.input([checklist_answers.GROUP])
+    held = {"answer": "held", "reason": "The helper stays where it is."}
+    asked.model_validate({"status": "done", "checklist": {"web": {"no-any": "n/a", "newspaper": held}}})
+    with pytest.raises(pydantic.ValidationError, match="checklist"):
+        asked.model_validate({"status": "done", "checklist": reported})
+    # A run given no list is asked for no answers at all.
+    with pytest.raises(pydantic.ValidationError, match="checklist"):
+        worker.WORKER.input().model_validate({"status": "done", "checklist": {"web": {"no-any": "pass"}}})
 
 
 def test_a_reason_is_bounded() -> None:
