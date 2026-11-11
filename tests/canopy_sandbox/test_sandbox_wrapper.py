@@ -1107,7 +1107,7 @@ def test_canopys_sandboxed_reviewer_reads_the_checkout_through_the_wrapper(
 ) -> None:
     """`_review` with the wrapper as `review_cmd`'s prefix: the policy reads the slot it leased, and writes none."""
     template = f"{WRAPPER} review --read {{definitions_dir}} -- env OPENCODE_CONFIG_DIR={{definitions_dir}} agent run"
-    review_cmd = f"review_cmd = '{template} --agent canopy-reviewer {{prompt}}'"
+    review_cmd = f"review_cmd = '{template} --agent canopy-reviewer --format json {{prompt}}'"
     user = canopy_env.user_file.read_text().replace("[runtime]\n", f"[runtime]\n{review_cmd}\n", 1)
     canopy_env.write_user(user + "\n[review]\nagent_prs = true\n")
     conn: sqlite3.Connection = canopy_env.journal()

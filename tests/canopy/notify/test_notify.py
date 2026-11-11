@@ -62,7 +62,7 @@ def json_messages(out: Path) -> list[dict[str, Any]]:
 
 def done_with_no_pr() -> Script:
     """The worker reports its ticket done with no PR, so its unit raises no `unobserved_pr` the sink would hear of."""
-    return worker_does(result=json.dumps({k: v for k, v in json.loads(WORKER_DONE).items() if k != "pr"}))
+    return worker_does(result=json.dumps({k: v for k, v in json.loads(WORKER_DONE).items() if k != "prs"}))
 
 
 def needing_reviewers(*keys: str) -> list[Called]:
