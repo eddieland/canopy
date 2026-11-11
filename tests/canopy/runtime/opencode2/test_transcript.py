@@ -130,7 +130,10 @@ def test_a_tool_call_as_the_agent_made_it_is_its_exact_name_how_it_ended_and_its
 
 
 def test_what_a_tool_call_did_to_files_is_its_act_and_the_files_it_named() -> None:
-    """2's tools name a file by `path`, a session moved from 1 by `filePath`; `patch` and `shell` are 2's names."""
+    """2's tools name a file by `path`, a session moved from 1 by `filePath`; `patch` and `shell` are 2's names.
+
+    A shell call is printed as the agent named it, so `bash`, 1's name, which 2 runs as its `shell`, is the shell too.
+    """
 
     def touched(tool: str, given: dict[str, object]) -> Touch:
         return transcript.touched(Called(tool, completed=True, input=given))
@@ -145,7 +148,8 @@ def test_what_a_tool_call_did_to_files_is_its_act_and_the_files_it_named() -> No
     assert touched("glob", {"pattern": "**/*.py"}) == Touch("search")
     assert touched("shell", {"command": "git grep parse"}) == Touch("search")
     assert touched("shell", {"command": "uv run pytest"}) == Touch("other")
-    assert touched("bash", {"command": "rg parse"}) == Touch("other")  # 1's name for the shell
+    assert touched("bash", {"command": "rg parse"}) == Touch("search")
+    assert touched("bash", {"command": "uv run pytest"}) == Touch("other")
     assert touched("edit", {}) == Touch("other")
 
 
@@ -176,7 +180,7 @@ def test_what_a_call_returned_is_its_output_or_error_and_whether_its_tools_metad
 
 def test_the_command_a_call_ran_is_its_shell_input() -> None:
     assert transcript.command(Called("shell", completed=True, input={"command": "gh pr view 3"})) == "gh pr view 3"
-    assert transcript.command(Called("bash", completed=True, input={"command": "ls"})) is None  # 1's name
+    assert transcript.command(Called("bash", completed=True, input={"command": "ls"})) == "ls"  # as the agent named it
     assert transcript.command(Called("shell", completed=True, input={"command": 3})) is None
     assert transcript.command(Called("read", completed=True, input={"path": "a.py"})) is None
 
