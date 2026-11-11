@@ -134,5 +134,12 @@ the runtime's metadata says `truncated`, and unknown where it says nothing, as a
 a repeated read a completed `read` of a path the run had read before, whatever its range; a result's characters as the
 runtime printed it, whole, each log read to the transcript's bound, which the report names, and a run past it read that
 far and marked; and `status`'s characters its input as compact JSON, refused calls included. Open, for the operator
-before the measurement: the threshold each later stage needs, if not the draft's tenth. Next: two weeks of `canopy
-tool-results` on the operator's workspace, in `MEASUREMENTS.md`.
+before the measurement: the threshold each later stage needs, if not the draft's tenth. The threshold, set by the
+operator before the measurement, is the draft's: a later stage proceeds only for a tool whose results are at least a
+tenth of its role's result characters. Measured 2026-11-10 (MEASUREMENTS "2026-11-10: M71 stage 0, where each role's
+tool results go"): at or above it, `implement`'s bash, read, and skill; `resume`'s bash and skill; the planner's read
+and grep; the reviewer's read and `canopy_git_diff`; a chore's tracker search, bash, and `github_pull_request_read`; and
+the overseer's `canopy_decide`, grep, `canopy_review-items`, and `canopy_dispatch`. `canopy_git_show` (0.072 of the
+planner's, 0.050 of the reviewer's) and `github_pull_request_read` (0.078 of `resume`'s, 0.062 of the reviewer's) are
+under it, and the shell's `gh` reads are not split out of bash. Open for the operator: which later stages proceed on
+these numbers.

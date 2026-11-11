@@ -575,9 +575,9 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 ## D131. A plan's or the guide's Mermaid diagram is drawn by mermaid, as an image, in the web UI alone
 
-- `mermaid`, pinned, draws a plan's or a guide page's ```` ```mermaid ```` fence (flowchart, sequence, and state
-  diagrams only); only `ui/src/lib/diagram.ts` imports it, on demand. Its code stays the document: comments, the diff,
-  and the file see it.
+- `mermaid`, pinned, draws a plan's or a guide page's ```` ```mermaid ```` fence (flowchart, sequence, state,
+  class, and entity relationship diagrams only); only `ui/src/lib/diagram.ts` imports it, on demand. Its code stays
+  the document: comments, the diff, and the file see it.
 - A plan is model text (T1), so mermaid runs `strict`, with SVG labels, and its config locked against the diagram's own.
 - What is shown is only ever an `<img>` of its SVG: an image runs no script, follows no link, and fetches nothing, so
   a gap in mermaid's sanitizer reaches nothing shown. While drawing, mermaid lays the SVG out off screen in the page,

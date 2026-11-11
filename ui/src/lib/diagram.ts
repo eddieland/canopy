@@ -13,7 +13,7 @@
 import mermaid from 'mermaid'
 import type { MermaidConfig } from 'mermaid'
 
-/** A diagram drawn: its SVG, and what kind it is (`flowchart-v2`, `sequence`, `stateDiagram`). */
+/** A diagram drawn: its SVG, and what kind it is (`flowchart-v2`, `sequence`, `stateDiagram`, `classDiagram`, `er`). */
 export interface Drawn {
     /** The SVG, whole, for an image. */
     svg: string
@@ -30,9 +30,10 @@ export interface NotDrawn {
 /** The Markdown fence's language that marks a diagram. */
 export const DIAGRAM_LANGUAGE = 'mermaid'
 
-// The kinds drawn, as mermaid names them: `graph` and `flowchart` are both `flowchart-v2`.
-const KINDS = new Set(['flowchart-v2', 'flowchart', 'sequence', 'stateDiagram'])
-const KIND_NAMES = 'flowchart, sequenceDiagram, and stateDiagram'
+// The kinds drawn, as mermaid names them: `graph` and `flowchart` are both `flowchart-v2`, `classDiagram` is
+// `classDiagram` or its older renderer's `class`, and `erDiagram` is `er`.
+const KINDS = new Set(['flowchart-v2', 'flowchart', 'sequence', 'stateDiagram', 'classDiagram', 'class', 'er'])
+const KIND_NAMES = 'flowchart, sequenceDiagram, stateDiagram, classDiagram, and erDiagram'
 // The configuration only this module may set: mermaid's own list, and what this module chooses, so a diagram cannot
 // widen what it may do or change how it looks.
 const SECURE = [
@@ -55,6 +56,8 @@ const SECURE = [
     'flowchart',
     'sequence',
     'state',
+    'class',
+    'er',
 ]
 // A plan is at most tens of thousands of characters; a diagram is a small part of it.
 const MAX_TEXT = 20_000
@@ -133,6 +136,8 @@ function configuration(): MermaidConfig {
         flowchart: natural,
         sequence: natural,
         state: natural,
+        class: natural,
+        er: natural,
         themeVariables: {
             darkMode: document.documentElement.classList.contains('dark'),
             fontFamily: FONT,
@@ -166,6 +171,9 @@ function configuration(): MermaidConfig {
             stateLabelColor: ink,
             transitionColor: muted,
             transitionLabelColor: ink,
+            classText: ink,
+            attributeBackgroundColorOdd: raised,
+            attributeBackgroundColorEven: background,
         },
     }
 }

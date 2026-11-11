@@ -334,12 +334,14 @@ Rules:
   ended, and how long it took in one field; `spent`; then the paths. A run given a checklist has its answers in a panel
   of their own under that one, a row an item, too many for a field, `held` in `status-blocked`, since a reviewer reads
   its reason under it. A worker's or a task's run that ended has its Diff next, a panel per repository that sums up
-  rather than shows: the range, files, and lines in its header's readout, the files with theirs under it, and the
-  diff's file panels, each an h3 naming its file, only once `Show diff` opens them, read then, so the transcript stays
-  on the first screen; a sentence where a diff is missing, never an empty panel. What a run pushed after a list is part
-  of that change, so it is a scope of its repository's Diff, not a panel beside it: a segmented control, `after the
-  list` and `whole run`, opens on the stretch, a dot in `answer-fixed` marks each file it touched, and a line under the
-  files names its commits, so the answers and the fix are read together and the stretch reads as inside the run. Then
+  rather than shows: the range, files, and lines in its header's readout, the files with theirs under it, then its
+  commits (`RunCommits`), each a short id linked out through the PR, its subject as text, and canopy's marks as chips,
+  and the diff's file panels, each an h3 naming its file, only once `Show diff` opens them, read then, so the
+  transcript stays on the first screen; a sentence where a diff is missing, never an empty panel. What a run pushed
+  after a list is part of that change, so it is a scope of its repository's Diff, not a panel beside it: a segmented
+  control, `after the list` and `whole run`, opens on the stretch, a dot in `answer-fixed` marks each file it touched,
+  and a line under the files names its commits, so the answers and the fix are read together and the stretch reads as
+  inside the run. Then
   the thread the operator came to answer, with its form, then the ticket's actions; a page with no thread has its main
   content there instead: a transcript, a chore's open findings and runs, a tick's decisions, a review's findings and
   diff, a PR's reviews. A chore's notes are a thread nothing waits on, so they follow
@@ -1382,7 +1384,8 @@ reader, so no table repeats them.
   where it goes rather than repeating the title. Then panels: its fields, with a grant of another review in its foot
   when it is at its review limit; its review threads when canopy has read them or holds a draft for it, led by its
   feedback plan while that waits on the operator; then its reviews, the runs that pushed to it, each with its range in
-  the PR's repository as a ticket's runs list names it, and its decisions, each a `ListPanel`, and no Runs at all on a
+  the PR's repository as a ticket's runs list names it and its commits there under it, with the kick canopy pushed
+  after it, so the list reads as the branch's history, and its decisions, each a `ListPanel`, and no Runs at all on a
   PR with no ticket, since runs are a ticket's.
 - **A PR's threads** (`ReviewThreads`, DESIGN §29) are its coworkers' review threads, as canopy's reader last read
   them, on the diff the latest run kept, under every `trust.review_replies` setting, with the replies runs drafted under

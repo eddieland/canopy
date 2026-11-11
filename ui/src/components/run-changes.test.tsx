@@ -52,6 +52,9 @@ function range(repo: string, fields: Partial<RunRange> = {}): RunRange {
         files_changed: 1,
         lines_added: 1,
         lines_removed: 1,
+        commit_count: null,
+        commits: [],
+        kick: null,
         ...fields,
     }
 }
@@ -170,6 +173,23 @@ describe('RunChangesPanel', () => {
         expect(document.querySelector('img')).toBeNull()
         fireEvent.click(within(screen.getByTestId('run-change')).getByRole('button', { name: 'Hide diff of web' }))
         expect(screen.queryAllByTestId('diff-file')).toHaveLength(0)
+    })
+
+    it('lists the commits in its range under its files, an unpushed slot’s linked nowhere', async () => {
+        const made = { canopy_trailer: true, prefixed: null, runtime_trailer: false, harness_pushed: false }
+        const commits = [{ sha: END, subject: 'ABC-099: the fix', ...made }]
+        await render([
+            change('api', { pr_url: PR }, { commits, commit_count: 3 }),
+            change('web', { pr_url: PR }, { commits, commit_count: 1, unpushed_sha: LEFT }),
+        ])
+        const [api, web] = screen.getAllByTestId('run-commits')
+        expect(api?.textContent).toBe('and 2 older commitsc9d24f8ABC-099: the fix')
+        expect(
+            within(api as HTMLElement)
+                .getByRole('link', { name: 'c9d24f8' })
+                .getAttribute('href'),
+        ).toBe(`${PR}/commits/${END}`)
+        expect(within(web as HTMLElement).queryByRole('link')).toBeNull()
     })
 
     it('opens the diff a link names, `#diff-web`, and links to the PR’s page for the whole branch', async () => {

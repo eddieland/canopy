@@ -130,6 +130,13 @@ it touched, not the four hundred the branch has piled up since `implement`. When
 vs base** takes you to the PR's page, which has it as the latest run that pushed left it, with its threads on it. A
 run across several repositories has a Diff panel for each.
 
+Under the files, the panel lists the run's commits, oldest first: each short id opens the commit on GitHub, through the
+PR, and the subject is the worker's, so read it as a claim. Chips say what canopy's marks found: **no trailer** or **no
+prefix** for a commit made around canopy's hooks, **co-author** for a co-author trailer canopy didn't add (usually the
+agent runtime signing its work), and **pushed by canopy** for one the worker committed and never pushed, which canopy's
+push after the run put on origin. A run that made a hundred commits has the newest hundred, and says how many older ones
+it left out; if your worker made a hundred commits, the list is the least of your worries.
+
 When the list held the worker's push, that repository's Diff opens on what the worker pushed after reading the list,
 right under the answers. A switch beside **branch vs base** picks **after the list** or **whole run**, and starts on the
 first. After the list, a dot marks each file the stretch touched, and a line under the files names its two commits,

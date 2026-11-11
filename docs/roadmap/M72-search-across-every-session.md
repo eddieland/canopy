@@ -158,12 +158,17 @@ is gone after the next pass; a sandboxed run's session is found as an unsandboxe
 when it is due while the first build runs; and the index's size and a search's time on the real record are in
 `MEASUREMENTS.md` beside stage 0's.
 
-Status: not started. Drafted 2026-11-10 at the operator's ask, from §13's read of the runtime's record and a read of
+Status: in progress. Drafted 2026-11-10 at the operator's ask, from §13's read of the runtime's record and a read of
 the build npm ships (`@opencode/cli-linux-x64` 2.1.4), not run. Chosen conservatively, for the operator to change: the
 names (`canopy sessions`, `sessions.search`, `sessions.exclude`); `off` by default; one index per workspace, beside
 its journal, rather than one per machine; the text of OpenCode 2's sessions alone; and no reader of a session in the
-web UI, so a hit outside canopy is reopened in the runtime. Open, for the operator: before stage 0, its thresholds, if
-not the draft's; from its count, whether the sessions OpenCode 1 left in its own tables get a reader; and whether
+web UI, so a hit outside canopy is reopened in the runtime. Stage 0's command, `canopy sessions --sizes`, built
+2026-11-10, reads OpenCode 2's record alone. Its thresholds, set by the operator before the measurement, are the
+draft's: a search within 0.25 s, and an index no larger than a quarter of the runtime's own database. Measured
+2026-11-10 (MEASUREMENTS "2026-11-10: M72 stage 0, the runtime's record and what indexing it costs"): every cut passes
+both, the widest, `read`, with its slowest search at 0.027 s and its largest index 0.6% of the database, where a plain
+scan takes about 70 s, so stage 0's rule gives stage 2 `read`. Open, for the operator: the call on the cut, before stage
+2; whether the sessions OpenCode 1 left in its own tables get a reader, which stage 0 did not count; and whether
 canopy's sessions should also leave the runtime's own list, which this milestone does not do. A sandboxed role's are
 already in a record of its own (§24); giving an unsandboxed run one, or archiving canopy's sessions through the
 runtime, changes what canopy does with the runtime's data and logins (§26, T2, T4), and is a milestone of its own.

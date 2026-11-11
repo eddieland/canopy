@@ -54,7 +54,8 @@ def pull_requests(ctx: Context) -> list[PullRequest]:
 def pull_request(backend: Backend, ctx: Context, url: str) -> PullRequestDetail | None:
     """One PR: the runs that pushed to it, its review runs and limit, and the decisions naming it.
 
-    Each run names its range in the PR's repository, the commits it went from and to and its size (DESIGN §45).
+    Each run names its range in the PR's repository, the commits it went from and to and its size, the commits in it,
+    and the kick canopy pushed after it, so its runs list reads as the branch's history (DESIGN §23, §45).
 
     Returns:
         The PR's page, or None when no unit, review run, or decision names it. One that only decisions name, such as
@@ -71,7 +72,8 @@ def pull_request(backend: Backend, ctx: Context, url: str) -> PullRequestDetail 
         return None
     runs: list[sqlite3.Row] = _runs(ctx.conn, found.ticket_key, url) if found.ticket_key is not None else []
     shown = runs[:PR_RUNS]
-    ranges = change_views.ranges_of(ctx.conn, [int(r["id"]) for r in shown])
+    # The branch's history in the PR's repository: each run's commits, and the kick canopy pushed after it (§45).
+    ranges = change_views.ranges_of(ctx.conn, [int(r["id"]) for r in shown], history_in=found.repo)
     reviewed = backend.review_limit(ctx, url)
     return PullRequestDetail(
         pull_request=found,

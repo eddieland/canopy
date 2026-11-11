@@ -9,6 +9,7 @@ the branch's diff the latest run that pushed kept, or say why there is none.
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -17,7 +18,7 @@ from unittest import mock
 from canopy.core import db, gc_passes, records, review_diff, run_changes
 from canopy.core.run_changes import Change
 from canopy.core.vocab import RunKind, RunStatus
-from tests.canopy.helpers import KEY, present, running_run
+from tests.canopy.helpers import KEY, kicked, present, running_run
 from tests.canopy.web_helpers import signed_in_client
 
 if TYPE_CHECKING:
@@ -46,6 +47,18 @@ COUNTED = run_changes.counted(
         review_diff.Count("logo.png", "old-logo.png", None, None),
     ],
 )
+#: The commits a run recorded: one the worker pushed with canopy's marks, and one made around the hooks canopy pushed.
+COMMITS = (
+    run_changes.Commit("e5" * 20, "PROJ-1: the change", canopy_trailer=True, prefixed=True),
+    run_changes.Commit(
+        END,
+        "around <U+200B>",
+        canopy_trailer=False,
+        prefixed=False,
+        runtime_trailer=True,
+        harness_pushed=True,
+    ),
+)
 PR = "https://github.com/acme/api/pull/7"
 WEB_PR = "https://github.com/acme/web/pull/8"
 
@@ -53,7 +66,7 @@ WEB_PR = "https://github.com/acme/web/pull/8"
 def test_a_runs_page_carries_its_range_and_files_as_counted_and_no_diff(ctx: Context) -> None:
     run_id = ended_run(ctx)
     keep(ctx, run_id, "api", CHANGE, BRANCH)
-    run_changes.record(ctx.conn, run_id, [kept("api")])
+    run_changes.record(ctx.conn, run_id, [replace(kept("api"), commits=COMMITS, commit_count=3)])
     db.set_unit(ctx.conn, KEY, ctx.repo, "api", pr_url=PR)
 
     c, _ = signed_in_client(ctx)
@@ -69,6 +82,26 @@ def test_a_runs_page_carries_its_range_and_files_as_counted_and_no_diff(ctx: Con
             "files_changed": 2,
             "lines_added": 1,
             "lines_removed": 1,
+            "commit_count": 3,
+            "commits": [
+                {
+                    "sha": "e5" * 20,
+                    "subject": "PROJ-1: the change",
+                    "canopy_trailer": True,
+                    "prefixed": True,
+                    "runtime_trailer": False,
+                    "harness_pushed": False,
+                },
+                {
+                    "sha": END,
+                    "subject": "around <U+200B>",
+                    "canopy_trailer": False,
+                    "prefixed": False,
+                    "runtime_trailer": True,
+                    "harness_pushed": True,
+                },
+            ],
+            "kick": None,
         },
         "files": [
             {"path": "src/canopy/order.py", "old_path": None, "added": 1, "removed": 1},
@@ -213,7 +246,7 @@ def test_a_joint_runs_page_carries_a_change_per_repository_one_of_them_unpushed(
 
 def test_a_tickets_runs_list_names_each_runs_range_and_size_without_its_files(ctx: Context) -> None:
     recorded = ended_run(ctx)
-    run_changes.record(ctx.conn, recorded, [kept("api")])
+    run_changes.record(ctx.conn, recorded, [replace(kept("api"), commits=COMMITS, commit_count=3)])
     bare = ended_run(ctx)
     c, _ = signed_in_client(ctx)
     runs = {r["id"]: r for r in c.get(f"/api/tickets/{KEY}").json()["runs"]}
@@ -227,6 +260,10 @@ def test_a_tickets_runs_list_names_each_runs_range_and_size_without_its_files(ct
             "files_changed": 2,
             "lines_added": 1,
             "lines_removed": 1,
+            # Counted, never listed: the run's page and its PR's list them.
+            "commit_count": 3,
+            "commits": [],
+            "kick": None,
         },
     ]
     assert runs[recorded]["changes"] == []
@@ -250,6 +287,28 @@ def test_a_prs_runs_list_names_each_runs_range_in_the_prs_repository_alone(ctx: 
     assert bare not in on_web
     # Neither list carries a run's files: its page does.
     assert all(r["changes"] == [] for r in [*on_api.values(), *on_web.values()])
+
+
+def test_a_prs_runs_list_is_its_branchs_history_each_runs_commits_and_the_kick_after_it(ctx: Context) -> None:
+    kicked_to = "f6" * 20
+    first = ended_run(ctx, prs={"api": PR, "web": WEB_PR})
+    run_changes.record(
+        ctx.conn,
+        first,
+        [replace(kept("api"), commits=COMMITS, commit_count=2), replace(kept("web"), commits=COMMITS, commit_count=2)],
+    )
+    # A kick in web, after the run.
+    kicked(ctx.conn, first, END, kicked_to, "2026-10-08T12:00:00Z")
+    db.set_unit(ctx.conn, KEY, ctx.repo, "api", pr_url=PR)
+    db.set_unit(ctx.conn, KEY, ctx.repo, "web", pr_url=WEB_PR)
+    c, _ = signed_in_client(ctx)
+    [on_web] = c.get("/api/pull-request", params={"url": WEB_PR}).json()["runs"]
+    [web] = on_web["ranges"]
+    assert [(m["sha"], m["harness_pushed"]) for m in web["commits"]] == [("e5" * 20, False), (END, True)]
+    assert web["kick"] == {"from_head": END, "to_head": kicked_to, "kicked_at": "2026-10-08T12:00:00Z"}
+    [on_api] = c.get("/api/pull-request", params={"url": PR}).json()["runs"]
+    [api] = on_api["ranges"]
+    assert (len(api["commits"]), api["kick"]) == (2, None)
 
 
 def test_a_prs_threads_sit_on_the_latest_pushed_diff_or_say_why_there_is_none(ctx: Context) -> None:

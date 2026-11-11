@@ -99,6 +99,9 @@ test("a run's memory arrives folded to its header", async ({ page }) => {
 function textAboveTranscript(page: Page): Promise<string> {
     return page.locator('main').evaluate((main) => {
         const transcript = main.querySelector('[data-testid=transcript]')
+        // The run's commits are its worker's subjects, which canopy's prefix starts with the key: no fact of the
+        // page's.
+        const commits = [...main.querySelectorAll('[data-testid=run-commits]')]
         const walker = document.createTreeWalker(main, NodeFilter.SHOW_TEXT)
         const texts: string[] = []
         for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
@@ -106,7 +109,9 @@ function textAboveTranscript(page: Page): Promise<string> {
             if (transcript?.contains(node) === true) {
                 break
             }
-            texts.push(node.textContent ?? '')
+            if (!commits.some((list) => list.contains(node))) {
+                texts.push(node.textContent ?? '')
+            }
         }
         return texts.join('\n')
     })

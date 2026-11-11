@@ -304,6 +304,37 @@ class ChecklistStretch(Model):
     """Retention removed the diff, this many days after the run ended (DESIGN §26); None when it did not."""
 
 
+class RunCommit(Model):
+    """One commit in a run's range (DESIGN §45), as the run's end logged it, with canopy's marks on it (TRUST_MODEL T5).
+
+    The subject is the branch's text, untrusted, kept cut with every hidden character named.
+    """
+
+    sha: str
+    """The commit's full id."""
+    subject: str
+    """Its subject: a worker's text, shown as text."""
+    canopy_trailer: bool | None = None
+    """Whether it carries every trailer canopy's hooks add; None when the run's marks named none."""
+    prefixed: bool | None = None
+    """Whether its subject starts with canopy's prefix, or is a fixup's; None when the run's marks named none."""
+    runtime_trailer: bool = False
+    """Whether it carries a `Co-authored-by` trailer not canopy's, as the runtime's own attribution is."""
+    harness_pushed: bool = False
+    """Whether canopy's own push after the worker, not the worker, put it on origin."""
+
+
+class RunKick(Model):
+    """A push canopy made after a run to rerun its PR's checks the worker judged flaky (DESIGN §23)."""
+
+    from_head: str
+    """The commit origin's branch held before the kick: the run's end."""
+    to_head: str
+    """The rebased copy the kick pushed in its place."""
+    kicked_at: datetime
+    """When."""
+
+
 class RunRange(Model):
     """The commits a worker's or a task's run went from and to in one repository (DESIGN §45), and how much it changed.
 
@@ -329,6 +360,13 @@ class RunRange(Model):
     """The lines it added, a binary file's counting none; None as `files_changed` is."""
     lines_removed: int | None = None
     """The lines it removed; None as `files_changed` is."""
+    commit_count: int | None = None
+    """How many commits the range held; None when canopy read none."""
+    commits: list[RunCommit] = []
+    """The commits, oldest first, the newest the run recorded: on the run's page and its PR's, none in a ticket's runs
+    list."""
+    kick: RunKick | None = None
+    """The kick canopy pushed after the run, on its PR's page, where the runs list is the branch's history."""
 
 
 class ChangedFile(Model):

@@ -1,12 +1,13 @@
 """What the mock journal's ended worker and task runs changed (DESIGN §45), for `python -m canopy.serve --mock`.
 
 Run 39, ABC-099's implement in web, started from main, origin having no branch yet, and pushed PR 88's head: both its
-diffs are kept, so its page names the files it changed and shows their diff when opened. Run 40, ABC-100's
-fix-ci, failed with its fix still in its slot: its diffs are of work not on origin. Run 37, ABC-100's implement, kept
-neither, and its page says why. Run 38, ABC-103's implement, was held by web's checklist: what it changed holds the
-stretch it pushed after the list (`checklists`) and the v1 client it deleted before, so its page shows the one inside
-the other. Task 1's run in web kept both, as a worker run's do. Run 45's record is `drafts`'s, whose PR page reads its
-branch's diff.
+diffs are kept, so its page names the files it changed and shows their diff when opened. Its second commit was left
+unpushed by its worker and pushed by canopy. Run 40, ABC-100's fix-ci, failed with its fix still in its slot: its
+diffs, and its commit, are of work not on origin. Run 37, ABC-100's implement, kept neither, and its page says why.
+Run 38, ABC-103's implement, was held by web's checklist: what it changed holds the stretch it pushed after the list
+(`checklists`) and the v1 client it deleted before, so its page shows the one inside the other. Task 1's run in web
+kept both, as a worker run's do, one of its commits made around canopy's hooks. Run 45's record is `drafts`'s, whose
+PR page reads its branch's diff and lists both runs' commits as its branch's history.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import records, review_diff, run_changes
 from canopy.serve.mock import checklists
-from canopy.serve.mock.reviews import SHA_88
+from canopy.serve.mock.reviews import SHA_88, SHA_88_FIRST
 
 if TYPE_CHECKING:
     import sqlite3
@@ -29,6 +30,8 @@ _UNPUSHED_86 = "d8e61b30" + "8" * 32
 #: Where main was when task 1's run started, and the head it pushed.
 _MAIN_TASK = "2c9a17e4" + "2" * 32
 _HEAD_97 = "5e0b7c2a9d41f3e86a2c4b7d9e1f0a3c5b8d2e4f"
+#: Task 1's run's first commit, made around canopy's hooks.
+_AROUND = "3f7a0d52" + "3" * 32
 #: Why run 37 kept no diff, as `runs.changes` says it.
 _NOT_KEPT = "the run left no branch on origin and no commit of its own in its slot"
 
@@ -156,6 +159,16 @@ def seed(conn: sqlite3.Connection) -> None:
                 change_kept=True,
                 branch_kept=True,
                 counted=counted(_DEBOUNCE),
+                commits=(
+                    run_changes.Commit(SHA_88_FIRST, "ABC-099: debounce the search box's fetch", canopy_trailer=True),
+                    run_changes.Commit(
+                        SHA_88,
+                        "ABC-099: test that search waits 250 ms",
+                        canopy_trailer=True,
+                        harness_pushed=True,
+                    ),
+                ),
+                commit_count=2,
             ),
         ],
     )
@@ -172,6 +185,14 @@ def seed(conn: sqlite3.Connection) -> None:
                 change_kept=True,
                 branch_kept=True,
                 counted=counted(_RETRY),
+                commits=(
+                    run_changes.Commit(
+                        _UNPUSHED_86,
+                        "ABC-100: wait for the payment frame, not two seconds",
+                        canopy_trailer=True,
+                    ),
+                ),
+                commit_count=1,
             ),
         ],
     )
@@ -209,6 +230,11 @@ def seed(conn: sqlite3.Connection) -> None:
                 change_kept=True,
                 branch_kept=True,
                 counted=counted(_BUNDLE),
+                commits=(
+                    run_changes.Commit(_AROUND, "wip", canopy_trailer=False, runtime_trailer=True),
+                    run_changes.Commit(_HEAD_97, "Replace moment with date-fns in DatePicker", canopy_trailer=True),
+                ),
+                commit_count=2,
             ),
         ],
         table="task_runs",
