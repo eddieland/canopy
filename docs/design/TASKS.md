@@ -6,7 +6,7 @@ reads the journal](READING_THE_JOURNAL.md). Next: [The harness decides](HARNESS_
 
 ## 36. One-off tasks
 
-Built, and checked against the fakes; its live check is ROADMAP M61's.
+Built (ROADMAP M61), and checked against the fakes; its live check is SCENARIOS S77.
 
 A **task** is one-off work the operator submits in canopy, in their own words, about no ticket: exploring a question in
 the code, trying an approach, or planning the tickets that should follow. A worker runs it once in a worktree of one
