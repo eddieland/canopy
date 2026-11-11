@@ -203,6 +203,9 @@ type SessionsRead = Literal["found", "missing", "failed"]
 MAX_SESSIONS = 500
 #: How long a session's directory may be, as the record keeps it; a longer one is cut.
 MAX_DIRECTORY = 4096
+#: How long a session's title may be, as the journal keeps it (`session_title`); a longer one is cut. The runtime makes
+#: a title of a session's first words, and canopy names its runs' in a line, so a longer one is one written to fill.
+MAX_TITLE = 200
 
 
 @dataclass(frozen=True)
@@ -226,6 +229,11 @@ class SessionSpend:
     cache_write: int
     #: Each model's replies and their cost, the most costly first, at most `MAX_MODELS`.
     models: Sequence[ModelUse] = ()
+    #: Its title, as `session_title` keeps it, when the read was asked for titles; None when not, or it has none.
+    title: str | None = None
+    #: When the runtime archived it, so its own list leaves it out, in milliseconds since the epoch; None when it did
+    #: not, or the read was not asked for titles.
+    archived_ms: int | None = None
 
 
 @dataclass(frozen=True)
@@ -459,6 +467,22 @@ def _line_stages(line: str) -> list[list[str]]:
 def session_id(value: object) -> str | None:
     """Return `value` if it is a session id canopy prints (`SESSION_ID_RE`), else None."""
     return value if isinstance(value, str) and SESSION_ID_RE.fullmatch(value) else None
+
+
+def session_title(value: object) -> str | None:
+    """Return a session's title as canopy keeps it: one line, nothing hidden, at most `MAX_TITLE` characters.
+
+    A title is whatever the runtime made of a session's first words, or what a run named it, so it is data (TRUST_MODEL
+    T1): every run of whitespace, a line break's among them, is one space, and every character that is not printable, a
+    control, a zero-width or bidi mark, or a tag, is dropped, so what is shown is what is kept.
+
+    Returns:
+        The title; None when `value` is not text, or nothing is left of it.
+    """
+    if not isinstance(value, str):
+        return None
+    flat = "".join(c for c in " ".join(value.split()) if c.isprintable()).strip()
+    return flat[:MAX_TITLE].rstrip() or None
 
 
 def model_uses(replies: Iterable[tuple[str, int, float]]) -> tuple[ModelUse, ...]:

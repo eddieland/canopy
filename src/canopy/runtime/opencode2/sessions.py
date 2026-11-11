@@ -1,10 +1,11 @@
 """What every OpenCode 2 session cost (DESIGN §13), read from OpenCode 2.1.4's database, every project's in one.
 
 OpenCode 2 keeps its sessions where OpenCode 1 does (`canopy.runtime.opencode.sessions`), in tables of its own:
-`session_v2`, with the same columns of cost and tokens, and `session_message`, whose rows of type `assistant` name the
-model that wrote each reply, `{providerID, id, variant}`, and its cost, as `opencode session export` prints them
-(`canopy.runtime.opencode2.session_models`). `opencode session list` lists only one project's top-level sessions, so
-the database is read here too, by OpenCode 1's reader, with OpenCode 2's queries.
+`session_v2`, with the same columns of cost and tokens, its title, and when it was archived, and `session_message`,
+whose rows of type `assistant` name the model that wrote each reply, `{providerID, id, variant}`, and its cost, as
+`opencode session export` prints them (`canopy.runtime.opencode2.session_models`). `opencode session list` lists only
+one project's top-level sessions, so the database is read here too, by OpenCode 1's reader, with OpenCode 2's queries.
+A session is reopened as OpenCode 1's is, `opencode --session ID` in its directory.
 """
 
 from __future__ import annotations
@@ -40,13 +41,21 @@ WHERE session_id IN (SELECT value FROM json_each(?))
   AND coalesce(json_type(data, '$.cost'), 'integer') IN ('integer', 'real')
 GROUP BY 1, 2, 3, 4
 """
+#: The title of each session a JSON array of ids names, and when it was archived, as `opencode1.TITLES_SQL` reads them.
+TITLES_SQL = "SELECT id, title, time_archived FROM session_v2 WHERE id IN (SELECT value FROM json_each(?))"
+#: The same, of a table with no column for the archive.
+UNARCHIVED_SQL = "SELECT id, title, NULL FROM session_v2 WHERE id IN (SELECT value FROM json_each(?))"
+#: How OpenCode 2's record is asked for its sessions' titles.
+TITLES = opencode1.TitleQueries("session_v2", TITLES_SQL, UNARCHIVED_SQL)
 #: Between a model and its variant, as canopy's config spells one (`canopy.core.agent_models`), not as OpenCode 2's own
 #: `#`, so the same variant reads the same under either runtime (`canopy.runtime.opencode2.session_models`).
 VARIANT_MARK = "@"
 
 
-def updated_after(cursor: SessionCursor | None, *, limit: int = MAX_SESSIONS) -> SessionPage:
+def updated_after(cursor: SessionCursor | None, *, limit: int = MAX_SESSIONS, titles: bool = False) -> SessionPage:
     """Read OpenCode 2's sessions updated after `cursor` from its databases, the operator's and each sandbox role's.
+
+    With `titles`, each session's title and archive are read too.
 
     Returns:
         At most `limit` sessions, the least recently updated first; `missing` when OpenCode has no database yet;
@@ -59,4 +68,14 @@ def updated_after(cursor: SessionCursor | None, *, limit: int = MAX_SESSIONS) ->
         cursor,
         limit=limit,
         variant_mark=VARIANT_MARK,
+        titles=TITLES if titles else None,
     )
+
+
+def reopen(session_id: str, directory: str) -> str:
+    """The command that reopens session `session_id` in OpenCode 2, in the directory it ran in, as OpenCode 1's does.
+
+    Returns:
+        One shell line, each word quoted as the shell needs it.
+    """
+    return opencode1.reopen(session_id, directory)

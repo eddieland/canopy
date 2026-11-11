@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest import mock
@@ -106,7 +107,7 @@ def test_read_next_starts_after_the_cursor(conn: sqlite3.Connection) -> None:
     with mock.patch.object(sessions, "updated_after", autospec=True, return_value=found(session("ses_2"))) as read:
         page = runtime_sessions.read_next(conn, limit=10, version=Version.ONE)
 
-    read.assert_called_once_with((NOON_MS, "ses_1"), version=Version.ONE, limit=10)
+    read.assert_called_once_with((NOON_MS, "ses_1"), version=Version.ONE, limit=10, titles=False)
     assert [s.session_id for s in page.sessions] == ["ses_2"]
     assert runtime_sessions.cursor(conn) == (NOON_MS, "ses_2")
 
@@ -160,3 +161,96 @@ def test_spend_before_any_read_says_so(conn: sqlite3.Connection) -> None:
     spent = runtime_sessions.spend(conn, *DAY, state_dir=STATE_DIR)
 
     assert (spent.canopy.sessions, spent.outside.sessions, spent.read_at, spent.status) == (0, 0, None, None)
+
+
+def titled(
+    session_id: str,
+    title: str,
+    *,
+    directory: str = "/work/api",
+    archived_ms: int | None = None,
+) -> SessionSpend:
+    """A session as the runtime reports it to a read asked for titles."""
+    return replace(session(session_id, directory=directory), title=title, archived_ms=archived_ms)
+
+
+def test_a_read_that_keeps_titles_keeps_each_but_in_an_excluded_directory(conn: sqlite3.Connection) -> None:
+    page = found(
+        titled("ses_1", "Fix the flaky test", archived_ms=NOON_MS),
+        titled("ses_2", "A client's secret", directory="/home/me/clients/acme/api"),
+        titled("ses_3", "The clients list", directory="/home/me/clients"),
+    )
+    with mock.patch.object(sessions, "updated_after", autospec=True, return_value=page) as read:
+        runtime_sessions.read_next(conn, version=Version.TWO, exclude=["/home/me/clients/*"])
+
+    read.assert_called_once_with(None, version=Version.TWO, limit=500, titles=True)
+    kept = {s: runtime_sessions.of_session(conn, s) for s in ("ses_1", "ses_2", "ses_3")}
+    assert {s: (r.title, r.archived_at) if r else None for s, r in kept.items()} == {
+        "ses_1": ("Fix the flaky test", "2026-10-24T12:00:00.000Z"),
+        "ses_2": (None, None),
+        "ses_3": ("The clients list", None),
+    }
+
+
+def test_a_read_that_keeps_no_title_keeps_none_the_runtime_gave(conn: sqlite3.Connection) -> None:
+    with mock.patch.object(sessions, "updated_after", autospec=True, return_value=found(titled("ses_1", "Mine"))):
+        runtime_sessions.read_next(conn, version=Version.TWO)
+
+    row = runtime_sessions.of_session(conn, "ses_1")
+    assert row is not None
+    assert row.title is None
+
+
+def test_a_read_under_a_new_setting_starts_again_from_the_first_session(conn: sqlite3.Connection) -> None:
+    page = found(titled("ses_9", "Later", archived_ms=NOON_MS))
+    runtime_sessions.record(conn, page, titles=runtime_sessions.titles_setting([]))
+    with mock.patch.object(sessions, "updated_after", autospec=True, return_value=page) as read:
+        runtime_sessions.read_next(conn, version=Version.TWO, exclude=[])
+        runtime_sessions.read_next(conn, version=Version.TWO, exclude=["/srv/scratch"])
+
+    assert [c.args[0] for c in read.call_args_list] == [(NOON_MS, "ses_9"), None]
+    read_now = runtime_sessions.last_read(conn)
+    assert read_now is not None
+    assert read_now.titles == '["/srv/scratch"]'
+
+
+def test_a_read_that_fails_under_a_new_setting_starts_again_on_the_next(conn: sqlite3.Connection) -> None:
+    runtime_sessions.record(conn, found(session("ses_1")))
+    failed = SessionPage("failed", error="locked")
+    with mock.patch.object(sessions, "updated_after", autospec=True, return_value=failed) as read:
+        runtime_sessions.read_next(conn, version=Version.TWO, exclude=[])
+        runtime_sessions.read_next(conn, version=Version.TWO, exclude=[])
+
+    assert [c.args[0] for c in read.call_args_list] == [None, None]
+    assert runtime_sessions.cursor(conn) == (NOON_MS, "ses_1")
+
+
+def test_turning_titles_off_drops_every_title_and_reads_on_from_the_cursor(conn: sqlite3.Connection) -> None:
+    runtime_sessions.record(conn, found(titled("ses_1", "Mine", archived_ms=NOON_MS)), titles="[]")
+    with mock.patch.object(sessions, "updated_after", autospec=True, return_value=found(session("ses_2"))) as read:
+        runtime_sessions.read_next(conn, version=Version.TWO)
+
+    read.assert_called_once_with((NOON_MS, "ses_1"), version=Version.TWO, limit=500, titles=False)
+    row = runtime_sessions.of_session(conn, "ses_1")
+    assert row is not None
+    assert (row.title, row.archived_at) == (None, None)
+    read_now = runtime_sessions.last_read(conn)
+    assert read_now is not None
+    assert read_now.titles is None
+
+
+def test_a_newly_excluded_directorys_titles_are_dropped_before_the_read_starts_again(conn: sqlite3.Connection) -> None:
+    runtime_sessions.record(
+        conn,
+        found(
+            titled("ses_1", "Mine", directory="/home/me/notes"),
+            titled("ses_2", "A client's", directory="/srv/acme"),
+        ),
+        titles=runtime_sessions.titles_setting([]),
+    )
+    failed = SessionPage("failed", error="locked")
+    with mock.patch.object(sessions, "updated_after", autospec=True, return_value=failed):
+        runtime_sessions.read_next(conn, version=Version.TWO, exclude=["/srv/*"])
+
+    titles = {s: getattr(runtime_sessions.of_session(conn, s), "title", None) for s in ("ses_1", "ses_2")}
+    assert titles == {"ses_1": "Mine", "ses_2": None}
