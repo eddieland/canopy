@@ -38,7 +38,7 @@ from canopy.infra import procs
 from canopy.runtime import servers
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Callable, Iterable
 
 #: The MCP server canopy gives a review's or a plan's run, as its inline config names it. The runtime joins it to each
 #: tool's name, `canopy_git_diff`; no tool's own name holds an underscore, as none of canopy's tools do (DESIGN §27).
@@ -87,6 +87,9 @@ LOG_FORMAT = "%H%x00%P%x00%an%x00%ae%x00%aI%x00%B"
 _LOG_FIELDS = 6
 #: A file's status as `--name-status` prints it: a letter, and for a rename or a copy how alike the two are.
 _STATUS_RE = re.compile(r"[A-Z][0-9]*")
+#: The line that starts each file's patch in a diff: no line of a patch's own starts so, each being marked ` `, `+`,
+#: `-`, or `\`, and git quotes a path that holds a line break.
+_PATCH_HEADER = "diff --git "
 #: A revision as the tools take one: a commit id, a ref, `HEAD~2`, `main^2`, `@{u}`. Never an option (no leading `-`),
 #: a range (`..`), a blob (`rev:path`), or anything a shell or a pathspec would read.
 REVISION_RE = re.compile(r"(?!.*\.\.)[A-Za-z0-9@][A-Za-z0-9_./~^@{}+-]{0,199}")
@@ -652,7 +655,9 @@ def diff(runner: procs.Runner, checkouts: Mapping[str, Path], request: Diff) -> 
     shape = ("--numstat",) if request.stat else ()
     done = _git(runner, where, "diff", *args, *shape, "--end-of-options", base, head, "--", *_paths(request.paths))
     text = _out(done, "diff")
-    return _said(text) if text else f"No difference between {base} and {head} in what was asked."
+    if not text:
+        return f"No difference between {base} and {head} in what was asked."
+    return _said(text, steer=_stat_steer if request.stat else _patch_steer)
 
 
 def log(runner: procs.Runner, checkouts: Mapping[str, Path], request: Log) -> Commits:
@@ -1264,8 +1269,16 @@ def _out(done: procs.Result, step: str) -> str:
     return done.stdout
 
 
-def _said(text: str) -> str:
+def _said(text: str, steer: Callable[[str, str], str] | None = None) -> str:
     """What a tool returns of what git printed: after `DATA_NOTE`, every hidden character named but tabs, and cut.
+
+    The line saying it was cut comes after the bound, as one line naming what narrows the next call: a cut that does
+    not say how to narrow is read again whole.
+
+    Args:
+        text: What git printed.
+        steer: What that line says after its bound, from the text kept and the whole text as shown; without one, to
+            name fewer paths or a narrower range.
 
     Returns:
         The text, cut at a line's end within `MAX_CHARS`, with a line saying so when it was.
@@ -1274,7 +1287,42 @@ def _said(text: str) -> str:
     if len(shown) <= MAX_CHARS:
         return f"{DATA_NOTE}\n\n{shown}"
     cut = shown[: shown.rfind("\n", 0, MAX_CHARS) + 1 or MAX_CHARS]
-    return f"{DATA_NOTE}\n\n{cut}\n[cut at {MAX_CHARS} characters: name fewer paths, or a narrower range]"
+    said = steer(cut, shown) if steer else ": name fewer paths, or a narrower range"
+    return f"{DATA_NOTE}\n\n{cut}\n[cut at {MAX_CHARS} characters{said}]"
+
+
+def _patch_steer(kept: str, whole: str) -> str:
+    """What a cut patch says after its bound: how many files it kept whole, and the fields that read the rest.
+
+    Returns:
+        The rest of the line, naming `stat` and `paths`.
+    """
+    files = _patches(whole)
+    begun = _patches(kept)
+    ended = begun if whole.startswith(_PATCH_HEADER, len(kept)) else max(begun - 1, 0)
+    return (
+        f", with {ended} of the {files} files changed whole: stat lists each with its lines added and removed, and "
+        "paths reads them a few at a time"
+    )
+
+
+def _patches(text: str) -> int:
+    """How many files' patches `text` starts.
+
+    Returns:
+        The number of lines that start with `_PATCH_HEADER`.
+    """
+    return text.startswith(_PATCH_HEADER) + text.count(f"\n{_PATCH_HEADER}")
+
+
+def _stat_steer(kept: str, whole: str) -> str:
+    """What a cut `stat` says after its bound: how many files it listed, and the field that lists the rest.
+
+    Returns:
+        The rest of the line, naming `paths`.
+    """
+    listed, files = kept.count("\n"), whole.count("\n") + 1
+    return f", with {listed} of the {files} files changed listed: name a directory in paths to list the files under it"
 
 
 def _shown(text: str) -> str:
