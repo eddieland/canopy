@@ -18,8 +18,6 @@ MAX_PR_TITLE = 256
 #: How many closing brackets `last_line` adds to or drops from a result line that is not JSON: a slip's worth, so a
 #: line wrong in more than its closing is still no result.
 MAX_REPAIRS = 3
-#: What a run's note says of a result read only after its closing brackets were repaired.
-REPAIRED = "the result line was not valid JSON; it was read with its closing brackets repaired"
 
 _CLOSERS = {"{": "}", "[": "]"}
 # A JSON string, captured so that splitting a line on it keeps it.
@@ -73,7 +71,7 @@ def last_line[M: BaseModel](model: type[M], text: str) -> M | None:
 
     Lines after it that are not JSON objects, such as a runtime plugin's notices, are passed over (DESIGN §13). An
     invalid object is not: a result the agent got wrong is no result, never an earlier line's. One slip is repaired: a
-    line that is not JSON only for its closing brackets is read with them put right (`repaired`).
+    line that is not JSON only for its closing brackets is read with them put right.
 
     Returns:
         The validated result, or None when no line starts with `{` or the last one does not validate as `model`.
@@ -82,19 +80,6 @@ def last_line[M: BaseModel](model: type[M], text: str) -> M | None:
     if line is None:
         return None
     return stored(model, line if _is_json(line) else _rebalanced(line))
-
-
-def repaired(text: str) -> bool:
-    """Whether `text`'s result line is JSON only with its closing brackets repaired, as `last_line` reads it.
-
-    Returns:
-        True when the line is not JSON as written and is once its closing brackets are put right.
-    """
-    line = _result_line(text)
-    if line is None or _is_json(line):
-        return False
-    fixed = _rebalanced(line)
-    return fixed is not None and _is_json(fixed)
 
 
 def stored[M: BaseModel](model: type[M], result_json: object) -> M | None:

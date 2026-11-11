@@ -16,7 +16,7 @@ from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, cast
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, StrictStr
 
 from canopy.core import contract, conversation, db, records, sql
 
@@ -94,6 +94,40 @@ class Checked:
             A check that records nothing.
         """
         return Checked(refused=[*self.refused, *(Refusal(key, why) for key in self.recorded)])
+
+
+class Group(BaseModel):
+    """The follow-up tickets a worker filed, a group of its result's fields (`core.run_result`) while it may file."""
+
+    created: dict[StrictStr, StrictStr | None] = Field(
+        default_factory=dict,
+        description="Every follow-up ticket you created in the tracker, by its key, with the repository its body "
+        "names on its `canopy-repo:` line, or null when it names none. Name them also when you report `blocked` or "
+        "`failed`; leave it out when you created none.",
+    )
+
+
+class TaskGroup(BaseModel):
+    """The tickets a one-off task's worker filed, a group of its result's fields while it may file."""
+
+    created: list[StrictStr] = Field(
+        default_factory=list,
+        description="The key of every ticket you created in the tracker. Name them also when you report `blocked` "
+        "or `failed`; leave it out when you created none.",
+    )
+
+
+#: The group's name, a worker's and a task's.
+GROUP = "created"
+
+
+def may_file(conn: sqlite3.Connection, key: str, *, limit: int) -> bool:
+    """Whether a worker of ticket `key` may file follow-ups, so its prompt says how and its result names them (§18).
+
+    Returns:
+        False when `limit`, `policy.max_follow_ups`, is 0, or `key` is itself a follow-up, which files none.
+    """
+    return limit > 0 and get_follow_up(conn, key) is None
 
 
 def parse(text: str) -> object:

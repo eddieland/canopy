@@ -15,7 +15,9 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated, Literal
+
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr
 
 from canopy.core import records
 from canopy.core.prompts import mark_comments
@@ -221,50 +223,115 @@ def _ids(ids: Sequence[int]) -> str:
     return ", ".join(map(str, ids)) or "none"
 
 
-def _contract(*, ticket: bool) -> str:
-    """Return `{{DRAFTS}}`: the result field every comment the run would have posted goes in (DESIGN §29).
+#: What the tool says of every draft's text.
+_TEXT = (
+    f"At most {MAX_DRAFT_CHARS:,} characters of GitHub Markdown, written as the operator would say it, with no secret "
+    "and no hidden characters."
+)
 
-    It follows the result line and memory's contract, as memory's follows the result line, so it says the field goes
-    in the same JSON object.
+
+class ThreadDraft(BaseModel):
+    """A reply on a review thread, as a run's `result` call drafts it."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
+
+    on: Literal["thread"] = Field(description="`thread`: a reply on a review thread.")
+    pr: StrictStr = Field(description="The PR's URL, one of this run's PRs.")
+    comment: StrictInt = Field(
+        description="The id of any review comment on the thread: the number in its URL after `#discussion_r`.",
+    )
+    did: Literal["changed", "declined", "answered"] = Field(
+        description="Whether you made the change it asked for, declined it, or answered a question.",
+    )
+    text: StrictStr | None = Field(default=None, description=f"The reply. {_TEXT} Leave it out with `react` alone.")
+    react: Reaction | None = Field(
+        default=None,
+        description="A reaction on the comment `comment` names, where one says what a reply would, such as `+1` on a "
+        "nit you fixed: give it and leave `text` out.",
+    )
+
+
+class PrDraft(BaseModel):
+    """A comment on a PR, as a run's `result` call drafts it."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
+
+    on: Literal["pr"] = Field(
+        description="`pr`: a comment on the PR, at most one a PR, for what is no reply on a thread, such as an answer "
+        "to a review's own text, or what you fixed in CI.",
+    )
+    pr: StrictStr = Field(description="The PR's URL, one of this run's PRs.")
+    text: StrictStr = Field(description=f"The comment. {_TEXT}")
+
+
+class TicketDraft(BaseModel):
+    """A comment on the ticket, as a run's `result` call drafts it."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
+
+    on: Literal["ticket"] = Field(
+        description="`ticket`: a comment on the ticket, at most one: your question when you are blocked, and otherwise "
+        "what you did, every PR link, and anything a reviewer should look at first.",
+    )
+    url: StrictStr = Field(description="The ticket's URL.")
+    text: StrictStr = Field(description=f"The comment. {_TEXT}")
+
+
+#: What the tool says of the drafts as a whole.
+_DRAFTS = (
+    "Each comment you would otherwise have posted, which canopy keeps for the operator. They read each one where it "
+    "goes, may edit or drop it, and send it as their own words, so post none of them yourself and mark none. Nobody "
+    f"but the operator sees a draft until they send it. At most {MAX_DRAFTS}."
+)
+
+
+class DraftsGroup(BaseModel):
+    """The comments a run drafts on its PRs, a group of its result's fields (`core.run_result`) under `approve`."""
+
+    drafts: list[Annotated[ThreadDraft | PrDraft, Field(discriminator="on")]] = Field(
+        default_factory=list,
+        description=_DRAFTS,
+    )
+
+
+class TicketDraftsGroup(BaseModel):
+    """The comments a run drafts on its PRs and its ticket, where canopy can post the ticket's for the operator."""
+
+    drafts: list[Annotated[ThreadDraft | PrDraft | TicketDraft, Field(discriminator="on")]] = Field(
+        default_factory=list,
+        description=_DRAFTS,
+    )
+
+
+#: The groups' names: the drafts of a run that drafts for its PRs alone, and of one that drafts for its ticket too.
+DRAFTS_GROUP = "drafts"
+TICKET_DRAFTS_GROUP = "ticket_drafts"
+GROUPS: Mapping[str, type[BaseModel]] = {DRAFTS_GROUP: DraftsGroup, TICKET_DRAFTS_GROUP: TicketDraftsGroup}
+
+
+def asked_group(rendered: records.RunReplies | None) -> list[str]:
+    """The group of `GROUPS` a run whose prompt was rendered under `rendered` is asked for (DESIGN §29).
 
     Returns:
-        The contract, starting with the blank line before it.
+        The group's name, in a list; none for a run that posts its own comments, or comments nowhere.
     """
-    entries = [
-        (
-            '- `{"on":"thread","pr":"<PR URL>","comment":<id>,"did":"changed|declined|answered","text":"<reply>"}`: '
-            "a reply on a review thread. `comment` is the id of any review comment on the thread, the number in its "
-            "URL after `#discussion_r`. `did` says whether you made the change it asked for, declined it, or "
-            'answered a question. It may also carry `"react"`, a reaction on the comment `comment` names, one of '
-            f"{', '.join(f'`{r}`' for r in Reaction)}: where a reaction says what a reply would, such as `+1` on "
-            "a nit you fixed, give it and leave `text` out."
-        ),
-        (
-            '- `{"on":"pr","pr":"<PR URL>","text":"<comment>"}`: at most one a PR, for what is no reply on a thread, '
-            "such as an answer to a review's own text, or what you fixed in CI."
-        ),
-    ]
-    if ticket:
-        entries.append(
-            '- `{"on":"ticket","url":"<the ticket\'s URL>","text":"<comment>"}`: at most one, for the ticket: your '
-            "question when you are blocked, and otherwise what you did, every PR link, and anything a reviewer "
-            "should look at first.",
-        )
-    lines = [
-        "",
-        "",
-        (
-            'That JSON object also carries `"drafts"`: each comment you would otherwise have posted, which canopy '
-            "keeps for the operator. They read each one where it goes, may edit or drop it, and send it as their own "
-            f"words, so post none of them yourself and mark none. At most {MAX_DRAFTS}, each one of these:"
-        ),
-        "",
-        *entries,
-        "",
-        (
-            f"Each `pr` is one of this run's PRs. Each text is at most {MAX_DRAFT_CHARS:,} characters of GitHub "
-            "Markdown, written as the operator would say it, with no secret and no hidden characters. Nobody but the "
-            "operator sees a draft until they send it."
-        ),
-    ]
-    return "\n".join(lines)
+    if rendered is None or rendered.mode is not ReplyMode.APPROVE:
+        return []
+    return [TICKET_DRAFTS_GROUP if rendered.ticket_drafts else DRAFTS_GROUP]
+
+
+def _contract(*, ticket: bool) -> str:
+    """Return `{{DRAFTS}}`: where every comment the run would have posted goes instead (DESIGN §29).
+
+    The run's `result` tool says what a draft holds; this says only that the run writes them, so a prompt that drops
+    it, as an override written before drafts existed would, fails to render rather than have its worker post.
+
+    Returns:
+        The sentence, starting with the blank line before it.
+    """
+    where = "its PRs and its ticket" if ticket else "its PRs"
+    return (
+        "\n\nEach comment you would otherwise have posted on "
+        f"{where} goes in your result's `drafts`, which canopy keeps for the operator to send as their own: post "
+        "none of them yourself and mark none."
+    )

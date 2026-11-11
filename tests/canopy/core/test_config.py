@@ -18,7 +18,7 @@ from canopy.runtime.implementation import Version
 from tests.conftest import HERMETIC_GIT, SHARED_TOML, TRACKER_SOURCE, TRACKER_TOML, CanopyEnv, git, user_toml
 
 #: A reviewer's command the operator set, without a private server.
-REVIEW_CMD = "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-reviewer"
+REVIEW_CMD = "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-reviewer --format json"
 
 EXAMPLES = Path(__file__).parents[3] / "examples"
 
@@ -615,7 +615,10 @@ CHORE_CMD = "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent cano
 @pytest.mark.parametrize(
     ("tables", "where"),
     [
-        ({"runtime": {"worker_cmd": "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --auto"}}, "worker_cmd"),
+        (
+            {"runtime": {"worker_cmd": "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --format json --auto"}},
+            "worker_cmd",
+        ),
         (
             {"runtime": {"overseer_cmd": "env OPENCODE_CONFIG_DIR={definitions_dir} opencode --yolo run"}},
             "overseer_cmd",
@@ -642,6 +645,46 @@ def test_a_command_that_approves_what_rules_would_ask_about_is_refused(
         load(canopy_env.root, canopy_env.user_file)
     assert where in str(e.value)
     assert "approve what an agent's rules would ask about" in str(e.value)
+
+
+@pytest.mark.parametrize(
+    ("key", "agent"),
+    [
+        ("worker_cmd", "canopy-worker"),
+        ("private_worker_cmd", "canopy-worker-private"),
+        ("plan_cmd", "canopy-planner"),
+        ("chore_cmd", "canopy-chore"),
+        ("review_cmd", "canopy-reviewer"),
+    ],
+)
+@pytest.mark.parametrize("options", ["", " --format text", " --format"])
+def test_an_agent_template_that_prints_no_events_is_refused(
+    canopy_env: CanopyEnv,
+    key: str,
+    agent: str,
+    options: str,
+) -> None:
+    """An agent reports its result by a tool call, which canopy reads from the events its run prints (DESIGN §13)."""
+    template = f"env OPENCODE_CONFIG_DIR={{definitions_dir}} opencode run --agent {agent}{options}"
+    canopy_env.configure(canopy_env.user_file, {"runtime": {key: template}})
+    with pytest.raises(ConfigError) as e:
+        load(canopy_env.root, canopy_env.user_file)
+    assert f"runtime.{key}: Value error, must have OpenCode print its events" in str(e.value)
+    assert "`--format json`" in str(e.value)
+
+
+@pytest.mark.parametrize("key", ["worker_cmd", "private_worker_cmd", "plan_cmd", "chore_cmd", "review_cmd"])
+def test_an_agent_template_may_ask_for_its_events_in_one_word(canopy_env: CanopyEnv, key: str) -> None:
+    template = "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --format=json {prompt}"
+    canopy_env.configure(canopy_env.user_file, {"runtime": {key: template}})
+    assert getattr(load(canopy_env.root, canopy_env.user_file).runtime, key) == template
+
+
+def test_the_overseers_template_need_print_no_events(canopy_env: CanopyEnv) -> None:
+    """Only the agents that report a result by a tool call must print their events; the overseer is not one."""
+    template = "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer {prompt}"
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"overseer_cmd": template}})
+    assert load(canopy_env.root, canopy_env.user_file).runtime.overseer_cmd == template
 
 
 def test_a_chore_of_an_agent_of_the_operators_own_may_approve_what_its_rules_ask_about(canopy_env: CanopyEnv) -> None:

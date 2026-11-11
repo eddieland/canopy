@@ -134,8 +134,8 @@ def test_a_review_runs_outside_the_checkout_at_the_commit(
         # Its fixed instructions are its agent's body, which ends with the contract; it is sent the run's own.
         prompt = told(reviewer)
         assert prompt.startswith("# canopy reviewer\n")
-        assert reviewer["argv"][3].startswith("## Run\n\nThis is review 1 of at most ")
-        assert f"- Checkout: `{run_dir / 'checkout'}`" in reviewer["argv"][3]
+        assert reviewer["argv"][-1].startswith("## Run\n\nThis is review 1 of at most ")
+        assert f"- Checkout: `{run_dir / 'checkout'}`" in reviewer["argv"][-1]
         assert "Post nothing anywhere" in prompt
         assert "canopy-review" not in prompt
         assert "None: never report `low`." in prompt
@@ -224,8 +224,8 @@ def test_reviews_share_their_reviewers_body_and_snapshot_and_are_sent_only_their
     assert body is not None
     for reviewed, run in zip((first, second), runs, strict=True):
         assert reviewed.row.sha not in body
-        assert run["argv"][3] == prompts.split(reviewed.prompt).message
-        assert f"- Commit: `{reviewed.row.sha}`" in run["argv"][3]
+        assert run["argv"][-1] == prompts.split(reviewed.prompt).message
+        assert f"- Commit: `{reviewed.row.sha}`" in run["argv"][-1]
 
 
 def test_a_tickets_reviewer_override_reaches_its_reviews_alone(

@@ -1299,7 +1299,7 @@ def due_chore(scenario: Scenario, name: str, *, when: str | None = None) -> None
     prompt.write_text(f"# {name}\n")
     table: dict[str, Any] = {
         "prompt": str(prompt),
-        "cmd": "agent run --agent canopy-chore {prompt}",
+        "cmd": "agent run --agent canopy-chore --format json {prompt}",
         "every_minutes": 120,
     }
     if when is not None:

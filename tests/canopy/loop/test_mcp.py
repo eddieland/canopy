@@ -91,7 +91,7 @@ def overseen(canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path) -> C
     prompt = canopy_env.home / "chores" / "build-health.md"
     prompt.parent.mkdir()
     prompt.write_text("# Build health\n\nLook at the build queue.\n")
-    reviewer = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-reviewer {prompt}"
+    reviewer = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-reviewer --format json {prompt}"
     user = canopy_env.user_file.read_text().replace("[runtime]\n", f"[runtime]\nreview_cmd = '{reviewer}'\n", 1)
     # A chore with a `when` is the overseer's to run (DESIGN §37).
     when = 'when = "Weekdays only."\n'

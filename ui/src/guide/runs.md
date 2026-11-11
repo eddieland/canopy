@@ -105,7 +105,7 @@ then it may hold someone else's work; check before you go digging there for this
 
 A run that ended `failed`, `crashed`, or `unknown` also has **ended on**, right under its summary: the transcript's
 last runtime error, or failing that its last failed or refused tool call, with when it happened. The summary is the
-harness's side of it (`the worker exited 1 without a result line`), which is true and not much help; this is the
+harness's side of it (`the worker reported no result`), which is true and not much help; this is the
 agent's side, often something as mundane as a rate limit. Click it to jump to that row in the transcript instead of
 scrolling past a few hundred rows to find it. A chore run's page has the same field.
 

@@ -95,8 +95,8 @@ def test_worker_that_pushes_is_done(scenario: Scenario, git_pool: GitPool, treeh
     assert not objects.exists()  # removed once the run was over
     argv = w["argv"]
     assert isinstance(argv, list)
-    assert argv[:4] == ["run", "--agent", "canopy-worker", "--title=PROJ-1 implement"]
-    assert argv[4] == prompts.split(run.prompt).message
+    assert argv[:6] == ["run", "--agent", "canopy-worker", "--format", "json", "--title=PROJ-1 implement"]
+    assert argv[6] == prompts.split(run.prompt).message
 
     slot = Path(slot_of(scenario.conn, run.id).slot_path)
     # Detached: the worker pushed HEAD to the branch, which started from origin/main.
@@ -169,7 +169,10 @@ def test_the_session_title_names_the_ticket_and_its_title(
     session_title: str,
 ) -> None:
     """`{title}` is the run's session title, so the runtime's session list names the ticket (DESIGN §13)."""
-    template = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-worker --title={title} {prompt}"
+    template = (
+        "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-worker --format json --title={title} "
+        "{prompt}"
+    )
     scenario.configures(runtime={"worker_cmd": template})
     if title is not None:
         scenario.overseer(ticket_sets("PROJ-1", title=title))
@@ -177,21 +180,21 @@ def test_the_session_title_names_the_ticket_and_its_title(
     [w] = agent_runs(scenario.agent_log)
     argv = w["argv"]
     assert isinstance(argv, list)
-    assert argv[3] == f"--title={session_title}"
+    assert argv[5] == f"--title={session_title}"
 
 
 def test_a_worker_template_that_places_no_prompt_gets_it_on_stdin(scenario: Scenario, git_pool: GitPool) -> None:
     """No argument limit applies to a prompt on stdin (D023), and the suffix still follows the template's words."""
     scenario.configures(
         runtime={
-            "worker_cmd": "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-worker",
+            "worker_cmd": "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-worker --format json",
             "worker_cmd_suffix": "--log-level INFO",
         },
     )
     run = scenario.run(worker=pushes())
     assert run.status == "done"
     [w] = agent_runs(scenario.agent_log)
-    assert w["argv"] == ["run", "--agent", "canopy-worker", "--log-level", "INFO"]
+    assert w["argv"] == ["run", "--agent", "canopy-worker", "--format", "json", "--log-level", "INFO"]
     assert w["stdin"] == prompts.split(run.prompt).message
 
 
@@ -783,11 +786,11 @@ def test_a_timed_out_worker_records_what_it_reported_before_the_kill(scenario: S
     assert (run.row["session_id"], run.row["cost_usd"], run.row["tokens_cache_write"]) == ("ses_slow", 0.5, 4)
 
 
-def test_a_worker_without_events_reports_no_session(scenario: Scenario, git_pool: GitPool) -> None:
+def test_status_prints_what_a_worker_said_on_one_line(scenario: Scenario, git_pool: GitPool) -> None:
     summary = "\x1b[2Jcleared the screen\nand  went on   " + "x" * 300
     result = json.dumps({"status": "failed", "summary": summary, "pr": "https://x.test/\x1b"})
     run = scenario.run(worker=worker_does(result=result))
-    assert (run.status, run.row["session_id"], run.row["cost_usd"]) == ("failed", None, None)
+    assert (run.status, run.row["session_id"], run.row["cost_usd"]) == ("failed", "ses_fake", 0.25)
 
     out = scenario.operator("status").out
     # Agent-written text reaches the terminal on one line, without control characters, and cut; a PR that is not a
@@ -798,7 +801,8 @@ def test_a_worker_without_events_reports_no_session(scenario: Scenario, git_pool
     assert said == "    [2Jcleared the screen and went on " + "x" * 123 + "..."
     assert len(said) == 4 + 160
     persona = f"persona canopy {run.row['persona_digest'][:12]}"
-    assert f"\n    no session reported  {persona}  log {run.row['log_path']}\n" in out
+    spent = "$0.25, 3.5k tokens, 5.5k peak context"
+    assert f"\n    session ses_fake  {spent}  {persona}  log {run.row['log_path']}\n" in out
 
 
 def test_status_lists_recent_runs_newest_first(

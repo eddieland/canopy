@@ -189,7 +189,7 @@ def test_a_chore_run_records_its_findings(canopy_env: CanopyEnv, chores: Path, a
             version=canopy_env.runtime,
         )
         assert {name: agent["env"].get(name) for name in given} == given
-        prompt = agent["argv"][3]
+        prompt = agent["argv"][-1]
         assert prompt.startswith("# Build health\n\nLook at the build queue.\n\n## Run\n")
         run = json_block(prompt)
         assert (run["chore"], run["run_id"], run["context"]) == ("build-health", 1, "Look at build 90")
@@ -246,7 +246,7 @@ def test_the_operators_standing_instructions_follow_every_chores_own_prompt(
     # A try is a run through the same code, so its prompt carries them too.
     with chore_reports(OK):
         assert main(["chore", "try", "build-health", "--no-record"]) == 0
-    assert f"## Standing instructions from the operator\n\n{rule}\n" in agent_runs(agent_log)[-1]["argv"][3]
+    assert f"## Standing instructions from the operator\n\n{rule}\n" in agent_runs(agent_log)[-1]["argv"][-1]
 
 
 def test_chore_instructions_that_cannot_be_used_refuse_the_run(
@@ -431,7 +431,7 @@ def test_a_chore_lists_at_most_its_max_findings_and_counts_the_rest(
     assert [f.id for f in parsed.findings] == ["f0", "f1"]
     assert parsed.more_findings == 5
     [agent] = agent_runs(agent_log)
-    prompt = agent["argv"][3]
+    prompt = agent["argv"][-1]
     assert json_block(prompt)["max_findings"] == 2
     assert "List at most `max_findings` findings" in prompt
 
@@ -842,7 +842,7 @@ def test_try_runs_a_chore_in_the_foreground_and_records_it(
     tried = agent_runs(agent_log)[-1]
     assert tried["cwd"] == str(canopy_env.state_dir / "chores" / "build-health")
     assert tried["env"]["CANOPY_RUN_ID"] == "chore-2"
-    run = json_block(tried["argv"][3])
+    run = json_block(tried["argv"][-1])
     assert (run["run_id"], run["context"]) == (2, "Look at build 91")
     assert json_block(start.prompt_file(Path(row.log_path)).read_text()) == run
     # The try held its run's lifelock, as a detached `_chore` does, and removed it once the row was closed.
@@ -871,7 +871,7 @@ def test_try_with_no_record_records_nothing(
     assert open_ids(canopy_env, conn) == [FINDING["id"]]
     tried = agent_runs(agent_log)[-1]
     assert tried["env"]["CANOPY_RUN_ID"] == "chore-try:build-health"
-    assert json_block(tried["argv"][3])["run_id"] is None
+    assert json_block(tried["argv"][-1])["run_id"] is None
 
 
 def test_try_works_with_chores_off_and_reports_a_bad_result(
@@ -960,7 +960,7 @@ def test_a_try_from_the_web_is_recorded_and_done_by_a_chore_process_of_its_own(
     assert [d["action"] for d in conn.execute("SELECT action FROM decisions")] == []
     tried = json.loads(agent_log.read_text().splitlines()[-1])
     assert tried["env"]["CANOPY_RUN_ID"] == "chore-1"
-    assert json_block(tried["argv"][3])["run_id"] == 1
+    assert json_block(tried["argv"][-1])["run_id"] == 1
 
 
 def test_a_try_from_the_web_that_cannot_start_is_refused_and_its_run_closed(
@@ -1003,12 +1003,12 @@ def test_a_note_to_a_chore_reaches_its_next_runs(
     # A note waits for the chore's next run: it does not wake a waiting loop, which wakes for tickets' messages.
     assert db.latest_message_id(conn, source="operator", subject_kind=db.SUBJECT_TICKET) == 0
     run_inline(conn, OK)
-    run = json_block(agent_runs(agent_log)[-1]["argv"][3])
+    run = json_block(agent_runs(agent_log)[-1]["argv"][-1])
     [carried] = run["operator_notes"]
     assert (carried["id"], carried["note"]) == (1, note)
     with chore_reports(OK):
         assert main(["chore", "try", "build-health"]) == 0
-    assert json_block(agent_runs(agent_log)[-1]["argv"][3])["operator_notes"] == [carried]
+    assert json_block(agent_runs(agent_log)[-1]["argv"][-1])["operator_notes"] == [carried]
 
     capsys.readouterr()
     assert main(["show", "chore:build-health"]) == 0
@@ -1175,7 +1175,7 @@ def test_a_chore_reads_its_earlier_runs_through_its_tool_from_a_cwd_outside_the_
     assert (entry["command"][-2:], entry["cwd"]) == (["_mcp", "--chore"], str(root))
     entry = given_server(agent, reports.SERVER, canopy_env.runtime)
     assert (entry["command"][-2:], entry["cwd"]) == (["_mcp", "--reports"], str(root))
-    assert json_block(agent["argv"][3])["history"] == tool == history.tool_name()
+    assert json_block(agent["argv"][-1])["history"] == tool == history.tool_name()
     listed, whole, other, both = agent["tools"]
     assert not listed["error"], listed["text"]
     assert not whole["error"], whole["text"]

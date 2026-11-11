@@ -1010,7 +1010,9 @@ def waits(*keys: str, rationale: str = "nothing to do yet") -> list[Called]:
 
 def with_events(env: CanopyEnv, agent: str) -> None:
     """Have the command that runs `agent` (`canopy-overseer`, ...) ask for OpenCode's JSON events, as defaults do."""
-    env.write_user(env.user_file.read_text().replace(f"--agent {agent} ", f"--agent {agent} --format json ", 1))
+    text = env.user_file.read_text()
+    if f"--agent {agent} --format json" not in text:
+        env.write_user(text.replace(f"--agent {agent} ", f"--agent {agent} --format json ", 1))
 
 
 def with_rebase(env: CanopyEnv) -> None:
@@ -1333,7 +1335,7 @@ def titled_workers(env: CanopyEnv) -> None:
 
     So the fake worker knows the ticket each run is of (FAKE_WORKER_FOR in the fake).
     """
-    template = "agent run --agent canopy-worker {prompt}"
+    template = "agent run --agent canopy-worker --format json {prompt}"
     text = env.user_file.read_text()
     assert template in text
     env.write_user(text.replace(template, template.replace(" {prompt}", " --title={title} {prompt}")))
@@ -1534,7 +1536,7 @@ def chore_toml(name: str = "build-health", *, every: int = 120, extra: str = "")
     """A `[chores.<name>]` table for the user file, its command the fake agent."""
     return (
         f"\n[chores.{name}]\nprompt = {json.dumps(str(Path.home() / 'chores' / f'{name}.md'))}\n"
-        f"cmd = 'agent run --agent canopy-chore {{prompt}}'\nevery_minutes = {every}\n{extra}"
+        f"cmd = 'agent run --agent canopy-chore --format json {{prompt}}'\nevery_minutes = {every}\n{extra}"
     )
 
 

@@ -1199,7 +1199,7 @@ def test_a_sandboxed_repositorys_review_runs_in_the_wrapper_canopy_adds(
 
     It does so for a PR in a repository `runtime.sandbox_repos` names.
     """
-    review_cmd = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-reviewer {prompt}"
+    review_cmd = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-reviewer --format json {prompt}"
     canopy_env.configure(
         canopy_env.user_file,
         {"runtime": {"sandbox_repos": ["repo"], "review_cmd": review_cmd}, "review": {"agent_prs": True}},

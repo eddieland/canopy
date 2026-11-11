@@ -54,12 +54,6 @@ def test_a_planner_shows_its_card_while_it_runs(scenario: Scenario, git_pool: Gi
     assert cards.of(working.finishes().row).card == cards.Card.model_validate(FIRST)
 
 
-def test_a_worker_whose_events_are_not_printed_keeps_no_card(scenario: Scenario, git_pool: GitPool) -> None:
-    working = scenario.starts(worker=worker_does(["true"], tools=[calls(STATUS, **FIRST)]))
-    assert cards.of(working.row) == cards.Standing(None, None, 0)
-    working.finishes()
-
-
 def test_canopy_status_shows_what_a_running_card_says_now_and_marks_it_stale(
     scenario: Scenario,
     git_pool: GitPool,

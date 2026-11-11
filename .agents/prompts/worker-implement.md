@@ -95,15 +95,9 @@ Do not guess on decisions that would be expensive to reverse.
 
 ## Result
 
-The operator reads your `summary` and `question` in canopy as Markdown: paragraphs, `-` and `1.` lists, `code`,
-fenced code, **bold**, *italics*, `>` quotes, `---` rules, and tables. Nothing else is read, and a link shows its
-address, so write a URL as itself.
-
-Report your result by calling `canopy_run_result`, as the last thing you do. Its arguments are the fields of the result
-line at the end of your message from canopy, and each field that message asks you to add to it, as an argument of its
-own. If the call is refused, fix what the refusal names and call it again; once it is taken, end your run. Only if you
-have no such tool, print the result instead: your last line of stdout exactly one JSON object, in that line's shape,
-with nothing after it.
+Report your result by calling `canopy_run_result`, as the last thing you do: its arguments say what each field holds. Nothing
+you print is read as your result. If the call is refused, fix what the refusal names and call it again; once it is
+taken, end your run.
 
 <!-- canopy: run -->
 
@@ -205,6 +199,6 @@ they conflict.
 
 {{/NOTICE}}
 
-## Result line
+## What your result names
 
-{"status":"done|blocked|failed","branch":"{{BRANCH}}","prs":{{PRS}},"pr_titles":{{PR_TITLES}},"summary":"<your report, line breaks sparingly>","question":"<only when blocked>"}{{MEMORY_CONTRACT}}{{DRAFTS}}{{CHECKLIST}}
+Its `branch` is `{{BRANCH}}`, and its `prs` and `pr_titles` have a key for each repository listed above.{{DRAFTS}}{{CHECKLIST}}

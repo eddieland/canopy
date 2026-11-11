@@ -44,6 +44,7 @@ from canopy.core import (
     run_changes,
     run_inbox,
     run_models,
+    run_result,
     sandboxing,
 )
 from canopy.core.config import render_command
@@ -99,6 +100,47 @@ class TaskResult(BaseModel):
     #: The PR it opened, at most one by its prompt; shown when it is a plain URL.
     prs: Annotated[list[Text], Field(max_length=MAX_PRS)] = []
     # `created` is read apart, by `follow_ups.parse`, so a list of any shape refuses its entries, never the result.
+
+
+class Report(BaseModel):
+    """What a task's worker reports with its `result` call (DESIGN §36): the task's result, described.
+
+    The call's input, and so stricter than `TaskResult`, which reads what it reported.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
+
+    status: Literal["done", "blocked", "failed"] = Field(
+        description=f"How the task ended: `done` when you did what it asked; {run_result.ENDED}",
+    )
+    summary: StrictStr = Field(
+        default="",
+        description="A short account for the operator: what you found or did, the PR's link if you opened one, the "
+        "tickets you filed, and what they should look at first; the detail goes in your report. "
+        f"{run_result.markdown(MAX_TEXT)}",
+    )
+    question: StrictStr | None = Field(
+        default=None,
+        description="Only when `blocked`: what you need the operator to answer, which their reply to the task "
+        f"answers. {run_result.markdown(MAX_TEXT)}",
+    )
+    branch: StrictStr | None = Field(
+        default=None,
+        description="The branch your message names, only when you pushed it.",
+    )
+    prs: list[StrictStr] = Field(
+        default_factory=list,
+        description=f"The URL of the PR you opened, when you opened one: at most {MAX_PRS}.",
+    )
+
+
+#: What a task's worker reports.
+CONTRACT = run_result.Contract(
+    "task",
+    f"Report how the task ended, and what your message from canopy asked you to report with it. {run_result.REPORTING}",
+    Report,
+    {follow_ups.GROUP: follow_ups.TaskGroup, checklist_answers.GROUP: checklist_answers.Group},
+)
 
 
 @dataclass(frozen=True)
@@ -347,9 +389,9 @@ def _work(ctx: Context, run: records.TaskRun, link: bytes | None, out: TextIO, l
     if done.timed_out:
         status, note = RunStatus.TIMEOUT, f"the worker timed out after {timeout_minutes} minutes"
     elif parsed is None:
-        status, note = RunStatus.UNKNOWN, "the worker's last line was not a valid result"
+        status, note = RunStatus.UNKNOWN, f"the worker {run_result.MISSING}"
     else:
-        status, note = RunStatus(parsed.status), contract.REPAIRED if contract.repaired(text) else ""
+        status, note = RunStatus(parsed.status), ""
     # Each entry checked alone, on its text (D003), whatever the rest of the result says.
     tickets = task_tickets.check(
         follow_ups.parse(text),
@@ -530,7 +572,7 @@ def _run_agent(
     its repository's checklist, when the run has one (DESIGN §42).
 
     Returns:
-        The agent's process and the text its result line is read from.
+        The agent's process and the result it reported, as one line of JSON; "" when it reported none.
 
     Raises:
         SetupError: the runtime's config in the slot shadows canopy's definitions or names a tracker tool.
@@ -567,6 +609,11 @@ def _run_agent(
     answers = starts.answers_dir(Path(run.log_path))
     listed = checklists.file_of(answers, run.repo)
     held = {slot: listed} if listed.is_file() else {}
+    # What it reports with canopy's `result` tool: the tickets it may file, and its answers to a list it was given.
+    files = task.project is not None and ctx.config.policy.max_follow_ups > 0
+    groups = [*([follow_ups.GROUP] if files else []), *([checklist_answers.GROUP] if held else [])]
+    reports = CONTRACT.asked(groups)
+    env |= reports.env()
     # Where canopy's `pre-push` reads the list, and canopy's plugin and `messages` tool the operator's messages, which
     # a sandboxed run may read and not write (DESIGN §24, §42, §44).
     env[cards.ANSWERS_ENV] = str(answers)
@@ -604,7 +651,8 @@ def _run_agent(
             digest=snapshot.name,
             tools=output.tools,
         )
-    return done, output.text
+    version = ctx.config.runtime.version
+    return done, run_result.reported(done.stdout, reports, server=cards.SERVER, version=version)
 
 
 def _rewritten(slot: Path, link: bytes | None) -> Path | None:
