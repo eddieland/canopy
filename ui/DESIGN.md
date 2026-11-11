@@ -1069,6 +1069,8 @@ reader, so no table repeats them.
   its diagram (`src/lib/plan-diagram.ts`), an image in a hairline box, drawn again when the theme or palette changes,
   as wide as it is drawn or narrower to fit, but never under three quarters of that, past which its labels go unread:
   a wider one scrolls, each edge faded while there is more past it (`diagram-image`, `edge-fade`), as the guide's do,
+  every kind drawn in one hand (`themeCss` in `src/lib/diagram.ts`): one label size, one corner, one line weight, a
+  subgraph dashed, a sequence's actors once, at its top, and its captions lifted off the lifelines they cross,
   with a `Source` toggle under it; its code shows while toggled on, while the cursor is in it, or while a comment or a
   change is marked in it, and out of sight it is clipped, not removed, so a screen reader still reads it; one that
   cannot be drawn shows its code and why. The toolbar (`Toolbar`, below) is `icon-xs` toggles in groups split by

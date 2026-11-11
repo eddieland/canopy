@@ -12,7 +12,7 @@ vi.mock(import('@/lib/diagram'), () => ({
     drawDiagram: vi.fn<(source: string) => Promise<Drawn | NotDrawn>>((source) =>
         Promise.resolve(
             source.startsWith('pie')
-                ? { error: 'a pie diagram is not drawn here' }
+                ? { error: 'pie is not drawn here' }
                 : { svg: `<svg>${source}</svg>`, kind: 'sequence' },
         ),
     ),
@@ -81,7 +81,7 @@ describe('a Mermaid code block', () => {
 
     it('says why it was not drawn, with no image', async () => {
         const { root } = open('```mermaid\npie\n    "a": 1\n```')
-        expect(await within(root).findByText('Not drawn: a pie diagram is not drawn here.')).toBeTruthy()
+        expect(await within(root).findByText('Not drawn: pie is not drawn here.')).toBeTruthy()
         expect(within(root).queryByRole('img')).toBeNull()
     })
 

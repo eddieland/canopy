@@ -60,8 +60,26 @@ const SECURE = [
 ]
 // A plan is at most tens of thousands of characters; a diagram is a small part of it.
 const MAX_TEXT = 20_000
-// The font every system has, which an image can draw with.
+// The font every system has, which an image can draw with. Not the page's IBM Plex: an image can use a font only if its
+// SVG carries it whole, which would add more to each diagram than the diagram itself.
 const FONT = 'ui-sans-serif, system-ui, sans-serif'
+// One size for every label in every kind, the plan's table's: a sequence diagram's own default is larger.
+const FONT_SIZE = 14
+// The width a flowchart's label wraps at: wide enough that a module's name, `api: ReportQuery.iter_rows`, wraps between
+// words, never inside one, which is all mermaid can do with a word longer than the width.
+const WRAP_AT = 260
+// A shape's corner: a step under the figure's own, so a node reads as held by it.
+const RADIUS = 4
+// The keyword that opens each kind mermaid reads but canopy does not draw, where it is not mermaid's own name for it:
+// what the planner wrote, so `Not drawn:` names it as written.
+const KEYWORDS: Partial<Record<string, string>> = {
+    er: 'erDiagram',
+    class: 'classDiagram',
+    classDiagram: 'classDiagram',
+    requirement: 'requirementDiagram',
+    gitGraph: 'gitGraph',
+    xychart: 'xychart-beta',
+}
 
 // How a diagram is read, drawn or not: at mermaid's strictest, whatever the diagram asks.
 const READ: MermaidConfig = {
@@ -113,7 +131,7 @@ async function kindOf(source: string): Promise<string | NotDrawn> {
     const { diagramType } = await mermaid.parse(source)
     return KINDS.has(diagramType)
         ? diagramType
-        : { error: `a ${diagramType} diagram is not drawn here, only ${KIND_NAMES}` }
+        : { error: `${KEYWORDS[diagramType] ?? diagramType} is not drawn here, only ${KIND_NAMES}` }
 }
 
 function configuration(): MermaidConfig {
@@ -122,7 +140,6 @@ function configuration(): MermaidConfig {
     const raised = token('--surface-raised')
     const ink = token('--foreground')
     const muted = token('--muted-foreground')
-    const edge = token('--border')
     // Each size is the one a node, a line, and a label are drawn at, without a layout's own `useMaxWidth`, which
     // would make the image as wide as whatever holds it rather than as wide as it is.
     const natural = { useMaxWidth: false }
@@ -132,13 +149,24 @@ function configuration(): MermaidConfig {
         look: 'classic',
         layout: 'dagre',
         fontFamily: FONT,
-        flowchart: natural,
-        sequence: natural,
+        flowchart: { ...natural, wrappingWidth: WRAP_AT },
+        // Its actors once, at the top: drawn again at the foot, they take a sixth of its height to say nothing new.
+        sequence: {
+            ...natural,
+            mirrorActors: false,
+            actorFontSize: FONT_SIZE,
+            messageFontSize: FONT_SIZE,
+            noteFontSize: FONT_SIZE,
+            actorFontFamily: FONT,
+            messageFontFamily: FONT,
+            noteFontFamily: FONT,
+        },
         state: natural,
+        themeCSS: themeCss(background),
         themeVariables: {
             darkMode: document.documentElement.classList.contains('dark'),
             fontFamily: FONT,
-            fontSize: '14px',
+            fontSize: `${FONT_SIZE}px`,
             background,
             primaryColor: raised,
             primaryTextColor: ink,
@@ -150,10 +178,12 @@ function configuration(): MermaidConfig {
             titleColor: ink,
             edgeLabelBackground: background,
             clusterBkg: background,
-            clusterBorder: edge,
+            // A subgraph and a note are outlined as a node is, a subgraph's dashed: in `--border`, at 1.4:1 to the
+            // canvas, they were too faint to see.
+            clusterBorder: muted,
             noteBkgColor: raised,
             noteTextColor: ink,
-            noteBorderColor: edge,
+            noteBorderColor: muted,
             actorBkg: raised,
             actorBorder: muted,
             actorTextColor: ink,
@@ -170,6 +200,25 @@ function configuration(): MermaidConfig {
             transitionLabelColor: ink,
         },
     }
+}
+
+// What every kind draws alike, as the document around it does: one corner and one line weight for every shape and
+// edge, and a sequence's captions and messages lifted off the lifelines they cross by a halo of the canvas, as an
+// edge's label sits on its own patch of it. Mermaid puts this before its own rules, so each wins by `!important`.
+function themeCss(canvas: string): string {
+    const shapes = '.node rect, .cluster rect, rect.actor, rect.note, .note rect, .statediagram-state rect, rect.basic'
+    const lines = [
+        '.flowchart-link, .edgePath .path, .transition, .messageLine0, .messageLine1',
+        '.actor-line, .loopLine, .node rect, .node polygon, .node circle, .node path',
+        '.cluster rect, rect.actor, rect.note, .statediagram-state rect, rect.basic',
+    ].join(', ')
+    return [
+        `${shapes} { rx: ${RADIUS}px !important; ry: ${RADIUS}px !important; }`,
+        `${lines} { stroke-width: 1px !important; }`,
+        `.cluster rect { stroke-dasharray: 4 3 !important; }`,
+        `.messageText, .loopText, .loopText tspan { paint-order: stroke; stroke: ${canvas} !important;`,
+        ` stroke-width: 6px !important; stroke-linejoin: round; }`,
+    ].join('\n')
 }
 
 // A token's color as `#rrggbb`, which mermaid can lighten and darken: tokens are written in oklch, which it cannot

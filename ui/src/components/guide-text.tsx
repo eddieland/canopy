@@ -183,7 +183,7 @@ function Diagram({ lines }: { lines: string[] }) {
     // edges faded where there is more (`diagram-image`, `edge-fade`).
     const width = drawn.width === undefined ? undefined : ({ '--diagram-width': `${drawn.width}px` } as CSSProperties)
     return (
-        <figure className="rounded-md border px-4 py-5">
+        <figure className="rounded-md border bg-surface px-4 py-5">
             <div ref={(box) => (box === null ? undefined : markOverflowEdges(box))} className="edge-fade">
                 <img
                     src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(drawn.svg)}`}
