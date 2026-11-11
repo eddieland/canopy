@@ -101,6 +101,23 @@ def failures(conn: sqlite3.Connection, tick_id: int) -> list[Failure]:
     return found
 
 
+def query_result(conn: sqlite3.Connection) -> list[str]:
+    """The keys the tracker query returned on the newest run that read it to the end.
+
+    Returns:
+        The keys; none when no run has.
+    """
+    row = sql.execute(
+        conn,
+        sql.select("query_result")
+        .from_("connector_runs")
+        .where("query_result IS NOT NULL")
+        .order_by("id DESC")
+        .limit(1),
+    ).fetchone()
+    return [str(k) for k in json.loads(str(row[0]))] if row is not None else []
+
+
 def read_whole(conn: sqlite3.Connection, tick_id: int) -> bool | None:
     """Whether tick `tick_id` read every source whole: what the loop's polls after it go on from (DESIGN §39).
 

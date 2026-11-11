@@ -277,16 +277,13 @@ def test_canopy_sessions_sizes_json_is_the_measurement(
     assert found == snapshot
 
 
-def test_canopy_sessions_is_refused_inside_a_run_and_asks_for_sizes(
+def test_canopy_sessions_sizes_is_refused_inside_a_run(
     canopy_env: CanopyEnv,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     with in_run(7):
         assert main(["sessions", "--sizes"]) == 1
     assert "sessions refused (inside_run): CANOPY_RUN_ID is set" in capsys.readouterr().err
-
-    assert main(["sessions"]) == 2
-    assert "with --sizes" in capsys.readouterr().err
 
 
 @pytest.mark.opencode1  # OpenCode 1's record is not measured

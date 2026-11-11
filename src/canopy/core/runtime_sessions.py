@@ -6,10 +6,16 @@ any row before (`record`). A session is canopy's when one of this journal's agen
 subagent, for one that is, however deep, or when it ran in the workspace's state directory, which only canopy runs
 agents in: a chore's own directory is there, and `canopy chore try --no-record` names its run nowhere. Every other
 session is spend outside canopy (`spend`).
+
+While `sessions.search` is `titles` (ROADMAP M72), the read keeps each session's title and archive too, but of one in
+a directory `sessions.exclude` names (`excluded`), for `canopy.core.session_list` to list. The read keeps them under
+one setting, recorded with its cursor: a read under another starts again from the first session, so every session is
+read under the one in force, and one that keeps none drops every title the journal holds first.
 """
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -21,7 +27,7 @@ from canopy.runtime.report import MAX_SESSIONS
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Sequence
+    from collections.abc import Collection, Sequence
     from pathlib import Path
 
     from canopy.core.run_models import RunTable
@@ -31,7 +37,7 @@ if TYPE_CHECKING:
 #: How many directories `spend` lists of the sessions outside canopy, the costliest first.
 DIRECTORIES = 10
 #: The tables of this journal's agent runs, each with the session its run ran in.
-_RUN_TABLES: tuple[RunTable, ...] = ("ticks", "runs", "chore_runs", "review_runs", "task_runs", "epic_runs")
+RUN_TABLES: tuple[RunTable, ...] = ("ticks", "runs", "chore_runs", "review_runs", "task_runs", "epic_runs")
 
 
 @dataclass(frozen=True)
@@ -69,17 +75,56 @@ class SessionsSpend:
     status: SessionsRead | None
 
 
-def read_next(conn: sqlite3.Connection, *, version: Version, limit: int = MAX_SESSIONS) -> SessionPage:
+def read_next(
+    conn: sqlite3.Connection,
+    *,
+    version: Version,
+    limit: int = MAX_SESSIONS,
+    exclude: Sequence[str] | None = None,
+) -> SessionPage:
     """Read the runtime's sessions updated after the journal's cursor, and record them.
 
-    The runtime is the one `version` runs.
+    The runtime is the one `version` runs. `exclude` is `sessions.exclude` while `sessions.search` keeps titles, and
+    None while it keeps none. A read under another setting than the last starts from the first session, having
+    dropped first every title it keeps none of: each one's, when it keeps none, else those in a directory it excludes.
 
     Returns:
         The page the runtime returned; a full one means more may wait to be read.
     """
-    page = sessions.updated_after(cursor(conn), version=version, limit=limit)
-    record(conn, page)
+    setting = titles_setting(exclude)
+    was = last_read(conn)
+    kept = was.titles if was is not None else None
+    if kept is not None and setting is None:
+        with db.transaction(conn):
+            _drop_titles(conn)
+        kept = None
+    elif setting is not None and kept != setting:
+        with db.transaction(conn):
+            _drop_excluded(conn, json.loads(setting))
+    start = cursor(conn) if kept == setting else None
+    page = sessions.updated_after(start, version=version, limit=limit, titles=setting is not None)
+    record(conn, page, titles=setting, restarted=start is None)
     return page
+
+
+def titles_setting(exclude: Sequence[str] | None) -> str | None:
+    """What the read keeps titles under, as the journal records it: `exclude`, `sessions.exclude`, as a JSON array.
+
+    Returns:
+        The setting; None when `exclude` is None, as it is while `sessions.search` keeps no title.
+    """
+    return None if exclude is None else json.dumps(list(exclude))
+
+
+def excluded(globs: Collection[str]) -> sql.Fragment:
+    """A condition true of a session whose `directory` one of `globs` names, as `sessions.exclude` reads one.
+
+    A glob is SQLite's GLOB, matched against the directory or, with `/*` after it, any directory below one it names.
+
+    Returns:
+        The condition; false of every session when `globs` is empty.
+    """
+    return sql.any_of(*(sql.frag("directory GLOB ? OR directory GLOB ?", g, f"{g}/*") for g in globs))
 
 
 def cursor(conn: sqlite3.Connection) -> SessionCursor | None:
@@ -103,19 +148,39 @@ def last_read(conn: sqlite3.Connection) -> records.RuntimeSessionRead | None:
     return records.select(records.RuntimeSessionRead).one(conn)
 
 
-def record(conn: sqlite3.Connection, page: SessionPage, *, now: str | None = None) -> None:
+def record(
+    conn: sqlite3.Connection,
+    page: SessionPage,
+    *,
+    now: str | None = None,
+    titles: str | None = None,
+    restarted: bool = False,
+) -> None:
     """Record a page the runtime returned: each session in it in place of any row before, and how the read ended.
 
-    A read that did not find the record leaves the cursor where it was, so the next read starts there again.
+    `titles` is the setting the page was read under (`titles_setting`): its sessions' titles are kept but of those
+    in a directory it excludes. `restarted` says the page was read from the first session, as a read under a new
+    setting is. A read that did not find the record leaves the cursor, and the setting, where they were, so the next
+    read starts there again.
     """
     at = now or db.now()
     was = last_read(conn)
     status = SessionsRead(page.outcome)
-    found = status is SessionsRead.FOUND and page.cursor is not None
-    updated_ms, session_id = page.cursor if found and page.cursor is not None else _kept(was)
+    found = status is SessionsRead.FOUND and (page.cursor is not None or restarted)
+    updated_ms, session_id = (page.cursor or (None, None)) if found else _kept(was)
+    setting = titles if found else (was.titles if was is not None else None)
     with db.transaction(conn):
         for session in page.sessions:
-            _record_session(conn, session, at)
+            _record_session(conn, session, at, keep_title=titles is not None)
+        if titles is not None and page.sessions:
+            ids = json.dumps([s.session_id for s in page.sessions])
+            (
+                records.update(records.RuntimeSession)
+                .set(title=None, archived_at=None)
+                .where("session_id IN (SELECT value FROM json_each(?))", ids)
+                .where("{}", excluded(json.loads(titles)))
+                .run(conn)
+            )
         records.insert(
             records.RuntimeSessionRead,
             id=1,
@@ -125,6 +190,7 @@ def record(conn: sqlite3.Connection, page: SessionPage, *, now: str | None = Non
             error=page.error if status is SessionsRead.FAILED else None,
             skipped=(was.skipped if was is not None else 0) + page.skipped,
             read_at=at,
+            titles=setting,
         ).or_replace().run(conn)
 
 
@@ -211,13 +277,14 @@ def sessions_in(since: str, until: str | None, state_dir: Path) -> sql.Select:
     """Each of the runtime's sessions that started in `[since, until)`, and whether it is canopy's, as `spend` reads it.
 
     `until` None reads to the newest. Its columns are the session's `started_at`, `directory`, `cost_usd`, and
-    `tokens_*`, and `ours`, true for canopy's.
+    `tokens_*`, and `ours`, true for canopy's; and its `session_id`, `parent_id`, `updated_at`, `title`, and
+    `archived_at`, for a list of the sessions (`canopy.core.session_list`).
 
     Returns:
         The select, for a caller to sum as it needs.
     """
     ran = sql.union(
-        *(sql.select("session_id").from_("{}", sql.name(t)).where("session_id IS NOT NULL") for t in _RUN_TABLES),
+        *(sql.select("session_id").from_("{}", sql.name(t)).where("session_id IS NOT NULL") for t in RUN_TABLES),
     )
     # The runtime records the directory a session started in as the process's working directory, its real path.
     home = str(state_dir.resolve())
@@ -225,7 +292,8 @@ def sessions_in(since: str, until: str | None, state_dir: Path) -> sql.Select:
     found = (
         sql.select(
             "s.started_at, s.directory, s.cost_usd, s.tokens_input, s.tokens_output, s.tokens_reasoning,"
-            " s.tokens_cache_read, s.tokens_cache_write, s.session_id IN (SELECT session_id FROM ours) AS ours",
+            " s.tokens_cache_read, s.tokens_cache_write, s.session_id IN (SELECT session_id FROM ours) AS ours,"
+            " s.session_id, s.parent_id, s.updated_at, s.title, s.archived_at",
         )
         .with_("ran(session_id) AS ({})", ran)
         .with_(
@@ -250,7 +318,19 @@ def _kept(was: records.RuntimeSessionRead | None) -> tuple[int | None, str | Non
     return (was.cursor_updated_ms, was.cursor_session_id) if was is not None else (None, None)
 
 
-def _record_session(conn: sqlite3.Connection, session: SessionSpend, at: str) -> None:
+# Every title and archive the journal keeps, dropped, as the read that keeps none does first.
+def _drop_titles(conn: sqlite3.Connection) -> None:
+    records.update(records.RuntimeSession).set(title=None, archived_at=None).everything().run(conn)
+    records.update(records.RuntimeSessionRead).set(titles=None).everything().run(conn)
+
+
+# The title and archive of every session in a directory one of `globs` names, dropped, as a read under a setting that
+# newly excludes it does first.
+def _drop_excluded(conn: sqlite3.Connection, globs: Collection[str]) -> None:
+    records.update(records.RuntimeSession).set(title=None, archived_at=None).where("{}", excluded(globs)).run(conn)
+
+
+def _record_session(conn: sqlite3.Connection, session: SessionSpend, at: str, *, keep_title: bool) -> None:
     records.delete(records.RuntimeSession).where("session_id = ?", session.session_id).run(conn)
     records.insert(
         records.RuntimeSession,
@@ -267,6 +347,8 @@ def _record_session(conn: sqlite3.Connection, session: SessionSpend, at: str) ->
         tokens_cache_read=session.cache_read,
         tokens_cache_write=session.cache_write,
         read_at=at,
+        title=session.title if keep_title else None,
+        archived_at=_journal_time(session.archived_ms) if keep_title and session.archived_ms is not None else None,
     ).run(conn)
     records.insert_rows(records.RuntimeSessionModel, ("session_id", "model", "replies", "cost_usd")).many(
         conn,
