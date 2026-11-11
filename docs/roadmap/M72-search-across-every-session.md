@@ -171,8 +171,11 @@ scan takes about 70 s, so stage 0's rule gives stage 2 `read`. The operator's ca
 the rule gives. Stage 1 begun 2026-11-11: the two keys, the read keeping each title and archive under either runtime
 version and starting again from the first session when a key changes, and `canopy sessions [WORDS]`; the web UI's
 Sessions page, the search page's two panels, and TRUST_MODEL T8 for them, are next. The reopen command, `opencode
---session ID` in the session's directory, is OpenCode 1's, assumed of 2 and not yet run. Open, for the operator:
-whether the sessions OpenCode 1 left in its own tables get a reader, which stage 0 did not count; and whether canopy's
-sessions should also leave the runtime's own list, which this milestone does not do. A sandboxed role's are
-already in a record of its own (§24); giving an unsandboxed run one, or archiving canopy's sessions through the
-runtime, changes what canopy does with the runtime's data and logins (§26, T2, T4), and is a milestone of its own.
+--session ID` in the session's directory, is OpenCode 1's, assumed of 2 and not yet run. Settled 2026-11-11, at the
+operator's ask to resolve what was open, for the operator to change. The sessions OpenCode 1 left in its own tables get
+no reader: OpenCode 1 is deprecated and kept only until it is dropped (AGENTS.md). Stage 0's command counts them,
+unread, and the section does not give the count, so this was settled without it. And canopy's sessions stay in the
+runtime's own list: the Sessions page opens on the operator's own, with canopy's a filter away. What would thin the
+runtime's list changes what canopy does with the runtime's data and logins (§26, T2, T4): a record of its own for an
+unsandboxed run, as a sandboxed role has (§24), or archiving canopy's sessions through the runtime. That is a milestone
+of its own, on the roadmap's deferred list with its trigger.
