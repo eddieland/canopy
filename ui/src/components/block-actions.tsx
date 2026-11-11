@@ -95,7 +95,7 @@ export function TableActions({
                     'text/html': new Blob([htmlTable(rows)], { type: 'text/html' }),
                 }),
             ])
-            toast({ title: 'Copied the table for a spreadsheet', detail: `${rows.length} rows`, tone: 'done' })
+            toast({ title: 'Copied the table for a spreadsheet', detail: rowsCopied(rows), tone: 'done' })
         } catch (error) {
             toast({ title: 'Could not copy the table', detail: reason(error), tone: 'failed' })
         }
@@ -131,6 +131,12 @@ export function TableActions({
             </DropdownMenu>
         </>
     )
+}
+
+// What a copy of a table's rows holds, in words: its header and the rows under it.
+function rowsCopied(rows: Rows): string {
+    const below = Math.max(rows.length - 1, 0)
+    return `its header and ${below} ${below === 1 ? 'row' : 'rows'}`
 }
 
 /**

@@ -174,6 +174,11 @@ describe("a plan's diagram's actions", () => {
         const [blob, name] = vi.mocked(saveFile).mock.lastCall ?? []
         expect(name).toBe('ABC-1-plan-2-table-1.csv')
         expect(await blob?.text()).toBe("\uFEFFFile,Why\r\na.py,'=1\r\n")
+        expect(toasts.map((toast) => toast.detail)).toEqual([
+            '| File | Why |',
+            'its header and 1 row',
+            'ABC-1-plan-2-table-1.csv',
+        ])
     })
 
     it('go when their diagram does', () => {
