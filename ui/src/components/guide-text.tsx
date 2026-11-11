@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { Fragment, useState } from 'react'
 
+import { BlockActions, DiagramActions } from '@/components/block-actions'
 import { Code } from '@/components/code'
 import { CodeBlock } from '@/components/code-block'
 import { Mark } from '@/components/rich-text'
@@ -168,15 +169,23 @@ function cellClass(align: Align): string {
 function Diagram({ lines }: { lines: string[] }) {
     const { resolved } = useTheme()
     const { light, dark } = usePalettes()
-    const drawn = useDiagram(lines.join('\n'), `${resolved} ${light} ${dark}`)
+    const source = lines.join('\n')
+    const drawn = useDiagram(source, `${resolved} ${light} ${dark}`)
     // The picture the browser could not read, by its SVG, so a new drawing is tried afresh.
     const [unread, setUnread] = useState<string | undefined>(undefined)
     if (drawn === undefined) {
         return <Skeleton className="h-64 w-full rounded-md" />
     }
+    // Its source copied, however it is drawn: the actions go in the figure's corner, over the code or the picture.
+    const actions = (
+        <BlockActions>
+            <DiagramActions source={source} />
+        </BlockActions>
+    )
     if ('error' in drawn || unread === drawn.svg) {
         return (
-            <figure className="flex flex-col gap-2">
+            <figure className="group/block relative flex flex-col gap-2">
+                {actions}
                 <CodeBlock lines={lines} lang={DIAGRAM_FENCE} className={GUIDE_BLOCK} />
                 <figcaption className="text-sm text-muted-foreground">
                     Not drawn: {'error' in drawn ? drawn.error : UNREADABLE}.
@@ -185,7 +194,8 @@ function Diagram({ lines }: { lines: string[] }) {
         )
     }
     return (
-        <figure className="overflow-x-auto rounded-md border px-4 py-5">
+        <figure className="group/block relative overflow-x-auto rounded-md border px-4 py-5">
+            {actions}
             <img
                 src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(drawn.svg)}`}
                 alt={diagramTitle(lines) ?? 'A diagram'}

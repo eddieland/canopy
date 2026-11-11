@@ -28,6 +28,7 @@ import {
 import { Fragment, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 
+import { PlanBlockActions } from '@/components/block-actions'
 import { Panel, PanelFooter, PanelHeader } from '@/components/panel'
 import { DecisionsJump, PlanDecisions } from '@/components/plan-decisions'
 import { AskForChanges, DraftForm, PlanThreads, ThreadCard } from '@/components/plan-threads'
@@ -605,6 +606,7 @@ export function PlanEditor({
                         data-plan-text={planText}
                         className={cn('px-6 py-4', showChanges && 'plan-changes', raw && 'hidden')}
                     />
+                    <PlanBlockActions owner={editor} />
                     {source !== undefined && (
                         <div className="px-6 py-4">
                             <textarea
@@ -772,7 +774,12 @@ export function PlanDocument({ markdown, label }: { markdown: string; label: str
         },
     })
     const planText = usePlanText()
-    return <EditorContent editor={editor} data-plan-text={planText} className="px-6 py-4" />
+    return (
+        <>
+            <EditorContent editor={editor} data-plan-text={planText} className="px-6 py-4" />
+            <PlanBlockActions owner={editor} />
+        </>
+    )
 }
 
 // How many changes are marked, and buttons that step the cursor to the one before or after it.

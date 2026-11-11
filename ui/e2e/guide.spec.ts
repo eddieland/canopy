@@ -121,6 +121,27 @@ test('a diagram is drawn as its picture, named for a screen reader, and drawn ag
     await expect(run).not.toHaveAttribute('src', dark ?? '')
 })
 
+test.describe("a diagram's actions", () => {
+    test.use({ permissions: ['clipboard-read', 'clipboard-write'] })
+
+    test('copy its Mermaid source, shown while the diagram is pointed at', async ({ page }) => {
+        await page.goto('guide/how-the-loop-works')
+        const diagram = page
+            .getByTestId('guide-page')
+            .getByRole('figure')
+            .filter({ has: page.getByRole('img', { name: 'The loop: a tick, then a wait until the next one' }) })
+        const copy = diagram.getByRole('button', { name: 'Copy Mermaid source' })
+        await expect(copy.locator('..')).toHaveCSS('opacity', '0')
+        await diagram.hover()
+        await expect(copy.locator('..')).toHaveCSS('opacity', '1')
+        await copy.click()
+        await expect(page.getByRole('status').filter({ hasText: 'Copied Mermaid source' })).toBeVisible()
+        const source = await page.evaluate(() => navigator.clipboard.readText())
+        expect(source).toMatch(/^flowchart TD\n {4}accTitle: The loop: a tick, then a wait until the next one\n/u)
+        expect(source).not.toContain('```')
+    })
+})
+
 test('a page the guide does not have is the 404', async ({ page }) => {
     await page.goto('guide/no-such-page')
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Nothing here')

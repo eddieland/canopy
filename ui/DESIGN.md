@@ -1046,7 +1046,8 @@ reader, so no table repeats them.
   `AGENTS.md` sets. An empty fence that names one of the repository's example files after its language (`EMBEDS`)
   shows that file whole, as it is when the guide is built, so a page never keeps a copy of one. A code block is colored
   as a diff's code is (A review), in the language its fence names, plain until its grammar has loaded. A
-  ```` ```mermaid ```` fence is drawn as its diagram, as a plan's is (D131), named by its `accTitle`, and
+  ```` ```mermaid ```` fence is drawn as its diagram, as a plan's is (D131), with its actions in its corner, named by
+  its `accTitle`, and
   `guide.test.ts` fails on one mermaid cannot read or with no `accTitle`. A diagram is for a shape the prose would take
   paragraphs to hold, beside the prose, never instead of it. A new page is a file there and a line in its group in
   `SOURCES`.
@@ -1067,8 +1068,9 @@ reader, so no table repeats them.
   document's type (A document, under Primitives). What the plan holds as characters (HTML, an image) is muted monospace;
   a link is underlined in `muted-foreground` with its address on hover, never a link. A Mermaid code block is drawn as
   its diagram (`src/lib/plan-diagram.ts`), an image in a hairline box, drawn again when the theme or palette changes,
-  with a `Source` toggle under it; its code shows while toggled on, while the cursor is in it, or while a comment or a
-  change is marked in it, and out of sight it is clipped, not removed, so a screen reader still reads it; one that
+  with a `Source` toggle under it and its actions in its corner (A block's actions, below); its code shows while
+  toggled on, while the cursor is in it, or while a comment or a change is marked in it, and out of sight it is
+  clipped, not removed, so a screen reader still reads it; one that
   cannot be drawn shows its code and why. The toolbar (`Toolbar`, below) is `icon-xs` toggles in groups split by
   hairlines, then `Comment`, enabled while text is selected; each control's tooltip names it and the shortcut the editor
   binds to it, on this keyboard, and declares the same keys as `aria-keyshortcuts`. The paragraph's style and the
@@ -1157,6 +1159,13 @@ reader, so no table repeats them.
   with more than one link is one button saying how many (`3 PRs`) that opens them as a menu, so the links stay one line
   however many repositories. The Work panel keeps each repository's PR beside its phase; those lines scroll inside the
   panel past a few, so its total cost, its actions, and the reply stay in reach.
+- **A block's actions** (`BlockActions`, `src/components/block-actions.tsx`): what takes a block of a document
+  elsewhere, a diagram's Mermaid source among them, sits in a row at the block's top right corner, over it, on
+  `surface`: ghost `icon-xs` buttons, each named on hover, as a copy button is (below). They show while the block is
+  hovered, holds the caret, or one of them holds the focus, and always on a touch screen, kept in place out of sight so
+  nothing moves; a block marks itself `group/block` and is positioned. A plan's blocks are drawn by ProseMirror, so each
+  keeps an element for its actions (`src/lib/block-slots.ts`) which the page fills through a portal, in its own tree.
+  They are never printed.
 - **Text to paste elsewhere** has a copy button after it (`Copyable`, `CopyButton`): a branch, a path, a session id, a
   review's commit, whole though the page shows its first 7 characters. A path copies whole though the page shows it
   from the workspace root (`CopyablePath`); until the root is read there is no button, so a copy is never the short

@@ -4,6 +4,8 @@
 // code hides behind a Source toggle, and shows again while the caret is in it (being edited, under the picture it
 // draws), while a comment's highlight or a change is marked in it, and when the diagram cannot be drawn, under why.
 // An arrow key at the edge of the block beside a diagram puts the caret in its code, so the keyboard always reaches it.
+// The figure keeps room at its top right for the diagram's actions, which the page draws there (src/lib/block-slots.ts,
+// src/components/block-actions.tsx).
 //
 // A code block of any other language draws as it always has, a `pre` around a `code`, as `CodeBlock` renders it.
 import { Extension } from '@tiptap/core'
@@ -13,6 +15,8 @@ import type { EditorState } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import type { EditorView, NodeView, ViewMutationRecord } from '@tiptap/pm/view'
 
+import { blockSlots, newSlotId } from '@/lib/block-slots'
+import type { BlockSlots } from '@/lib/block-slots'
 import type { Drawn, NotDrawn } from '@/lib/diagram'
 
 // Kept in step with DIAGRAM_LANGUAGE in src/lib/diagram.ts, which loads only when a diagram is drawn.
@@ -36,11 +40,14 @@ export const PlanDiagrams = Extension.create({
     name: 'planDiagrams',
     addProseMirrorPlugins() {
         const editor = this.editor
+        const slots = blockSlots(editor)
         return [
             new Plugin({
                 key: new PluginKey('planDiagrams'),
                 props: {
-                    nodeViews: { codeBlock: (node) => (isDiagram(node) ? new DiagramView(node) : codeView(node)) },
+                    nodeViews: {
+                        codeBlock: (node) => (isDiagram(node) ? new DiagramView(node, slots) : codeView(node)),
+                    },
                     decorations: (state) => (editor.isEditable ? editing(state) : DecorationSet.empty),
                     handleKeyDown: (view, event) => editor.isEditable && enterDiagram(view, event),
                 },
@@ -112,16 +119,22 @@ class DiagramView implements NodeView {
     private readonly image: HTMLImageElement
     private readonly reason: HTMLElement
     private readonly toggle: HTMLButtonElement
+    // The room for its actions, which the page fills, and where it says what they act on.
+    private readonly actions: HTMLElement
+    private readonly slots: BlockSlots
+    private readonly id = newSlotId()
     private text: string
     // Which draw the picture shows: one that ends after a later one began is dropped.
     private draws = 0
     private timer: ReturnType<typeof setTimeout> | undefined
     private readonly unsubscribe: () => void
 
-    constructor(node: ProseMirrorNode) {
+    constructor(node: ProseMirrorNode, slots: BlockSlots) {
         this.text = node.textContent
+        this.slots = slots
         this.dom = document.createElement('div')
-        this.dom.className = 'plan-diagram'
+        // A block whose actions show while it is hovered (`block-actions`, src/index.css).
+        this.dom.className = 'plan-diagram group/block'
         this.dom.dataset['diagram'] = 'pending'
         const pre = child(this.dom, 'pre')
         this.contentDOM = child(pre, 'code')
@@ -151,10 +164,13 @@ class DiagramView implements NodeView {
             this.toggle.setAttribute('aria-pressed', String(shown))
             this.dom.toggleAttribute('data-source', shown)
         })
+        this.actions = child(this.figure, 'div')
+        this.actions.className = 'block-actions'
 
         this.unsubscribe = onThemeChange(() => {
             this.draw()
         })
+        this.publish()
         this.draw()
     }
 
@@ -164,6 +180,7 @@ class DiagramView implements NodeView {
         }
         if (node.textContent !== this.text) {
             this.text = node.textContent
+            this.publish()
             // A draw of the code before this edit, still under way, is dropped when it ends.
             this.draws += 1
             clearTimeout(this.timer)
@@ -190,6 +207,12 @@ class DiagramView implements NodeView {
         clearTimeout(this.timer)
         this.draws += 1
         this.unsubscribe()
+        this.slots.remove(this.id)
+    }
+
+    // Says what the diagram's actions act on now: its source.
+    private publish(): void {
+        this.slots.put({ id: this.id, kind: 'diagram', slot: this.actions, source: this.text })
     }
 
     private draw(): void {
