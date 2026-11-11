@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 from unittest import mock
 
 from canopy.runtime.opencode import sessions
-from canopy.runtime.report import ModelUse, SessionPage
+from canopy.runtime.report import MAX_TITLE, ModelUse, SessionPage
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -304,3 +304,43 @@ def test_a_sandbox_roles_database_a_link_leads_out_of_its_directory_is_not_read(
     (role / "opencode").symlink_to(elsewhere.parent)
 
     assert read(tmp_path) == SessionPage("missing")
+
+
+def test_a_read_asked_for_titles_keeps_each_bounded_on_one_line_with_nothing_hidden(tmp_path: Path) -> None:
+    path = database(tmp_path)
+    add_session(path, "ses_1", updated=2_000)
+    add_session(path, "ses_2", updated=2_001)
+    with contextlib.closing(sqlite3.connect(path)) as conn, conn:
+        title = "Fix\nthe\u200b login\x1b[2J  test" + "x" * 300
+        conn.execute("UPDATE session SET title = ? WHERE id = 'ses_1'", (title,))
+        conn.execute("UPDATE session SET title = '\u202e' WHERE id = 'ses_2'")
+
+    with mock.patch.dict(os.environ, {"XDG_DATA_HOME": str(tmp_path)}):
+        titled = sessions.updated_after(None, titles=True)
+    untitled = read(tmp_path)
+
+    first, second = titled.sessions
+    assert first.title is not None
+    assert first.title.startswith("Fix the login[2J testxx")
+    assert len(first.title) == MAX_TITLE
+    assert (second.title, first.archived_ms) == (None, None)
+    assert [s.title for s in untitled.sessions] == [None, None]
+
+
+def test_a_read_asked_for_titles_says_when_a_session_was_archived_where_the_table_does(tmp_path: Path) -> None:
+    path = database(tmp_path)
+    add_session(path, "ses_1", updated=2_000)
+    add_session(path, "ses_2", updated=2_001)
+    with contextlib.closing(sqlite3.connect(path)) as conn, conn:
+        conn.execute("ALTER TABLE session ADD COLUMN time_archived integer")
+        conn.execute("UPDATE session SET time_archived = 1500 WHERE id = 'ses_1'")
+        conn.execute("UPDATE session SET time_archived = 'yesterday' WHERE id = 'ses_2'")
+
+    with mock.patch.dict(os.environ, {"XDG_DATA_HOME": str(tmp_path)}):
+        page = sessions.updated_after(None, titles=True)
+
+    assert [(s.title, s.archived_ms) for s in page.sessions] == [("a title", 1500), ("a title", None)]
+
+
+def test_a_session_is_reopened_in_its_directory_quoted_for_the_shell() -> None:
+    assert sessions.reopen("ses_1", "/home/me/my notes") == "cd '/home/me/my notes' && opencode --session ses_1"
