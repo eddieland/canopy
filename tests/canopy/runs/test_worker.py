@@ -19,7 +19,7 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import cards, config, contract, db, definitions, prompts, run_models, workspace
+from canopy.core import cards, config, db, definitions, prompts, run_models, workspace
 from canopy.core.vocab import FlakyCause, RunStatus
 from canopy.runs import worker
 from canopy.runtime import servers
@@ -56,8 +56,8 @@ def test_worker_that_pushes_is_done(scenario: Scenario, git_pool: GitPool, treeh
     assert json.loads(run.row["result_json"]) == {
         "status": "done",
         "branch": "agent/PROJ-1-work",
-        "pr": "https://example.test/pr/1",
-        "prs": {"repo": "https://example.test/pr/1"},  # a result from before joint runs is read as the new contract
+        "pr": None,  # the contract before joint runs, which the `result` tool no longer takes
+        "prs": {"repo": "https://example.test/pr/1"},
         "pr_titles": None,  # nor did it report its PR's title
         "summary": "did it",
         "question": None,
@@ -83,6 +83,8 @@ def test_worker_that_pushes_is_done(scenario: Scenario, git_pool: GitPool, treeh
     assert w["env"] == {
         **{name: w["env"][name] for name in servers.env({}, version=scenario.env.runtime, cwd=scenario.env.root)},
         "CANOPY_RUN_ID": str(run.id),
+        # What its `result` call reports: a worker's result, with the groups this run is asked for (DESIGN §13).
+        "CANOPY_RESULT": "worker:created,drafts",
         "CANOPY_GIT_OBJECTS": str(objects),
         # Where the operator's answer to a question its card asks reaches it (DESIGN §41).
         "CANOPY_ANSWERS": str(scenario.env.state_dir / "runs" / f"{run.id}.answers"),
@@ -473,13 +475,30 @@ def test_no_commits_is_not_unpushed(scenario: Scenario, git_pool: GitPool) -> No
 
 
 @pytest.mark.parametrize(
-    ("last_line", "exit_code"),
-    [("not json", 0), ("", 0), ('{"status": "finished"}', 0), ('{"summary": "no status"}', 1)],
+    ("result", "exit_code"),
+    [
+        # Nothing reported: what a worker prints is nobody's result, a JSON object on its last line included.
+        ("not json", 0),
+        ("", 0),
+        # A result the tool refuses: a status, a field, or a type the worker's contract does not have.
+        ('{"status": "finished"}', 0),
+        ('{"summary": "no status"}', 1),
+        ('{"status": "done", "extra": "not a field"}', 0),
+        ('{"status": "done", "pr": "https://example.test/pr/1"}', 0),
+        ('{"status": "done", "summary": 1}', 0),
+        # A field of a group this run was not asked for: an `implement` leaves no check flaky.
+        ('{"status": "done", "flaky": true}', 0),
+    ],
 )
-def test_bad_result_line_is_unknown(scenario: Scenario, git_pool: GitPool, last_line: str, exit_code: int) -> None:
-    run = scenario.run(worker=worker_does(result=last_line, exit_code=exit_code))
+def test_a_worker_that_reports_no_result_is_unknown(
+    scenario: Scenario,
+    git_pool: GitPool,
+    result: str,
+    exit_code: int,
+) -> None:
+    run = scenario.run(worker=worker_does(result=result, exit_code=exit_code))
     assert run.status == "unknown"
-    assert json.loads(run.row["result_json"]) == {"harness": "the worker's last line was not a valid result"}
+    assert json.loads(run.row["result_json"]) == {"harness": "the worker reported no result"}
 
 
 RESULT = "canopy_run_result"
@@ -487,9 +506,9 @@ RESULT = "canopy_run_result"
 
 def test_a_result_reported_with_the_result_tool_is_the_runs_result(scenario: Scenario, git_pool: GitPool) -> None:
     """The worker's last `result` call the server took is its result, whatever it printed after."""
-    with_events(scenario.env, "canopy-worker")
     reported = [calls(RESULT, status="done", summary="early"), calls(RESULT, status="blocked", question="which API?")]
-    run = scenario.run(worker=worker_does(then_tools=reported, result="not json"))
+    line = '{"status": "failed", "summary": "printed, so read by nobody"}'
+    run = scenario.run(worker=worker_does(then_tools=reported, result=f"chatter\n{line}"))
     assert run.status == "blocked"
     result = json.loads(run.row["result_json"])
     assert (result["question"], result.get("harness")) == ("which API?", None)
@@ -497,33 +516,31 @@ def test_a_result_reported_with_the_result_tool_is_the_runs_result(scenario: Sce
 
 
 def test_a_result_the_result_tool_refused_is_no_result(scenario: Scenario, git_pool: GitPool) -> None:
-    """A call the server refused reports nothing, so the worker's last line is read, as before the tool."""
-    with_events(scenario.env, "canopy-worker")
-    refused = [calls(RESULT, status="finished")]
+    """A call the server refused reports nothing: it neither replaces the result before it nor stands as one."""
+    taken = calls(RESULT, status="blocked", question="which API?")
+    refused = calls(RESULT, status="finished")
+    run = scenario.run(worker=worker_does(then_tools=[taken, refused], result=""))
+    assert run.status == "blocked"
+    assert json.loads(run.row["result_json"])["question"] == "which API?"
+
+    # Nor is a line the worker printed read in its place.
     line = '{"status": "blocked", "question": "which API?"}'
-    run = scenario.run(worker=worker_does(then_tools=refused, result=line))
-    assert run.status == "blocked"
-    unreported = scenario.run(worker=worker_does(then_tools=refused, result="not json"))
+    unreported = scenario.run(worker=worker_does(then_tools=[refused], result=f"chatter\n{line}"))
     assert unreported.status == "unknown"
-
-
-def test_result_line_with_an_unclosed_array_is_read_and_noted(scenario: Scenario, git_pool: GitPool) -> None:
-    line = '{"status": "blocked", "question": "which API?", "review_answers": [{"review": 1, "finding": 1}}'
-    run = scenario.run(worker=worker_does(result=line))
-    assert run.status == "blocked"
-    result = json.loads(run.row["result_json"])
-    assert result["question"] == "which API?"
-    assert result["harness"] == contract.REPAIRED
-    assert git_pool.remote_head("agent/PROJ-1-work") is None
+    assert json.loads(unreported.row["result_json"]) == {"harness": "the worker reported no result"}
 
 
 def test_result_text_is_bounded(scenario: Scenario, git_pool: GitPool) -> None:
-    result = json.dumps({"status": "failed", "summary": "x" * 10000, "extra": "ignored"})
+    """The tool takes text of any length, and what canopy keeps of it is cut to its bound."""
+    result = json.dumps({"status": "failed", "summary": "x" * 10000})
     run = scenario.run(worker=worker_does(result=result))
     stored = json.loads(run.row["result_json"])
     assert run.status == "failed"
     assert len(stored["summary"]) == 2000
-    assert "extra" not in stored
+    # The reader, which reads what the tool took, passes over a field it does not know.
+    read = present(worker.parse_result(json.dumps({"status": "failed", "summary": "x" * 10000, "extra": "ignored"})))
+    assert len(read.summary) == 2000
+    assert "extra" not in read.model_dump()
 
 
 def test_timeout(scenario: Scenario, git_pool: GitPool, treehouse_state: Path) -> None:
@@ -690,7 +707,7 @@ def test_a_worker_records_the_session_and_cost_it_reported(
     with report_events(scenario.env):
         run = scenario.run(worker=pushes())
 
-    # The result line is read from the events' text, as it is from stdout without them.
+    # The result is read from the events: its `result` call.
     assert run.status == "done"
     assert json.loads(run.row["result_json"])["summary"] == "did it"
     assert unit_of(scenario.conn, "PROJ-1").pr_url == "https://example.test/pr/1"
@@ -704,8 +721,10 @@ def test_a_worker_records_the_session_and_cost_it_reported(
     first = ("tokens_first_call", "tokens_first_cache_write", "tokens_first_cache_read")
     assert tuple(row[c] for c in first) == (5500, 500, 4000)
     assert (scenario.env.state_dir / definitions.RUNTIME_DIR / row["definitions_digest"]).is_dir()  # the one it loaded
-    # Each command the fake ran is a `bash` call that returned its stdout.
-    assert tools_of(scenario.conn, "runs", run.id) == tools_printed(scenario.agent_log, "canopy-worker") != []
+    # Its `result` call is one of its tool calls, and each command the fake ran a `bash` call that returned its stdout.
+    [reporting, *ran] = tools_of(scenario.conn, "runs", run.id)
+    assert reporting[:3] == (RESULT, 1, 0)
+    assert ran == tools_printed(scenario.agent_log, "canopy-worker") != []
     # Which models served it, read from its session as it ended (DESIGN §13).
     assert [(m.model, m.replies) for m in run_models.of_run(scenario.conn, "runs", run.id)] == [
         ("anthropic/claude-x", 1),
@@ -753,7 +772,8 @@ def test_a_running_worker_shows_its_session_spend_and_latest_tool_call(scenario:
 
     # Once it ends, its row has its whole report, and its log what it printed in the same shape as ever.
     assert (run.status, run.row["session_id"], run.row["cost_usd"]) == ("done", "ses_w1", 0.25)
-    assert (run.row["activity_tool"], run.row["activity"]) == ("bash", f"sh -c cd {root} && canopy status")
+    # The last call it made was the one that reported its result.
+    assert (run.row["activity_tool"], run.row["activity"]) == (RESULT, "")
     out = run.printed.out
     assert re.search(r"--- worker stdout ---\n(\{.*\}\n)+\n--- worker stderr ---\n\n--- worker exit 0 ---\n", out)
 
@@ -788,7 +808,7 @@ def test_a_timed_out_worker_records_what_it_reported_before_the_kill(scenario: S
 
 def test_status_prints_what_a_worker_said_on_one_line(scenario: Scenario, git_pool: GitPool) -> None:
     summary = "\x1b[2Jcleared the screen\nand  went on   " + "x" * 300
-    result = json.dumps({"status": "failed", "summary": summary, "pr": "https://x.test/\x1b"})
+    result = json.dumps({"status": "failed", "summary": summary, "prs": {"repo": "https://x.test/\x1b"}})
     run = scenario.run(worker=worker_does(result=result))
     assert (run.status, run.row["session_id"], run.row["cost_usd"]) == ("failed", "ses_fake", 0.25)
 

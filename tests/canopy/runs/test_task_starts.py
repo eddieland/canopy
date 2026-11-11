@@ -432,7 +432,10 @@ def test_a_task_run_s_models_and_tool_calls_are_recorded_as_it_ends(
     assert [(m.model, m.replies) for m in run_models.of_run(inline.conn, "task_runs", run.id)] == [
         ("anthropic/claude-x", 1),
     ]
-    assert tools_of(inline.conn, "task_runs", run.id) == [("bash", 1, 0, len("read it\n"))]
+    # Its `result` call is one of its tool calls.
+    [reporting, *ran] = tools_of(inline.conn, "task_runs", run.id)
+    assert reporting[:3] == ("canopy_run_result", 1, 0)
+    assert ran == [("bash", 1, 0, len("read it\n"))]
     spent = spend.breakdown(inline.conn, datetime.now(UTC), 1, state_dir=inline.state_dir)
     assert [(m.model, m.runs, m.cost_usd) for m in spent.models if m.kind == "tasks"] == [
         ("anthropic/claude-x", 1, 0.25),
@@ -459,11 +462,12 @@ def test_a_task_run_keeps_its_workers_progress_but_never_a_question(
         tools=[calls(status, **progress), calls(status, **progress, question=question)],
     ):
         run = run_task(inline, started.run_id)
-    # The server refused the question: the first update is recorded, and both calls and the command counted since.
+    # The server refused the question: the first update is recorded, and counted since are both calls, the command,
+    # and the call that reported its result.
     [made] = [[(t["name"], t["error"]) for t in r["tools"]] for r in agent_runs(agent_log)]
     assert made == [(status, False), (status, True)]
     standing = cards.of(run)
-    assert (standing.card, standing.calls_since, run.card_asked_at) == (cards.Card.model_validate(progress), 2, None)
+    assert (standing.card, standing.calls_since, run.card_asked_at) == (cards.Card.model_validate(progress), 3, None)
     capsys.readouterr()
     assert operator("show", "task:1") == 0
     shown = capsys.readouterr().out
@@ -734,8 +738,7 @@ def test_a_task_in_a_repository_without_a_list_hears_none_and_is_not_held(
     (checklists_dir(canopy_env) / "other.md").write_text(CHECKLIST)
     submit()
     [started] = start(checking)
-    checklist = {"repo": {"general-types": "pass"}}
-    with private_worker_does(*commit_and_push(BRANCH), result={**DONE, "checklist": checklist}):
+    with private_worker_does(*commit_and_push(BRANCH), result=DONE):
         run = run_task(checking, started.run_id)
     [worker] = agent_runs(agent_log)
     assert "keeps a checklist" not in told(worker)
@@ -1280,23 +1283,21 @@ def test_a_key_outside_the_project_is_unrecorded_and_raises_its_item_until_a_rep
     assert unrecorded_items(inline) == []
 
 
-def test_a_task_with_no_project_records_no_key_and_raises_its_item_until_stopped(
+def test_a_task_with_no_project_is_not_asked_for_the_tickets_it_filed_and_records_no_key(
     inline: Context,
     agent_log: Path,
 ) -> None:
+    """Its result has no `created`, so the tool refuses one that names a ticket, and the run reports nothing."""
     submit()
     [started] = start(inline)
     with private_worker_does(result={**DONE, "created": ["PROJ-1"]}):
         run = run_task(inline, started.run_id)
+    assert run.status is RunStatus.UNKNOWN
+    assert json.loads(present(run.result_json)) == {"harness": "the worker reported no result"}
     assert task_tickets.of_task(inline.conn, 1) == []
-    assert (
-        "PROJ-1: the task names no project, so it files no tickets" in json.loads(present(run.result_json))["harness"]
-    )
     [worker] = agent_runs(agent_log)
     assert "File no tickets in the tracker: the operator submitted this task with no tracker project" in (told(worker))
-    assert [i.ticket_key for i in unrecorded_items(inline)] == ["task:1"]
-    assert operator("stop", "task:1") == 0
-    assert unrecorded_items(inline) == []
+    assert worker["env"]["CANOPY_RESULT"] == "task"
 
 
 def test_no_row_a_task_that_files_tickets_writes_names_a_ticket(inline: Context) -> None:

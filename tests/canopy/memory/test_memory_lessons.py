@@ -8,16 +8,18 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import pydantic
 import pytest
 
 from canopy.cli.main import main
 from canopy.core import db, memory, memory_manage, prompts, records
 from canopy.core.config import load
-from canopy.core.vocab import MemoryCited, MemoryScope, MemoryStatus, ResumeReason, RunKind
+from canopy.core.vocab import MemoryCited, MemoryMode, MemoryScope, MemoryStatus, ResumeReason, RunKind, RunStatus
 from canopy.infra import logs, resources
 from canopy.loop import attention
 from canopy.memory import attention as memory_attention
 from canopy.memory import reconcile as memory_reconcile
+from canopy.runs import worker
 from tests.canopy.helpers import (
     BRANCH,
     KEY,
@@ -51,6 +53,8 @@ WORK = dispatches(slug="work")
 FIX_CI = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CI])
 LESSON = "Run the API's tests with `make test-api`; plain `pytest` misses its fixtures."
 HEADING = "## Lessons from the operator"
+#: What the run's note says when its `result` tool took no result.
+NO_RESULT = "the worker reported no result"
 VALUES = {
     **PROMPT_VALUES,
     "AUTHORIZATION": prompts.plan_authorization(["agent-ready-alice"], private=False),
@@ -138,8 +142,9 @@ def promoted(
 def test_with_proposals_off_a_proposal_is_stored_nowhere(scenario: Scenario, git_pool: GitPool) -> None:
     scenario.configures("private", memory=memory_modes(ticket_notes="record"))
     run = scenario.run(WORK, worker=pushes(proposals=[{"key": "api-tests", "text": LESSON}]))
+    # The run is asked for notes alone, so its tool refuses a result that proposes.
+    assert (run.status, json.loads(run.row["result_json"])["harness"]) == (RunStatus.UNKNOWN, NO_RESULT)
     assert memories(scenario.conn) == []
-    assert '`"proposals":' not in run.prompt
 
 
 def test_at_record_a_proposal_waits_and_a_promoted_lesson_reaches_no_prompt(
@@ -156,7 +161,7 @@ def test_at_record_a_proposal_waits_and_a_promoted_lesson_reaches_no_prompt(
         "repo",
         first.id,
     )
-    assert '`"proposals":' in first.prompt
+    assert first.status == RunStatus.DONE
     promoted = scenario.operator("memory", "promote", str(proposal.id))
     assert "It is recorded, not served: memory.proposals is record" in promoted.out
     lesson = memories(conn)[-1]
@@ -195,8 +200,12 @@ def test_at_use_a_lesson_reaches_every_worker_prompt(
     assert f"Lesson {lesson.id}, `api-tests`:\n> {LESSON}" in text
     assert "A pending proposal that no prompt carries." not in text
     # Every run served lessons may cite them; only one that pushes may propose more (DESIGN §28).
-    assert '`"memory_used":[<id>]`' in text
-    assert ('`"proposals":' in text) is (kind in memory.NOTE_KINDS)
+    writes = kind in memory.NOTE_KINDS
+    contract = worker.WORKER if writes else worker.CONTRACTS[kind]
+    asked = contract.input(memory.asked_groups(rendered.modes, writes=writes)).model_fields
+    assert {"memory_used", "memory_wrong"} <= set(asked)
+    assert ("proposals" in asked) is writes
+    assert "notes" not in asked
 
 
 def test_the_reviewers_prompt_has_no_place_for_lessons() -> None:
@@ -244,9 +253,10 @@ def test_with_notes_in_use_and_lessons_recording_a_cited_lesson_changes_nothing(
     conn = scenario.conn
     scenario.configures("private", memory=memory_modes(ticket_notes="use", proposals="record"))
     lesson = promoted(conn, scenario.env)
-    text = scenario.run(WORK, worker=pushes(memory_used=[lesson.id], memory_wrong=[lesson.id])).prompt
-    assert '`"memory_used":[<id>]`' in text
-    assert HEADING not in text
+    # Shown its ticket's notes, the run may cite what it was shown, and a lesson is not among it.
+    run = scenario.run(WORK, worker=pushes(memory_used=[lesson.id], memory_wrong=[lesson.id]))
+    assert run.status == RunStatus.DONE
+    assert HEADING not in run.prompt
     assert memory.get(conn, lesson.id) == lesson
 
 
@@ -254,21 +264,21 @@ def test_a_plan_cites_the_lessons_it_relied_on_or_found_wrong_and_proposes_none(
     scenario: Scenario,
     git_pool: GitPool,
 ) -> None:
-    """A plan's citations renew a lesson and report one wrong, as a worker's do; a proposal from it is not written."""
+    """A plan's citations renew a lesson and report one wrong, as a worker's do; its tool takes no proposal."""
     conn, canopy_env = scenario.conn, scenario.env
     scenario.configures("private", memory=memory_modes(ticket_notes="use", proposals="use"))
     # From another ticket's run: a started ticket is not planned.
     used = promoted(conn, canopy_env, ticket="PROJ-2")
     wrong = promoted(conn, canopy_env, "Never run the linter.", key="lint", ticket="PROJ-2")
-    sent = {
-        "memory_used": [used.id, wrong.id],
-        "memory_wrong": [wrong.id],
-        "proposals": [{"key": "more", "text": "More."}],
-    }
+    sent = {"memory_used": [used.id, wrong.id], "memory_wrong": [wrong.id]}
     planner = planner_does(plan="# Plan\n\nDo it.\n", result={"status": "done", "summary": "planned it", **sent})
     run = scenario.run(dispatches(kind=RunKind.PLAN), worker=planner)
-    assert '`"memory_used":[<id>]`' in run.prompt
-    assert '`"proposals":' not in run.prompt
+    assert "relied on in `memory_used`, and of any you found wrong in `memory_wrong`" in run.prompt
+    assert "proposals" not in run.prompt
+    asked = worker.PLAN.input(memory.asked_groups(memory.Modes(MemoryMode.USE, MemoryMode.USE), writes=False))
+    asked.model_validate({"status": "done", **sent})
+    with pytest.raises(pydantic.ValidationError, match="proposals"):
+        asked.model_validate({"status": "done", "proposals": [{"key": "more", "text": "More."}]})
     assert memory.citations(conn, run.id) == {used.id: MemoryCited.USED, wrong.id: MemoryCited.WRONG}
     after = present(memory.get(conn, used.id))
     assert after.use_count == 1
@@ -297,17 +307,20 @@ def test_a_feedback_plan_cites_the_lessons_it_relied_on(
     assert present(memory.get(conn, lesson.id)).use_count == 1
 
 
-def test_while_lessons_record_a_plan_is_asked_for_no_memory_and_what_it_sends_changes_nothing(
+def test_while_lessons_record_a_plan_is_asked_for_no_memory_and_its_tool_refuses_what_it_cites(
     scenario: Scenario,
     git_pool: GitPool,
 ) -> None:
     conn = scenario.conn
     scenario.configures("private", memory=memory_modes(proposals="record"))
     lesson = promoted(conn, scenario.env, ticket="PROJ-2")
-    sent = {"memory_used": [lesson.id], "proposals": [{"key": "more", "text": "More."}]}
+    sent = {"memory_used": [lesson.id]}
     planner = planner_does(plan="# Plan\n\nDo it.\n", result={"status": "done", "summary": "planned it", **sent})
     run = scenario.run(dispatches(kind=RunKind.PLAN), worker=planner)
-    assert "That JSON object may also carry" not in run.prompt
+    assert (run.status, json.loads(run.row["result_json"])["harness"]) == (
+        RunStatus.UNKNOWN,
+        "the planner reported no result",
+    )
     assert HEADING not in run.prompt
     assert memory.get(conn, lesson.id) == lesson
     assert [m.id for m in memories(conn) if m.status is MemoryStatus.PENDING] == []
