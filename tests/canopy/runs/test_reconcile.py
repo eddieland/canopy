@@ -380,7 +380,7 @@ def test_live_tick_takes_a_ticket_to_a_pushed_branch(
         # A PR the `vcs` source reads, so the next tick lists the ticket to the overseer (DESIGN §39).
         worker_does(
             *commit_and_push("agent/PROJ-1-add-login"),
-            result=json.dumps(json.loads(WORKER_DONE) | {"pr": READ_PR}),
+            result=json.dumps(json.loads(WORKER_DONE) | {"prs": {"repo": READ_PR}}),
         ),
     ):
         assert main(["tick"]) == 0
@@ -392,7 +392,7 @@ def test_live_tick_takes_a_ticket_to_a_pushed_branch(
     assert run["branch"] == "agent/PROJ-1-add-login"
     assert run["pid"] is not None
     assert run["ended_at"] is not None
-    assert json.loads(run["result_json"])["pr"] == READ_PR
+    assert json.loads(run["result_json"])["prs"] == {"repo": READ_PR}
     assert git_pool.remote_head("agent/PROJ-1-add-login") is not None
     assert all(s["status"] == "available" for s in pool(treehouse_state))
 

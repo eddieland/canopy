@@ -111,8 +111,6 @@ def test_a_joint_implement_works_in_a_desk_and_opens_a_pr_per_repository(
     assert f"- `api` at `{desk / 'api'}`: branch `{BRANCH}` from `main`; PR: not recorded;" in prompt
     assert f"- `web` at `{desk / 'web'}`: branch `{BRANCH}` from `main`; PR: not recorded;" in prompt
     assert "Each PR's body links its sibling PRs and says which one merges first." in prompt
-    assert '"prs":{"api":"<url or null>","web":"<url or null>"}' in prompt
-    assert '"pr_titles":{"api":"<its title or null>","web":"<its title or null>"}' in prompt
 
     # The next run is told each unit's PR.
     resume = dispatches(kind=RunKind.RESUME, repo=("web", "api"), reasons=[ResumeReason.REVIEW])
@@ -373,7 +371,7 @@ def test_a_joint_prompt_override_without_the_repositories_is_refused(
     )
     [(action, reason)] = ws_scenario.refuses(dispatches(repo=("api", "web")))
     assert action == "refused:bad_prompt"
-    assert reason.endswith("missing required placeholder {{REPOSITORIES}}, {{PRS}}")
+    assert reason.endswith("missing required placeholder {{REPOSITORIES}}")
     assert pool_statuses(treehouse_state) == ["available", "available"]
     # The same override still serves a run in one repository.
     alone = ws_scenario.run(dispatches(repo="api"))

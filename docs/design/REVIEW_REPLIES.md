@@ -25,7 +25,7 @@ since the harness never branches on `tracker.provider` (§17).
 ### The drafts
 
 Under `approve`, an `implement` or `resume` worker, public or private, pushes as before and comments on no PR; a push
-never waits on the drafts. Its result line carries the drafts, parsed apart from the result:
+never waits on the drafts. Its result carries the drafts, checked apart from the rest of it:
 
 - a reply to a review thread, saying whether the run made the change, declined it, or answered a question. A decline is
   a draft too, and the run still reports `blocked`;

@@ -68,6 +68,8 @@ permission:
   # runs (DESIGN §19, History), which refuses any other chore's, and the reports its prompts name (DESIGN §27), each
   # of which writes nothing: `show-run` and `show-chore` and no ticket's page, which holds its conversation.
   "canopy_chore_history": allow
+  # And the `result` tool of the same server, which validates a result and writes nothing (DESIGN §13).
+  "canopy_chore_result": allow
   "canopy_reports_health": allow
   "canopy_reports_spend": allow
   "canopy_reports_decisions": allow

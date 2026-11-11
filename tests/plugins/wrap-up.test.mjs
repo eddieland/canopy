@@ -17,7 +17,7 @@ const { default: canopy } = await import(pathToFileURL(plugin).href);
 
 const TOLD =
     "[canopy] The operator stopped this ticket and asks you to wrap up now: finish what keeps your work (commit and" +
-    " push it, or record your decisions), start nothing new, then print your result line, its summary naming what" +
+    " push it, or record your decisions), start nothing new, then report your result, its summary naming what" +
     " remains.";
 
 let answers;

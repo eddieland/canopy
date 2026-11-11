@@ -593,3 +593,13 @@ such as a shipped migration, may still cite one, and git history has its text.
   linked to the tick's step that started it.
 - None of it leaves the machine unasked: canopy sends it only to the OTLP endpoint the operator names in private
   config, from `infra/otlp.py` alone, its one network call (T2); a scrape of it through a listener follows T8.
+
+## D133. An agent reports its result by a tool call, whose schema is the contract
+
+- Every agent but the overseer ends by calling canopy's `result` tool; the harness reads the call from the run's
+  events and validates it again. The tool's input schema describes each field, so a prompt never spells out JSON.
+- Why: a result written by hand as one JSON line was lost to a single wrong bracket, after the agent had exited.
+- So every agent template but the overseer's must print the runtime's events, and a new result field is a described
+  field of its contract's model (`core.run_result`), never prose in a prompt.
+- Rejected: repairing or re-asking for a printed line; a server that writes the result to a file, which would let an
+  agent's process write what canopy records.

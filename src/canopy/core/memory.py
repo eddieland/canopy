@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, assert_never
 
-from pydantic import BaseModel, ConfigDict, JsonValue
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, StrictInt, StrictStr
 
 from canopy.core import contract, db, records, sql
 from canopy.core.memory_text import TextRefused, check_key, check_text, normalized, quoted
@@ -70,7 +70,6 @@ HARNESS_REASONS = frozenset({PROPOSAL_REASON, REVIEW_REASON, WRONG_REASON})
 # The placeholders a prompt carries memory in (`prompts.MEMORY_PARTS`).
 TICKET_MEMORY = "TICKET_MEMORY"
 WORKSPACE_LESSONS = "WORKSPACE_LESSONS"
-MEMORY_CONTRACT = "MEMORY_CONTRACT"
 # What a run is told to run to search its memory past its digest (`canopy memory search`).
 SEARCH_COMMAND = "canopy memory search WORDS"
 _NOTES_HEADING = "## Notes from earlier runs"
@@ -200,12 +199,11 @@ class Rendered:
 def render(conn: sqlite3.Connection, config: Config, *, key: str, kind: str, repos: Collection[str]) -> Rendered | None:
     """Return memory's part of a `kind` run's prompt for ticket `key`, or None when no tier reaches it (DESIGN §28).
 
-    While a tier records, nothing of what was written is rendered: the prompt carries the contract alone, which asks
-    the worker to write. At `use`, ticket notes render `key`'s digest into `{{TICKET_MEMORY}}`, and lessons the ones
-    for `repos` into `{{WORKSPACE_LESSONS}}`; their ids are the ones the run may cite. A prompt for a kind the
-    contract reaches must carry `{{MEMORY_CONTRACT}}`, and one served a digest its placeholder, so an override written
-    before memory existed fails to render rather than drop either. A plan's contract asks only for its citations, so
-    it reaches a plan only at `use`.
+    While a tier records, nothing of what was written is rendered: the run's `result` tool alone asks the worker to
+    write, in the fields it lists (`asked_groups`). At `use`, ticket notes render `key`'s digest into
+    `{{TICKET_MEMORY}}`, and lessons the ones for `repos` into `{{WORKSPACE_LESSONS}}`; their ids are the ones the run
+    may cite. A prompt served a digest must carry its placeholder, so an override written before memory existed fails
+    to render rather than drop it.
 
     Returns:
         The modes the run is rendered under, the placeholders' values, the placeholders the prompt must carry, and the
@@ -217,9 +215,6 @@ def render(conn: sqlite3.Connection, config: Config, *, key: str, kind: str, rep
     values: dict[str, str] = {}
     required: list[str] = []
     ids: list[int] = []
-    if kind in NOTE_KINDS or modes.proposals is MemoryMode.USE:
-        values[MEMORY_CONTRACT] = memory_contract(modes, writes=kind in NOTE_KINDS)
-        required.append(MEMORY_CONTRACT)
     if modes.ticket_notes is MemoryMode.USE:
         digest = ticket_digest(conn, key)
         # It starts the line of the heading after it, so it ends with the blank line before that heading; a ticket with
@@ -234,82 +229,6 @@ def render(conn: sqlite3.Connection, config: Config, *, key: str, kind: str, rep
         required.append(WORKSPACE_LESSONS)
         ids.extend(lessons.ids)
     return Rendered(modes=modes, values=values, required=tuple(required), ids=tuple(ids))
-
-
-def memory_contract(modes: Modes, *, writes: bool = True) -> str:
-    """Return `{{MEMORY_CONTRACT}}`: the result fields the run's modes ask for, with their bounds (DESIGN §28).
-
-    It follows the result line, which cannot carry fields that come and go with the config, so it says they go in the
-    same JSON object. It asks for each field only while the tier that owns it allows it, and without `writes`, a
-    planner's, for no proposal: only which memories it relied on or found wrong.
-
-    Returns:
-        The contract, starting with the blank line before it; "" when it asks for nothing.
-    """
-    fields: list[str] = []
-    if modes.ticket_notes is not MemoryMode.OFF:
-        # A fact that outlives the ticket is pointed at the proposals, or away, since a note ends with its ticket.
-        elsewhere = "propose it as a lesson instead" if modes.proposals is not MemoryMode.OFF else "leave it out"
-        fields.append(
-            f'- `"notes":[{{"key":"<key>","text":"<note>"}}]`: at most {MAX_NOTES_PER_RUN} notes for this '
-            "ticket's later runs, about this ticket's work that the next run would otherwise have to find again. A "
-            "note ends with its ticket, so it holds only what is true of this ticket alone. What would hold for "
-            "another ticket too, such as what the tools, the tracker, or your access here can or cannot do, or how "
-            f"a repository's tests must be run, is not a note: {elsewhere}. Not what your summary, the branch, or its "
-            "commits already say, and not what you did: those reach the next run anyway. Each key is lowercase "
-            "words joined by hyphens, at most 40 characters, starting with what kind of note it is: `cause-` for a "
-            "cause of this ticket's problem you found, `dead-end-` for an approach to it that failed and why, "
-            "`check-` for how to reproduce or verify it, such as a test to run; then its subject, as in "
-            "`cause-ci-timeout`. A note under a key already written replaces it, so to revise one, keep its key. "
-            "Each text is plain text, line breaks sparingly, at most "
-            f"{MAX_NOTE_CHARS} characters, in your own words, in this shape: `<what holds>. Evidence: <a path and "
-            "line, a test, a command and its outcome, or a commit>. Next: <what a later run should do or skip>.` "
-            "Never ticket, PR, or log text copied in, never a secret, token, or password.",
-        )
-    if writes and modes.proposals is not MemoryMode.OFF:
-        fields.append(
-            f'- `"proposals":[{{"key":"<key>","text":"<lesson>","repo":"<repository>"}}]`: at most '
-            f"{MAX_PROPOSALS_PER_RUN} lessons you propose for every later run in this workspace, not this ticket "
-            "alone: what any worker here should know, whatever its ticket, such as how a repository's tests must be "
-            "run, or what the tools, the tracker, or your access here cannot do. What you learned that would hold "
-            "for another ticket belongs here. Propose only what this run showed, by a command you ran or a failure "
-            "you saw, and what the repository's own docs, such as its `AGENTS.md`, do not already say. The operator "
-            "reads each and may promote it; none reaches a run until then. Give `repo` only for a lesson about one "
-            "repository you worked in, and leave it out otherwise. Each key is lowercase words joined by hyphens, "
-            "naming the lesson's subject, as in `tests-need-docker`. Each text is plain text, line breaks "
-            f"sparingly, at most {MAX_PROPOSAL_CHARS} characters, in your own words, never a secret, in this shape: "
-            "`<what to do or not do, as an instruction to any worker>. Why: <what showed it>. When: <the task, path, "
-            "or step it applies to>.`",
-        )
-    if modes.ticket_notes is MemoryMode.USE:
-        fields.append(
-            '- `"drop_notes":["<key>"]`: the keys of notes shown above that no longer hold, such as one about a '
-            "failure since fixed.",
-        )
-    if MemoryMode.USE in (modes.ticket_notes, modes.proposals):
-        fields.append(
-            '- `"memory_used":[<id>]` and `"memory_wrong":[<id>]`: the ids of the notes or lessons this prompt shows '
-            "that you relied on, and of those you checked and found wrong. Cite only ids it shows, and leave out what "
-            "you did not use.",
-        )
-    if not fields:
-        return ""
-    lines = [
-        "",
-        "",
-        (
-            "That JSON object may also carry these fields, each optional; leave out any you have nothing for, since an "
-            "empty list is better than an entry that would not help:"
-        ),
-        "",
-        *fields,
-        "",
-        (
-            "What you write here is kept by canopy, never posted, and read by the operator. Mention none of it on the "
-            "ticket or a PR."
-        ),
-    ]
-    return "\n".join(lines)
 
 
 def record_rendered(conn: sqlite3.Connection, run_id: int, rendered: Rendered) -> None:
@@ -335,7 +254,7 @@ def run_memory(conn: sqlite3.Connection, run_id: int) -> records.RunMemory | Non
 
 
 class Fields(BaseModel):
-    """A worker's memory fields, read from its result line apart from the result (DESIGN §28, Writing).
+    """A worker's memory fields, read from its result apart from the rest of it (DESIGN §28, Writing).
 
     Untrusted: each entry is checked as it is written, and refused alone, so one bad entry costs only itself.
     """
@@ -349,8 +268,139 @@ class Fields(BaseModel):
     memory_wrong: JsonValue = None
 
 
+class Note(BaseModel):
+    """A note a run writes for its ticket's later runs, as its `result` call sends it."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
+
+    key: StrictStr = Field(
+        description="Lowercase words joined by hyphens, at most 40 characters, starting with the kind of note: "
+        "`cause-` for a cause of this ticket's problem you found, `dead-end-` for an approach that failed and why, "
+        "`check-` for how to reproduce or verify it; then its subject, as in `cause-ci-timeout`. A note under a key "
+        "already written replaces it, so to revise one, keep its key.",
+    )
+    text: StrictStr = Field(
+        description=f"Plain text, line breaks sparingly, at most {MAX_NOTE_CHARS} characters, in your own words, in "
+        "this shape: `<what holds>. Evidence: <a path and line, a test, a command and its outcome, or a commit>. "
+        "Next: <what a later run should do or skip>.` Never ticket, PR, or log text copied in, never a secret.",
+    )
+
+
+class Proposal(BaseModel):
+    """A lesson a run proposes for every later run in the workspace, as its `result` call sends it."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
+
+    key: StrictStr = Field(
+        description="Lowercase words joined by hyphens, naming the lesson's subject, as in `tests-need-docker`.",
+    )
+    text: StrictStr = Field(
+        description=f"Plain text, line breaks sparingly, at most {MAX_PROPOSAL_CHARS} characters, in your own words, "
+        "never a secret, in this shape: `<what to do or not do, as an instruction to any worker>. Why: <what showed "
+        "it>. When: <the task, path, or step it applies to>.`",
+    )
+    repo: StrictStr | None = Field(
+        default=None,
+        description="The repository the lesson is about, only for a lesson about one repository you worked in.",
+    )
+
+
+#: What the tool says of every memory field: who reads it.
+_KEPT = "Kept by canopy, never posted, and read by the operator: mention none of it on the ticket or a PR."
+
+
+class NotesGroup(BaseModel):
+    """The notes a run may write, a group of its result's fields (`core.run_result`) while ticket notes are on."""
+
+    model_config = ConfigDict(frozen=True, defer_build=True)
+
+    notes: list[Note] = Field(
+        default_factory=list,
+        description=f"At most {MAX_NOTES_PER_RUN} notes for this ticket's later runs, about this ticket's work that "
+        "the next run would otherwise have to find again. A note ends with its ticket, so it holds only what is true "
+        "of this ticket alone: what would hold for another ticket too, such as what the tools or your access here "
+        "can or cannot do, or how a repository's tests must be run, is not a note. Not what your summary, the branch, "
+        f"or its commits already say, and not what you did: those reach the next run anyway. Leave it out when you "
+        f"have none, since no note is better than one that would not help. {_KEPT}",
+    )
+
+
+class DropNotesGroup(BaseModel):
+    """The notes a run may drop, a group of its result's fields while it is shown its ticket's notes."""
+
+    model_config = ConfigDict(frozen=True, defer_build=True)
+
+    drop_notes: list[StrictStr] = Field(
+        default_factory=list,
+        description="The keys of notes your message shows that no longer hold, such as one about a failure since "
+        "fixed.",
+    )
+
+
+class ProposalsGroup(BaseModel):
+    """The lessons a run may propose, a group of its result's fields while proposals are on."""
+
+    model_config = ConfigDict(frozen=True, defer_build=True)
+
+    proposals: list[Proposal] = Field(
+        default_factory=list,
+        description=f"At most {MAX_PROPOSALS_PER_RUN} lessons you propose for every later run in this workspace, not "
+        "this ticket alone: what any worker here should know, whatever its ticket, such as how a repository's tests "
+        "must be run, or what the tools, the tracker, or your access here cannot do. Propose only what this run "
+        "showed, by a command you ran or a failure you saw, and what the repository's own docs, such as its "
+        "`AGENTS.md`, do not already say. The operator reads each and may promote it; none reaches a run until then. "
+        f"Leave it out when you have none. {_KEPT}",
+    )
+
+
+class CitedGroup(BaseModel):
+    """The memories a run cites, a group of its result's fields while it is shown any."""
+
+    model_config = ConfigDict(frozen=True, defer_build=True)
+
+    memory_used: list[StrictInt] = Field(
+        default_factory=list,
+        description="The ids of the notes or lessons your message shows that you relied on. Cite only ids it shows, "
+        "and leave out what you did not use.",
+    )
+    memory_wrong: list[StrictInt] = Field(
+        default_factory=list,
+        description="The ids of the notes or lessons your message shows that you checked and found wrong.",
+    )
+
+
+#: The groups of a result's fields memory asks for, by name (`core.run_result`).
+GROUPS: Mapping[str, type[BaseModel]] = {
+    "notes": NotesGroup,
+    "drop_notes": DropNotesGroup,
+    "proposals": ProposalsGroup,
+    "cited": CitedGroup,
+}
+
+
+def asked_groups(modes: Modes, *, writes: bool = True) -> list[str]:
+    """The groups of `GROUPS` a run rendered under `modes` is asked for (DESIGN §28).
+
+    Each is asked only while the tier that owns it allows it, and without `writes`, a planner's, for no note or
+    proposal: only which memories it relied on or found wrong.
+
+    Returns:
+        The groups' names; none when no tier reaches the run.
+    """
+    groups: list[str] = []
+    if writes and modes.ticket_notes is not MemoryMode.OFF:
+        groups.append("notes")
+    if writes and modes.proposals is not MemoryMode.OFF:
+        groups.append("proposals")
+    if writes and modes.ticket_notes is MemoryMode.USE:
+        groups.append("drop_notes")
+    if MemoryMode.USE in (modes.ticket_notes, modes.proposals):
+        groups.append("cited")
+    return groups
+
+
 def parse(text: str) -> Fields | None:
-    """Parse the memory fields of `text`'s result line, the last line that starts with `{` (DESIGN §13).
+    """Parse the memory fields of `text`, the result a run reported, as it reported it (DESIGN §13).
 
     Returns:
         The fields, or None when there is no such line or it is not a JSON object.
@@ -388,7 +438,7 @@ def record_run(conn: sqlite3.Connection, run_id: int, fields: Fields | None, *, 
 
     Call inside the transaction that closes the run. The ticket is the run's own, read from its row, never from the
     result. A run rendered with every tier off has no `run_memory` row and writes nothing, whatever it sent; so does one
-    whose result line was not a valid result, which is why `fields` is None. A field the run's modes did not ask for
+    that reported no valid result, which is why `fields` is None. A field the run's modes did not ask for
     changes nothing, and nor do a planner's proposals: a plan only cites. `head` is the commit the run's branch was at
     when its worker ended.
 

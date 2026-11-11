@@ -51,7 +51,7 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
     # Every section the block can have: a chore, reviews, a notice, tickets in each state the block tells apart, and
     # the harness's dispatches to come.
     prompts(canopy_env, "build-health", "deps")
-    template = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-reviewer {prompt}"
+    template = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-reviewer --format json {prompt}"
     user = canopy_env.user_file.read_text().replace("[runtime]\n", f"[runtime]\nreview_cmd = '{template}'\n", 1)
     # build-health is the overseer's to decide; deps, with no `when`, is the harness's to run (DESIGN §37).
     canopy_env.write_user(

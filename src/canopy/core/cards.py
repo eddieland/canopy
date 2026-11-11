@@ -431,7 +431,7 @@ def deliver(path: Path, answered: Answered) -> bool:
 def ask_wrap_up(path: Path) -> bool:
     """Ask the running agent whose answers directory is at `path` to wrap up, when it was asked, for it to read.
 
-    canopy's plugin tells the agent on its next tool call to keep its work and print its result line (DESIGN §22).
+    canopy's plugin tells the agent on its next tool call to keep its work and report its result (DESIGN §22).
 
     Returns:
         Whether it was asked: False when the directory is gone, its run having ended.
