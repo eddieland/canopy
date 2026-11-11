@@ -12,9 +12,10 @@ with a unit's PR no source reads at all, its URL naming no PR, until the operato
 `merged` row while a `multi_repo` item is open on it: a repository's part may remain. An item the overseer holds
 open on a ticket the harness takes stands while the overseer is not given the ticket (`attention.current`).
 
-The rows it decides are `ROWS`: only those it reads from its own journal alone, which need no measurement (§37, The
-evidence gate). A row that rests on what a connector observed joins them only by a PR citing the measurement that shows
-the derivation right on it; no switch in config turns one on.
+The rows it decides are `ROWS`: those it reads from its own journal alone, which need no measurement (§37, The
+evidence gate); `CLOSED`, a ticket the tracker says is closed, which it marks done; and `UNLABELED`, an open ticket
+with no queue label the query returned, which it skips. A row that rests on what a connector observed joins them only
+by a PR citing the measurement that shows the derivation right on it; no switch in config turns one on.
 
 Whatever the overseer records about a ticket the harness decided, through any of its tools, is refused `decided`
 (`loop.tools`), and the duties check owes it nothing about one (§6). A cursor the harness moves, past what needs no
@@ -25,10 +26,11 @@ nothing about the ticket.
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, TypedDict
 
-from canopy.core import conversation, db, kept_items, records
+from canopy.core import connector_runs, conversation, db, kept_items, memory, records
 from canopy.core.vocab import Decider, Phase
 from canopy.loop import attention
 
@@ -63,6 +65,17 @@ ROWS: Mapping[Phase, Row] = {
     Phase.RUNNING: Row("wait", "a worker of it is running"),
     Phase.NEEDS_HUMAN: Row("wait", "its latest run asked the operator, who has not answered", private_only=True),
 }
+#: The row of a ticket the tracker says is closed, with no worker of it running and none of its units holding a row or
+#: stale: marked `done` (§7). Enabled on MEASUREMENTS "2026-11-10: M38, the derivation against the overseer over two
+#: weeks": five situations, no disagreement. One with a worker running, or with a unit's PR holding a row or not read
+#: fresh, stays the overseer's: none was measured.
+CLOSED = Row("done", "the tracker says it is closed")
+#: The row `none` of an open ticket with no queue label, not one the operator started, that the tracker query returned:
+#: `skip` (§7, §17). Enabled on the same measurement: six situations, no disagreement. One with a worker running, or a
+#: unit holding a row or stale, holds a row, and is the overseer's; one the query did not return is let go, unlisted
+#: (`phases.let_go`), so neither decides it; and a candidate no row holds for stays the overseer's, its `wait` or `skip`
+#: judgment.
+UNLABELED = Row("skip", "open, with no queue label")
 
 
 @dataclass(frozen=True)
@@ -70,7 +83,7 @@ class Decision:
     """A ticket the harness decides this tick: what it records, and the phase it sets."""
 
     key: str
-    #: None for a ticket whose observation is stale: no row was derived, so its phase stays as it was.
+    #: None where no row of §7 sets one, so its phase stays as it was: a ticket stale, closed, or with no queue label.
     phase: Phase | None
     action: str
     rationale: str
@@ -97,12 +110,13 @@ def decide(ctx: Context, derived: Iterable[Derived]) -> list[Decision]:
     apart = (
         {i.ticket_key for i in attention.current(ctx.conn) if i.reason == kept_items.MULTI_REPO} if merged else set()
     )
+    queried = frozenset(connector_runs.query_result(ctx.conn))
     found: list[Decision] = []
     for key in sorted(by_ticket):
         subjects = by_ticket[key]
         if key in apart and any(Phase.MERGED in s.phases for s in subjects):
             continue
-        decision = _decided(ctx.conn, key, subjects)
+        decision = _decided(ctx.conn, key, subjects, queried)
         if decision is not None:
             found.append(decision)
     return found
@@ -112,13 +126,20 @@ def record(conn: sqlite3.Connection, tick_id: int, repo: str, decisions: Iterabl
     """Record the harness's `decisions` in tick `tick_id`, each marked as its own, with its phase, in one transaction.
 
     `repo` is the workspace root a ticket the journal touches is recorded under. A dry run records them too: they are
-    decisions, not actions, and its corpus holds who made each (D036).
+    decisions, not actions, and its corpus holds who made each (D036). Only a live tick marks a `done` ticket done, as
+    only a live tick's `ticket set` does, or the first live tick would never see the ticket.
     """
+    tick = db.get_tick(conn, tick_id)
+    live = tick is not None and not tick.dry_run
     with db.transaction(conn):
         for d in decisions:
             db.touch_ticket(conn, d.key, repo)
             if d.phase is not None:
                 db.change_ticket(conn, d.key, "phase", d.phase)
+            if d.action == CLOSED.action and live:
+                db.change_ticket(conn, d.key, "done", 1)
+                # A done ticket's notes are invalidated: its work merged or was closed (DESIGN §28, Retention).
+                memory.end_ticket_notes(conn, d.key, "ticket done")
             db.record_decision(conn, tick_id, d.key, d.action, d.rationale, decider=Decider.HARNESS)
 
 
@@ -155,8 +176,15 @@ def section(decisions: Iterable[records.Decision]) -> list[Decided]:
     return [{"ticket": str(d.ticket_key), "action": d.action, "why": d.rationale} for d in decisions]
 
 
-def _decided(conn: sqlite3.Connection, key: str, subjects: Sequence[Derived]) -> Decision | None:
+def _decided(
+    conn: sqlite3.Connection,
+    key: str,
+    subjects: Sequence[Derived],
+    queried: AbstractSet[str],
+) -> Decision | None:
     """The harness's decision about ticket `key`, from its derived `subjects`: its own row first, then its units'.
+
+    `queried` is what the tracker query last returned.
 
     Returns:
         The decision, or None when the ticket is left to the overseer.
@@ -175,7 +203,9 @@ def _decided(conn: sqlite3.Connection, key: str, subjects: Sequence[Derived]) ->
         else:
             why = f"stale: {what}; it waits for the {source} source to read it again"
         return Decision(key, None, "wait", why)
-    if own.repo is not None or own.stale is not None or own.closed or not own.candidate or not own.phases:
+    if own.repo is None and own.stale is None and not own.candidate:
+        return _closed(conn, key, subjects) if own.closed else _unlabeled(key, subjects, queried)
+    if own.repo is not None or own.stale is not None or not own.phases:
         return None
     private = conversation.is_started(conversation.start_of(conn, key))
     if not all(_takes(s, private=private) for s in subjects):
@@ -183,6 +213,33 @@ def _decided(conn: sqlite3.Connection, key: str, subjects: Sequence[Derived]) ->
     phase = own.phases[0]
     row = ROWS[phase]
     return Decision(key, phase, row.action, f"{phase}: {row.why}")
+
+
+def _closed(conn: sqlite3.Connection, key: str, subjects: Sequence[Derived]) -> Decision | None:
+    """The harness's `done` for ticket `key`, which the tracker says is closed, as `CLOSED` takes it.
+
+    Returns:
+        The decision, or None when it is left to the overseer: a worker of it is running, which the derivation of a
+        closed ticket does not show, or one of its units holds a row or is stale.
+    """
+    if any(s.phases or s.stale is not None for s in subjects) or db.running_run_of(conn, key) is not None:
+        return None
+    ticket = db.get_ticket(conn, key)
+    if ticket is not None and ticket.done:
+        return None
+    return Decision(key, None, CLOSED.action, f"closed: {CLOSED.why}")
+
+
+def _unlabeled(key: str, subjects: Sequence[Derived], queried: AbstractSet[str]) -> Decision | None:
+    """The harness's `skip` for ticket `key`, open and no candidate, as `UNLABELED` takes it.
+
+    Returns:
+        The decision, or None when it is left to the overseer, a row holding for it or a unit stale, or to no one, the
+        query not having returned it.
+    """
+    if key not in queried or any(s.phases or s.stale is not None for s in subjects):
+        return None
+    return Decision(key, None, UNLABELED.action, f"not_labeled: {UNLABELED.why}")
 
 
 def _stale(subjects: Sequence[Derived]) -> tuple[str, str | None] | None:

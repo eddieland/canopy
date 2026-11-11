@@ -141,5 +141,17 @@ tool results go"): at or above it, `implement`'s bash, read, and skill; `resume`
 and grep; the reviewer's read and `canopy_git_diff`; a chore's tracker search, bash, and `github_pull_request_read`; and
 the overseer's `canopy_decide`, grep, `canopy_review-items`, and `canopy_dispatch`. `canopy_git_show` (0.072 of the
 planner's, 0.050 of the reviewer's) and `github_pull_request_read` (0.078 of `resume`'s, 0.062 of the reviewer's) are
-under it, and the shell's `gh` reads are not split out of bash. Open for the operator: which later stages proceed on
-these numbers.
+under it, and the shell's `gh` reads are not split out of bash. Settled 2026-11-11, at the operator's ask to resolve
+what was open, by that threshold, for the operator to change. Of stage 1, the steer on a cut `canopy_git_diff` goes
+ahead, `diff` being 0.181 of the reviewer's. `canopy_git_show`'s range is held, under a tenth of both its roles'. The
+partial `status` and the overseer's prompt are held too, chosen conservatively: neither narrows a result, so these
+numbers say nothing for them; what `status` calls sent is in the command's `--json` and not in the section. Accept's
+live checks of the range and of a step updated by title wait with those cuts. Stage 2 does not proceed on these numbers.
+For a review's run that is settled: the reviewer has no shell, and `github_pull_request_read` is 0.062 of its results.
+For a `resume` it is not: its `gh pr view` reads are inside `bash`, as stage 3's `gh run view` reads are, so stage 3
+waits the same way. This measurement cannot split them: the command names a shell call by its program where the
+runtime's reader hands it the command, and OpenCode 2's hands it for a tool named `shell` alone
+(`runtime/opencode2/transcript.py`), so the calls the operator's record names `bash` are one row. OpenCode 2.2.5's
+build, read and not run, takes `bash` as another name for its `shell`. So stages 2 and 3 wait on that reader taking
+`bash` for the shell too, then on a new measurement, in a section of its own, with the shell's rows and what `status`
+sent, read against the same threshold.

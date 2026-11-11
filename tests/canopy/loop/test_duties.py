@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 from canopy.core import db
-from canopy.core.vocab import Phase, TickStatus
+from canopy.core.vocab import Decider, Phase, TickStatus
 from canopy.loop import attention, duties, phases
 from tests.canopy.helpers import LABEL, calls, chore_toml, chore_waits, decides, in_tick, raises, seen, waits
 from tests.canopy.scenario_helpers import Scenario, sets_phase
@@ -187,12 +187,18 @@ def test_an_unlabeled_ticket_started_since_its_derivation_is_listed(scenario: Sc
     assert phases.let_go(scenario.conn, derived) == set()
 
 
-def test_an_unlabeled_ticket_the_query_still_returns_is_owed_a_skip(scenario: Scenario, connector_state: Path) -> None:
+def test_an_unlabeled_ticket_the_query_still_returns_is_the_harnesss_skip(
+    scenario: Scenario,
+    connector_state: Path,
+) -> None:
+    """Its row, `none`, is the harness's (DESIGN §37), so the overseer owes it nothing and is not run for it."""
     scenario.seen("PROJ-1")
     connector_state.write_text(json.dumps({TRACKER_SOURCE: {"query": ["PROJ-1"], "lines": [unlabeled("PROJ-1")]}}))
-    failed = scenario.tick(code=1)
-    assert failed.tick.summary == "overseer left duties undone: no decision for PROJ-1"
-    assert scenario.ticket_state("PROJ-1")["key"] == "PROJ-1"
+    ticked = scenario.tick()
+    assert (ticked.tick.status, ticked.tick.overseer_ran) == (TickStatus.OK, False)
+    assert [(d.ticket_key, d.action, d.decider) for d in ticked.decisions if d.ticket_key == "PROJ-1"] == [
+        ("PROJ-1", "skip", Decider.HARNESS),
+    ]
 
 
 def test_stopped_and_recently_done_tickets_are_owed_nothing(

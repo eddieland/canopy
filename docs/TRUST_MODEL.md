@@ -68,6 +68,10 @@ Controls:
   for. A worker's prompt names its copy and gives its outline, never its text, and says the prompt's obligations come
   before it, as before the standing instructions; a plan cannot widen what a worker may do. The worker reads the
   approved text alone: `_run` checks the file against the hash the operator approved before it writes the copy.
+- A session's title, which `sessions.search` keeps (DESIGN §13), is whatever the runtime made of the session's first
+  words or a run named it, ticket and PR text among them: data, kept on one line, bounded, with every control and
+  hidden character dropped, rendered as text, and put in no prompt. A search of titles is words found as text, never
+  a pattern, and no agent canopy runs can list or search them.
 - Workers can push only to `trust.branch_prefix` branches, with one exception: the head branch of an open PR the
   operator authored and labeled with one of `tracker.labels` (PR-scoped work, ROADMAP M14, D056). Enforced by the
   worker prompt and by repository branch protection, which the operator must configure. canopy `init` prints the
@@ -129,16 +133,19 @@ Controls:
   local store's database or starts a server of its own, leaves the ticket the worker's word, so a steered worker could
   name another ticket the journal holds: a listed author's comment on its artifact would then steer that ticket's next
   worker, and anyone else's would raise an item about it.
-- The harness records the decisions that need no judgment itself, before the overseer runs (DESIGN §37): today only
-  `wait`, for a ticket whose worker is running and for a private ticket's question the operator has not answered,
-  each read from the journal, and only when every row the derivation finds for the ticket and its units is one of
-  these, none stale. Such a ticket's text reaches no overseer that tick, and whatever the overseer records about it, a
-  decision, dispatch, attention item, or `ticket-set`, is refused `decided`, so a steered overseer cannot overrule the
-  harness; an item the overseer raised on it stands until the overseer is given the ticket again, or it is done or
-  stopped. Residual: the harness reads the absence of every other row from the
-  derivation, so a row it misses waits until the overseer is given the ticket again. Its dispatches carry no
-  model-written context: today it starts only a due chore with no `when`, whose `chore-run` and `chore-wait` the
-  overseer is refused `decided`, and no ticket's run, since each rests on an observation.
+- The harness records the decisions that need no judgment itself, before the overseer runs (DESIGN §37): today `wait`,
+  for a ticket whose worker is running and for a private ticket's question the operator has not answered, each read from
+  the journal, and `done` for a ticket the `tracker` source read closed and `skip` for one it read open with no queue
+  label that the query returned, each with no worker of it running and none of its units holding a row; and only when
+  every row the derivation finds for the ticket and its units is one of these, none stale. Such a ticket's text reaches
+  no overseer that tick, and whatever the overseer records about it, a decision, dispatch, attention item, or
+  `ticket-set`, is refused `decided`, so a steered overseer cannot overrule the harness; an item the overseer raised on
+  it stands until the overseer is given the ticket again, or it is done or stopped. Residual: the harness reads the
+  absence of every other row from the derivation, so a row it misses waits until the overseer is given the ticket again;
+  and a tracker that reports a ticket closed ends canopy's work on it, as the overseer reading the same observation
+  would, until the operator forgets the ticket. Its dispatches carry no model-written context: today it starts only a
+  due chore with no `when`, whose `chore-run` and `chore-wait` the overseer is refused `decided`, and no ticket's run,
+  since each rests on an observation.
 - The attention items that need no judgment (`needs_reviewer`, `ready_to_merge`, `untrusted_review`, `attempt_limit`,
   `review_failed`, `review_limit`, `plan_review`, `plan_changed`) are the harness's, raised from the journal and the
   observations in its own words, and kept while an observation they rest on is stale (DESIGN §14). The overseer is
@@ -927,6 +934,14 @@ Controls:
   the reports their prompts read allowed: health, spend, decisions, a run's and a chore's page, the config's settings,
   and what each agent is offered for `canopy-introspect`, and memory's listings for `canopy-memory-tickets`. Neither
   has a shell.
+- Every session's title (DESIGN §13): while the private `sessions.search` is `titles`, the journal keeps the title of
+  every session the runtime keeps, as it keeps their spend: private tickets' runs' and the operator's own, in any
+  directory, among them. Only the operator reads them: `canopy sessions` refuses inside a tick or a run, and no tool,
+  report, or prompt section serves them, so no run reads another ticket's work or the operator's own through canopy.
+  A directory `sessions.exclude` names is listed nowhere, and `off`, the default, keeps no title. A title kept before
+  either change stays in the journal until the loop's next read drops it, which it does before it reads anything;
+  until then nothing lists it, since the command lists by the config in force and refuses at `off`. An unsandboxed
+  run could already read the runtime's record itself, the standing residual.
 - Opt-in: a sandboxed run (T4) reads none of the operator's secrets under `$HOME` but what its template re-allows, and
   reaches the network only through `srt`'s proxy, which connects to the hosts on the operator's allowlist and to no
   other, and to no loopback, link-local, or cloud metadata address, nor the host's own, whatever name resolves there.
@@ -992,7 +1007,8 @@ carries their version. Unlike build scripts a worker runs (T4), this file is rea
 worktree and before any agent starts. If it could set the runtime commands, the overseer's bash allows,
 `notify.cmd`, chores, the review query, the connectors and how old an observation may be before a dispatch on it is
 refused, prompt paths, capacity, queue labels, authorized repliers, agent memory's tiers, the agents' personas or
-models, the checklists, or which agents publish artifacts and whose comments on them count, one commit would be enough
+models, the checklists, which agents publish artifacts and whose comments on them count, or which of the runtime's
+sessions canopy lists by title, one commit would be enough
 to run commands on operators' machines, raise their spend, send what workers read off the machine, or pick who steers their
 workers.
 
