@@ -143,6 +143,7 @@ export function PlanEditor({
     marks,
     comments = true,
     decides = editable,
+    name = 'plan',
 }: {
     /** The plan, as Markdown. Read when the editor opens. */
     markdown: string
@@ -212,6 +213,8 @@ export function PlanEditor({
      * plan read only that still waits on the operator's word.
      */
     decides?: boolean
+    /** What a file saved from the plan, such as a diagram's picture, is named for: `ABC-102-plan-2`. */
+    name?: string
 }) {
     const editor = useEditor({
         extensions: planExtensions([
@@ -606,7 +609,7 @@ export function PlanEditor({
                         data-plan-text={planText}
                         className={cn('px-6 py-4', showChanges && 'plan-changes', raw && 'hidden')}
                     />
-                    <PlanBlockActions owner={editor} />
+                    <PlanBlockActions owner={editor} name={name} />
                     {source !== undefined && (
                         <div className="px-6 py-4">
                             <textarea
@@ -759,7 +762,18 @@ export function PlanEditor({
  * their characters and draws no link, so untrusted text stays text, as a plan's does. `markdown` is read once: other
  * text is a new `key`.
  */
-export function PlanDocument({ markdown, label }: { markdown: string; label: string }) {
+export function PlanDocument({
+    markdown,
+    label,
+    name,
+}: {
+    /** The document, as Markdown. Read when it opens. */
+    markdown: string
+    /** What a screen reader calls it. */
+    label: string
+    /** What a file saved from it, such as a diagram's picture, is named for: `task-4-report`. */
+    name: string
+}) {
     const editor = useEditor({
         extensions: planExtensions(),
         content: markdown,
@@ -777,7 +791,7 @@ export function PlanDocument({ markdown, label }: { markdown: string; label: str
     return (
         <>
             <EditorContent editor={editor} data-plan-text={planText} className="px-6 py-4" />
-            <PlanBlockActions owner={editor} />
+            <PlanBlockActions owner={editor} name={name} />
         </>
     )
 }

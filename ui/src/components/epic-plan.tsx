@@ -163,6 +163,7 @@ function NewestPlan({
             editable={false}
             comments={false}
             decides={waits}
+            name={`epic-${epic}-plan-${newest.plan.id}`}
             previous={
                 before?.text === null || before?.text === undefined
                     ? undefined
@@ -344,6 +345,7 @@ function EarlierPlan({ epic, file }: { epic: number; file: EpicPlanFile }) {
                                 onThreadsChange={ignore}
                                 editable={false}
                                 comments={false}
+                                name={`epic-${epic}-plan-${file.plan.id}`}
                             />
                         </div>
                     )}

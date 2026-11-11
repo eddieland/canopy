@@ -1,7 +1,9 @@
+import { readFile } from 'node:fs/promises'
+
 import { expect, test } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import { clickAtEnd, clickAtStart, plan, settled, signIn } from './helpers.ts'
+import { clickAtEnd, clickAtStart, plan, settled, signIn, storeTheme } from './helpers.ts'
 
 test.beforeEach(async ({ page }) => {
     await signIn(page)
@@ -43,6 +45,37 @@ test("the sample plan's Mermaid block is drawn as its diagram, its source under 
     await expect(page.getByLabel('Plan Markdown')).toContainText('```mermaid\nsequenceDiagram\n    participant Page')
 })
 
+for (const theme of ['dark', 'light'] as const) {
+    test(`a diagram's picture saves as a PNG twice its size, on its surface, in ${theme}`, async ({ page }) => {
+        await storeTheme(page, theme)
+        await page.reload()
+        const block = plan(page).locator('.plan-diagram')
+        const image = block.getByRole('img', { name: /^A sequence diagram/u })
+        await expect(image).toBeVisible()
+        const size = await image.evaluate((shown: HTMLImageElement) => [shown.naturalWidth, shown.naturalHeight])
+        await block.hover()
+        await block.getByRole('button', { name: 'Copy or save the picture' }).click()
+        const saving = page.waitForEvent('download')
+        await page.getByRole('menuitem', { name: 'Save as PNG' }).click()
+        const download = await saving
+        expect(download.suggestedFilename()).toBe('plan-sequence-1.png')
+        await expect(page.getByRole('status').filter({ hasText: 'Saved the diagram as a PNG' })).toBeVisible()
+
+        const png = await readFile(await download.path())
+        expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual(size.map((side) => side * 2))
+        // Its corner is the surface, opaque: dark on a dark page, light on a light one.
+        const [red = 0, green = 0, blue = 0, alpha = 0] = await page.evaluate(async (base64) => {
+            const bytes = Uint8Array.from(atob(base64), (char) => char.codePointAt(0) ?? 0)
+            const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }))
+            const context = new OffscreenCanvas(1, 1).getContext('2d')
+            context?.drawImage(bitmap, 0, 0)
+            return [...(context?.getImageData(0, 0, 1, 1).data ?? [])]
+        }, png.toString('base64'))
+        expect(alpha).toBe(255)
+        expect(red + green + blue)[theme === 'dark' ? 'toBeLessThan' : 'toBeGreaterThan'](theme === 'dark' ? 200 : 600)
+    })
+}
+
 test.describe("a diagram's actions", () => {
     test.use({ permissions: ['clipboard-read', 'clipboard-write'] })
 
@@ -71,6 +104,17 @@ test.describe("a diagram's actions", () => {
         await expect
             .poll(() => page.evaluate(() => navigator.clipboard.readText()))
             .toBe(`${fenced}\nPage->>Page: done`)
+    })
+
+    test('copy its picture as an image, a PNG on the clipboard', async ({ page }) => {
+        const block = plan(page).locator('.plan-diagram')
+        await expect(block.getByRole('img', { name: /^A sequence diagram/u })).toBeVisible()
+        await block.hover()
+        await block.getByRole('button', { name: 'Copy or save the picture' }).click()
+        await page.getByRole('menuitem', { name: 'Copy as image' }).click()
+        await expect(page.getByRole('status').filter({ hasText: 'Copied the diagram as an image' })).toBeVisible()
+        const types = await page.evaluate(async () => (await navigator.clipboard.read()).flatMap((item) => item.types))
+        expect(types).toContain('image/png')
     })
 
     test('copy the source of one that cannot be drawn', async ({ page }) => {

@@ -140,6 +140,19 @@ test.describe("a diagram's actions", () => {
         expect(source).toMatch(/^flowchart TD\n {4}accTitle: The loop: a tick, then a wait until the next one\n/u)
         expect(source).not.toContain('```')
     })
+
+    test('save its picture as a PNG named for its title', async ({ page }) => {
+        await page.goto('guide/how-the-loop-works')
+        const diagram = page
+            .getByTestId('guide-page')
+            .getByRole('figure')
+            .filter({ has: page.getByRole('img', { name: 'The loop: a tick, then a wait until the next one' }) })
+        await diagram.hover()
+        await diagram.getByRole('button', { name: 'Copy or save the picture' }).click()
+        const saving = page.waitForEvent('download')
+        await page.getByRole('menuitem', { name: 'Save as PNG' }).click()
+        expect((await saving).suggestedFilename()).toBe('the-loop-a-tick-then-a-wait-until-the-next-one.png')
+    })
 })
 
 test('a page the guide does not have is the 404', async ({ page }) => {

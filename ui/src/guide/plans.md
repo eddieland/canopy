@@ -137,6 +137,11 @@ plan's file holds it, without the fence, ready to paste into a PR description, a
 Mermaid, and so do most of the places you'd want it. A diagram that couldn't be drawn copies the same way, so you
 can fix it in an editor that says more than `Parse error on line 3`.
 
+For the places that don't speak Mermaid (Slack, a slide, an email), the picture's menu beside it has **Copy as
+image** and **Save as PNG**. Either way you get the diagram at twice its size on its own background, so it reads on
+any page, named for where it came from: `ABC-102-plan-2-sequence-1.png` is plan 2's first diagram, a sequence diagram.
+It's drawn in the theme you're looking at, so a dark theme saves a dark picture; your slide template may have views.
+
 The code is still the plan. **Source**, under the diagram, shows it; so does putting the cursor in it, which the arrow
 keys do from the line above or below, and which is how you edit one, with the diagram redrawn under it as you stop
 typing. A comment or a change marked in the code shows it too, since that's where those live. A diagram Mermaid can't

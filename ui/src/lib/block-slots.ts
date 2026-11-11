@@ -13,6 +13,8 @@ export interface DiagramSlot {
     slot: HTMLElement
     /** The diagram's Mermaid source, as the plan's file has it between its fence lines. */
     source: string
+    /** Its picture as the page shows it, and the kind mermaid read it as; none while it is drawn, or not drawn. */
+    drawn: { svg: string; kind: string } | undefined
 }
 
 /** A block's room for its actions. */

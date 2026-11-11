@@ -124,6 +124,8 @@ class DiagramView implements NodeView {
     private readonly slots: BlockSlots
     private readonly id = newSlotId()
     private text: string
+    // The picture shown, and its kind; none while it is drawn, or not drawn.
+    private picture: { svg: string; kind: string } | undefined
     // Which draw the picture shows: one that ends after a later one began is dropped.
     private draws = 0
     private timer: ReturnType<typeof setTimeout> | undefined
@@ -210,9 +212,9 @@ class DiagramView implements NodeView {
         this.slots.remove(this.id)
     }
 
-    // Says what the diagram's actions act on now: its source.
+    // Says what the diagram's actions act on now: its source, and its picture once drawn.
     private publish(): void {
-        this.slots.put({ id: this.id, kind: 'diagram', slot: this.actions, source: this.text })
+        this.slots.put({ id: this.id, kind: 'diagram', slot: this.actions, source: this.text, drawn: this.picture })
     }
 
     private draw(): void {
@@ -243,6 +245,8 @@ class DiagramView implements NodeView {
         this.image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(result.svg)}`
         this.image.hidden = false
         this.reason.textContent = ''
+        this.picture = { svg: result.svg, kind: result.kind }
+        this.publish()
     }
 
     // The diagram not drawn, for `reason`: its code shows, with why under it, and no picture.
@@ -251,6 +255,10 @@ class DiagramView implements NodeView {
         this.image.hidden = true
         this.image.removeAttribute('src')
         this.reason.textContent = `Not drawn: ${reason}.`
+        if (this.picture !== undefined) {
+            this.picture = undefined
+            this.publish()
+        }
     }
 }
 

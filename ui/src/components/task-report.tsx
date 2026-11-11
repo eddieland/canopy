@@ -63,7 +63,12 @@ export function TaskReportPanel({
             ) : (
                 <>
                     {/* A new hash is new text: the document reads its Markdown once. */}
-                    <PlanDocument key={data.sha256 ?? ''} markdown={data.text} label={`Report from ${ref ?? ''}`} />
+                    <PlanDocument
+                        key={data.sha256 ?? ''}
+                        markdown={data.text}
+                        label={`Report from ${ref ?? ''}`}
+                        name={`task-${task.id}-report`}
+                    />
                     <p className="border-t px-3 py-2 font-mono text-xs text-muted-foreground">
                         <CopyablePath path={data.path} label="report path" />
                     </p>
