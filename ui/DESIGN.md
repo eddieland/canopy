@@ -511,12 +511,12 @@ whole either side.
   subsection apart from it by weight alone. A plan's size is the operator's (Settings): Normal is these, and the other
   sizes move the body and both headings together, the one place a size outside the steps appears. The guide stays at
   Normal. Code is set as everywhere else (`Code`, Rich text). A table is `document-table`, in a plan, the guide, and
-  rich text alike: as wide as what it holds, a hairline under its head and each row, no grid and no fill, its first
-  column flush with the text, its head in `muted-foreground`, its figures tabular, and a step under the text around it
-  in `em`, so a plan's size moves it too. Code in a cell breaks where it must, keeping room for a dozen characters,
-  and drops its chip; a table still too wide scrolls, its edges faded while there is more (`edge-fade`). Its measure
-  is fixed, `max-w-3xl`. What lays a document out, the guide's
-  rules between sections or a plan's margin, is its surface's own; its type is not.
+  rich text alike: the measure's full width at least, wider where what it holds needs it, a hairline under its head
+  and each row, no grid and no fill, its first column flush with the text, its head in `muted-foreground`, its figures
+  tabular, and a step under the text around it in `em`, so a plan's size moves it too. Code in a cell breaks where it
+  must, keeping room for a dozen characters, and drops its chip; a table still too wide scrolls, its edges faded while
+  there is more (`edge-fade`). Its measure is fixed, `max-w-3xl`. What lays a document out, the guide's rules between
+  sections or a plan's margin, is its surface's own; its type is not.
 - **`ReviewsTable`** and **`RunsTable`**: review runs and runs, one row each, on every page that lists them. On the
   page of what they belong to, the columns that would repeat it go, as a `ListRow` kind of their own. The reviews one
   request made of one commit, one per persona (DESIGN §31), are adjacent rows with no hairline between them, each with
@@ -1074,11 +1074,11 @@ reader, so no table repeats them.
   a link is underlined in `muted-foreground` with its address on hover, never a link. A Mermaid code block is drawn as
   its diagram (`src/lib/plan-diagram.ts`), an image in a hairline box, drawn again when the theme or palette changes,
   as wide as it is drawn or narrower to fit, but never under three quarters of that, past which its labels go unread:
-  a wider one scrolls, each edge faded while there is more past it (`diagram-image`, `edge-fade`), as the guide's do,
-  every kind drawn in one hand (`themeCss` in `src/lib/diagram.ts`): one label size, one corner, one line weight, a
-  subgraph dashed, a sequence's actors once, at its top, and its captions lifted off the lifelines they cross, named
-  and captioned by its `accTitle`, which the planner is asked for, else named by its kind,
-  with a `Source` toggle under it; its code shows while toggled on, while the cursor is in it, or while a comment or a
+  a wider one scrolls, each edge faded while there is more past it (`diagram-image`, `edge-fade`), as the guide's do.
+  Every kind is drawn in one hand (`themeCss` in `src/lib/diagram.ts`): one label size, one corner, one line weight, a
+  subgraph dashed, a sequence's actors once, at its top, and its captions lifted off the lifelines they cross. It is
+  named and captioned by its `accTitle`, which the planner is asked for, else named by its kind. A `Source` toggle sits
+  under it; its code shows while toggled on, while the cursor is in it, or while a comment or a
   change is marked in it, and out of sight it is clipped, not removed, so a screen reader still reads it; one that
   cannot be drawn shows its code and why. The toolbar (`Toolbar`, below) is `icon-xs` toggles in groups split by
   hairlines, then `Comment`, enabled while text is selected; each control's tooltip names it and the shortcut the editor

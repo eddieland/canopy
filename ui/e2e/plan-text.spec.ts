@@ -59,12 +59,12 @@ test("a plan's table and a diagram's caption keep their step under its text at e
     const caption = doc.getByText(/^Not drawn:/u)
     await expect(table).toHaveCSS('font-size', '14px')
     await expect(caption).toHaveCSS('font-size', '14px')
-    // As wide as what it holds, not the plan's measure.
+    // The measure's full width, though what it holds is narrow, so it never sits stranded at the text's left.
     const widths = await table.evaluate((element) => ({
         table: element.getBoundingClientRect().width,
         plan: element.closest('.plan-doc')?.getBoundingClientRect().width ?? 0,
     }))
-    expect(widths.table).toBeLessThan(widths.plan / 2)
+    expect(Math.abs(widths.table - widths.plan)).toBeLessThan(1)
 
     await page.goto('settings')
     await settled(page)
