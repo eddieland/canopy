@@ -282,6 +282,60 @@
 }
 
 /*
+ * A plan printed, or saved as a PDF (src/lib/plan-print.ts): the plan alone, as a document, under the line naming it.
+ * The shell goes, and of the page everything but the plan and what holds it: its header, toolbar, foot, decisions,
+ * comments, and earlier plans, and a drawn diagram's code, which its picture stands for. A diagram, a table, and a
+ * code block each keep to one page where they fit; a table and a code block wrap rather than scroll; and a diagram's
+ * picture drawn dark is turned round, its light and dark swapped and its hues kept, since the print does not wait for
+ * it to be drawn again in the light theme the page takes.
+ */
+@media print {
+    @page {
+        margin: 16mm;
+    }
+    :root[data-printing='plan'] {
+        & [data-testid='app-header'],
+        & aside,
+        & main :not(:has([data-print-plan]), [data-print-plan], [data-print-plan] *),
+        & [data-print-plan] > :not([data-print-line], [data-print-body]),
+        & .plan-diagram-toggle,
+        & .plan-diagram[data-diagram='drawn'] > pre {
+            display: none;
+        }
+        & .page-scroll {
+            display: block;
+        }
+        & [data-print-plan] {
+            border: none;
+            box-shadow: none;
+            background: none;
+        }
+        & [data-print-body] {
+            padding: 0;
+        }
+        & :is(.plan-diagram-figure, .plan-table, .plan-code) {
+            break-inside: avoid;
+        }
+        & .plan-diagram-figure {
+            border: none;
+        }
+        & .plan-diagram-figure img[data-drawn-dark] {
+            filter: invert(1) hue-rotate(180deg);
+        }
+        & .tableWrapper {
+            overflow: visible;
+        }
+        & .plan-doc :is(th, td) {
+            overflow-wrap: anywhere;
+        }
+        & .plan-code pre {
+            overflow: visible;
+            white-space: pre-wrap;
+        }
+    }
+}
+
+/*
  * What the page scrolls in, everything under the header (AppShell), so a scrollbar never sits beside the header. Its
  * gutter is kept whether or not the page is long enough to need it: no layout shift when a page grows a scrollbar.
  * Positioned, so it is the containing block of what is absolute inside it, such as an `sr-only` file input, and clips

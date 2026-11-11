@@ -44,6 +44,7 @@ import { planText } from '@/lib/outcomes'
 import { planDecisions } from '@/lib/plan-decisions'
 import type { PlanDecision } from '@/lib/plan-decisions'
 import { clearPicks, pickOption, usePlanPicks } from '@/lib/plan-picks'
+import { printLine } from '@/lib/plan-print'
 import { approvedChanged, approveLabel, planNeededWhy, planWaits } from '@/lib/plan-state'
 import { fromServer, MAX_NOTES, movedAnchors, threadChanges, unread } from '@/lib/plan-threads'
 import type { PlanThread, ThreadChange } from '@/lib/plan-threads'
@@ -427,6 +428,7 @@ function NewestPlan({
             name={`${ticketKey}-plan-${newest.plan.id}`}
             file={newest.archive_name}
             unsaved={dirty}
+            printLine={printLine(ticketKey, newest.plan.id, newest.plan.status, newest.plan.created_at)}
             // A waiting plan that replaced one is read for what changed, so its changes show first.
             previous={
                 before !== undefined && typeof replaced?.text === 'string'

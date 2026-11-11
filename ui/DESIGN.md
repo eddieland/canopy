@@ -1087,7 +1087,11 @@ reader, so no table repeats them.
   the journal, which hold while the section's words are as marked, so a rewritten section is unread again; then a menu
   that copies or saves the plan's Markdown whole, as the page shows it (`PlanFileMenu`), named as `canopy archive`
   names the plan, the same menu a task's report and a feedback plan's file carry. Its file's path closes the page's
-  description, on a line of its own, with a copy button. While the changes are marked, a commented passage drops its
+  description, on a line of its own, with a copy button. A page's plan prints alone, as a document, under a line naming
+  its ticket, plan, status, and date, in the light theme whatever the screen shows (`src/lib/plan-print.ts`): no
+  shell, header, toolbar, foot, decisions, or comments, a diagram and a table each kept to a page where they fit, a
+  table and a code block wrapped, and a diagram's picture still drawn dark turned round (`invert` with its hues
+  kept). While the changes are marked, a commented passage drops its
   tint, so no word wears a comment's and a change's at once, but keeps an underline in the accent. The header is
   `sticky`, and what the editor scrolls into view stops below it. A commented
   passage sits on the accent's tint; the open one, or the one being commented on, darker and underlined; the cursor in
