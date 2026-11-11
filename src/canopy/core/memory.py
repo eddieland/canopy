@@ -254,7 +254,7 @@ def run_memory(conn: sqlite3.Connection, run_id: int) -> records.RunMemory | Non
 
 
 class Fields(BaseModel):
-    """A worker's memory fields, read from its result line apart from the result (DESIGN §28, Writing).
+    """A worker's memory fields, read from its result apart from the rest of it (DESIGN §28, Writing).
 
     Untrusted: each entry is checked as it is written, and refused alone, so one bad entry costs only itself.
     """
@@ -400,7 +400,7 @@ def asked_groups(modes: Modes, *, writes: bool = True) -> list[str]:
 
 
 def parse(text: str) -> Fields | None:
-    """Parse the memory fields of `text`'s result line, the last line that starts with `{` (DESIGN §13).
+    """Parse the memory fields of `text`, the result a run reported, as it reported it (DESIGN §13).
 
     Returns:
         The fields, or None when there is no such line or it is not a JSON object.
@@ -438,7 +438,7 @@ def record_run(conn: sqlite3.Connection, run_id: int, fields: Fields | None, *, 
 
     Call inside the transaction that closes the run. The ticket is the run's own, read from its row, never from the
     result. A run rendered with every tier off has no `run_memory` row and writes nothing, whatever it sent; so does one
-    whose result line was not a valid result, which is why `fields` is None. A field the run's modes did not ask for
+    that reported no valid result, which is why `fields` is None. A field the run's modes did not ask for
     changes nothing, and nor do a planner's proposals: a plan only cites. `head` is the commit the run's branch was at
     when its worker ended.
 

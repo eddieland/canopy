@@ -938,7 +938,7 @@ def _plan(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     (DESIGN §43).
 
     Returns:
-        The planner's status; `timeout` if it timed out; `unknown` for a missing or invalid result line, or a `done`
+        The planner's status; `timeout` if it timed out; `unknown` for a missing or invalid result, or a `done`
         whose file in the desk is not a plan or is the plan it replaces, unedited, though the operator asked for
         changes (`plans.unrevised`); or `crashed` when the plan's own file could not be written.
 
@@ -1081,7 +1081,7 @@ def _feedback_plan(
     plan, and with what the read saw, its snapshot (DESIGN §32, Planning again).
 
     Returns:
-        The planner's status; `timeout` if it timed out; `unknown` for a missing or invalid result line, or a `done`
+        The planner's status; `timeout` if it timed out; `unknown` for a missing or invalid result, or a `done`
         whose file in the desk is not a plan or is the plan it replaces, unedited, though the operator asked for
         changes (`plans.unrevised`); or `crashed` when the plan's own file could not be written.
 
@@ -1236,7 +1236,7 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
 
     parsed = parse_result(text)
-    # Memory's fields are read only from a valid result line, and never stored with the result (DESIGN §28).
+    # Memory's fields are read only from a valid result, and never stored with the result (DESIGN §28).
     remembered = memory.parse(text) if parsed is not None else None
     drafted = drafts.parse(text) if parsed is not None else None
     # So are the tickets it filed, recorded whatever its status, a timeout's included: they exist in the tracker, and
@@ -1393,7 +1393,7 @@ def _check_checklist(
 ) -> checklist_answers.Checked | None:
     """Check what a worker answered of the lists it was given, read back from its answers directory (DESIGN §42).
 
-    `text` is its output, or "" when its last line was no valid result, whose fields are not read.
+    `text` is its output, or "" when it reported no valid result, whose fields are not read.
 
     Returns:
         An answer for every item of every list it was given; None for a run given none.

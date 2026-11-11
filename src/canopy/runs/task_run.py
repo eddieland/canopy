@@ -1,11 +1,11 @@
 """`canopy _task <run_id>`: one run of a one-off task, in the slot the tick leased for it (DESIGN §36).
 
 Checks out the task's branch at a detached HEAD, or the base before one is pushed, runs `runtime.private_worker_cmd`
-with the task's prompt, parses the result line, verifies the push of the task's branch as a worker's run does, never
-with force whatever `trust.rebase` says (`unpushed` when it cannot), records the head the branch is at on origin and
-what the run changed (`changes`, DESIGN §45), and tidies and returns the slot. The slot is returned on every exit path
-this process can see; a run whose `_task` died is closed by reconcile, and one the operator stops with `--now` by
-`canopy stop` (`end`), each keeping nothing of what it changed.
+with the task's prompt, reads the result its worker reported, verifies the push of the task's branch as a worker's run
+does, never with force whatever `trust.rebase` says (`unpushed` when it cannot), records the head the branch is at on
+origin and what the run changed (`changes`, DESIGN §45), and tidies and returns the slot. The slot is returned on every
+exit path this process can see; a run whose `_task` died is closed by reconcile, and one the operator stops with `--now`
+by `canopy stop` (`end`), each keeping nothing of what it changed.
 
 What the run leaves besides its branch: its report, `.canopy-task-report.md` at the slot's root, which git there
 ignores, is kept in the state directory before the slot is returned, and the next run starts with a copy of the
@@ -361,7 +361,7 @@ def _work(ctx: Context, run: records.TaskRun, link: bytes | None, out: TextIO, l
     """Check the branch out, run the task's worker, and check what it pushed.
 
     Returns:
-        The worker's status; `timeout`, `unknown` for a missing or invalid result line, `unpushed` for work not on
+        The worker's status; `timeout`, `unknown` for a missing or invalid result, `unpushed` for work not on
         origin, `crashed` for a worker that rewrote its slot's git, or `stopped` for a task stopped before it started.
 
     Raises:
@@ -383,7 +383,7 @@ def _work(ctx: Context, run: records.TaskRun, link: bytes | None, out: TextIO, l
     done, text = _run_agent(ctx, run, task, out, log, marks=marks)
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
     parsed = contract.last_line(TaskResult, text)
-    # Read only from a valid result line, and recorded however the run ends: an item it was given and did not answer is
+    # Read only from a valid result, and recorded however the run ends: an item it was given and did not answer is
     # counted unanswered (DESIGN §42).
     listed = _check_checklist(run, text if parsed is not None else "")
     if done.timed_out:
@@ -482,7 +482,7 @@ def _keep_checklist_pushes(
 def _check_checklist(run: records.TaskRun, text: str) -> checklist_answers.Checked | None:
     """Check what the worker answered of the list it was given, read back from the run's answers directory (§42).
 
-    `text` is its output, or "" when its last line was no valid result, whose fields are not read.
+    `text` is its output, or "" when it reported no valid result, whose fields are not read.
 
     Returns:
         An answer for every item of the list; None for a run given none.

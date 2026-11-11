@@ -1,7 +1,7 @@
 """Follow-up tickets (DESIGN §18): what a worker reports it filed, checked and recorded, and put to the operator.
 
 An `implement` or `resume` worker on a ticket that is not itself a follow-up, public or private, may file tickets
-outside its own and name them in its result line's `created` field, each with the repository it is for or null. `_run`
+outside its own and name them in its result's `created` field, each with the repository it is for or null. `_run`
 checks each entry alone, on its text, since the harness reads no tracker (D003), and records the ones that pass with the
 run; a refused entry is named in the run's note and stored with its result, and raises `follow_up_unrecorded`
 (`unrecorded`) until the run's ticket is done or forgotten. A recorded follow-up authorizes nothing: the run's close
@@ -34,7 +34,7 @@ MAX_DETAIL = 2000
 
 
 class _Reported(BaseModel):
-    """The result line's `created` field, read apart from the rest of the result as memory's fields are (DESIGN §28).
+    """The result's `created` field, read apart from the rest of the result as memory's fields are (DESIGN §28).
 
     Untrusted, so each entry is checked in `check`: a value of any shape is read here, and one that is not an object of
     keys to repositories or nulls is refused there, never taken as the whole result being invalid.
@@ -135,10 +135,10 @@ def may_file(conn: sqlite3.Connection, key: str, *, limit: int) -> bool:
 
 
 def parse(text: str) -> object:
-    """Read the `created` field of `text`'s result line, the last line that starts with `{` (DESIGN §13).
+    """Read the `created` field of `text`, the result a run reported, as it reported it (DESIGN §13).
 
     Returns:
-        The field's value as JSON gave it, or None when there is no such field or no valid result line.
+        The field's value as JSON gave it, or None when there is no such field or no valid result.
     """
     found = contract.last_line(_Reported, text)
     return found.created if found is not None else None
@@ -284,7 +284,7 @@ def get_follow_up(conn: sqlite3.Connection, key: str) -> records.FollowUp | None
 
 
 def valid_key(key: object) -> bool:
-    """Whether `key`, as a result line gave it, is a ticket key canopy can record: its text alone (D003).
+    """Whether `key`, as a result gave it, is a ticket key canopy can record: its text alone (D003).
 
     Returns:
         True for a string of at most `conversation.MAX_KEY` characters that `conversation.KEY_RE` matches.

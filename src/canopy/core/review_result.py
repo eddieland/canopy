@@ -75,10 +75,10 @@ class ReviewResult(BaseModel):
 
 
 def parse(stdout: str) -> ReviewResult | None:
-    """Parse `stdout`'s result line (DESIGN §13) as a review's result. None if it is missing or invalid.
+    """Parse `stdout`, the result a run reported (DESIGN §13), as a review's result. None if it is missing or invalid.
 
     Returns:
-        The validated result, or None if `stdout` has no result line or its last one does not validate.
+        The validated result, or None if `stdout` holds no result or it does not validate.
     """
     return contract.last_line(ReviewResult, stdout)
 
@@ -116,10 +116,10 @@ class RevisionResult(BaseModel):
 
 
 def parse_revision(stdout: str) -> RevisionResult | None:
-    """Parse `stdout`'s result line (DESIGN §13) as a revision's result. None if it is missing or invalid.
+    """Parse `stdout`, the result a run reported (DESIGN §13), as a revision's result. None if it is missing or invalid.
 
     Returns:
-        The validated result, or None if `stdout` has no result line or its last one does not validate.
+        The validated result, or None if `stdout` holds no result or it does not validate.
     """
     return contract.last_line(RevisionResult, stdout)
 

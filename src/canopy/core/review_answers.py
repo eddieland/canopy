@@ -1,6 +1,6 @@
 """What a resumed worker answered of the review findings it was handed (DESIGN §21, Answers and rebuttals).
 
-A `resume` handed canopy's review findings answers each in its result line's `review_answers` field: `fixed`, or
+A `resume` handed canopy's review findings answers each in its result's `review_answers` field: `fixed`, or
 `declined` with its reason, naming the finding by its review run and number. `_run` checks each entry alone and records
 those that pass with the run: a finding of one of its own ticket's `done` reviews, at most one answer each. The next
 review of the PR reads them beside the findings as data, so it need not report a declined one again unless it can
@@ -34,7 +34,7 @@ MAX_NAMED = 10
 
 
 class _Reported(BaseModel):
-    """The result line's `review_answers` field, read apart from the rest of the result, as follow-ups are.
+    """The result's `review_answers` field, read apart from the rest of the result, as follow-ups are.
 
     Untrusted, so each entry is checked in `check`: a value of any shape is read here, and one that is not a list of
     answers is refused there, never taken as the whole result being invalid.
@@ -115,10 +115,10 @@ GROUP = "review_answers"
 
 
 def parse(text: str) -> object:
-    """Return the `review_answers` field of `text`'s result line, as the worker wrote it.
+    """Return the `review_answers` field of `text`, the result a run reported, as the worker wrote it.
 
     Returns:
-        The field's value, of any shape; None when there is no result line or it has no such field.
+        The field's value, of any shape; None when there is no result or it has no such field.
     """
     found = contract.last_line(_Reported, text)
     return found.review_answers if found is not None else None

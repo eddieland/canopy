@@ -706,7 +706,7 @@ def feedback_plan_note(
 ) -> str:
     """Return a resume's `{{PLAN}}` when it follows a feedback plan (DESIGN §32): its copy, outline, and approved items.
 
-    The items are the harness's, from the plan's validated result line, each its number, PR, kind, id, and what the
+    The items are the harness's, from the plan's validated result, each its number, PR, kind, id, and what the
     plan proposes: those the approval named, which the run acts on, and the only ones. `left_out` names the plan's items
     the operator left out of their approval, each its number and id, whose sections its copy still holds, under
     `### Item <id>` headings as every item's are. `message_id` is the operator message their approval wrote, which the

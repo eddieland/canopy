@@ -2,7 +2,7 @@
 
 A worker run that may push, or a one-off task's (§36), is given the list of each of its repositories that has one, in
 its answers directory, and canopy's `pre-push` holds its push to ask it (`commit_hooks`). It answers each item in its
-result line's `checklist` field, by repository and item id: `pass`, `fixed`, `held` with its reason, or `n/a`. `_run`,
+result's `checklist` field, by repository and item id: `pass`, `fixed`, `held` with its reason, or `n/a`. `_run`,
 or `_task`, checks the answers against the lists the run was given, read back from its answers directory, and records a
 row for every item of every list, naming the run, a worker's or a task's: the answer, or `unanswered` for an item its
 result said nothing of. An answer to an item or a repository the run's lists do not hold is dropped, and named in the
@@ -258,7 +258,7 @@ class _Answered(records.View):
 
 
 class _Reported(BaseModel):
-    """The result line's `checklist` field, read apart from the rest of the result, as review answers are.
+    """The result's `checklist` field, read apart from the rest of the result, as review answers are.
 
     Untrusted, so it is checked in `check`: a value of any shape is read here, and one that is not answers is dropped
     there, never taken as the whole result being invalid.
@@ -298,10 +298,10 @@ GROUP = "checklist"
 
 
 def parse(text: str) -> object:
-    """Return the `checklist` field of `text`'s result line, as the worker wrote it.
+    """Return the `checklist` field of `text`, the result a run reported, as the worker wrote it.
 
     Returns:
-        The field's value, of any shape; None when there is no result line or it has no such field.
+        The field's value, of any shape; None when there is no result or it has no such field.
     """
     found = contract.last_line(_Reported, text)
     return found.checklist if found is not None else None

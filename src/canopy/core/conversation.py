@@ -3,7 +3,7 @@
 Every channel the operator writes through (`canopy start`, `stop`, `reply`, `forget`, `dismiss`, `send`, and the web UI)
 calls the functions here, so the guards live in one place: the subject is valid and supports the verb, the command does
 not run inside one of canopy's own runs, the ticket was started (or, for a reply, is one canopy knows), and the body is
-within its bound. Agents never write a message: `_run` records a run's report and question from its result line
+within its bound. Agents never write a message: `_run` records a run's report and question from its result
 (`close_run`), and nothing else a worker can call does.
 
 A private ticket's start record and its operator messages are canopy's own facts, so the harness checks them in code

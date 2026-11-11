@@ -4,7 +4,7 @@ A case, one of `review.eval_cases` in private config, is a PR at a commit: a `bu
 fixed forward, with the lines its bug is on as the operator confirmed them; or a `clean` case, one the operator knows
 is sound. An eval reviews each case as a review is done (`execute`): in a slot of its repository's pool, checked out
 detached at the commit with its links out of the checkout removed, the reviewer in a directory of its own that links to
-it, its result line validated and judged. Its prompt is the reviewer's as a first review of a PR no ticket owns gets
+it, its result validated and judged. Its prompt is the reviewer's as a first review of a PR no ticket owns gets
 it, with no notice, notes, or previous review, so every eval of a case reads the same text but for what it compares:
 the prompt, the persona, and the model.
 

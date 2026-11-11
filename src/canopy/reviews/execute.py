@@ -214,7 +214,7 @@ def judged(ctx: Context, parsed: result.ReviewResult, changed: Collection[str] |
 
 
 def _revised(ctx: Context, run: records.ReviewRun, parsed: result.RevisionResult | None) -> Outcome:
-    """The outcome of a revision's result line: a `done` one made the draft's newest version, if the draft waited on it.
+    """The outcome of a revision's result: a `done` one made the draft's newest version, if the draft waited on it.
 
     Returns:
         `unknown` for no valid result, `failed` for a result that is not `done`, else `done`, with a note when the
