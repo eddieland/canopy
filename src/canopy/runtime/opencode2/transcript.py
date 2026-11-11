@@ -45,12 +45,14 @@ _MAX_MS = 253_402_300_799_999
 # shell's command, a file tool's path, a search's pattern, a fetch's address, a search's query, a skill's id.
 _SAID_BY = ("command", "path", "pattern", "url", "query", "id")
 
-#: The tools that read one file, that edit one, that edit those a patch names, and that search, and the shell.
+#: The tools that read one file, that edit one, that edit those a patch names, and that search.
 _READS = frozenset({"read"})
 _EDITS = frozenset({"edit", "write"})
 _PATCHES = frozenset({"patch", "apply_patch"})
 _SEARCHES = frozenset({"grep", "glob"})
-_SHELL = "shell"
+# OpenCode 2 runs a call an agent names `bash` as its `shell`, and prints the call under the name the agent gave.
+#: The shell, by each name a call of it is printed under: OpenCode 2's own, and `bash`, OpenCode 1's.
+_SHELLS = frozenset({"shell", "bash"})
 #: The fields of a file tool's input that name its file: OpenCode 2's own, then OpenCode 1's.
 _PATH_BY = ("path", "filePath")
 #: A patch's line naming a file it changes: `*** Update File: src/a.py`, and the path it moves one to.
@@ -211,7 +213,7 @@ def touched(call: Called) -> Touch:
             return Touch("edit", paths)
     elif call.tool in _SEARCHES:
         return Touch("search")
-    elif call.tool == _SHELL:
+    elif call.tool in _SHELLS:
         command = given.get("command")
         if isinstance(command, str) and shell_searches(command):
             return Touch("search")
@@ -225,7 +227,7 @@ def command(call: Called) -> str | None:
         It, or None for a call of any other tool, or one whose command is not a string.
     """
     given = call.input.get("command")
-    return given if call.tool == _SHELL and isinstance(given, str) else None
+    return given if call.tool in _SHELLS and isinstance(given, str) else None
 
 
 def _entry(event: Mapping[str, object]) -> Entry | None:

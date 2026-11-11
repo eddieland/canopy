@@ -219,6 +219,19 @@ def test_runs_are_measured_per_role_and_tool(tmp_path: Path, journals: Journals,
     assert tool_results.measure(conn, NOW - timedelta(days=60), 1, state_dir=tmp_path, version=runtime).roles == ()
 
 
+def test_a_shell_call_the_agent_named_bash_counts_as_its_program(
+    tmp_path: Path,
+    journals: Journals,
+    runtime: Version,
+) -> None:
+    """OpenCode 2 prints a call under the name its agent gave, `bash` for some: its row is still its program's."""
+    conn = journals.open(tmp_path / "canopy.db")
+    calls = [Made("bash", {"command": "gh pr view 3 --json comments"}, "s" * 40), shell("gh run view 7", 60)]
+    worker(conn, tmp_path / "named.log", NOW - timedelta(hours=1), calls, runtime)
+    [implement] = tool_results.measure(conn, NOW, 1, state_dir=tmp_path, version=runtime).roles
+    assert [(t.tool, t.calls, t.chars) for t in implement.tools] == [("$ gh run view", 1, 60), ("$ gh pr view", 1, 40)]
+
+
 def test_a_log_past_the_bound_is_read_to_it_and_marked(tmp_path: Path, journals: Journals, runtime: Version) -> None:
     conn = journals.open(tmp_path / "canopy.db")
     run_id = worker(conn, tmp_path / "long.log", NOW - timedelta(hours=1), FIRST, runtime)
