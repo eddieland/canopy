@@ -171,4 +171,18 @@ alone at 0.244, under a quarter, and the `resume` runs at 0.50. Open for the ope
 met; the monorepo's languages, with each grammar's query coverage; and whether stage 1 renders the outline for every
 role at once or the workers first. That measurement's searches leave out a shell search an agent made under the name
 `bash`, which OpenCode 2's reader took for no shell until 2026-11-11 (M71), so they are a floor; the gate was met on the
-share alone, and stands.
+share alone, and stands. Settled 2026-11-11, at the operator's ask to resolve what was open, for the operator to change.
+Stage 1 starts: the threshold was set before the measurement and is not moved after it, and the monorepo's worker runs
+are over it. What the numbers leave weak is recorded, not weighed against the gate: 65 of 561 runs were anchored, the
+`implement` runs alone are at 0.244, and a `resume` run's calls before its anchor may be reads of the PR's feedback
+rather than a search for the file, which this measurement does not tell apart. So stage 1's two weeks at `tree` are read
+per kind beside stage 0's, `implement` and `resume` each, as well as against the gate's one median. The workers get the
+outline first, `implement` and `resume`, a joint run's among them, in stage 1's first PR, with the keys, the renderer,
+and TRUST_MODEL: the gate reads worker runs, and so does the measurement that ends the stage, so its two weeks start
+once the workers have it. The planner's, the reviewer's, and a task's follow in PRs of their own, within stage 1 and
+not waiting on those two weeks, so Accept stands as written. They come second on the numbers: the monorepo's plan runs
+are under the threshold at 0.154, a review's at 0.288 is over it but its diff names its files already, and task runs
+were not measured. The monorepo's languages are not settled here and hold nothing: stage 1 parses nothing, and no doc
+in this repository names them. They are named if the operator calls stage 2, from a count of the monorepo's tracked
+files by extension, taken then; a language whose wheel ships no tags query gets a vendored one, as stage 2 says, and
+Starlark is expected among them, the monorepo being Bazel's.
