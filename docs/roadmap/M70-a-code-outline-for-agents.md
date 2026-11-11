@@ -184,8 +184,8 @@ not waiting on those two weeks, so Accept stands as written. They come second on
 are under the threshold at 0.154, a review's at 0.288 is over it but its diff names its files already, and task runs
 were not measured. The monorepo's languages are not settled here and hold nothing: stage 1 parses nothing, and no doc
 in this repository names them. They are named if the operator calls stage 2, from a count of the monorepo's tracked
-files by extension, taken then; a language whose wheel ships no tags query gets a vendored one, as stage 2 says, and
-Starlark is expected among them, the monorepo being Bazel's. Stage 1 begun 2026-11-11, at the operator's ask, for the
+files by extension, taken then; a language whose wheel ships no tags query gets a vendored one, as stage 2 says.
+Stage 1 begun 2026-11-11, at the operator's ask, for the
 workers, against the fakes: the three keys, the tree in an `implement`'s and a `resume`'s prompt, a joint run's per
 repository, DESIGN §46, and TRUST_MODEL T1, T3, T6, and T7. Chosen conservatively, for the operator to change. The tree
 is read in the leased slot at dispatch, before `_run` fetches, so it is as the lease last fetched it, and the outline
