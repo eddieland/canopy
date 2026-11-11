@@ -215,6 +215,8 @@ test.describe("a diagram's actions", () => {
         await clickAtStart(doc.getByRole('heading', { name: 'Files' }))
         await page.keyboard.press('ArrowLeft')
         await page.keyboard.type('\nPage->>Page: done')
+        // The caret alone shows them: the pointer is away from the block.
+        await page.mouse.move(0, 0)
         await expect(copy.locator('..')).toHaveCSS('opacity', '1')
         await copy.click()
         await expect
