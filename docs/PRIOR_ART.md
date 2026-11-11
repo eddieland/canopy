@@ -3,8 +3,9 @@
 A survey of open-source projects that overlap with canopy, and what their issue trackers show they learned the hard
 way. Surveyed 2026-09-29, aide 2026-10-18, shared plans across tickets 2026-11-02 ([Shared plans across
 tickets](#shared-plans-across-tickets)), tools for token efficiency 2026-11-08 ([Tools for token
-efficiency](#tools-for-token-efficiency)), and a session plugin's hooks 2026-11-10 ([Hooks inside a
-session](#hooks-inside-a-session)). Why canopy is built anyway is D050.
+efficiency](#tools-for-token-efficiency)), a session plugin's hooks 2026-11-10 ([Hooks inside a
+session](#hooks-inside-a-session)), and planners of multi-ticket work 2026-11-11 ([Planning an
+epic](#planning-an-epic)). Why canopy is built anyway is D050.
 
 The canopy statuses below are as of those dates and are not kept current. Check the code before acting on one.
 
@@ -263,6 +264,102 @@ three things to measure was checked live.
   journal can say whether these happen.
 - Subagents, web search and fetch, loaders for another tool's config files, and an update check when the plugin
   loads: D077, TRUST_MODEL T4 and T7.
+
+## Planning an epic
+
+Surveyed 2026-11-11, asked by the operator: tools that plan work spanning several units, beyond those in [Shared plans
+across tickets](#shared-plans-across-tickets), for what would improve canopy's epic planner (§43). Read in the
+repositories' own files and issues where a link goes to one. The vendors' sites were outside the session's network, so
+Kiro, Traycer, Antigravity, Cursor, Factory, Devin, Jules, Zenflow, and Augment are read from search excerpts of their
+own pages: secondary, each to be read whole before anything is built on it. Anthropic's posts were read whole. The
+canopy comparisons are as of that date, and nothing here was checked live.
+
+### Worth building, in rough order
+
+- **Hold the outline's rules in code.** The planner's prompt says every requirement is covered, every contract has an
+  entry that provides it, and a provider comes before its users; `core/epic_outline.py` refuses only an id the plan
+  does not hold and an entry after itself, so an uncovered `R`, a contract no entry provides, and a cycle in `After`
+  are approved as written, and the page shows the first only on hover. beads lints an epic's graph before work starts
+  (`bd swarm validate`: cycles, orphans, disconnected parts, the ready fronts;
+  [CLI reference](https://github.com/gastownhall/beads/blob/main/docs/CLI_REFERENCE.md)), and Taskmaster has
+  `validate-dependencies`. Those who check with a model miss things: Spec Kit's `/analyze` sees only what the model
+  loaded, and its users ask for an inventory of ids kept by a script
+  ([#4164](https://github.com/github/spec-kit/issues/4164)); OpenSpec's `validate --strict` checks structure alone
+  ([#783](https://github.com/Fission-AI/OpenSpec/issues/783)). canopy's ids make it mechanical: refuse the plan as
+  `bad_outline` already does, so the planner fixes it before the operator reads it. Read-only, never a repair:
+  Taskmaster's `fix_dependencies` wiped data ([#1636](https://github.com/eyaltoledano/claude-task-master/issues/1636)).
+- **How each requirement is shown met.** An epic's `R` is "observable" and nothing more; a ticket's plan has
+  `Acceptance` and `Verification` (§25), so the check exists only per ticket and nothing says when the epic is done.
+  Factory's orchestrator writes a validation contract of behaviors before it defines features, and validators that
+  wrote none of the code check it at each milestone; in one mission their findings became 21 fix features, a third of
+  the work (secondary). Anthropic's long-running harness keeps a feature list whose entries carry test steps and a
+  `passes` flag that only verification may flip
+  ([post](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents)); superpowers' plans give
+  each check its command and the output that means success
+  ([writing-plans](https://github.com/obra/superpowers/blob/main/skills/writing-plans/SKILL.md)). For canopy: one
+  line under each `R` saying how someone who did not write it would see it met, which each member's `Acceptance` cites
+  and the close-out review reads. Against going further: Anthropic dropped per-sprint contracts as models improved,
+  keeping one pass at the end ([post](https://www.anthropic.com/engineering/harness-design-long-running-apps)), which
+  is what the close-out already is.
+- **Progress by requirement, derived.** The epic's page counts entries filed, not requirements met. ccpm keeps a
+  `progress:` on the epic and beads `bd epic status`. Where the count is a box an agent ticks it drifts: Kiro ticked a
+  task whose sub-agent had been killed at its iteration limit
+  ([#11786](https://github.com/kirodotdev/Kiro/issues/11786)), and Backlog.md's issues are checkboxes out of step with
+  status ([#914](https://github.com/MrLesk/Backlog.md/issues/914)). canopy already knows each member's PR and phase
+  (§7), so an `R` is met when every entry covering it has a merged member: derived, never written by an agent.
+- **A worker's departures, said by the worker.** `epic_drift` is raised from a member's plan, before any code. What a
+  worker finds while building, a contract that cannot hold as written, reaches the operator only as prose in a
+  summary. Cursor's workers hand back concerns and deviations as fields of one hand-off (secondary); superpowers'
+  implementers end `DONE_WITH_CONCERNS`; beads files a discovery with where it came from (`discovered-from`). A
+  member's result naming the `R` and `C` ids it departed from, checked against the plan's ids as a planner's are and
+  raised as the same attention item, extends drift to the build with no new channel. Not an agent-written section of
+  the plan: Codex's ExecPlans and Augment's "living spec" let the implementer edit the plan, which approval by hash
+  exists to prevent.
+- **Findings at close-out that lead somewhere.** The close-out review's findings stay on the epic. Factory turns a
+  validator's findings into fix features; Traycer grades each against the plan and re-verifies only the earlier ones
+  on a second pass (secondary). For canopy the operator chooses which findings to file, through the filing run that
+  already exists; nothing is filed alone.
+
+### Worth measuring first
+
+- **A critic before the operator reads.** Jules ran a second agent over plans nobody would approve by hand and
+  claimed 9.5% fewer failed tasks (secondary, the vendor's own figure; Jules is being shut down). canopy's plans are
+  all read by the operator, and Anthropic's evaluator "talked itself into approving". The journal says how often an
+  epic's first plan is approved without a reply; if that is most of them, a critic buys nothing. If one is tried,
+  bound it as oh-my-opencode's is ([In prompts](#in-prompts)), to what a member's planner could not go on from.
+- **More than one question, each with a default.** canopy's planner asks one blocking question or plans. Spec Kit's
+  `/clarify` asks at most five, one at a time, each with a recommended answer, and logs each answer in the spec
+  ([clarify.md](https://github.com/github/spec-kit/blob/main/templates/commands/clarify.md)); Kiro puts an ambiguity
+  as a choice of two (secondary). canopy's `Decisions` already are questions with a chosen default, answered after
+  the plan rather than before it, which costs a plan run when the answer changes the breakdown. Measure how many
+  epics' first reply picks another option before moving any of them ahead of the plan.
+- **Entries that touch the same files.** ccpm's tasks declare `conflicts_with`, and Kiro never runs two tasks on the
+  same files at once (secondary). canopy's siblings with no `After` between them may run together and conflict at
+  merge, which costs a `resume` each. No tool showed how accurate a planner's guess at files is, so count members'
+  conflict resumes first; the fix would be a planner told to order such entries with `After`, not a new field.
+
+### Already answered, or not to copy
+
+- **A dependent released when its blocker finishes rather than merges** is Gas Town's top open dependency bug
+  ([#1893](https://github.com/gastownhall/gastown/issues/1893)). canopy stacks a blocked ticket on its blocker's branch
+  only while that PR is open and green, and tells it when the blocker merges (§10).
+- **An integration branch per epic** (Gas Town), or one worktree the epic's agents share (ccpm, where a worker's
+  hours of work never reached main, [#530](https://github.com/automazeio/ccpm/issues/530)): one worker per ticket,
+  each with its PR, and stacking gives the dependent its provider's code.
+- **Requirements matched by their headings.** OpenSpec merges a change into its specs by header name, so a reworded
+  header breaks the merge and two changes to one requirement drop scenarios; its users ask for stable ids
+  ([#2033](https://github.com/Fission-AI/OpenSpec/issues/2033)). canopy's ids, never reused, are that.
+- **A size score per ticket.** Taskmaster's 1 to 10 is ignored by its own `expand`
+  ([#1728](https://github.com/eyaltoledano/claude-task-master/issues/1728)), and expanding every task up front misses
+  what the finished ones taught ([#866](https://github.com/eyaltoledano/claude-task-master/issues/866)), which is
+  the case for a member's plan written just in time. superpowers' rule is worth one line of the planner's prompt
+  instead: split only where a reviewer could reject one entry and approve its neighbor.
+- **Comments in the plan's margin** (Antigravity, Claude Code's cloud plan review; Cursor's users ask for it;
+  secondary). A ticket's plan has them; an epic's takes a reply on purpose, since its members read the plan itself.
+- **A deeper plan.** Spec Kit's users call it the "illusion of work"
+  ([#75](https://github.com/github/spec-kit/issues/75)), Anthropic's planner leaves implementation detail out because
+  an error in it cascades, and Cursor removed its judge and integrator roles as costing more than they caught
+  (secondary). The epic plan stays shallow.
 
 ## Lessons canopy's design already answers
 
