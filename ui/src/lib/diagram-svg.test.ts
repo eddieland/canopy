@@ -77,7 +77,7 @@ describe('a diagram saved as an SVG', () => {
         const { svg, dropped } = savedSvg(hostile, 'black')
         expect(dropped).toEqual([
             'svg@onload',
-            'style@import-or-url',
+            'style',
             'script',
             'a',
             'g@xlink:href',
@@ -95,7 +95,49 @@ describe('a diagram saved as an SVG', () => {
         // The link's group keeps where it drew its node, and what it held.
         expect(saved.querySelector('g[transform="translate(1, 2)"] > rect')).not.toBeNull()
         expect([...saved.querySelectorAll('use')].map((use) => use.getAttribute('href'))).toEqual([null, '#ok'])
-        expect(saved.querySelector('style')?.textContent).toContain('url(#ok)')
+        // A stylesheet that would load is dropped whole, not mended.
+        expect(saved.querySelector('style')?.textContent).toBe('')
+    })
+
+    it('leaves out what sits beside the picture, and what is neither element nor text inside it', () => {
+        // A stylesheet's instruction before the root, which a browser opening the file would load from.
+        const beside = [
+            '<?xml-stylesheet href="https://example.com/a.css"?>',
+            `<svg xmlns="${SVG}" viewBox="0 0 4 4"><!-- a note --><?pi data?><g><rect width="1"/>words</g></svg>`,
+        ].join('')
+        const { svg, dropped } = savedSvg(beside, 'black')
+        expect(svg).not.toMatch(/example\.com|xml-stylesheet|<\?|<!--/u)
+        expect(svg).toMatch(/^<svg /u)
+        expect(svg).toContain('words')
+        expect(dropped).toEqual(['#comment', '#processing-instruction'])
+    })
+
+    it.each([
+        ['an escaped url()', 'g{fill:\\75rl(https://example.com/x)}'],
+        ['an escaped @import', '@\\69mport "https://example.com/a.css";'],
+        ['an image set', 'g{fill:image-set("https://example.com/p.png" 1x)}'],
+        ['an at-rule other than @keyframes', '@font-face{font-family:x;src:local(x)}'],
+        ['an unknown function', 'g{fill:paint(x)}'],
+    ])('drops a stylesheet with %s whole', (_what, css) => {
+        const { svg, dropped } = savedSvg(`<svg xmlns="${SVG}"><style>${css}</style></svg>`, 'black')
+        expect(dropped).toEqual(['style'])
+        expect(read(svg).querySelector('style')?.textContent).toBe('')
+    })
+
+    it('drops a style attribute, or a presentation attribute, that is not plain CSS', () => {
+        const { svg, dropped } = savedSvg(
+            [
+                `<svg xmlns="${SVG}">`,
+                '<rect style="fill:image-set(\'https://example.com/p.png\' 1x)" fill="\\75rl(https://example.com/f)"',
+                ' stroke="teal" transform="translate(1, 2) scale(2)" title="a note (kept)"/></svg>',
+            ].join(''),
+            'black',
+        )
+        expect(dropped).toEqual(['rect@style', 'rect@fill'])
+        const rect = read(svg).querySelector('rect:not([fill="black"])')
+        expect(rect?.getAttribute('stroke')).toBe('teal')
+        expect(rect?.getAttribute('transform')).toBe('translate(1, 2) scale(2)')
+        expect(rect?.getAttribute('title')).toBe('a note (kept)')
     })
 
     it('refuses a picture the browser cannot read', () => {
