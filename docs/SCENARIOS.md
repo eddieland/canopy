@@ -162,6 +162,10 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
   keep its comments, with only those two values changed, and `~/.config/canopy/config.toml` untouched. Then try a
   count past its ceiling and adding a reviewer back by hand-crafting the request: expect each refused, naming its
   guard, and the files unchanged.
+- **S77. A task keeps to its own work** (M61). `canopy task submit --project <project>` a planning task whose text
+  names an existing ticket and the code it is about, and asks for a PR. Expect its branch under `task/`, its PR a
+  draft, each ticket it filed in that project with no queue label and named by `canopy show task:N`, and the ticket it
+  named, on the tracker, with nothing canopy wrote. These are the prompt's rules, not guards.
 
 ### Reviews
 
@@ -230,6 +234,12 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
   as logins, a bot's ending `[bot]`. Make an open issue of another repository block a watched one: expect a `partial`
   run naming it, and the ticket stale. Run it once on a GitHub Enterprise server too, `--repo <host>/<owner>/<name>`,
   where an older server without issue dependencies fails every read, naming the field.
+- **S78. An artifact's comments, back to the ticket** (M62). With `[artifacts]` naming a real store, Louvre or the
+  local one, have a public ticket's worker publish an artifact. As someone in `authorized_authors`, comment on a
+  passage: expect `canopy status` to name the `artifacts` source with an `ok` run, the comment in the ticket's
+  conversation quoting its passage, and a `resume` whose worker publishes a new version that answers it, replies, and
+  resolves the thread. As someone not listed, comment too: expect `untrusted_artifact_comment` on the attention list
+  and no dispatch until the operator replies on the ticket. Run it again after a change to the store's feed.
 
 ### What canopy keeps
 
