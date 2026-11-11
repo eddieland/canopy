@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { Check } from 'lucide-react'
-import { useId, useState } from 'react'
+import { lazy, Suspense, useId, useState } from 'react'
 import type { SubmitEvent } from 'react'
 
 import { ApiError } from '@/api/client'
@@ -23,12 +23,17 @@ import { TicketLink } from '@/components/ticket-link'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
+import { Skeleton } from '@/components/ui/skeleton'
 import { feedbackPlanApprovedText } from '@/lib/outcomes'
 import { messageAnchor } from '@/lib/refs'
 import { threadAnchor } from '@/lib/reviews'
 import { useSendKeys } from '@/lib/send-key'
 import type { Tone } from '@/lib/tone'
 import { cn } from '@/lib/utils'
+
+// The plan's file laid out as a document, its tables and diagrams drawn, as a ticket's plan and a task's report are;
+// loaded once it is opened, since what draws it (Tiptap, D120) is more script than the rest of the page needs.
+const PlanDocument = lazy(async () => ({ default: (await import('@/components/plan-editor')).PlanDocument }))
 
 // A plan's status in its chip's color: one waiting on the operator, stale or not, as a waiting draft is; an approved
 // one as what the loop is about to act on; a spent one plain.
@@ -113,8 +118,15 @@ export function FeedbackPlanPanel({ plan, onChange }: { plan: FeedbackPlan; onCh
                         </span>
                     </div>
                     <CollapsibleContent>
-                        <div className="border-t px-3 py-2 font-mono text-xs" data-testid="feedback-plan-text">
-                            <MemoryText text={text} lines />
+                        <div className="border-t" data-testid="feedback-plan-text">
+                            <Suspense fallback={<Skeleton className="mx-6 my-4 h-24" />}>
+                                <PlanDocument
+                                    key={text}
+                                    markdown={text}
+                                    label={`feedback-plan:${plan.id}`}
+                                    name={`feedback-plan-${plan.id}`}
+                                />
+                            </Suspense>
                         </div>
                     </CollapsibleContent>
                 </Collapsible>
