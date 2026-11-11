@@ -129,3 +129,6 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
   the pinned version is checked first.
 - Slack replies (M64): when the operator's Slack app can be granted read access to its channel's threads, so
   Accept's live check can run. The sink's notifications (M10) do not need it.
+- canopy's sessions out of the runtime's own list (left out of M72): when, with M72's Sessions page in use, the
+  operator still cannot find their own sessions in the runtime's list for canopy's. It changes what canopy does with
+  the runtime's data and logins (DESIGN §26, TRUST_MODEL T2 and T4), so it is a milestone of its own.
