@@ -63,6 +63,8 @@ if TYPE_CHECKING:
 RUNNING = harness.Decision(KEY, Phase.RUNNING, "wait", "running: a worker of it is running")
 #: What the harness records for a ticket the tracker says is closed.
 CLOSED = harness.Decision(KEY, None, "done", "closed: the tracker says it is closed")
+#: What the harness records for an open ticket with no queue label that the query returned.
+UNLABELED = harness.Decision(KEY, None, "skip", "not_labeled: open, with no queue label")
 
 
 @pytest.fixture
@@ -288,6 +290,42 @@ def test_a_closed_ticket_whose_pr_holds_a_row_is_left_to_the_overseer(
     observed.execute("UPDATE observed_tickets SET state = 'closed'")
     observed.commit()
     assert held_rows(canopy_env)[KEY, "repo"] == (Phase.MERGED,)
+    assert decided(canopy_env) == []
+
+
+def test_an_unlabeled_ticket_the_query_returned_is_the_harnesss_skip(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+) -> None:
+    """Its row, `none`, was measured right (MEASUREMENTS 2026-11-10, M38)."""
+    observed.execute("UPDATE observed_tickets SET labels = '[]'")
+    query_read(observed, [KEY])
+    observed.commit()
+    assert decided(canopy_env) == [UNLABELED]
+
+
+def test_an_unlabeled_ticket_the_query_did_not_return_is_let_go_undecided(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+) -> None:
+    # The state block leaves it out (`phases.let_go`), so no one owes it a decision (DESIGN §17).
+    observed.execute("UPDATE observed_tickets SET labels = '[]'")
+    query_read(observed, [])
+    observed.commit()
+    assert decided(canopy_env) == []
+
+
+def test_an_unlabeled_ticket_whose_pr_holds_a_row_is_left_to_the_overseer(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+) -> None:
+    db.set_unit(observed, KEY, str(canopy_env.root), "repo", pr_url=PR)
+    observe_pr(observed)
+    check(observed, "build", "completed", "success")
+    observed.execute("UPDATE observed_tickets SET labels = '[]'")
+    query_read(observed, [KEY])
+    observed.commit()
+    assert held_rows(canopy_env)[KEY, "repo"] == (Phase.GREEN_UNREVIEWED,)
     assert decided(canopy_env) == []
 
 

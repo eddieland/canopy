@@ -22,7 +22,18 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Literal
 
-from canopy.core import conversation, db, item_numbers, observe, personas, plans, records, review_runs, sql
+from canopy.core import (
+    connector_runs,
+    conversation,
+    db,
+    item_numbers,
+    observe,
+    personas,
+    plans,
+    records,
+    review_runs,
+    sql,
+)
 from canopy.core import review_result as result
 from canopy.core.config import CANOPY_REVIEWER
 from canopy.core.vocab import (
@@ -193,7 +204,7 @@ def let_go(conn: sqlite3.Connection, derived: Iterable[Derived]) -> frozenset[st
     Returns:
         Their keys.
     """
-    queried = set(_query_result(conn))
+    queried = set(connector_runs.query_result(conn))
     return frozenset(
         d.ticket_key
         for d in derived
@@ -487,7 +498,7 @@ class _World:
         stopped = set(conversation.stopped(conn))
         tickets = {t.key: t for t in db.open_tickets(conn) if t.key not in stopped}
         done = _done(conn)
-        keys = sorted(set(tickets) | (set(_query_result(conn)) - stopped - done))
+        keys = sorted(set(tickets) | (set(connector_runs.query_result(conn)) - stopped - done))
         comments: dict[str, list[records.ObservedComment]] = {}
         query = sql.select("*").from_("observed_comments").where_in("ticket", keys).order_by("commented_at, id")
         for c in records.fetch_all(conn, records.ObservedComment, query):
@@ -870,23 +881,6 @@ class _World:
             return False
         withheld = review_runs.withheld(self.ctx.conn, run.id)
         return any(i not in withheld for i in range(1, len(stored.findings) + 1))
-
-
-def _query_result(conn: sqlite3.Connection) -> list[str]:
-    """The keys the tracker query returned on the newest run that read it to the end.
-
-    Returns:
-        The keys; none when no run has.
-    """
-    row = sql.execute(
-        conn,
-        sql.select("query_result")
-        .from_("connector_runs")
-        .where("query_result IS NOT NULL")
-        .order_by("id DESC")
-        .limit(1),
-    ).fetchone()
-    return [str(k) for k in json.loads(str(row[0]))] if row is not None else []
 
 
 def _done(conn: sqlite3.Connection) -> set[str]:
