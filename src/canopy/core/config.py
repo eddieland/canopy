@@ -48,7 +48,7 @@ from pydantic import (
     model_validator,
 )
 
-from canopy.core import agent_models, bash_allows, chore_result, contract, hostgit
+from canopy.core import agent_models, bash_allows, chore_result, contract, hostgit, path_patterns
 from canopy.core.vocab import MemoryMode, PlannerApproval, PoolKind, ReplyMode
 from canopy.infra import procs, tracing
 from canopy.infra.metrics import Metrics  # noqa: TC001  (pydantic reads `Telemetry.metrics` at run time)
@@ -1735,6 +1735,39 @@ class Chore(Section):
 ChoreName = Annotated[str, AfterValidator(_chore_name)]
 
 
+#: What canopy renders into a run's prompt of the code its work is about (ROADMAP M70): nothing; or a directory tree.
+type Outline = Literal["off", "tree"]
+#: The fewest and the most characters an outline may be bounded to: room for a few dozen lines, and no more than a
+#: prompt can carry beside its work.
+MIN_OUTLINE_CHARS = 500
+MAX_OUTLINE_CHARS = 50_000
+
+
+class Index(Section):
+    """The `[index]` table: the outline of a repository's code a run's prompt starts with (DESIGN §46).
+
+    Every key is private: an outline is in every prompt it reaches, so a shared file that turned it on, or raised its
+    bound, would raise every operator's spend, and one that set `exclude` would choose what their agents are shown
+    (TRUST_MODEL T7).
+    """
+
+    #: `off`, the default: every prompt is the bytes it is without an outline. `tree`: a worker's prompt holds a
+    #: directory tree of each repository it works in, the directories its work is about opened to their files.
+    outline: Annotated[Outline, Scope.PRIVATE] = "off"
+    #: The most characters of a prompt the outline takes, shared among a joint run's repositories.
+    outline_chars: Annotated[
+        StrictInt,
+        Field(ge=MIN_OUTLINE_CHARS, le=MAX_OUTLINE_CHARS),
+        Scope.PRIVATE,
+    ] = 6000
+    #: Tracked files no outline needs, such as `vendor/` or `**/*.snap`: each a path or pattern from a repository's
+    #: root, compared as a `high_impact_paths` entry is (DESIGN §21).
+    exclude: Annotated[
+        tuple[Annotated[StrictStr, AfterValidator(path_patterns.impact_path)], ...],
+        Scope.PRIVATE,
+    ] = ()
+
+
 class Config(Section):
     """The merged, validated configuration."""
 
@@ -1756,6 +1789,7 @@ class Config(Section):
     artifacts: Artifacts
     spend: Spend
     sessions: Sessions
+    index: Index
     telemetry: Telemetry
     # Tables of tables, keyed by name; private as a whole (TABLE_SECTIONS).
     chores: Annotated[dict[ChoreName, Chore], Scope.PRIVATE] = {}
@@ -1798,6 +1832,7 @@ SECTIONS: dict[str, type[Section]] = {
     "artifacts": Artifacts,
     "spend": Spend,
     "sessions": Sessions,
+    "index": Index,
     "telemetry": Telemetry,
 }
 

@@ -119,6 +119,11 @@ def test_needs_human_label_is_set_by_the_workspace_and_overridden_by_the_user(ca
         ("sessions", "search = 'titles'"),
         # A shared file could bring an excluded directory's sessions back.
         ("sessions", "exclude = []"),
+        # An outline is in every prompt it reaches: a shared file could raise every operator's spend with it,
+        ("index", "outline = 'tree'"),
+        ("index", "outline_chars = 50000"),
+        # or choose what their agents are shown of a repository.
+        ("index", "exclude = ['src/']"),
     ],
 )
 def test_the_workspace_file_may_not_set_user_only_keys(canopy_env: CanopyEnv, section_key: tuple[str, str]) -> None:
@@ -1182,3 +1187,29 @@ def test_a_directory_sessions_exclude_names_is_expanded_from_home_without_a_trai
     listed = load(canopy_env.root, canopy_env.user_file).sessions
 
     assert (listed.search, listed.exclude) == ("titles", (f"{Path.home()}/clients", "/srv/*/scratch", "/"))
+
+
+def test_the_outline_is_off_by_default_and_its_keys_are_checked(canopy_env: CanopyEnv) -> None:
+    assert load(canopy_env.root, canopy_env.user_file).index.outline == "off"
+
+    canopy_env.append_user("\n[index]\noutline = 'tree'\noutline_chars = 2000\nexclude = ['vendor/', '**/*.snap']\n")
+
+    index = load(canopy_env.root, canopy_env.user_file).index
+    assert (index.outline, index.outline_chars, index.exclude) == ("tree", 2000, ("vendor/", "**/*.snap"))
+
+
+@pytest.mark.parametrize(
+    "toml",
+    [
+        "outline = 'symbols'",  # stage 2's, not built
+        "outline_chars = 499",
+        "outline_chars = 50001",
+        "exclude = ['/vendor']",
+        "exclude = ['src/[ab]']",
+    ],
+)
+def test_an_index_key_canopy_cannot_use_is_refused(canopy_env: CanopyEnv, toml: str) -> None:
+    canopy_env.append_user(f"\n[index]\n{toml}\n")
+
+    with pytest.raises(ConfigError, match="index"):
+        load(canopy_env.root, canopy_env.user_file)

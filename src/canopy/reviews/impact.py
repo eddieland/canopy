@@ -9,12 +9,11 @@ commit has a `high` review comes first.
 
 from __future__ import annotations
 
-import fnmatch
-from collections.abc import Collection, Iterable, Sequence
+from collections.abc import Collection, Iterable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import records, sql
+from canopy.core import path_patterns, records, sql
 from canopy.core import review_result as result
 from canopy.core.vocab import ReviewRunStatus
 from canopy.infra.text import printable
@@ -88,7 +87,7 @@ def matched(entries: Iterable[str], changed: Iterable[str]) -> Match | None:
     for path in sorted(changed):
         components = path.split("/")
         for entry, parts in patterns:
-            if _covers(parts, components):
+            if path_patterns.covers(parts, components):
                 return Match(path, entry)
     return None
 
@@ -125,18 +124,3 @@ def high(conn: sqlite3.Connection, tickets: Collection[str], prs: Collection[str
         if run.ticket_key is not None and run.ticket_key in tickets:
             found_tickets.add(run.ticket_key)
     return High(frozenset(found_prs), frozenset(found_tickets))
-
-
-def _covers(parts: Sequence[str], components: Sequence[str]) -> bool:
-    # Walks the parts once, keeping every count of components they can have matched so far, so a pattern with many
-    # wildcards costs parts times components, never the backtracking of one regular expression over the whole path.
-    # Any count left at the end is a prefix the pattern matches, and an entry covers everything under what it matches.
-    reached = {0}
-    for part in parts:
-        if part == "**":
-            reached = set(range(min(reached), len(components) + 1))
-        else:
-            reached = {n + 1 for n in reached if n < len(components) and fnmatch.fnmatchcase(components[n], part)}
-        if not reached:
-            return False
-    return True

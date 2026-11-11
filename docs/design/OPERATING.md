@@ -121,7 +121,8 @@ the private file, and a workspace file that sets one is a config error naming th
 Whoever controls a shared workspace file (anyone who can push to the repository holding it) must not run commands,
 choose prompts or models, spend money, authorize anyone, decide what is said in the operator's name, or loosen a
 guard; every key that does is private (TRUST_MODEL T7). Among them are every `runtime`, `notify`, `connect`,
-`chores`, `review`, `serve`, `memory`, `paths`, `capacity`, `loop`, `sessions`, and `telemetry` key, the queue labels,
+`chores`, `review`, `serve`, `memory`, `paths`, `capacity`, `loop`, `sessions`, `index`, and `telemetry` key, the queue
+labels,
 the repliers and trusted reviewers, the comment marks and commit trailer, `trust.rebase`, and `trust.max_flaky_kicks`.
 Unknown keys are errors in every file, and a removed key is an error that says what to do instead.
 
