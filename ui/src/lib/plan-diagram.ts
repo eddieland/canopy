@@ -212,6 +212,9 @@ class DiagramView implements NodeView {
         this.draws += 1
         const draw = this.draws
         const source = this.text
+        // The theme it is drawn in, as mermaid reads it when it starts: a picture drawn dark prints turned round
+        // (src/lib/plan-print.ts).
+        const dark = document.documentElement.classList.contains('dark')
         let result: Drawn | NotDrawn
         try {
             const { drawDiagram } = await import('@/lib/diagram')
@@ -230,6 +233,7 @@ class DiagramView implements NodeView {
         const name = KIND_NAMES[result.kind] ?? 'diagram'
         this.image.alt = `${/^[aeiou]/u.test(name) ? 'An' : 'A'} ${name}, drawn from the Mermaid source beside it`
         this.image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(result.svg)}`
+        this.image.toggleAttribute('data-drawn-dark', dark)
         this.image.hidden = false
         this.reason.textContent = ''
         this.picture = { svg: result.svg, kind: result.kind }

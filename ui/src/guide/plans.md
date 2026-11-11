@@ -104,6 +104,12 @@ file is named as `canopy archive` names it (`412-APPROVED-export-reports-as-csv.
 name however it left. The same button sits on an earlier plan, an epic's plan, a feedback plan's file, and a task's
 report.
 
+Printing a plan, or saving it as a PDF from the print dialog, gives you the plan alone, as a document: one line
+naming its ticket, which plan it is, where it stands, and when it was written, then the plan, with none of the page's
+buttons, comments, or rail around it. It prints in the light theme whatever you read it in, so a dark theme doesn't
+put pale grey text on white paper, and diagrams and tables are kept to a page where they fit, wrapped rather than cut
+off where they don't. Your printer will still find a way to jam.
+
 **Outline**, at the right of the Plan panel's header, lists the plan's headings, each step indented under its
 section, and goes to the one you pick, with the cursor in it if you can edit. Every plan has the same headings (Goal,
 Acceptance, Context, and so on down to Risks), so after a few plans you'll know where Steps is without looking, and

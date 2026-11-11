@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { expect, test } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import { clickAtEnd, clickIn, plan, select, settled, signIn } from './helpers.ts'
+import { clickAtEnd, clickIn, plan, select, settled, signIn, storeTheme } from './helpers.ts'
 
 test.beforeEach(async ({ page }) => {
     await signIn(page)
@@ -467,6 +467,51 @@ test('Markdown pasted into a code block stays code, as its characters', async ({
     await expect(plan(page).getByRole('heading', { name: 'both deploy' })).toHaveCount(0)
     await page.getByRole('button', { name: 'Show Markdown' }).click()
     await expect(page.getByLabel('Plan Markdown')).toContainText('```\n- name: web\n- name: api\n# both deploy\n```')
+})
+
+test('a plan prints alone, as a document, in the light theme whatever the screen shows', async ({ page }) => {
+    await storeTheme(page, 'dark')
+    await page.reload()
+    await expect(plan(page).getByRole('img', { name: /^A sequence diagram/u })).toBeVisible()
+    const root = page.locator('html')
+    await expect(root).toHaveClass(/\bdark\b/u)
+
+    await page.evaluate(() => globalThis.dispatchEvent(new Event('beforeprint')))
+    await page.emulateMedia({ media: 'print' })
+    await expect(root).not.toHaveClass(/\bdark\b/u)
+    await expect(page.getByTestId('app-header')).toBeHidden()
+    await expect(page.getByRole('heading', { name: 'Comments' })).toBeHidden()
+    await expect(page.getByRole('toolbar', { name: 'Format' })).toBeHidden()
+    await expect(page.getByTestId('plan-bar')).toBeHidden()
+    await expect(plan(page).getByRole('button', { name: 'Source', exact: true })).toBeHidden()
+    await expect(page.getByText('ABC-102 · the sample plan')).toBeVisible()
+    // Dark text on the page, which a print's white paper reads.
+    const ink = await plan(page)
+        .locator('p')
+        .first()
+        .evaluate((paragraph) => {
+            const context = document.createElement('canvas').getContext('2d')
+            if (context === null) {
+                return 765
+            }
+            context.fillStyle = getComputedStyle(paragraph).color
+            context.fillRect(0, 0, 1, 1)
+            const [red = 0, green = 0, blue = 0] = context.getImageData(0, 0, 1, 1).data
+            return red + green + blue
+        })
+    expect(ink).toBeLessThan(300)
+    // A picture still drawn dark prints turned round; one drawn again in the light theme prints as it is.
+    const picture = plan(page).getByRole('img', { name: /^A sequence diagram/u })
+    const filter = await picture.evaluate((image) => [
+        'drawnDark' in (image as HTMLElement).dataset,
+        getComputedStyle(image).filter,
+    ])
+    expect(filter[1]).toBe(filter[0] === true ? 'invert(1) hue-rotate(180deg)' : 'none')
+
+    await page.emulateMedia({ media: 'screen' })
+    await page.evaluate(() => globalThis.dispatchEvent(new Event('afterprint')))
+    await expect(root).toHaveClass(/\bdark\b/u)
+    await expect(page.getByTestId('app-header')).toBeVisible()
 })
 
 test.describe('copying out of the plan', () => {

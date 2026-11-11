@@ -63,6 +63,7 @@ import { markSection, marksOn, planSections, usePlanMarks } from '@/lib/plan-mar
 import type { PlanSection, SectionMark } from '@/lib/plan-marks'
 import { planOutline, sectionAt } from '@/lib/plan-outline'
 import type { OutlineEntry } from '@/lib/plan-outline'
+import { printsAPlan } from '@/lib/plan-print'
 import { planExtensions } from '@/lib/plan-schema'
 import { usePlanText } from '@/lib/plan-text'
 import {
@@ -147,6 +148,7 @@ export function PlanEditor({
     name = 'plan',
     file = `${name}.md`,
     unsaved = false,
+    printLine,
 }: {
     /** The plan, as Markdown. Read when the editor opens. */
     markdown: string
@@ -222,6 +224,11 @@ export function PlanEditor({
     file?: string
     /** Whether the page holds edits the plan's file does not have yet, which a copy of it then carries. */
     unsaved?: boolean
+    /**
+     * Given, the plan is the one its page prints, under this line naming it (`printLine`): the page prints it alone,
+     * in the light theme (`src/lib/plan-print.ts`).
+     */
+    printLine?: string | undefined
 }) {
     const editor = useEditor({
         extensions: planExtensions([
@@ -370,6 +377,10 @@ export function PlanEditor({
         const tr = withHighlight(editor.state.tr, { kind: 'sync', threads: placed }).setMeta('addToHistory', false)
         editor.view.dispatch(tr)
     }, [editor, threads])
+
+    // The page prints this plan alone, in the light theme, while it shows it.
+    const printed = printLine !== undefined
+    useEffect(() => (printed ? printsAPlan() : undefined), [printed])
 
     useEffect(() => {
         // Without `false`, Tiptap emits `update` as if the operator had edited, and the plan, serialized again in the
@@ -576,7 +587,12 @@ export function PlanEditor({
                         : 'grid-cols-[minmax(0,var(--container-plan))]',
                 )}
             >
-                <Panel>
+                <Panel data-print-plan={printed || undefined}>
+                    {printed && (
+                        <p data-print-line className="hidden text-sm text-muted-foreground print:block">
+                            {printLine}
+                        </p>
+                    )}
                     <PanelHeader ref={planHeader} label="Plan" sticky>
                         <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
                             {status}
@@ -619,6 +635,7 @@ export function PlanEditor({
                     <EditorContent
                         editor={editor}
                         data-plan-text={planText}
+                        data-print-body
                         className={cn('px-6 py-4', showChanges && 'plan-changes', raw && 'hidden')}
                     />
                     <PlanBlockActions owner={editor} name={name} />
