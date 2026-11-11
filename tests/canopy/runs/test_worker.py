@@ -19,13 +19,14 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import cards, config, db, definitions, prompts, run_models, workspace
+from canopy.core import cards, config, contract, db, definitions, prompts, run_models, workspace
 from canopy.core.vocab import FlakyCause, RunStatus
 from canopy.runs import worker
 from canopy.runtime import servers
 from tests.canopy.helpers import (
     InlineRunner,
     agent_runs,
+    calls,
     commit_and_push,
     has_deadline,
     inline_servers,
@@ -476,6 +477,41 @@ def test_bad_result_line_is_unknown(scenario: Scenario, git_pool: GitPool, last_
     run = scenario.run(worker=worker_does(result=last_line, exit_code=exit_code))
     assert run.status == "unknown"
     assert json.loads(run.row["result_json"]) == {"harness": "the worker's last line was not a valid result"}
+
+
+RESULT = "canopy_run_result"
+
+
+def test_a_result_reported_with_the_result_tool_is_the_runs_result(scenario: Scenario, git_pool: GitPool) -> None:
+    """The worker's last `result` call the server took is its result, whatever it printed after."""
+    with_events(scenario.env, "canopy-worker")
+    reported = [calls(RESULT, status="done", summary="early"), calls(RESULT, status="blocked", question="which API?")]
+    run = scenario.run(worker=worker_does(then_tools=reported, result="not json"))
+    assert run.status == "blocked"
+    result = json.loads(run.row["result_json"])
+    assert (result["question"], result.get("harness")) == ("which API?", None)
+    assert git_pool.remote_head("agent/PROJ-1-work") is None
+
+
+def test_a_result_the_result_tool_refused_is_no_result(scenario: Scenario, git_pool: GitPool) -> None:
+    """A call the server refused reports nothing, so the worker's last line is read, as before the tool."""
+    with_events(scenario.env, "canopy-worker")
+    refused = [calls(RESULT, status="finished")]
+    line = '{"status": "blocked", "question": "which API?"}'
+    run = scenario.run(worker=worker_does(then_tools=refused, result=line))
+    assert run.status == "blocked"
+    unreported = scenario.run(worker=worker_does(then_tools=refused, result="not json"))
+    assert unreported.status == "unknown"
+
+
+def test_result_line_with_an_unclosed_array_is_read_and_noted(scenario: Scenario, git_pool: GitPool) -> None:
+    line = '{"status": "blocked", "question": "which API?", "review_answers": [{"review": 1, "finding": 1}}'
+    run = scenario.run(worker=worker_does(result=line))
+    assert run.status == "blocked"
+    result = json.loads(run.row["result_json"])
+    assert result["question"] == "which API?"
+    assert result["harness"] == contract.REPAIRED
+    assert git_pool.remote_head("agent/PROJ-1-work") is None
 
 
 def test_result_text_is_bounded(scenario: Scenario, git_pool: GitPool) -> None:

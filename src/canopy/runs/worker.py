@@ -1,11 +1,11 @@
 """`canopy _run <run_id>`: one worker execution in its leased slots (DESIGN §8, §18).
 
 Sets up the branch in each slot, runs the operator's `setup_cmd` there, makes the desk of a joint run, runs
-`worker_cmd` with a timeout, parses the result line, verifies the branch is pushed in each slot and keeps what the run
-changed there (`changes`, DESIGN §45), removes the desk, returns every slot, and closes the `runs` row, recording the
-follow-up tickets its result names that pass their checks (DESIGN §18). The slots are returned on every exit path
-this process can see: normal, exception, and SIGTERM, SIGHUP, or SIGINT. SIGKILL cannot be caught; reconcile finds
-that run's dead pid on the next tick.
+`worker_cmd` with a timeout, reads the result it reported with canopy's `result` tool, or else its result line,
+verifies the branch is pushed in each slot and keeps what the run changed there (`changes`, DESIGN §45), removes the
+desk, returns every slot, and closes the `runs` row, recording the follow-up tickets its result names that pass their
+checks (DESIGN §18). The slots are returned on every exit path this process can see: normal, exception, and SIGTERM,
+SIGHUP, or SIGINT. SIGKILL cannot be caught; reconcile finds that run's dead pid on the next tick.
 
 A plan run checks each slot out at its base and pushes nothing, and always works in a desk, even over one repository:
 the desk holds a copy of the plan it replaces, if the ticket has one. The planner runs with `plan_cmd` and writes its
@@ -22,13 +22,24 @@ from __future__ import annotations
 import functools
 import json
 import os
+import re
 import sqlite3
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, Self, TextIO, assert_never, cast
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, StrictInt, StrictStr, model_validator
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    StrictInt,
+    StrictStr,
+    ValidationError,
+    model_validator,
+)
+from pydantic.json_schema import SkipJsonSchema  # noqa: TC002  (pydantic reads the annotation at run time)
 
 from canopy.core import (
     agent_models,
@@ -86,6 +97,7 @@ from canopy.runtime.watch import Watch
 
 if TYPE_CHECKING:
     from canopy.core.context import Context
+    from canopy.runtime.report import Called
 
 MAX_TEXT = 2000
 #: A planner's reason for saying its plan needs no review: a sentence, as a sink's line carries it.
@@ -165,22 +177,29 @@ class WorkerResult(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
 
-    status: Literal["done", "blocked", "failed"]
-    branch: Text | None = None
-    pr: Text | None = None
-    prs: dict[StrictStr, Text | None] | None = None
-    pr_titles: dict[StrictStr, PrTitle | None] | None = None
-    summary: Text = ""
-    question: Text | None = None
+    status: Literal["done", "blocked", "failed"] = Field(description="How the work ended.")
+    branch: Text | None = Field(default=None, description="The branch you pushed to.")
+    #: The contract before joint runs, which a `result` call's schema leaves out.
+    pr: SkipJsonSchema[Text | None] = None
+    prs: dict[StrictStr, Text | None] | None = Field(
+        default=None,
+        description="Each repository you worked in, by name, with its PR's URL, or null where it has none.",
+    )
+    pr_titles: dict[StrictStr, PrTitle | None] | None = Field(
+        default=None,
+        description="Each repository, by name, with its PR's title, or null.",
+    )
+    summary: Text = Field(default="", description="Your report to the operator, as Markdown.")
+    question: Text | None = Field(default=None, description="What you need answered, only when blocked.")
     #: Whether a `resume` for `ci` left a failed check as not the change's, such as a flaky test, for the operator to
     #: rerun (DESIGN §23). The checks and the evidence are in `summary`.
-    flaky: Flaky = False
+    flaky: Flaky = Field(default=False, description="Only where your message from canopy asks for it.")
     #: With `flaky`, where the worker judged the check failed, given only when its evidence says so (DESIGN §23).
-    flaky_cause: Cause = None
+    flaky_cause: Cause = Field(default=None, description="With `flaky`, as your message from canopy says.")
     #: With `flaky`, one line on why the check failed, such as the error it ended with; None when the worker gave none.
-    flaky_detail: FlakyDetail = None
+    flaky_detail: FlakyDetail = Field(default=None, description="With `flaky`, one line on why the check failed.")
     #: The worker's `flaky_cause` when it was not one of `FlakyCause`'s, as it said it; set from that field alone.
-    flaky_cause_other: OtherCause = None
+    flaky_cause_other: SkipJsonSchema[OtherCause] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -299,6 +318,61 @@ def parse_result(stdout: str) -> WorkerResult | None:
         The worker's result, or None.
     """
     return contract.last_line(WorkerResult, stdout)
+
+
+#: The tool a worker reports its result with, served by the run's own server beside `status` (DESIGN §8): the agent
+#: sees it as `canopy_run_result`.
+RESULT_TOOL = "result"
+#: A run's CANOPY_RUN_ID that names a run served the tool: a worker's or a planner's id, of which only a worker's
+#: definition allows it. A task's, `task-3`, and a review's, `review-7`, report in their final line.
+REPORTING_RUN_ID_RE = re.compile(r"[0-9]{1,18}")
+
+
+class Reported(WorkerResult):
+    """The input of a `result` call (DESIGN §8): the result contract, with whatever else the run was asked to report.
+
+    The fields the contract does not name, such as the tickets it filed, are kept as sent and read as a result line's
+    are, each by its own check.
+    """
+
+    model_config = ConfigDict(extra="allow", frozen=True, defer_build=True)
+
+
+def result_tool_name() -> str:
+    """The name the agent, and the definitions' rules, know the `result` tool by.
+
+    Returns:
+        `canopy_run_result`.
+    """
+    return servers.tool_name(cards.SERVER, RESULT_TOOL)
+
+
+def may_report(run: str) -> bool:
+    """Whether the run CANOPY_RUN_ID names `run` is served the `result` tool.
+
+    Returns:
+        True for a worker's or a planner's run; False for a task's, a review's, or anything else.
+    """
+    return REPORTING_RUN_ID_RE.fullmatch(run) is not None
+
+
+def read_report(called: Called) -> str | None:
+    """The result a tool call the agent made reports, if it is a `result` call that completed and validates.
+
+    A call the server refused is a tool error, which the runtime prints as failed, not completed; its input is held to
+    the tool's own too, as a `status` call's is (`cards.read_call`).
+
+    Returns:
+        The call's input as a result line, which every reader of one reads; None for any other call, a refused one, or
+        one whose input is no result.
+    """
+    if called.tool != result_tool_name() or not called.completed:
+        return None
+    try:
+        Reported.model_validate(called.input)
+        return json.dumps(dict(called.input))
+    except (ValidationError, TypeError, ValueError):
+        return None
 
 
 def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
@@ -552,6 +626,7 @@ def _run_agent(
     desk_files: Mapping[str, str] | None = None,
     marks: commit_hooks.Marks = commit_hooks.NONE,
     follows_plan: bool = False,
+    reports: bool = False,
 ) -> tuple[procs.Result, str]:
     """Check the places the agent reads config from, make the run's desk if it has one, and run `template` in it.
 
@@ -561,12 +636,15 @@ def _run_agent(
     `desk_files` are written into the desk, by name, readable only by the operator, before the agent starts.
     `marks` are what canopy's git hooks put on every commit the agent makes (`commit_hooks`).
     `follows_plan` says the run has its copy of an approved plan where it starts, which canopy's plugin names to it.
+    `reports` says the agent may report its result with canopy's `result` tool (DESIGN §8): its last such call the
+    server took is then the result, whatever its text ends with.
 
     The session and cost the runtime reported are recorded on the run at once, so a git step after the agent that
     fails does not lose them (DESIGN §13).
 
     Returns:
-        The agent's process and the text its result line is read from.
+        The agent's process and the text its result line is read from: with `reports`, the result it reported, as a
+        line.
 
     Raises:
         SetupError: a place the agent reads config from shadows canopy's definitions, or, for a private run or a
@@ -666,7 +744,7 @@ def _run_agent(
             stdin=rendered.stdin,
             timeout=timeout_minutes * 60,
             on_start=lambda pid: db.set_agent_pid(ctx.conn, "runs", run_id, pid),
-            on_line=_Progress(ctx, run_id, out, log),
+            on_line=(progress := _Progress(ctx, run_id, out, log)),
         )
     out.write(f"\n--- worker stderr ---\n{result.stderr}\n")
     out.write(f"--- worker exit {result.returncode}{' (timed out)' if result.timed_out else ''} ---\n")
@@ -685,7 +763,7 @@ def _run_agent(
         )
         spent = output.usage.spent() if output.usage else {}
         log.info("worker reported", extra={"run_id": run_id, "session_id": output.session_id, **spent})
-    return result, output.text
+    return result, progress.reported if reports and progress.reported is not None else output.text
 
 
 def _held_for(answers: Path, slots: Iterable[_Slot]) -> dict[Path, Path]:
@@ -713,6 +791,8 @@ class _Progress:
         self.log = log
         run = records.select(records.Run).where("id = ?", run_id).one(ctx.conn)
         self.watch = Watch(version=ctx.config.runtime.version, model=run.model if run is not None else None)
+        #: The result the agent last reported with canopy's `result` tool, as a line; None while it has reported none.
+        self.reported: str | None = None
 
     def __call__(self, line: str) -> None:
         self.out.write(line)
@@ -720,6 +800,12 @@ class _Progress:
         change = self.watch.read(line)
         if change is None:
             return
+        if change.called is not None:
+            # A later report replaces an earlier one, as a later line would.
+            reported = read_report(change.called)
+            if reported is not None:
+                self.reported = reported
+                self.log.info("worker reported its result with canopy's tool", extra={"run_id": self.run_id})
         try:
             # One transaction, so a tool call's progress and its card are recorded together or not at all.
             with db.transaction(self.ctx.conn):
@@ -1026,6 +1112,7 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
         desk_files=desk_files,
         marks=marks,
         follows_plan=copies[plans.COPY] is not None,
+        reports=True,
     )
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
 
@@ -1045,7 +1132,7 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     elif parsed is None:
         status, note = RunStatus.UNKNOWN, "the worker's last line was not a valid result"
     else:
-        status, note = RunStatus(parsed.status), ""
+        status, note = RunStatus(parsed.status), contract.REPAIRED if contract.repaired(text) else ""
 
     rewritten = [(slot, path) for slot in slots if (path := slot.rewritten()) is not None]
     if rewritten:
