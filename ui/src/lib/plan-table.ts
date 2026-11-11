@@ -65,7 +65,9 @@ export class PlanTableView extends TableView {
         return kept
     }
 
-    // Its actions are not the document: what is done to them is their own.
+    // Its actions are not the document: what is done to them is their own. What changes in them is not an edit
+    // either, and needs no `ignoreMutation` of its own: Tiptap's ignores every change inside `this.dom`, which holds
+    // them, that is not inside its cells.
     stopEvent(event: Event): boolean {
         return event.target instanceof globalThis.Node && this.actions.contains(event.target)
     }

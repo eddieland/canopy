@@ -131,8 +131,9 @@ shell waits for you to press Enter rather than running the moment it lands.
 
 A table in a plan has the same corner. Its copy button copies the table as the Markdown the plan's file holds, ready
 for a PR description; the menu beside it has **Copy for a spreadsheet**, which pastes into Sheets, Excel, or Numbers as
-cells, and **Save as CSV**. A cell that starts with `=`, `+`, `-`, or `@` goes as text, so a planner's
-`=HYPERLINK(...)` arrives as the words it was rather than as a formula in your sheet. Numbers like `-3` stay numbers.
+cells, and **Save as CSV**. A cell that starts with `=`, `+`, `-`, or `@` goes as text, behind a `'` that tells the
+spreadsheet so, and a planner's `=HYPERLINK(...)` arrives as words rather than as a formula in your sheet. A spreadsheet
+opening the CSV may show that `'`; better a stray apostrophe than a cell that runs. Numbers like `-3` stay numbers.
 
 ## Diagrams
 
