@@ -121,8 +121,8 @@ the private file, and a workspace file that sets one is a config error naming th
 Whoever controls a shared workspace file (anyone who can push to the repository holding it) must not run commands,
 choose prompts or models, spend money, authorize anyone, decide what is said in the operator's name, or loosen a
 guard; every key that does is private (TRUST_MODEL T7). Among them are every `runtime`, `notify`, `connect`,
-`chores`, `review`, `serve`, `memory`, `paths`, `capacity`, `loop`, `sessions`, and `telemetry` key, the queue labels, the
-repliers and trusted reviewers, the comment marks and commit trailer, `trust.rebase`, and `trust.max_flaky_kicks`.
+`chores`, `review`, `serve`, `memory`, `paths`, `capacity`, `loop`, `sessions`, and `telemetry` key, the queue labels,
+the repliers and trusted reviewers, the comment marks and commit trailer, `trust.rebase`, and `trust.max_flaky_kicks`.
 Unknown keys are errors in every file, and a removed key is an error that says what to do instead.
 
 **The private file's provenance.** The private file is under the workspace root, which may be a checkout of a shared
@@ -480,9 +480,9 @@ first, a subagent's under the one it ran for, the archived only when asked, or f
 word given. Those outside canopy are listed apart from canopy's, each with the command that reopens it in the runtime
 in its directory, and each of canopy's names the run that made it. A title is data: one line, bounded, nothing hidden
 in it, rendered as text and put in no prompt, and no tool serves the list to an agent. At `off`, the default, no title
-is read or kept, and turning it off drops every one kept; a directory the private `sessions.exclude` names keeps no
-title and is listed nowhere. A change to either starts the read again from the first session, so every session is read
-as the setting now says.
+is read or kept; a directory the private `sessions.exclude` names keeps no title and is listed nowhere. A change to
+either drops, on the loop's next read, every title kept that the setting now keeps none of, and starts the read again
+from the first session, so every session is read as the setting now says.
 
 ### The operator's skill
 

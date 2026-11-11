@@ -237,3 +237,20 @@ def test_turning_titles_off_drops_every_title_and_reads_on_from_the_cursor(conn:
     read_now = runtime_sessions.last_read(conn)
     assert read_now is not None
     assert read_now.titles is None
+
+
+def test_a_newly_excluded_directorys_titles_are_dropped_before_the_read_starts_again(conn: sqlite3.Connection) -> None:
+    runtime_sessions.record(
+        conn,
+        found(
+            titled("ses_1", "Mine", directory="/home/me/notes"),
+            titled("ses_2", "A client's", directory="/srv/acme"),
+        ),
+        titles=runtime_sessions.titles_setting([]),
+    )
+    failed = SessionPage("failed", error="locked")
+    with mock.patch.object(sessions, "updated_after", autospec=True, return_value=failed):
+        runtime_sessions.read_next(conn, version=Version.TWO, exclude=["/srv/*"])
+
+    titles = {s: getattr(runtime_sessions.of_session(conn, s), "title", None) for s in ("ses_1", "ses_2")}
+    assert titles == {"ses_1": "Mine", "ses_2": None}

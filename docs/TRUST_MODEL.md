@@ -938,8 +938,10 @@ Controls:
   every session the runtime keeps, as it keeps their spend: private tickets' runs' and the operator's own, in any
   directory, among them. Only the operator reads them: `canopy sessions` refuses inside a tick or a run, and no tool,
   report, or prompt section serves them, so no run reads another ticket's work or the operator's own through canopy.
-  A directory `sessions.exclude` names keeps no title and is listed nowhere, and `off`, the default, keeps none. An
-  unsandboxed run could already read the runtime's record itself, the standing residual.
+  A directory `sessions.exclude` names is listed nowhere, and `off`, the default, keeps no title. A title kept before
+  either change stays in the journal until the loop's next read drops it, which it does before it reads anything;
+  until then nothing lists it, since the command lists by the config in force and refuses at `off`. An unsandboxed
+  run could already read the runtime's record itself, the standing residual.
 - Opt-in: a sandboxed run (T4) reads none of the operator's secrets under `$HOME` but what its template re-allows, and
   reaches the network only through `srt`'s proxy, which connects to the hosts on the operator's allowlist and to no
   other, and to no loopback, link-local, or cloud metadata address, nor the host's own, whatever name resolves there.

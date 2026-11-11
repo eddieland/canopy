@@ -85,8 +85,8 @@ def read_next(
     """Read the runtime's sessions updated after the journal's cursor, and record them.
 
     The runtime is the one `version` runs. `exclude` is `sessions.exclude` while `sessions.search` keeps titles, and
-    None while it keeps none. A read under another setting than the last starts from the first session; one that keeps
-    none drops every title first.
+    None while it keeps none. A read under another setting than the last starts from the first session, having
+    dropped first every title it keeps none of: each one's, when it keeps none, else those in a directory it excludes.
 
     Returns:
         The page the runtime returned; a full one means more may wait to be read.
@@ -98,6 +98,9 @@ def read_next(
         with db.transaction(conn):
             _drop_titles(conn)
         kept = None
+    elif setting is not None and kept != setting:
+        with db.transaction(conn):
+            _drop_excluded(conn, json.loads(setting))
     start = cursor(conn) if kept == setting else None
     page = sessions.updated_after(start, version=version, limit=limit, titles=setting is not None)
     record(conn, page, titles=setting, restarted=start is None)
@@ -319,6 +322,12 @@ def _kept(was: records.RuntimeSessionRead | None) -> tuple[int | None, str | Non
 def _drop_titles(conn: sqlite3.Connection) -> None:
     records.update(records.RuntimeSession).set(title=None, archived_at=None).everything().run(conn)
     records.update(records.RuntimeSessionRead).set(titles=None).everything().run(conn)
+
+
+# The title and archive of every session in a directory one of `globs` names, dropped, as a read under a setting that
+# newly excludes it does first.
+def _drop_excluded(conn: sqlite3.Connection, globs: Collection[str]) -> None:
+    records.update(records.RuntimeSession).set(title=None, archived_at=None).where("{}", excluded(globs)).run(conn)
 
 
 def _record_session(conn: sqlite3.Connection, session: SessionSpend, at: str, *, keep_title: bool) -> None:
