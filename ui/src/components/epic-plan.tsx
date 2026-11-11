@@ -126,12 +126,11 @@ function NewestPlan({
             }
         } catch (error: unknown) {
             setFailure(error)
-        } finally {
-            setBusy(false)
-            // No stream event carries an epic: its page and the list read it again.
-            void client.invalidateQueries({ queryKey: keys.epic(epic) })
-            void client.invalidateQueries({ queryKey: keys.epics })
         }
+        setBusy(false)
+        // No stream event carries an epic: its page and the list read it again.
+        void client.invalidateQueries({ queryKey: keys.epic(epic) })
+        void client.invalidateQueries({ queryKey: keys.epics })
     }
 
     function approve() {

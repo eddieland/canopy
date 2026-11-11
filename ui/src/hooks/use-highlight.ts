@@ -5,6 +5,10 @@ import type { CodeToken } from '@/lib/highlight'
 import { highlightLanguage } from '@/lib/languages'
 import type { Language } from '@/lib/languages'
 
+// Loads the highlighter's module when the first code is read. Outside the hooks: the React Compiler does not compile
+// a dynamic `import()`, and would leave a hook that held one unmemoized (`react/todo` in the lint).
+const loadHighlighter = () => import('@/lib/highlight')
+
 /**
  * The tokens of each line of `file`'s hunks, by hunk and then line, once its language's grammar has loaded and read
  * them (`src/lib/highlight.ts`); undefined until then, and for good when the file is in no language canopy highlights,
@@ -20,7 +24,7 @@ export function useHighlight(file: DiffFile): (CodeToken[] | undefined)[][] | un
         if (language !== undefined && file.hunks.length > 0) {
             void (async () => {
                 try {
-                    const { highlightHunks } = await import('@/lib/highlight')
+                    const { highlightHunks } = await loadHighlighter()
                     const hunks = await highlightHunks(language, file.hunks)
                     if (!gone.signal.aborted) {
                         setDone({ file, hunks })
@@ -52,7 +56,7 @@ export function useHighlightLines(
         if (language !== undefined) {
             void (async () => {
                 try {
-                    const { highlightLines } = await import('@/lib/highlight')
+                    const { highlightLines } = await loadHighlighter()
                     const tokens = await highlightLines(language, text.split('\n'))
                     if (!gone.signal.aborted) {
                         setDone({ language, text, lines: tokens })

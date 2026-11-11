@@ -103,9 +103,8 @@ export function useDictation(onText: (text: string) => number): Dictation {
             }
         } catch (error_) {
             setError(error_)
-        } finally {
-            setState('idle')
         }
+        setState('idle')
     }
 
     async function start() {
@@ -122,12 +121,12 @@ export function useDictation(onText: (text: string) => number): Dictation {
                 audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
             })
         } catch (error_) {
+            starting.current = false
             setError(new Error(microphoneTrouble(error_)))
             setState('idle')
             return
-        } finally {
-            starting.current = false
         }
+        starting.current = false
         if (gone.current) {
             release(stream)
             return

@@ -73,11 +73,9 @@ function WorktreesPage() {
     const [reading, setReading] = useState(false)
     const readAgain = async () => {
         setReading(true)
-        try {
-            await refetch()
-        } finally {
-            setReading(false)
-        }
+        // Never rejects: a read that fails comes back as the query's error, which the page shows.
+        await refetch()
+        setReading(false)
     }
     return (
         <>

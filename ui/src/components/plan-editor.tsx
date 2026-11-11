@@ -146,7 +146,7 @@ export function PlanEditor({
     comments = true,
     decides = editable,
     name = 'plan',
-    file = `${name}.md`,
+    file,
     unsaved = false,
     printLine,
 }: {
@@ -220,7 +220,10 @@ export function PlanEditor({
     decides?: boolean
     /** What a file saved from the plan, such as a diagram's picture, is named for: `ABC-102-plan-2`. */
     name?: string
-    /** What the plan's Markdown is saved as, whole: the name `canopy archive` gives it, where it has one. */
+    /**
+     * What the plan's Markdown is saved as, whole: the name `canopy archive` gives it, where it has one, and `name`
+     * with `.md` by default.
+     */
     file?: string
     /** Whether the page holds edits the plan's file does not have yet, which a copy of it then carries. */
     unsaved?: boolean
@@ -405,21 +408,6 @@ export function PlanEditor({
         setChanged(now.trimEnd() !== original)
         onChange?.(now)
     })
-    const onPassageClick = useEffectEvent(({ id }: { id: string }) => activate(id, false))
-    const onCommentKey = useEffectEvent(() => startComment())
-    useEffect(() => {
-        const edit = () => onEdit()
-        const click = (event: { id: string }) => onPassageClick(event)
-        const key = () => onCommentKey()
-        editor.on('update', edit)
-        editor.on('planThreadActivate', click)
-        editor.on('planCommentRequest', key)
-        return () => {
-            editor.off('update', edit)
-            editor.off('planThreadActivate', click)
-            editor.off('planCommentRequest', key)
-        }
-    }, [editor])
 
     // The open decisions brought fully into view, clear of the sticky header and foot as tall as they are now (the
     // header's modes wrap on a narrow page, and a note being written makes the foot taller), so measured rather than
@@ -455,6 +443,17 @@ export function PlanEditor({
         editor.view.dispatch(tr)
     }
 
+    // Puts the cursor back in the plan after `range`, a comment's passage, as a shared document does once a comment is
+    // sent, resolved, or put aside: the keyboard carries on in the plan rather than from the top of the page, where the
+    // focus falls when the control that had it goes. With no passage, the plan takes the focus where its cursor was.
+    function backToPlan(range: Range | undefined) {
+        if (range === undefined) {
+            editor.commands.focus()
+        } else {
+            editor.commands.focus(range.to)
+        }
+    }
+
     function cancelComment() {
         const range = highlightsKey.getState(editor.state)?.draft
         setDraft(undefined)
@@ -475,17 +474,6 @@ export function PlanEditor({
         onThreadsChange(addThread(threads, { id, anchor, body, at: new Date().toISOString() }))
         editor.view.dispatch(withHighlight(editor.state.tr, { kind: 'add', id, range }))
         backToPlan(range)
-    }
-
-    // Puts the cursor back in the plan after `range`, a comment's passage, as a shared document does once a comment is
-    // sent, resolved, or put aside: the keyboard carries on in the plan rather than from the top of the page, where the
-    // focus falls when the control that had it goes. With no passage, the plan takes the focus where its cursor was.
-    function backToPlan(range: Range | undefined) {
-        if (range === undefined) {
-            editor.commands.focus()
-        } else {
-            editor.commands.focus(range.to)
-        }
     }
 
     // What the operator did to thread `id` from its card, then the cursor back after its passage: looked up first, as
@@ -548,6 +536,26 @@ export function PlanEditor({
             editor.commands.focus(target)
         }
     }
+
+    // What the editor says of itself: an edit, a passage clicked, and the keys that start a comment. Below the
+    // functions these call, not above: the React Compiler does not compile a component that calls a function declared
+    // further down from a closure made before it, and leaves the whole editor unmemoized (`react/invariant` and
+    // `react/todo` in the lint). `backToPlan` sits above the functions that call it for the same reason.
+    const onPassageClick = useEffectEvent(({ id }: { id: string }) => activate(id, false))
+    const onCommentKey = useEffectEvent(() => startComment())
+    useEffect(() => {
+        const edit = () => onEdit()
+        const click = (event: { id: string }) => onPassageClick(event)
+        const key = () => onCommentKey()
+        editor.on('update', edit)
+        editor.on('planThreadActivate', click)
+        editor.on('planCommentRequest', key)
+        return () => {
+            editor.off('update', edit)
+            editor.off('planThreadActivate', click)
+            editor.off('planCommentRequest', key)
+        }
+    }, [editor])
 
     const open = threads.filter((thread) => !thread.resolved).length
     // What an approval would carry to the implement, for the caller's actions (`renderActions`).
@@ -624,7 +632,7 @@ export function PlanEditor({
                             {!raw && <OutlineMenu editor={editor} ticket={marks} />}
                             <PlanFileMenu
                                 markdown={() => source ?? editor.getMarkdown()}
-                                file={file}
+                                file={file ?? `${name}.md`}
                                 unsaved={unsaved}
                             />
                         </span>
