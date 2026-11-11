@@ -381,6 +381,7 @@ def _work(ctx: Context, run: records.TaskRun, link: bytes | None, out: TextIO, l
         branch=run.branch,
         start=start,
         pushed=pushed,
+        marks=marks,
         log_path=run.log_path,
         log=log,
     )

@@ -10,11 +10,13 @@ Being built (ROADMAP M38). It waits on §35, and each row on a measurement (belo
 records before the overseer, each marked as its own; a ticket taken or left whole; `decided`; the duties owed only for
 the tickets left (§6); the state block's `harness`, naming each ticket taken; and "Order and capacity", the order now
 in §7. The rows enabled are those read from the journal alone: `wait` for `running`, and for a private ticket's
-`needs_human`; and `chore run` for a due chore with no `when` (§19). No ticket's dispatch is enabled: each rests on an
-observation. Of the attention list held in code, built: the items the harness raises from their causes, in §14, which
-the overseer is refused (`raised`); the three the overseer keeps, below; and its other items held through a tick that
-does not give the overseer their subject, until one that does leaves them out or the ticket is done or stopped (§14),
-so a ticket with one is the harness's for a `wait`, though not for a run. Of the cursors, built: the harness's moves
+`needs_human`; and `chore run` for a due chore with no `when` (§19); and, on their measurement, `done` for a closed
+ticket and `skip` for an open one with no queue label that the query returned, each with no worker running and no unit
+holding a row. No ticket's dispatch is enabled: each rests on an observation. Of the attention list held in code, built:
+the items the harness raises from their causes, in §14, which the overseer is refused (`raised`); the three the overseer
+keeps, below; and its other items held through a tick that does not give the overseer their subject, until one that
+does leaves them out or the ticket is done or stopped (§14), so a ticket with one is the harness's for a `wait`, though
+not for a run. Of the cursors, built: the harness's moves
 past what needs no handling, and a dispatch's default cursors, for a `resume` of a public ticket, read from fresh
 observations, the harness's own `resume` moving them as the overseer's does (What the overseer is left). The rest is
 designed, not built. Until it is, §8, §21, and TRUST_MODEL describe canopy as it is; this section says what changes,

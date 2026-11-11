@@ -245,7 +245,12 @@ def _show_run(ctx: Context, run: records.TaskRun) -> None:
         checklist_answers.pushes_of(ctx.conn, run.id, table="task_runs"),
         log_path=run.log_path,
     )
-    changed = change_lines(run_changes.of_run(ctx.conn, run.id, table="task_runs"), log_path=run.log_path)
+    changed = change_lines(
+        run_changes.of_run(ctx.conn, run.id, table="task_runs"),
+        log_path=run.log_path,
+        # A worker's text, which no agent is given (DESIGN §45).
+        commits=run_changes.commits_of(ctx.conn, run.id, table="task_runs") if conversation.is_operator() else None,
+    )
     for heading, lines in (("checklist", answered), ("changed", changed)):
         if lines:
             click.echo(f"    {heading}:")

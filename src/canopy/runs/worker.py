@@ -1163,7 +1163,7 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     if any(found.unpushed for found in checked_pushes):
         status, note = RunStatus.UNPUSHED, "; ".join(found.unpushed for found in checked_pushes if found.unpushed)
     # Before a kick, which replaces the branch's commits with copies the run did not make (DESIGN §23).
-    changed = _keep_changes(run, slots, starts, checked_pushes, log)
+    changed = _keep_changes(run, slots, starts, checked_pushes, marks=marks, log=log)
     listed = _keep_checklist_pushes(run, slots, branch, listed, log)
     committed = [
         found for s in slots for n, c in copies.items() if c is not None and (found := _committed_copy(s, branch, n))
@@ -1282,12 +1282,15 @@ def _keep_changes(
     slots: Sequence[_Slot],
     starts: Sequence[checkpoint.Start],
     checked: Sequence[checkpoint.Pushed],
+    *,
+    marks: commit_hooks.Marks,
     log: logs.TickAdapter,
 ) -> tuple[run_changes.Change, ...]:
     """Read what the run changed in each slot and keep its diffs, which the PR's page shows its threads on (§29, §45).
 
-    `checked` is what the push check found of each slot. Best effort, as a review's diff is (§21, The diff): a failure
-    is logged and named in the slot's record, and the run goes on.
+    `checked` is what the push check found of each slot, and `marks` what canopy's hooks put on the run's commits. Best
+    effort, as a review's diff is (§21, The diff): a failure is logged and named in the slot's record, and the run goes
+    on.
 
     Returns:
         A change per slot, in the slots' order.
@@ -1300,6 +1303,7 @@ def _keep_changes(
             branch=str(run["branch"]),
             start=start,
             pushed=found,
+            marks=marks,
             log_path=str(run["log_path"]),
             log=log,
         )

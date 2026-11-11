@@ -163,4 +163,13 @@ and that entry with it), the fifth bullet's. Built (2026-10-31) for S27's re-mea
 review comment of a ticket's PR, a check run), from its source time to the first live tick that decided about its
 ticket after canopy observed it, a cursor moved or a refusal not counted, with its 90th percentile, canopy's own part,
 how many a poll's tick acted on, and those not acted on. A check run carries no source time in the contract, so only
-canopy's part of its wait is known.
+canopy's part of its wait is known. Settled by the operator (2026-11-10): `runtime.allow_bash`'s overseer entry goes
+with its MCP servers. S27 re-measured 2026-11-10 (MEASUREMENTS "2026-11-10: M39, a day and a night of the loop"), over
+two weeks and a 3.6-day stretch with no restart, a weekend with a light queue, against Accept: most ticks running no
+overseer, not met (none of the stretch's 80 ticks); overseer spend per day at a quarter of 2026-10-13's $52.53, about
+$13.13, for the same queue: the stretch's $2.8 to $2.9 a day is under it, on a lighter queue; median latency under three
+minutes, met by day and by night (108 s and 99 s). Open for the operator: whether the stretch's 19 dispatches the
+harness's rows did not allow are actions a tick without the overseer would miss or the overseer's mistakes, which no
+action missed waits on; and whether the tracker's run of partial reads earlier in the window counts as a source outage,
+no source having failed in the stretch. Not yet shown: a source stopped for a few polls, and whether `loop waits`
+churned.

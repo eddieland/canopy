@@ -119,14 +119,18 @@ expensive kind.
 
 ## Diagrams
 
-A code block fenced as `mermaid` is drawn as the diagram it describes: a flowchart, a sequence diagram, or a state
-diagram, which covers how modules fit, which side calls which, and what a status may become. A picture of the call
-order is quicker to check than three paragraphs about it, and quicker to catch being wrong. It's drawn in your theme's
-colors, and again when you change them.
+A code block fenced as `mermaid` is drawn as the diagram it describes: a flowchart, a sequence diagram, a state
+diagram, a class diagram, or an entity relationship diagram, which covers how modules fit, which side calls which, what
+a status may become, what a new type holds, and how a migration's tables relate. A part the plan adds or changes ends
+its label with `(new)` or `(changed)`, so you can see what moves without reading the whole picture. A picture of the
+call order is quicker to check than three paragraphs about it, and quicker to catch being wrong. It's drawn in your
+theme's colors, and again when you change them.
 
-Planners draw one where it earns its place, usually in Context or Steps, and say the same in prose, since the worker
-after them reads the code, not the picture. Expect one or two in a plan that needs them and none in most, which is the
-right number for a typo fix.
+Planners draw one wherever the work has a shape: a plan that changes how two parts talk, adds a status, or reorders a
+flow has at least one, usually in Context for how things stand and again under the step that changes them. They say
+the same in prose, since the worker after them reads the code, not the picture, and they reach for a table the same
+way, for the files a step changes or the risks beside their way back. A typo fix still gets none. An epic's plan of
+three tickets or more opens its breakdown with the order they're built in, drawn.
 
 The code is still the plan. **Source**, under the diagram, shows it; so does putting the cursor in it, which the arrow
 keys do from the line above or below, and which is how you edit one, with the diagram redrawn under it as you stop

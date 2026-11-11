@@ -89,7 +89,9 @@ the agent on its next tool call. An answer is a letter, never words, so a forged
 the agent's own options (TRUST_MODEL T1). Each run counts its card's lapses, from fresh to stale, as its tool calls
 and its end find them, and `canopy cards` reports them per role over the last days, so the week's measurement reads
 from the journal. The live checks above, stage 3's among them, and the week of `MEASUREMENTS.md` wait on the
-operator.
+operator. The week recorded 2026-11-10 (MEASUREMENTS "2026-11-10: M65, how often running cards went stale"), with no
+threshold set: a card lapsed at least once on 52% of `implement` runs, 16% of `resume` runs, 10% of plan runs, and 42%
+of reviews, and ended stale on 18%, 2%, 2%, and none. The live checks above still wait on the operator.
 
 [status]: https://github.com/fullstackhouse/paseo-status
 [progress]: https://github.com/stevecastaneda/paseo-plugins/tree/main/progress

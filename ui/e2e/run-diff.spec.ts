@@ -24,9 +24,31 @@ test("a run's page sums up what it changed, over its transcript, and shows the d
     const panels = await page.locator('main h2').allTextContents()
     expect(panels.indexOf('Diff')).toBeLessThan(panels.indexOf('Transcript'))
 
+    // Its commits, oldest first, the second pushed by canopy after the worker left it, each opening on GitHub.
+    const commits = diff.getByTestId('run-commit')
+    await expect(commits).toHaveText([
+        "5e1c0d2ABC-099: debounce the search box's fetch",
+        '9b2f4c6ABC-099: test that search waits 250 mspushed by canopy',
+    ])
+    await expect(commits.first().getByRole('link', { name: '5e1c0d2' })).toHaveAttribute(
+        'href',
+        'https://github.com/acme/web/pull/88/commits/5e1c0d2a77777777777777777777777777777777',
+    )
+
     await diff.getByRole('button', { name: 'Show diff of web' }).click()
     await expect(diff.getByTestId('diff-file')).toHaveCount(2)
     await expect(diff.getByTestId('diff-file').first()).toContainText('controller.abort()')
+})
+
+test("a PR's runs list reads as its branch's history, each run's commits under its range", async ({ page }) => {
+    await page.goto(`pull-requests/pr?url=${encodeURIComponent('https://github.com/acme/web/pull/88')}`)
+    await settled(page)
+    const commits = page.getByTestId('pull-request-runs').getByTestId('run-commit')
+    await expect(commits).toContainText([
+        'ABC-099: cancel the timer on unmount',
+        "ABC-099: debounce the search box's fetch",
+        'ABC-099: test that search waits 250 ms',
+    ])
 })
 
 test("an unpushed run's change is marked not on origin, and one not kept says why", async ({ page }) => {

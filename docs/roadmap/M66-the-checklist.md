@@ -126,3 +126,9 @@ it let through, in the slot's own git directory, and `_run` or `_task` keeps the
 log, recorded in `checklist_pushes` and named by `canopy show`. The run's page, and a task run's, shows each stretch
 under the Checklist panel, 2026-11-06, as M69 stage 2 asks: its repository and commits, then its diff in the panels a
 review's diff has, or why it has none. Stage 1's live checks are next, then stage 2's two weeks.
+Stage 2's two weeks recorded 2026-11-10 (MEASUREMENTS "2026-11-10: M66 stage 2, the checklist's two weeks"), the
+monorepo's list: parameter-types reminded 414 times, fixed 28 and held 14; narrow-except 357, fixed 6, never held;
+trailing-commas 347, fixed 9, never held; each `n/a` on 18% to 36% and unanswered on about a fifth. By the operator's
+count, about zero checklist-type nits reached a human reviewer on canopy's PRs in the window. Open for the operator:
+whether to reword or drop an item, and the call on stage 3, which Accept records here. Stage 1's live checks are still
+to run.

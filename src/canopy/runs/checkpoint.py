@@ -49,6 +49,10 @@ class Pushed:
     head: str
     #: Why the work is not on origin; "" when it is, or when the agent committed nothing.
     unpushed: str = ""
+    #: Where origin's branch was before the check's own push put the slot's HEAD there, "" when origin had no branch;
+    #: None when the check pushed nothing, or its push failed. The commits past it are the harness's push, not the
+    #: worker's (DESIGN §45).
+    harness_from: str | None = None
 
 
 class Git:
@@ -159,22 +163,25 @@ def ensure_pushed(git: Git, branch: str, start: Start, log: logs.TickAdapter, *,
     """
     local = git.run("rev-parse", "HEAD")
     remote = remote_head(git, branch)
+    harness_from: str | None = None
     # A HEAD that holds nothing past the start is no work of the agent's; whatever is on origin is its doing.
     if remote != local and not git.ok("merge-base", "--is-ancestor", local, start.commit):
         log.warning("worker left commits unpushed; pushing once", extra={"branch": branch, "repo": git.name})
         pushed = _push(git, branch, start.pushed if rebase else None)
-        remote = remote_head(git, branch)
+        before, remote = remote, remote_head(git, branch)
         if not pushed.ok or remote != local:
             detail = (pushed.stderr.strip() or pushed.stdout.strip())[:500]
             return Pushed(remote, f"{git.where}commits on {branch} are not on origin; the push failed: {detail}")
+        harness_from = before
     left = _left_behind(git, branch, start, remote)
     if left:
         return Pushed(
             remote,
             f"{git.where}the worker moved HEAD off {len(left)} commit(s) not on origin, such as {left[0][:12]}; "
             "nothing was pushed for them",
+            harness_from,
         )
-    return Pushed(remote)
+    return Pushed(remote, harness_from=harness_from)
 
 
 def left_work(git: Git, branch: str, start: Start, pushed: Pushed) -> str | None:

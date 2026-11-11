@@ -8,6 +8,7 @@ import type { ChangedFile, ChecklistStretch, ReviewDiff, RunChange, RunRange } f
 import { Disclosure } from '@/components/disclosure'
 import { Empty, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { DiffPanels } from '@/components/review-diff'
+import { RunCommits } from '@/components/run-commits'
 import { Chip } from '@/components/status'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
@@ -18,6 +19,7 @@ import type { Placed } from '@/lib/reviews'
 import {
     changedAfterText,
     changedPath,
+    commitsLeftOutText,
     DIFF_UNREAD,
     diffAnchor,
     diffsByRepo,
@@ -56,8 +58,10 @@ export type ChangeQuery<K extends QueryKey> = (repo: string) => UseQueryOptions<
  * What a worker's or a task's run changed (DESIGN §45), a Diff panel per repository, by repository: a summary, since a
  * run's page is opened to see why the run ended far more often than to read its diff. Its header names the repository,
  * the commits, and how many files and lines changed, marks a slot the run left unpushed, and links to the PR's page,
- * where the branch against its base is; under it, each file with its lines. `Show diff` opens the diff's file panels
- * under the panel (`DiffPanels`), the run's own read then (`diff`); a page opened at `#diff-<repo>` opens that one.
+ * where the branch against its base is; under it, each file with its lines, then the commits in its range, each with
+ * canopy's marks on it and linked to its page on GitHub through the PR (`RunCommits`). `Show diff` opens the diff's
+ * file panels under the panel (`DiffPanels`), the run's own read then (`diff`); a page opened at `#diff-<repo>` opens
+ * that one.
  *
  * A run held by its list (DESIGN §42) pushed a stretch after it, part of what it changed: the panel of its repository
  * holds it as a scope, `after the list` beside `whole run`, and opens on it, its diff sent with the run, so the fix the
@@ -213,6 +217,15 @@ function RepoDiffSection<K extends QueryKey>({
                         </>
                     ) : (
                         <ChangeBody change={change} marked={marked} />
+                    )}
+                    {change !== null && (
+                        <RunCommits
+                            commits={change.range.commits}
+                            prUrl={change.pr_url}
+                            onOrigin={change.range.unpushed_sha === null}
+                            leftOut={commitsLeftOutText(change.range)}
+                            className="border-t px-3 py-2"
+                        />
                     )}
                     {stretch !== null && <StretchLine stretch={stretch} under={change !== null || listed || records} />}
                 </Panel>
