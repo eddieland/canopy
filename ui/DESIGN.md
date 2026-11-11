@@ -1045,12 +1045,11 @@ reader, so no table repeats them.
   (`waiting on you`, not `blocked`), and leaves how the code does it to the code and why to the design, in the voice
   `AGENTS.md` sets. An empty fence that names one of the repository's example files after its language (`EMBEDS`)
   shows that file whole, as it is when the guide is built, so a page never keeps a copy of one. A code block is colored
-  as a diff's code is (A review), in the language its fence names, plain until its grammar has loaded. A
-  ```` ```mermaid ```` fence is drawn as its diagram, as a plan's is (D131), with its actions in its corner, named by
-  its `accTitle`, and
-  `guide.test.ts` fails on one mermaid cannot read or with no `accTitle`. A diagram is for a shape the prose would take
-  paragraphs to hold, beside the prose, never instead of it. A new page is a file there and a line in its group in
-  `SOURCES`.
+  as a diff's code is (A review), in the language its fence names, plain until its grammar has loaded, and copied from
+  its corner. A ```` ```mermaid ```` fence is drawn as its diagram, as a plan's is (D131), with its actions in its
+  corner, named by its `accTitle`, and `guide.test.ts` fails on one mermaid cannot read or with no `accTitle`. A
+  diagram is for a shape the prose would take paragraphs to hold, beside the prose, never instead of it. A new page is
+  a file there and a line in its group in `SOURCES`.
 - **A question before losing work** (`AlertDialog`): a page that holds the operator's work not yet saved or sent asks
   before it is left, in a dialog centred over the canvas: its question as the title (`Leave this page?`), what leaving
   loses under it, then an outline `Stay`, which takes the focus and which Escape gives, and `Leave` in `destructive`. A
@@ -1171,13 +1170,15 @@ reader, so no table repeats them.
   keeps an element for its actions (`src/lib/block-slots.ts`) which the page fills through a portal, in its own tree.
   They are never printed.
 - **Text to paste elsewhere** has a copy button after it (`Copyable`, `CopyButton`): a branch, a path, a session id, a
-  review's commit, whole though the page shows its first 7 characters. A path copies whole though the page shows it
-  from the workspace root (`CopyablePath`); until the root is read there is no button, so a copy is never the short
-  path. The button is a ghost `icon-xs` with the `Copy` icon, muted until hovered; a click shows `Check` in the accent,
-  or `X` in `status-failed` when the browser refuses, and names what happened, and a toast says the same with the text
-  it copied. In a dense list it shows only while its row is hovered or it has the focus, keeping its space so nothing
-  moves, and always on a touch screen. The clipboard needs a secure context, so elsewhere there is no button and the
-  text stays selectable.
+  review's commit, whole though the page shows its first 7 characters. A code block, in a plan, the guide, or rich text,
+  has one in its corner (A block's actions), which copies its code as the fence holds it, no newline after its last
+  line, so a command pasted in a shell waits for Enter; a diff's code has none. A path copies whole though the page
+  shows it from the workspace root (`CopyablePath`); until the root is read there is no button, so a copy is never the
+  short path. The button is a ghost `icon-xs` with the `Copy` icon, muted until hovered; a click shows `Check` in the
+  accent, or `X` in `status-failed` when the browser refuses, and names what happened, and a toast says the same with
+  the text it copied. In a dense list it shows only while its row is hovered or it has the focus, keeping its space so
+  nothing moves, and always on a touch screen. The clipboard needs a secure context, so elsewhere there is no button
+  and the text stays selectable.
 - **A toast** (`Toaster`, `useToast` in `src/hooks/use-toast.ts`) says what an action did when the place it was done
   shows too little of it: a copy names what it copied, a draft's send what it sent. It sits at the bottom center of the
   window on `surface` with a hairline, a `Check` in the accent or an `X` in `status-failed`, its title, and a line under

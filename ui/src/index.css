@@ -1921,6 +1921,10 @@
              * reader reads the code that draws the picture. */
             @apply sr-only;
         }
+        /* A code block, positioned for its actions in its corner. */
+        & .plan-code {
+            @apply relative;
+        }
         & .plan-diagram-figure {
             @apply relative m-0 flex flex-col items-center gap-2 rounded-md border bg-surface p-3;
         }

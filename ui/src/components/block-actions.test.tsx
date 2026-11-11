@@ -113,6 +113,20 @@ describe("a plan's diagram's actions", () => {
         expect(within(first).getByRole('button', { name: 'Copy Mermaid source' })).toBeDefined()
     })
 
+    it("copy a code block's code from its room", async () => {
+        const write = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue()
+        const owner = {}
+        renderActions(owner)
+        const slot = document.createElement('div')
+        document.body.append(slot)
+        act(() => {
+            blockSlots(owner).put({ id: newSlotId(), kind: 'code', slot, text: 'make lint' })
+        })
+        fireEvent.click(within(slot).getByRole('button', { name: 'Copy code' }))
+        await settle()
+        expect(write).toHaveBeenCalledWith('make lint')
+    })
+
     it('go when their diagram does', () => {
         const plan = planDocument()
         renderActions(plan.owner)

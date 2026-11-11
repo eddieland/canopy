@@ -121,6 +121,20 @@ test('a diagram is drawn as its picture, named for a screen reader, and drawn ag
     await expect(run).not.toHaveAttribute('src', dark ?? '')
 })
 
+test.describe("a code block's copy button", () => {
+    test.use({ permissions: ['clipboard-read', 'clipboard-write'] })
+
+    test('copies the block as the page shows it, with no newline after its last line', async ({ page }) => {
+        await page.goto('guide/config-files')
+        const block = page.getByTestId('guide-page').locator('pre').first()
+        await block.hover()
+        await block.locator('..').getByRole('button', { name: 'Copy code' }).click()
+        const copied = await page.evaluate(() => navigator.clipboard.readText())
+        expect(copied).toBe(await block.textContent())
+        expect(copied).not.toMatch(/\n$/u)
+    })
+})
+
 test.describe("a diagram's actions", () => {
     test.use({ permissions: ['clipboard-read', 'clipboard-write'] })
 

@@ -55,6 +55,11 @@ export function DiagramActions({
     )
 }
 
+/** A code block's actions: its code copied, exactly as the fence holds it, without the fence's lines. */
+export function CodeActions({ text }: { text: string }) {
+    return <CopyButton text={text} label="code" />
+}
+
 /**
  * The actions of the blocks of a plan's document, the editor `owner`'s, each drawn into its block's room for them
  * (`src/lib/block-slots.ts`): through a portal, so they render in the page's tree, with its toasts, though ProseMirror
@@ -63,19 +68,24 @@ export function DiagramActions({
  */
 export function PlanBlockActions({ owner, name }: { owner: object; name: string }) {
     const slots = blockSlots(owner)
-    const blocks = useSyncExternalStore(slots.subscribe, slots.snapshot)
-    const ordered = inDocumentOrder(blocks)
-    return ordered.map((block, i) =>
-        createPortal(
+    const blocks = inDocumentOrder(useSyncExternalStore(slots.subscribe, slots.snapshot))
+    // Each diagram's place among the document's diagrams, by its id.
+    const diagrams = blocks.filter((block) => block.kind === 'diagram').map((block) => block.id)
+    return blocks.map((block) => {
+        if (block.kind === 'code') {
+            return createPortal(<CodeActions text={block.text} />, block.slot, String(block.id))
+        }
+        const place = diagrams.indexOf(block.id) + 1
+        return createPortal(
             <DiagramActions
                 source={block.source}
                 drawn={block.drawn}
-                name={`${name}-${kindWord(block.drawn?.kind ?? '')}-${i + 1}`}
+                name={`${name}-${kindWord(block.drawn?.kind ?? '')}-${place}`}
             />,
             block.slot,
             String(block.id),
-        ),
-    )
+        )
+    })
 }
 
 // `blocks` in the order their rooms sit in the page, which is the document's: they are registered as their views are

@@ -28,7 +28,7 @@ describe("a document's blocks with room for their actions", () => {
         slots.put(diagram(first, 'flowchart LR'))
         slots.put(diagram(second, 'sequenceDiagram'))
         slots.put(diagram(first, 'flowchart TD'))
-        expect(slots.snapshot().map((block) => [block.id, block.source])).toEqual([
+        expect(slots.snapshot().map((block) => [block.id, block.kind === 'diagram' && block.source])).toEqual([
             [first, 'flowchart TD'],
             [second, 'sequenceDiagram'],
         ])
