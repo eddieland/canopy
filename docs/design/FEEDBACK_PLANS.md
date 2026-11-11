@@ -46,7 +46,7 @@ them, so the operator weighs it, and `untrusted_review` is not raised for an ite
 A feedback plan is a run kind of its own, run as §25's are, within capacity: the same definition, a desk with the
 unit's slot at the PR's head, and one file written, its plan. It posts nothing and pushes nothing. Its prompt carries
 the PR's review items as the `vcs` source observed them and each check's conclusion at the head, all data to it (T1),
-and it reads the ticket as §25's planner does. Its plan has a section for each item, and its result line adds to §25's
+and it reads the ticket as §25's planner does. Its plan has a section for each item, and its result adds to §25's
 the items it covers, each by id with what it proposes, `change`, `decline`, `ask`, or `leave`, and for a change or a
 decline the reply it would draft (§29). A review item's id the source did not observe is refused, with a harness note
 on the run; an item no plan covers stays unhandled and goes to the next plan. Feedback plan runs are limited per unit,

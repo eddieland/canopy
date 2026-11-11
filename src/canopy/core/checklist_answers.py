@@ -2,7 +2,7 @@
 
 A worker run that may push, or a one-off task's (§36), is given the list of each of its repositories that has one, in
 its answers directory, and canopy's `pre-push` holds its push to ask it (`commit_hooks`). It answers each item in its
-result line's `checklist` field, by repository and item id: `pass`, `fixed`, `held` with its reason, or `n/a`. `_run`,
+result's `checklist` field, by repository and item id: `pass`, `fixed`, `held` with its reason, or `n/a`. `_run`,
 or `_task`, checks the answers against the lists the run was given, read back from its answers directory, and records a
 row for every item of every list, naming the run, a worker's or a task's: the answer, or `unanswered` for an item its
 result said nothing of. An answer to an item or a repository the run's lists do not hold is dropped, and named in the
@@ -25,7 +25,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, assert_never, cast
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, StrictStr
 
 from canopy.core import cards, checklists, contract, db, records, spend, sql
 from canopy.core.vocab import ItemAnswer
@@ -258,7 +258,7 @@ class _Answered(records.View):
 
 
 class _Reported(BaseModel):
-    """The result line's `checklist` field, read apart from the rest of the result, as review answers are.
+    """The result's `checklist` field, read apart from the rest of the result, as review answers are.
 
     Untrusted, so it is checked in `check`: a value of any shape is read here, and one that is not answers is dropped
     there, never taken as the whole result being invalid.
@@ -269,11 +269,39 @@ class _Reported(BaseModel):
     checklist: object = None
 
 
+class Held(BaseModel):
+    """An item a run left failing, with why, as its `result` call sends it."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
+
+    answer: Literal["held"] = Field(description="`held`: you left the item failing.")
+    reason: StrictStr = Field(description=f"Why, in a sentence or two, at most {MAX_REASON} characters.")
+
+
+class Group(BaseModel):
+    """A run's answers to the operator's checklists, a group of its result's fields (`core.run_result`)."""
+
+    model_config = ConfigDict(frozen=True, defer_build=True)
+
+    checklist: dict[StrictStr, dict[StrictStr, Literal["pass", "fixed", "n/a"] | Held]] = Field(
+        default_factory=dict,
+        description="Under each repository your message says has a checklist, every item of its list by its id, none "
+        "left out, whether or not your push was held: `pass` when you held the diff to the rule and it holds; `fixed` "
+        "when this run committed the fix; an object with `held` and a reason when you left it failing; `n/a` only "
+        "when the diff touches none of the paths the item is about, or nothing its rule speaks of. An item you "
+        "checked is never `n/a`, and one you leave out is recorded unanswered, which says you never looked.",
+    )
+
+
+#: The group's name.
+GROUP = "checklist"
+
+
 def parse(text: str) -> object:
-    """Return the `checklist` field of `text`'s result line, as the worker wrote it.
+    """Return the `checklist` field of `text`, the result a run reported, as the worker wrote it.
 
     Returns:
-        The field's value, of any shape; None when there is no result line or it has no such field.
+        The field's value, of any shape; None when there is no result or it has no such field.
     """
     found = contract.last_line(_Reported, text)
     return found.checklist if found is not None else None
@@ -490,7 +518,6 @@ def contract_text(lists: Sequence[Checklist]) -> str:
     if not lists:
         return ""
     repos = ", ".join(f"`{found.repo}`" for found in lists)
-    entry = '{"<item id>":"pass|fixed|n/a","<item id>":{"answer":"held","reason":"<why>"}}'
     return "\n".join(
         [
             "",
@@ -506,13 +533,8 @@ def contract_text(lists: Sequence[Checklist]) -> str:
             ),
             "",
             (
-                f'That JSON object also carries `"checklist":{{"<repository>":{entry}}}`: under each repository above, '
-                "every item of its list by its id, none left out, whether or not your push was held. `pass` when you "
-                "held the diff to the rule and it holds, `fixed` when this run committed the fix, `held` when you left "
-                f"it failing, with a `reason` saying why in a sentence or two, at most {MAX_REASON} characters, and "
-                "`n/a` only when the diff touches none of the paths the item is about, or nothing its rule speaks of, "
-                "so there was nothing to hold it to. An item you checked is `pass`, `fixed`, or `held`, never `n/a`. "
-                "An item you leave out is not `n/a` either: canopy records it unanswered, which says you never looked."
+                "Answer every item of each list in your result's `checklist`, under its repository, none left out, "
+                "whether or not your push was held."
             ),
         ],
     )

@@ -544,7 +544,6 @@ def prompt_values(
         # The overseer's, which ticket and PR text can steer: quoted, so no line of it passes for the prompt's own.
         "CONTEXT": quoted(context) if context else None,
         "TIMEOUT_MINUTES": str(cfg.runtime.review_timeout_minutes),
-        "CONTRACT": result.CONTRACT,
     }
 
 

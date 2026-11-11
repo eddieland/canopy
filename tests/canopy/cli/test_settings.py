@@ -14,8 +14,8 @@ from canopy.core import config, conversation, definitions, sandboxing
 from tests.conftest import CanopyEnv
 
 PLAN_CMD = (
-    "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-planner --log-level 'some level' "
-    "--title={title} {prompt}"
+    "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-planner --format json "
+    "--log-level 'some level' --title={title} {prompt}"
 )
 
 
@@ -65,6 +65,8 @@ def test_each_agents_command_is_rendered_with_its_keys_and_their_files(
         "run",
         "--agent",
         "canopy-planner",
+        "--format",
+        "json",
         "--log-level",
         "some level",
         "--title=PROJ-1 plan: Example ticket",
@@ -129,7 +131,7 @@ def test_the_text_quotes_each_command_for_a_shell(canopy_env: CanopyEnv, capsys:
         [
             "env",
             f"OPENCODE_CONFIG_DIR={definitions_dir}",
-            *shlex.split("opencode run --agent canopy-planner --log-level"),
+            *shlex.split("opencode run --agent canopy-planner --format json --log-level"),
             "some level",
             "--title=PROJ-1 plan: Example ticket",
             "<prompt>",

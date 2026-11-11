@@ -21,6 +21,7 @@ import { StarterKit } from '@tiptap/starter-kit'
 
 import { ATOM } from '@/lib/plan-anchors'
 import { PlanDiagrams } from '@/lib/plan-diagram'
+import { PlanTable } from '@/lib/plan-table'
 
 // A mark as a document's JSON holds it.
 type JSONMark = NonNullable<JSONContent['marks']>[number]
@@ -43,7 +44,9 @@ export function planExtensions(more: AnyExtension[] = []): AnyExtension[] {
         PlanLink.configure({ openOnClick: false, autolink: false, linkOnPaste: false }),
         TaskList,
         PlanTaskItem.configure({ nested: true }),
-        TableKit.configure({ table: { resizable: false } }),
+        // A table is ours, drawn with room for its actions; its rows and cells are the kit's.
+        TableKit.configure({ table: false }),
+        PlanTable.configure({ resizable: false }),
         VerbatimBlock,
         VerbatimInline,
         ImageAsText,

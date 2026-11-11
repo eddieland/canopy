@@ -754,7 +754,7 @@ def _raised_id(item: PlanItem, pr: str, head: str, what: str) -> int:
         The id.
     """
     # Below zero, so it never meets an observed review's or comment's id, which the connector contract holds to 1 and
-    # up (`observe`), in a plan's result line or wherever an item is named. Made of what the item is, its PR, the head,
+    # up (`observe`), in a plan's result or wherever an item is named. Made of what the item is, its PR, the head,
     # and the check's name, the base, or the blocker's PR, and of nothing a read changes at that head, such as a check
     # run's id or its time: every read of the same head names the same failure by the same id, so an item a `resume`
     # handled stays handled, and one no plan covered is offered again as itself, until a push makes a new one. Two of a

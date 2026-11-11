@@ -67,8 +67,8 @@ operator's file plus a section canopy generates, which the file cannot drop: the
 notes and notice to workers (§8), the latest run and open findings, and the result contract. Reconcile (§6 step 3)
 treats chore runs as worker runs; a decision names a ticket or a chore, never both.
 
-Result contract, one JSON line, last line of the agent's text (§13), validated with pydantic (D026); anything else is
-`unknown`, with no findings recorded:
+Result contract, the arguments of the chore agent's `result` call, or the last line of the text of a chore that runs
+the operator's own command (§13), validated with pydantic (D026); anything else is `unknown`, with no findings recorded:
 
 ```json
 {"status":"ok|failed","summary":"a paragraph, line breaks sparingly",
@@ -113,7 +113,7 @@ cut list never reads as the whole. Deleting a chore's table resolves its items.
 ### Trust model changes
 
 Chores touch T1 (findings are data everywhere), T3 (`every_minutes`, one run at a time, and `max_chores` are controls in
-code), T6 (a chore's only output is its result line, and its residual is listed there), and T7 (chores and their keys
+code), T6 (a chore's only output is its result, and its residual is listed there), and T7 (chores and their keys
 are private). Under §7, the operator answers for any tool a chore's definition allows; canopy assumes chore tools only
 read.
 
@@ -287,7 +287,7 @@ undone or a change no step plans is then a finding like any other. It gets the P
 undismissed findings with the worker's answers, as data: what still holds and was not declined is reported again.
 Rejected: a second agent verifying each finding, doubling spend; notes for later reviews, telling the next what to skip.
 
-Result contract, the last line of the reviewer's text (§13), validated (D026); anything else is `unknown`:
+Result contract, the arguments of the reviewer's `result` call (§13), validated (D026); anything else is `unknown`:
 
 ```json
 {"status":"done|failed","verdict":"clean|findings","impact":"low|normal|high",

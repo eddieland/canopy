@@ -131,7 +131,7 @@ test("a review that ended badly says on its run's page what it ended on", async 
     await page.goto('pull-requests/reviews/3/run')
     await settled(page)
     // The harness's note says why it is `unknown`, and `ended on` the failed call, which shows its row.
-    await expect(page.getByRole('main').getByText("the reviewer's last line was not a valid result")).toBeVisible()
+    await expect(page.getByRole('main').getByText('the reviewer reported no result')).toBeVisible()
     const read = page.getByTestId('transcript').getByTestId('transcript-tool')
     await expect(read).toHaveCount(1)
     await page.getByRole('button', { name: /File not found: checkout\/src\/billing\/client\.ts/u }).click()

@@ -259,5 +259,5 @@ Roles:
   (§21, §34), and one read, `review-items` (§30). Read-only everywhere else. What it owes every tick is checked when
   it ends (§6 step 5).
 - **Worker**: an agent run with `worker_cmd` in a leased worktree with a task prompt. Writes code, pushes a branch,
-  opens or updates a PR, comments on the ticket, prints a result line, exits. Never merges, approves, or moves a ticket
+  opens or updates a PR, comments on the ticket, reports its result, exits. Never merges, approves, or moves a ticket
   to Done. A private ticket's worker runs with `private_worker_cmd` and writes nothing to the ticket (§22).

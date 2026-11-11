@@ -30,7 +30,7 @@
 // from where it runs.
 //
 // Its sixth is the wrap-up (DESIGN §22): in a run that keeps its progress, once the operator stops its ticket and asks
-// it to wrap up, one line on the next tool call's result asks the agent to keep its work and print its result line.
+// it to wrap up, one line on the next tool call's result asks the agent to keep its work and report its result.
 //
 // Its seventh is the message (DESIGN §44): in a worker's, planner's, or one-off task's run, once the operator sends it
 // a message, one line on the next tool call's result says a message waits and names canopy's tool that returns it,
@@ -112,7 +112,7 @@ const FILE_BYTES = 4096;
 /** The wrap-up's line, which the file asks for. */
 const WRAP_UP =
     `${MARK} The operator stopped this ticket and asks you to wrap up now: finish what keeps your work (commit and` +
-    " push it, or record your decisions), start nothing new, then print your result line, its summary naming what" +
+    " push it, or record your decisions), start nothing new, then report your result, its summary naming what" +
     " remains.";
 /** The letter of a question's option. */
 const LETTER = /^[A-E]$/;
@@ -317,7 +317,7 @@ async function untilRegistered(ctx) {
  * agent that error's reason, or, with none, `Permission denied:` and the permission alone: not what it asked for, nor
  * that the refusal is meant. An agent told only that tries the same another way, through another command or tool, and
  * spends its run on it. So the job sets the reason to the runtime's own words, the resources the call asked for, and
- * one line of canopy's: that the rules refuse it on purpose, not to try it another way, and to say in the result line
+ * one line of canopy's: that the rules refuse it on purpose, not to try it another way, and to say in the result
  * what remains if the work cannot go on without it. It changes nothing else of the error, so the call stays refused as
  * the runtime refused it, and leaves an error of any other kind, or one already explained, as it is. A rule the
  * repository or the operator set (TRUST_MODEL T7) is explained as canopy's are: the line names the rules the run is
@@ -385,7 +385,7 @@ function refusal(permission) {
     return (
         `${MARK} ${means === undefined ? "" : `${means} `}The rules this run is under refuse it on purpose; it is not` +
         " a fault to fix. Do not try it another way, through another command, a script, or another tool. If your" +
-        " work cannot go on without it, finish what you can and say what remains in your result line."
+        " work cannot go on without it, finish what you can and say what remains in your result."
     );
 }
 
@@ -493,8 +493,8 @@ function line(left, first) {
         return said;
     }
     return (
-        `${said} Wrap up now: finish what keeps your work (commit and push it, or record your decisions), then print` +
-        " your result line."
+        `${said} Wrap up now: finish what keeps your work (commit and push it, or record your decisions), then report` +
+        " your result."
     );
 }
 

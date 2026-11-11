@@ -28,8 +28,10 @@ import {
 import { Fragment, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 
+import { PlanBlockActions } from '@/components/block-actions'
 import { Panel, PanelFooter, PanelHeader } from '@/components/panel'
 import { DecisionsJump, PlanDecisions } from '@/components/plan-decisions'
+import { PlanFileMenu } from '@/components/plan-file-menu'
 import { AskForChanges, DraftForm, PlanThreads, ThreadCard } from '@/components/plan-threads'
 import type { Draft, ThreadActions } from '@/components/plan-threads'
 import { Button } from '@/components/ui/button'
@@ -61,6 +63,7 @@ import { markSection, marksOn, planSections, usePlanMarks } from '@/lib/plan-mar
 import type { PlanSection, SectionMark } from '@/lib/plan-marks'
 import { planOutline, sectionAt } from '@/lib/plan-outline'
 import type { OutlineEntry } from '@/lib/plan-outline'
+import { printsAPlan } from '@/lib/plan-print'
 import { planExtensions } from '@/lib/plan-schema'
 import { usePlanText } from '@/lib/plan-text'
 import {
@@ -142,6 +145,10 @@ export function PlanEditor({
     marks,
     comments = true,
     decides = editable,
+    name = 'plan',
+    file = `${name}.md`,
+    unsaved = false,
+    printLine,
 }: {
     /** The plan, as Markdown. Read when the editor opens. */
     markdown: string
@@ -211,6 +218,17 @@ export function PlanEditor({
      * plan read only that still waits on the operator's word.
      */
     decides?: boolean
+    /** What a file saved from the plan, such as a diagram's picture, is named for: `ABC-102-plan-2`. */
+    name?: string
+    /** What the plan's Markdown is saved as, whole: the name `canopy archive` gives it, where it has one. */
+    file?: string
+    /** Whether the page holds edits the plan's file does not have yet, which a copy of it then carries. */
+    unsaved?: boolean
+    /**
+     * Given, the plan is the one its page prints, under this line naming it (`printLine`): the page prints it alone,
+     * in the light theme (`src/lib/plan-print.ts`).
+     */
+    printLine?: string | undefined
 }) {
     const editor = useEditor({
         extensions: planExtensions([
@@ -359,6 +377,10 @@ export function PlanEditor({
         const tr = withHighlight(editor.state.tr, { kind: 'sync', threads: placed }).setMeta('addToHistory', false)
         editor.view.dispatch(tr)
     }, [editor, threads])
+
+    // The page prints this plan alone, in the light theme, while it shows it.
+    const printed = printLine !== undefined
+    useEffect(() => (printed ? printsAPlan() : undefined), [printed])
 
     useEffect(() => {
         // Without `false`, Tiptap emits `update` as if the operator had edited, and the plan, serialized again in the
@@ -565,7 +587,12 @@ export function PlanEditor({
                         : 'grid-cols-[minmax(0,var(--container-plan))]',
                 )}
             >
-                <Panel>
+                <Panel data-print-plan={printed || undefined}>
+                    {printed && (
+                        <p data-print-line className="hidden text-sm text-muted-foreground print:block">
+                            {printLine}
+                        </p>
+                    )}
                     <PanelHeader ref={planHeader} label="Plan" sticky>
                         <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
                             {status}
@@ -595,6 +622,11 @@ export function PlanEditor({
                                 Markdown
                             </Toggle>
                             {!raw && <OutlineMenu editor={editor} ticket={marks} />}
+                            <PlanFileMenu
+                                markdown={() => source ?? editor.getMarkdown()}
+                                file={file}
+                                unsaved={unsaved}
+                            />
                         </span>
                         {editable && !raw && (
                             <FormatBar editor={editor} canComment={seen.selected} onComment={startComment} />
@@ -603,8 +635,10 @@ export function PlanEditor({
                     <EditorContent
                         editor={editor}
                         data-plan-text={planText}
+                        data-print-body
                         className={cn('px-6 py-4', showChanges && 'plan-changes', raw && 'hidden')}
                     />
+                    <PlanBlockActions owner={editor} name={name} />
                     {source !== undefined && (
                         <div className="px-6 py-4">
                             <textarea
@@ -757,7 +791,18 @@ export function PlanEditor({
  * their characters and draws no link, so untrusted text stays text, as a plan's does. `markdown` is read once: other
  * text is a new `key`.
  */
-export function PlanDocument({ markdown, label }: { markdown: string; label: string }) {
+export function PlanDocument({
+    markdown,
+    label,
+    name,
+}: {
+    /** The document, as Markdown. Read when it opens. */
+    markdown: string
+    /** What a screen reader calls it. */
+    label: string
+    /** What a file saved from it, such as a diagram's picture, is named for: `task-4-report`. */
+    name: string
+}) {
     const editor = useEditor({
         extensions: planExtensions(),
         content: markdown,
@@ -772,7 +817,12 @@ export function PlanDocument({ markdown, label }: { markdown: string; label: str
         },
     })
     const planText = usePlanText()
-    return <EditorContent editor={editor} data-plan-text={planText} className="px-6 py-4" />
+    return (
+        <>
+            <EditorContent editor={editor} data-plan-text={planText} className="px-6 py-4" />
+            <PlanBlockActions owner={editor} name={name} />
+        </>
+    )
 }
 
 // How many changes are marked, and buttons that step the cursor to the one before or after it.

@@ -41,6 +41,9 @@ VARIANT_OPTION = "--variant"
 APPROVE_OPTIONS = frozenset(
     {"--auto", "--yolo", "--dangerously-skip-permissions", "--dangerouslySkipPermissions"},
 )
+#: The option of `opencode run` that chooses what it prints, and its value for one JSON event a line.
+FORMAT_OPTION = "--format"
+EVENTS_FORMAT = "json"
 # The agent a command runs, as `opencode run` takes it, by a name that is safe as one path component.
 _AGENT_RE = re.compile(r"(--agent[ =])([a-z][a-z0-9-]*)(?=\s|$)")
 
@@ -111,3 +114,16 @@ def approve_option(words: Sequence[str]) -> str | None:
         The word, or None when none passes one.
     """
     return next((word for word in words if word.split("=", 1)[0] in APPROVE_OPTIONS), None)
+
+
+def prints_events(words: Sequence[str]) -> bool:
+    """Whether `words`, a command's, ask `opencode run` for its JSON events, which canopy reads an agent's run from.
+
+    `--format json` counts wherever it is, as a wrapper may hand it on.
+
+    Returns:
+        True when they do.
+    """
+    joined = f"{FORMAT_OPTION}={EVENTS_FORMAT}"
+    pairs = zip(words, [*words[1:], ""], strict=False)
+    return any(word == joined or (word, after) == (FORMAT_OPTION, EVENTS_FORMAT) for word, after in pairs)
