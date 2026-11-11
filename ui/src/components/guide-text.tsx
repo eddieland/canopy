@@ -125,7 +125,7 @@ function BlockView({ block, page }: { block: Block<GuidePiece>; page: string }) 
         }
         case 'table': {
             return (
-                <div className="overflow-x-auto">
+                <div ref={(box) => (box === null ? undefined : markOverflowEdges(box))} className="edge-fade">
                     <table className="document-table">
                         <thead>
                             <tr>

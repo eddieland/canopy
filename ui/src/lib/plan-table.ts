@@ -10,6 +10,7 @@ import type { EditorView } from '@tiptap/pm/view'
 
 import { blockSlots, newSlotId } from '@/lib/block-slots'
 import type { BlockSlots } from '@/lib/block-slots'
+import { markOverflowEdges } from '@/lib/overflow-edges'
 
 /** A plan's table, drawn with room for its actions. */
 export const PlanTable = Table.extend({
@@ -29,9 +30,13 @@ export const PlanTable = Table.extend({
     },
 })
 
-/** A table's view: Tiptap's, in a block that holds the room for its actions beside it. */
+/**
+ * A table's view: Tiptap's, in a block that holds the room for its actions beside it. Its wrapper scrolls sideways,
+ * each edge faded while the table runs past it (`edge-fade`), so a column out of sight is never taken for no column.
+ */
 export class PlanTableView extends TableView {
     private readonly actions: HTMLElement
+    private readonly unmark: () => void
     private readonly slots: BlockSlots
     private readonly markdown: (table: ProseMirrorNode) => string
     private readonly id = newSlotId()
@@ -54,6 +59,7 @@ export class PlanTableView extends TableView {
         this.actions.className = 'block-actions'
         this.actions.contentEditable = 'false'
         this.dom.append(wrapper, this.actions)
+        this.unmark = markOverflowEdges(wrapper)
         this.publish(node)
     }
 
@@ -73,6 +79,7 @@ export class PlanTableView extends TableView {
     }
 
     destroy(): void {
+        this.unmark()
         this.slots.remove(this.id)
     }
 

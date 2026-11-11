@@ -9,6 +9,7 @@ import { PullRequestLink } from '@/components/pull-request-link'
 import { RunLink } from '@/components/run-link'
 import { splitLinks } from '@/lib/links'
 import type { Piece } from '@/lib/links'
+import { markOverflowEdges } from '@/lib/overflow-edges'
 import { isPullRequest, pullRequestLabel } from '@/lib/pull-request-label'
 import { splitRunRefs } from '@/lib/refs'
 import { ALIGN, clamp, codeSpans, parse } from '@/lib/rich-text'
@@ -159,7 +160,7 @@ function BlockView({ block, prose, look }: { block: Block; prose: boolean; look:
         }
         case 'table': {
             return (
-                <div className="overflow-x-auto">
+                <div ref={(box) => (box === null ? undefined : markOverflowEdges(box))} className="edge-fade">
                     <table className="document-table">
                         <thead>
                             <tr>

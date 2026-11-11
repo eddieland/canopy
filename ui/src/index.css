@@ -264,7 +264,8 @@
  * least, so a narrow one never sits stranded at the text's left, and wider where what it holds needs it, a
  * hairline under its head and each row but the last, no grid and no fill, its first column flush with the text's edge
  * and its last with the measure's. A step under the text around it, in `em`, so it moves with a plan's text size; its
- * head quieter than its rows, which are what is read; its figures tabular, so a column of numbers lines up.
+ * head quieter than its rows, which are what is read; its figures tabular, so a column of numbers lines up. What
+ * holds it scrolls sideways (`edge-fade`) when it is still too wide.
  */
 @utility document-table {
     @apply w-full border-collapse text-left tabular-nums;
@@ -278,6 +279,16 @@
     }
     & th {
         @apply font-medium text-muted-foreground;
+    }
+    /* Code in a cell breaks where it must, so a path or a signature never holds its column wider than the rest and
+     * pushes columns out of sight; and it drops its chip, which a code span broken over lines turns into a stack of
+     * pills. Its face still sets it apart. */
+    & :is(th, td) code {
+        @apply bg-transparent px-0 wrap-anywhere;
+    }
+    /* But not to a sliver: a cell keeps room for a dozen characters of code before the table scrolls instead. */
+    & :is(th, td):has(code) {
+        min-width: 7em;
     }
 }
 
@@ -2002,7 +2013,7 @@
             @apply m-0;
         }
         & .tableWrapper {
-            @apply overflow-x-auto;
+            @apply edge-fade;
         }
         & strong {
             @apply font-semibold;
