@@ -83,7 +83,7 @@ test("the arrow keys go into a diagram's code from the line above and below it",
 test("a class diagram and an entity relationship diagram are drawn, for a plan's types and tables", async ({
     page,
 }) => {
-    await write(
+    await writePlan(
         page,
         [
             '# Plan',
