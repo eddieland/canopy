@@ -2,9 +2,9 @@
 
 The wait reads the runtime's record of its sessions, canopy's and not, a page at a time from where the last read
 stopped (`canopy.core.runtime_sessions`): every `EVERY_SECONDS` once it has caught up, and `GAP_SECONDS` apart while a
-full page says more of the history waits. None is read while the loop is paused, nor in a dry run. It runs in the
-loop's own process, so nothing reads them outside `canopy loop` (D042), and it never ends the loop: what it raises is
-logged, and the next read is `EVERY_SECONDS` later.
+full page says more of the history waits, each session's title with it while `sessions.search` keeps titles. None is
+read while the loop is paused, nor in a dry run. It runs in the loop's own process, so nothing reads them outside
+`canopy loop` (D042), and it never ends the loop: what it raises is logged, and the next read is `EVERY_SECONDS` later.
 """
 
 from __future__ import annotations
@@ -53,7 +53,12 @@ class Recorder:
         status = SessionsRead.FAILED
         self.behind = False
         try:
-            page = runtime_sessions.read_next(ctx.conn, version=ctx.config.runtime.version)
+            listed = ctx.config.sessions
+            page = runtime_sessions.read_next(
+                ctx.conn,
+                version=ctx.config.runtime.version,
+                exclude=listed.exclude if listed.search != "off" else None,
+            )
             status = SessionsRead(page.outcome)
             self.behind = status is SessionsRead.FOUND and len(page.sessions) + page.skipped >= MAX_SESSIONS
             if status is SessionsRead.FAILED:
