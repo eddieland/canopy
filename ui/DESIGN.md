@@ -1067,6 +1067,8 @@ reader, so no table repeats them.
   document's type (A document, under Primitives). What the plan holds as characters (HTML, an image) is muted monospace;
   a link is underlined in `muted-foreground` with its address on hover, never a link. A Mermaid code block is drawn as
   its diagram (`src/lib/plan-diagram.ts`), an image in a hairline box, drawn again when the theme or palette changes,
+  as wide as it is drawn or narrower to fit, but never under three quarters of that, past which its labels go unread:
+  a wider one scrolls, each edge faded while there is more past it (`diagram-image`, `edge-fade`), as the guide's do,
   with a `Source` toggle under it; its code shows while toggled on, while the cursor is in it, or while a comment or a
   change is marked in it, and out of sight it is clipped, not removed, so a screen reader still reads it; one that
   cannot be drawn shows its code and why. The toolbar (`Toolbar`, below) is `icon-xs` toggles in groups split by

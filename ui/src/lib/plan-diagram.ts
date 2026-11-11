@@ -14,6 +14,7 @@ import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import type { EditorView, NodeView, ViewMutationRecord } from '@tiptap/pm/view'
 
 import type { Drawn, NotDrawn } from '@/lib/diagram'
+import { markOverflowEdges } from '@/lib/overflow-edges'
 
 // Kept in step with DIAGRAM_LANGUAGE in src/lib/diagram.ts, which loads only when a diagram is drawn.
 const LANGUAGE = 'mermaid'
@@ -115,6 +116,7 @@ class DiagramView implements NodeView {
     private draws = 0
     private timer: ReturnType<typeof setTimeout> | undefined
     private readonly unsubscribe: () => void
+    private readonly unmark: () => void
 
     constructor(node: ProseMirrorNode) {
         this.text = node.textContent
@@ -128,7 +130,11 @@ class DiagramView implements NodeView {
         this.figure = child(this.dom, 'figure')
         this.figure.className = 'plan-diagram-figure'
         this.figure.contentEditable = 'false'
-        this.image = child(this.figure, 'img')
+        // The picture scrolls in a box of its own, so a diagram too wide to read narrowed scrolls rather than shrinks,
+        // and the caption and the toggle stay put.
+        const scroll = child(this.figure, 'div')
+        scroll.className = 'plan-diagram-scroll'
+        this.image = child(scroll, 'img')
         this.image.alt = 'A diagram'
         this.image.hidden = true
         this.reason = child(this.figure, 'figcaption')
@@ -143,6 +149,7 @@ class DiagramView implements NodeView {
             this.dom.toggleAttribute('data-source', shown)
         })
 
+        this.unmark = markOverflowEdges(scroll)
         this.unsubscribe = onThemeChange(() => {
             this.draw()
         })
@@ -181,6 +188,7 @@ class DiagramView implements NodeView {
         clearTimeout(this.timer)
         this.draws += 1
         this.unsubscribe()
+        this.unmark()
     }
 
     private draw(): void {
@@ -210,9 +218,21 @@ class DiagramView implements NodeView {
         }
         this.dom.dataset['diagram'] = 'drawn'
         this.image.alt = `A ${KIND_NAMES[result.kind] ?? 'diagram'}, drawn from the Mermaid source beside it`
+        showWidth(this.image, result.width)
         this.image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(result.svg)}`
         this.image.hidden = false
         this.reason.textContent = ''
+    }
+}
+
+// The width a diagram's picture is drawn at, which `diagram-image` (src/index.css) keeps it near; none, where the SVG
+// does not say, leaves it as wide as it is, or narrower to fit.
+function showWidth(image: HTMLImageElement, width: number | undefined): void {
+    image.toggleAttribute('data-width', width !== undefined)
+    if (width === undefined) {
+        image.style.removeProperty('--diagram-width')
+    } else {
+        image.style.setProperty('--diagram-width', `${width}px`)
     }
 }
 

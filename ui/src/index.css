@@ -260,6 +260,47 @@
 }
 
 /*
+ * A box that scrolls sideways, each edge faded while there is more past it (src/lib/overflow-edges.ts marks which), so
+ * the operator sees there is more where the scrollbar stays hidden until a scroll.
+ */
+@utility edge-fade {
+    overflow-x: auto;
+    --fade-start: 0px;
+    --fade-end: 0px;
+    &[data-more-start] {
+        --fade-start: 2.5rem;
+    }
+    &[data-more-end] {
+        --fade-end: 2.5rem;
+    }
+    &:is([data-more-start], [data-more-end]) {
+        mask-image: linear-gradient(
+            to right,
+            transparent,
+            black var(--fade-start),
+            black calc(100% - var(--fade-end)),
+            transparent
+        );
+    }
+}
+
+/*
+ * A diagram's picture, in a plan or the guide: as wide as it is drawn, narrower to fit what holds it, but never under
+ * three quarters of that, past which its labels are too small to read; there, what holds it scrolls (`edge-fade`).
+ * Centred while it fits. Its width is the diagram's, `--diagram-width`, set with `data-width` where the SVG says it.
+ */
+@utility diagram-image {
+    display: block;
+    height: auto;
+    max-width: 100%;
+    margin-inline: auto;
+    &[data-width] {
+        max-width: none;
+        width: clamp(calc(var(--diagram-width) * 0.75), 100%, var(--diagram-width));
+    }
+}
+
+/*
  * What the page scrolls in, everything under the header (AppShell), so a scrollbar never sits beside the header. Its
  * gutter is kept whether or not the page is long enough to need it: no layout shift when a page grows a scrollbar.
  * Positioned, so it is the containing block of what is absolute inside it, such as an `sr-only` file input, and clips
@@ -1899,13 +1940,16 @@
             @apply sr-only;
         }
         & .plan-diagram-figure {
-            @apply m-0 flex flex-col items-center gap-2 rounded-md border bg-surface p-3;
+            @apply m-0 flex flex-col gap-2 rounded-md border bg-surface p-3;
         }
         & .plan-diagram[data-diagram='pending'] .plan-diagram-figure {
             @apply hidden;
         }
+        & .plan-diagram-scroll {
+            @apply edge-fade;
+        }
         & .plan-diagram-figure img {
-            @apply h-auto max-w-full;
+            @apply diagram-image;
         }
         & .plan-diagram-figure figcaption {
             @apply self-start text-sm text-muted-foreground empty:hidden;

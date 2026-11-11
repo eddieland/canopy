@@ -122,7 +122,9 @@ expensive kind.
 A code block fenced as `mermaid` is drawn as the diagram it describes: a flowchart, a sequence diagram, or a state
 diagram, which covers how modules fit, which side calls which, and what a status may become. A picture of the call
 order is quicker to check than three paragraphs about it, and quicker to catch being wrong. It's drawn in your theme's
-colors, and again when you change them.
+colors, and again when you change them. One wider than the plan is narrowed to fit, but only so far: past three
+quarters of its size its labels would be too small to read, so it scrolls sideways instead, its edge faded where
+there's more. A twelve-step chain drawn left to right will make you scroll; that's the diagram's fault, not yours.
 
 Planners draw one wherever the work has a shape: a plan that changes how two parts talk, adds a status, or reorders a
 flow has at least one, usually in Context for how things stand and again under the step that changes them. They say

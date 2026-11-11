@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { Fragment } from 'react'
+import type { CSSProperties } from 'react'
 
 import { Code } from '@/components/code'
 import { CodeBlock } from '@/components/code-block'
@@ -8,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useDiagram } from '@/hooks/use-diagram'
 import { DIAGRAM_FENCE, anchor, diagramTitle, plainText } from '@/lib/guide'
 import type { GuidePiece } from '@/lib/guide'
+import { markOverflowEdges } from '@/lib/overflow-edges'
 import { ALIGN } from '@/lib/rich-text'
 import type { Align, Block, Line } from '@/lib/rich-text'
 import { cn } from '@/lib/utils'
@@ -177,13 +179,20 @@ function Diagram({ lines }: { lines: string[] }) {
             </figure>
         )
     }
+    // As wide as it is drawn, or narrower to fit, but never so narrow its labels go unread: past that it scrolls, its
+    // edges faded where there is more (`diagram-image`, `edge-fade`).
+    const width = drawn.width === undefined ? undefined : ({ '--diagram-width': `${drawn.width}px` } as CSSProperties)
     return (
-        <figure className="overflow-x-auto rounded-md border px-4 py-5">
-            <img
-                src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(drawn.svg)}`}
-                alt={diagramTitle(lines) ?? 'A diagram'}
-                className="mx-auto h-auto max-w-full"
-            />
+        <figure className="rounded-md border px-4 py-5">
+            <div ref={(box) => (box === null ? undefined : markOverflowEdges(box))} className="edge-fade">
+                <img
+                    src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(drawn.svg)}`}
+                    alt={diagramTitle(lines) ?? 'A diagram'}
+                    data-width={drawn.width === undefined ? undefined : ''}
+                    style={width}
+                    className="diagram-image"
+                />
+            </div>
         </figure>
     )
 }

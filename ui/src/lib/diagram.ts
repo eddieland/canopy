@@ -19,6 +19,8 @@ export interface Drawn {
     svg: string
     /** The kind mermaid read it as. */
     kind: string
+    /** How wide it is drawn, in CSS pixels, as its SVG says; never shown much narrower (`diagram-image`). */
+    width?: number | undefined
 }
 
 /** A diagram that was not drawn, and why, in a line for the operator. */
@@ -86,7 +88,7 @@ export async function drawDiagram(source: string): Promise<Drawn | NotDrawn> {
         }
         drawn += 1
         const { svg } = await mermaid.render(`plan-diagram-${drawn}`, source)
-        return { svg, kind: read }
+        return { svg, kind: read, width: naturalWidth(svg) }
     } catch (error) {
         return { error: firstLine(error) }
     }
@@ -196,4 +198,10 @@ function firstLine(error: unknown): string {
         ?.trim()
         .replace(/[.:]+$/u, '')
     return line || 'mermaid could not read it'
+}
+
+// The width the SVG's root is drawn at, which mermaid writes as an attribute when a layout has no `useMaxWidth`.
+function naturalWidth(svg: string): number | undefined {
+    const width = /^<svg\b[^>]*?\swidth="(?<width>\d+(?:\.\d+)?)(?:px)?"/u.exec(svg)?.groups?.['width']
+    return width === undefined ? undefined : Number(width)
 }
