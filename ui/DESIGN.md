@@ -1416,7 +1416,8 @@ reader, so no table repeats them.
   said as `MemoryText`, and where it is, a router `Link` to the thread's card or a link out; under that, muted, its
   proposal as a chip in its tone, its author, and the plan's words), and in its foot the operator's words and `Approve
   whole` or `Approve N of M`, its command on hover, an approval done as the `ApprovedBand` a ticket's plan gets, then a
-  `Disclosure` of the plan's file. An item an approval did not tick is `for the next plan` wherever the page says so,
+  `Disclosure` of the plan's file, laid out read only as a document (`PlanDocument`, as a task's report is), loaded
+  once opened. An item an approval did not tick is `for the next plan` wherever the page says so,
   and its box is named `approve item N`, never `left out` or `leave`: `leave` is a proposal, to leave the item be, which
   ticking it approves; the CLI's flag stays `--leave`, on the button's hover. Each proposal's chip has a quiet tone of
   its own (`proposal-*`), so `change`, the one that edits code, stands out, `decline` and `ask` sit apart from it and

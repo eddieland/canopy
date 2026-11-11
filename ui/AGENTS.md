@@ -21,8 +21,9 @@ memory, and do not upgrade in passing.
 - TanStack Router (file-based, `src/routes/`) and TanStack Query.
 - Tiptap on ProseMirror for the plan editor alone (D120): only `src/lib/plan-*.ts` and
   `src/components/plan-editor.tsx` import it, and only the pages that show a plan load it: a ticket's plan page, an
-  epic's, the sample editor, and a task's page, whose report it lays out read only (`PlanDocument`); never the
-  ticket's page, whose plan card does not import it.
+  epic's, the sample editor, and a task's page, whose report it lays out read only (`PlanDocument`), and a PR's page
+  once its feedback plan's file is opened, which loads it then; never the ticket's page, whose plan card does not
+  import it.
 - Shiki for a review's diff and the code blocks of the guide and rich text alone (D121): only `src/lib/highlight.ts`
   and `src/lib/languages.ts`, its grammars, import it, and only on demand, each grammar its own chunk.
 - mermaid for a plan's diagrams and the guide's alone (D131): only `src/lib/diagram.ts` imports it, and only on
