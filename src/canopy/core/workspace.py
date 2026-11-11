@@ -31,6 +31,7 @@ from canopy.core.config import (
     RepoName,
     link_template,
 )
+from canopy.core.path_patterns import impact_path
 from canopy.infra import logs
 
 MAP_FILE_NAME = "MAP.md"
@@ -90,33 +91,6 @@ def url_error(value: str) -> str | None:
 def _check_name(value: str) -> str:
     if not value.strip() or len(value) > MAX_CHECK_NAME or not value.isprintable():
         raise ValueError(f"must be a check's name: printable, 1 to {MAX_CHECK_NAME} characters")
-    return value
-
-
-def impact_path(value: str) -> str:
-    """Check `value` as a path or pattern from a repository's root, as `high_impact_paths` and a checklist's take them.
-
-    Returns:
-        `value`, unchanged.
-
-    Raises:
-        ValueError: it is not one.
-    """
-    # Compared with the paths git names, which are from the root, by whole components (`canopy.reviews.impact`). A part
-    # may hold `*` and `?`, or be `**`. `[`, `]`, and `\` are refused, so no entry is read as a class or an escape its
-    # author did not mean, or meant one this does not read.
-    parts = value.removesuffix("/").split("/")
-    if (
-        not value.isprintable()
-        or value.startswith("/")
-        or any(c in value for c in "[]\\")
-        or any(p in {"", ".", ".."} or ("**" in p and p != "**") for p in parts)
-    ):
-        raise ValueError(
-            "must be a path from the repository's root, such as '.agents/' or 'docs/TRUST_MODEL.md', or a pattern, "
-            "such as '**/OWNERS' or 'services/*/migrations/': no leading '/', empty part, '.', or '..'; '*' and '?' "
-            "within a part, '**' only as a whole part, and no '[', ']', or '\\'",
-        )
     return value
 
 

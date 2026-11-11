@@ -1113,6 +1113,9 @@ def render_worker(
         "ATTACHMENTS": None,
         # A member's epic (DESIGN §43): none unless dispatch rendered it for a planner, which leaves the section out.
         "EPIC": None,
+        # The outline of the run's repositories (DESIGN §46): empty unless dispatch rendered one, so with
+        # `index.outline` off every prompt is the same bytes as before it existed.
+        "OUTLINE": "",
         **values,
         **_standing_values(standing_instructions(config), _worker_reader(kind, private=private)),
         "PERSONA": persona.text if persona is not None else "",

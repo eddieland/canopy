@@ -52,6 +52,7 @@ from canopy.runs import (
     feedback_items,
     feedback_plans,
     follow_ups,
+    outlines,
     plan_guards,
     policy,
 )
@@ -1141,6 +1142,8 @@ def _spawn(
         "REASONS": prompts.reasons_note(tuple(reasons), private=plan.private),
         "FOLLOW_UPS": _follow_ups_note(ctx, key, private=plan.private),
         "PLAN_REVIEW": prompts.plan_review(offered, feedback=kind == policy.FEEDBACK_PLAN),
+        # The tree of each repository's code, as data (DESIGN §46): empty with `index.outline` off.
+        outlines.OUTLINE: outlines.for_run(ctx, tick_id, key, kind, branch=branch, slots=slots),
     }
     if kind == policy.FEEDBACK_PLAN:
         values |= {

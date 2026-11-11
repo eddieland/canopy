@@ -185,4 +185,14 @@ are under the threshold at 0.154, a review's at 0.288 is over it but its diff na
 were not measured. The monorepo's languages are not settled here and hold nothing: stage 1 parses nothing, and no doc
 in this repository names them. They are named if the operator calls stage 2, from a count of the monorepo's tracked
 files by extension, taken then; a language whose wheel ships no tags query gets a vendored one, as stage 2 says, and
-Starlark is expected among them, the monorepo being Bazel's.
+Starlark is expected among them, the monorepo being Bazel's. Stage 1 begun 2026-11-11, at the operator's ask, for the
+workers, against the fakes: the three keys, the tree in an `implement`'s and a `resume`'s prompt, a joint run's per
+repository, DESIGN §46, and TRUST_MODEL T1, T3, T6, and T7. Chosen conservatively, for the operator to change. The tree
+is read in the leased slot at dispatch, before `_run` fetches, so it is as the lease last fetched it, and the outline
+names the ref: an `implement`'s base, a `resume`'s branch. A `resume` whose branch changed nothing yet is opened by the
+ticket's words. Beyond aider's split, the commonest words of English prose rank nothing and a plain plural is its
+singular, since a ticket is prose where aider's message named identifiers. An opened directory names at most 40 of its
+own files, the ones the work is about first. `index.outline_chars` is 6,000 by default and bounds the trees, the
+section's own sentence apart. A prompt override without `{{OUTLINE}}` gets no outline and is not refused, as it must
+carry nothing to do its work. A privately started ticket has no observation, so its tree is opened by size. Next: the
+planner's, the reviewer's, and a task's, then Accept's live checks and the two weeks at `tree`.

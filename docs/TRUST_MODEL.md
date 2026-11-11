@@ -68,6 +68,10 @@ Controls:
   for. A worker's prompt names its copy and gives its outline, never its text, and says the prompt's obligations come
   before it, as before the standing instructions; a plan cannot widen what a worker may do. The worker reads the
   approved text alone: `_run` checks the file against the hash the operator approved before it writes the copy.
+- A run's code outline, which `index.outline` renders (DESIGN §46), is the repository's text: the paths of the tree
+  git holds, which any contributor names. It is data in the prompt, framed as such, every line quoted so none passes
+  for the prompt's own, each path bounded, and one holding a character that can hide text dropped, never rendered. The
+  ticket's text picks which directories the outline opens and is rendered nowhere in it.
 - A session's title, which `sessions.search` keeps (DESIGN §13), is whatever the runtime made of the session's first
   words or a run named it, ticket and PR text among them: data, kept on one line, bounded, with every control and
   hidden character dropped, rendered as text, and put in no prompt. A search of titles is words found as text, never
@@ -598,6 +602,9 @@ Controls in code, not prompts:
   `resume`; a stale one is planned again only once its PR has had no new item, reply, head, or check conclusion for
   `policy.feedback_quiet_minutes` (10 by default; a repository may only raise it), refused `quiet` before then, in code.
   So a stream of comments or pushes from a bot spends a bounded number of plan runs.
+- The code outline (DESIGN §46): bounded by `index.outline_chars` whatever a repository's size, read by one git
+  listing with a time limit and a bound on what is read, and left out when either is passed, so no repository's size
+  holds a dispatch or fills a prompt.
 - Follow-ups (DESIGN §18): at most `policy.max_follow_ups` recorded per run, 5 by default (0 records none, and a
   repository may only lower it), and one generation deep: a follow-up's runs record none. A ticket past them, or one a
   run that rewrote its slot's git reported, is not recorded, and the harness raises `follow_up_unrecorded` naming it.
@@ -943,6 +950,9 @@ Controls:
   either change stays in the journal until the loop's next read drops it, which it does before it reads anything;
   until then nothing lists it, since the command lists by the config in force and refuses at `off`. An unsandboxed
   run could already read the runtime's record itself, the standing residual.
+- A run's code outline (DESIGN §46) is of the trees of its own repositories, in the slots it leased, read by the
+  harness from git's objects: never a path an agent, a ticket, or a prompt names, so a steered agent is shown no other
+  project through it. It holds file names, which the run could list itself.
 - Opt-in: a sandboxed run (T4) reads none of the operator's secrets under `$HOME` but what its template re-allows, and
   reaches the network only through `srt`'s proxy, which connects to the hosts on the operator's allowlist and to no
   other, and to no loopback, link-local, or cloud metadata address, nor the host's own, whatever name resolves there.
@@ -1008,8 +1018,9 @@ carries their version. Unlike build scripts a worker runs (T4), this file is rea
 worktree and before any agent starts. If it could set the runtime commands, the overseer's bash allows,
 `notify.cmd`, chores, the review query, the connectors and how old an observation may be before a dispatch on it is
 refused, prompt paths, capacity, queue labels, authorized repliers, agent memory's tiers, the agents' personas or
-models, the checklists, which agents publish artifacts and whose comments on them count, or which of the runtime's
-sessions canopy lists by title, one commit would be enough
+models, the checklists, which agents publish artifacts and whose comments on them count, which of the runtime's
+sessions canopy lists by title, or whether a prompt holds a code outline, how large, and of which files, one commit
+would be enough
 to run commands on operators' machines, raise their spend, send what workers read off the machine, or pick who steers their
 workers.
 

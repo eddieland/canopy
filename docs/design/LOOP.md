@@ -288,7 +288,8 @@ run. A `plan` writes the ticket's plan before its first `implement`, with guards
    slot leased and what it was meant to handle still new.
 2. Lease a slot in each named repository's pool (§18) and record the run, its slots, and each base.
 3. Render the worker prompt for the kind, with the operator's messages (§22), standing instructions (§12), and the
-   notice, and the latest runs' reports as data. A started ticket's run gets the kind's private variant (§22), with no
+   notice, and, as data, the latest runs' reports and an outline of each repository's code where the operator has
+   turned it on (§46). A started ticket's run gets the kind's private variant (§22), with no
    label check and no tracker writes. Every other worker reads the ticket first and, if it is closed or carries no
    queue label, reports `failed` as not authorized and changes nothing; the run counts toward the attempt limit (D051).
    The overseer's context points at what to read, never a copy of ticket or PR text, which invites injection, nor a
