@@ -253,11 +253,10 @@ function useWrite(epic: number, onDone: (said: string) => void) {
             said = await work()
         } catch (error: unknown) {
             setFailure(error)
-        } finally {
-            setBusy(false)
-            void client.invalidateQueries({ queryKey: keys.epic(epic) })
-            void client.invalidateQueries({ queryKey: keys.epics })
         }
+        setBusy(false)
+        void client.invalidateQueries({ queryKey: keys.epic(epic) })
+        void client.invalidateQueries({ queryKey: keys.epics })
         if (said !== null) {
             onDone(said)
         }

@@ -2,10 +2,6 @@
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["react", "typescript", "oxc", "unicorn", "import", "jsx-a11y", "promise", "vitest"],
   "jsPlugins": [
-    {
-      "name": "react-compiler",
-      "specifier": "eslint-plugin-react-hooks"
-    },
     // Every exported name, and each field of an exported interface, carries a JSDoc comment with no types in it:
     // TypeScript has the types. oxlint's own jsdoc plugin has no rule that requires a comment.
     {
@@ -102,21 +98,25 @@
     "tailwindcss/enforce-shorthand": "error",
     "tailwindcss/no-unnecessary-whitespace": "error",
     "tailwindcss/no-hardcoded-colors": "error",
-    "react-compiler/static-components": "error",
-    "react-compiler/use-memo": "error",
-    "react-compiler/void-use-memo": "error",
-    "react-compiler/preserve-manual-memoization": "error",
-    "react-compiler/incompatible-library": "error",
-    "react-compiler/immutability": "error",
-    "react-compiler/globals": "error",
-    "react-compiler/refs": "error",
-    "react-compiler/set-state-in-effect": "error",
-    "react-compiler/error-boundaries": "error",
-    "react-compiler/purity": "error",
-    "react-compiler/set-state-in-render": "error",
-    "react-compiler/unsupported-syntax": "error",
-    "react-compiler/config": "error",
-    "react-compiler/gating": "error",
+    // The React Compiler's rules, from oxlint's own port of the compiler, which is the one the build runs
+    // (`compiler: true` in vite.config.ts), so the lint and the build read a component the same way. todo and
+    // invariant refuse a component or hook the compiler would skip, which the build leaves unmemoized without a
+    // word: syntax it does not compile yet (`try`/`finally`, `??=`, a dynamic `import()`), or an error of its own.
+    "react/static-components": "error",
+    "react/use-memo": "error",
+    "react/void-use-memo": "error",
+    "react/preserve-manual-memoization": "error",
+    "react/incompatible-library": "error",
+    "react/immutability": "error",
+    "react/globals": "error",
+    "react/refs": "error",
+    "react/set-state-in-effect": "error",
+    "react/error-boundaries": "error",
+    "react/purity": "error",
+    "react/set-state-in-render": "error",
+    "react/unsupported-syntax": "error",
+    "react/todo": "error",
+    "react/invariant": "error",
     "no-restricted-imports": [
       "error",
       {

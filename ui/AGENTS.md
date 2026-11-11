@@ -9,8 +9,9 @@ Pinned exactly in `package.json`. Check the current docs for these versions befo
 memory, and do not upgrade in passing.
 
 - Vite 8 single-page app. No Next.js, no server rendering.
-- React 19.3 with the React Compiler (`@vitejs/plugin-react` `compiler: true`). `<ViewTransition>` and
-  `useEffectEvent` are stable in 19.3: never install `react@canary`.
+- React 19.3 with the React Compiler (`@vitejs/plugin-react` `compiler: true`, which runs Oxc's port of it,
+  `oxc-transform-react`, still experimental). `<ViewTransition>` and `useEffectEvent` are stable in 19.3: never
+  install `react@canary`.
 - TypeScript strict, with `noUncheckedIndexedAccess`.
 - Tailwind v4, configured in CSS (`src/index.css`, `src/styles/tokens.css`). There is no `tailwind.config.js`.
 - shadcn/ui on Radix, Vega style (`components.json`). Add components with `npx shadcn add <name>` and read
@@ -32,9 +33,9 @@ memory, and do not upgrade in passing.
 - jsdiff (`diff`) for a plan's word diff alone: only `src/lib/plan-diff.ts` imports it.
 - cmdk for the repository, model, and author pickers' and the jump palette's searchable lists, which Radix has no
   primitive for: only `src/components/ui/command.tsx` imports it, and the lint refuses it elsewhere.
-- oxlint (with the React Compiler's rules, eslint-plugin-jsdoc's, eslint-plugin-playwright's on `e2e/`,
-  oxlint-tailwindcss's on Tailwind classes, and type-aware rules through oxlint-tsgolint) and oxfmt, Vitest,
-  Playwright.
+- oxlint (with the React Compiler's rules, its own, from the port the build runs, eslint-plugin-jsdoc's,
+  eslint-plugin-playwright's on `e2e/`, oxlint-tailwindcss's on Tailwind classes, and type-aware rules through
+  oxlint-tsgolint) and oxfmt, Vitest, Playwright.
 
 Add a library as the repository's `AGENTS.md` says, when it clearly beats the code we would write instead, and pin it
 exactly like the rest. One that only a few files need is held to them, as Tiptap (D120) and Shiki (D121) are.
@@ -78,6 +79,10 @@ dozen. When every screenshot differs, check the browser before the change.
   `.oxlintrc.json`); a public member of an exported class needs one too, which the lint does not check.
 - **No hand-written memoization.** The compiler memoizes. `useMemo`, `useCallback`, and `memo` are banned by the lint.
   Follow the compiler's rules (no setState directly in an effect body, no reading refs during render, ...).
+- **Every component and hook compiles.** The build skips one the compiler cannot compile and leaves it unmemoized
+  without a word, so the lint refuses it (`react/todo`, `react/invariant`). Inside one: no `try` with a `finally`, no
+  `??=`, `||=`, or `&&=`, no dynamic `import()` (load through a function at the module's top, as
+  `src/hooks/use-diagram.ts` does), and a function it declares sits above every function and closure that calls it.
 - **Types come from the server.** API types are generated from the pydantic models in `src/canopy/serve/schema/`:
   the shared ones in its `__init__.py`, and each feature's in a module of its own. To change a shape, change the
   pydantic model; `npm run gen` writes the types from it, and they are not committed. Import types from

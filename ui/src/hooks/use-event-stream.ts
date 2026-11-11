@@ -82,8 +82,9 @@ export function useEventStream<T>(url: string, options: EventStreamOptions<T>): 
         // When the stream went down, kept through every retry until it opens again.
         let downAt: number | null = null
         const down = () => {
-            downAt ??= Date.now()
-            setReported({ url, status: 'reconnecting', downSince: downAt })
+            const since = downAt ?? Date.now()
+            downAt = since
+            setReported({ url, status: 'reconnecting', downSince: since })
         }
 
         const stopRetry = () => {
