@@ -3,8 +3,9 @@
 OpenCode keeps every session it ran, in every directory, in one SQLite database, `opencode/opencode.db` under
 `$XDG_DATA_HOME`, or `~/.local/share` when that is unset: canopy's runs, the operator's own sessions, and the
 subagents' sessions each ran, which `opencode session list` leaves out, as it does other projects'. So the database is
-read, not a command: opened read-only, one query for a page of sessions and one for their replies' models, each naming
-the columns it reads, so the tables holding OpenCode's accounts and tokens are never read. Each session row carries its
+read, not a command: opened read-only, one query for a page of sessions and one for their replies' models, and, when
+the read is asked for them, one for their titles and when each was archived (ROADMAP M72), each naming the columns it
+reads, so the tables holding OpenCode's accounts and tokens are never read. Each session row carries its
 cost and tokens, summed by OpenCode; each assistant message names its provider, model, variant when not the model's
 default, and cost, as `opencode export` prints it (`canopy.runtime.opencode.session_models`), so each model is named as
 that module names it.
@@ -25,6 +26,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import shlex
 import sqlite3
 import time
 from pathlib import Path
@@ -42,6 +44,7 @@ from canopy.runtime.report import (
     SessionSpend,
     model_uses,
     session_id,
+    session_title,
 )
 
 if TYPE_CHECKING:
@@ -83,14 +86,36 @@ WHERE session_id IN (SELECT value FROM json_each(?))
   AND coalesce(json_type(data, '$.cost'), 'integer') IN ('integer', 'real')
 GROUP BY 1, 2, 3, 4
 """
+#: The title of each session a JSON array of ids names, and when it was archived, where the table says (`TitleQueries`).
+TITLES_SQL = "SELECT id, title, time_archived FROM session WHERE id IN (SELECT value FROM json_each(?))"
+#: The same, of a table with no column for the archive.
+UNARCHIVED_SQL = "SELECT id, title, NULL FROM session WHERE id IN (SELECT value FROM json_each(?))"
+#: The columns of a table, by its name.
+COLUMNS_SQL = "SELECT name FROM pragma_table_info(?)"
 #: Between a model and its variant, as `canopy.runtime.opencode.session_models` names a model run at one.
 VARIANT_MARK = "@"
 #: Where the read starts when no cursor is given: before every session.
 _FIRST: SessionCursor = (-1, "")
 
 # Milliseconds since the epoch, as OpenCode stamps a session: up to the year 9999.
-_Millis = Annotated[StrictInt, Field(ge=0, le=253_402_300_799_999)]
+_MAX_MILLIS = 253_402_300_799_999
+_Millis = Annotated[StrictInt, Field(ge=0, le=_MAX_MILLIS)]
 _Cost = Annotated[StrictFloat | StrictInt, Field(ge=0, le=MAX_COST_USD, allow_inf_nan=False)]
+
+
+class TitleQueries(NamedTuple):
+    """How a version's record is asked for its sessions' titles, as `TITLES` asks OpenCode 1's."""
+
+    #: The table of sessions, whose columns say which of the two queries reads it.
+    table: str
+    #: The title and archive of each session a JSON array of ids names, as `TITLES_SQL` reads them.
+    titled: str
+    #: The same, of a table with no column for the archive, as `UNARCHIVED_SQL` reads them.
+    unarchived: str
+
+
+#: How OpenCode 1's record is asked for its sessions' titles.
+TITLES = TitleQueries("session", TITLES_SQL, UNARCHIVED_SQL)
 
 
 class _Session(BaseModel):
@@ -120,14 +145,33 @@ class _Replies(BaseModel):
     cost: _Cost
 
 
-def updated_after(cursor: SessionCursor | None, *, limit: int = MAX_SESSIONS) -> SessionPage:
+def updated_after(cursor: SessionCursor | None, *, limit: int = MAX_SESSIONS, titles: bool = False) -> SessionPage:
     """Read OpenCode's sessions updated after `cursor` from its databases, the operator's and each sandbox role's.
+
+    With `titles`, each session's title and archive are read too.
 
     Returns:
         At most `limit` sessions, the least recently updated first; `missing` when OpenCode has no database yet;
         `failed`, with why, when the operator's could not be read.
     """
-    return read(databases(), SESSIONS_SQL, MODELS_SQL, cursor, limit=limit, variant_mark=VARIANT_MARK)
+    return read(
+        databases(),
+        SESSIONS_SQL,
+        MODELS_SQL,
+        cursor,
+        limit=limit,
+        variant_mark=VARIANT_MARK,
+        titles=TITLES if titles else None,
+    )
+
+
+def reopen(session_id: str, directory: str) -> str:
+    """The command that reopens session `session_id` in OpenCode, in the directory it ran in, for the operator to copy.
+
+    Returns:
+        One shell line, each word quoted as the shell needs it.
+    """
+    return f"cd {shlex.quote(directory)} && opencode --session {shlex.quote(session_id)}"
 
 
 def databases() -> list[Path]:
@@ -245,6 +289,7 @@ def read(
     *,
     limit: int,
     variant_mark: str,
+    titles: TitleQueries | None = None,
 ) -> SessionPage:
     """Read a page of sessions from the databases at `paths`, with queries shaped as `SESSIONS_SQL` and `MODELS_SQL`.
 
@@ -252,7 +297,8 @@ def read(
     page. Each after it is a sandbox role's, which its runs write: one canopy cannot read is passed over, so that a run
     can keep only its own role's sessions from being read. Each is read from the cursor, and their sessions merged in
     the order of their update, so the page's last is where every one of them is read from next.
-    `variant_mark` goes between a model and the variant it ran at, as the version's export names it.
+    `variant_mark` goes between a model and the variant it ran at, as the version's export names it. With `titles`,
+    each session's title and archive are read with it, as `TITLES` reads OpenCode 1's.
 
     Returns:
         The page, as `updated_after` gives it.
@@ -264,7 +310,9 @@ def read(
         if not path.is_file():
             continue
         try:
-            rows.extend(_rows(path, sessions_sql, models_sql, after, limit=limit, variant_mark=variant_mark))
+            rows.extend(
+                _rows(path, sessions_sql, models_sql, after, limit=limit, variant_mark=variant_mark, titles=titles),
+            )
         except _UnreadableError as e:
             if n == 0:
                 return SessionPage("failed", error=str(e))
@@ -300,6 +348,7 @@ def _rows(
     *,
     limit: int,
     variant_mark: str,
+    titles: TitleQueries | None,
 ) -> list[_Row]:
     try:
         with opened(path) as conn:
@@ -307,6 +356,7 @@ def _rows(
             sessions = [_session(row) for row in rows]
             ids = json.dumps([s.id for s in sessions if s is not None])
             replies = _replies(query(conn, models_sql, ids)) if any(sessions) else []
+            named = _titles(conn, titles, ids) if titles is not None and any(sessions) else {}
     except sqlite3.Error as e:
         raise _UnreadableError(f"OpenCode's database could not be read: {str(e)[:200]}") from None
     found: list[_Row] = []
@@ -314,9 +364,30 @@ def _rows(
         updated, row_id = row[4], row[0]
         if not isinstance(updated, int) or not isinstance(row_id, str):
             raise _UnreadableError("OpenCode's database holds a session canopy cannot read past")
-        spend = _spend(session, [r for r in replies if r.session_id == session.id], variant_mark) if session else None
+        spend = (
+            _spend(session, [r for r in replies if r.session_id == session.id], variant_mark, named.get(session.id))
+            if session
+            else None
+        )
         found.append(_Row(updated, row_id, spend))
     return found
+
+
+# Each session's title and when it was archived, by its id, of those `ids`, a JSON array, names: a title as
+# `session_title` keeps it, and an archive that is not a time read as none.
+def _titles(conn: sqlite3.Connection, titles: TitleQueries, ids: str) -> dict[str, tuple[str | None, int | None]]:
+    columns = {row[0] for row in query(conn, COLUMNS_SQL, titles.table)}
+    statement = titles.titled if "time_archived" in columns else titles.unarchived
+    found: dict[str, tuple[str | None, int | None]] = {}
+    for found_id, title, archived in query(conn, statement, ids):
+        if isinstance(found_id, str):
+            found[found_id] = (session_title(title), _a_time(archived))
+    return found
+
+
+# The value as a time OpenCode stamps, or None when it is not one.
+def _a_time(value: object) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= _MAX_MILLIS else None
 
 
 # The row as a session, or None when canopy cannot read it.
@@ -339,7 +410,12 @@ def _replies(rows: Iterable[Sequence[object]]) -> list[_Replies]:
     return found
 
 
-def _spend(session: _Session, replies: Iterable[_Replies], variant_mark: str) -> SessionSpend:
+def _spend(
+    session: _Session,
+    replies: Iterable[_Replies],
+    variant_mark: str,
+    titled: tuple[str | None, int | None] | None,
+) -> SessionSpend:
     named = (
         (f"{r.provider}/{r.model}{f'{variant_mark}{r.variant}' if r.variant else ''}", r.replies, float(r.cost))
         for r in replies
@@ -357,4 +433,6 @@ def _spend(session: _Session, replies: Iterable[_Replies], variant_mark: str) ->
         cache_read=session.cache_read,
         cache_write=session.cache_write,
         models=model_uses(named),
+        title=titled[0] if titled is not None else None,
+        archived_ms=titled[1] if titled is not None else None,
     )

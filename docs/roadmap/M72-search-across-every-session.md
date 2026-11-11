@@ -167,10 +167,14 @@ web UI, so a hit outside canopy is reopened in the runtime. Stage 0's command, `
 draft's: a search within 0.25 s, and an index no larger than a quarter of the runtime's own database. Measured
 2026-11-10 (MEASUREMENTS "2026-11-10: M72 stage 0, the runtime's record and what indexing it costs"): every cut passes
 both, the widest, `read`, with its slowest search at 0.027 s and its largest index 0.6% of the database, where a plain
-scan takes about 70 s, so stage 0's rule gives stage 2 `read`. Settled 2026-11-11, at the operator's ask to resolve what
-was open, for the operator to change. The cut is `read`, as that rule gives. The sessions OpenCode 1 left in its own
-tables get no reader: OpenCode 1 is deprecated and kept only until it is dropped (AGENTS.md). Stage 0's command counts
-them, unread, and the section does not give the count, so this was settled without it. And canopy's sessions stay in the
+scan takes about 70 s, so stage 0's rule gives stage 2 `read`. The operator's call on the cut (2026-11-11): `read`, as
+the rule gives. Stage 1 begun 2026-11-11: the two keys, the read keeping each title and archive under either runtime
+version and starting again from the first session when a key changes, and `canopy sessions [WORDS]`; the web UI's
+Sessions page, the search page's two panels, and TRUST_MODEL T8 for them, are next. The reopen command, `opencode
+--session ID` in the session's directory, is OpenCode 1's, assumed of 2 and not yet run. Settled 2026-11-11, at the
+operator's ask to resolve what was open, for the operator to change. The sessions OpenCode 1 left in its own tables get
+no reader: OpenCode 1 is deprecated and kept only until it is dropped (AGENTS.md). Stage 0's command counts them,
+unread, and the section does not give the count, so this was settled without it. And canopy's sessions stay in the
 runtime's own list: the Sessions page opens on the operator's own, with canopy's a filter away. What would thin the
 runtime's list changes what canopy does with the runtime's data and logins (§26, T2, T4): a record of its own for an
 unsandboxed run, as a sandboxed role has (§24), or archiving canopy's sessions through the runtime. That is a milestone

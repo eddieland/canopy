@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest import mock
+
+import pytest
 
 from canopy.core import pause, runtime_sessions
 from canopy.core.vocab import SessionsRead
@@ -14,8 +18,6 @@ from canopy.runtime.report import MAX_SESSIONS, SessionPage, SessionSpend
 from tests.canopy.helpers import FakeTime, console, context, overseer_does
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from canopy.core.context import Context
     from tests.conftest import CanopyEnv
 
@@ -99,3 +101,17 @@ def test_a_live_loop_records_the_sessions_and_a_dry_run_none(
         assert read.called is not dry_run
 
     assert runtime_sessions.of_session(canopy_env.journal(), "ses_0") is not None
+
+
+@pytest.mark.parametrize("search", ["off", "titles"])
+def test_the_recorder_reads_titles_only_while_sessions_search_keeps_them(canopy_env: CanopyEnv, search: str) -> None:
+    canopy_env.append_user(f"\n[sessions]\nsearch = '{search}'\nexclude = ['~/clients/']\n")
+    canopy_env.journal()
+    ctx = context(canopy_env)
+    with mock.patch.object(runtime, "updated_after", autospec=True, return_value=page(0)) as read:
+        sessions.Recorder(FakeTime().clock, logs.for_tick(None)).step(ctx)
+
+    read_now = runtime_sessions.last_read(ctx.conn)
+    assert read_now is not None
+    assert read.call_args.kwargs["titles"] is (search == "titles")
+    assert read_now.titles == (json.dumps([str(Path.home() / "clients")]) if search == "titles" else None)

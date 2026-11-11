@@ -133,6 +133,11 @@ class RuntimeSession(Row):
     tokens_cache_read: int
     tokens_cache_write: int
     read_at: str
+    #: Its title, kept while `sessions.search` is `titles` (ROADMAP M72); None when it has none, none is kept, or its
+    #: directory is one `sessions.exclude` names.
+    title: str | None
+    #: When the runtime archived it, so its own list leaves it out; None when it did not, or no title is kept.
+    archived_at: str | None
 
 
 @dataclass(frozen=True)
@@ -165,6 +170,8 @@ class RuntimeSessionRead(Row):
     #: How many sessions every read so far passed over as ones canopy cannot read.
     skipped: int
     read_at: str
+    #: What the read keeps titles under: `sessions.exclude` as a JSON array; None while it keeps none.
+    titles: str | None
 
 
 @dataclass(frozen=True)

@@ -86,3 +86,10 @@ def test_a_kept_name_is_one_printable_line_within_its_bound() -> None:
     assert report.kept_name("evil\x1b[31m\n tool") == "evil[31m tool"
     assert report.kept_name("") == "?"
     assert report.kept_name("t" * 500) == "t" * report.MAX_TOOL_NAME
+
+
+def test_a_sessions_title_is_one_line_with_nothing_hidden_within_its_bound() -> None:
+    assert report.session_title("  Fix the\r\nflaky\u2028test\u200d\u202e ") == "Fix the flaky test"
+    assert report.session_title("\x00\u200b") is None
+    assert report.session_title(7) is None
+    assert report.session_title("a " * 300) == ("a " * 100).strip()
