@@ -260,13 +260,14 @@
 }
 
 /*
- * A document's table, a plan's, a guide page's, or a message's (DESIGN.md, A document): as wide as what it holds, a
+ * A document's table, a plan's, a guide page's, or a message's (DESIGN.md, A document): the measure's full width at
+ * least, so a narrow one never sits stranded at the text's left, and wider where what it holds needs it, a
  * hairline under its head and each row but the last, no grid and no fill, its first column flush with the text's edge
  * and its last with the measure's. A step under the text around it, in `em`, so it moves with a plan's text size; its
  * head quieter than its rows, which are what is read; its figures tabular, so a column of numbers lines up.
  */
 @utility document-table {
-    @apply border-collapse text-left tabular-nums;
+    @apply w-full border-collapse text-left tabular-nums;
     font-size: 0.875em;
     line-height: 1.6;
     & :is(th, td) {
