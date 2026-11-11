@@ -4,7 +4,10 @@ The renderer is given a tree's paths and what the work is about, and reads nothi
 git's objects, here a repository made by hand.
 """
 
+import os
+from collections.abc import Iterator
 from pathlib import Path
+from unittest import mock
 
 import pytest
 from syrupy.assertion import SnapshotAssertion
@@ -12,7 +15,7 @@ from syrupy.assertion import SnapshotAssertion
 from canopy.core import code_outline
 from canopy.core.code_outline import About, Listing
 from canopy.infra import procs
-from tests.conftest import git
+from tests.conftest import HERMETIC_GIT, git
 
 #: A repository's tree, written by hand: a service with two packages, their tests, and some docs.
 TREE = Listing(
@@ -164,24 +167,26 @@ def test_a_tree_wider_than_its_bound_is_cut_to_it() -> None:
 
 
 @pytest.fixture
-def repository(tmp_path: Path) -> Path:
+def repository(tmp_path: Path) -> Iterator[Path]:
     """A repository with a commit on `main`, and a branch `work` that changes one file and adds another."""
     repo = tmp_path / "outlined"
-    repo.mkdir()
-    git("init", "--quiet", "--initial-branch=main", cwd=repo)
-    for name in ("src/app.py", "src/pkg/util.py", "docs/Überblick.md"):
-        (repo / name).parent.mkdir(parents=True, exist_ok=True)
-        (repo / name).write_text("one\n")
-    git("add", ".", cwd=repo)
-    git("commit", "--quiet", "-m", "initial", cwd=repo)
-    git("checkout", "--quiet", "-b", "work", cwd=repo)
-    (repo / "src/app.py").write_text("two\n")
-    (repo / "src/pkg/new.py").write_text("new\n")
-    git("add", ".", cwd=repo)
-    git("commit", "--quiet", "-m", "work", cwd=repo)
-    # What the working tree holds is never read: the outline is of what git holds.
-    (repo / "untracked.py").write_text("stray\n")
-    return repo
+    # An author of the tests' own, as `git_pool` sets one: a runner's git may have none.
+    with mock.patch.dict(os.environ, HERMETIC_GIT):
+        repo.mkdir()
+        git("init", "--quiet", "--initial-branch=main", cwd=repo)
+        for name in ("src/app.py", "src/pkg/util.py", "docs/Überblick.md"):
+            (repo / name).parent.mkdir(parents=True, exist_ok=True)
+            (repo / name).write_text("one\n")
+        git("add", ".", cwd=repo)
+        git("commit", "--quiet", "-m", "initial", cwd=repo)
+        git("checkout", "--quiet", "-b", "work", cwd=repo)
+        (repo / "src/app.py").write_text("two\n")
+        (repo / "src/pkg/new.py").write_text("new\n")
+        git("add", ".", cwd=repo)
+        git("commit", "--quiet", "-m", "work", cwd=repo)
+        # What the working tree holds is never read: the outline is of what git holds.
+        (repo / "untracked.py").write_text("stray\n")
+        yield repo
 
 
 def test_a_tree_is_listed_from_gits_objects_never_the_working_tree(repository: Path) -> None:
