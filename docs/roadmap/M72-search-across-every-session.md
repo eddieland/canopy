@@ -167,8 +167,12 @@ web UI, so a hit outside canopy is reopened in the runtime. Stage 0's command, `
 draft's: a search within 0.25 s, and an index no larger than a quarter of the runtime's own database. Measured
 2026-11-10 (MEASUREMENTS "2026-11-10: M72 stage 0, the runtime's record and what indexing it costs"): every cut passes
 both, the widest, `read`, with its slowest search at 0.027 s and its largest index 0.6% of the database, where a plain
-scan takes about 70 s, so stage 0's rule gives stage 2 `read`. Open, for the operator: the call on the cut, before stage
-2; whether the sessions OpenCode 1 left in its own tables get a reader, which stage 0 did not count; and whether
-canopy's sessions should also leave the runtime's own list, which this milestone does not do. A sandboxed role's are
+scan takes about 70 s, so stage 0's rule gives stage 2 `read`. The operator's call on the cut (2026-11-11): `read`, as
+the rule gives. Stage 1 begun 2026-11-11: the two keys, the read keeping each title and archive under either runtime
+version and starting again from the first session when a key changes, and `canopy sessions [WORDS]`; the web UI's
+Sessions page, the search page's two panels, and TRUST_MODEL T8 for them, are next. The reopen command, `opencode
+--session ID` in the session's directory, is OpenCode 1's, assumed of 2 and not yet run. Open, for the operator:
+whether the sessions OpenCode 1 left in its own tables get a reader, which stage 0 did not count; and whether canopy's
+sessions should also leave the runtime's own list, which this milestone does not do. A sandboxed role's are
 already in a record of its own (§24); giving an unsandboxed run one, or archiving canopy's sessions through the
 runtime, changes what canopy does with the runtime's data and logins (§26, T2, T4), and is a milestone of its own.

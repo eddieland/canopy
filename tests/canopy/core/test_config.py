@@ -115,6 +115,10 @@ def test_needs_human_label_is_set_by_the_workspace_and_overridden_by_the_user(ca
         # Traces would leave the operator's machine for a host whoever controls the workspace file chose.
         ("telemetry", "traces = 'otlp'"),
         ("telemetry", "endpoint = 'https://collector.example'"),
+        # Every session's title, the operator's own work in any directory among it, would be listed and served.
+        ("sessions", "search = 'titles'"),
+        # A shared file could bring an excluded directory's sessions back.
+        ("sessions", "exclude = []"),
     ],
 )
 def test_the_workspace_file_may_not_set_user_only_keys(canopy_env: CanopyEnv, section_key: tuple[str, str]) -> None:
@@ -1125,3 +1129,13 @@ def test_artifacts_are_checked(canopy_env: CanopyEnv, toml: str, message: str) -
 
 def test_a_publishing_worker_gets_every_tool_of_the_stores_contract_but_its_feed() -> None:
     assert sorted(config.ARTIFACT_TOOLS) == sorted({t.name for t in store_tools.TOOLS} - {"comment_feed"})
+
+
+def test_a_directory_sessions_exclude_names_is_expanded_from_home_without_a_trailing_slash(
+    canopy_env: CanopyEnv,
+) -> None:
+    canopy_env.append_user("\n[sessions]\nsearch = 'titles'\nexclude = ['~/clients/', '/srv/*/scratch', '/']\n")
+
+    listed = load(canopy_env.root, canopy_env.user_file).sessions
+
+    assert (listed.search, listed.exclude) == ("titles", (f"{Path.home()}/clients", "/srv/*/scratch", "/"))
