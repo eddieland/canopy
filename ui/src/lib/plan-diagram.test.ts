@@ -2,6 +2,7 @@ import { within } from '@testing-library/dom'
 import { Editor } from '@tiptap/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { blockSlots } from '@/lib/block-slots'
 import { drawDiagram } from '@/lib/diagram'
 import type { Drawn, NotDrawn } from '@/lib/diagram'
 import { planExtensions } from '@/lib/plan-schema'
@@ -92,6 +93,23 @@ describe('a Mermaid code block', () => {
         expect(within(root).getByText('Not drawn: the browser cannot read its picture.')).toBeTruthy()
         expect(within(root).queryByRole('img')).toBeNull()
         expect(root.querySelector<HTMLElement>('.plan-diagram')?.dataset['diagram']).toBe('failed')
+    })
+
+    it('keeps room in its figure for its actions, saying what they act on as its source is edited', async () => {
+        const { editor, root } = open(DIAGRAM)
+        await within(root).findByRole('img')
+        const slots = blockSlots(editor)
+        const [block] = slots.snapshot()
+        expect(block?.kind).toBe('diagram')
+        expect(block?.source).toBe('sequenceDiagram\n    A->>B: hi')
+        expect(block?.slot.parentElement).toBe(root.querySelector('.plan-diagram-figure'))
+
+        editor.commands.insertContentAt(codeEnd(editor), '\n    B->>A: bye')
+        expect(slots.snapshot().map((each) => each.source)).toEqual(['sequenceDiagram\n    A->>B: hi\n    B->>A: bye'])
+        expect(slots.snapshot()[0]?.id).toBe(block?.id)
+
+        editor.commands.setContent('# No diagram here', { contentType: 'markdown' })
+        expect(slots.snapshot()).toEqual([])
     })
 
     it('is drawn again once its source rests after an edit, and when the theme changes', async () => {

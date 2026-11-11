@@ -31,7 +31,7 @@ test("the sample plan's Mermaid block is drawn as its diagram, its source under 
     const source = doc.getByText('participant Page as web: reports page')
     await expect.poll(() => inSight(source)).toBe(false)
 
-    const toggle = doc.getByRole('button', { name: 'Source' })
+    const toggle = doc.getByRole('button', { name: 'Source', exact: true })
     await toggle.click()
     await expect(toggle).toHaveAttribute('aria-pressed', 'true')
     await expect.poll(() => inSight(source)).toBe(true)
@@ -41,6 +41,48 @@ test("the sample plan's Mermaid block is drawn as its diagram, its source under 
     // The block is still its Markdown, written back as it was read.
     await page.getByRole('button', { name: 'Show Markdown' }).click()
     await expect(page.getByLabel('Plan Markdown')).toContainText('```mermaid\nsequenceDiagram\n    participant Page')
+})
+
+test.describe("a diagram's actions", () => {
+    test.use({ permissions: ['clipboard-read', 'clipboard-write'] })
+
+    test('copy its Mermaid source as the plan holds it between its fence lines, edits included', async ({ page }) => {
+        const doc = plan(page)
+        const block = doc.locator('.plan-diagram')
+        const copy = block.getByRole('button', { name: 'Copy Mermaid source' })
+        await expect(copy.locator('..')).toHaveCSS('opacity', '0')
+        await block.hover()
+        await expect(copy.locator('..')).toHaveCSS('opacity', '1')
+        await copy.click()
+        await expect(page.getByRole('status').filter({ hasText: 'Copied Mermaid source' })).toBeVisible()
+        const copied = await page.evaluate(() => navigator.clipboard.readText())
+
+        await page.getByRole('button', { name: 'Show Markdown' }).click()
+        const markdown = (await page.getByLabel('Plan Markdown').textContent()) ?? ''
+        const fenced = /```mermaid\n(?<source>[\s\S]*?)\n```/u.exec(markdown)?.groups?.['source']
+        expect(copied).toBe(fenced)
+
+        // An edit to its code is what it copies next, while the caret is in it, which shows its actions too.
+        await clickAtStart(doc.getByRole('heading', { name: 'Files' }))
+        await page.keyboard.press('ArrowLeft')
+        await page.keyboard.type('\nPage->>Page: done')
+        // The caret alone shows them: the pointer is away from the block.
+        await page.mouse.move(0, 0)
+        await expect(copy.locator('..')).toHaveCSS('opacity', '1')
+        await copy.click()
+        await expect
+            .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+            .toBe(`${fenced}\nPage->>Page: done`)
+    })
+
+    test('copy the source of one that cannot be drawn', async ({ page }) => {
+        await write(page, '# Plan\n\n```mermaid\npie\n  "a": 1\n```\n')
+        const block = plan(page).locator('.plan-diagram')
+        await expect(block.getByText(/^Not drawn/u)).toBeVisible()
+        await block.hover()
+        await block.getByRole('button', { name: 'Copy Mermaid source' }).click()
+        await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('pie\n  "a": 1')
+    })
 })
 
 test('the caret moved into a diagram shows its source, and an edit there draws it again', async ({ page }) => {

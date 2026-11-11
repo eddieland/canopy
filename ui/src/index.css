@@ -260,6 +260,28 @@
 }
 
 /*
+ * A block's actions (src/components/block-actions.tsx): a diagram's, a code block's, in a row at the block's top right
+ * corner, over it, on its surface. Shown while the block, an ancestor marked `group/block`, is hovered, a plan's
+ * diagram holds the caret (`plan-diagram-editing`), or an action holds the focus, and always on a touch screen, which
+ * has no hover; kept in place out of sight, so nothing moves as they show. Never printed. The caret's rule is here, in
+ * the utility, since one in the components layer would lose to it.
+ */
+@utility block-actions {
+    @apply absolute top-1.5 right-1.5 z-10 flex items-center gap-0.5 rounded-md bg-surface p-0.5 opacity-0;
+    transition: opacity 150ms;
+    &:focus-within,
+    :where(.group\/block:hover, .plan-diagram-editing) & {
+        opacity: 1;
+    }
+    @media (pointer: coarse) {
+        opacity: 1;
+    }
+    @media print {
+        display: none;
+    }
+}
+
+/*
  * What the page scrolls in, everything under the header (AppShell), so a scrollbar never sits beside the header. Its
  * gutter is kept whether or not the page is long enough to need it: no layout shift when a page grows a scrollbar.
  * Positioned, so it is the containing block of what is absolute inside it, such as an `sr-only` file input, and clips
@@ -1899,7 +1921,7 @@
             @apply sr-only;
         }
         & .plan-diagram-figure {
-            @apply m-0 flex flex-col items-center gap-2 rounded-md border bg-surface p-3;
+            @apply relative m-0 flex flex-col items-center gap-2 rounded-md border bg-surface p-3;
         }
         & .plan-diagram[data-diagram='pending'] .plan-diagram-figure {
             @apply hidden;
@@ -1908,7 +1930,8 @@
             @apply h-auto max-w-full;
         }
         & .plan-diagram-figure figcaption {
-            @apply self-start text-sm text-muted-foreground empty:hidden;
+            /* Clear of the actions in the figure's corner, when the caption is all the figure holds. */
+            @apply self-start pr-8 text-sm text-muted-foreground empty:hidden;
         }
         & .plan-diagram-toggle {
             @apply self-end rounded-sm border bg-surface px-2 py-0.5 text-xs text-muted-foreground;

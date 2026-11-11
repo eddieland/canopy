@@ -132,6 +132,11 @@ the same in prose, since the worker after them reads the code, not the picture, 
 way, for the files a step changes or the risks beside their way back. A typo fix still gets none. An epic's plan of
 three tickets or more opens its breakdown with the order they're built in, drawn.
 
+Point at a diagram and **Copy Mermaid source** appears in its top right corner. It copies the code exactly as the
+plan's file holds it, without the fence, ready to paste into a PR description, an issue, or a doc: GitHub draws
+Mermaid, and so do most of the places you'd want it. A diagram that couldn't be drawn copies the same way, so you
+can fix it in an editor that says more than `Parse error on line 3`.
+
 The code is still the plan. **Source**, under the diagram, shows it; so does putting the cursor in it, which the arrow
 keys do from the line above or below, and which is how you edit one, with the diagram redrawn under it as you stop
 typing. A comment or a change marked in the code shows it too, since that's where those live. A diagram Mermaid can't
