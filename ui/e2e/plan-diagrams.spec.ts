@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
-import type { Locator, Page } from '@playwright/test'
+import type { Locator } from '@playwright/test'
 
-import { clickAtEnd, clickAtStart, plan, settled, signIn } from './helpers.ts'
+import { clickAtEnd, clickAtStart, plan, settled, signIn, writePlan } from './helpers.ts'
 
 test.beforeEach(async ({ page }) => {
     await signIn(page)
@@ -13,14 +13,6 @@ test.beforeEach(async ({ page }) => {
 // pixel, for the caret and a screen reader, so Playwright counts it visible.
 function inSight(target: Locator): Promise<boolean> {
     return target.evaluate((element) => (element.closest('pre')?.getBoundingClientRect().height ?? 0) > 1)
-}
-
-// Replaces the sample plan with `markdown`, through its Markdown, as the operator would.
-async function write(page: Page, markdown: string): Promise<void> {
-    const mode = page.getByRole('button', { name: 'Markdown', exact: true })
-    await mode.click()
-    await page.getByRole('textbox', { name: 'Plan as Markdown' }).fill(markdown)
-    await mode.click()
 }
 
 test("the sample plan's Mermaid block is drawn as its diagram, its source under Source", async ({ page }) => {
@@ -89,7 +81,7 @@ test("the arrow keys go into a diagram's code from the line above and below it",
 })
 
 test('a diagram mermaid cannot read, or of a kind not drawn here, shows its source and why', async ({ page }) => {
-    await write(page, '# Plan\n\n```mermaid\nflowchart LR\n  A -->\n```\n\n```mermaid\npie\n  "a": 1\n```\n')
+    await writePlan(page, '# Plan\n\n```mermaid\nflowchart LR\n  A -->\n```\n\n```mermaid\npie\n  "a": 1\n```\n')
     const doc = plan(page)
     await expect(doc.getByText(/^Not drawn: Parse error on line/u)).toBeVisible()
     await expect(
@@ -107,7 +99,7 @@ test("what a diagram's labels write as HTML stays text, and its config cannot sa
             fetched.push(request.url())
         }
     })
-    await write(
+    await writePlan(
         page,
         [
             '# Plan',

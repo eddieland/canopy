@@ -255,6 +255,15 @@ export async function screenshotWhole(page: Page, name: string): Promise<void> {
     await expect(page).toHaveScreenshot(name)
 }
 
+/**
+ * Screenshots `part` of the page as `name`, once the page has grown to its height as for `screenshotMain`, so no
+ * sticky header sits over it.
+ */
+export async function screenshotPart(page: Page, part: Locator, name: string): Promise<void> {
+    await growToPage(page)
+    await expect(part).toHaveScreenshot(name)
+}
+
 /** Screenshots the page's main pane as `name`, without the header and the rail around it. */
 export async function screenshotMain(page: Page, name: string): Promise<void> {
     await growToPage(page)
@@ -560,6 +569,14 @@ export async function serveReview(
 /** The plan editor's document. */
 export function plan(page: Page): Locator {
     return page.getByRole('textbox', { name: 'Plan', exact: true })
+}
+
+/** Replaces the plan in the editor with `markdown`, through its Markdown, as the operator would. */
+export async function writePlan(page: Page, markdown: string): Promise<void> {
+    const mode = page.getByRole('button', { name: 'Markdown', exact: true })
+    await mode.click()
+    await page.getByRole('textbox', { name: 'Plan as Markdown' }).fill(markdown)
+    await mode.click()
 }
 
 /**
