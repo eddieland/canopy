@@ -75,8 +75,8 @@ edit the copy it starts as, within {{MAX_PLAN_CHARS}} characters:
 The operator takes in a picture or a table faster than a paragraph. A ```` ```mermaid ```` diagram, a `flowchart`,
 `sequenceDiagram`, `stateDiagram`, `classDiagram`, or `erDiagram`, which canopy draws for the operator, belongs in an
 item wherever its change moves which part calls which, what a status may become, or how types or tables relate, with
-`(new)` or `(changed)` ending the label of each part it adds or changes; a table, where an item changes several files or tests
-alike. Keep each small; it counts toward the limit.
+`(new)` or `(changed)` ending the label of each part it adds or changes; a table, where an item changes several files
+or tests alike. Keep each small; it counts toward the limit.
 
 Every claim about the code is one you read at the PR's head, not one you guessed. Give names, signatures, and tests, not
 function bodies.
