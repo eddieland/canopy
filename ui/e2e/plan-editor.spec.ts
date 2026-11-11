@@ -492,6 +492,28 @@ test.describe('copying out of the plan', () => {
         await page.keyboard.press('ControlOrMeta+c')
         expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('iter_rows()')
     })
+
+    test("a code block's copy button copies its code as the fence holds it, shown while it is pointed at", async ({
+        page,
+    }) => {
+        const mode = page.getByRole('button', { name: 'Markdown', exact: true })
+        await mode.click()
+        await page
+            .getByRole('textbox', { name: 'Plan as Markdown' })
+            .fill('# Plan\n\nRun:\n\n```sh\nmake lint\nmake test\n```\n')
+        await mode.click()
+        const block = plan(page).locator('.plan-code')
+        const copy = block.getByRole('button', { name: 'Copy code' })
+        await expect(copy.locator('..')).toHaveCSS('opacity', '0')
+        await block.hover()
+        await expect(copy.locator('..')).toHaveCSS('opacity', '1')
+        await copy.click()
+        await expect(page.getByRole('status').filter({ hasText: 'Copied code' })).toBeVisible()
+        expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('make lint\nmake test')
+        // The button is no part of the plan, which writes back as it was.
+        await page.getByRole('button', { name: 'Show Markdown' }).click()
+        await expect(page.getByLabel('Plan Markdown')).toContainText('```sh\nmake lint\nmake test\n```')
+    })
 })
 
 test('a card carries resolve and delete in its header, and reply only while it is the open one', async ({ page }) => {

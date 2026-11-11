@@ -101,15 +101,33 @@ describe('a Mermaid code block', () => {
         const slots = blockSlots(editor)
         const [block] = slots.snapshot()
         expect(block?.kind).toBe('diagram')
-        expect(block?.source).toBe('sequenceDiagram\n    A->>B: hi')
+        expect(block?.kind === 'diagram' && block.source).toBe('sequenceDiagram\n    A->>B: hi')
         expect(block?.slot.parentElement).toBe(root.querySelector('.plan-diagram-figure'))
 
         editor.commands.insertContentAt(codeEnd(editor), '\n    B->>A: bye')
-        expect(slots.snapshot().map((each) => each.source)).toEqual(['sequenceDiagram\n    A->>B: hi\n    B->>A: bye'])
+        expect(slots.snapshot().map((each) => (each.kind === 'diagram' ? each.source : each.text))).toEqual([
+            'sequenceDiagram\n    A->>B: hi\n    B->>A: bye',
+        ])
         expect(slots.snapshot()[0]?.id).toBe(block?.id)
 
         editor.commands.setContent('# No diagram here', { contentType: 'markdown' })
         expect(slots.snapshot()).toEqual([])
+    })
+
+    it("keeps room beside another language's block for its actions, saying what they copy as it is edited", () => {
+        const { editor, root } = open('```python\nprint("hi")\n```')
+        const slots = blockSlots(editor)
+        const [block] = slots.snapshot()
+        expect(block?.kind === 'code' && block.text).toBe('print("hi")')
+        expect(block?.slot.parentElement).toBe(root.querySelector('.plan-code'))
+        expect(within(root).getByText('print("hi")').closest('pre')?.parentElement).toBe(block?.slot.parentElement)
+
+        editor.commands.insertContentAt(codeEnd(editor), '\nprint("bye")')
+        expect(slots.snapshot().map((each) => each.kind === 'code' && each.text)).toEqual(['print("hi")\nprint("bye")'])
+
+        // Made a diagram, it is a diagram's block, with a diagram's room.
+        editor.commands.setContent('```mermaid\nflowchart LR\n```', { contentType: 'markdown' })
+        expect(slots.snapshot().map((each) => each.kind)).toEqual(['diagram'])
     })
 
     it('is drawn again once its source rests after an edit, and when the theme changes', async () => {

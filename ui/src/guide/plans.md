@@ -117,6 +117,10 @@ a ticket that needs none, it says so and names `canopy plan KEY`. If a plan's fi
 the page names the problem and the path instead of opening an empty editor, since an empty plan approved is the most
 expensive kind.
 
+A code block has a copy button in its top right corner while you point at it, here and on every page of this guide.
+It copies the code alone, without the fence and without a newline after the last line, so a command pasted into a
+shell waits for you to press Enter rather than running the moment it lands.
+
 ## Diagrams
 
 A code block fenced as `mermaid` is drawn as the diagram it describes: a flowchart, a sequence diagram, a state

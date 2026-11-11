@@ -1,6 +1,6 @@
 // Where a plan's document keeps room for a block's actions (src/components/block-actions.tsx): an element of a block's
 // node view, outside the document, which ProseMirror draws and the page fills through a portal, so the actions are
-// React in the page's own tree, with its toasts, though the document around them is not. A diagram's, for now
+// React in the page's own tree, with its toasts, though the document around them is not: a diagram's and a code block's
 // (src/lib/plan-diagram.ts).
 
 /** A diagram's room for its actions, and what they act on. */
@@ -17,8 +17,20 @@ export interface DiagramSlot {
     drawn: { svg: string; kind: string } | undefined
 }
 
+/** A code block's room for its actions, and the text they copy. */
+export interface CodeSlot {
+    /** Which block it is, for a key that holds while the block does. */
+    id: number
+    /** What kind of block it is. */
+    kind: 'code'
+    /** The element its actions go in. */
+    slot: HTMLElement
+    /** The block's code, as the plan's file has it between its fence lines. */
+    text: string
+}
+
 /** A block's room for its actions. */
-export type BlockSlot = DiagramSlot
+export type BlockSlot = DiagramSlot | CodeSlot
 
 /** The blocks of one document that keep room for their actions, as they are now, and who hears when they change. */
 export class BlockSlots {

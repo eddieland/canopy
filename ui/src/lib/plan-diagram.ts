@@ -7,7 +7,8 @@
 // The figure keeps room at its top right for the diagram's actions, which the page draws there (src/lib/block-slots.ts,
 // src/components/block-actions.tsx).
 //
-// A code block of any other language draws as it always has, a `pre` around a `code`, as `CodeBlock` renders it.
+// A code block of any other language draws as it always has, a `pre` around a `code`, as `CodeBlock` renders it, with
+// room beside it for its actions (its copy button) too.
 import { Extension } from '@tiptap/core'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state'
@@ -18,6 +19,7 @@ import type { EditorView, NodeView, ViewMutationRecord } from '@tiptap/pm/view'
 import { blockSlots, newSlotId } from '@/lib/block-slots'
 import type { BlockSlots } from '@/lib/block-slots'
 import type { Drawn, NotDrawn } from '@/lib/diagram'
+import { CodeView } from '@/lib/plan-code'
 
 // Kept in step with DIAGRAM_LANGUAGE in src/lib/diagram.ts, which loads only when a diagram is drawn.
 const LANGUAGE = 'mermaid'
@@ -46,7 +48,8 @@ export const PlanDiagrams = Extension.create({
                 key: new PluginKey('planDiagrams'),
                 props: {
                     nodeViews: {
-                        codeBlock: (node) => (isDiagram(node) ? new DiagramView(node, slots) : codeView(node)),
+                        codeBlock: (node) =>
+                            isDiagram(node) ? new DiagramView(node, slots) : new CodeView(node, slots),
                     },
                     decorations: (state) => (editor.isEditable ? editing(state) : DecorationSet.empty),
                     handleKeyDown: (view, event) => editor.isEditable && enterDiagram(view, event),
@@ -93,22 +96,6 @@ function enterDiagram(view: EditorView, event: KeyboardEvent): boolean {
     const caret = back ? $edge.pos - 1 : $edge.pos + 1
     view.dispatch(view.state.tr.setSelection(TextSelection.create(doc, caret)).scrollIntoView())
     return true
-}
-
-// A code block that is not a diagram, as `CodeBlock` renders one.
-function codeView(node: ProseMirrorNode): NodeView {
-    const dom = document.createElement('pre')
-    const contentDOM = child(dom, 'code')
-    const language: unknown = node.attrs['language']
-    if (typeof language === 'string' && language) {
-        contentDOM.className = `language-${language}`
-    }
-    return {
-        dom,
-        contentDOM,
-        // Drawn again if it changes language, which may make it a diagram.
-        update: (next) => next.type === node.type && next.attrs['language'] === language,
-    }
 }
 
 // A diagram's code block: its code, and the picture it draws.
