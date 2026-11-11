@@ -18,11 +18,29 @@ if TYPE_CHECKING:
     from canopy.runtime.report import SessionCursor, SessionPage
 
 
-def updated_after(cursor: SessionCursor | None, *, version: Version, limit: int = MAX_SESSIONS) -> SessionPage:
+def updated_after(
+    cursor: SessionCursor | None,
+    *,
+    version: Version,
+    limit: int = MAX_SESSIONS,
+    titles: bool = False,
+) -> SessionPage:
     """Read the sessions the runtime `version` runs keeps, updated after `cursor`, or every one from the first if None.
+
+    With `titles`, each session's title and when it was archived are read too (ROADMAP M72): nothing reads them else.
 
     Returns:
         At most `limit` sessions, capped at `MAX_SESSIONS`, the least recently updated first, and the cursor to read on
         from; `missing` when the runtime has kept no session yet; `failed`, with why, when its record could not be read.
     """
-    return pick(version, one.sessions, two.sessions).updated_after(cursor, limit=min(limit, MAX_SESSIONS))
+    implementation = pick(version, one.sessions, two.sessions)
+    return implementation.updated_after(cursor, limit=min(limit, MAX_SESSIONS), titles=titles)
+
+
+def reopen(session_id: str, directory: str, *, version: Version) -> str:
+    """The command that reopens session `session_id` in the runtime `version` runs, in `directory`, where it ran.
+
+    Returns:
+        One shell line, for the operator to copy.
+    """
+    return pick(version, one.sessions, two.sessions).reopen(session_id, directory)

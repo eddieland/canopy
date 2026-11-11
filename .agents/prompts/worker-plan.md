@@ -70,19 +70,25 @@ section with nothing to say for this ticket says `None.`
 
 The operator reads the plan before anyone else, and takes in a picture or a table faster than a paragraph: reach for
 one wherever the plan has a shape to show. A diagram shows how the modules in `Context` fit, which part calls which in
-a step, the order things happen across processes, or the states a status moves through. Draw it in a
-```` ```mermaid ```` block, as a `flowchart`, `sequenceDiagram`, or `stateDiagram`, the kinds canopy draws for the
+a step, the order things happen across processes, the states a status moves through, the types a change adds and
+what holds what, or the tables a migration changes and how they relate. Draw it in a ```` ```mermaid ```` block, as a
+`flowchart`, `sequenceDiagram`, `stateDiagram`, `classDiagram`, or `erDiagram`, the kinds canopy draws for the
 operator; it shows any other as code. A plan that changes how two parts interact, adds or changes a status, or
 reorders a flow has at least one, usually in `Context` for how things stand, and another under the step that changes
 them when the shape changes. Keep each to a dozen nodes or so, its labels plain words naming what the plan names, with
-no styling, links, or configuration. A table, likewise, shows what several parallel sentences hide: the files a step
-changes and how, or the risks beside how to back each out. Neither replaces a shape fixed above, such as a decision's
-lettered options, and the prose still says all the work needs, since the worker reads a diagram as code. A change with
-no such shape, such as a one-line fix, needs neither.
+no styling, links, or configuration; where it shows the change, end the label of each part the plan adds or changes
+with `(new)` or `(changed)`, so the operator sees what moves. A parenthesis is syntax in a flowchart, class diagram,
+or ER diagram, so there a marked label goes in double quotes: `A["Dispatch (new)"]`, `-->|"calls (changed)"|`,
+`class Run["Run (new)"]`, `"RUN (new)" ||--o{ TICKET : "has (new)"`. A table, likewise, shows what several parallel
+sentences hide: the files a step changes and how, or the risks beside how to back each out. Neither replaces a shape
+fixed above, such as a decision's lettered options, and the prose still says all the work needs, since the worker
+reads a diagram as code. A change with no such shape, such as a one-line fix, needs neither. Each counts toward the
+plan's length.
 
 Before you exit, check the plan against the ticket and the operator's messages, and fix any gap: a requirement with no
-`Acceptance` line or no step that meets it, a line that defers a decision, a name or signature spelled two ways, or a
-claim about the code that you guessed rather than read.
+`Acceptance` line or no step that meets it, a line that defers a decision, a name or signature spelled two ways, a
+diagram that names a part, call, or state the prose does not, or a claim about the code that you guessed rather than
+read.
 
 If `{{PLAN_FILE}}` exists in your directory, it is the plan this one replaces, and `{{PLAN_OUT}}` starts as a copy of
 it. The operator's messages that came after it say what to change. Read `{{PLAN_OUT}}`, then change only that with

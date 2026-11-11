@@ -217,7 +217,8 @@ class DiagramView implements NodeView {
             return
         }
         this.dom.dataset['diagram'] = 'drawn'
-        this.image.alt = `A ${KIND_NAMES[result.kind] ?? 'diagram'}, drawn from the Mermaid source beside it`
+        const name = KIND_NAMES[result.kind] ?? 'diagram'
+        this.image.alt = `${/^[aeiou]/u.test(name) ? 'An' : 'A'} ${name}, drawn from the Mermaid source beside it`
         showWidth(this.image, result.width)
         this.image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(result.svg)}`
         this.image.hidden = false
@@ -249,6 +250,9 @@ const KIND_NAMES: Partial<Record<string, string>> = {
     flowchart: 'flowchart',
     sequence: 'sequence diagram',
     stateDiagram: 'state diagram',
+    classDiagram: 'class diagram',
+    class: 'class diagram',
+    er: 'entity relationship diagram',
 }
 
 // The theme and palette are classes and data on <html> (src/theme/), which a diagram's colors come from.
