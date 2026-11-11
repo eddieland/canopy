@@ -13,6 +13,19 @@ describe('a Mermaid diagram', () => {
         expect(await readDiagram(source)).toBeUndefined()
     })
 
+    // The planners mark what a plan adds or changes `(new)` or `(changed)`: a bare parenthesis is syntax in a
+    // flowchart, a class diagram, and an ER diagram, so their prompts quote the label, which each of these reads.
+    it.each([
+        ['a flowchart node', 'flowchart LR\n  A["Dispatch (new)"] --> B'],
+        ['a flowchart edge', 'flowchart LR\n  A -->|"calls (changed)"| B'],
+        ['a sequence participant', 'sequenceDiagram\n  participant A as Dispatch (new)\n  A->>B: lease (new)'],
+        ['a state', 'stateDiagram-v2\n  Q: Queued (new)\n  [*] --> Q'],
+        ['a class', 'classDiagram\n  class Run["Run (changed)"]\n  Run --> Ticket'],
+        ['an entity and a relationship', 'erDiagram\n  "RUN (new)" ||--o{ TICKET : "has (new)"'],
+    ])('reads a marked label on %s', async (_part, source) => {
+        expect(await readDiagram(source)).toBeUndefined()
+    })
+
     it('of another kind is refused, naming the kinds that are drawn', async () => {
         expect(await readDiagram('pie\n  "a": 1')).toEqual({
             error:
