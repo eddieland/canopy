@@ -36,7 +36,7 @@ Three, each in its own PRs. Stage 1 waits on stage 0, and stage 2 on stage 1 in 
   - *The keys.* An `[ask]` table, private (T7, D016): the provider's base URL, its model, and the command that prints
     the token. With no table, the default, `canopy ask` says it is not configured and does nothing; no other command,
     the loop, the web UI, the journal, or an install changes: no migration, no row, no prompt, no definition. `canopy
-    config show` names the keys, never the token.
+    config show` leaves the keys out, as it leaves every key that names a host or a command.
   - *The command.* `canopy ask [REF] TEXT`, the operator's (§22): refused inside a tick or a run, and no tool serves
     it to an agent. `-` reads the question from stdin; with no TEXT it asks in turn until the terminal closes, each
     question hearing the ones before. With a REF, any subject `canopy show` takes (D075), what `canopy show REF`
@@ -54,12 +54,15 @@ Three, each in its own PRs. Stage 1 waits on stage 0, and stage 2 on stage 1 in 
     client. The harness never reads it (T2).
   - *The tools.* The program is an MCP client over stdio alone, of the servers the harness names on its command line,
     never the model. Stage 1 names one: `canopy _mcp --ask`, canopy's read-only reports (§27) and the reads a question
-    about a subject needs, `status` and `show`, a ticket's page with its conversation and plan among them. It serves
-    only an ask the operator started, lists nothing inside a tick or a run, and writes nothing. `canopy-mcp` gains
+    about a subject needs, `status` and `show`, a ticket's page with its conversation and plan among them. Asked
+    with a REF, `show` answers for that subject alone, so text on its page cannot have another ticket's sent with it;
+    asked with none, for any. It serves outside a tick, as the operator's own reads run, where canopy's other servers
+    list nothing (D124), lists nothing inside a tick or a run, and writes nothing. `canopy-mcp` gains
     the client's half of the protocol, beside the server's (D124). The program has no shell, no file tool, and no web
     tool (D077): a tool is offered by exact name, and anything else a model calls is answered as an error.
-  - *Bounds (T3).* The rounds of tool calls a question may take, the size of a tool's result as the model is given
-    it, the tokens of an answer, and the time a question may run, each with a default the `[ask]` table may lower.
+  - *Bounds (T3).* The size of everything a request sends, the REF's page and the questions before among it, the
+    rounds of tool calls a question may take, the size of a tool's result as the model is given it, the tokens of an
+    answer, and the time a question may run, each with a default the `[ask]` table may lower.
     Past one, the program says which and stops.
 - **Stage 2, asked from the web UI.** Only once stage 1 is in daily use, and the operator's to cut: a box on a plan's
   page and on the status page that puts the same question, with the page's subject as its REF, and shows the answer
@@ -71,19 +74,22 @@ Three, each in its own PRs. Stage 1 waits on stage 0, and stage 2 on stage 1 in 
 - **Rejected:** the call from the harness (§4: the core never calls a model, and T2: it opens no connection); the
   provider's SDK or the `mcp` SDK (each its own HTTP stack, D124, D130); MSAL or any login of canopy's own (a
   credential flow in canopy, T2, for a token the operator's tools already cache); the token in canopy's config (a
-  secret in a file `config show` prints); a runtime adapter so that roles could run on either (AGENTS.md, Do not
+  secret in a file canopy reads, T2); a runtime adapter so that roles could run on either (AGENTS.md, Do not
   build); and the provider's URL in the workspace file (one commit would send the journal's text to another host, T7).
 - **TRUST_MODEL**, in the PR that builds stage 1, which says what it lets canopy do: send what the journal holds to a
-  provider the operator names. T1 (the model reads ticket, plan, and run text, all of it data; it has read tools
-  alone, so a steered model can do no more than answer wrongly, and its answer is shown as text, authorizes nothing,
-  and enters no prompt); T2 (one more shipped program holds a credential, a model provider's, read from the
-  operator's command and sent to one origin; the harness reads none); T3 (the bounds above; the provider's spend is
-  the company's, uncounted); T6 (a question sends journal text, a private ticket's among it, to the provider named,
-  which is not the runtime's; only the operator's private config names it, and with no `[ask]` table nothing is
-  sent); T7 (the `[ask]` keys are private: one runs a command, one chooses where text goes); T8 unchanged until stage
-  2. A `DECISIONS.md` entry with it: the one program that calls a model directly, and that no role of the loop runs on
-  it. The design gains a short section for the command and its promises, a line in §5 for the member, a sentence in
-  §27 for the server, and §12 the keys, with `examples/config.toml`; the guide a page; the operator's skill a row.
+  provider the operator names. T1 (the model reads ticket, plan, and run text, all of it data; it has read tools alone,
+  so a steered model can do no more than answer wrongly, and its answer is shown as text, authorizes nothing, and enters
+  no prompt); T2 (one more shipped program holds a credential, a model provider's, read from the operator's command and
+  sent to one origin; the harness reads none); T3 (the bounds above; the provider's spend is the company's, uncounted);
+  T6 (a question sends journal text, a private ticket's among it, to the provider named, which is not the runtime's;
+  only the operator's private config names it, and with no `[ask]` table nothing is sent; the refusal inside a run reads
+  the run's environment, so it stops a mistake, not an unsandboxed run, which runs as the operator and can already read
+  the journal and the cached token itself, D076's residual; a sandboxed run cannot read the state directory, the journal
+  with it (§24), and what else it is kept from is stage 1's to say); T7 (the `[ask]` keys are private: one runs a
+  command, one chooses where text goes); T8 unchanged until stage 2. A `DECISIONS.md` entry with it: the one program
+  that calls a model directly, and that no role of the loop runs on it. The design gains a short section for the command
+  and its promises, a line in §5 for the member, a sentence in §27 for the server, and §12 the keys, with
+  `examples/config.toml`; the guide a page; the operator's skill a row.
 - **Tests with the fakes:** a fake provider played through `canopy-http`, as the Slack sink's tests play Slack, and a
   fake token command. With no `[ask]` table, the command refuses and the journal, the config report, and a dry tick
   are as before. A question answered with no tool call; one answered after a call of a report; a REF's page in the
