@@ -129,14 +129,17 @@ Controls:
   local store's database or starts a server of its own, leaves the ticket the worker's word, so a steered worker could
   name another ticket the journal holds: a listed author's comment on its artifact would then steer that ticket's next
   worker, and anyone else's would raise an item about it.
-- The harness records the decisions that need no judgment itself, before the overseer runs (DESIGN §37): today only
+- The harness records the decisions that need no judgment itself, before the overseer runs (DESIGN §37): today
   `wait`, for a ticket whose worker is running and for a private ticket's question the operator has not answered,
-  each read from the journal, and only when every row the derivation finds for the ticket and its units is one of
-  these, none stale. Such a ticket's text reaches no overseer that tick, and whatever the overseer records about it, a
-  decision, dispatch, attention item, or `ticket-set`, is refused `decided`, so a steered overseer cannot overrule the
-  harness; an item the overseer raised on it stands until the overseer is given the ticket again, or it is done or
+  each read from the journal, and `done` for a ticket the `tracker` source read closed, with no worker of it running
+  and none of its units holding a row; and only when every row the derivation finds for the ticket and its units is
+  one of these, none stale. Such a ticket's text reaches no overseer that tick, and whatever the overseer records about
+  it, a decision, dispatch, attention item, or `ticket-set`, is refused `decided`, so a steered overseer cannot overrule
+  the harness; an item the overseer raised on it stands until the overseer is given the ticket again, or it is done or
   stopped. Residual: the harness reads the absence of every other row from the
-  derivation, so a row it misses waits until the overseer is given the ticket again. Its dispatches carry no
+  derivation, so a row it misses waits until the overseer is given the ticket again; and a tracker that reports a
+  ticket closed ends canopy's work on it, as the overseer reading the same observation would, until the operator
+  forgets the ticket. Its dispatches carry no
   model-written context: today it starts only a due chore with no `when`, whose `chore-run` and `chore-wait` the
   overseer is refused `decided`, and no ticket's run, since each rests on an observation.
 - The attention items that need no judgment (`needs_reviewer`, `ready_to_merge`, `untrusted_review`, `attempt_limit`,
