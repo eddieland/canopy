@@ -165,3 +165,40 @@ test('a diagram that fits is drawn at its own size, not stretched', async ({ pag
     expect(Math.abs(width.shown - width.drawn)).toBeLessThan(1)
     await expect(diagram.locator('xpath=..')).not.toHaveAttribute('data-more-end')
 })
+
+test("a table's code breaks where it must, so a wide table's columns are all in view", async ({ page }) => {
+    const row = [
+        'api',
+        '`api/reports/query/iterators/paged_rows.py`',
+        'raise it when the connection drops mid-page',
+        '`iter_rows(report_id: int, *, resume_from: Cursor | None = None) -> Iterator[Row]`',
+        '`test_paged_rows.py`',
+        'a dropped page resumes',
+    ]
+    await writePlan(
+        page,
+        `# Plan\n\n| Repository | File | Change | Signature | Test | Acceptance |\n${'| --- '.repeat(6)}|\n` +
+            `| ${row.join(' | ')} |\n`,
+    )
+    const wrapper = plan(page).getByRole('table').locator('xpath=..')
+    await expect(plan(page).getByRole('columnheader', { name: 'Acceptance' })).toBeVisible()
+    const fits = await wrapper.evaluate((box) => box.scrollWidth <= box.clientWidth)
+    expect(fits).toBe(true)
+    await expect(wrapper).not.toHaveAttribute('data-more-end')
+})
+
+test('a table too wide for the plan scrolls, its far edge faded', async ({ page }) => {
+    const heads = Array.from({ length: 14 }, (_, i) => `Criterion ${i + 1}`)
+    await writePlan(
+        page,
+        `# Plan\n\n| ${heads.join(' | ')} |\n${'| --- '.repeat(14)}|\n| ${heads.map(() => 'unbroken').join(' | ')} |\n`,
+    )
+    const wrapper = plan(page).getByRole('table').locator('xpath=..')
+    await expect(wrapper).toHaveAttribute('data-more-end')
+    await expect(wrapper).not.toHaveAttribute('data-more-start')
+    await wrapper.evaluate((box) => {
+        box.scrollLeft = box.scrollWidth
+    })
+    await expect(wrapper).toHaveAttribute('data-more-start')
+    await expect(wrapper).not.toHaveAttribute('data-more-end')
+})
