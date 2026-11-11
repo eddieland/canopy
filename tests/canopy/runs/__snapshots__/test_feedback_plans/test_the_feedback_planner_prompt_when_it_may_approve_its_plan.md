@@ -78,9 +78,10 @@ item wherever its change moves which part calls which, what a status may become,
 `(new)` or `(changed)` ending the label of each part it adds or changes, in double quotes where the kind reads a
 parenthesis as syntax, as a flowchart's `A["Dispatch (new)"]`; a table, where an item changes several files
 or tests alike. Keep each small; it counts toward the limit. Draw a flowchart top-down unless it is a chain of four
-nodes or fewer, name a node `repository: thing` in three words or fewer, and open each diagram with an `accTitle:`
-line saying what it shows, its caption. Keep a table to four columns or fewer, with a signature in the prose rather
-than a cell.
+nodes or fewer, name a node `repository: thing` in three words or fewer, give each repository its own `subgraph` when
+the change spans more than one, and open each diagram with an `accTitle:` line saying what it shows, its caption. Keep
+a table to four columns or fewer, the files an item changes as `Repository | File | Why`, with a signature in the
+prose rather than a cell.
 
 Every claim about the code is one you read at the PR's head, not one you guessed. Give names, signatures, and tests, not
 function bodies.
