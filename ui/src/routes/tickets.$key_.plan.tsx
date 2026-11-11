@@ -7,6 +7,7 @@ import { Code } from '@/components/code'
 import { Notice } from '@/components/notice'
 import { Empty, PageHeader, Panel, PanelLoading } from '@/components/panel'
 import { ChangesAsked } from '@/components/plan-card'
+import { PlanFileLine } from '@/components/plan-markdown'
 import { FollowedEpicPlanLine } from '@/components/ticket-epic'
 import { PlanState, TicketPlan } from '@/components/ticket-plan'
 import { useViewedTicket } from '@/lib/recent-tickets'
@@ -28,7 +29,8 @@ function PlanPage() {
     useViewedTicket(key, title)
     const query = useQuery(ticketPlansQuery(key))
     const { data, error } = query
-    const newest = data?.newest?.plan
+    const file = data?.newest ?? undefined
+    const newest = file?.plan
     // The plan's reference leads its title, then its ticket's, as a run's page leads with `run:39`.
     const header = (
         <PageHeader
@@ -36,7 +38,15 @@ function PlanPage() {
             title={newest === undefined ? 'Plan' : planRef(newest.id)}
             subject={title}
             tab={`${key} plan`}
-            links={newest !== undefined && <FollowedEpicPlanLine followed={newest.epic_plan} />}
+            links={
+                file !== undefined && (
+                    // Under the description, the epic plan it follows, then where its file is.
+                    <>
+                        <FollowedEpicPlanLine followed={file.plan.epic_plan} />
+                        <PlanFileLine path={file.path} />
+                    </>
+                )
+            }
         >
             {data !== undefined && <PlanState plans={data} />}
         </PageHeader>

@@ -30,6 +30,7 @@ import type { ReactNode } from 'react'
 
 import { Panel, PanelFooter, PanelHeader } from '@/components/panel'
 import { DecisionsJump, PlanDecisions } from '@/components/plan-decisions'
+import { PlanMarkdownActions } from '@/components/plan-markdown'
 import { AskForChanges, DraftForm, PlanThreads, ThreadCard } from '@/components/plan-threads'
 import type { Draft, ThreadActions } from '@/components/plan-threads'
 import { Button } from '@/components/ui/button'
@@ -115,6 +116,7 @@ const SOURCE = [
  * in Ask for changes, which sends the open comments to the planner as one message (`changeRequest`). Markdown, in the
  * header, swaps the document for its Markdown as plain text, to read or edit as written; `onChange` gets that text as
  * it is typed, and turning Markdown off reads it back into the document, where the comments find their passages again.
+ * Beside Markdown, Copy Markdown and Save .md take what it shows (`PlanMarkdownActions`), a save named `fileName`.
  * With `marks`, the Outline lets the operator mark each section read or a concern, and counts those left to read
  * (`src/lib/plan-marks.ts`). Without `comments`, the plan has no Comments panel and no margin kept for one: for a plan
  * read only that takes no comments, as an epic's is. Its foot offers the caller's actions while it may be edited, or,
@@ -142,6 +144,8 @@ export function PlanEditor({
     marks,
     comments = true,
     decides = editable,
+    fileName,
+    unsaved = false,
 }: {
     /** The plan, as Markdown. Read when the editor opens. */
     markdown: string
@@ -211,6 +215,10 @@ export function PlanEditor({
      * plan read only that still waits on the operator's word.
      */
     decides?: boolean
+    /** What `Save .md` names the plan's file: as `canopy archive` names it, from the server. */
+    fileName: string
+    /** Whether the plan here holds edits not yet saved to its file, which a copy or a save of it says it takes. */
+    unsaved?: boolean
 }) {
     const editor = useEditor({
         extensions: planExtensions([
@@ -585,15 +593,24 @@ export function PlanEditor({
                                     {showChanges && <ChangeSteps count={seen.changes} onStep={goToChange} />}
                                 </span>
                             )}
-                            <Toggle
-                                size="xs"
-                                pressed={raw}
-                                onPressedChange={showSource}
-                                title={editable ? 'Edit the plan as Markdown' : "Read the plan's Markdown"}
-                            >
-                                <FileCode aria-hidden />
-                                Markdown
-                            </Toggle>
+                            <span className="flex items-center gap-1">
+                                <Toggle
+                                    size="xs"
+                                    pressed={raw}
+                                    onPressedChange={showSource}
+                                    title={editable ? 'Edit the plan as Markdown' : "Read the plan's Markdown"}
+                                >
+                                    <FileCode aria-hidden />
+                                    Markdown
+                                </Toggle>
+                                {/* Beside the mode, what it shows, its field's text while it is on, so a copy is that
+                                    byte for byte. */}
+                                <PlanMarkdownActions
+                                    markdown={() => source ?? editor.getMarkdown()}
+                                    fileName={fileName}
+                                    unsaved={unsaved}
+                                />
+                            </span>
                             {!raw && <OutlineMenu editor={editor} ticket={marks} />}
                         </span>
                         {editable && !raw && (

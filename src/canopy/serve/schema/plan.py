@@ -63,6 +63,8 @@ class PlanFile(Model):
     """The persona its planner wrote in, and its instructions; none for a run from before canopy recorded one."""
     path: str
     """The file, under the state directory: the operator reads and edits it with their own tools too."""
+    file_name: str
+    """What `canopy archive` names it, its run, status, and title (`plan_export.name`): what the page saves it as."""
     text: str | None = None
     """Its Markdown, or none when the file is not a plan any more: `problem` says why."""
     problem: str | None = None

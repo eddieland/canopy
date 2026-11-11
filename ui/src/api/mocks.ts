@@ -728,6 +728,7 @@ export const mockEpicPlans: EpicPlans[] = [
             {
                 plan: mockEpicDetails[0]?.plan ?? missing('epic 1 plan'),
                 path: '.canopy/plans/epics/1/run-1.md',
+                file_name: '1-APPROVED-billing-on-v2.md',
                 text: BILLING_PLAN,
                 problem: null,
                 sha256: '9f2c4e81b07d3a65c1e8f4a2d9b0c7e3f6a1d4b8e2c5f9a07b3d6e1c4f8a2b5d',
@@ -751,6 +752,7 @@ export const mockEpicPlans: EpicPlans[] = [
                     approved_channel: null,
                 },
                 path: '.canopy/plans/epics/2/run-2.md',
+                file_name: '2-SUPERSEDED-offline-order-history.md',
                 text: OFFLINE_FIRST,
                 problem: null,
                 sha256: '4b7e1d9a3c6f0e2b8d5a1c4f7e0b3d6a9c2f5e8b1d4a7c0f3e6b9d2a5c8f1e4b',
@@ -760,6 +762,7 @@ export const mockEpicPlans: EpicPlans[] = [
             {
                 plan: mockEpicDetails[1]?.plan ?? missing('epic 2 plan'),
                 path: '.canopy/plans/epics/2/run-3.md',
+                file_name: '3-PROPOSED-offline-order-history.md',
                 text: OFFLINE_SECOND,
                 problem: null,
                 sha256: 'd1a4c7f0e3b6d9a2c5f8e1b4d7a0c3f6e9b2d5a8c1f4e7b0d3a6c9f2e5b8d1a4',
@@ -1042,6 +1045,7 @@ export function feedbackPlan(fields: Partial<FeedbackPlan> = {}): FeedbackPlan {
         approved_message: null,
         spent_run: null,
         path: '/home/op/acme/.canopy/plans/ABC-099/46.md',
+        file_name: '46-PROPOSED-feedback.md',
         text: '# Feedback plan: ABC-099\n\n### Item 2468013579: change\n\nMove it into a `finally`.\n',
         problem: null,
         items: [

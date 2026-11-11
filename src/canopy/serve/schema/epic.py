@@ -228,6 +228,8 @@ class EpicPlanFile(Model):
     """The plan the file is."""
     path: str
     """The file, under the state directory: the operator reads and edits it with their own tools too."""
+    file_name: str
+    """What the page saves it as, named as `canopy archive` names a ticket's plan: its run, status, and title."""
     text: str | None = None
     """Its Markdown, or none when the file is not a plan any more: `problem` says why. Model text, untrusted."""
     problem: str | None = None

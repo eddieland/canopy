@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, assert_never
 
-from canopy.core import contract, conversation, db, epic_outline, epics, plans
+from canopy.core import contract, conversation, db, epic_outline, epics, plan_export, plans
 from canopy.core.vocab import PlanStatus, RunStatus
 from canopy.runs import epic_runs
 from canopy.serve.schema.epic import (
@@ -331,6 +331,12 @@ def _plan_file(ctx: Context, plan: records.EpicPlan) -> EpicPlanFile:
     return EpicPlanFile(
         plan=plan_summary(plan),
         path=str(path),
+        file_name=plan_export.file_name(
+            plan.run_id,
+            [plan.status.value.upper()],
+            reading.text or "",
+            f"epic:{plan.epic_id}",
+        ),
         text=reading.text,
         problem=reading.problem,
         sha256=reading.sha256,

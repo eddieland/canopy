@@ -6,6 +6,7 @@ import type { TaskRun, TaskSummary } from '@/api/types'
 import { CopyablePath } from '@/components/copy-button'
 import { Empty, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { PlanDocument } from '@/components/plan-editor'
+import { PlanMarkdownActions } from '@/components/plan-markdown'
 import { Chip } from '@/components/status'
 import { TaskRunLink } from '@/components/task-link'
 import { taskRunRef } from '@/lib/refs'
@@ -17,8 +18,8 @@ const EDITED = 'Edited since its run left it: this is the file as it stands now,
 /**
  * A task's report (DESIGN §36), the page's main content: the newest one a run left, as its file stands now, laid out
  * as a document through the plan's schema, so what the agent wrote stays text. Its header names the run that left it,
- * and `edited` once the file changed since. A task no run has reported on says what comes next; a file no longer a
- * report says why, as `canopy show task:N` does.
+ * and `edited` once the file changed since, then copies or saves its Markdown whole (`PlanMarkdownActions`). A task no
+ * run has reported on says what comes next; a file no longer a report says why, as `canopy show task:N` does.
  */
 export function TaskReportPanel({
     task,
@@ -51,6 +52,13 @@ export function TaskReportPanel({
                         <span className="readout text-xs text-muted-foreground">
                             from <TaskRunLink task={task.id} run={run.id} />
                         </span>
+                        {data !== undefined && data.text !== null && (
+                            <PlanMarkdownActions
+                                markdown={() => data.text ?? ''}
+                                fileName={data.file_name}
+                                what="report"
+                            />
+                        )}
                     </span>
                 )}
             </PanelHeader>

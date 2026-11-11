@@ -196,6 +196,23 @@ finds its passage again by its words. A passage you only touched up there keeps 
 Leaving the page with edits not saved or a comment not sent asks first. And if the file changed since you opened it,
 the save is refused rather than overwriting someone else's edit unseen.
 
+## Taking a plan with you
+
+A plan rarely stays here. It goes into the PR that implements it, to another agent, onto a design review. **Copy
+Markdown** and **Save .md**, the two icons beside **Markdown** in the Plan panel's header, take it whole, on the newest
+plan, an earlier one, or an epic's. What leaves is exactly what **Markdown** would show you, byte for byte, so with
+**Markdown** on it's that field as you've typed it. Edits you haven't saved come along, and the toast ends
+`with your unsaved edits`, so a draft never reaches a PR description passing for the plan canopy approved.
+
+**Save .md** names the file the way `canopy archive` does: its run, its status in capitals, and its title, as
+`412-APPROVED-export-reports-as-csv.md`. One plan has one name, whichever way it left the building. It holds the plan
+alone; who approved it, as which hash, and at what cost is the archive's front matter, and the archive is where that
+lives. **Copy Markdown** needs the page served over https or from localhost, as every copy button here does; elsewhere
+only **Save .md** is offered.
+
+The line under the page's description names the plan's file, with a button that copies its whole path. It's a plain
+file on purpose: your editor, `grep`, and `diff` all work on it, and none of them needs this page open.
+
 ## Approving, or asking for changes
 
 The Plan panel's foot holds the decision, and sticks to the bottom of the window while you read, so a long plan is

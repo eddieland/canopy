@@ -59,6 +59,7 @@ function Sample() {
                 onChange={setMarkdown}
                 onAskForChanges={setAsked}
                 previous={{ label: 'plan 1', markdown: SAMPLE_PREVIOUS }}
+                fileName="sample-plan.md"
             />
             <Panel>
                 <PanelHeader label="What the planner reads" />

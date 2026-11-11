@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal, assert_never
 
-from canopy.core import db, plans, records, sql
+from canopy.core import db, plan_export, plans, records, sql
 from canopy.core.vocab import PlanItem, PlanStatus
 from canopy.runs import feedback_items, feedback_plans
 from canopy.serve.schema import FeedbackPlanWritten, WaitingFeedbackPlan
@@ -94,6 +94,12 @@ def for_pr(ctx: Context, url: str, thread_of: Mapping[int, str]) -> FeedbackPlan
         approved_message=plan.approved_message_id,
         spent_run=plan.spent_run_id,
         path=str(path),
+        file_name=plan_export.name(
+            "feedback plan",
+            plan,
+            reading.text or "",
+            ticket_title=db.ticket_titles(conn, [plan.ticket_key]).get(plan.ticket_key),
+        ),
         text=reading.text,
         problem=reading.problem,
         items=items,

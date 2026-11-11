@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises'
+
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
@@ -119,6 +121,33 @@ test("a tick's output path copies whole, though the page shows it from the works
     await page.goto('workspace/ticks/2')
     await page.getByRole('button', { name: 'Copy output path' }).click()
     expect(await clipboard(page)).toBe(`${await workspaceRoot(page)}/.canopy/ticks/2.log`)
+})
+
+test("a plan's Markdown copies whole as Markdown shows it, and saves under the name canopy archive gives it", async ({
+    page,
+}) => {
+    await page.goto('tickets/ABC-105/plan')
+    await settled(page)
+    const found = (await (await page.request.get('api/tickets/ABC-105/plans')).json()) as {
+        newest: { path: string; file_name: string }
+    }
+    const shown = page.getByTestId('ticket-plan')
+    await shown.getByRole('button', { name: 'Copy Markdown' }).first().click()
+    await expect(page.getByTestId('toast').filter({ hasText: "Copied the plan's Markdown" })).toBeVisible()
+    const copied = await clipboard(page)
+    await shown.getByRole('button', { name: 'Markdown', exact: true }).first().click()
+    expect(copied).toBe(await page.getByRole('textbox', { name: 'Plan as Markdown' }).inputValue())
+
+    const saving = page.waitForEvent('download')
+    await shown.getByRole('button', { name: 'Save .md' }).first().click()
+    const saved = await saving
+    expect(saved.suggestedFilename()).toBe(found.newest.file_name)
+    expect(found.newest.file_name).toMatch(/^\d+-PROPOSED-[a-z0-9-]+\.md$/u)
+    expect(await readFile(await saved.path(), 'utf8')).toBe(copied)
+
+    // Its file's path, under the page's description, copies whole.
+    await page.getByTestId('plan-file').getByRole('button', { name: 'Copy plan path' }).click()
+    expect(await clipboard(page)).toBe(found.newest.path)
 })
 
 /** The workspace root the server's meta gives, which a path shown from it is joined to when copied. */

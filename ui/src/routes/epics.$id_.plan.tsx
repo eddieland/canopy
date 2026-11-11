@@ -7,6 +7,7 @@ import { NoPlan } from '@/components/epic-board'
 import { EpicChangesAsked, EpicPlan, EpicPlanHash, EpicPlanState } from '@/components/epic-plan'
 import { Notice } from '@/components/notice'
 import { Empty, PageHeader, Panel, PanelLoading, PanelSkeleton } from '@/components/panel'
+import { PlanFileLine } from '@/components/plan-markdown'
 import { epicId, epicTitle } from '@/lib/epics'
 import { epicRef } from '@/lib/refs'
 
@@ -35,6 +36,8 @@ function EpicPlanPage() {
     const { data, error } = query
     // A stopped epic takes no reply: its plan may still be approved, but nothing asks for the next.
     const stopped = detail !== undefined && detail.epic.stopped_at !== null
+    // The newest plan's file.
+    const file = data?.plans.at(-1)
     const header = (
         <PageHeader
             parents={<EpicCrumb id={id} />}
@@ -42,7 +45,16 @@ function EpicPlanPage() {
             subject={detail === undefined ? undefined : epicTitle(detail.epic.text)}
             help={HELP}
             tab={`${epicRef(id)} plan`}
-            links={data !== undefined && <EpicPlanHash plans={data} />}
+            links={
+                data !== undefined &&
+                file !== undefined && (
+                    // Under the description, the hash its approval takes, then where its file is.
+                    <>
+                        <EpicPlanHash plans={data} />
+                        <PlanFileLine path={file.path} />
+                    </>
+                )
+            }
         >
             {data !== undefined && <EpicPlanState epic={data.epic_id} plans={data} stopped={stopped} />}
         </PageHeader>

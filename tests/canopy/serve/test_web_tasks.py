@@ -253,6 +253,8 @@ def test_a_task_runs_report_is_its_file_as_text_and_says_when_it_was_edited_or_i
     # Its path from the workspace root, as a run's log path is shown, so a page never shows a machine's temp dir.
     shown = str(path.relative_to(backend.workspace.root))
     assert (found["path"], found["problem"], found["edited"]) == (shown, None, False)
+    # Saved from the page under a name as `canopy archive` gives a plan: its run, REPORT, and its title.
+    assert found["file_name"] == f"{run_id}-REPORT-nightly-export.md"
     assert c.get(f"/api/tasks/{task.id}").json()["runs"][0]["reported"] is True
 
     path.write_text("# Edited by hand\n")

@@ -1,6 +1,6 @@
 import { QueryClient } from '@tanstack/react-query'
-import { cleanup, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { cleanup, fireEvent, screen, within } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { mockTaskRun, mockTasks } from '@/api/mocks'
 import { keys } from '@/api/queries'
@@ -20,6 +20,7 @@ function report(fields: Partial<TaskReport> = {}): TaskReport {
         task_id: 1,
         run_id: 2,
         path: '.canopy/tasks/1/2.md',
+        file_name: '2-REPORT-checkout-bundle.md',
         text: '# Checkout bundle\n\nDown to 612 kB. <img src=x onerror=alert(1)> [here](https://example.com)\n',
         problem: null,
         sha256: 'abc',
@@ -56,6 +57,27 @@ describe('TaskReportPanel', () => {
         expect(shown.textContent).toContain('<img src=x onerror=alert(1)>')
         expect(within(shown).queryByRole('link', { name: 'here' })).toBeNull()
         expect(within(shown).queryByText('edited')).toBeNull()
+    })
+
+    it('copies the report whole, and saves it under the name the server gives it', async () => {
+        vi.stubGlobal('isSecureContext', true)
+        const write = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue()
+        // The name each download link offered its file under.
+        const saved: string[] = []
+        vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+            saved.push(this.download)
+        })
+        const shown = await panel([mockTaskRun({ id: 2 })])
+
+        fireEvent.click(within(shown).getByRole('button', { name: 'Copy Markdown' }))
+        expect(write).toHaveBeenCalledWith(report().text)
+        fireEvent.click(within(shown).getByRole('button', { name: 'Save .md' }))
+        expect(saved).toEqual(['2-REPORT-checkout-bundle.md'])
+    })
+
+    it('offers nothing to copy for a file that is no report any more', async () => {
+        const shown = await panel([mockTaskRun({ id: 2 })], report({ text: null, problem: 'missing', sha256: null }))
+        expect(within(shown).queryByRole('button', { name: 'Save .md' })).toBeNull()
     })
 
     it('says when the file was edited since its run left it', async () => {

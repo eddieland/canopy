@@ -418,6 +418,8 @@ function NewestPlan({
             onChange={setMarkdown}
             editable={editable}
             edited={newest.edited}
+            fileName={newest.file_name}
+            unsaved={dirty}
             marks={ticketKey}
             // A waiting plan that replaced one is read for what changed, so its changes show first.
             previous={
@@ -579,7 +581,13 @@ function EarlierPlan({ ticketKey, plan }: { ticketKey: string; plan: PlanSummary
                     )}
                     {found !== undefined && found.text !== null && (
                         <div className="flex flex-col gap-3 p-3">
-                            <PlanEditor markdown={found.text} threads={[]} onThreadsChange={ignore} editable={false} />
+                            <PlanEditor
+                                markdown={found.text}
+                                threads={[]}
+                                onThreadsChange={ignore}
+                                editable={false}
+                                fileName={found.file_name}
+                            />
                             {found.persona !== null && <PersonaPanel persona={found.persona} />}
                         </div>
                     )}

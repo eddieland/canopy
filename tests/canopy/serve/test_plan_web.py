@@ -66,6 +66,8 @@ def test_a_tickets_plans_are_read_as_their_files_stand(ctx: Context) -> None:
     assert (newest["edited"], newest["changed_since_approval"]) == (False, False)
     assert newest["plan"]["id"] == plan_id
     assert newest["plan"]["status"] == "proposed"
+    # The name `canopy archive` gives it, which the page saves it as: its run, status, and title.
+    assert newest["file_name"] == f"{newest['plan']['run_id']}-PROPOSED-plan-for-proj-1.md"
     assert [p["id"] for p in listed["plans"]] == [plan_id]
     assert listed["threads"] == []
 

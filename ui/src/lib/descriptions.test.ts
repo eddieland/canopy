@@ -205,6 +205,7 @@ describe('ticketDescription', () => {
         const file = {
             plan,
             path: '/state/plans/ABC-1/41.md',
+            file_name: '41-PROPOSED.md',
             text: '# Plan\n',
             problem: null,
             sha256: 'abc',

@@ -95,6 +95,10 @@ def test_an_epics_plans_are_each_as_its_file_stands(backend: Backend) -> None:
     assert (found["planning"], found["changes_asked"]) == (None, None)
     assert [p["plan"]["status"] for p in found["plans"]] == ["superseded", "proposed"]
     assert all(p["text"].startswith("# Offline order history") and not p["edited"] for p in found["plans"])
+    # Each saved from the page under a name as `canopy archive` gives a ticket's plan: its run, status, and title.
+    assert [p["file_name"] for p in found["plans"]] == [
+        f"{p['plan']['run_id']}-{p['plan']['status'].upper()}-offline-order-history.md" for p in found["plans"]
+    ]
     assert c.get(f"/api/epics/{PLANNING}/plans").json() == {
         "epic_id": PLANNING,
         "planning": 4,

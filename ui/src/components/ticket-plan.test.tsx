@@ -29,6 +29,7 @@ const NEWEST: PlanFile = {
     plan: PLAN,
     text: TEXT,
     path: '/home/op/.canopy/plans/ABC-1/2.md',
+    file_name: '50-PROPOSED.md',
     problem: null,
     sha256: 'read-hash',
     edited: false,
@@ -589,6 +590,36 @@ describe('TicketPlan', () => {
         expect((await screen.findByRole('alert')).textContent).toBe(
             'refused (bad_plan): the file changed since it was read',
         )
+    })
+
+    it("copies the plan's Markdown as Markdown shows it, an edit not yet saved included", () => {
+        vi.stubGlobal('isSecureContext', true)
+        const write = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue()
+        renderPlan()
+        typeInPlan(' Then a test.')
+
+        fireEvent.click(button('Copy Markdown'))
+        fireEvent.click(button('Markdown'))
+        const field = screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Plan as Markdown' })
+        expect(write.mock.calls).toEqual([[field.value]])
+        expect(field.value).toContain('Then a test.')
+        // While Markdown shows, its field as typed.
+        fireEvent.change(field, { target: { value: `${field.value}\n\nAnd docs.\n` } })
+        fireEvent.click(button('Copy Markdown'))
+        expect(write).toHaveBeenLastCalledWith(field.value)
+    })
+
+    it('saves an earlier plan too, under the name the server gives it', async () => {
+        // The name each download link offered its file under.
+        const saved: string[] = []
+        vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+            saved.push(this.download)
+        })
+        renderPlan()
+        fireEvent.click(screen.getByRole('button', { name: 'Show plan 1' }))
+        const earlier = within(screen.getByTestId('earlier-plans'))
+        fireEvent.click(await earlier.findByRole('button', { name: 'Save .md' }))
+        expect(saved).toEqual(['50-PROPOSED.md'])
     })
 
     it('saves with Ctrl+S anywhere on the page, and only once there is an edit', async () => {

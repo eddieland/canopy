@@ -332,10 +332,24 @@ def name(
     Returns:
         The name, as `412-APPROVED-export-reports-as-csv.md`.
     """
-    parts = [str(row.run_id), row.status.value.upper()]
+    marks = [row.status.value.upper()]
     if kind == "feedback plan":
-        parts.append("feedback")
-    slug = _slug(_title(text, row.ticket_key, ticket_title))
+        marks.append("feedback")
+    return file_name(row.run_id, marks, text, row.ticket_key, ticket_title=ticket_title)
+
+
+def file_name(run_id: int, marks: Iterable[str], text: str, key: str, *, ticket_title: str | None = None) -> str:
+    """A file's name as `name` gives a plan's: its run, then `marks`, then its title as a slug.
+
+    The web UI saves a plan under the name an export gives it, so one plan has one name whichever way it left, and
+    names the other Markdown an agent wrote the same way, an epic's plan by its status and a task's report as `REPORT`.
+    The title is the text's first heading, less `key`, or `ticket_title` when it has none, as `name` reads it.
+
+    Returns:
+        The name, as `412-APPROVED-export-reports-as-csv.md`.
+    """
+    parts = [str(run_id), *marks]
+    slug = _slug(_title(text, key, ticket_title))
     if slug:
         parts.append(slug)
     return "-".join(parts) + ".md"

@@ -15,6 +15,7 @@ import { MarkdownField } from '@/components/markdown-field'
 import { MemoryText } from '@/components/memory-text'
 import { Notice } from '@/components/notice'
 import { Panel, PanelFooter, PanelHeader } from '@/components/panel'
+import { PlanMarkdownActions } from '@/components/plan-markdown'
 import { RunLink } from '@/components/run-link'
 import { SendKeycap } from '@/components/send-keycap'
 import { Chip } from '@/components/status'
@@ -105,6 +106,10 @@ export function FeedbackPlanPanel({ plan, onChange }: { plan: FeedbackPlan; onCh
                     <div className="flex items-center gap-2 px-3 py-1.5">
                         <Disclosure open={shown} what="the plan" />
                         <span className="text-xs text-muted-foreground">as its file stands now</span>
+                        {/* Whole, folded or not: what the disclosure shows. */}
+                        <span className="ml-auto">
+                            <PlanMarkdownActions markdown={() => plan.text ?? ''} fileName={plan.file_name} />
+                        </span>
                     </div>
                     <CollapsibleContent>
                         <div className="border-t px-3 py-2 font-mono text-xs" data-testid="feedback-plan-text">

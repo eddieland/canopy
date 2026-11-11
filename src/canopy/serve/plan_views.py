@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from canopy.core import db, epics, personas, plan_threads, plans, records
+from canopy.core import db, epics, personas, plan_export, plan_threads, plans, records
 from canopy.core.vocab import PlanStatus, RunKind
 from canopy.serve.schema.persona import RunPersona
 from canopy.serve.schema.plan import (
@@ -58,15 +58,23 @@ def plan_file(ctx: Context, plan: records.Plan) -> PlanFile:
     """A plan as its file stands now.
 
     Returns:
-        The plan, the persona its planner wrote in, its path, its text or why it is not a plan any more, its hash,
-        whether it was edited, and what of its ticket's text changed since its approval.
+        The plan, the persona its planner wrote in, its path and the name `canopy archive` gives it, its text or why
+        it is not a plan any more, its hash, whether it was edited, and what of its ticket's text changed since its
+        approval.
     """
     path = plans.path_for(ctx.state_dir, plan.ticket_key, plan.run_id)
     reading = plans.read(path)
+    ticket = db.get_ticket(ctx.conn, plan.ticket_key)
     return PlanFile(
         plan=plan_summary(ctx.conn, plan),
         persona=run_persona(ctx, plan.run_id),
         path=str(path),
+        file_name=plan_export.name(
+            "plan",
+            plan,
+            reading.text or "",
+            ticket_title=ticket.title if ticket is not None else None,
+        ),
         text=reading.text,
         problem=reading.problem,
         sha256=reading.sha256,

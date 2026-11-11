@@ -163,6 +163,7 @@ function NewestPlan({
             editable={false}
             comments={false}
             decides={waits}
+            fileName={newest.file_name}
             previous={
                 before?.text === null || before?.text === undefined
                     ? undefined
@@ -344,6 +345,7 @@ function EarlierPlan({ epic, file }: { epic: number; file: EpicPlanFile }) {
                                 onThreadsChange={ignore}
                                 editable={false}
                                 comments={false}
+                                fileName={file.file_name}
                             />
                         </div>
                     )}

@@ -173,15 +173,17 @@ The newest plan opens in the plan editor, read only, as its file stands now. An 
 has no margin: what you want changed goes in a reply, which reads the whole plan anyway. Its header has its status,
 `waiting on you` while it is proposed and no plan run is working, or `changes asked` once you asked and the next tick
 has yet to act on it, and how long ago it was written, then the plan's
-modes: **Markdown** shows the file as written, and **Outline** jumps to a heading. A plan that replaced another opens
-with **Changes since plan N** pressed while it waits on you, so you read what your reply changed rather than the whole
-thing again.
+modes: **Markdown** shows the file as written, and **Outline** jumps to a heading; the two icons beside **Markdown**,
+**Copy Markdown** and **Save .md**, take it whole ([Taking a plan with you](plans#taking-a-plan-with-you)). A plan
+that replaced another opens with **Changes since plan N** pressed while it waits on you, so you read what your reply
+changed rather than the whole thing again.
 
 Under the title, a line says which plan run wrote it (`epic:N#M`), when you approved it and how, and whether its file
 was edited since the planner wrote it or since you approved it. Under that is the file's
 `sha256` as it stands, the start of it shown, the whole on hover and copied by the button beside it. canopy approves a
 plan by that hash and keeps a copy, so an edit after approval doesn't sneak in: canopy goes on reading the copy you
-approved, and a change you want goes in a reply, which asks for a new plan.
+approved, and a change you want goes in a reply, which asks for a new plan. Under the hash is the file's path, copied
+whole by its own button.
 
 While the plan waits on you, its foot, stuck to the bottom of the window as you read, has your two ways out:
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import contract, conversation, db, plans, run_models, sql
+from canopy.core import contract, conversation, db, plan_export, plans, run_models, sql
 from canopy.core.vocab import RunStatus
 from canopy.runs import task_tickets, tasks
 from canopy.serve import change_views, checklist_views, views
@@ -203,18 +203,21 @@ def task_report(ctx: Context, task_id: int, run_id: int) -> TaskReport | None:
     link.
 
     Returns:
-        The report's text, or why its file is no longer one, its hash, and whether it was edited since the run.
+        The report's text, or why its file is no longer one, the name the page saves it as, its hash, and whether it
+        was edited since the run.
     """
     row = _run_of(ctx.conn, task_id, run_id)
     if row is None or row.report_sha256 is None:
         return None
     path = tasks.report_path(ctx.state_dir, task_id, run_id)
     reading = plans.read(path)
+    text = conversation.printable(reading.text) if reading.text is not None else None
     return TaskReport(
         task_id=task_id,
         run_id=run_id,
         path=shown_path(str(path), ctx.workspace.root),
-        text=conversation.printable(reading.text) if reading.text is not None else None,
+        file_name=plan_export.file_name(run_id, ["REPORT"], text or "", f"task:{task_id}"),
+        text=text,
         problem=reading.problem,
         sha256=reading.sha256,
         edited=reading.sha256 != row.report_sha256,

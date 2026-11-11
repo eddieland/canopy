@@ -154,7 +154,8 @@ already waits on the same thread, it says so: the plan's resume writes a new rep
 answers ahead of it. Both may go, or one; the page won't pick for you. A review, or an item with no thread on this page,
 shows its proposed reply in its row instead. **Show the plan**, at the panel's foot, unfolds the plan's file as it
 stands, as plain text, so an enthusiastic `<img>` in a coworker's comment stays a string of characters, in the rows as
-in the file.
+in the file. **Copy Markdown** and **Save .md** beside it take that file whole, folded or not, named as a ticket's
+plans are ([Taking a plan with you](plans#taking-a-plan-with-you)).
 
 A plan goes `stale` when the PR moves after it was written: a new comment or reply, an edit, a resolved thread, a new
 head, a check that changed its mind, a conflict that came or went, or a blocker that merged. The panel lists each

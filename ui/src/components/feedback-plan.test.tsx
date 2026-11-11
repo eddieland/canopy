@@ -322,6 +322,23 @@ describe('FeedbackPlanPanel', () => {
         expect(shown.querySelector('strong')).toBeNull()
     })
 
+    it('copies its file whole, folded or not, and saves it under the name the server gives it', async () => {
+        vi.stubGlobal('isSecureContext', true)
+        const write = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue()
+        // The name each download link offered its file under.
+        const saved: string[] = []
+        vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+            saved.push(this.download)
+        })
+        const plan = feedbackPlan()
+        await renderRouted(<FeedbackPlanPanel plan={plan} onChange={changed} />)
+
+        fireEvent.click(screen.getByRole('button', { name: 'Copy Markdown' }))
+        expect(write).toHaveBeenCalledWith(plan.text)
+        fireEvent.click(screen.getByRole('button', { name: 'Save .md' }))
+        expect(saved).toEqual(['46-PROPOSED-feedback.md'])
+    })
+
     it('names a failed check, a conflict, and a merged blocker by what they are, with no author', async () => {
         const check = feedbackPlanItem({
             number: 1,
