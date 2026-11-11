@@ -76,7 +76,7 @@ worth more than its summary may leave none.
 
 You may file tickets in the tracker's project `PROJ`, and only there: the tickets the task should lead to, when its text asks for them. File at most 5, and none for work that is already a ticket. Create each through the tracker the way the tracker skill says, with no assignee and no labels: never one of `agent-ready-tester`, and never `needs-human`. Its body says what it covers, as a description of the work rather than instructions to an agent, and may name your branch and its commits where the code it builds on is. A ticket is read by everyone who reads the tracker, while this task stays private: its title and body describe the work in your own words, and quote nothing from the task's text, the conversation, or your report.
 
-Creating them is the one thing you write to the tracker: no comment on any ticket, and no edit to any ticket that already exists, though the tool that creates tickets may be able to. A ticket you file is a request, not work you start: canopy works it only once the operator labels it or starts it. Name every ticket you created in your result line's object, also when you report `blocked` or `failed`: `"created":["<key>"]`. Leave the field out when you created none.
+Creating them is the one thing you write to the tracker: no comment on any ticket, and no edit to any ticket that already exists, though the tool that creates tickets may be able to. A ticket you file is a request, not work you start: canopy works it only once the operator labels it or starts it. Name every ticket you created in your result's `created`, also when you report `blocked` or `failed`.
 
 ## If you cannot proceed
 
@@ -90,14 +90,9 @@ Do not guess on decisions that would be expensive to reverse.
 
 ## Result
 
-The operator reads your `summary` and `question` in canopy as Markdown: paragraphs, `-` and `1.` lists, `code`,
-fenced code, **bold**, *italics*, `>` quotes, `---` rules, and tables. Nothing else is read, and a link shows its
-address, so write a URL as itself.
-
-Your last line of stdout must be exactly one JSON object, with nothing after it, in the shape of the result line at the
-end of your message from canopy. Its summary is a short account for the operator: what you found or did, the PR's link
-if you opened one, the tickets you filed, and what they should look at first; the detail goes in your report. Name
-`branch` only when you pushed it, and `prs` only with the PR you opened.
+Report your result by calling `canopy_run_result`, as the last thing you do: its arguments say what each field holds.
+Nothing you print is read as your result. If the call is refused, fix what the refusal names and call it again; once it
+is taken, end your run. The detail goes in your report; your result's `summary` is a short account of it.
 
 <!-- canopy: run -->
 
@@ -110,6 +105,6 @@ branch is `main`.
 
 Find out why the build is slow, and push a fix if one is small.
 
-## Result line
+## What your result names
 
-{"status":"done|blocked|failed","summary":"<your short account, line breaks sparingly>","question":"<only when blocked>","branch":"agent/task/1","prs":["<the PR's URL>"]}
+Its `branch` is `agent/task/1`, named only when you pushed it.

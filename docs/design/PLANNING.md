@@ -56,7 +56,7 @@ A plan runs in a desk of worktrees at their bases (§18), with no branch and not
 (§13), reads only inside its desk, its worktrees' history through canopy's read-only git tools (§27), and the ticket
 through the private worker's tracker read tools (§22), without which it is not run, and writes one file, its plan.
 The ticket's text and the code are data to it (T1).
-Result contract, the last line of its text (§13), validated (D026):
+Result contract, the arguments of its `result` call (§13), validated (D026):
 
 ```json
 {"status":"done|blocked|failed","summary":"...","question":"<only when blocked>","effort":"small|medium|large","review":"needed|not_needed","review_reason":"..."}

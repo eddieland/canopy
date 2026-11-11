@@ -95,6 +95,9 @@ class FeedbackPlan(Model):
     """The resume that went ahead on its approval, which it spent."""
     path: str
     """Its file, under the state directory: the operator reads and edits it with their own tools too."""
+    archive_name: str
+    """Its name as `canopy archive` exports it, `415-PROPOSED-feedback-export-reports-as-csv.md`: what a copy saved from
+    the page is named."""
     text: str | None = None
     """Its Markdown as the file stands, plain text here; None when the file is not a plan any more."""
     problem: str | None = None

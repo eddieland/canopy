@@ -18,7 +18,7 @@ no command for them.
   runs is decided by quoting. A tool call's arguments are JSON fields, with nothing to quote, expand, or end early.
 - Each verb is its own tool name, so spend by tool (§11) splits the overseer's calls by verb.
 
-Workers are out of scope: what they report is read from their final line after they exit (§8). A worker's, planner's,
+Workers are out of scope: what they report is read from their `result` call (§13). A worker's, planner's,
 reviewer's, or task's one tool of canopy's own, `status` (§41), writes nothing: the harness records its update from the
 call in the events the agent prints, so nothing a worker writes reaches the journal but what canopy observes it print.
 

@@ -72,7 +72,7 @@ test("a refused shell command is told what it asked for, and that the refusal is
         "Permission denied: shell (`git status`, `git push --force origin agent/PROJ-1`)\n" +
             "[canopy] The rules this run is under refuse it on purpose; it is not a fault to fix. Do not try it" +
             " another way, through another command, a script, or another tool. If your work cannot go on without it," +
-            " finish what you can and say what remains in your result line.",
+            " finish what you can and say what remains in your result.",
     );
     // The call stays refused as the runtime refused it: only the reason is changed.
     assert.equal(refused._tag, "Permission.BlockedError");

@@ -96,28 +96,38 @@ def test_the_models_are_private(canopy_env: CanopyEnv) -> None:
         ),
         (
             "worker_cmd",
-            "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --model a/b",
+            "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json --model a/b",
             "worker",
         ),
         (
             "private_worker_cmd",
-            "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker-private --model=a/b",
+            (
+                "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker-private --format json "
+                "--model=a/b"
+            ),
             "worker",
         ),
-        ("plan_cmd", "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-planner -m a/b", "planner"),
+        (
+            "plan_cmd",
+            "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-planner --format json -m a/b",
+            "planner",
+        ),
         (
             "review_cmd",
-            "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-reviewer -m a/b",
+            "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-reviewer --format json -m a/b",
             "reviewer",
         ),
         (
             "chore_cmd",
-            "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore --model a/b",
+            "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore --format json --model a/b",
             "chore",
         ),
         (
             "review_cmd",
-            "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-reviewer --variant high",
+            (
+                "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-reviewer --format json "
+                "--variant high"
+            ),
             "reviewer",
         ),
         ("worker_cmd_prefix", "wrap --model a/b --", "worker or runtime.models.planner"),
@@ -150,9 +160,15 @@ def test_a_wrapper_may_take_a_short_option_of_its_own(canopy_env: CanopyEnv) -> 
 @pytest.mark.parametrize(
     ("template", "model"),
     [
-        ("env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-worker {prompt}", Model(MODEL)),
-        ("env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-worker-private {prompt}", Model(MODEL)),
-        ("env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-planner {prompt}", None),
+        (
+            "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-worker --format json {prompt}",
+            Model(MODEL),
+        ),
+        (
+            "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-worker-private --format json {prompt}",
+            Model(MODEL),
+        ),
+        ("env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-planner --format json {prompt}", None),
         # The operator's own agent: its model is the runtime's choice, not canopy's.
         ("env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent my-agent {prompt}", None),
     ],
@@ -260,7 +276,9 @@ def test_a_chore_model_with_a_chore_cmd_that_runs_another_agent_is_refused(canop
     canopy_env.configure(
         canopy_env.user_file,
         {
-            "runtime": {"chore_cmd": "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent my-chore"},
+            "runtime": {
+                "chore_cmd": "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent my-chore --format json",
+            },
             "chores": chore(model=MODEL),
         },
     )
@@ -302,7 +320,9 @@ def test_every_chore_runs_an_agent_of_the_operators_own_when_the_chore_command_d
         canopy_env.user_file,
         {
             "runtime": {
-                "chore_cmd": "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent my-chore {prompt}",
+                "chore_cmd": (
+                    "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent my-chore --format json {prompt}"
+                ),
                 "models": {"chore": MODEL},
             },
             "chores": chore(),

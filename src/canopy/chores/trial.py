@@ -83,6 +83,7 @@ def prepare(ctx: Context, name: str, context: str | None) -> Prepared:
         context,
         conversation.chore_notes(ctx.conn, name),
         held=notice.for_prompt(ctx.conn),
+        by_tool=start.reports_by_tool(ctx.config, chore),
     )
     try:
         cwd, command, _ = execute.prepare(ctx, name, chore, prompt)
@@ -135,6 +136,7 @@ def record(ctx: Context, prepared: Prepared) -> Recorded:
                 prepared.context,
                 notes,
                 held=notice.for_prompt(ctx.conn),
+                by_tool=start.reports_by_tool(ctx.config, state.chore),
             )
             logs.write_private(start.prompt_file(log_path), prompt)
         except OSError as e:
@@ -207,7 +209,8 @@ def run_unrecorded(ctx: Context, prepared: Prepared) -> execute.Outcome:
         env=history.run_env(ctx, f"{history.TRY_PREFIX}{prepared.name}"),
         timeout=prepared.chore.timeout_minutes * 60,
     )
-    return execute.outcome_of(done, stdout.read(done.stdout, version=ctx.config.runtime.version), prepared.chore)
+    output = stdout.read(done.stdout, version=ctx.config.runtime.version)
+    return execute.outcome_of(done, output, prepared.chore, reported=execute.reported(ctx, done))
 
 
 def _crash(ctx: Context, run: records.ChoreRun, e: Exception) -> str:

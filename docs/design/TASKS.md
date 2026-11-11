@@ -59,10 +59,10 @@ after later replies move the branch, with the range it went from and to and its 
   `canopy show` the keys. One it files and never reports is T6's residual for follow-ups, unchanged.
 - It may leave a report, a markdown file at the slot's root, excluded from git. canopy keeps it as it keeps a plan
   (§25): an operator-only file in the state directory, copied out before the slot is returned, never read through a
-  link, never sent anywhere. The next run gets a copy, as a worker gets its plan. The result line's summary stays short;
+  link, never sent anywhere. The next run gets a copy, as a worker gets its plan. The result's summary stays short;
   the report holds what a planning or exploring task found.
 
-Result contract, the last line of its text (§13), validated (D026); anything else is `unknown`:
+Result contract, the arguments of its `result` call (§13), validated (D026); anything else is `unknown`:
 
 ```json
 {"status":"done|blocked|failed","summary":"...","question":"<only when blocked>","branch":"<only when pushed>","prs":["..."],"created":["..."]}

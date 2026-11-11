@@ -23,7 +23,7 @@ class RunStatus(StrEnum):
     DONE = "done"
     BLOCKED = "blocked"
     FAILED = "failed"
-    # The worker's last line was not a valid result.
+    # The worker reported no result.
     UNKNOWN = "unknown"
     # The worker reported done with work it had not pushed.
     UNPUSHED = "unpushed"

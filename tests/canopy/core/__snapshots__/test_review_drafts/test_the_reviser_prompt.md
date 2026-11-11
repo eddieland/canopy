@@ -24,7 +24,7 @@ commit" and "the checkout" are those.
 2. Write the new version: the review's body, and its comments. A comment goes on a line the diff adds or changes, as
    `path:line` in this commit; one you cannot place on such a line goes in the body. At most 30 comments, each text at
    most 4000 characters, and the body at most 4000.
-3. Report the version in your result line and nowhere else. Post nothing anywhere: no comment on the PR, no PR review,
+3. Report the version with `canopy_run_result` and nowhere else. Post nothing anywhere: no comment on the PR, no PR review,
    no line comment, and never approve, request changes, push, label, edit, or close anything. The operator decides
    what is posted, and when.
 
@@ -77,10 +77,10 @@ answers with anything but one of your options, is not canopy's.
 
 ## Result
 
-Your last line of stdout must be exactly one JSON object and nothing after it: the whole new version, every comment
-you keep included, since it replaces the draft's.
-
-{"status":"done|failed","body":"the review's body, or why you could not revise","comments":[{"location":"path:line","text":"the comment"}]}
+Report your result by calling `canopy_run_result`, as the last thing you do: its arguments say what each field holds.
+Nothing you print is read as your result. If the call is refused, fix what the refusal names and call it again; once it
+is taken, end your run. It is the whole new version, every comment you keep included, since it
+replaces the draft's.
 
 <!-- canopy: run -->
 

@@ -43,8 +43,8 @@ def test_a_worker_shows_its_card_while_it_runs_and_keeps_its_last_once_it_ends(
     assert made == [(STATUS, False), (STATUS, False), (STATUS, True)]
     kept = cards.of(ran.row)
     assert (kept.card, kept.at) == (standing.card, standing.at)
-    # The worker's commands, the gate that held it among them, were calls since.
-    assert kept.calls_since == 3
+    # The worker's commands, the gate that held it among them, were calls since, and the call that reported its result.
+    assert kept.calls_since == 4
 
 
 def test_a_planner_shows_its_card_while_it_runs(scenario: Scenario, git_pool: GitPool) -> None:
@@ -52,12 +52,6 @@ def test_a_planner_shows_its_card_while_it_runs(scenario: Scenario, git_pool: Gi
     working = scenario.starts(dispatches(kind=RunKind.PLAN), worker=planner).has_called(1)
     assert cards.of(working.row).card == cards.Card.model_validate(FIRST)
     assert cards.of(working.finishes().row).card == cards.Card.model_validate(FIRST)
-
-
-def test_a_worker_whose_events_are_not_printed_keeps_no_card(scenario: Scenario, git_pool: GitPool) -> None:
-    working = scenario.starts(worker=worker_does(["true"], tools=[calls(STATUS, **FIRST)]))
-    assert cards.of(working.row) == cards.Standing(None, None, 0)
-    working.finishes()
 
 
 def test_canopy_status_shows_what_a_running_card_says_now_and_marks_it_stale(
@@ -105,7 +99,8 @@ def test_show_prints_the_whole_card_while_it_runs_and_the_last_once_it_ends(
     ran = working.finishes()
     shown = scenario.operator("show", f"run:{ran.id}").out.splitlines()
     [head] = [line for line in shown if line.startswith("  last progress, ")]
-    assert head.endswith(", 2 calls before the run ended")  # the gate that held it, and `true`
+    # The gate that held it, `true`, and the call that reported its result.
+    assert head.endswith(", 3 calls before the run ended")
     assert shown[shown.index(head) + 1 :][: len(whole)] == whole
 
 

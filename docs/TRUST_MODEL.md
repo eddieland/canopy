@@ -904,16 +904,17 @@ Controls:
   chore findings) off the machine to wherever a sink sends it. The harness sends only the fields DESIGN §20 lists,
   cut to their limits, and the Slack sink escapes Slack's markup so the text cannot mention anyone or disguise a link.
   The desktop sink passes text to its tool as arguments, never as a shell command or a script.
-- The reviewer writes nothing outside its result line (D114), and a revision of a review's draft, which runs as the
+- The reviewer writes nothing outside its result (D114), and a revision of a review's draft, which runs as the
   reviewer under the same definition, nothing outside the version it reports. Its definition denies commenting or
   replying anywhere, submitting a PR review, pushing, writing files, labels, and edits by name, as defense in depth;
   the operator's runtime need not grant it a write tool at all. Off a GitHub tracker, the tracker's server is denied
   whole but its read tools, allowed by name, as for the planner, so a write there no pattern names fails closed.
   Outside its directory it reads only the skill directories in the operator's home (`~/.claude/skills`,
   `~/.agents/skills`, OpenCode's own), so a skill's references and scripts load with it; it changes nothing there, and
-  what it reads can reach its result line as the skills' own text does. Every agent that writes is denied them.
-- A chore's only output is its result line. The shipped `canopy-chore` definition has no edit, subagent, or shell tools,
-  one tool of canopy's, `canopy_chore_history`, which reads its own chore's earlier runs and writes nothing, and denies
+  what it reads can reach its result as the skills' own text does. Every agent that writes is denied them.
+- A chore's only output is its result. The shipped `canopy-chore` definition has no edit, subagent, or shell tools,
+  two tools of canopy's, `canopy_chore_history`, which reads its own chore's earlier runs, and `canopy_chore_result`,
+  which validates its result (D133), neither of which writes anything, and denies
   MCP write tools by name. Outside its directory it reads only the operator's skill directories, as the reviewer does.
   That tool's server is named in the chore run's environment alone (DESIGN §27), lists nothing
   outside a chore's run, refuses another chore's history as the command does, and every other definition denies it.

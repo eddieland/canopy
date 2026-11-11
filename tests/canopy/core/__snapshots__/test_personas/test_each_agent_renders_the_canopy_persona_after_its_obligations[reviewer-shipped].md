@@ -28,7 +28,7 @@
      reason to hold the merge. Report at most five, the ones that matter most.
 6. Judge the change's impact: `high` (behavior many depend on, data, security, or anything hard to undo), `normal`, or
    `low`, which you may say only under this rule from the operator: None: never report `low`.
-7. Report the review in your result line and nowhere else: canopy hands its findings to whoever acts on them.
+7. Report the review with `canopy_run_result` and nowhere else: canopy hands its findings to whoever acts on them.
    Post nothing anywhere: no comment on the PR or the ticket, no PR review, no line comment, and never approve,
    request changes, push, label, edit, or close anything. Put the PR's title, as it stands when you read it, in
    `pr_title`: canopy shows it beside the PR.

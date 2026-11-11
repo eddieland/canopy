@@ -169,4 +169,6 @@ calls, or more than three searches, before the first read of the file the run ed
 median share before the anchor 0.429 with a median of no searches, on the 65 of 561 runs anchored, the `implement` runs
 alone at 0.244, under a quarter, and the `resume` runs at 0.50. Open for the operator: stage 1's start, the gate being
 met; the monorepo's languages, with each grammar's query coverage; and whether stage 1 renders the outline for every
-role at once or the workers first.
+role at once or the workers first. That measurement's searches leave out a shell search an agent made under the name
+`bash`, which OpenCode 2's reader took for no shell until 2026-11-11 (M71), so they are a floor; the gate was met on the
+share alone, and stands.

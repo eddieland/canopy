@@ -28,16 +28,16 @@ With both off, every shipped prompt is as before memory existed, and what a work
 
 ### The contract
 
-The `implement` and `resume` prompts ask, after the result line, for each optional memory field only while its tier
-allows it: `notes` and `proposals` while their tier is not off; `drop_notes`, `memory_used`, and `memory_wrong` at
-`use`. A prompt override that lacks what its mode needs is refused. At `use` they carry the ticket's notes, capped,
-framed as its previous runs are: data to check against the branch, kept off the tracker, the PRs, and commits. A plan's
-and a feedback plan's ask only for `memory_used` and `memory_wrong`, at `use`: a planner pushes nothing a merge can
-check.
+An `implement`'s and a `resume`'s `result` tool (§13) lists each optional memory field only while its tier allows it,
+with what the field is for: `notes` and `proposals` while their tier is not off; `drop_notes`, `memory_used`, and
+`memory_wrong` at `use`. A prompt override that lacks what its mode needs is refused. At `use` the prompts carry the
+ticket's notes, capped, framed as its previous runs are: data to check against the branch, kept off the tracker, the
+PRs, and commits. A plan's and a feedback plan's ask only for `memory_used` and `memory_wrong`, at `use`: a planner
+pushes nothing a merge can check.
 
 ### Writing
 
-A run's memory is written in the transaction that closes it (§8, step 7), only from a valid result line, and only for
+A run's memory is written in the transaction that closes it (§8, step 7), only from a valid result, and only for
 the run's own ticket as its journal row names it, so no run writes another ticket's notes. Memory is never stored with
 the result, so `purge` can reach it. A new note under a key supersedes the old, and notes from failed or blocked runs
 are kept: a dead end is what a retry most needs. A report of a note wrong retires it; of a lesson, it only records the
