@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { expect, test } from '@playwright/test'
 import type { BrowserContext, Locator, Page } from '@playwright/test'
 
-import { clickAtEnd, clickAtStart, plan, settled, signIn, storeTheme } from './helpers.ts'
+import { clickAtEnd, clickAtStart, plan, settled, signIn, storeTheme, writePlan } from './helpers.ts'
 
 test.beforeEach(async ({ page }) => {
     await signIn(page)
@@ -15,14 +15,6 @@ test.beforeEach(async ({ page }) => {
 // pixel, for the caret and a screen reader, so Playwright counts it visible.
 function inSight(target: Locator): Promise<boolean> {
     return target.evaluate((element) => (element.closest('pre')?.getBoundingClientRect().height ?? 0) > 1)
-}
-
-// Replaces the sample plan with `markdown`, through its Markdown, as the operator would.
-async function write(page: Page, markdown: string): Promise<void> {
-    const mode = page.getByRole('button', { name: 'Markdown', exact: true })
-    await mode.click()
-    await page.getByRole('textbox', { name: 'Plan as Markdown' }).fill(markdown)
-    await mode.click()
 }
 
 test("the sample plan's Mermaid block is drawn as its diagram, its source under Source", async ({ page }) => {
@@ -126,7 +118,7 @@ test('every kind of diagram saves as an SVG with nothing left out, which draws o
         ['class', ['classDiagram', '  class Run {', '    +str status', '    +start()', '  }', '  Run --> Ticket']],
         ['er', ['erDiagram', '  TICKET ||--o{ RUN : has', '  RUN {', '    int id', '  }']],
     ] as const
-    await write(page, ['# Plan', ...kinds.flatMap(([, lines]) => ['', '```mermaid', ...lines, '```'])].join('\n'))
+    await writePlan(page, ['# Plan', ...kinds.flatMap(([, lines]) => ['', '```mermaid', ...lines, '```'])].join('\n'))
     const blocks = plan(page).locator('.plan-diagram')
     await expect(blocks.locator('img:visible')).toHaveCount(kinds.length)
     for (const [i, [kind]] of kinds.entries()) {
@@ -161,7 +153,7 @@ test('a diagram whose labels write HTML and whose config asks for links saves as
     page,
     context,
 }) => {
-    await write(
+    await writePlan(
         page,
         [
             '# Plan',
@@ -236,7 +228,7 @@ test.describe("a diagram's actions", () => {
     })
 
     test('copy the source of one that cannot be drawn', async ({ page }) => {
-        await write(page, '# Plan\n\n```mermaid\npie\n  "a": 1\n```\n')
+        await writePlan(page, '# Plan\n\n```mermaid\npie\n  "a": 1\n```\n')
         const block = plan(page).locator('.plan-diagram')
         await expect(block.getByText(/^Not drawn/u)).toBeVisible()
         await block.hover()
@@ -293,7 +285,7 @@ test("the arrow keys go into a diagram's code from the line above and below it",
 test("a class diagram and an entity relationship diagram are drawn, for a plan's types and tables", async ({
     page,
 }) => {
-    await write(
+    await writePlan(
         page,
         [
             '# Plan',
@@ -322,7 +314,7 @@ test("a class diagram and an entity relationship diagram are drawn, for a plan's
 })
 
 test('a diagram mermaid cannot read, or of a kind not drawn here, shows its source and why', async ({ page }) => {
-    await write(page, '# Plan\n\n```mermaid\nflowchart LR\n  A -->\n```\n\n```mermaid\npie\n  "a": 1\n```\n')
+    await writePlan(page, '# Plan\n\n```mermaid\nflowchart LR\n  A -->\n```\n\n```mermaid\npie\n  "a": 1\n```\n')
     const doc = plan(page)
     await expect(doc.getByText(/^Not drawn: Parse error on line/u)).toBeVisible()
     await expect(
@@ -334,7 +326,7 @@ test('a diagram mermaid cannot read, or of a kind not drawn here, shows its sour
 })
 
 test('a diagram that writes a link is drawn, its node as any other and no link in its picture', async ({ page }) => {
-    await write(
+    await writePlan(
         page,
         [
             '# Plan',
@@ -366,7 +358,7 @@ test("what a diagram's labels write as HTML stays text, and its config cannot sa
             fetched.push(request.url())
         }
     })
-    await write(
+    await writePlan(
         page,
         [
             '# Plan',

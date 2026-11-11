@@ -7,7 +7,8 @@
 // - Under src/, each `@keyframes` name is defined once. CSS keeps the last of two with one name, so every animation
 //   that names it runs the other's motion, and nothing else says so.
 // - No line in ui/ is longer than 120 characters, the repository's limit for every file type (AGENTS.md). A
-//   formatter does not break a long string; split it (cn() and cva() take several).
+//   formatter does not break a long string; split it (cn() and cva() take several). A line holding a URL, and a
+//   Markdown table's row, which cannot be broken, are the exceptions AGENTS.md names.
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 
@@ -104,7 +105,8 @@ for (const path of files(ui, /\.(?:css|ts|tsx|mjs|json|html|md|svg)$/u)) {
     readFileSync(path, 'utf8')
         .split('\n')
         .forEach((line, i) => {
-            if (line.length > MAX_LINE && !/https?:\/\//u.test(line)) {
+            const unbreakable = /https?:\/\//u.test(line) || (name.endsWith('.md') && line.startsWith('|'))
+            if (line.length > MAX_LINE && !unbreakable) {
                 found.push(`${name}:${i + 1}: ${line.length} characters; the limit is ${MAX_LINE}`)
             }
         })
