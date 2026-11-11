@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { plan, settled, signIn } from './helpers.ts'
+import { plan, settled, signIn, writePlan } from './helpers.ts'
 
 test.beforeEach(async ({ page }) => {
     await signIn(page)
@@ -45,4 +45,33 @@ test("settings sets a plan's text size, which the plan keeps after a reload", as
     await page.goto('plan-editor')
     await settled(page)
     await expect(plan(page)).toHaveCSS('font-size', '16px')
+})
+
+test("a plan's table and a diagram's caption keep their step under its text at every size", async ({ page }) => {
+    await page.goto('plan-editor')
+    await settled(page)
+    await writePlan(
+        page,
+        '# Plan\n\n| Key | Default |\n| --- | --- |\n| `retry.limit` | 4 |\n\n```mermaid\npie\n  "a": 1\n```\n',
+    )
+    const doc = plan(page)
+    const table = doc.getByRole('table')
+    const caption = doc.getByText(/^Not drawn:/u)
+    await expect(table).toHaveCSS('font-size', '14px')
+    await expect(caption).toHaveCSS('font-size', '14px')
+    // As wide as what it holds, not the plan's measure.
+    const widths = await table.evaluate((element) => ({
+        table: element.getBoundingClientRect().width,
+        plan: element.closest('.plan-doc')?.getBoundingClientRect().width ?? 0,
+    }))
+    expect(widths.table).toBeLessThan(widths.plan / 2)
+
+    await page.goto('settings')
+    await settled(page)
+    await page.getByTestId('plan-text-tiny').click()
+    await page.goto('plan-editor')
+    await settled(page)
+    await writePlan(page, '# Plan\n\n| Key | Default |\n| --- | --- |\n| `retry.limit` | 4 |\n')
+    // Tiny's 12px body, a step down: under it, never over it, as a fixed size was.
+    await expect(plan(page).getByRole('table')).toHaveCSS('font-size', '10.5px')
 })
