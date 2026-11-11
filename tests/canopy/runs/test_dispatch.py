@@ -74,7 +74,6 @@ def test_dispatch_leases_records_and_spawns(
         assert f"ticket PROJ-1 in {leased.slot_path}, and your branch is `agent/PROJ-1-add-login`." in text
         assert "This run works in one repository:\n- `repo` at `" + str(leased.slot_path) in text
         assert ": branch `agent/PROJ-1-add-login` from `main`; PR: not recorded; look up the PR for " in text
-        assert '"prs":{"repo":"<url or null>"}' in text
         assert text.lower().count("add the label") == 1, "only the ticket's needs-human label, never the PR's"
         assert "Time limit: 45 minutes" in text
 

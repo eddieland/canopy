@@ -1,6 +1,6 @@
 """What a resumed worker answered of the review findings it was handed (DESIGN §21, Answers and rebuttals).
 
-A `resume` handed canopy's review findings answers each in its result line's `review_answers` field: `fixed`, or
+A `resume` handed canopy's review findings answers each in its result's `review_answers` field: `fixed`, or
 `declined` with its reason, naming the finding by its review run and number. `_run` checks each entry alone and records
 those that pass with the run: a finding of one of its own ticket's `done` reviews, at most one answer each. The next
 review of the PR reads them beside the findings as data, so it need not report a declined one again unless it can
@@ -14,7 +14,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr
 
 from canopy.core import contract, records, review_runs
 from canopy.core import review_result as result
@@ -34,7 +34,7 @@ MAX_NAMED = 10
 
 
 class _Reported(BaseModel):
-    """The result line's `review_answers` field, read apart from the rest of the result, as follow-ups are.
+    """The result's `review_answers` field, read apart from the rest of the result, as follow-ups are.
 
     Untrusted, so each entry is checked in `check`: a value of any shape is read here, and one that is not a list of
     answers is refused there, never taken as the whole result being invalid.
@@ -78,11 +78,47 @@ class Checked:
         return f"review answers not recorded: {'; '.join(parts)}"
 
 
+class Entry(BaseModel):
+    """One answer to a finding of canopy's review, as a resume's `result` call sends it."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
+
+    review: StrictInt = Field(description="The review run the finding is listed under in your message, by its id.")
+    finding: StrictInt = Field(description="The finding's number under that review, from 1.")
+    answer: FindingAnswer = Field(
+        description="`fixed` when this run's pushes fix it; `declined` when you left it as it is.",
+    )
+    reason: StrictStr | None = Field(
+        default=None,
+        description=f"Required for `declined`: why, in a few sentences, at most {MAX_REASON} characters, in your own "
+        "words: what in the code or the ticket makes the finding wrong, or not this change's to fix. Optional for "
+        "`fixed`: what the fix is.",
+    )
+
+
+class Group(BaseModel):
+    """A resume's answers to its review's findings, a group of its result's fields (`core.run_result`)."""
+
+    model_config = ConfigDict(frozen=True, defer_build=True)
+
+    review_answers: list[Entry] = Field(
+        default_factory=list,
+        description="One entry for each finding your message lists under canopy's review, and none when it lists "
+        "no review. canopy's next review of the PR reads each answer, so a declined finding is not reported again "
+        "unless the reviewer can show the reason is wrong, and then it goes to the operator, not back to you. Leave "
+        "out a finding you neither fixed nor declined.",
+    )
+
+
+#: The group's name.
+GROUP = "review_answers"
+
+
 def parse(text: str) -> object:
-    """Return the `review_answers` field of `text`'s result line, as the worker wrote it.
+    """Return the `review_answers` field of `text`, the result a run reported, as the worker wrote it.
 
     Returns:
-        The field's value, of any shape; None when there is no result line or it has no such field.
+        The field's value, of any shape; None when there is no result or it has no such field.
     """
     found = contract.last_line(_Reported, text)
     return found.review_answers if found is not None else None
@@ -188,27 +224,14 @@ def hold_rebuttals(conn: sqlite3.Connection, run: records.ReviewRun, stored: res
 
 
 def contract_text() -> str:
-    """Return `{{REVIEW_ANSWERS}}`: the result field a resume handed canopy's review findings answers them in.
+    """Return `{{REVIEW_ANSWERS}}`: that a resume handed canopy's review findings answers each in its result.
 
     Returns:
-        The contract, starting with the blank line before it.
+        The sentence, starting with the blank line before it; the run's `result` tool says what an answer holds.
     """
-    entry = '{"review":<review run id>,"finding":<its number>,"answer":"fixed|declined","reason":"<why>"}'
-    return "\n".join(
-        [
-            "",
-            "",
-            (
-                f'That JSON object also carries `"review_answers":[{entry}]`: one entry for each finding under '
-                "canopy's review above, naming it by the review run and number it is listed under. `fixed` when this "
-                "run's pushes fix it, `declined` when you left it as it is, with a `reason` that says why in a few "
-                f"sentences, at most {MAX_REASON} characters, in your own words: what in the code or the ticket makes "
-                "the finding wrong, or not this change's to fix. canopy's next review of the PR reads each answer, so "
-                "a declined finding is not reported again unless the reviewer can show the reason is wrong, and then "
-                "it goes to the operator, not back to you. Answer only the findings listed; leave out one you neither "
-                "fixed nor declined."
-            ),
-        ],
+    return (
+        "\n\nAnswer each finding listed under canopy's review above in your result's `review_answers`, by the review "
+        "run and the number it is listed under."
     )
 
 

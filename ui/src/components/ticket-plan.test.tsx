@@ -29,6 +29,7 @@ const NEWEST: PlanFile = {
     plan: PLAN,
     text: TEXT,
     path: '/home/op/.canopy/plans/ABC-1/2.md',
+    archive_name: '41-PROPOSED-a-plan.md',
     problem: null,
     sha256: 'read-hash',
     edited: false,
@@ -240,9 +241,14 @@ describe('TicketPlan', () => {
     })
 
     describe('PlanState', () => {
+        // Where the plan's file is, the last sentence of each.
+        const FILE = `Its file: ${NEWEST.path}`
+        // The same, as a regular expression matches it.
+        const FILED = FILE.replaceAll('.', String.raw`\.`)
+
         it('says who wrote a waiting plan, and that it waits on you', async () => {
             expect(await state({})).toBe(
-                'Written by run:50. It waits on you: read it, comment, then approve it or ask for changes.',
+                `Written by run:50. It waits on you: read it, comment, then approve it or ask for changes.${FILE}`,
             )
         })
 
@@ -252,7 +258,7 @@ describe('TicketPlan', () => {
             expect(await state({ newest: { ...newest, changed_since_approval: true } })).toMatch(
                 new RegExp(
                     '^Written by run:50, approved \\S+ ago via web, edited since the planner wrote it, changed since ' +
-                        'it was approved\\. $',
+                        `it was approved\\. ${FILED}$`,
                     'u',
                 ),
             )
@@ -262,7 +268,11 @@ describe('TicketPlan', () => {
             const approved = { ...PLAN, status: 'approved' as const, approved_at: '2026-10-08T11:30:00Z' }
             const newest = { ...NEWEST, plan: { ...approved, approved_channel: 'web' } }
             expect(await state({ newest: { ...newest, ticket_changed: ['title', 'description'] } })).toMatch(
-                /^Written by run:50, approved \S+ ago via web, its ticket’s title and description changed since\. $/u,
+                new RegExp(
+                    '^Written by run:50, approved \\S+ ago via web, ' +
+                        `its ticket’s title and description changed since\\. ${FILED}$`,
+                    'u',
+                ),
             )
         })
 
@@ -278,22 +288,22 @@ describe('TicketPlan', () => {
             expect(await state({ newest: { ...NEWEST, plan: approved } })).toMatch(
                 new RegExp(
                     '^Written by run:50, approved \\S+ ago by the planner\\. Its planner judged it small work\\. ' +
-                        'It said the plan needs no review: A one-line typo fix in the README\\.$',
+                        `It said the plan needs no review: A one-line typo fix in the README\\.${FILED}$`,
                     'u',
                 ),
             )
         })
 
         it('says which run writes the next plan, and leaves changes you asked for to their band', async () => {
-            expect(await state({ planning: 51 })).toBe('Written by run:50. Run 51 is writing a new plan.')
+            expect(await state({ planning: 51 })).toBe(`Written by run:50. Run 51 is writing a new plan.${FILE}`)
             cleanup()
-            expect(await state({ changes_asked: '2026-10-08T11:40:00Z' })).toBe('Written by run:50. ')
+            expect(await state({ changes_asked: '2026-10-08T11:40:00Z' })).toBe(`Written by run:50. ${FILE}`)
         })
 
         it('says a ticket that needs no plan needs none, and no planner for changes asked before', async () => {
             const superseded = { ...NEWEST, plan: { ...PLAN, status: 'superseded' as const } }
             expect(await state({ newest: superseded, needed: false, changes_asked: '2026-10-08T11:40:00Z' })).toBe(
-                'Written by run:50. Its ticket needs no plan now.',
+                `Written by run:50. Its ticket needs no plan now.${FILE}`,
             )
         })
 

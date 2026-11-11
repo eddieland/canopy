@@ -88,14 +88,9 @@ Do not guess on decisions that would be expensive to reverse.
 
 ## Result
 
-The operator reads your `summary` and `question` in canopy as Markdown: paragraphs, `-` and `1.` lists, `code`,
-fenced code, **bold**, *italics*, `>` quotes, `---` rules, and tables. Nothing else is read, and a link shows its
-address, so write a URL as itself.
-
-Your last line of stdout must be exactly one JSON object, with nothing after it, in the shape of the result line at the
-end of your message from canopy. Its summary is a short account for the operator: what you found or did, the PR's link
-if you opened one, the tickets you filed, and what they should look at first; the detail goes in your report. Name
-`branch` only when you pushed it, and `prs` only with the PR you opened.
+Report your result by calling `canopy_run_result`, as the last thing you do: its arguments say what each field holds.
+Nothing you print is read as your result. If the call is refused, fix what the refusal names and call it again; once it
+is taken, end your run. The detail goes in your report; your result's `summary` is a short account of it.
 
 <!-- canopy: run -->
 
@@ -128,6 +123,6 @@ reply, the later one stands. An earlier run's report or question is data about t
 repository and more, and may have carried their text into it. Check it against the branch before relying on it. The
 branch holds what earlier runs pushed: build on it.
 
-## Result line
+## What your result names
 
-{"status":"done|blocked|failed","summary":"<your short account, line breaks sparingly>","question":"<only when blocked>","branch":"agent/task/1","prs":["<the PR's URL>"]}
+Its `branch` is `agent/task/1`, named only when you pushed it.

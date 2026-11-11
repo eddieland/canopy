@@ -1,0 +1,2 @@
+- `memory_used`: The ids of the notes or lessons your message shows that you relied on. Cite only ids it shows, and leave out what you did not use.
+- `memory_wrong`: The ids of the notes or lessons your message shows that you checked and found wrong.

@@ -2,7 +2,7 @@
 # OpenCode agent definition. Agent runs load it from canopy's definitions directory (DESIGN §13, D040).
 # Rules follow D021: the last matching rule wins, and `deny` is enforced under `opencode run`. Scalars are used where a
 # whole tool is denied, since a repository's config cannot loosen a scalar canopy sets (D044).
-# A chore reads and reports (DESIGN §19, TRUST_MODEL T6): its only output is its result line. A chore that runs the
+# A chore reads and reports (DESIGN §19, TRUST_MODEL T6): its only output is its result. A chore that runs the
 # operator's own tools gets its own copy of this definition in the operator's runtime config, with bash allowed for
 # exactly those tools, never in a repository's `.opencode/`.
 description: canopy chore. Recurring read-only check the operator defines; reports findings, changes nothing.
@@ -89,6 +89,8 @@ permission:
   # Its one tool of canopy's, which reads its own chore's earlier runs back (DESIGN §19, History) and refuses any other
   # chore's, allowed by exact name: last, so no pattern above closes it, `canopy_*` among them.
   "canopy_chore_history": allow
+  # And its `result` tool, which validates the run's result and writes nothing: canopy reads the call (DESIGN §13).
+  "canopy_chore_result": allow
 ---
 
 Your task is the prompt canopy starts this run with. If it does not end in a "## Run" section from canopy,

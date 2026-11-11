@@ -51,7 +51,7 @@ _PROPOSED_STANCE: Mapping[Proposal, DraftStance] = {
 
 
 class Fields(BaseModel):
-    """A worker's drafts, read from its result line apart from the result. Untrusted: each entry is checked alone."""
+    """A worker's drafts, read from its result apart from the rest of it. Untrusted: each entry is checked alone."""
 
     model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
 
@@ -59,7 +59,7 @@ class Fields(BaseModel):
 
 
 def parse(text: str) -> Fields | None:
-    """Parse the drafts of `text`'s result line, the last line that starts with `{` (DESIGN §13).
+    """Parse the drafts of `text`, the result a run reported, as it reported it (DESIGN §13).
 
     Returns:
         The fields, or None when there is no such line or it is not a JSON object.
@@ -85,7 +85,7 @@ def record_run(conn: sqlite3.Connection, run_id: int, fields: Fields | None) -> 
     Call inside the transaction that closes the run. The ticket is the run's own, read from its row, and a draft for a
     PR must name one of the PRs its units hold for the repositories it covered, so no run drafts for another's. A run
     rendered under `post`, or of a kind that comments nowhere, writes nothing, whatever it sent; so does one whose
-    result line was not a valid result, which is why `fields` is None.
+    run reported no valid result, which is why `fields` is None.
 
     Returns:
         The drafts refused, as recorded in the run's `run_replies.refused`.

@@ -205,7 +205,7 @@ def test_init_explains_an_old_user_file(canopy_env: CanopyEnv, capsys: pytest.Ca
     assert main(["init"]) == 0
     out = capsys.readouterr().out
     assert "The config does not load yet" in out
-    assert "'env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-worker {prompt}'" in out
+    assert "'env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-worker --format json {prompt}'" in out
 
 
 def test_init_warns_about_copies_of_canopys_agents(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:

@@ -215,9 +215,10 @@ def test_a_note_from_the_web_is_recorded_as_the_cli_records_one_and_the_next_pro
         assert (note.source, note.kind, note.channel) == ("operator", "reply", "web")
         assert (note.body, note.submission) == (NOTE, "web:note-0001")
         state = chore_view.state_of(ctx.conn, "deps", ctx.config.chores["deps"])
-        prompt = start.render("Check deps.", state, None, None, conversation.chore_notes(ctx.conn, "deps"), held=None)
-    notes: list[dict[str, Any]] = json_block(prompt)["operator_notes"]
-    assert [(n["id"], n["note"]) for n in notes] == [
+        notes = conversation.chore_notes(ctx.conn, "deps")
+        prompt = start.render("Check deps.", state, None, None, notes, held=None, by_tool=True)
+    carried: list[dict[str, Any]] = json_block(prompt)["operator_notes"]
+    assert [(n["id"], n["note"]) for n in carried] == [
         (8, "Leave out the docs site's lockfile: it is never deployed."),
         (21, NOTE),
     ]

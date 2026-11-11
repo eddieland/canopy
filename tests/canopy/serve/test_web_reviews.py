@@ -178,7 +178,7 @@ def test_a_review_without_a_diff_has_none_and_a_failed_one_says_why(backend: Bac
     failed = c.get("/api/reviews/3").json()
     assert (failed["review"]["status"], failed["note"], failed["findings"]) == (
         "unknown",
-        "the reviewer's last line was not a valid result",
+        "the reviewer reported no result",
         [],
     )
 

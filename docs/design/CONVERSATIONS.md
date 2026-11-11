@@ -24,7 +24,7 @@ filed without the agent's reports, its questions, or the operator's answers appe
 
 Each message is recorded against its subject, with its source (a worker's run, the operator through a channel that
 authenticated them, or a tracker comment), its kind, and its channel. The harness records a run's report and
-a `blocked` run's question from the result line (§8), in the transaction that closes the run. Operator input goes
+a `blocked` run's question from its result (§8), in the transaction that closes the run. Operator input goes
 through one function every channel calls, which refuses an empty or overlong body rather than cut it and records a
 retried submission once. Agents never write a message directly. An operator message, or a task submitted (§36), or a
 start, stop, grant, or notice (§8), from any channel, ends the loop's wait (§6, D073); a note to a chore does not (§19).
@@ -58,7 +58,7 @@ so no agent can lift a limit that bounds it (TRUST_MODEL T1).
 - `stop` keeps the ticket private and lets nothing dispatch it until it is started again. Stopped now, its run is ended
   as reconcile ends a crashed one (§6) and still counts toward attempt limits. Stopped with a wrap-up, its run is told
   on its next tool call, through a file in its answers directory that canopy's plugin reads (§33, §41), to keep its
-  work and print its result line, and ends on its own; the ask is advice, so the timeout, or a stop now, still ends a
+  work and report its result, and ends on its own; the ask is advice, so the timeout, or a stop now, still ends a
   run that goes on (TRUST_MODEL T3). Stop and dispatch cannot interleave.
 - The private worker reads the tracker, and writes to it only to file follow-ups, which authorize nothing (§18): it
   is allowed the tracker tools config names as read tools, so a wrong list fails closed, the provider's tools that

@@ -70,7 +70,8 @@ BRANCH = f"agent/{KEY}-work"
 LABEL = "agent-ready-tester"
 #: The PR WORKER_DONE reports, as a URL that names no PR, so no source reads it.
 WORKER_PR = "https://example.test/pr/1"
-WORKER_DONE = json.dumps({"status": "done", "branch": BRANCH, "pr": WORKER_PR, "summary": "did it"})
+#: A `done` worker's result in the tests' workspace of one repository, `repo`, as its `result` call reports it.
+WORKER_DONE = json.dumps({"status": "done", "branch": BRANCH, "prs": {"repo": WORKER_PR}, "summary": "did it"})
 #: The PR a worker that sends drafts opens (`sends_drafts`).
 DRAFTS_PR = "https://github.com/acme/api/pull/7"
 #: A PR the tests' `vcs` source reads, open with nothing on it, unless a test's GitHub state says otherwise. A ticket
@@ -1010,7 +1011,9 @@ def waits(*keys: str, rationale: str = "nothing to do yet") -> list[Called]:
 
 def with_events(env: CanopyEnv, agent: str) -> None:
     """Have the command that runs `agent` (`canopy-overseer`, ...) ask for OpenCode's JSON events, as defaults do."""
-    env.write_user(env.user_file.read_text().replace(f"--agent {agent} ", f"--agent {agent} --format json ", 1))
+    text = env.user_file.read_text()
+    if f"--agent {agent} --format json" not in text:
+        env.write_user(text.replace(f"--agent {agent} ", f"--agent {agent} --format json ", 1))
 
 
 def with_rebase(env: CanopyEnv) -> None:
@@ -1178,13 +1181,15 @@ def chore_reports(
     report: object,
     *commands: list[str],
     tools: Sequence[Called] = (),
+    then_tools: Sequence[Called] = (),
     **behavior: Unpack[Behavior],
 ) -> Iterator[None]:
-    """Until the block ends, the fake chore prints `report`, verbatim if it is a string.
+    """Until the block ends, the fake chore reports `report`, or prints it if it is a string, which reports nothing.
 
-    It prints it after making the calls `tools` names and running `commands`, if given.
+    It does so after making the calls `tools` names, running `commands`, and making the calls `then_tools` names, if
+    given.
     """
-    with scripted("CHORE", reported(report, commands, tools), behavior):
+    with scripted("CHORE", reported(report, commands, tools, then_tools), behavior):
         yield
 
 
@@ -1333,7 +1338,7 @@ def titled_workers(env: CanopyEnv) -> None:
 
     So the fake worker knows the ticket each run is of (FAKE_WORKER_FOR in the fake).
     """
-    template = "agent run --agent canopy-worker {prompt}"
+    template = "agent run --agent canopy-worker --format json {prompt}"
     text = env.user_file.read_text()
     assert template in text
     env.write_user(text.replace(template, template.replace(" {prompt}", " --title={title} {prompt}")))
@@ -1534,7 +1539,7 @@ def chore_toml(name: str = "build-health", *, every: int = 120, extra: str = "")
     """A `[chores.<name>]` table for the user file, its command the fake agent."""
     return (
         f"\n[chores.{name}]\nprompt = {json.dumps(str(Path.home() / 'chores' / f'{name}.md'))}\n"
-        f"cmd = 'agent run --agent canopy-chore {{prompt}}'\nevery_minutes = {every}\n{extra}"
+        f"cmd = 'agent run --agent canopy-chore --format json {{prompt}}'\nevery_minutes = {every}\n{extra}"
     )
 
 

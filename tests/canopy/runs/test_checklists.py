@@ -119,7 +119,7 @@ def test_the_prompt_says_a_push_may_be_held_only_with_a_list(scenario: Scenario,
     (checklists_dir(scenario.env) / "repo.md").write_text(LIST)
     run = scenario.run(dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CONFLICT]))
     assert "The operator keeps a checklist for `repo`" in run.prompt
-    assert '"checklist":{"<repository>":' in run.prompt
+    assert "Answer every item of each list in your result's `checklist`, under its repository" in run.prompt
 
 
 def test_a_run_that_answers_nothing_is_recorded_unanswered(scenario: Scenario, git_pool: GitPool) -> None:
@@ -129,9 +129,11 @@ def test_a_run_that_answers_nothing_is_recorded_unanswered(scenario: Scenario, g
     assert [(a.item, a.answer) for a in checklist_answers.of_run(scenario.conn, run.id)] == [
         ("general-types", ItemAnswer.UNANSWERED),
     ]
-    # A run given no list records none.
+    # A run given no list is asked for no answers, so its tool refuses a result that carries some, and it records none.
     (checklists_dir(scenario.env) / "repo.md").unlink()
     run = scenario.run(worker=worker_does(result=worker_result(checklist={"repo": {"general-types": "pass"}})))
+    assert run.status == RunStatus.UNKNOWN
+    assert "the worker reported no result" in str(run)
     assert checklist_answers.of_run(scenario.conn, run.id) == []
 
 

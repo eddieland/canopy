@@ -2,20 +2,24 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import pydantic
 import pytest
 
 from canopy.cli.main import main
 from canopy.core import db, memory, prompts
 from canopy.core.config import load
-from canopy.core.vocab import MemoryMode, MemoryStatus, ResumeReason, RunKind
+from canopy.core.vocab import MemoryMode, MemoryStatus, ResumeReason, RunKind, RunStatus
+from canopy.runs import worker
 from tests.canopy.helpers import (
     BRANCH,
     KEY,
     PROMPT_VALUES,
+    agent_runs,
     in_run,
     in_tick,
     memories,
@@ -25,9 +29,11 @@ from tests.canopy.helpers import (
     worker_does,
     worker_result,
 )
-from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
+from tests.canopy.scenario_helpers import Ran, Scenario, dispatches, pushes
 
 if TYPE_CHECKING:
+    from pydantic import JsonValue
+
     from tests.conftest import CanopyEnv, GitPool
 
 #: The overseer dispatches KEY's implement on its `work` branch.
@@ -37,21 +43,37 @@ FIX_CI = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CI])
 #: Ticket notes at `record`, in the workspace's private file.
 RECORDING = {"ticket_notes": "record"}
 NOTE = "The lint job fails on a cold cache: run `make lint` twice before trusting it."
-CONTRACT = "That JSON object may also carry these fields"
+#: What the run's note says when its `result` tool took no result.
+NO_RESULT = "the worker reported no result"
 
 
-def test_with_memory_off_a_note_a_worker_sends_is_stored_nowhere(scenario: Scenario, git_pool: GitPool) -> None:
+@pytest.mark.parametrize(
+    "sent",
+    [{"notes": [{"key": "lint", "text": NOTE}]}, {"proposals": [{"key": "x", "text": "y"}]}],
+    ids=["notes", "proposals"],
+)
+def test_with_memory_off_a_note_a_worker_sends_is_stored_nowhere(
+    scenario: Scenario,
+    git_pool: GitPool,
+    agent_log: Path,
+    sent: dict[str, object],
+) -> None:
+    """A run no tier reaches is asked for no memory field, so its tool refuses a result that carries one."""
     conn = scenario.conn
-    sent = pushes(notes=[{"key": "lint", "text": NOTE}], proposals=[{"key": "x", "text": "y"}])
-    run = scenario.run(WORK, worker=sent)
-    assert run.status == "done"
+    run = scenario.run(WORK, worker=worker_does(result=worker_result(**sent)))
+    assert not set(memory.GROUPS) & set(asked_of(agent_log))
+    assert (run.status, harness_note(run)) == (RunStatus.UNKNOWN, NO_RESULT)
     assert memories(conn) == []
     assert memory.run_memory(conn, run.id) is None
     assert "notes" not in str(run.row["result_json"])
     assert conn.execute("SELECT count(*) FROM memory_reads").fetchone()[0] == 0
 
 
-def test_at_record_a_note_is_stored_and_reaches_no_prompt(scenario: Scenario, git_pool: GitPool) -> None:
+def test_at_record_a_note_is_stored_and_reaches_no_prompt(
+    scenario: Scenario,
+    git_pool: GitPool,
+    agent_log: Path,
+) -> None:
     scenario.configures("private", memory=RECORDING)
     first = scenario.run(WORK, worker=pushes(notes=[{"key": "lint", "text": f"  {NOTE} "}]))
     [note] = memories(scenario.conn)
@@ -60,10 +82,10 @@ def test_at_record_a_note_is_stored_and_reaches_no_prompt(scenario: Scenario, gi
     assert note.head is not None
     assert len(note.head) == 12
     assert "notes" not in str(first.row["result_json"])
-    # The run's prompt asked for notes, and the next one does too, without serving the one written.
-    assert CONTRACT in first.prompt
+    # The run's `result` tool asked for notes, and the next one's does too, without serving the one written.
+    assert "notes" in asked_of(agent_log)
     text = scenario.run(FIX_CI).prompt
-    assert CONTRACT in text
+    assert "notes" in asked_of(agent_log)
     assert NOTE not in text
     assert "## Notes from earlier runs" not in text
 
@@ -77,12 +99,33 @@ def test_at_record_a_run_is_journaled_with_its_modes_and_no_ids(scenario: Scenar
     assert memory.read_by(scenario.conn, second.id) == []
 
 
-def test_at_record_what_only_use_asks_for_changes_nothing(scenario: Scenario, git_pool: GitPool) -> None:
+@pytest.mark.parametrize("field", ["memory_used", "memory_wrong", "drop_notes"])
+def test_at_record_what_only_use_asks_for_is_refused_and_changes_nothing(
+    scenario: Scenario,
+    git_pool: GitPool,
+    agent_log: Path,
+    field: str,
+) -> None:
+    """A run shown no note is asked to cite and to drop none: its tool refuses a result that does."""
     scenario.configures("private", memory=RECORDING)
     scenario.run(WORK, worker=pushes(notes=[{"key": "lint", "text": NOTE}]))
     [note] = memories(scenario.conn)
-    scenario.run(FIX_CI, worker=pushes(memory_used=[note.id], memory_wrong=[note.id], drop_notes=["lint"]))
+    sent: dict[str, object] = {field: ["lint"] if field == "drop_notes" else [note.id]}
+    run = scenario.run(FIX_CI, worker=worker_does(result=worker_result(**sent)))
+    assert not {"cited", "drop_notes"} & set(asked_of(agent_log))
+    assert (run.status, harness_note(run)) == (RunStatus.UNKNOWN, NO_RESULT)
     [after] = memories(scenario.conn)
+    assert after == note
+
+
+def test_at_record_the_journal_drops_what_only_use_asks_for(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
+    """Behind the tool, the write itself changes nothing for a field the run's modes did not ask for."""
+    first = recording_run(canopy_env, conn)
+    memory.record_run(conn, first, memory.Fields(notes=[{"key": "lint", "text": NOTE}]), head=None)
+    [note] = memories(conn)
+    fields = memory.Fields(memory_used=[note.id], memory_wrong=[note.id], drop_notes=["lint"])
+    assert memory.record_run(conn, recording_run(canopy_env, conn), fields, head=None) == []
+    [after] = memories(conn)
     assert after == note
 
 
@@ -104,10 +147,31 @@ def test_notes_from_a_failed_run_are_kept(scenario: Scenario, git_pool: GitPool)
     assert [n.key for n in memories(scenario.conn)] == ["dead-end"]
 
 
-def test_a_note_is_its_own_runs_tickets_whatever_the_result_names(scenario: Scenario, git_pool: GitPool) -> None:
-    scenario.configures("private", memory=RECORDING)
-    scenario.run(WORK, worker=pushes(ticket="OTHER-9", notes=[{"key": "lint", "text": NOTE, "ticket": "OTHER-9"}]))
-    assert [n.ticket_key for n in memories(scenario.conn)] == [KEY]
+@pytest.mark.parametrize(
+    "named",
+    [
+        {"ticket": "OTHER-9", "notes": [{"key": "lint", "text": NOTE}]},
+        {"notes": [{"key": "lint", "text": NOTE, "ticket": "OTHER-9"}]},
+    ],
+    ids=["the-result", "the-note"],
+)
+def test_a_result_cannot_name_a_notes_ticket(named: dict[str, object]) -> None:
+    """A note is its own run's ticket's: the tool's input has no field that names another."""
+    asked = worker.WORKER.input(["notes"])
+    asked.model_validate({"status": "done", "notes": [{"key": "lint", "text": NOTE}]})
+    with pytest.raises(pydantic.ValidationError, match="ticket"):
+        asked.model_validate({"status": "done", **named})
+
+
+def test_a_note_is_its_own_runs_tickets_whatever_the_fields_name(
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+) -> None:
+    """Behind the tool, the write takes the ticket from the run's row, whatever an entry names."""
+    run_id = recording_run(canopy_env, conn)
+    fields = memory.Fields(notes=[{"key": "lint", "text": NOTE, "ticket": "OTHER-9"}])
+    assert memory.record_run(conn, run_id, fields, head=None) == []
+    assert [n.ticket_key for n in memories(conn)] == [KEY]
 
 
 def test_entries_past_the_bounds_are_refused_alone_and_recorded(scenario: Scenario, git_pool: GitPool) -> None:
@@ -131,7 +195,7 @@ def test_entries_past_the_bounds_are_refused_alone_and_recorded(scenario: Scenar
             notes=[
                 {"key": "long", "text": "x" * 401},
                 {"key": "repeat", "text": f"  {NOTE.upper()}"},
-                "not an object",
+                {"key": "Third One", "text": "Three."},
                 {"key": "fourth", "text": "Four."},
                 {"key": "fifth", "text": "Five."},
                 {"key": "sixth", "text": "Past the cap."},
@@ -149,7 +213,7 @@ def test_entries_past_the_bounds_are_refused_alone_and_recorded(scenario: Scenar
     assert refusals(conn, second.id) == [
         ("notes", "long", "its text is 401 characters, over 400"),
         ("notes", "repeat", f"it repeats note {lint.id}"),
-        ("notes", None, "it is not an object with a key and a text"),
+        ("notes", None, "its key is not lowercase words joined by hyphens, at most 40 characters"),
         ("notes", "sixth", "past the 5 notes a run may write"),
     ]
 
@@ -172,25 +236,95 @@ def refusals(conn: sqlite3.Connection, run_id: int) -> list[tuple[str, str | Non
     return [(r.field, r.key, r.why) for r in memory.refused_of(rendered)]
 
 
-def test_notes_that_are_not_a_list_are_refused(scenario: Scenario, git_pool: GitPool) -> None:
+#: Notes of the wrong shape: not a list, and an entry that is not an object of a key and a text.
+MISSHAPEN: list[JsonValue] = [
+    {"key": "lint", "text": NOTE},
+    ["not an object"],
+    [{"key": "lint"}],
+    [{"key": "lint", "text": 7}],
+]
+
+
+@pytest.mark.parametrize("notes", MISSHAPEN, ids=["not-a-list", "not-an-object", "no-text", "text-not-a-string"])
+def test_the_tool_refuses_notes_of_the_wrong_shape(scenario: Scenario, git_pool: GitPool, notes: JsonValue) -> None:
+    """The run's tool holds each note to its shape, so the worker is told while it can still send it again."""
+    with pytest.raises(pydantic.ValidationError, match="notes"):
+        worker.WORKER.input(["notes"]).model_validate({"status": "done", "notes": notes})
+    # A worker that never sends it right reported no result, and wrote nothing.
     scenario.configures("private", memory=RECORDING)
-    run = scenario.run(WORK, worker=pushes(notes={"key": "lint", "text": NOTE}))
-    rendered = present(memory.run_memory(scenario.conn, run.id))
-    assert [(r.field, r.why) for r in memory.refused_of(rendered)] == [("notes", "`notes` is not a list")]
+    run = scenario.run(WORK, worker=pushes(notes=notes))
+    assert (run.status, harness_note(run)) == (RunStatus.UNKNOWN, NO_RESULT)
     assert memories(scenario.conn) == []
+
+
+def test_behind_the_tool_notes_of_the_wrong_shape_are_refused_alone(
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+) -> None:
+    """The write checks each entry itself, whatever the tool let through: a bad one costs only itself."""
+    run_id = recording_run(canopy_env, conn)
+    assert [
+        (r.field, r.why) for r in memory.record_run(conn, run_id, memory.Fields(notes=MISSHAPEN[0]), head=None)
+    ] == [
+        ("notes", "`notes` is not a list"),
+    ]
+    assert memories(conn) == []
+    fields = memory.Fields(notes=["not an object", {"key": "lint"}, {"key": "lint", "text": NOTE}])
+    assert [
+        (r.field, r.key, r.why) for r in memory.record_run(conn, recording_run(canopy_env, conn), fields, head=None)
+    ] == [
+        ("notes", None, "it is not an object with a key and a text"),
+        ("notes", "lint", "its text is not a string"),
+    ]
+    assert [n.key for n in memories(conn)] == ["lint"]
+    assert refusals(conn, run_id) == [("notes", None, "`notes` is not a list")]
+
+
+def recording_run(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> int:
+    """An implement of KEY rendered with ticket notes at `record`, at work, for a test of the write behind the tool."""
+    with_memory(canopy_env, ticket_notes="record")
+    rendered = present(
+        memory.render(conn, load(canopy_env.root, canopy_env.user_file), key=KEY, kind="implement", repos=("repo",)),
+    )
+    with in_tick(conn) as tick_id:
+        db.touch_ticket(conn, KEY, "repo")
+        run_id = db.insert_run(
+            conn,
+            tick_id=tick_id,
+            key=KEY,
+            kind=RunKind.IMPLEMENT,
+            branch=BRANCH,
+            slots=(),
+            runs_dir=Path("/runs"),
+        )
+        memory.record_rendered(conn, run_id, rendered)
+    return run_id
+
+
+def asked_of(agent_log: Path) -> list[str]:
+    """The groups of fields the latest agent run's `result` tool asked for, as canopy told its run."""
+    _, _, groups = str(agent_runs(agent_log)[-1]["env"]["CANOPY_RESULT"]).partition(":")
+    return groups.split(",") if groups else []
+
+
+def harness_note(run: Ran) -> str | None:
+    """What the harness said of how `run` ended, in its recorded result."""
+    note: str | None = json.loads(run.row["result_json"] or "{}").get("harness")
+    return note
 
 
 @pytest.mark.parametrize(
     ("kind", "private"),
     [(k, False) for k in prompts.WORKER] + [(k, True) for k in prompts.WORKER_PRIVATE],
 )
-def test_at_record_each_prompt_differs_from_its_off_self_by_the_contract_alone(
+def test_at_record_each_prompt_is_its_off_self(
     canopy_env: CanopyEnv,
     conn: sqlite3.Connection,
     kind: str,
     *,
     private: bool,
 ) -> None:
+    """While a tier records, the prompt carries nothing of memory: the run's `result` tool alone asks for notes."""
     values = {
         **PROMPT_VALUES,
         "AUTHORIZATION": prompts.plan_authorization(["agent-ready-alice"], private=False),
@@ -207,26 +341,29 @@ def test_at_record_each_prompt_differs_from_its_off_self_by_the_contract_alone(
         assert rendered is None
         return
     assert rendered is not None
-    contract = rendered.values[memory.MEMORY_CONTRACT]
-    assert contract.startswith("\n\nThat JSON object may also carry these fields")
-    assert '`"notes":' in contract
-    assert "drop_notes" not in contract
-    assert "memory_used" not in contract
-    assert "proposals" not in contract
-    on = prompts.render_worker(cfg, kind, {**values, **rendered.values}, private=private, required=rendered.required)
-    assert on == off.removesuffix("\n") + contract + "\n"
+    assert (rendered.values, rendered.required) == ({}, ())
+    assert prompts.render_worker(cfg, kind, values, private=private, required=rendered.required) == off
+    # What the prompt no longer says, the tool's input does: the notes, and nothing only `use` asks for.
+    groups = memory.asked_groups(rendered.modes)
+    assert groups == ["notes"]
+    added = set(worker.WORKER.input(groups).model_fields) - set(worker.WORKER.input().model_fields)
+    assert added == {"notes"}
 
 
-def test_an_override_without_the_contract_serves_until_a_tier_records(scenario: Scenario, git_pool: GitPool) -> None:
+def test_an_override_from_before_memory_serves_while_a_tier_records(
+    scenario: Scenario,
+    git_pool: GitPool,
+    agent_log: Path,
+) -> None:
+    """The fields memory asks for are the tool's, so a prompt that never heard of memory still has its notes written."""
     overrides = scenario.env.user_file.parent / "prompts"
     overrides.mkdir()
     (overrides / "worker-implement.md").write_text("Work on {{KEY}}, labels {{LABELS}}.\n{{DRAFTS}}\n")
-    # Ended, so the next dispatch is refused for its prompt alone.
-    scenario.run(WORK)
     scenario.configures("private", memory=RECORDING)
-    [(action, rationale)] = scenario.refuses(WORK)[-1:]
-    assert action == "refused:bad_prompt"
-    assert "missing required placeholder {{MEMORY_CONTRACT}}" in rationale
+    run = scenario.run(WORK, worker=pushes(notes=[{"key": "lint", "text": NOTE}]))
+    assert run.prompt.startswith(f"Work on {KEY}, labels ")
+    assert "notes" in asked_of(agent_log)
+    assert [n.key for n in memories(scenario.conn)] == ["lint"]
 
 
 @pytest.mark.parametrize("how", ["done", "forget"])
