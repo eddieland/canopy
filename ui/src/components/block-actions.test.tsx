@@ -146,6 +146,25 @@ describe("a plan's diagram's actions", () => {
         expect(within(first).getByRole('button', { name: 'Copy or save the picture' })).toBeDefined()
     })
 
+    it("save a drawn one's picture as an SVG, cut down to what canopy keeps, on a background", async () => {
+        const plan = planDocument()
+        renderActions(plan.owner)
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4 4"><g onclick="go()"><rect/></g></svg>'
+        const slot = plan.put('erDiagram\n    A ||--o{ B : has', { svg, kind: 'er' })
+
+        openPictureMenu(slot)
+        fireEvent.click(await screen.findByRole('menuitem', { name: 'Save as SVG' }))
+        const [blob, name] = vi.mocked(saveFile).mock.lastCall ?? []
+        expect(name).toBe('ABC-1-plan-2-er-1.svg')
+        expect(blob?.type).toBe('image/svg+xml')
+        const saved = (await blob?.text()) ?? ''
+        expect(saved).toContain('<rect x="0" y="0" width="4" height="4"')
+        expect(saved).not.toContain('onclick')
+        expect(toasts).toEqual([
+            { title: 'Saved the diagram as an SVG', detail: 'ABC-1-plan-2-er-1.svg', tone: 'done' },
+        ])
+    })
+
     it("copy a drawn one's picture as a PNG on the clipboard", async () => {
         vi.stubGlobal(
             'ClipboardItem',

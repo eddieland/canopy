@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast'
 import { blockSlots } from '@/lib/block-slots'
 import type { BlockSlot } from '@/lib/block-slots'
 import { diagramPng, diagramSurface, kindWord } from '@/lib/diagram-picture'
+import { savedSvg } from '@/lib/diagram-svg'
 import { saveFile } from '@/lib/save-file'
 
 /** A diagram's picture as the page shows it, and the kind mermaid read it as. */
@@ -32,7 +33,7 @@ export function BlockActions({ children }: { children: ReactNode }) {
 
 /**
  * A diagram's actions: its Mermaid source copied, exactly as the fence holds it, without the fence's lines; and once it
- * is drawn, its picture copied as an image or saved as a PNG, named `name` (`ABC-102-plan-2-sequence-1`).
+ * is drawn, its picture copied as an image or saved as a PNG or an SVG, named `name` (`ABC-102-plan-2-sequence-1`).
  */
 export function DiagramActions({
     source,
@@ -85,9 +86,11 @@ function inDocumentOrder(blocks: readonly BlockSlot[]): BlockSlot[] {
     )
 }
 
-// A drawn diagram's picture, copied as an image or saved as a PNG, from a menu of its own: the source's copy is the
-// one action most wanted, and these are its other forms. Copying needs the clipboard, which a page reaches only in a
-// secure context, and an image on it, which a browser without `ClipboardItem` cannot put there.
+// A drawn diagram's picture, copied as an image or saved as a PNG or an SVG, from a menu of its own: the source's copy
+// is the one action most wanted, and these are its other forms. The SVG is the picture cut down to canopy's lists
+// (`src/lib/diagram-svg.ts`), never mermaid's as it came, since a file opened on its own is a document (D131).
+// Copying needs the clipboard, which a page reaches only in a secure context, and an image on it, which a browser
+// without `ClipboardItem` cannot put there.
 function PictureMenu({ svg, name }: { svg: string; name: string }) {
     const toast = useToast()
     const file = `${name}.png`
@@ -96,6 +99,16 @@ function PictureMenu({ svg, name }: { svg: string; name: string }) {
         try {
             saveFile(await diagramPng(svg, diagramSurface()), file)
             toast({ title: 'Saved the diagram as a PNG', detail: file, tone: 'done' })
+        } catch (error) {
+            toast({ title: 'Could not save the diagram', detail: reason(error), tone: 'failed' })
+        }
+    }
+    function saveVector() {
+        const vector = `${name}.svg`
+        try {
+            const { svg: saved } = savedSvg(svg, diagramSurface())
+            saveFile(new Blob([saved], { type: 'image/svg+xml' }), vector)
+            toast({ title: 'Saved the diagram as an SVG', detail: vector, tone: 'done' })
         } catch (error) {
             toast({ title: 'Could not save the diagram', detail: reason(error), tone: 'failed' })
         }
@@ -134,6 +147,10 @@ function PictureMenu({ svg, name }: { svg: string; name: string }) {
                 <DropdownMenuItem onSelect={() => void save()}>
                     <Download aria-hidden />
                     Save as PNG
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={saveVector}>
+                    <Download aria-hidden />
+                    Save as SVG
                 </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>
