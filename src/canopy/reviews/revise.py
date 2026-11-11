@@ -19,7 +19,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from canopy.core import agent_models, db, personas, prompts, recorded_runs, review_drafts, review_revisions, review_runs
-from canopy.core import review_result as result
 from canopy.core.conversation import printable
 from canopy.core.vocab import RecordedKind, ReviewDraftStatus
 from canopy.infra import lock
@@ -269,7 +268,6 @@ def _prompt(ctx: Context, run_id: int, target: Target, persona: personas.Persona
         "DRAFT": _draft_text(target.version),
         "NOTES": _notes_text(target.notes),
         "TIMEOUT_MINUTES": str(cfg.runtime.review_timeout_minutes),
-        "CONTRACT": result.REVISION_CONTRACT,
     }
     try:
         return prompts.render_reviser(cfg, values, persona=persona)

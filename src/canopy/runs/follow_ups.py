@@ -1,7 +1,7 @@
 """Follow-up tickets (DESIGN §18): what a worker reports it filed, checked and recorded, and put to the operator.
 
 An `implement` or `resume` worker on a ticket that is not itself a follow-up, public or private, may file tickets
-outside its own and name them in its result line's `created` field, each with the repository it is for or null. `_run`
+outside its own and name them in its result's `created` field, each with the repository it is for or null. `_run`
 checks each entry alone, on its text, since the harness reads no tracker (D003), and records the ones that pass with the
 run; a refused entry is named in the run's note and stored with its result, and raises `follow_up_unrecorded`
 (`unrecorded`) until the run's ticket is done or forgotten. A recorded follow-up authorizes nothing: the run's close
@@ -16,7 +16,7 @@ from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, cast
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, StrictStr
 
 from canopy.core import contract, conversation, db, records, sql
 
@@ -34,7 +34,7 @@ MAX_DETAIL = 2000
 
 
 class _Reported(BaseModel):
-    """The result line's `created` field, read apart from the rest of the result as memory's fields are (DESIGN §28).
+    """The result's `created` field, read apart from the rest of the result as memory's fields are (DESIGN §28).
 
     Untrusted, so each entry is checked in `check`: a value of any shape is read here, and one that is not an object of
     keys to repositories or nulls is refused there, never taken as the whole result being invalid.
@@ -96,11 +96,49 @@ class Checked:
         return Checked(refused=[*self.refused, *(Refusal(key, why) for key in self.recorded)])
 
 
-def parse(text: str) -> object:
-    """Read the `created` field of `text`'s result line, the last line that starts with `{` (DESIGN §13).
+class Group(BaseModel):
+    """The follow-up tickets a worker filed, a group of its result's fields (`core.run_result`) while it may file."""
+
+    model_config = ConfigDict(frozen=True, defer_build=True)
+
+    created: dict[StrictStr, StrictStr | None] = Field(
+        default_factory=dict,
+        description="Every follow-up ticket you created in the tracker, by its key, with the repository its body "
+        "names on its `canopy-repo:` line, or null when it names none. Name them also when you report `blocked` or "
+        "`failed`; leave it out when you created none.",
+    )
+
+
+class TaskGroup(BaseModel):
+    """The tickets a one-off task's worker filed, a group of its result's fields while it may file."""
+
+    model_config = ConfigDict(frozen=True, defer_build=True)
+
+    created: list[StrictStr] = Field(
+        default_factory=list,
+        description="The key of every ticket you created in the tracker. Name them also when you report `blocked` "
+        "or `failed`; leave it out when you created none.",
+    )
+
+
+#: The group's name, a worker's and a task's.
+GROUP = "created"
+
+
+def may_file(conn: sqlite3.Connection, key: str, *, limit: int) -> bool:
+    """Whether a worker of ticket `key` may file follow-ups, so its prompt says how and its result names them (§18).
 
     Returns:
-        The field's value as JSON gave it, or None when there is no such field or no valid result line.
+        False when `limit`, `policy.max_follow_ups`, is 0, or `key` is itself a follow-up, which files none.
+    """
+    return limit > 0 and get_follow_up(conn, key) is None
+
+
+def parse(text: str) -> object:
+    """Read the `created` field of `text`, the result a run reported, as it reported it (DESIGN §13).
+
+    Returns:
+        The field's value as JSON gave it, or None when there is no such field or no valid result.
     """
     found = contract.last_line(_Reported, text)
     return found.created if found is not None else None
@@ -246,7 +284,7 @@ def get_follow_up(conn: sqlite3.Connection, key: str) -> records.FollowUp | None
 
 
 def valid_key(key: object) -> bool:
-    """Whether `key`, as a result line gave it, is a ticket key canopy can record: its text alone (D003).
+    """Whether `key`, as a result gave it, is a ticket key canopy can record: its text alone (D003).
 
     Returns:
         True for a string of at most `conversation.MAX_KEY` characters that `conversation.KEY_RE` matches.

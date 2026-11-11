@@ -40,6 +40,7 @@ function plans(fields: Partial<TicketPlans> = {}, plan: PlanSummary = PLAN, text
         newest: {
             plan,
             path: '/state/plans/ABC-1/41.md',
+            archive_name: '41-PROPOSED-plan.md',
             text,
             problem: null,
             sha256: 'abc',

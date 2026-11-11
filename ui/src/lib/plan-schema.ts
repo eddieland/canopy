@@ -13,15 +13,15 @@ import type { AnyExtension, JSONContent, MarkdownToken } from '@tiptap/core'
 import { Heading } from '@tiptap/extension-heading'
 import { Link } from '@tiptap/extension-link'
 import { TaskItem, TaskList } from '@tiptap/extension-list'
-import { TableHeader, TableKit, TableView } from '@tiptap/extension-table'
+import { TableHeader, TableKit } from '@tiptap/extension-table'
 import { Markdown } from '@tiptap/markdown'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { StarterKit } from '@tiptap/starter-kit'
 
-import { markOverflowEdges } from '@/lib/overflow-edges'
 import { ATOM } from '@/lib/plan-anchors'
 import { PlanDiagrams } from '@/lib/plan-diagram'
+import { PlanTable } from '@/lib/plan-table'
 
 // A mark as a document's JSON holds it.
 type JSONMark = NonNullable<JSONContent['marks']>[number]
@@ -44,7 +44,9 @@ export function planExtensions(more: AnyExtension[] = []): AnyExtension[] {
         PlanLink.configure({ openOnClick: false, autolink: false, linkOnPaste: false }),
         TaskList,
         PlanTaskItem.configure({ nested: true }),
-        TableKit.configure({ table: { resizable: false, View: PlanTableView }, tableHeader: false }),
+        // A table is ours, drawn with room for its actions, as is its header cell; its rows and cells are the kit's.
+        TableKit.configure({ table: false, tableHeader: false }),
+        PlanTable.configure({ resizable: false }),
         PlanTableHeader,
         VerbatimBlock,
         VerbatimInline,
@@ -450,18 +452,3 @@ const PlanTableHeader = TableHeader.extend({
         return ['th', mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, { scope: 'col' }), 0]
     },
 })
-
-// A table as Tiptap draws one, in a box of its own that scrolls sideways, whose edges are faded while the table runs
-// past them (`edge-fade`), so a column out of sight is never taken for no column.
-class PlanTableView extends TableView {
-    private readonly unmark: () => void
-
-    constructor(...args: ConstructorParameters<typeof TableView>) {
-        super(...args)
-        this.unmark = markOverflowEdges(this.dom)
-    }
-
-    destroy(): void {
-        this.unmark()
-    }
-}

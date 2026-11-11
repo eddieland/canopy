@@ -1146,16 +1146,12 @@ def pushes(
 
     def made(key: str) -> Script:
         pushed, said, number = branch or f"agent/{key}-work", message or f"{key}: the change", key.rpartition("-")[2]
-        result = json.loads(WORKER_DONE) | {"branch": pushed, "pr": f"https://example.test/pr/{number}"}
+        result = json.loads(WORKER_DONE) | {"branch": pushed, "prs": {"repo": f"https://example.test/pr/{number}"}}
         commands = commit_and_push(pushed, said)
         if repos:
             # In a desk each repository is a link of its own, and the run records a PR per repository, not one.
-            del result["pr"]
             result["prs"] = {name: f"https://example.test/{name}/pr/{number}" for name in repos}
             commands = [["git", "-C", name, *command[1:]] for name in repos for command in commands]
-        if "prs" in reported:
-            # A result names its PRs one way: the joint `prs`, which a test may give for one repository too.
-            result.pop("pr", None)
         return worker_does(*commands, result=json.dumps(result | reported))
 
     return replace(made(KEY), per_ticket=made)
@@ -1299,7 +1295,7 @@ def due_chore(scenario: Scenario, name: str, *, when: str | None = None) -> None
     prompt.write_text(f"# {name}\n")
     table: dict[str, Any] = {
         "prompt": str(prompt),
-        "cmd": "agent run --agent canopy-chore {prompt}",
+        "cmd": "agent run --agent canopy-chore --format json {prompt}",
         "every_minutes": 120,
     }
     if when is not None:

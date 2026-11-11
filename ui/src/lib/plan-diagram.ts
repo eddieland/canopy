@@ -4,8 +4,11 @@
 // code hides behind a Source toggle, and shows again while the caret is in it (being edited, under the picture it
 // draws), while a comment's highlight or a change is marked in it, and when the diagram cannot be drawn, under why.
 // An arrow key at the edge of the block beside a diagram puts the caret in its code, so the keyboard always reaches it.
+// The figure keeps room at its top right for the diagram's actions, which the page draws there (src/lib/block-slots.ts,
+// src/components/block-actions.tsx).
 //
-// A code block of any other language draws as it always has, a `pre` around a `code`, as `CodeBlock` renders it.
+// A code block of any other language draws as it always has, a `pre` around a `code`, as `CodeBlock` renders it, with
+// room beside it for its actions (its copy button) too.
 import { Extension } from '@tiptap/core'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state'
@@ -13,12 +16,17 @@ import type { EditorState } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import type { EditorView, NodeView, ViewMutationRecord } from '@tiptap/pm/view'
 
+import { blockSlots, newSlotId } from '@/lib/block-slots'
+import type { BlockSlots } from '@/lib/block-slots'
 import type { Drawn, NotDrawn } from '@/lib/diagram'
 import { diagramTitle } from '@/lib/diagram-title'
 import { markOverflowEdges } from '@/lib/overflow-edges'
+import { CodeView } from '@/lib/plan-code'
 
 // Kept in step with DIAGRAM_LANGUAGE in src/lib/diagram.ts, which loads only when a diagram is drawn.
 const LANGUAGE = 'mermaid'
+// Why a picture is not shown when the browser cannot read it, as src/lib/diagram.ts says it too.
+const UNREADABLE = 'the browser cannot read its picture'
 // How long the code rests after a keystroke before its diagram is drawn again, in milliseconds.
 const REST_MS = 400
 // The class the code block holding the caret wears, which shows its code.
@@ -36,11 +44,15 @@ export const PlanDiagrams = Extension.create({
     name: 'planDiagrams',
     addProseMirrorPlugins() {
         const editor = this.editor
+        const slots = blockSlots(editor)
         return [
             new Plugin({
                 key: new PluginKey('planDiagrams'),
                 props: {
-                    nodeViews: { codeBlock: (node) => (isDiagram(node) ? new DiagramView(node) : codeView(node)) },
+                    nodeViews: {
+                        codeBlock: (node) =>
+                            isDiagram(node) ? new DiagramView(node, slots) : new CodeView(node, slots),
+                    },
                     decorations: (state) => (editor.isEditable ? editing(state) : DecorationSet.empty),
                     handleKeyDown: (view, event) => editor.isEditable && enterDiagram(view, event),
                 },
@@ -88,22 +100,6 @@ function enterDiagram(view: EditorView, event: KeyboardEvent): boolean {
     return true
 }
 
-// A code block that is not a diagram, as `CodeBlock` renders one.
-function codeView(node: ProseMirrorNode): NodeView {
-    const dom = document.createElement('pre')
-    const contentDOM = child(dom, 'code')
-    const language: unknown = node.attrs['language']
-    if (typeof language === 'string' && language) {
-        contentDOM.className = `language-${language}`
-    }
-    return {
-        dom,
-        contentDOM,
-        // Drawn again if it changes language, which may make it a diagram.
-        update: (next) => next.type === node.type && next.attrs['language'] === language,
-    }
-}
-
 // A diagram's code block: its code, and the picture it draws.
 class DiagramView implements NodeView {
     readonly dom: HTMLElement
@@ -112,17 +108,25 @@ class DiagramView implements NodeView {
     private readonly image: HTMLImageElement
     private readonly reason: HTMLElement
     private readonly toggle: HTMLButtonElement
+    // The room for its actions, which the page fills, and where it says what they act on.
+    private readonly actions: HTMLElement
+    private readonly slots: BlockSlots
+    private readonly id = newSlotId()
     private text: string
+    // The picture shown, and its kind; none while it is drawn, or not drawn.
+    private picture: { svg: string; kind: string } | undefined
     // Which draw the picture shows: one that ends after a later one began is dropped.
     private draws = 0
     private timer: ReturnType<typeof setTimeout> | undefined
     private readonly unsubscribe: () => void
     private readonly unmark: () => void
 
-    constructor(node: ProseMirrorNode) {
+    constructor(node: ProseMirrorNode, slots: BlockSlots) {
         this.text = node.textContent
+        this.slots = slots
         this.dom = document.createElement('div')
-        this.dom.className = 'plan-diagram'
+        // A block whose actions show while it is hovered (`block-actions`, src/index.css).
+        this.dom.className = 'plan-diagram group/block'
         this.dom.dataset['diagram'] = 'pending'
         const pre = child(this.dom, 'pre')
         this.contentDOM = child(pre, 'code')
@@ -138,6 +142,13 @@ class DiagramView implements NodeView {
         this.image = child(scroll, 'img')
         this.image.alt = 'A diagram'
         this.image.hidden = true
+        // A picture the browser cannot read is a diagram not drawn, shown as its code and why, not a broken image
+        // under a block that says it was drawn. Only the picture shown now can fail: a new one ends the old one's load.
+        this.image.addEventListener('error', () => {
+            if (this.image.hasAttribute('src')) {
+                this.fail(UNREADABLE)
+            }
+        })
         this.reason = child(this.figure, 'figcaption')
         this.toggle = child(this.figure, 'button')
         this.toggle.type = 'button'
@@ -149,11 +160,14 @@ class DiagramView implements NodeView {
             this.toggle.setAttribute('aria-pressed', String(shown))
             this.dom.toggleAttribute('data-source', shown)
         })
+        this.actions = child(this.figure, 'div')
+        this.actions.className = 'block-actions'
 
         this.unmark = markOverflowEdges(scroll)
         this.unsubscribe = onThemeChange(() => {
             this.draw()
         })
+        this.publish()
         this.draw()
     }
 
@@ -163,6 +177,7 @@ class DiagramView implements NodeView {
         }
         if (node.textContent !== this.text) {
             this.text = node.textContent
+            this.publish()
             // A draw of the code before this edit, still under way, is dropped when it ends.
             this.draws += 1
             clearTimeout(this.timer)
@@ -190,6 +205,12 @@ class DiagramView implements NodeView {
         this.draws += 1
         this.unsubscribe()
         this.unmark()
+        this.slots.remove(this.id)
+    }
+
+    // Says what the diagram's actions act on now: its source, and its picture once drawn.
+    private publish(): void {
+        this.slots.put({ id: this.id, kind: 'diagram', slot: this.actions, source: this.text, drawn: this.picture })
     }
 
     private draw(): void {
@@ -200,6 +221,9 @@ class DiagramView implements NodeView {
         this.draws += 1
         const draw = this.draws
         const source = this.text
+        // The theme it is drawn in, as mermaid reads it when it starts: a picture drawn dark prints turned round
+        // (src/lib/plan-print.ts).
+        const dark = document.documentElement.classList.contains('dark')
         let result: Drawn | NotDrawn
         try {
             const { drawDiagram } = await import('@/lib/diagram')
@@ -211,10 +235,7 @@ class DiagramView implements NodeView {
             return
         }
         if ('error' in result) {
-            this.dom.dataset['diagram'] = 'failed'
-            this.image.hidden = true
-            this.image.removeAttribute('src')
-            this.reason.textContent = `Not drawn: ${result.error}.`
+            this.fail(result.error)
             return
         }
         this.dom.dataset['diagram'] = 'drawn'
@@ -225,8 +246,23 @@ class DiagramView implements NodeView {
             title ?? `${/^[aeiou]/u.test(name) ? 'An' : 'A'} ${name}, drawn from the Mermaid source beside it`
         showWidth(this.image, result.width)
         this.image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(result.svg)}`
+        this.image.toggleAttribute('data-drawn-dark', dark)
         this.image.hidden = false
         this.reason.textContent = title ?? ''
+        this.picture = { svg: result.svg, kind: result.kind }
+        this.publish()
+    }
+
+    // The diagram not drawn, for `reason`: its code shows, with why under it, and no picture.
+    private fail(reason: string): void {
+        this.dom.dataset['diagram'] = 'failed'
+        this.image.hidden = true
+        this.image.removeAttribute('src')
+        this.reason.textContent = `Not drawn: ${reason}.`
+        if (this.picture !== undefined) {
+            this.picture = undefined
+            this.publish()
+        }
     }
 }
 

@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, TextIO
 
-from pydantic import BaseModel, ConfigDict, StrictStr
+from pydantic import BaseModel, ConfigDict, Field, StrictStr
 
 from canopy.core import (
     agent_models,
@@ -34,6 +34,7 @@ from canopy.core import (
     hostgit,
     plans,
     run_models,
+    run_result,
     sandboxing,
 )
 from canopy.core.config import render_command
@@ -73,6 +74,34 @@ class EpicPlanResult(BaseModel):
     status: Literal["done", "blocked", "failed"]
     summary: Text = ""
     question: Text | None = None
+
+
+class Report(BaseModel):
+    """What an epic's planner reports with its `result` call (DESIGN §43): the plan itself is the file it wrote."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
+
+    status: Literal["done", "blocked", "failed"] = Field(
+        description="How planning ended: `done` when your plan's file holds a plan canopy can read, which alone "
+        f"records one; {run_result.ENDED}",
+    )
+    summary: StrictStr = Field(
+        default="",
+        description="Your report to the operator: what the plan proposes, in a paragraph, line breaks sparingly. "
+        f"{run_result.markdown(MAX_TEXT)}",
+    )
+    question: StrictStr | None = Field(
+        default=None,
+        description=f"Only when `blocked`: what you need the operator to answer. {run_result.markdown(MAX_TEXT)}",
+    )
+
+
+#: What an epic's planner reports.
+CONTRACT = run_result.Contract(
+    "epic_plan",
+    f"Report how planning the epic ended, once your plan is written to its file. {run_result.REPORTING}",
+    Report,
+)
 
 
 @dataclass(frozen=True)
@@ -163,7 +192,7 @@ def _work(ctx: Context, run: records.EpicRun, out: TextIO, log: logs.TickAdapter
     if result.timed_out:
         return Outcome(RunStatus.TIMEOUT, parsed, "the planner ran out of time")
     if parsed is None:
-        return Outcome(RunStatus.UNKNOWN, None, "the planner's result line could not be read")
+        return Outcome(RunStatus.UNKNOWN, None, f"the planner {run_result.MISSING}")
     if parsed.status != "done":
         return Outcome(RunStatus(parsed.status), parsed)
     seed = desk_files.get(plans.WRITTEN)
@@ -245,7 +274,7 @@ def _run_agent(
     cost, and tool calls the runtime reported are recorded at once.
 
     Returns:
-        The agent's process and the text its result line is read from.
+        The agent's process and the result it reported, as one line of JSON; "" when it reported none.
 
     Raises:
         SetupError: a place the planner reads config from shadows canopy's definitions or names a tracker tool, or the
@@ -288,6 +317,8 @@ def _run_agent(
     }
     served = {cards.SERVER: cards.SERVER_COMMAND, git_tools.SERVER: git_tools.command(trees)}
     env |= servers.env(served, version=runtime.version, cwd=ctx.workspace.root.absolute())
+    reports = CONTRACT.asked()
+    env |= reports.env()
     result = ctx.runner.run(
         argv,
         cwd=desk,
@@ -311,7 +342,7 @@ def _run_agent(
             digest=snapshot.name,
             tools=output.tools,
         )
-    return result, output.text
+    return result, run_result.reported(result.stdout, reports, server=cards.SERVER, version=runtime.version)
 
 
 def _echo(out: TextIO, line: str) -> None:

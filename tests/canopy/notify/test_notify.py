@@ -62,7 +62,7 @@ def json_messages(out: Path) -> list[dict[str, Any]]:
 
 def done_with_no_pr() -> Script:
     """The worker reports its ticket done with no PR, so its unit raises no `unobserved_pr` the sink would hear of."""
-    return worker_does(result=json.dumps({k: v for k, v in json.loads(WORKER_DONE).items() if k != "pr"}))
+    return worker_does(result=json.dumps({k: v for k, v in json.loads(WORKER_DONE).items() if k != "prs"}))
 
 
 def needing_reviewers(*keys: str) -> list[Called]:
@@ -697,7 +697,7 @@ def test_notify_test_sends_now_and_changes_nothing(
 def test_chore_runs_reach_a_sink_that_takes_chores(scenario: Scenario, sink_script: Path, tmp_path: Path) -> None:
     prompt = scenario.env.home / "chore.md"
     prompt.write_text("Check.\n")
-    chore_cmd = "agent run --agent canopy-chore {prompt}"
+    chore_cmd = "agent run --agent canopy-chore --format json {prompt}"
     # With a `when`, the overseer's to run or hold off (DESIGN §37).
     check = {"prompt": str(prompt), "every_minutes": 60, "cmd": chore_cmd, "when": "Weekdays only."}
     scenario.configures(chores={"check": check})

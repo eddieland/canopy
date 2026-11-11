@@ -373,6 +373,30 @@ def _no_model(*roles: str, run_args: bool = False) -> AfterValidator:
     return AfterValidator(check)
 
 
+def _prints_events(value: str) -> str:
+    """Refuse a template that does not ask the runtime for its events (DESIGN §13).
+
+    An agent reports its result by calling canopy's `result` tool, which canopy reads from the events the run prints,
+    as it reads the run's session, spend, and progress: without them the run could report nothing.
+
+    Returns:
+        The template.
+
+    Raises:
+        ValueError: it asks for none.
+    """
+    if not invocation.prints_events(shlex.split(value)):
+        raise ValueError(
+            f"must have {invocation.NAME} print its events, as the default template does with `--format json`: "
+            "canopy reads the agent's result, session, and spend from them",
+        )
+    return value
+
+
+#: A template of an agent that reports its result by a tool call, so must print the runtime's events.
+_EVENTS = AfterValidator(_prints_events)
+
+
 def _refuse_model_option(template: str, instead: str, *, run_args: bool = False) -> None:
     """Refuse `template` if it passes the runtime a model or a variant, saying what to set `instead`.
 
@@ -797,19 +821,19 @@ class Runtime(Section):
     #: The overseer's temperature, or -1 to set none and leave the model's own: set -1 when the overseer runs on a
     #: model that refuses one, such as OpenAI's reasoning models.
     overseer_temperature: Annotated[Temperature, Scope.PRIVATE] = 0.1
-    worker_cmd: Annotated[AgentTemplate, Scope.PRIVATE, _no_model("worker")] = _default_cmd(agents.WORKER)
+    worker_cmd: Annotated[AgentTemplate, Scope.PRIVATE, _no_model("worker"), _EVENTS] = _default_cmd(agents.WORKER)
     # A private ticket's worker: its own agent, which cannot write to the tracker (DESIGN §22). Shares the worker's
     # timeout.
-    private_worker_cmd: Annotated[AgentTemplate, Scope.PRIVATE, _no_model("worker")] = _default_cmd(
+    private_worker_cmd: Annotated[AgentTemplate, Scope.PRIVATE, _no_model("worker"), _EVENTS] = _default_cmd(
         agents.PRIVATE_WORKER,
     )
     # The planner is its own agent, with no edit or shell tools and only the tracker's read tools (DESIGN §25); it
     # shares the worker's timeout.
-    plan_cmd: Annotated[AgentTemplate, Scope.PRIVATE, _no_model("planner")] = _default_cmd(agents.PLANNER)
+    plan_cmd: Annotated[AgentTemplate, Scope.PRIVATE, _no_model("planner"), _EVENTS] = _default_cmd(agents.PLANNER)
     # A chore's default command; a chore that runs the operator's own tools sets its own (DESIGN §19).
-    chore_cmd: Annotated[AgentTemplate, Scope.PRIVATE, _no_model("chore")] = _default_cmd(agents.CHORE)
+    chore_cmd: Annotated[AgentTemplate, Scope.PRIVATE, _no_model("chore"), _EVENTS] = _default_cmd(agents.CHORE)
     # The reviewer; running it on a different model from the worker's, `models.reviewer`, is recommended (DESIGN §21).
-    review_cmd: Annotated[AgentTemplate, Scope.PRIVATE, _no_model("reviewer")] = _default_cmd(agents.REVIEWER)
+    review_cmd: Annotated[AgentTemplate, Scope.PRIVATE, _no_model("reviewer"), _EVENTS] = _default_cmd(agents.REVIEWER)
     #: The reviewer's temperature, or -1, the default, to set none and leave the model's own. The reviewer is meant to
     #: run on another model than the worker's (DESIGN §21), and some, such as OpenAI's reasoning models, refuse a
     #: request that sets one; set a low one when the reviewer runs on a model that takes it.

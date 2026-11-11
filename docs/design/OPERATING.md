@@ -341,11 +341,19 @@ it, which approves every one instead.
 
 ### What a run prints
 
-Every agent's output is read the same way, whether the template asks for plain text or JSON events. A JSON result
-contract (§8, §18, §19, §21) is the last line of the text that starts with `{`; lines after it that do not are passed
-over, since a runtime or plugin may print after the agent's last word. A last object that does not validate is no
-result: canopy never falls back to an earlier one, which may be an example the agent quoted or a result it took back.
-The overseer's done token is a plain line anywhere in its final message (§6).
+Every agent but the overseer reports its result by calling `result`, a tool of a server canopy gives its run: beside
+`status` (§41) for a worker, planner, reviewer, or task's worker, and beside a chore's history (§19). Its arguments are
+the result's fields (§8, §18, §19, §21, §25, §36), so the runtime writes the JSON, and the tool's input schema, not the
+prompt, says what each field holds: the fields of the run's kind, and those this run is asked for, such as memory's
+while a tier is on (§28). It refuses any other field, and a result that does not validate, while the agent can still
+send it again. The server writes nothing: the harness reads the last call the server took from the events the run
+prints, as it reads an update, holds it to the same input, and then checks it as untrusted (D026). So config refuses a
+template of these agents that does not ask for the runtime's events, and nothing an agent prints is its result. The
+definitions allow the tool by exact name (§27). A run that reports none is `unknown`.
+
+A chore that runs the operator's own command or agent prints its result instead, one JSON line, the last of its text
+that starts with `{`: a line that is not JSON only for a few closing brackets, outside any string, is read with them
+put right. The overseer's done token is a plain line anywhere in its final message (§6).
 
 From the events the harness also reads, each validated (D026), the session id, the cost, the context used, and the
 tool calls by tool, a skill's by the skill it loaded, and records them on the tick or run (§11) with the digest of the

@@ -5,12 +5,14 @@ import sqlite3
 from pathlib import Path
 from typing import cast
 
+import pydantic
 import pytest
 
 from canopy.core import contract, conversation, db, outbox, records, sql
+from canopy.core.vocab import RunStatus
 from canopy.loop import attention
 from canopy.notify import message
-from canopy.runs import follow_ups
+from canopy.runs import follow_ups, worker
 from tests.canopy.helpers import (
     KEY,
     agent_runs,
@@ -29,6 +31,8 @@ from tests.conftest import GitPool
 FOLLOW_UP = "PROJ-14"
 #: A private worker's result: done, and nothing filed.
 DONE: dict[str, object] = {"status": "done", "summary": "did it"}
+#: What the run's note says when its `result` tool took no result.
+NO_RESULT = "the worker reported no result"
 
 
 def recorded(conn: sqlite3.Connection) -> list[tuple[str, str, int, str | None]]:
@@ -64,7 +68,7 @@ def test_an_implement_records_each_follow_up_it_reports_with_its_repository(
     assert note_of(run.row) == ""
     # The worker was told it may file them, how, and how to report them.
     assert "You may file follow-up tickets" in run.prompt
-    assert '"created":{"<key>":"<repository or null>"}' in run.prompt
+    assert "Name every ticket you created in your result's `created`" in run.prompt
     assert "File at most 5" in run.prompt
 
 
@@ -126,19 +130,32 @@ def test_a_run_records_at_most_max_follow_ups_the_first_in_its_order(scenario: S
 
 def test_at_zero_workers_file_none_and_nothing_is_recorded(scenario: Scenario, git_pool: GitPool) -> None:
     scenario.configures("workspace", policy={"max_follow_ups": 0})
+    # The run is asked for no follow-up, so its tool refuses a result that names one.
     run = scenario.run(worker=pushes(created={FOLLOW_UP: None}))
+    assert (run.status, note_of(run.row)) == (RunStatus.UNKNOWN, NO_RESULT)
     assert recorded(scenario.conn) == []
-    assert f"{FOLLOW_UP}: policy.max_follow_ups is 0" in note_of(run.row)
     assert "File no tickets in the tracker: the operator set policy.max_follow_ups to 0." in run.prompt
+    # Behind the tool, the check refuses it too.
+    checked = follow_ups.check(scenario.conn, {FOLLOW_UP: None}, parent=KEY, repos={"repo"}, limit=0)
+    assert (checked.recorded, [(r.key, r.why) for r in checked.refused]) == (
+        {},
+        [(FOLLOW_UP, "policy.max_follow_ups is 0")],
+    )
 
 
 def test_a_follow_ups_runs_file_none(scenario: Scenario, git_pool: GitPool) -> None:
     scenario.run(worker=pushes(created={FOLLOW_UP: "repo"}))
+    # The run is asked for no follow-up, so its tool refuses a result that names one.
     run = scenario.run(dispatches(FOLLOW_UP), worker=pushes(created={"PROJ-20": None}))
-    assert run.status == "done"
+    assert (run.status, note_of(run.row)) == (RunStatus.UNKNOWN, NO_RESULT)
     assert [f.key for f in records_of(scenario.conn)] == [FOLLOW_UP]
-    assert f"PROJ-20: {FOLLOW_UP} is itself a follow-up, and a follow-up's runs file none" in note_of(run.row)
     assert f"File no tickets in the tracker: {FOLLOW_UP} is itself a follow-up of {KEY}" in run.prompt
+    # Behind the tool, the check refuses it too.
+    checked = follow_ups.check(scenario.conn, {"PROJ-20": None}, parent=FOLLOW_UP, repos={"repo"}, limit=5)
+    assert (checked.recorded, [(r.key, r.why) for r in checked.refused]) == (
+        {},
+        [("PROJ-20", f"{FOLLOW_UP} is itself a follow-up, and a follow-up's runs file none")],
+    )
 
 
 def test_a_follow_up_authorizes_nothing_and_canopy_tells_the_operator_once(
@@ -284,13 +301,27 @@ def test_a_key_another_run_recorded_first_is_named_as_refused(scenario: Scenario
     assert stored[follow_ups.STORED] == {"keys": [FOLLOW_UP], "others": 0}
 
 
+@pytest.mark.parametrize("created", ["PROJ-14", ["PROJ-14"], 7, {"PROJ-14": 7}, {"PROJ-14": ["repo"]}])
+def test_the_tool_refuses_a_created_field_that_is_not_an_object_of_keys(created: object) -> None:
+    """The run's tool takes an object from each key to its repository, so the worker can send it again."""
+    asked = worker.WORKER.input([follow_ups.GROUP])
+    asked.model_validate({"status": "done", "created": {FOLLOW_UP: "repo", "PROJ-15": None}})
+    with pytest.raises(pydantic.ValidationError, match="created"):
+        asked.model_validate({"status": "done", "created": created})
+
+
+def test_a_worker_that_never_sends_an_object_of_keys_reported_no_result(scenario: Scenario, git_pool: GitPool) -> None:
+    run = scenario.run(worker=pushes(created=[FOLLOW_UP]))
+    assert (run.status, note_of(run.row)) == (RunStatus.UNKNOWN, NO_RESULT)
+    assert recorded(scenario.conn) == []
+    assert follow_ups.STORED not in contract.stored_object(run.row["result_json"])
+
+
 @pytest.mark.parametrize("created", ["PROJ-14", ["PROJ-14"], 7])
-def test_a_created_field_that_is_not_an_object_is_one_refused_entry(
+def test_behind_the_tool_a_created_field_that_is_not_an_object_is_one_refused_entry(
     scenario: Scenario,
-    git_pool: GitPool,
     created: object,
 ) -> None:
-    run = scenario.run(worker=pushes(created=created))
-    assert run.status == "done"
-    assert recorded(scenario.conn) == []
-    assert contract.stored_object(run.row["result_json"])[follow_ups.STORED] == {"keys": [], "others": 1}
+    checked = follow_ups.check(scenario.conn, created, parent=KEY, repos={"repo"}, limit=5)
+    assert checked.recorded == {}
+    assert [(r.key, r.why) for r in checked.refused] == [(None, "`created` is not an object of ticket keys")]

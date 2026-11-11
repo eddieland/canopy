@@ -145,7 +145,7 @@ def test_a_review_that_ends_any_way_but_done_is_not_scored(scenario: Scenario, c
     cases(scenario, case("retry", sha, base, "retry.py:1"), case("sound", sha, base, pr=THEIRS))
     with reviewer_reports("no result line"):
         printed = scenario.operator("review", "eval")
-    assert "| retry | bug | unknown | not scored: the reviewer's last line was not a valid result |" in printed.out
+    assert "| retry | bug | unknown | not scored: the reviewer reported no result |" in printed.out
     assert "Recall: 0 of 0 bug cases. False alarms: 0 of 0 clean cases" in printed.out
 
 
