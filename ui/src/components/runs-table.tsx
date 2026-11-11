@@ -14,6 +14,7 @@ import { PullRequestLink } from '@/components/pull-request-link'
 import { ReviewLink } from '@/components/review-link'
 import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { ListRow, RowLine, RowList } from '@/components/rows'
+import { RunCommits } from '@/components/run-commits'
 import { RunDoing } from '@/components/run-doing'
 import { RunLink } from '@/components/run-link'
 import { RunProgressLine } from '@/components/run-progress'
@@ -28,7 +29,7 @@ import { isUnread, modelNames, runModelIds, sameModel, UNREAD, unservedReason } 
 import { choreRunRef } from '@/lib/refs'
 import { shortSha, verdictText, verdictTone } from '@/lib/reviews'
 import { ROW_SUBGRID, rowLineFrom } from '@/lib/rows'
-import { diffAnchor, linesText, rangeSpan, rangeTitle } from '@/lib/run-changes'
+import { commitsLeftOutText, diffAnchor, linesText, rangeSpan, rangeTitle } from '@/lib/run-changes'
 import { RUN_TEXT } from '@/lib/run-state'
 import type { SubjectRuns } from '@/lib/run-state'
 import { taskTitle } from '@/lib/tasks'
@@ -437,6 +438,21 @@ function RunBody({
                     )}
                 </RowLine>
             )}
+            {/* On a PR's page, the branch's history: the run's commits there, and the kick canopy pushed after it. */}
+            {ownPr !== undefined &&
+                run.ranges
+                    .filter((range) => range.commits.length > 0 || range.kick !== null)
+                    .map((range) => (
+                        <RowLine key={range.repo} from={under}>
+                            <RunCommits
+                                commits={range.commits}
+                                prUrl={ownPr}
+                                onOrigin={range.unpushed_sha === null}
+                                leftOut={commitsLeftOutText(range)}
+                                kick={range.kick}
+                            />
+                        </RowLine>
+                    ))}
         </>
     )
 }

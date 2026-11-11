@@ -121,4 +121,21 @@ the build is the tests that hold it and the mock's ABC-130, whose `resume` worke
 on PR 61; with no diff kept, the page names the latest run that left its work on origin and why it kept none, in its
 Diff panel's words; its runs list names each run's range in the PR's repository alone, a joint run's other repository
 being its own PR's. The mock's run 45 now counts its change, so the screenshot of PR 88's page, whose runs list and
-threads panel both change, is to be taken again. Live check next: this milestone's Accept.
+threads panel both change, is to be taken again. Stage 3, 2026-11-10, against the fakes: as stage 1 reads the range,
+`_run` and `_task` log its commits, the newest 100 a row each in `run_commits` and all counted on `run_changes`
+(migration 0015), each with its subject cut and every hidden character named, whether it carries canopy's trailers and
+prefix and another co-author's, and whether the push check's own push put it on origin, which the check now reports;
+the note for a commit that lacks a mark stays. `canopy show run:ID` and `task:N` list them for the operator, and tell
+an agent reading the run, through `show-run` or inside a tick, only how many there were, since a subject is a worker's
+text. A run's page lists them under its Diff panel's files, each opening its page on GitHub through the PR's URL, and
+a PR's runs list puts each run's commits there under its range, with the kick canopy pushed after it, as the branch's
+history. Chosen conservatively, for the operator to change: another co-author is any `Co-authored-by` trailer canopy
+did not form, since canopy knows no runtime's; a commit counts as canopy's push when the push check pushed it, never a
+kick's copy, which the kick's line names. The mock's runs 39 and 45 and task 1's run carry commits, so the screenshots
+of `workspace/runs/39`, `tasks/1/runs/1`, and PR 88's page are to be taken again. Stage 4 waits for its own go-ahead,
+after stages 1 to 3 have been in real use. Live check next: this milestone's Accept, stage 3's line included.
+Measured 2026-11-10 (MEASUREMENTS "2026-11-10: M69, the disk canopy's files take"): the journal's diff tables take about
+160 KiB for the 78 runs with changes recorded since 2026-11-09, and garbage collection does not count the kept diff
+files apart from the run's others. The operator's word (2026-11-10): a run's Diff page did replace GitHub's compare view
+for judging a run. A follow-up, not a blocker: its UI and UX still need polish, for example with Impeccable. Not yet
+measured: the kept diffs' disk per run and per day, how many runs kept none and why, and a full week of it.

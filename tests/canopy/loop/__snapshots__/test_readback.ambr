@@ -1,4 +1,19 @@
 # serializer version: 1
+# name: test_each_repositorys_commits_are_printed_oldest_first_with_the_marks_they_lack
+  '''
+  api  111111111111..222222222222, merge base 333333333333
+    not kept: gone
+    commits (4, the oldest 1 not recorded):
+      555555555555  PROJ-7: the change  [another co-author]
+      666666666666  a commit around the hooks <U+200B>  [no canopy trailer, no prefix]
+      777777777777  PROJ-7: the rest  [pushed by canopy]
+  docs  111111111111..222222222222, merge base 333333333333
+    not kept: gone
+    commits (0)
+  web  111111111111..222222222222, merge base 333333333333
+    not kept: gone
+  '''
+# ---
 # name: test_each_repositorys_range_and_kept_diffs_are_printed
   '''
   api  111111111111..222222222222, merge base 333333333333

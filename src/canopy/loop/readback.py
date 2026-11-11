@@ -37,7 +37,7 @@ from canopy.loop import attention
 from canopy.loop.render import chore_line, named, prs_of, result_of, spent
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
     from pathlib import Path
 
     from canopy.core import records
@@ -130,10 +130,11 @@ def read_decisions(ctx: Context, request: Decisions) -> str:
     return "\n".join(lines)
 
 
-def read_run(ctx: Context, request: ShowRun, *, card: bool = False) -> str:
-    """Print a run, as `canopy show run:ID` prints it, with its agent's progress when `card` says so.
+def read_run(ctx: Context, request: ShowRun, *, operator: bool = False) -> str:
+    """Print a run, as `canopy show run:ID` prints it, with what is the operator's alone when `operator` says so.
 
-    A run's progress is the operator's alone (DESIGN §41): the report a chore's agent reads leaves it out.
+    A run's progress is the operator's alone (DESIGN §41), and so are its commits' subjects, a worker's text no agent
+    is given (§45): the report a chore's agent reads leaves them out.
 
     Returns:
         The run's lines and its messages.
@@ -164,13 +165,17 @@ def read_run(ctx: Context, request: ShowRun, *, card: bool = False) -> str:
     answered = checklist_lines(checklist_answers.of_run(ctx.conn, run_id), pushed, log_path=str(run["log_path"]))
     if answered:
         lines.extend(["\nChecklist:", *(f"  {line}" for line in answered)])
-    changed = change_lines(run_changes.of_run(ctx.conn, run_id), log_path=str(run["log_path"]))
+    changed = change_lines(
+        run_changes.of_run(ctx.conn, run_id),
+        log_path=str(run["log_path"]),
+        commits=run_changes.commits_of(ctx.conn, run_id) if operator else None,
+    )
     if changed:
         lines.extend(["\nChanged:", *(f"  {line}" for line in changed)])
     # Its agent's progress, while it runs and its last once it ends (DESIGN §41).
     running = run["status"] == RunStatus.RUNNING
     standing = cards.of(run)
-    if card and (standing.card is not None or running):
+    if operator and (standing.card is not None or running):
         lines.extend(
             cards.lines(
                 standing,
@@ -181,7 +186,7 @@ def read_run(ctx: Context, request: ShowRun, *, card: bool = False) -> str:
             ),
         )
     # The operator's messages to it while it ran, and when its agent fetched each (DESIGN §44): the operator's alone.
-    sent = run_inbox.sent_to(ctx.conn, "runs", run_id) if card else []
+    sent = run_inbox.sent_to(ctx.conn, "runs", run_id) if operator else []
     if sent:
         lines.extend([f"\nYour messages to it ({len(sent)}):", *run_inbox.show_lines(sent, running=running)])
     messages = db.run_messages(ctx.conn, run_id)
@@ -217,16 +222,24 @@ def checklist_lines(
     return lines
 
 
-def change_lines(changes: Sequence[records.RunChange], *, log_path: str) -> list[str]:
+def change_lines(
+    changes: Sequence[records.RunChange],
+    *,
+    log_path: str,
+    commits: Mapping[str, Sequence[records.RunCommit]] | None = None,
+) -> list[str]:
     """What a run changed in each repository (DESIGN §45): its range in short commits, and where its diffs are kept.
 
     `canopy show run:ID` prints them under a heading, and `canopy show task:N` under each of its runs. A range is from
     the commit the run started from to the one it left on origin, or, for a slot it left unpushed, to the last commit it
     made there, marked as not on origin. A diff that was not kept is said to be missing, with why; one kept and since
-    removed with the run's other files (§26) is said to be removed.
+    removed with the run's other files (§26) is said to be removed. Then the range's commits, by repository in
+    `commits`, oldest first, each with the marks it lacks and whether canopy's own push put it on origin; their count
+    alone when `commits` is None, as for an agent, which is given no worker's subject (§45).
 
     Returns:
-        The lines, unindented: a repository's range, then a line for each diff kept, then why one was not.
+        The lines, unindented: a repository's range, then a line for each diff kept, then why one was not, then its
+        commits.
     """
     lines: list[str] = []
     for c in changes:
@@ -246,6 +259,36 @@ def change_lines(changes: Sequence[records.RunChange], *, log_path: str) -> list
             lines.append(f"  against its base {_kept(review_diff.run_path_for(log_path, c.repo))}")
         if c.missing is not None:
             lines.append(f"  not kept: {one_line(c.missing)}")
+        lines.extend(commit_lines(c, commits.get(c.repo, ()) if commits is not None else None))
+    return lines
+
+
+def commit_lines(change: records.RunChange, commits: Sequence[records.RunCommit] | None) -> list[str]:
+    """The commits a run recorded in one repository's range (DESIGN §45), oldest first, under a count.
+
+    Each is its short commit and its subject, the branch's text, cut to a line, then what canopy's marks say of it in
+    brackets: the trailers or prefix it lacks (TRUST_MODEL T5), a co-author trailer not canopy's, and whether canopy's
+    own push, not the worker, put it on origin. `commits` None prints the count alone.
+
+    Returns:
+        The lines, each indented by two spaces; none for a range whose commits were not read.
+    """
+    if change.commit_count is None:
+        return []
+    if commits is None:
+        return [f"  commits ({change.commit_count})"]
+    older = change.commit_count - len(commits)
+    more = f", the oldest {older} not recorded" if older > 0 else ""
+    lines = [f"  commits ({change.commit_count}{more}){':' if commits else ''}"]
+    for commit in commits:
+        marks = [
+            *(["no canopy trailer"] if commit.canopy_trailer is False else []),
+            *(["no prefix"] if commit.prefixed is False else []),
+            *(["another co-author"] if commit.runtime_trailer else []),
+            *(["pushed by canopy"] if commit.harness_pushed else []),
+        ]
+        noted = f"  [{', '.join(marks)}]" if marks else ""
+        lines.append(f"    {commit.sha[:_SHORT]}  {one_line(commit.subject)}{noted}")
     return lines
 
 

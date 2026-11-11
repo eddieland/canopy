@@ -129,16 +129,19 @@ Controls:
   local store's database or starts a server of its own, leaves the ticket the worker's word, so a steered worker could
   name another ticket the journal holds: a listed author's comment on its artifact would then steer that ticket's next
   worker, and anyone else's would raise an item about it.
-- The harness records the decisions that need no judgment itself, before the overseer runs (DESIGN §37): today only
-  `wait`, for a ticket whose worker is running and for a private ticket's question the operator has not answered,
-  each read from the journal, and only when every row the derivation finds for the ticket and its units is one of
-  these, none stale. Such a ticket's text reaches no overseer that tick, and whatever the overseer records about it, a
-  decision, dispatch, attention item, or `ticket-set`, is refused `decided`, so a steered overseer cannot overrule the
-  harness; an item the overseer raised on it stands until the overseer is given the ticket again, or it is done or
-  stopped. Residual: the harness reads the absence of every other row from the
-  derivation, so a row it misses waits until the overseer is given the ticket again. Its dispatches carry no
-  model-written context: today it starts only a due chore with no `when`, whose `chore-run` and `chore-wait` the
-  overseer is refused `decided`, and no ticket's run, since each rests on an observation.
+- The harness records the decisions that need no judgment itself, before the overseer runs (DESIGN §37): today `wait`,
+  for a ticket whose worker is running and for a private ticket's question the operator has not answered, each read from
+  the journal, and `done` for a ticket the `tracker` source read closed and `skip` for one it read open with no queue
+  label that the query returned, each with no worker of it running and none of its units holding a row; and only when
+  every row the derivation finds for the ticket and its units is one of these, none stale. Such a ticket's text reaches
+  no overseer that tick, and whatever the overseer records about it, a decision, dispatch, attention item, or
+  `ticket-set`, is refused `decided`, so a steered overseer cannot overrule the harness; an item the overseer raised on
+  it stands until the overseer is given the ticket again, or it is done or stopped. Residual: the harness reads the
+  absence of every other row from the derivation, so a row it misses waits until the overseer is given the ticket again;
+  and a tracker that reports a ticket closed ends canopy's work on it, as the overseer reading the same observation
+  would, until the operator forgets the ticket. Its dispatches carry no model-written context: today it starts only a
+  due chore with no `when`, whose `chore-run` and `chore-wait` the overseer is refused `decided`, and no ticket's run,
+  since each rests on an observation.
 - The attention items that need no judgment (`needs_reviewer`, `ready_to_merge`, `untrusted_review`, `attempt_limit`,
   `review_failed`, `review_limit`, `plan_review`, `plan_changed`) are the harness's, raised from the journal and the
   observations in its own words, and kept while an observation they rest on is stale (DESIGN §14). The overseer is
@@ -161,7 +164,9 @@ Controls:
   shown to the operator as text, bounded and with every control character dropped, at the terminal (`canopy show
   --diff`) as on a page, and put in no agent's prompt or state block. Its range is the harness's own reads of commits,
   never the agent's word; `canopy show run:ID`, which an agent may read through `show-run`, names the commits and the
-  files' paths, never a diff's text.
+  files' paths, never a diff's text. Its commits' subjects are a worker's text too, kept cut with every hidden
+  character named and shown to the operator alone: `canopy show` run inside a tick or a run, and `show-run`, print
+  how many commits there were and no subject.
 - Review feedback from anyone not in `trust.trusted_reviewers` (private, empty by default) starts no run on its own
   (D089). The overseer records `untrusted_review` and keeps its `review` cursor before it until the operator answers in
   canopy, with `canopy reply` or the web UI; the `resume` worker addresses such a comment only as an operator message
@@ -714,8 +719,9 @@ Controls now:
   object directory is deleted and the slot returned, by `_run` or, for a `_run` that was killed, by reconcile (DESIGN
   §8, §15). What a run changed (DESIGN §45) is read in those steps, of every worker's and task's run: `ls-remote`,
   `rev-parse`, `merge-base`, and `diff` of commits the slot already holds, the reads a run under `approve` made before,
-  with no driver or textconv, and the push check's own reads for an unpushed slot. Nothing new is read from a slot,
-  and nothing there is fetched, pushed, or moved.
+  with no driver or textconv, the push check's own reads for an unpushed slot, and `log` and `rev-list` of the same
+  commits for their ids, subjects, and trailers, bounded, as the marks' check already read them. Nothing new is read
+  from a slot, and nothing there is fetched, pushed, or moved.
 - The sandbox canary (`tests/canopy_sandbox/test_sandbox_canary.py`, HOST_ISOLATION §6) runs a plain script, no model,
   through the real prefix and the shipped templates, and checks every sandbox denial above on the host, with positive controls
   so that a sandbox that refuses everything fails. CI runs it on Linux.
@@ -756,7 +762,9 @@ but must be distinguishable:
   checklist and no mark to add, since their `pre-push` holds the push for the list (T4, DESIGN §42); what they add to a
   commit is the marks alone, none in such a run. Each run's range of commits is a row (DESIGN §45), the harness's
   read of origin as the run ended and before any kick, kept for good, so who put which commits on a branch can be told
-  after a kick rewrites it.
+  after a kick rewrites it; so is each commit in it, with whether it carries canopy's marks and another co-author's,
+  and whether the harness's own push, not the worker, put it on origin. The report's note on a commit that lacks a
+  mark stays.
 - PRs labeled `agent` where the runtime gives the worker a GitHub tool that sets labels (D084); every PR title carries
   the ticket key, and its branch the prefix.
 - `decisions` and `runs` tables are a complete local audit log of what the
