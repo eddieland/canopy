@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from canopy.core import db, epics, personas, plan_threads, plans, records
+from canopy.core import db, epics, personas, plan_export, plan_threads, plans, records
 from canopy.core.vocab import PlanStatus, RunKind
 from canopy.serve.schema.persona import RunPersona
 from canopy.serve.schema.plan import (
@@ -63,10 +63,12 @@ def plan_file(ctx: Context, plan: records.Plan) -> PlanFile:
     """
     path = plans.path_for(ctx.state_dir, plan.ticket_key, plan.run_id)
     reading = plans.read(path)
+    title = db.ticket_titles(ctx.conn, [plan.ticket_key]).get(plan.ticket_key)
     return PlanFile(
         plan=plan_summary(ctx.conn, plan),
         persona=run_persona(ctx, plan.run_id),
         path=str(path),
+        archive_name=plan_export.name("plan", plan, reading.text or "", ticket_title=title),
         text=reading.text,
         problem=reading.problem,
         sha256=reading.sha256,

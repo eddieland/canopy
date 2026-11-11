@@ -31,6 +31,7 @@ import type { ReactNode } from 'react'
 import { PlanBlockActions } from '@/components/block-actions'
 import { Panel, PanelFooter, PanelHeader } from '@/components/panel'
 import { DecisionsJump, PlanDecisions } from '@/components/plan-decisions'
+import { PlanFileMenu } from '@/components/plan-file-menu'
 import { AskForChanges, DraftForm, PlanThreads, ThreadCard } from '@/components/plan-threads'
 import type { Draft, ThreadActions } from '@/components/plan-threads'
 import { Button } from '@/components/ui/button'
@@ -144,6 +145,8 @@ export function PlanEditor({
     comments = true,
     decides = editable,
     name = 'plan',
+    file = `${name}.md`,
+    unsaved = false,
 }: {
     /** The plan, as Markdown. Read when the editor opens. */
     markdown: string
@@ -215,6 +218,10 @@ export function PlanEditor({
     decides?: boolean
     /** What a file saved from the plan, such as a diagram's picture, is named for: `ABC-102-plan-2`. */
     name?: string
+    /** What the plan's Markdown is saved as, whole: the name `canopy archive` gives it, where it has one. */
+    file?: string
+    /** Whether the page holds edits the plan's file does not have yet, which a copy of it then carries. */
+    unsaved?: boolean
 }) {
     const editor = useEditor({
         extensions: planExtensions([
@@ -599,6 +606,11 @@ export function PlanEditor({
                                 Markdown
                             </Toggle>
                             {!raw && <OutlineMenu editor={editor} ticket={marks} />}
+                            <PlanFileMenu
+                                markdown={() => source ?? editor.getMarkdown()}
+                                file={file}
+                                unsaved={unsaved}
+                            />
                         </span>
                         {editable && !raw && (
                             <FormatBar editor={editor} canComment={seen.selected} onComment={startComment} />

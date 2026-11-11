@@ -495,6 +495,29 @@ test.describe('copying out of the plan', () => {
         expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('iter_rows()')
     })
 
+    test("the plan's Markdown is copied and saved whole, edits included, as the Markdown mode shows it", async ({
+        page,
+    }) => {
+        await clickAtEnd(plan(page).getByRole('heading', { name: 'Files' }))
+        await page.keyboard.type(' changed')
+        const menu = page.getByRole('button', { name: 'Copy or save the plan' })
+        await menu.click()
+        await page.getByRole('menuitem', { name: 'Copy as Markdown' }).click()
+        await expect(page.getByRole('status').filter({ hasText: 'Copied the plan as Markdown' })).toBeVisible()
+        const copied = await page.evaluate(() => navigator.clipboard.readText())
+        expect(copied).toContain('## Files changed')
+
+        await page.getByRole('button', { name: 'Markdown', exact: true }).click()
+        expect(copied).toBe(await page.getByRole('textbox', { name: 'Plan as Markdown' }).inputValue())
+
+        await menu.click()
+        const saving = page.waitForEvent('download')
+        await page.getByRole('menuitem', { name: 'Save as .md' }).click()
+        const download = await saving
+        expect(download.suggestedFilename()).toBe('plan.md')
+        expect(await readFile(await download.path(), 'utf8')).toBe(copied)
+    })
+
     test("a table's actions copy its Markdown, its rows for a spreadsheet, and save them as CSV", async ({ page }) => {
         const table = plan(page).locator('.plan-table')
         await table.hover()

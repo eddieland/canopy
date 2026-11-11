@@ -18,6 +18,7 @@ import { keys, ticketPlanQuery } from '@/api/queries'
 import type { PlanChanged, PlanFile, PlanSummary, TicketPlans } from '@/api/types'
 import { Age } from '@/components/age'
 import { ApprovedBand } from '@/components/approved-band'
+import { CopyablePath } from '@/components/copy-button'
 import { Disclosure } from '@/components/disclosure'
 import { LinkedText } from '@/components/linked-text'
 import { Notice } from '@/components/notice'
@@ -130,9 +131,9 @@ function emptyText(plans: TicketPlans): string {
 
 /**
  * The plan's state in a sentence or two, its page's description: the run that wrote it, its approval, what changed in
- * its file since, how much work its planner judged it, and what comes next. Its status and age are its panel's header,
- * and changes asked are the band under the page's header (`ChangesAsked`); with no plan, its panel says what comes,
- * and this says nothing.
+ * its file since, how much work its planner judged it, what comes next, and where its file is. Its status and age are
+ * its panel's header, and changes asked are the band under the page's header (`ChangesAsked`); with no plan, its panel
+ * says what comes, and this says nothing.
  */
 export function PlanState({ plans }: { plans: TicketPlans }) {
     const newest = plans.newest
@@ -190,6 +191,10 @@ export function PlanState({ plans }: { plans: TicketPlans }) {
                     {sentence}
                 </Fragment>
             ))}
+            {/* Where its file is, on a line of its own, for the operator's own tools. */}
+            <span className="block" data-testid="plan-file-path">
+                Its file: <CopyablePath path={newest.path} label="plan path" />
+            </span>
         </>
     )
 }
@@ -420,6 +425,8 @@ function NewestPlan({
             edited={newest.edited}
             marks={ticketKey}
             name={`${ticketKey}-plan-${newest.plan.id}`}
+            file={newest.archive_name}
+            unsaved={dirty}
             // A waiting plan that replaced one is read for what changed, so its changes show first.
             previous={
                 before !== undefined && typeof replaced?.text === 'string'
@@ -586,6 +593,7 @@ function EarlierPlan({ ticketKey, plan }: { ticketKey: string; plan: PlanSummary
                                 onThreadsChange={ignore}
                                 editable={false}
                                 name={`${ticketKey}-plan-${plan.id}`}
+                                file={found.archive_name}
                             />
                             {found.persona !== null && <PersonaPanel persona={found.persona} />}
                         </div>

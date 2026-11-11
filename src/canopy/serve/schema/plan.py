@@ -63,6 +63,9 @@ class PlanFile(Model):
     """The persona its planner wrote in, and its instructions; none for a run from before canopy recorded one."""
     path: str
     """The file, under the state directory: the operator reads and edits it with their own tools too."""
+    archive_name: str
+    """Its name as `canopy archive` exports it, `412-APPROVED-export-reports-as-csv.md`: what a copy saved from the page
+    is named, so one plan has one name whichever way it left."""
     text: str | None = None
     """Its Markdown, or none when the file is not a plan any more: `problem` says why."""
     problem: str | None = None

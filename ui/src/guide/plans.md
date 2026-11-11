@@ -71,7 +71,8 @@ planner's choices, and says so itself. In Attention, a `plan review` row says `2
 so you can tell a plan with questions from a rubber stamp before you open either.
 
 There, the plan opens in an editor. The page's title names the plan and its ticket, and the line under it says which
-run wrote it, when you approved it and how, whether its file was edited since, and its effort. A member of an epic
+run wrote it, when you approved it and how, whether its file was edited since, and its effort, then where its file
+is, with a copy button, for your own editor. A member of an epic
 gets one more line: `follows epic:2's plan`, the start of that plan's hash, and when you approved it, since its planner
 read the epic's approved plan beside the ticket. When you've approved a newer plan of the epic since, the line says so
 and when, and leaves what changed for you to read on [the epic's plan page](epics#an-epics-plan). The **Plan** panel's
@@ -95,6 +96,13 @@ The plans are compared section by section first, each heading paired with its na
 the section most like it when the heading was renamed. So a section the planner moved wears a small **moved** at its
 heading instead of being struck out in one place and pasted green in another, and one it dropped folds into a single
 **Section removed** line where it used to be. Open that line to read what went; it was probably the part you liked.
+
+The last button in the Plan panel's header takes the plan whole: **Copy as Markdown**, or **Save as .md**, for the
+PR that implements it, another agent, or a design review. What you get is what the page shows, your edits included;
+if they aren't saved yet, the toast says so, since a copy of a plan nobody saved is a copy of a plan nobody has. The
+file is named as `canopy archive` names it (`412-APPROVED-export-reports-as-csv.md`), so the same plan has the same
+name however it left. The same button sits on an earlier plan, an epic's plan, a feedback plan's file, and a task's
+report.
 
 **Outline**, at the right of the Plan panel's header, lists the plan's headings, each step indented under its
 section, and goes to the one you pick, with the cursor in it if you can edit. Every plan has the same headings (Goal,
