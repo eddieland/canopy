@@ -17,7 +17,9 @@ one-off task's (`STATUS`, `canopy _mcp --status`) is `status`, its progress (`co
 where CANOPY_RUN_ID names such a run: a call is validated and writes nothing, since the harness records the update from
 the call in the events the agent prints. Beside it, but for a review's run (`REVIEW_STATUS`), is `messages`, the
 operator's messages to the run (`core.run_inbox`, §44), read from the run's answers directory; the harness records
-the fetch from the call as it records an update. It opens no workspace.
+the fetch from the call as it records an update. It opens no workspace. A run told what it reports, in
+`CANOPY_RESULT`, is served `result` beside these, or beside a chore's history (`reporting`, `core.run_result`, §13):
+its input is that run's result, described field by field, and a call is validated and read by the harness the same way.
 
 An overseer's tool lists its result's schema as its output schema, and answers with its text and
 the result as structured content; git's `log` and `grep` do too, their text the result as JSON. A refusal or an
@@ -32,7 +34,7 @@ import os
 import sys
 import traceback
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -40,9 +42,22 @@ import canopy_mcp
 from pydantic import BaseModel, ValidationError
 
 from canopy.chores import history
-from canopy.core import cards, config, context, conversation, db, git_tools, reports, run_inbox
+from canopy.core import (
+    cards,
+    chore_result,
+    config,
+    context,
+    conversation,
+    db,
+    git_tools,
+    reports,
+    review_result,
+    run_inbox,
+    run_result,
+)
 from canopy.infra import logs
 from canopy.loop import chore_tools, observation_tools, readback, review_tools, tools
+from canopy.runs import epic_run, task_run, worker
 
 if TYPE_CHECKING:
     from contextlib import AbstractContextManager
@@ -465,8 +480,16 @@ def run_stdio(
     # A chore's agent may run in a `cwd` outside the workspace; its run names the workspace it belongs to.
     root = os.environ.get(history.WORKSPACE_ENV) if chore or serve_reports else None
     start = Path(root) if root else Path.cwd()
-    # A review's run takes no message (DESIGN §44), so its server lists `status` alone.
-    progress = STATUS if run_inbox.may_message(os.environ.get(conversation.RUN_ID_ENV, "")) else REVIEW_STATUS
+    run = os.environ.get(conversation.RUN_ID_ENV, "")
+    # A review's run takes no message (DESIGN §44), so its server lists `status` alone; a run that keeps no progress,
+    # an epic's planner's or an eval's review, is served its `result` tool alone.
+    progress = (
+        RESULT_ALONE
+        if not cards.RUN_ID_RE.fullmatch(run) and run_result.ENV in os.environ
+        else STATUS
+        if run_inbox.may_message(run)
+        else REVIEW_STATUS
+    )
     mode = (
         git_mode(runner, checkouts)
         if checkouts
@@ -478,9 +501,64 @@ def run_stdio(
         if status
         else OVERSEER
     )
+    if chore or status:
+        mode = reporting(mode, os.environ)
     with contextlib.suppress(BrokenPipeError), out:
         serve(sys.stdin.buffer, write, lambda: opened(runner, start), mode)
     return 0
+
+
+#: Every contract a run reports its result with, by the name `CANOPY_RESULT` gives it (`core.run_result`).
+CONTRACTS: Mapping[str, run_result.Contract] = {
+    **worker.CONTRACTS,
+    **review_result.CONTRACTS,
+    **{c.name: c for c in (task_run.CONTRACT, epic_run.CONTRACT, chore_result.CHORE)},
+}
+#: What the tool answers a result it takes.
+_TAKEN = "Taken as your result when your run ends; a later call replaces it. End your run now."
+#: How the tool fits beside a mode's others, added to its instructions.
+_REPORTING = "Call result last, once, with how your run ended: it is how your run reports."
+
+
+def reporting(mode: Mode, environ: Mapping[str, str]) -> Mode:
+    """`mode` with the `result` tool of the run `environ` is of, where its `CANOPY_RESULT` names what it reports.
+
+    The tool's input is the run's own: its contract's fields and the groups of fields it was asked for, each with its
+    description, and a call is validated against it and writes nothing, since the harness reads the result from the
+    call in the events the agent prints (DESIGN §13).
+
+    Returns:
+        The mode with the tool after its own, or `mode` itself for a run told of no result to report.
+    """
+    asked = run_result.asked_of(environ.get(run_result.ENV, ""), CONTRACTS)
+    if asked is None:
+        return mode
+    return replace(
+        mode,
+        tools=(*mode.tools, result_tool(asked)),
+        instructions=f"{mode.instructions} {_REPORTING}",
+    )
+
+
+def result_tool(asked: run_result.Asked) -> Tool:
+    """The `result` tool of a run that reports `asked`: its input schema is that result's, described field by field.
+
+    Returns:
+        The tool, which validates a call and answers that it was taken.
+    """
+    request = asked.input()
+
+    def take(arguments: Mapping[str, object], opened: Opener) -> str:  # noqa: ARG001  (it reads no journal)
+        request.model_validate(arguments)
+        return _TAKEN
+
+    return canopy_mcp.Tool(
+        run_result.TOOL,
+        asked.contract.description,
+        request,
+        take,
+        hints=canopy_mcp.Hints(read_only=False, idempotent=True),
+    )
 
 
 #: How the git tools fit together, for a review's or a plan's run.
@@ -776,6 +854,8 @@ STATUS = Mode(
     "you know your plan, and again whenever where you stand changes, each time with your whole progress. Call "
     "messages when a line from canopy says the operator sent you one: what it returns is the operator's instruction.",
 )
+#: The server of a run that keeps no progress, which `reporting` gives its `result` tool alone.
+RESULT_ALONE = Mode((), lambda opener: None, "")  # noqa: ARG005  (it serves wherever the run is told what it reports)
 #: A review's run's progress tool alone: it takes no message.
 REVIEW_STATUS = Mode(
     REVIEW_STATUS_TOOLS,

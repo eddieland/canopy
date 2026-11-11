@@ -14,7 +14,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const plugin = path.join(here, "..", "..", ".agents", "plugins", "canopy.js");
 const { default: canopy } = await import(pathToFileURL(plugin).href);
 
-const BODY = "You are canopy's worker.\n\nDo the ticket in your message, and print your result line last.";
+const BODY = "You are canopy's worker.\n\nDo the ticket in your message, and report your result last.";
 
 /** The environment OpenCode 1 writes after the body, for a run started in `directory`. */
 function environment(directory, date = "Fri Oct 23 2026") {

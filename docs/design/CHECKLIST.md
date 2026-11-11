@@ -61,7 +61,7 @@ has a list, not only when it has a mark to add. The hook's line and the worker's
 worker whose output reaches it cut short reads the list there. It is a reminder, not a guard: `--no-verify` skips it
 as it skips the repository's own hooks. The overseer, a planner, a reviewer, and a chore hear none.
 
-The worker's result line gains `checklist`: for each repository and item, `pass`, `fixed`, `held` with the reason, or
+The worker's result gains `checklist`: for each repository and item, `pass`, `fixed`, `held` with the reason, or
 `n/a`, validated (D026). A reminded run whose result answers no item is recorded as unanswered, never refused: its push
 is already made. The answers are the record the standing instructions lacked: the run's page shows them, and canopy
 counts, per repository and item, how often it was reminded, passed, fixed, held, and left unanswered, so an item earns

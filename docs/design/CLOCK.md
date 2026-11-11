@@ -36,7 +36,7 @@ for each, and each version reads only its own, so binding OpenCode 2 (D009) keep
 After each tool call that succeeds (`tool.execute.after`, MCP tools' included), once the run is in the last fifth of
 the time it had when the plugin loaded, and never more than its last 10 minutes, the plugin adds one line to the call's
 result: the minutes left, and, the first time in a session, to finish what keeps the work (commit and push, or record
-its decisions) and print the result line. The line goes after a built-in tool's output, and first in an MCP tool's
+its decisions) and report its result. The line goes after a built-in tool's output, and first in an MCP tool's
 content, which OpenCode truncates after the hook keeping its head; so the tracker's, GitHub's, and the overseer's own
 tools (§27) carry it too. OpenCode 2 truncates every tool's result after the hook, so there it goes first in all of
 them. Counting from its own load, at the session's start, keeps it to one variable.
@@ -82,7 +82,7 @@ is refused as before. A directory the shell would expand is left in the command.
 OpenCode 2 tells an agent a call its permission rules refuse as `Permission denied:` and the permission, nothing more,
 so an agent tries the same another way and spends its run on it. After such a call (`execute.after`) the plugin sets
 the refusal's reason to the runtime's words, what the call asked for, and one `[canopy]` line: the rules refuse it on
-purpose, it is not to be tried another way, and the result line says what remains if the work needs it. It changes
+purpose, it is not to be tried another way, and the result says what remains if the work needs it. It changes
 nothing else of the error, so the call stays refused as it was, and it reads only the refusal's permission and
 resources. A rule the repository or the operator set is explained as canopy's are (T7). 2's `evaluate` permission hook
 cannot do it: a refusal by the rules returns before the hook (2.1.2, read 2026-11-03). OpenCode 1 already tells the

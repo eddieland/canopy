@@ -10,10 +10,11 @@
     font-size: var(--text-2xs);
 }
 
-/* The config files' paths, the checklists' directory, a missing feedback plan's path, and an open desk's `code` line
- * are under the mock's temporary directory, and the system page's version names the commit, so they change with every
- * run, not the page. */
+/* The config files' paths, the checklists' directory, a missing feedback plan's path, a plan's file, and an open
+ * desk's `code` line are under the mock's temporary directory, and the system page's version names the commit, so they
+ * change with every run, not the page. */
 [data-testid='config-private-file'],
+[data-testid='plan-file-path'],
 [data-testid='desk-command'],
 [data-testid='config-models-file'],
 [data-testid='checklists-directory'],

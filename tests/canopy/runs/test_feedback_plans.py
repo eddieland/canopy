@@ -504,10 +504,11 @@ def test_a_feedback_plan_that_replaces_one_waiting_on_the_operator_waits_on_them
     feedback_planned(scenario, github_state)
     scenario.configures("private", policy={"planner_may_approve": True})
     scenario.operator("reply", KEY, "Accept bob's point instead.")
-    result = {"status": "done", "review": "not_needed", "review_reason": "Small."}
-    again = scenario.run(FEEDBACK_PLAN, worker=planner_does(plan="# Feedback plan, again\n", result=result))
+    again = scenario.run(FEEDBACK_PLAN, worker=planner_does(plan="# Feedback plan, again\n"))
     assert again.status == RunStatus.DONE
+    # It is not asked whether its plan needs review: neither told how to say so, nor given the fields to say it with.
     assert "## Whether the operator reviews this plan" not in again.prompt
+    assert agent_runs(scenario.agent_log)[-1]["env"]["CANOPY_RESULT"] == "feedback_plan"
     assert [(p.status, p.approved_channel) for p in feedback_plans.history(scenario.conn, KEY)] == [
         (PlanStatus.SUPERSEDED, None),
         (PlanStatus.PROPOSED, None),

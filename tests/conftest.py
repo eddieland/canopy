@@ -420,14 +420,20 @@ def user_toml(runtime: Version = Version.TWO) -> str:
 labels = ["agent-ready-tester"]
 
 [runtime]
-{version}overseer_cmd = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} agent run --agent canopy-overseer {{prompt}}'
-worker_cmd = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} agent run --agent canopy-worker {{prompt}}'
-private_worker_cmd = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} agent run --agent canopy-worker-private {{prompt}}'
-plan_cmd = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} agent run --agent canopy-planner --format json {{prompt}}'
+{version}overseer_cmd = '{_agent_cmd("canopy-overseer", events=False)}'
+worker_cmd = '{_agent_cmd("canopy-worker")}'
+private_worker_cmd = '{_agent_cmd("canopy-worker-private")}'
+plan_cmd = '{_agent_cmd("canopy-planner")}'
 
 {TRACKER_TOML}
 [paths]
 """
+
+
+def _agent_cmd(agent: str, *, events: bool = True) -> str:
+    """The template that runs the fake `agent`, printing its events unless it is the overseer's."""
+    flag = " --format json" if events else ""
+    return f"env OPENCODE_CONFIG_DIR={{definitions_dir}} agent run --agent {agent}{flag} {{prompt}}"
 
 
 @pytest.fixture

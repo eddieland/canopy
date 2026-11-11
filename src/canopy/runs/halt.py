@@ -7,7 +7,7 @@ that dies after it leaves reconcile to close the run `stopped`, not `crashed`. `
 counts toward attempt limits like any ended run.
 
 Asking it to wrap up writes a file in the run's answers directory, which canopy's plugin reads after each tool call: the
-agent is told once to keep its work and print its result line, and the run ends as any run does, on its own or at its
+agent is told once to keep its work and report its result, and the run ends as any run does, on its own or at its
 timeout. It is advice, as the clock's line is (§33): the timeout, and `--now`, stay what ends a run that goes on.
 """
 
@@ -49,7 +49,7 @@ def end(ctx: Context, run: records.Run, log: logs.TickAdapter) -> bool:
 
 
 def wrap_up(ctx: Context, run: records.Run, log: logs.TickAdapter) -> bool:
-    """Ask run `run`'s agent to wrap up: to keep its work and print its result line, which it hears on its next call.
+    """Ask run `run`'s agent to wrap up: to keep its work and report its result, which it hears on its next call.
 
     Returns:
         True once asked, or False if the run had already ended: nothing changes.

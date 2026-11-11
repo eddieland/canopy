@@ -14,7 +14,17 @@ from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
 
 from canopy.chores import history, start
-from canopy.core import agent_models, chore_runs, db, definitions, outbox, progress, run_models, run_offers
+from canopy.core import (
+    agent_models,
+    chore_runs,
+    db,
+    definitions,
+    outbox,
+    progress,
+    run_models,
+    run_offers,
+    run_result,
+)
 from canopy.core import chore_result as result
 from canopy.core import chore_view as view
 from canopy.core.config import render_command
@@ -127,8 +137,27 @@ def prepare(ctx: Context, name: str, chore: Chore, prompt: str) -> tuple[Path, R
     return cwd, render_command(template, prompt, snapshot, f"chore:{name}"), snapshot.name
 
 
-def outcome_of(done: procs.Result, output: AgentOutput, chore: Chore) -> Outcome:
-    """Return how a chore's agent ended: timed out, its validated result from `output`, or `unknown` without one."""
+def reported(ctx: Context, done: procs.Result) -> str:
+    """The result a chore's finished agent reported with canopy's `result` tool: its last call its server took (§13).
+
+    Returns:
+        The result as one line of JSON; "" when it reported none, as a chore that runs the operator's own command does,
+        whose result is its last line.
+    """
+    return run_result.reported(
+        done.stdout,
+        result.CHORE.asked(),
+        server=history.SERVER,
+        version=ctx.config.runtime.version,
+    )
+
+
+def outcome_of(done: procs.Result, output: AgentOutput, chore: Chore, *, reported: str = "") -> Outcome:
+    """Return how a chore's agent ended: timed out, its validated result, or `unknown` without one.
+
+    Its result is `reported`, what it reported with canopy's `result` tool, or else the last line of `output`, as a
+    chore that runs the operator's own command prints it (DESIGN §19).
+    """
     printed = Printed(output, done.stderr, done.returncode)
     if done.timed_out:
         return Outcome(
@@ -137,9 +166,9 @@ def outcome_of(done: procs.Result, output: AgentOutput, chore: Chore) -> Outcome
             f"the chore timed out after {chore.timeout_minutes} minutes",
             printed,
         )
-    parsed = result.parse(output.text)
+    parsed = result.parse(reported or output.text)
     if parsed is None:
-        note = "the chore's last line was not a valid result; its findings are not recorded"
+        note = f"the chore {run_result.MISSING}; its findings are not recorded"
         return Outcome(ChoreRunStatus.UNKNOWN, None, note, printed)
     # A guard in code: the prompt asks for at most `max_findings`, and a chore that lists more has the rest counted.
     return Outcome(ChoreRunStatus(parsed.status), result.capped(parsed, chore.max_findings), printed=printed)
@@ -214,7 +243,7 @@ def _work(ctx: Context, run: records.ChoreRun, out: TextIO, log: logs.TickAdapte
         )
         spent = output.usage.spent() if output.usage else {}
         log.info("chore reported", extra={"chore_run_id": run_id, "session_id": output.session_id, **spent})
-    return outcome_of(done, output, chore)
+    return outcome_of(done, output, chore, reported=reported(ctx, done))
 
 
 def _cwd(ctx: Context, name: str, chore: Chore) -> Path:

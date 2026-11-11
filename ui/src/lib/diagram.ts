@@ -4,6 +4,7 @@
 // setting any of it back, or the theme, layout, or CSS. Only the kinds a plan has use for are drawn; any other is
 // refused as such. The SVG is a string for an `<img>` (src/lib/plan-diagram.ts, src/hooks/use-diagram.ts), where the
 // browser runs no script, follows no link, and fetches nothing, so a gap in mermaid's sanitizer reaches nothing shown.
+// A link a diagram writes (`click A href "…"`) is dropped from it all the same, its node drawn as any other.
 // While it draws, mermaid lays the SVG out in the page, off screen, for a moment: there `strict` is the guard. Only
 // this module imports mermaid, and only on demand.
 //
@@ -69,8 +70,8 @@ const MAX_TEXT = 20_000
 // regular, about 20KB as a data URL, inside the image, which fetches nothing. Mermaid measures its labels in the page,
 // where the same face is loaded, so what it measures is what the image draws.
 const FONT = "'IBM Plex Mono', ui-monospace, monospace"
-// The face as the SVG carries it.
-const FACE = `<style>@font-face{font-family:'IBM Plex Mono';font-weight:400;src:url(${plexMono})}</style>`
+// The face as the SVG carries it, marked as canopy's own, which a saved file leaves out (src/lib/diagram-svg.ts).
+const FACE = `<style data-face="">${fontFace(plexMono)}</style>`
 // One size for every label in every kind: the app's data size, under the plan's text, as its tables are.
 const FONT_SIZE = 13
 // The width a flowchart's label wraps at: wide enough that a module's name, `api: ReportQuery.iter_rows`, wraps between
@@ -85,6 +86,12 @@ const KEYWORDS: Partial<Record<string, string>> = {
     gitGraph: 'gitGraph',
     xychart: 'xychart-beta',
 }
+// The namespaces of an SVG's own elements, and of the `xlink:href` mermaid writes a link with.
+const SVG = 'http://www.w3.org/2000/svg'
+const XLINK = 'http://www.w3.org/1999/xlink'
+// Why a picture is not shown when the browser cannot read it as SVG, as a plan's diagram says it too
+// (src/lib/plan-diagram.ts).
+const UNREADABLE = 'the browser cannot read its picture'
 
 // How a diagram is read, drawn or not: at mermaid's strictest, whatever the diagram asks.
 const READ: MermaidConfig = {
@@ -113,7 +120,10 @@ export async function drawDiagram(source: string): Promise<Drawn | NotDrawn> {
         }
         drawn += 1
         const { svg } = await mermaid.render(`plan-diagram-${drawn}`, source)
-        return { svg: withFace(svg), kind: read, width: naturalWidth(svg) }
+        const picture = withoutLinks(svg)
+        return typeof picture === 'string'
+            ? { svg: withFace(picture), kind: read, width: naturalWidth(picture) }
+            : picture
     } catch (error) {
         return { error: firstLine(error) }
     }
@@ -255,6 +265,35 @@ function tokenReader(): (token: string) => string {
     }
 }
 
+// `svg` with each link a diagram wrote (`click A href "…"`) turned into the group it wraps, which draws its node where
+// it was, or why it cannot be shown. mermaid keeps such a link at `strict`, as an `<a>` with an `xlink:href` whose
+// prefix it never declares, so the browser could not read the picture at all; and a link in a plan is not a link
+// (D113). A picture with no link is returned as mermaid wrote it.
+function withoutLinks(svg: string): string | NotDrawn {
+    if (!/<a\b/u.test(svg)) {
+        return svg
+    }
+    const declared = /^<svg\b[^>]*\sxmlns:xlink=/u.test(svg)
+        ? svg
+        : svg.replace(/^<svg\b/u, `<svg xmlns:xlink="${XLINK}"`)
+    const picture = new DOMParser().parseFromString(declared, 'image/svg+xml')
+    if (picture.querySelector('parsererror') !== null) {
+        return { error: UNREADABLE }
+    }
+    // A list as it stands, which `getElementsByTagName`'s would not: it would shrink as each link is replaced.
+    for (const link of picture.querySelectorAll('a')) {
+        const group = picture.createElementNS(SVG, 'g')
+        for (const attribute of link.attributes) {
+            if (attribute.localName !== 'href' && attribute.localName !== 'target') {
+                group.setAttributeNS(attribute.namespaceURI, attribute.name, attribute.value)
+            }
+        }
+        group.append(...link.childNodes)
+        link.replaceWith(group)
+    }
+    return new XMLSerializer().serializeToString(picture)
+}
+
 // The first line of what mermaid threw, which says where it could not read; the rest points at it in the source.
 function firstLine(error: unknown): string {
     const message = error instanceof Error ? error.message : String(error)
@@ -276,4 +315,9 @@ function naturalWidth(svg: string): number | undefined {
 // `@font-face`, and an image can use no font it does not carry.
 function withFace(svg: string): string {
     return svg.replace(/<svg\b[^>]*>/u, (open) => `${open}${FACE}`)
+}
+
+// The face's rule, its file `font` as a data URL.
+function fontFace(font: string): string {
+    return `@font-face{font-family:'IBM Plex Mono';font-weight:400;src:url(${font})}`
 }

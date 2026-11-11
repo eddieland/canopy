@@ -29,7 +29,7 @@ LOOP_PR = "https://github.com/acme/api/pull/7"
 @pytest.fixture
 def requests_env(canopy_env: CanopyEnv) -> CanopyEnv:
     """A reviewer command and no `[review]` table: reviews are on only while a request is open."""
-    template = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-reviewer {prompt}"
+    template = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-reviewer --format json {prompt}"
     user = canopy_env.user_file.read_text().replace("[runtime]\n", f"[runtime]\nreview_cmd = '{template}'\n", 1)
     canopy_env.write_user(user)
     return canopy_env

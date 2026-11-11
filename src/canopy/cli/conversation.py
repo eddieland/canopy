@@ -359,7 +359,7 @@ def cmd_stop(click_ctx: click.Context, ref: str, *, now: bool, wrap_up: bool) ->
     A ticket is not dispatched again until `canopy start`, and a task is not started again; one still queued is
     dropped. An epic gets no plan run again, and its members are left as they are. A running run finishes, unless
     --now ends it: its processes are killed, its slots returned, and it ends `stopped`. With --wrap-up, a ticket's
-    running run is told on its next tool call to keep its work (commit and push it), print its result line, and start
+    running run is told on its next tool call to keep its work (commit and push it), report its result, and start
     nothing new; it ends on its own, or at its timeout if it goes on. A PR's review request ends; a review of it
     already running finishes.
     """
