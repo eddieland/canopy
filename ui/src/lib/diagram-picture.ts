@@ -51,7 +51,19 @@ export async function diagramPng(svg: string, background: string): Promise<Blob>
     })
 }
 
-/** The surface a diagram's picture is drawn for, in the theme the page shows now: `--surface`, as mermaid drew it. */
+/**
+ * The surface a diagram's picture is drawn for, in the theme the page shows now: `--surface`, as mermaid drew it, as
+ * `#rrggbb`. Tokens are written in oklch, which a saved SVG's other readers (an editor, a slide tool) may not read, so
+ * it is painted on a pixel and read back, as src/lib/diagram.ts reads its colors; as written where it cannot be.
+ */
 export function diagramSurface(): string {
-    return getComputedStyle(document.documentElement).getPropertyValue('--surface').trim()
+    const token = getComputedStyle(document.documentElement).getPropertyValue('--surface').trim()
+    const context = document.createElement('canvas').getContext('2d', { willReadFrequently: true })
+    if (context === null) {
+        return token
+    }
+    context.fillStyle = token
+    context.fillRect(0, 0, 1, 1)
+    const [red = 0, green = 0, blue = 0] = context.getImageData(0, 0, 1, 1).data
+    return `#${[red, green, blue].map((channel) => channel.toString(16).padStart(2, '0')).join('')}`
 }

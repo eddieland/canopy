@@ -582,6 +582,8 @@ such as a shipped migration, may still cite one, and git history has its text.
 - What is shown is only ever an `<img>` of its SVG: an image runs no script, follows no link, and fetches nothing, so
   a gap in mermaid's sanitizer reaches nothing shown. While drawing, mermaid lays the SVG out off screen in the page,
   where `strict` is the guard.
+- It leaves the page only as a PNG, or as an SVG cut down to canopy's own lists (`ui/src/lib/diagram-svg.ts`): a saved
+  file opened on its own is a document, so nothing in it may run, link, or load from outside it.
 
 ## D132. Telemetry goes through OpenTelemetry in `infra` alone, and is off until the operator turns it on
 

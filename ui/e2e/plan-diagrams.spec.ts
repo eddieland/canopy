@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 
 import { expect, test } from '@playwright/test'
-import type { Locator, Page } from '@playwright/test'
+import type { BrowserContext, Locator, Page } from '@playwright/test'
 
 import { clickAtEnd, clickAtStart, plan, settled, signIn, storeTheme } from './helpers.ts'
 
@@ -75,6 +75,119 @@ for (const theme of ['dark', 'light'] as const) {
         expect(red + green + blue)[theme === 'dark' ? 'toBeLessThan' : 'toBeGreaterThan'](theme === 'dark' ? 200 : 600)
     })
 }
+
+// Saves the picture of `block`, a diagram's code block, as an SVG, and gives back its file's name, path, and text.
+async function saveSvg(page: Page, block: Locator): Promise<{ name: string; path: string; svg: string }> {
+    await block.hover()
+    await block.getByRole('button', { name: 'Copy or save the picture' }).click()
+    const saving = page.waitForEvent('download')
+    await page.getByRole('menuitem', { name: 'Save as SVG' }).click()
+    const download = await saving
+    const path = await download.path()
+    return { name: download.suggestedFilename(), path, svg: await readFile(path, 'utf8') }
+}
+
+// What the file at `path` does opened on its own, in a tab of `context`: how large it draws, whether anything in it
+// ran, and what it asked for besides itself.
+async function openOnItsOwn(
+    context: BrowserContext,
+    path: string,
+): Promise<{ width: number; height: number; ran: boolean; fetched: string[] }> {
+    const tab = await context.newPage()
+    const fetched: string[] = []
+    tab.on('request', (request) => {
+        if (request.url() !== `file://${path}`) {
+            fetched.push(request.url())
+        }
+    })
+    await tab.goto(`file://${path}`)
+    const seen = await tab.evaluate(() => {
+        const box = document.documentElement.getBoundingClientRect()
+        return { width: box.width, height: box.height, ran: 'pwned' in globalThis }
+    })
+    await tab.close()
+    return { ...seen, fetched }
+}
+
+test('every kind of diagram saves as an SVG with nothing left out, which draws on its own', async ({
+    page,
+    context,
+}) => {
+    const kinds = [
+        [
+            'flowchart',
+            ['flowchart TD', '  A["Dispatch (new)"] -->|"calls"| B[Runner]', '  subgraph web', '    B', '  end'],
+        ],
+        [
+            'sequence',
+            ['sequenceDiagram', '  A->>B: hi', '  loop each row', '    B-->>A: row', '  end', '  Note over A,B: done'],
+        ],
+        ['state', ['stateDiagram-v2', '  [*] --> ready', '  ready --> running: dispatch', '  running --> [*]']],
+        ['class', ['classDiagram', '  class Run {', '    +str status', '    +start()', '  }', '  Run --> Ticket']],
+        ['er', ['erDiagram', '  TICKET ||--o{ RUN : has', '  RUN {', '    int id', '  }']],
+    ] as const
+    await write(page, ['# Plan', ...kinds.flatMap(([, lines]) => ['', '```mermaid', ...lines, '```'])].join('\n'))
+    const blocks = plan(page).locator('.plan-diagram')
+    await expect(blocks.locator('img:visible')).toHaveCount(kinds.length)
+    for (const [i, [kind]] of kinds.entries()) {
+        const block = blocks.nth(i)
+        const shown = decodeURIComponent((await block.getByRole('img').getAttribute('src')) ?? '').replace(
+            /^[^,]*,/u,
+            '',
+        )
+        const saved = await saveSvg(page, block)
+        expect(saved.name).toBe(`plan-${kind}-${i + 1}.svg`)
+        // Every element it draws, and a background under them.
+        const names = await page.evaluate(
+            (pictures: string[]) =>
+                pictures.map((svg) =>
+                    [...new DOMParser().parseFromString(svg, 'image/svg+xml').querySelectorAll('*')].map(
+                        (element) => element.localName,
+                    ),
+                ),
+            [shown, saved.svg],
+        )
+        expect(names[1]).toEqual(['svg', 'rect', ...(names[0] ?? []).slice(1)])
+        const opened = await openOnItsOwn(context, saved.path)
+        expect(opened.width).toBeGreaterThan(50)
+        expect(opened.fetched).toEqual([])
+    }
+})
+
+test('a diagram whose labels write HTML and whose config asks for links saves as an inert SVG', async ({
+    page,
+    context,
+}) => {
+    await write(
+        page,
+        [
+            '# Plan',
+            '',
+            '```mermaid',
+            '---',
+            'config:',
+            '  securityLevel: loose',
+            '  htmlLabels: true',
+            '---',
+            'flowchart LR',
+            '  A["<img src=pwned.png onerror=window.pwned=1>"] --> B["<b>bold</b>"]',
+            '  click A call pwn()',
+            '  click B href "javascript:window.pwned=2"',
+            '  C[docs] --> A',
+            '  click C href "https://example.com/elsewhere"',
+            '```',
+            '',
+        ].join('\n'),
+    )
+    const block = plan(page).locator('.plan-diagram')
+    await expect(block.getByRole('img', { name: /^A flowchart/u })).toBeVisible()
+    const saved = await saveSvg(page, block)
+    expect(saved.svg).not.toMatch(/<a\b|onerror|<script|foreignObject|javascript:|example\.com/iu)
+    const opened = await openOnItsOwn(context, saved.path)
+    expect(opened.ran).toBe(false)
+    expect(opened.fetched).toEqual([])
+    expect(opened.width).toBeGreaterThan(50)
+})
 
 test.describe("a diagram's actions", () => {
     test.use({ permissions: ['clipboard-read', 'clipboard-write'] })

@@ -142,6 +142,11 @@ image** and **Save as PNG**. Either way you get the diagram at twice its size on
 any page, named for where it came from: `ABC-102-plan-2-sequence-1.png` is plan 2's first diagram, a sequence diagram.
 It's drawn in the theme you're looking at, so a dark theme saves a dark picture; your slide template may have views.
 
+**Save as SVG** saves the same picture as vectors, for a slide that gets scaled or an editor that wants to restyle
+it. It isn't Mermaid's file as it came: canopy keeps the shapes, text, and styles the diagram draws with and drops
+anything else, links and scripts first, so the file opened on its own can't run or load anything, same as the picture
+on the page. A model wrote the diagram, and a model doesn't get to put a script on your desktop by drawing a box.
+
 The code is still the plan. **Source**, under the diagram, shows it; so does putting the cursor in it, which the arrow
 keys do from the line above or below, and which is how you edit one, with the diagram redrawn under it as you stop
 typing. A comment or a change marked in the code shows it too, since that's where those live. A diagram Mermaid can't
