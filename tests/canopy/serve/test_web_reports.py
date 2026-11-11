@@ -54,8 +54,13 @@ def test_the_monthly_report_reads_local_months_oldest_first(backend: Backend) ->
     spent = c.get("/api/spend/breakdown", params={"days": 30}).json()["month"]["spent_usd"]
     assert october["cost_usd"] == pytest.approx(spent)
     assert [k["kind"] for k in october["kinds"]] == ["overseer", "workers", "plans", "chores", "reviews", "tasks"]
-    assert sum(k["cost_usd"] or 0 for k in october["kinds"]) == pytest.approx(october["cost_usd"])
-    assert october["tokens"]["cache_read"] == sum(k["tokens"]["cache_read"] for k in october["kinds"])
+    # Beside them the sessions outside canopy, which the mock's loop read (mock/sessions.py).
+    outside = october["outside"]
+    assert outside["sessions"] > 0
+    kinds = sum(k["cost_usd"] or 0 for k in october["kinds"])
+    assert kinds + outside["cost_usd"] == pytest.approx(october["cost_usd"])
+    cache_read = sum(k["tokens"]["cache_read"] for k in october["kinds"])
+    assert october["tokens"]["cache_read"] == cache_read + outside["tokens"]["cache_read"]
     assert 0 < october["tokens"]["cache_hit"] < 1
     assert october["models"]
     # The months before hold the history's worker runs and the tickets they landed, the latest first.
@@ -76,8 +81,9 @@ def test_the_monthly_report_reads_local_months_oldest_first(backend: Backend) ->
 def test_each_month_counts_the_sessions_outside_canopy_as_the_budget_does(backend: Backend) -> None:
     c = client(None, backend)
     before = c.get("/api/reports/monthly", params={"months": 1}).json()
-    assert before["sessions_read_at"] is None
-    assert before["months"][0]["outside"]["sessions"] == 0
+    # The mock's loop read the runtime's sessions after T0 (mock/sessions.py).
+    assert before["sessions_read_at"] == "2026-10-08T12:08:00Z"
+    was = before["months"][0]["outside"]
     ms = int(T0.timestamp() * 1000)
     mine = SessionSpend("ses_mine", None, "/home/me/notes", ms, ms, 1.5, 100, 20, 5, 300, 40)
     with backend.open() as ctx:
@@ -88,7 +94,8 @@ def test_each_month_counts_the_sessions_outside_canopy_as_the_budget_does(backen
         )
     after = c.get("/api/reports/monthly", params={"months": 1}).json()
     [october] = after["months"]
-    assert (october["outside"]["sessions"], october["outside"]["cost_usd"]) == (1, 1.5)
+    assert october["outside"]["sessions"] == was["sessions"] + 1
+    assert october["outside"]["cost_usd"] == pytest.approx(was["cost_usd"] + 1.5)
     assert october["cost_usd"] - before["months"][0]["cost_usd"] == pytest.approx(1.5)
     assert october["tokens"]["input"] - before["months"][0]["tokens"]["input"] == 100
     assert october["per_landed_usd"] == before["months"][0]["per_landed_usd"]
