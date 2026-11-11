@@ -1,23 +1,17 @@
-// The directory, the fifth job of the plugin canopy ships for its agent runs (DESIGN §33), under Node's own test
+// The directory, the fourth job of the plugin canopy ships for its agent runs (DESIGN §33), under Node's own test
 // runner: `make test-plugin`.
-// It is driven as OpenCode 1 drives it: its hook called before each tool call with the call's arguments, which the
-// hook changes in place, since 1 runs the tool with the object it handed the hook. `canopy.test.mjs` drives it through
-// OpenCode 2's entry point.
+// It is driven as the agent runtime drives it: its hook called before each tool call with the call's event, whose
+// input the hook changes in place, since the runtime runs the tool with the input it handed the hook.
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const plugin = path.join(here, "..", "..", ".agents", "plugins", "canopy.js");
-const { default: canopy } = await import(pathToFileURL(plugin).href);
+import { call, plugin } from "./runtime.mjs";
 
-/** Hand the hook a call of `tool` with `args`, as OpenCode 1 does, and return the arguments it runs with. */
-async function before(args, tool = "bash") {
-    const hooks = await canopy.server({});
-    await hooks["tool.execute.before"]({ tool, sessionID: "ses_1", callID: "call_1" }, { args });
-    return args;
+/** Hand the hook a call of `tool` with `input`, as the runtime does, and return the input it runs with. */
+async function before(input, tool = "shell") {
+    await (await plugin()).before(call(tool, { input }));
+    return input;
 }
 
 test("a leading cd becomes the call's working directory, so the rest is checked from where it runs", async () => {
@@ -30,8 +24,8 @@ test("a leading cd becomes the call's working directory, so the rest is checked 
 });
 
 test("each leading cd joins the one before it, onto the working directory the call names", async () => {
-    const args = { command: "cd a && cd 'b c' && cd \"d\" && make test", workdir: "repo/" };
-    assert.deepEqual(await before(args), { command: "make test", workdir: "repo/a/b c/d" });
+    const input = { command: "cd a && cd 'b c' && cd \"d\" && make test", workdir: "repo/" };
+    assert.deepEqual(await before(input), { command: "make test", workdir: "repo/a/b c/d" });
     assert.deepEqual(await before({ command: "cd a && cd /abs && ls" }), { command: "ls", workdir: "/abs" });
 });
 
@@ -39,8 +33,8 @@ test("a cd out of the directory moves as any other, so the runtime still refuses
     assert.deepEqual(await before({ command: "cd ../.. && git status" }), { command: "git status", workdir: "../.." });
 });
 
-test("OpenCode 2's shell tool is moved as 1's is", async () => {
-    assert.deepEqual(await before({ command: "cd app && ls" }, "shell"), { command: "ls", workdir: "app" });
+test("a call of the shell tool under its other name is moved too", async () => {
+    assert.deepEqual(await before({ command: "cd app && ls" }, "bash"), { command: "ls", workdir: "app" });
 });
 
 test("a command the shell would read otherwise is left as it is", async () => {
@@ -68,7 +62,8 @@ test("a command the shell would read otherwise is left as it is", async () => {
 test("a call of another tool, or with no command it can read, is left as it is", async () => {
     assert.deepEqual(await before({ command: "cd app && ls" }, "read"), { command: "cd app && ls" });
     assert.deepEqual(await before({ command: ["cd", "app"] }), { command: ["cd", "app"] });
-    const hooks = await canopy.server({});
-    await assert.doesNotReject(hooks["tool.execute.before"](undefined, undefined));
-    await assert.doesNotReject(hooks["tool.execute.before"]({ tool: "bash" }, { args: null }));
+    const hooks = await plugin();
+    await assert.doesNotReject(hooks.before(undefined));
+    await assert.doesNotReject(hooks.before(call("shell", { input: null })));
+    await assert.doesNotReject(hooks.before({ ...call("shell"), input: undefined }));
 });
