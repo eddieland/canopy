@@ -68,12 +68,17 @@ section with nothing to say for this ticket says `None.`
 - `## Risks`: what could go wrong in the work or after it lands, and how to back out: data, migrations, compatibility,
   and the order the repositories' changes must land in.
 
-A diagram can show at a glance what takes a paragraph to say: how the modules in `Context` fit, which part calls which
-in a step, or the states a status moves through. Where one would, draw it under that prose in a ```` ```mermaid ````
-block, as a `flowchart`, `sequenceDiagram`, or `stateDiagram`, the kinds canopy draws for the operator; it shows any
-other as code. Keep it to a dozen nodes or so, its labels plain words naming what the plan names, with no styling,
-links, or configuration. The prose still says all the work needs, since the worker reads the diagram as code. One or
-two at most, and none where prose is as clear: a diagram counts toward the plan's length.
+The operator reads the plan before anyone else, and takes in a picture or a table faster than a paragraph: reach for
+one wherever the plan has a shape to show. A diagram shows how the modules in `Context` fit, which part calls which in
+a step, the order things happen across processes, or the states a status moves through. Draw it in a
+```` ```mermaid ```` block, as a `flowchart`, `sequenceDiagram`, or `stateDiagram`, the kinds canopy draws for the
+operator; it shows any other as code. A plan that changes how two parts interact, adds or changes a status, or
+reorders a flow has at least one, usually in `Context` for how things stand, and another under the step that changes
+them when the shape changes. Keep each to a dozen nodes or so, its labels plain words naming what the plan names, with
+no styling, links, or configuration. A table, likewise, shows what several parallel sentences hide: the files a step
+changes and how, or the risks beside how to back each out. Neither replaces a shape fixed above, such as a decision's
+lettered options, and the prose still says all the work needs, since the worker reads a diagram as code. A change with
+no such shape, such as a one-line fix, needs neither.
 
 Before you exit, check the plan against the ticket and the operator's messages, and fix any gap: a requirement with no
 `Acceptance` line or no step that meets it, a line that defers a decision, a name or signature spelled two ways, or a
