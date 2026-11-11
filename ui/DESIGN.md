@@ -1053,9 +1053,9 @@ reader, so no table repeats them.
   shows that file whole, as it is when the guide is built, so a page never keeps a copy of one. A code block is colored
   as a diff's code is (A review), in the language its fence names, plain until its grammar has loaded, and copied from
   its corner. A ```` ```mermaid ```` fence is drawn as its diagram, as a plan's is (D131), with its actions in its
-  corner, named by its `accTitle`, and `guide.test.ts` fails on one mermaid cannot read or with no `accTitle`. A
-  diagram is for a shape the prose would take paragraphs to hold, beside the prose, never instead of it. A new page is
-  a file there and a line in its group in `SOURCES`.
+  corner, named and captioned by its `accTitle`, and `guide.test.ts` fails on one mermaid cannot read or with no
+  `accTitle`. A diagram is for a shape the prose would take paragraphs to hold, beside the prose, never instead of it.
+  A new page is a file there and a line in its group in `SOURCES`.
 - **A question before losing work** (`AlertDialog`): a page that holds the operator's work not yet saved or sent asks
   before it is left, in a dialog centred over the canvas: its question as the title (`Leave this page?`), what leaving
   loses under it, then an outline `Stay`, which takes the focus and which Escape gives, and `Leave` in `destructive`. A
@@ -1076,10 +1076,11 @@ reader, so no table repeats them.
   as wide as it is drawn or narrower to fit, but never under three quarters of that, past which its labels go unread:
   a wider one scrolls, each edge faded while there is more past it (`diagram-image`, `edge-fade`), as the guide's do.
   Every kind is drawn in one hand (`themeCss` in `src/lib/diagram.ts`): one label size, one corner, one line weight, a
-  subgraph dashed, a sequence's actors once, at its top, and its captions lifted off the lifelines they cross. A
-  `Source` toggle sits under it and its actions in its corner (A block's actions, below); its code shows while toggled
-  on, while the cursor is in it, or while a comment or a change is marked in it, and out of sight it is clipped, not
-  removed, so a screen reader still reads it; one that
+  subgraph dashed, a sequence's actors once, at its top, and its captions lifted off the lifelines they cross. It is
+  named and captioned by its `accTitle`, which the planner is asked for, else named by its kind. A `Source` toggle sits
+  under it and its actions in its corner (A block's actions, below); its code shows while toggled on, while the cursor
+  is in it, or while a comment or a change is marked in it, and out of sight it is clipped, not removed, so a screen
+  reader still reads it; one that
   cannot be drawn shows its code and why. The toolbar (`Toolbar`, below) is `icon-xs` toggles in groups split by
   hairlines, then `Comment`, enabled while text is selected; each control's tooltip names it and the shortcut the editor
   binds to it, on this keyboard, and declares the same keys as `aria-keyshortcuts`. The paragraph's style and the

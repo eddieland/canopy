@@ -8,7 +8,8 @@ import { CodeBlock } from '@/components/code-block'
 import { Mark } from '@/components/rich-text'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useDiagram } from '@/hooks/use-diagram'
-import { DIAGRAM_FENCE, anchor, diagramTitle, plainText } from '@/lib/guide'
+import { diagramTitle } from '@/lib/diagram-title'
+import { DIAGRAM_FENCE, anchor, plainText } from '@/lib/guide'
 import type { GuidePiece } from '@/lib/guide'
 import { markOverflowEdges } from '@/lib/overflow-edges'
 import { ALIGN } from '@/lib/rich-text'
@@ -206,7 +207,7 @@ function Diagram({ lines, page }: { lines: string[]; page: string }) {
     // edges faded where there is more (`diagram-image`, `edge-fade`).
     const width = drawn.width === undefined ? undefined : ({ '--diagram-width': `${drawn.width}px` } as CSSProperties)
     return (
-        <figure className="group/block relative rounded-md border bg-surface px-4 py-5">
+        <figure className="group/block relative flex flex-col gap-3 rounded-md border bg-surface px-4 py-5">
             {actions}
             <div ref={(box) => (box === null ? undefined : markOverflowEdges(box))} className="edge-fade">
                 <img
@@ -218,6 +219,7 @@ function Diagram({ lines, page }: { lines: string[]; page: string }) {
                     onError={() => setUnread(drawn.svg)}
                 />
             </div>
+            {title !== undefined && <figcaption className="text-sm text-muted-foreground">{title}</figcaption>}
         </figure>
     )
 }

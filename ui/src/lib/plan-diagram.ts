@@ -19,6 +19,7 @@ import type { EditorView, NodeView, ViewMutationRecord } from '@tiptap/pm/view'
 import { blockSlots, newSlotId } from '@/lib/block-slots'
 import type { BlockSlots } from '@/lib/block-slots'
 import type { Drawn, NotDrawn } from '@/lib/diagram'
+import { diagramTitle } from '@/lib/diagram-title'
 import { markOverflowEdges } from '@/lib/overflow-edges'
 import { CodeView } from '@/lib/plan-code'
 
@@ -238,13 +239,16 @@ class DiagramView implements NodeView {
             return
         }
         this.dom.dataset['diagram'] = 'drawn'
+        // Named by its `accTitle`, which the planner is asked for, and captioned with it; else by its kind.
+        const title = diagramTitle(source.split('\n'))
         const name = KIND_NAMES[result.kind] ?? 'diagram'
-        this.image.alt = `${/^[aeiou]/u.test(name) ? 'An' : 'A'} ${name}, drawn from the Mermaid source beside it`
+        this.image.alt =
+            title ?? `${/^[aeiou]/u.test(name) ? 'An' : 'A'} ${name}, drawn from the Mermaid source beside it`
         showWidth(this.image, result.width)
         this.image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(result.svg)}`
         this.image.toggleAttribute('data-drawn-dark', dark)
         this.image.hidden = false
-        this.reason.textContent = ''
+        this.reason.textContent = title ?? ''
         this.picture = { svg: result.svg, kind: result.kind }
         this.publish()
     }

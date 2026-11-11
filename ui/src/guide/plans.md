@@ -156,7 +156,9 @@ you scroll; that's the diagram's fault, not yours.
 Planners draw one wherever the work has a shape: a plan that changes how two parts talk, adds a status, or reorders a
 flow has at least one, usually in Context for how things stand and again under the step that changes them. They say
 the same in prose, since the worker after them reads the code, not the picture, and they reach for a table the same
-way, for the files a step changes or the risks beside their way back. A typo fix still gets none. An epic's plan of
+way, for the files a step changes or the risks beside their way back. They're asked to draw top-down, name each part
+`repository: thing`, keep a table to four columns, and title each diagram, and the title shows as its caption. A
+typo fix still gets none. An epic's plan of
 three tickets or more opens its breakdown with the order they're built in, drawn.
 
 Point at a diagram and **Copy Mermaid source** appears in its top right corner. It copies the code exactly as the

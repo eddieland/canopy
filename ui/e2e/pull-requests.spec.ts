@@ -187,5 +187,6 @@ test("a feedback plan's file opens laid out as a document, its table and diagram
     const plan = panel.getByRole('document', { name: /^feedback-plan:\d+$/u })
     await expect(plan.getByRole('heading', { name: 'Item 2468013601: change' })).toBeVisible()
     await expect(plan.getByRole('columnheader', { name: 'File' })).toBeVisible()
-    await expect(plan.getByRole('img', { name: /^A flowchart/u })).toBeVisible()
+    // Named by its `accTitle`, as a titled diagram is.
+    await expect(plan.getByRole('img', { name: 'The search inputs read one debounce' })).toBeVisible()
 })

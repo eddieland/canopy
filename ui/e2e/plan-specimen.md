@@ -7,6 +7,7 @@ connection drops, the job fails whole and the owner gets nothing.
 
 ```mermaid
 flowchart TD
+    accTitle: How a scheduled export runs today
     Menu[web: schedule menu] --> Form[web: schedule form]
     Form -->|saves| Table[(schedules table)]
     Cron[web: nightly cron] -->|enqueues| Queue[web: job queue]
