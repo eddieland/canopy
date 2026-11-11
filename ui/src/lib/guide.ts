@@ -167,6 +167,7 @@ export const PAGE_GUIDES = {
     '/reports/checklist': 'reports#the-checklist-page',
     '/reports/health': 'reports#the-health-page',
     '/reports/ci': 'reports#the-ci-page',
+    '/reports/connectors': 'reports#the-connectors-page',
     '/reports/reviews': 'reports#the-reviews-page',
     '/reports/plans': 'reports#the-plans-page',
     '/memory': 'memory',

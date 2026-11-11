@@ -53,7 +53,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `spend-overseer`, `-idle`, `-workers`, `-plans`, `-chores`, `-reviews`, `-tasks`, `-dry-run` | Spend series fills. |
 | `spend-outside` | The spend series of the sessions outside canopy: no run of canopy's. |
 | `context-carried`, `context-added` | The context chart's fills: what a model call carried, and what it added. |
-| `check-1` to `check-4`, `check-other` | The CI page's red checks, by rank, and the rest. |
+| `check-1` to `check-4`, `check-other` | The CI page's checks by rank, and the rest; the Connectors page's sources. |
 | `wait-1` to `wait-4` | How long something took, the quickest first: Reviews' first reviews, Health's run lengths. |
 | `answer-pass`, `-fixed`, `-held`, `-na`, `-unanswered` | The checklist page's answers: an item's bar, and by week. |
 | `proposal-change`, `-decline`, `-ask` | A feedback plan's proposal chip: what it does with an item, never a state. |

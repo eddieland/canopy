@@ -5,6 +5,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import {
     checklistCountsQuery,
     ciReportQuery,
+    connectorsReportQuery,
     healthReportQuery,
     monthlyReportQuery,
     plansReportQuery,
@@ -31,6 +32,7 @@ import { barPercent } from '@/lib/chart'
 import { checklistLine } from '@/lib/checklist'
 import { ciLine } from '@/lib/ci'
 import { useClock } from '@/lib/clock'
+import { connectorsLine, shortSum } from '@/lib/connectors'
 import { counted } from '@/lib/descriptions'
 import { countSum, healthLine } from '@/lib/health'
 import { unnamedHint } from '@/lib/models'
@@ -279,9 +281,10 @@ function ReportCards() {
     const checklist = useQuery(checklistCountsQuery(CARD_DAYS))
     const health = useQuery(healthReportQuery(CARD_DAYS))
     const ci = useQuery(ciReportQuery(CARD_DAYS))
+    const connectors = useQuery(connectorsReportQuery(CARD_DAYS))
     const reviews = useQuery(reviewsReportQuery(CARD_DAYS))
     const plans = useQuery(plansReportQuery(CARD_DAYS))
-    const [spendPage, checklistPage, healthPage, ciPage, reviewsPage, plansPage] = REPORT_PAGES
+    const [spendPage, checklistPage, healthPage, ciPage, connectorsPage, reviewsPage, plansPage] = REPORT_PAGES
     return (
         <nav aria-label="Report pages" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" data-testid="reports-cards">
             <ReportCard
@@ -306,6 +309,12 @@ function ReportCards() {
                 query={ci}
                 line={ciLine}
                 series={(found) => found.per_day.map((day) => ({ key: day.day, value: sum(day.red) }))}
+            />
+            <ReportCard
+                page={connectorsPage}
+                query={connectors}
+                line={connectorsLine}
+                series={(found) => found.per_day.map((day) => ({ key: day.day, value: shortSum(day) }))}
             />
             <ReportCard
                 page={reviewsPage}

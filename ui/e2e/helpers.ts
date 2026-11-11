@@ -59,6 +59,7 @@ export const ROUTES = [
     'reports/checklist',
     'reports/health',
     'reports/ci',
+    'reports/connectors',
     'reports/reviews',
     'reports/plans',
     'settings',

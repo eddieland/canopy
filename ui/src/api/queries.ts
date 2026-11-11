@@ -76,6 +76,8 @@ export const keys = {
     healthReport: (days: number) => ['spend', 'breakdown', 'health', days] as const,
     // Under the breakdowns' key too: a fix's start or end, or a kick, changes the report.
     ciReport: (days: number) => ['spend', 'breakdown', 'ci', days] as const,
+    // Under the breakdowns' key too: a tick runs the sources, and its cost marks them stale.
+    connectorsReport: (days: number) => ['spend', 'breakdown', 'connectors', days] as const,
     // Under the breakdowns' key too: a plan, a resume, or a review run changes the report.
     reviewsReport: (days: number) => ['spend', 'breakdown', 'reviews', days] as const,
     // Under the breakdowns' key too: a plan, its approval, or a resume changes the report.
@@ -317,6 +319,19 @@ export function ciReportQuery(days: number) {
         queryKey: keys.ciReport(days),
         queryFn: async ({ signal }) =>
             unwrap(await api.GET('/api/reports/ci', { params: { query: { days } }, signal })),
+    })
+}
+
+/**
+ * How each source's runs of the last `days` local days ended, how long they took, each day's that read less than
+ * asked, the newest of those, the lines refused, and each source now. Marked stale with the spend breakdowns, as a
+ * tick's cost marks them: a poll between ticks spends nothing, so the page reads its runs with the next tick's.
+ */
+export function connectorsReportQuery(days: number) {
+    return queryOptions({
+        queryKey: keys.connectorsReport(days),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/reports/connectors', { params: { query: { days } }, signal })),
     })
 }
 

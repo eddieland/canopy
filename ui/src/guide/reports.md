@@ -3,8 +3,9 @@
 What canopy cost and what it got done, month by month, what agent runs cost each day, and how they ended. Every
 dollar and token here is what the agent runtime reported, so if a runtime under-reports, so does this page. It is a
 mirror, not an audit. Beside them, the checklist page counts how workers answered your checklists, item by item, the
-CI page says which checks fail, the Reviews page says who reviews canopy's PRs and how soon, and the Plans page says
-how you approve plans and what their PRs needed after.
+CI page says which checks fail, the Connectors page says how reliably canopy reads your tracker and your PRs, the
+Reviews page says who reviews canopy's PRs and how soon, and the Plans page says how you approve plans and what their
+PRs needed after.
 
 Every report keeps its window in the same place, at the top right beside its title, so changing it from the bottom of
 a long page is one scroll up rather than a hunt. A column name with a dotted underline has more to say about what it
@@ -18,9 +19,9 @@ Spend never is: whether more of it bought enough is your call, not the page's.
 ## The reports page
 
 [Reports](/reports) opens on a card for each report under it: **Spend**, **Checklist**, **Health**, **CI**,
-**Reviews**, and **Plans**, each with that page's own line for the last 30 days (`3 of 46 runs failed over 30 days`)
-and, where the page draws one, a small line of its days, so a bad week shows before you open anything. Click a card for
-its page on those 30 days; hover it for what the page holds.
+**Connectors**, **Reviews**, and **Plans**, each with that page's own line for the last 30 days (`3 of 46 runs failed
+over 30 days`) and, where the page draws one, a small line of its days, so a bad week shows before you open anything.
+Click a card for its page on those 30 days; hover it for what the page holds.
 
 Under the cards, the calendar months sit side by side. The page opens on the months since the first one with anything
 in it, a year at most, and the panel says from when (`since April 2026`), so a workspace that's a few months old isn't
@@ -337,6 +338,44 @@ keeps only its latest state at a head. So canopy tells a status's runs apart by 
 done with a different result, is a new run. A rerun that went the same way as the last, finished between two reads,
 looks to canopy like nothing happened, which is also what it looks like on GitHub. Statuses count from the day you
 upgrade: the ones already finished at your PRs' heads then come in as their first runs.
+
+## The Connectors page
+
+The Connectors page, **Connectors** under [Reports](/reports) in the nav, says how reliably canopy reads the world:
+each source it reads (your tracker, GitHub, an artifact store, Slack), how its runs ended over the last **7 days** or
+**30 days**, how long they took, and how fresh what it read is right now. A source runs every tick and on each poll
+between ticks, so a week is a few thousand runs; this is where you find out whether the tracker fails once a month or
+once an hour, and whether it's getting slower. The line under the title is the window at a glance, `6 of 4,210 runs
+read less than asked over 7 days · jira stale`, and the figures under it are its headline: the runs, how many read less
+than they were asked, their share, and the lines canopy refused.
+
+A run ends one of three ways: `ok` read everything it was asked, `partial` finished but read less (a ticket it
+couldn't get, a line canopy refused), and `failed` recorded nothing at all: it didn't start, timed out, or stopped
+without its `end` line.
+
+- **Sources now**: what `canopy status` prints under Connectors. Each source, in the order a tick runs them, with how
+  its latest run ended and how long ago, the tick that made it or `poll`, and how old the oldest thing it observed is.
+  Past `connect.max_age_minutes`, or with a subject never observed at all, the source is `stale`: the loop is deciding
+  on what it read a while ago. An artifact store's source says which change of its feed it has read through instead.
+- **Runs by source**: each source's runs, split into a tick's and each poll's, how many ended `ok`, `partial`, and
+  `failed`, a red bar of the share that read less, the median and nine-in-ten lengths against its `timeout_minutes`,
+  and the lines it recorded and canopy refused, by kind. A median at three quarters of the timeout is in amber: one
+  slow afternoon of the tracker's away from failing every run.
+- **Read less than asked by day**: a bar per day, a color per source, `partial` and `failed` together, so a bad day or
+  a flapping source shows. Hover a bar for that day's sources; the table folded under it holds the same numbers.
+- **Newest runs that read less than asked**: the latest twenty, each with how it ended, its source, its tick or
+  `poll`, how long it ran, what it missed in canopy's words, and under that the last of what the connector wrote to
+  stderr. That last part is the connector's own words, shown as plain text, never as anything a page would run.
+- **Refused lines**: each kind of line canopy turned down, by source, with how many and in how many runs. A refused
+  line leaves its subject not read whole, so a kind refused run after run isn't bad luck: it's a connector and canopy
+  disagreeing about the contract, and one of them needs an upgrade.
+
+A run counts what it read, not what changed: a source that reads everything and finds nothing new is `ok`, and
+should be. Only a tick's run that reads less raises `connector_failed` on the [attention list](attention); a poll's
+raises nothing, and the next tick runs the source again. So this page counts runs the attention list never showed you,
+which is rather the point of it. Garbage collection removes connector runs older than `retention.journal_days`
+(90 days unless you set it), keeping each source's newest, so a window that reaches past it isn't whole. The page
+runs no source and changes no config: to read again now, run a tick.
 
 ## The Reviews page
 
