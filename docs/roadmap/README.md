@@ -101,10 +101,10 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M62. Artifacts, and comments on them back to the ticket](M62-artifacts.md): done 2026-11-11.
 - [M63. Attachments on tickets and tasks](M63-attachments.md): done 2026-11-11.
 - [M64. Slack replies](M64-slack-replies.md): deferred 2026-11-01.
-- [M65. Running agents say where they stand](M65-running-agents-say-where-they-stand.md): in progress.
+- [M65. Running agents say where they stand](M65-running-agents-say-where-they-stand.md): done 2026-11-11.
 - [M66. The checklist, asked before the push](M66-the-checklist.md): in progress.
 - [M67. Epic plans, shared by many tickets](M67-epic-plans.md): in progress.
-- [M68. Messages to running workers](M68-messages-to-running-workers.md): in progress.
+- [M68. Messages to running workers](M68-messages-to-running-workers.md): done 2026-11-11.
 - [M69. What each run changed, kept and shown](M69-what-each-run-changed.md): in progress.
 - [M70. A code outline for agents](M70-a-code-outline-for-agents.md): in progress.
 - [M71. Leaner tool results for every agent](M71-leaner-tool-results.md): in progress.
@@ -129,6 +129,9 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
   the pinned version is checked first.
 - Slack replies (M64): when the operator's Slack app can be granted read access to its channel's threads, so
   Accept's live check can run. The sink's notifications (M10) do not need it.
+- A notice to running agents (M68's stage 2): when a notice set or cleared during a long run, an outage say, reaches
+  its workers too late to matter. It travels as a message does: the line says a notice changed, and the tool returns
+  it.
 - canopy's sessions out of the runtime's own list (left out of M72): when, with M72's Sessions page in use, the
   operator still cannot find their own sessions in the runtime's list for canopy's. It changes what canopy does with
   the runtime's data and logins (DESIGN §26, TRUST_MODEL T2 and T4), so it is a milestone of its own.

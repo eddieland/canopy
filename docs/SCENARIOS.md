@@ -241,6 +241,17 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
   resolves the thread. As someone not listed, comment too: expect `untrusted_artifact_comment` on the attention list
   and no dispatch until the operator replies on the ticket. Run it again after a change to the store's feed.
 
+### Running agents
+
+- **S79. A card's question, answered** (M65). On a toy ticket with a plan, have a worker ask a question on its card,
+  once sandboxed and once not. Expect the card in the web UI within the run's first minutes, its steps the plan's;
+  answer with a letter on the run's page, and expect the agent to hear it on its next tool call, as its transcript
+  shows, and go on with that option. Run it again after an OpenCode upgrade or a change to the sandbox's templates.
+- **S80. A message to a running worker** (M68). On a toy ticket, once sandboxed and once not, send a running worker a
+  message from the ticket's page that narrows the ticket. Expect it told on its next tool call, the message fetched, as
+  its transcript and `canopy show run:ID` show, and its PR to keep to the narrower scope. Over a week of real use,
+  count from `canopy show` how many messages were fetched before their run ended, and record it in `MEASUREMENTS.md`.
+
 ### What canopy keeps
 
 - **S65. Git in the primary clones** (M47). Between ticks, with an idle slot holding a commit no remote has, run
