@@ -105,9 +105,13 @@ describe('a Mermaid code block', () => {
         expect(block?.slot.parentElement).toBe(root.querySelector('.plan-diagram-figure'))
 
         editor.commands.insertContentAt(codeEnd(editor), '\n    B->>A: bye')
-        expect(slots.snapshot().map((each) => (each.kind === 'diagram' ? each.source : each.text))).toEqual([
-            'sequenceDiagram\n    A->>B: hi\n    B->>A: bye',
-        ])
+        expect(
+            slots
+                .snapshot()
+                .map((each) =>
+                    each.kind === 'diagram' ? each.source : each.kind === 'code' ? each.text : each.markdown,
+                ),
+        ).toEqual(['sequenceDiagram\n    A->>B: hi\n    B->>A: bye'])
         expect(slots.snapshot()[0]?.id).toBe(block?.id)
 
         editor.commands.setContent('# No diagram here', { contentType: 'markdown' })

@@ -121,6 +121,12 @@ A code block has a copy button in its top right corner while you point at it, he
 It copies the code alone, without the fence and without a newline after the last line, so a command pasted into a
 shell waits for you to press Enter rather than running the moment it lands.
 
+A table in a plan has the same corner. Its copy button copies the table as the Markdown the plan's file holds, ready
+for a PR description; the menu beside it has **Copy for a spreadsheet**, which pastes into Sheets, Excel, or Numbers as
+cells, and **Save as CSV**. A cell that starts with `=`, `+`, `-`, or `@` goes as text, behind a `'` that tells the
+spreadsheet so, and a planner's `=HYPERLINK(...)` arrives as words rather than as a formula in your sheet. A spreadsheet
+opening the CSV may show that `'`; better a stray apostrophe than a cell that runs. Numbers like `-3` stay numbers.
+
 ## Diagrams
 
 A code block fenced as `mermaid` is drawn as the diagram it describes: a flowchart, a sequence diagram, a state

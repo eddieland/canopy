@@ -21,6 +21,14 @@ vi.mock(import('@/lib/save-file'), async (importOriginal) => ({
 
 let toasts: NewToast[] = []
 
+// A clipboard item that holds what it was made with, for a test to read back: happy-dom has none.
+class HeldItem {
+    readonly items: Record<string, Blob | Promise<Blob>>
+    constructor(items: Record<string, Blob | Promise<Blob>>) {
+        this.items = items
+    }
+}
+
 // A diagram's picture, drawn as a `kind` diagram.
 interface Picture {
     svg: string
@@ -127,6 +135,52 @@ describe("a plan's diagram's actions", () => {
         expect(write).toHaveBeenCalledWith('make lint')
     })
 
+    it("copy a table's Markdown, and its rows for a spreadsheet or as CSV named for its place", async () => {
+        vi.stubGlobal('ClipboardItem', HeldItem)
+        const text = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue()
+        const write = vi.spyOn(navigator.clipboard, 'write').mockResolvedValue()
+        const owner = {}
+        renderActions(owner)
+        const slot = document.createElement('div')
+        document.body.append(slot)
+        const rows = [
+            ['File', 'Why'],
+            ['a.py', '=1'],
+        ]
+        act(() => {
+            blockSlots(owner).put({ id: newSlotId(), kind: 'table', slot, rows, markdown: '| File | Why |' })
+        })
+
+        fireEvent.click(within(slot).getByRole('button', { name: 'Copy table as Markdown' }))
+        await settle()
+        expect(text).toHaveBeenCalledWith('| File | Why |')
+
+        fireEvent.pointerDown(within(slot).getByRole('button', { name: 'Copy or save the rows' }), {
+            button: 0,
+            ctrlKey: false,
+        })
+        fireEvent.click(await screen.findByRole('menuitem', { name: 'Copy for a spreadsheet' }))
+        await settle()
+        const [items] = write.mock.lastCall ?? [[]]
+        const copied = (items[0] as unknown as HeldItem).items as Record<string, Blob>
+        expect(await copied['text/plain']?.text()).toBe("File\tWhy\na.py\t'=1")
+        expect(await copied['text/html']?.text()).toContain('<th>File</th>')
+
+        fireEvent.pointerDown(within(slot).getByRole('button', { name: 'Copy or save the rows' }), {
+            button: 0,
+            ctrlKey: false,
+        })
+        fireEvent.click(await screen.findByRole('menuitem', { name: 'Save as CSV' }))
+        const [blob, name] = vi.mocked(saveFile).mock.lastCall ?? []
+        expect(name).toBe('ABC-1-plan-2-table-1.csv')
+        expect(await blob?.text()).toBe("\uFEFFFile,Why\r\na.py,'=1\r\n")
+        expect(toasts.map((toast) => toast.detail)).toEqual([
+            '| File | Why |',
+            'its header and 1 row',
+            'ABC-1-plan-2-table-1.csv',
+        ])
+    })
+
     it('go when their diagram does', () => {
         const plan = planDocument()
         renderActions(plan.owner)
@@ -180,15 +234,7 @@ describe("a plan's diagram's actions", () => {
     })
 
     it("copy a drawn one's picture as a PNG on the clipboard", async () => {
-        vi.stubGlobal(
-            'ClipboardItem',
-            class {
-                readonly items: Record<string, Promise<Blob>>
-                constructor(items: Record<string, Promise<Blob>>) {
-                    this.items = items
-                }
-            },
-        )
+        vi.stubGlobal('ClipboardItem', HeldItem)
         const write = vi.spyOn(navigator.clipboard, 'write').mockResolvedValue()
         const plan = planDocument()
         renderActions(plan.owner)
@@ -198,7 +244,7 @@ describe("a plan's diagram's actions", () => {
         fireEvent.click(await screen.findByRole('menuitem', { name: 'Copy as image' }))
         await settle()
         const [items] = write.mock.lastCall ?? [[]]
-        expect(Object.keys((items[0] as unknown as { items: object }).items)).toEqual(['image/png'])
+        expect(Object.keys((items[0] as unknown as HeldItem).items)).toEqual(['image/png'])
         expect(toasts).toEqual([
             { title: 'Copied the diagram as an image', detail: 'ABC-1-plan-2-state-1.png', tone: 'done' },
         ])
