@@ -1161,8 +1161,11 @@ reader, so no table repeats them.
   panel past a few, so its total cost, its actions, and the reply stay in reach.
 - **A block's actions** (`BlockActions`, `src/components/block-actions.tsx`): what takes a block of a document
   elsewhere, a diagram's Mermaid source among them, sits in a row at the block's top right corner, over it, on
-  `surface`: ghost `icon-xs` buttons, each named on hover, as a copy button is (below). They show while the block is
-  hovered, holds the caret, or one of them holds the focus, and always on a touch screen, kept in place out of sight so
+  `surface`: ghost `icon-xs` buttons, each named on hover, as a copy button is (below). The block's text, the form most
+  wanted, is a copy button; its other forms are a menu after it, in words, as a drawn diagram's picture is (`Copy as
+  image`, `Save as PNG`: twice its size, on `surface`, named for the plan, its kind, and its place,
+  `ABC-102-plan-2-sequence-1.png`, or on a guide page for its title). They show while the block is hovered, holds the
+  caret, one of them holds the focus, or their menu is open, and always on a touch screen, kept in place out of sight so
   nothing moves; a block marks itself `group/block` and is positioned. A plan's blocks are drawn by ProseMirror, so each
   keeps an element for its actions (`src/lib/block-slots.ts`) which the page fills through a portal, in its own tree.
   They are never printed.

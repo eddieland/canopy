@@ -11,6 +11,7 @@ import { DIAGRAM_FENCE, anchor, diagramTitle, plainText } from '@/lib/guide'
 import type { GuidePiece } from '@/lib/guide'
 import { ALIGN } from '@/lib/rich-text'
 import type { Align, Block, Line } from '@/lib/rich-text'
+import { fileWords } from '@/lib/save-file'
 import { cn } from '@/lib/utils'
 import { usePalettes } from '@/theme/palette'
 import { useTheme } from '@/theme/use-theme'
@@ -150,7 +151,7 @@ function BlockView({ block, page }: { block: Block<GuidePiece>; page: string }) 
         }
         case 'code': {
             return block.lang === DIAGRAM_FENCE ? (
-                <Diagram lines={block.lines} />
+                <Diagram lines={block.lines} page={page} />
             ) : (
                 <CodeBlock lines={block.lines} lang={block.lang} className={GUIDE_BLOCK} />
             )
@@ -166,7 +167,7 @@ function cellClass(align: Align): string {
 // A Mermaid fence, drawn as its diagram: an image named by its `accTitle`, drawn again when the theme or a palette
 // changes. A placeholder holds its place while mermaid loads; a diagram it cannot draw, or whose picture the browser
 // cannot read, shows its code and why.
-function Diagram({ lines }: { lines: string[] }) {
+function Diagram({ lines, page }: { lines: string[]; page: string }) {
     const { resolved } = useTheme()
     const { light, dark } = usePalettes()
     const source = lines.join('\n')
@@ -176,10 +177,16 @@ function Diagram({ lines }: { lines: string[] }) {
     if (drawn === undefined) {
         return <Skeleton className="h-64 w-full rounded-md" />
     }
-    // Its source copied, however it is drawn: the actions go in the figure's corner, over the code or the picture.
+    const title = diagramTitle(lines)
+    // Its source copied, however it is drawn, and its picture once it is: the actions go in the figure's corner, over
+    // the code or the picture. A file of the picture is named for its title, which every guide diagram has.
     const actions = (
         <BlockActions>
-            <DiagramActions source={source} />
+            <DiagramActions
+                source={source}
+                drawn={'error' in drawn || unread === drawn.svg ? undefined : drawn}
+                name={fileWords(title ?? '') || `${page}-diagram`}
+            />
         </BlockActions>
     )
     if ('error' in drawn || unread === drawn.svg) {
@@ -198,7 +205,7 @@ function Diagram({ lines }: { lines: string[] }) {
             {actions}
             <img
                 src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(drawn.svg)}`}
-                alt={diagramTitle(lines) ?? 'A diagram'}
+                alt={title ?? 'A diagram'}
                 className="mx-auto h-auto max-w-full"
                 onError={() => setUnread(drawn.svg)}
             />

@@ -5,7 +5,7 @@ import type { BlockSlot } from './block-slots'
 
 // A diagram's room for its actions, holding `source`.
 function diagram(id: number, source: string): BlockSlot {
-    return { id, kind: 'diagram', slot: document.createElement('div'), source }
+    return { id, kind: 'diagram', slot: document.createElement('div'), source, drawn: undefined }
 }
 
 describe("a document's blocks with room for their actions", () => {
