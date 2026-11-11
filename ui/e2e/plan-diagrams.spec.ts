@@ -137,17 +137,20 @@ test('every kind of diagram saves as an SVG with nothing left out, which draws o
         )
         const saved = await saveSvg(page, block)
         expect(saved.name).toBe(`plan-${kind}-${i + 1}.svg`)
-        // Every element it draws, and a background under them.
-        const names = await page.evaluate(
+        // Every element it draws, each with every attribute it had, its stylesheet whole, and a background under them.
+        const [drawn = [], kept = []] = await page.evaluate(
             (pictures: string[]) =>
                 pictures.map((svg) =>
                     [...new DOMParser().parseFromString(svg, 'image/svg+xml').querySelectorAll('*')].map(
-                        (element) => element.localName,
+                        (element) =>
+                            `${element.localName}[${element.getAttributeNames().toSorted().join(' ')}]${
+                                element.localName === 'style' ? element.textContent : ''
+                            }`,
                     ),
                 ),
             [shown, saved.svg],
         )
-        expect(names[1]).toEqual(['svg', 'rect', ...(names[0] ?? []).slice(1)])
+        expect(kept).toEqual([drawn[0], 'rect[fill height width x y]', ...drawn.slice(1)])
         const opened = await openOnItsOwn(context, saved.path)
         expect(opened.width).toBeGreaterThan(50)
         expect(opened.fetched).toEqual([])

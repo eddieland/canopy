@@ -154,11 +154,48 @@ const ATTRIBUTES = new Set([
 ])
 // A reference within the file: `#id`, or `url(#id)`, quoted or not.
 const FRAGMENT = /^#[\w.:-]*$/u
-// A `url(…)` that reaches outside the file, in CSS or an attribute's value; and every one of them, to replace.
+// A `url(…)` that reaches outside the file, in CSS or an attribute's value.
 const OUTSIDE = /url\(\s*(?!['"]?#)[^)]*\)/iu
-const EVERY_OUTSIDE = new RegExp(OUTSIDE.source, 'giu')
-// An `@import`, which loads another stylesheet.
-const IMPORT = /@import[^;]*;?/giu
+// The functions the CSS of a saved picture may call: its colors, a shadow, a transform's steps, a selector's own, and
+// `url()`, which reaches only within the file (`OUTSIDE`). Any other, `image-set()` among them, may load elsewhere.
+const CSS_FUNCTIONS = new Set([
+    'url',
+    'rgb',
+    'rgba',
+    'hsl',
+    'hsla',
+    'drop-shadow',
+    'translate',
+    'translatex',
+    'translatey',
+    'scale',
+    'scalex',
+    'scaley',
+    'rotate',
+    'matrix',
+    'not',
+    'is',
+    'where',
+    'nth-child',
+    'nth-of-type',
+])
+// The attributes whose values are CSS, held to the same rules as a stylesheet.
+const CSS_VALUED = new Set([
+    'style',
+    'fill',
+    'stroke',
+    'filter',
+    'clip-path',
+    'marker-start',
+    'marker-mid',
+    'marker-end',
+    'transform',
+    'gradientTransform',
+    'patternTransform',
+    'font-family',
+    'stop-color',
+    'flood-color',
+])
 
 /**
  * `svg`, a drawn diagram as the page shows it, made ready to be saved: only what canopy's lists keep, its links groups,
@@ -173,7 +210,8 @@ export function savedSvg(svg: string, background: string): SavedSvg {
     const dropped: string[] = []
     keep(root, dropped)
     root.prepend(backdrop(picture, root, background))
-    return { svg: new XMLSerializer().serializeToString(picture), dropped }
+    // The root alone, which leaves out what sits beside it: a doctype, or an `<?xml-stylesheet?>` that would load.
+    return { svg: new XMLSerializer().serializeToString(root), dropped }
 }
 
 // Keeps of `element` and what it holds only what the lists do, saying what it drops in `dropped`.
@@ -181,24 +219,27 @@ function keep(element: Element, dropped: string[]): void {
     // By their names, a list as it stands: the element's own would shrink as each is removed.
     for (const name of element.getAttributeNames()) {
         const value = element.getAttribute(name) ?? ''
-        if (!keeps(name, value) || OUTSIDE.test(value)) {
+        if (!keeps(name, value) || OUTSIDE.test(value) || (CSS_VALUED.has(name) && !plainCss(value))) {
             dropped.push(`${element.localName}@${name}`)
             element.removeAttribute(name)
         }
     }
-    if (element.localName === 'style') {
-        const css = element.textContent
-        const kept = css.replaceAll(IMPORT, '').replaceAll(EVERY_OUTSIDE, 'none')
-        if (kept !== css) {
-            dropped.push('style@import-or-url')
-            element.textContent = kept
-        }
+    if (element.localName === 'style' && !plainCss(element.textContent)) {
+        dropped.push('style')
+        element.textContent = ''
     }
-    // Each child, its next found before it is replaced or removed.
-    let child = element.firstElementChild
+    // Each child, its next found before it is replaced or removed; of what is not an element, text alone stays.
+    let child = element.firstChild
     while (child !== null) {
-        const next = child.nextElementSibling
-        if (child.namespaceURI === SVG && child.localName === 'a') {
+        const next = child.nextSibling
+        if (!(child instanceof Element)) {
+            if (child.nodeType !== Node.TEXT_NODE && child.nodeType !== Node.CDATA_SECTION_NODE) {
+                dropped.push(
+                    child.nodeType === Node.PROCESSING_INSTRUCTION_NODE ? '#processing-instruction' : child.nodeName,
+                )
+                child.remove()
+            }
+        } else if (child.namespaceURI === SVG && child.localName === 'a') {
             dropped.push('a')
             const group = child.ownerDocument.createElementNS(SVG, 'g')
             for (const attribute of child.attributes) {
@@ -215,6 +256,26 @@ function keep(element: Element, dropped: string[]): void {
         }
         child = next
     }
+}
+
+// Whether `css` is CSS that loads nothing and hides nothing: no escape (`\75rl(` is `url(`), no at-rule but
+// `@keyframes`, no function but those listed, and no `url()` outside the file. Mermaid's own holds none of these, so
+// CSS that does is dropped whole rather than mended.
+function plainCss(css: string): boolean {
+    if (css.includes('\\') || OUTSIDE.test(css)) {
+        return false
+    }
+    for (const [rule] of css.matchAll(/@[\w-]*/gu)) {
+        if (rule.toLowerCase() !== '@keyframes') {
+            return false
+        }
+    }
+    for (const [, name = ''] of css.matchAll(/([\w-]*)\(/gu)) {
+        if (!CSS_FUNCTIONS.has(name.toLowerCase())) {
+            return false
+        }
+    }
+    return true
 }
 
 // Whether the lists keep the attribute `name`, of `value`: one they name, a `data-` or `aria-` one, or a reference
