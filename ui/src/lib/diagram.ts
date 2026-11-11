@@ -11,6 +11,7 @@
 // An image draws with its own colors and fonts, not the page's: the colors are read from the theme's tokens as each
 // diagram is drawn, so a theme or palette changed redraws it, and the font is the system's, which the image can use,
 // since one measured in the page's bundled font but drawn in another would clip its labels.
+import plexMono from '@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2?inline'
 import mermaid from 'mermaid'
 import type { MermaidConfig } from 'mermaid'
 
@@ -64,11 +65,15 @@ const SECURE = [
 ]
 // A plan is at most tens of thousands of characters; a diagram is a small part of it.
 const MAX_TEXT = 20_000
-// The font every system has, which an image can draw with. Not the page's IBM Plex: an image can use a font only if its
-// SVG carries it whole, which would add more to each diagram than the diagram itself.
-const FONT = 'ui-sans-serif, system-ui, sans-serif'
-// One size for every label in every kind, the plan's table's: a sequence diagram's own default is larger.
-const FONT_SIZE = 14
+// The app's mono face, which its data, names, and labels are set in, as a diagram's parts are names: IBM Plex Mono in
+// every palette. An image can use a font only if its SVG carries it, so each diagram carries Plex Mono's Latin
+// regular, about 20KB as a data URL, inside the image, which fetches nothing. Mermaid measures its labels in the page,
+// where the same face is loaded, so what it measures is what the image draws.
+const FONT = "'IBM Plex Mono', ui-monospace, monospace"
+// The face as the SVG carries it, marked as canopy's own, which a saved file leaves out (src/lib/diagram-svg.ts).
+const FACE = `<style data-face="">${fontFace(plexMono)}</style>`
+// One size for every label in every kind: the app's data size, under the plan's text, as its tables are.
+const FONT_SIZE = 13
 // The width a flowchart's label wraps at: wide enough that a module's name, `api: ReportQuery.iter_rows`, wraps between
 // words, never inside one, which is all mermaid can do with a word longer than the width.
 const WRAP_AT = 260
@@ -107,6 +112,8 @@ let drawn = 0
 export async function drawDiagram(source: string): Promise<Drawn | NotDrawn> {
     mermaid.initialize(configuration())
     try {
+        // Measured in the face it is drawn in: a page that has set nothing in it yet has not loaded it.
+        await document.fonts.load(`${FONT_SIZE}px 'IBM Plex Mono'`)
         const read = await kindOf(source)
         if (typeof read !== 'string') {
             return read
@@ -114,7 +121,9 @@ export async function drawDiagram(source: string): Promise<Drawn | NotDrawn> {
         drawn += 1
         const { svg } = await mermaid.render(`plan-diagram-${drawn}`, source)
         const picture = withoutLinks(svg)
-        return typeof picture === 'string' ? { svg: picture, kind: read, width: naturalWidth(picture) } : picture
+        return typeof picture === 'string'
+            ? { svg: withFace(picture), kind: read, width: naturalWidth(picture) }
+            : picture
     } catch (error) {
         return { error: firstLine(error) }
     }
@@ -157,21 +166,26 @@ function configuration(): MermaidConfig {
         look: 'classic',
         layout: 'dagre',
         fontFamily: FONT,
-        flowchart: { ...natural, wrappingWidth: WRAP_AT },
+        // Mermaid copies this over a sequence diagram's own sizes, so the label size is set here as well as below.
+        fontSize: FONT_SIZE,
+        // Spaced as the app is, densely: mermaid's own spacing is a slide's.
+        flowchart: { ...natural, wrappingWidth: WRAP_AT, nodeSpacing: 32, rankSpacing: 36, padding: 10 },
         // Its actors once, at the top: drawn again at the foot, they take a sixth of its height to say nothing new.
         sequence: {
             ...natural,
             mirrorActors: false,
-            actorFontSize: FONT_SIZE,
-            messageFontSize: FONT_SIZE,
-            noteFontSize: FONT_SIZE,
-            actorFontFamily: FONT,
-            messageFontFamily: FONT,
-            noteFontFamily: FONT,
+            // At the text's edge, as every other kind is, not 50px in.
+            diagramMarginX: 8,
+            diagramMarginY: 8,
+            actorMargin: 32,
+            boxMargin: 6,
+            messageMargin: 28,
+            width: 120,
+            height: 40,
         },
-        state: natural,
-        class: natural,
-        er: natural,
+        state: { ...natural, padding: 6, nodeSpacing: 32, rankSpacing: 36 },
+        class: { ...natural, padding: 6 },
+        er: { ...natural, entityPadding: 10, minEntityWidth: 80, minEntityHeight: 40 },
         themeCSS: themeCss(background),
         themeVariables: {
             darkMode: document.documentElement.classList.contains('dark'),
@@ -295,4 +309,15 @@ function firstLine(error: unknown): string {
 function naturalWidth(svg: string): number | undefined {
     const width = /^<svg\b[^>]*?\swidth="(?<width>\d+(?:\.\d+)?)(?:px)?"/u.exec(svg)?.groups?.['width']
     return width === undefined ? undefined : Number(width)
+}
+
+// The SVG with the face its labels are set in carried inside it, as the first thing in it: mermaid's own styles drop an
+// `@font-face`, and an image can use no font it does not carry.
+function withFace(svg: string): string {
+    return svg.replace(/<svg\b[^>]*>/u, (open) => `${open}${FACE}`)
+}
+
+// The face's rule, its file `font` as a data URL.
+function fontFace(font: string): string {
+    return `@font-face{font-family:'IBM Plex Mono';font-weight:400;src:url(${font})}`
 }

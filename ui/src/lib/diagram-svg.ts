@@ -207,6 +207,11 @@ export function savedSvg(svg: string, background: string): SavedSvg {
     if (picture.querySelector('parsererror') !== null || root.namespaceURI !== SVG || root.localName !== 'svg') {
         throw new Error('the browser cannot read its picture')
     }
+    // The face the page draws its pictures in (src/lib/diagram.ts), which the file leaves to the reader's monospace
+    // rather than carry a font, as CSS that loads, past the lists.
+    for (const face of root.querySelectorAll(':scope > style[data-face]')) {
+        face.remove()
+    }
     const dropped: string[] = []
     keep(root, dropped)
     root.prepend(backdrop(picture, root, background))

@@ -71,6 +71,12 @@ describe('a Mermaid code block', () => {
         expect(drawDiagram).toHaveBeenCalledTimes(1)
     })
 
+    it('is labelled by its kind where it has no accTitle', async () => {
+        const { root } = open(PLAN)
+        await within(root).findByRole('img', { name: /^A sequence diagram/u })
+        expect(within(root).getByText('sequence diagram')).toBeTruthy()
+    })
+
     it('is named and captioned by its accTitle, where it has one', async () => {
         const { root } = open('```mermaid\nsequenceDiagram\n    accTitle: The export, row by row\n    A->>B: hi\n```')
         expect(await within(root).findByRole('img', { name: 'The export, row by row' })).toBeTruthy()
@@ -101,14 +107,14 @@ describe('a Mermaid code block', () => {
         expect(root.querySelector<HTMLElement>('.plan-diagram')?.dataset['diagram']).toBe('failed')
     })
 
-    it('keeps room in its figure for its actions, saying what they act on as its source is edited', async () => {
+    it('keeps room in its head for its actions, saying what they act on as its source is edited', async () => {
         const { editor, root } = open(DIAGRAM)
         await within(root).findByRole('img')
         const slots = blockSlots(editor)
         const [block] = slots.snapshot()
         expect(block?.kind).toBe('diagram')
         expect(block?.kind === 'diagram' && block.source).toBe('sequenceDiagram\n    A->>B: hi')
-        expect(block?.slot.parentElement).toBe(root.querySelector('.plan-diagram-figure'))
+        expect(block?.slot.parentElement).toBe(root.querySelector('.plan-diagram-head'))
 
         editor.commands.insertContentAt(codeEnd(editor), '\n    B->>A: bye')
         expect(

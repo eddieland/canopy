@@ -106,6 +106,7 @@ class DiagramView implements NodeView {
     readonly contentDOM: HTMLElement
     private readonly figure: HTMLElement
     private readonly image: HTMLImageElement
+    private readonly label: HTMLElement
     private readonly reason: HTMLElement
     private readonly toggle: HTMLButtonElement
     // The room for its actions, which the page fills, and where it says what they act on.
@@ -135,8 +136,12 @@ class DiagramView implements NodeView {
         this.figure = child(this.dom, 'figure')
         this.figure.className = 'plan-diagram-figure'
         this.figure.contentEditable = 'false'
+        // A head as a panel's section has: what the diagram is, in the app's label type, and Source at its right.
+        const head = child(this.figure, 'div')
+        head.className = 'plan-diagram-head'
+        this.label = child(head, 'figcaption')
         // The picture scrolls in a box of its own, so a diagram too wide to read narrowed scrolls rather than shrinks,
-        // and the caption and the toggle stay put.
+        // and the head stays put.
         const scroll = child(this.figure, 'div')
         scroll.className = 'plan-diagram-scroll'
         this.image = child(scroll, 'img')
@@ -149,8 +154,12 @@ class DiagramView implements NodeView {
                 this.fail(UNREADABLE)
             }
         })
-        this.reason = child(this.figure, 'figcaption')
-        this.toggle = child(this.figure, 'button')
+        this.reason = child(this.figure, 'p')
+        this.reason.className = 'plan-diagram-reason'
+        // Its actions in its head, before Source, shown as a block's are (`block-actions`), and kept in place.
+        this.actions = child(head, 'div')
+        this.actions.className = 'block-actions'
+        this.toggle = child(head, 'button')
         this.toggle.type = 'button'
         this.toggle.className = 'plan-diagram-toggle'
         this.toggle.textContent = 'Source'
@@ -160,8 +169,6 @@ class DiagramView implements NodeView {
             this.toggle.setAttribute('aria-pressed', String(shown))
             this.dom.toggleAttribute('data-source', shown)
         })
-        this.actions = child(this.figure, 'div')
-        this.actions.className = 'block-actions'
 
         this.unmark = markOverflowEdges(scroll)
         this.unsubscribe = onThemeChange(() => {
@@ -248,7 +255,8 @@ class DiagramView implements NodeView {
         this.image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(result.svg)}`
         this.image.toggleAttribute('data-drawn-dark', dark)
         this.image.hidden = false
-        this.reason.textContent = title ?? ''
+        this.reason.textContent = ''
+        this.label.textContent = title ?? name
         this.picture = { svg: result.svg, kind: result.kind }
         this.publish()
     }
@@ -259,6 +267,7 @@ class DiagramView implements NodeView {
         this.image.hidden = true
         this.image.removeAttribute('src')
         this.reason.textContent = `Not drawn: ${reason}.`
+        this.label.textContent = ''
         if (this.picture !== undefined) {
             this.picture = undefined
             this.publish()

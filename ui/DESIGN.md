@@ -512,11 +512,11 @@ whole either side.
   sizes move the body and both headings together, the one place a size outside the steps appears. The guide stays at
   Normal. Code is set as everywhere else (`Code`, Rich text). A table is `document-table`, in a plan, the guide, and
   rich text alike: the measure's full width at least, wider where what it holds needs it, a hairline under its head
-  and each row, no grid and no fill, its first column flush with the text, its head in `muted-foreground`, its figures
-  tabular, and a step under the text around it in `em`, so a plan's size moves it too. Code in a cell breaks where it
-  must, keeping room for a dozen characters, and drops its chip; a table still too wide scrolls, its edges faded while
-  there is more (`edge-fade`). Its measure is fixed, `max-w-3xl`. What lays a document out, the guide's rules between
-  sections or a plan's margin, is its surface's own; its type is not.
+  and each row, no grid and no fill, its first column flush with the text, its head in `panel-label` as the app's own
+  tables' are, its figures tabular, and a step under the text around it in `em`, so a plan's size moves it too. Code
+  in a cell breaks where it must, keeping room for a dozen characters, and drops its chip; a table still too wide
+  scrolls, its edges faded while there is more (`edge-fade`). Its measure is fixed, `max-w-3xl`. What lays a document
+  out, the guide's rules between sections or a plan's margin, is its surface's own; its type is not.
 - **`ReviewsTable`** and **`RunsTable`**: review runs and runs, one row each, on every page that lists them. On the
   page of what they belong to, the columns that would repeat it go, as a `ListRow` kind of their own. The reviews one
   request made of one commit, one per persona (DESIGN §31), are adjacent rows with no hairline between them, each with
@@ -1052,10 +1052,10 @@ reader, so no table repeats them.
   `AGENTS.md` sets. An empty fence that names one of the repository's example files after its language (`EMBEDS`)
   shows that file whole, as it is when the guide is built, so a page never keeps a copy of one. A code block is colored
   as a diff's code is (A review), in the language its fence names, plain until its grammar has loaded, and copied from
-  its corner. A ```` ```mermaid ```` fence is drawn as its diagram, as a plan's is (D131), with its actions in its
-  corner, named and captioned by its `accTitle`, and `guide.test.ts` fails on one mermaid cannot read or with no
-  `accTitle`. A diagram is for a shape the prose would take paragraphs to hold, beside the prose, never instead of it.
-  A new page is a file there and a line in its group in `SOURCES`.
+  its corner. A ```` ```mermaid ```` fence is drawn as its diagram, as a plan's is (D131), in a panel of its own whose
+  head is its `accTitle`, which names it, with its actions in its corner, and `guide.test.ts` fails on one mermaid
+  cannot read or with no `accTitle`. A diagram is for a shape the prose would take paragraphs to hold, beside the
+  prose, never instead of it. A new page is a file there and a line in its group in `SOURCES`.
 - **A question before losing work** (`AlertDialog`): a page that holds the operator's work not yet saved or sent asks
   before it is left, in a dialog centred over the canvas: its question as the title (`Leave this page?`), what leaving
   loses under it, then an outline `Stay`, which takes the focus and which Escape gives, and `Leave` in `destructive`. A
@@ -1072,15 +1072,17 @@ reader, so no table repeats them.
   so opening one never scrolls the page away from what it is on. The plan is laid out as a document (`.plan-doc`), in a
   document's type (A document, under Primitives). What the plan holds as characters (HTML, an image) is muted monospace;
   a link is underlined in `muted-foreground` with its address on hover, never a link. A Mermaid code block is drawn as
-  its diagram (`src/lib/plan-diagram.ts`), an image in a hairline box, drawn again when the theme or palette changes,
+  its diagram (`src/lib/plan-diagram.ts`), a section of the plan's panel rather than a card in it: a hairline, a head
+  in `panel-label` naming it, by its `accTitle` or else its kind, with `Source` at its right as a panel head's control
+  is, and the picture at the text's edge. It is drawn in the app's data dialect, Plex Mono at 13px and spaced densely,
+  the face carried inside the image since an image can use no other, and drawn again when the theme or palette changes,
   as wide as it is drawn or narrower to fit, but never under three quarters of that, past which its labels go unread:
   a wider one scrolls, each edge faded while there is more past it (`diagram-image`, `edge-fade`), as the guide's do.
   Every kind is drawn in one hand (`themeCss` in `src/lib/diagram.ts`): one label size, one corner, one line weight, a
-  subgraph dashed, a sequence's actors once, at its top, and its captions lifted off the lifelines they cross. It is
-  named and captioned by its `accTitle`, which the planner is asked for, else named by its kind. A `Source` toggle sits
-  under it and its actions in its corner (A block's actions, below); its code shows while toggled on, while the cursor
-  is in it, or while a comment or a change is marked in it, and out of sight it is clipped, not removed, so a screen
-  reader still reads it; one that
+  subgraph dashed, a sequence's actors once, at its top, and its captions lifted off the lifelines they cross. Its
+  actions sit in its head before `Source` (A block's actions, below). Its code shows, under the picture, while `Source`
+  is on, while the cursor is in it, or while a comment or a change is marked in it, and out of sight it is clipped, not
+  removed, so a screen reader still reads it; one that
   cannot be drawn shows its code and why. The toolbar (`Toolbar`, below) is `icon-xs` toggles in groups split by
   hairlines, then `Comment`, enabled while text is selected; each control's tooltip names it and the shortcut the editor
   binds to it, on this keyboard, and declares the same keys as `aria-keyshortcuts`. The paragraph's style and the
@@ -1178,17 +1180,17 @@ reader, so no table repeats them.
   panel past a few, so its total cost, its actions, and the reply stay in reach.
 - **A block's actions** (`BlockActions`, `src/components/block-actions.tsx`): what takes a block of a document
   elsewhere, a diagram's Mermaid source among them, sits in a row at the block's top right corner, over it, on
-  `surface`: ghost `icon-xs` buttons, each named on hover, as a copy button is (below). The block's text, the form most
-  wanted, is a copy button; its other forms are a menu after it, in words, as a drawn diagram's picture is (`Copy as
-  image`, `Save as PNG`, `Save as SVG`: on `surface`, the PNG twice its size, the SVG cut down to what canopy keeps
-  (D131), named for the plan, its kind, and its place, `ABC-102-plan-2-sequence-1.png`, or on a guide page for its
-  title), and as a plan's table's rows are (`Copy for a spreadsheet`, tab-separated text and an HTML table together;
-  `Save as CSV`, `ABC-102-plan-2-table-1.csv`), after its copy as Markdown. A cell a spreadsheet would run as a formula
-  goes as text (`src/lib/table-export.ts`). They show while the block is hovered, holds the
-  caret, one of them holds the focus, or their menu is open, and always on a touch screen, kept in place out of sight so
-  nothing moves; a block marks itself `group/block` and is positioned. A plan's blocks are drawn by ProseMirror, so each
-  keeps an element for its actions (`src/lib/block-slots.ts`) which the page fills through a portal, in its own tree.
-  They are never printed.
+  `surface`, or in a plan's diagram's head, before `Source`: ghost `icon-xs` buttons, each named on hover, as a copy
+  button is (below). The block's text, the form most wanted, is a copy button; its other forms are a menu after it, in
+  words, as a drawn diagram's picture is (`Copy as image`, `Save as PNG`, `Save as SVG`: on `surface`, the PNG twice its
+  size, the SVG cut down to what canopy keeps (D131), named for the plan, its kind, and its place,
+  `ABC-102-plan-2-sequence-1.png`, or on a guide page for its title), and as a plan's table's rows are (`Copy for a
+  spreadsheet`, tab-separated text and an HTML table together; `Save as CSV`, `ABC-102-plan-2-table-1.csv`), after its
+  copy as Markdown. A cell a spreadsheet would run as a formula goes as text (`src/lib/table-export.ts`). They show
+  while the block is hovered, holds the caret, one of them holds the focus, or their menu is open, and always on a touch
+  screen, kept in place out of sight so nothing moves; a block marks itself `group/block` and is positioned. A plan's
+  blocks are drawn by ProseMirror, so each keeps an element for its actions (`src/lib/block-slots.ts`) which the page
+  fills through a portal, in its own tree. They are never printed.
 - **Text to paste elsewhere** has a copy button after it (`Copyable`, `CopyButton`): a branch, a path, a session id, a
   review's commit, whole though the page shows its first 7 characters. A code block, in a plan, the guide, or rich text,
   has one in its corner (A block's actions), which copies its code as the fence holds it, no newline after its last

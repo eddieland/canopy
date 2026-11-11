@@ -53,6 +53,17 @@ describe('a diagram saved as an SVG', () => {
         expect(saved.querySelector('path[data-edge]')?.getAttribute('marker-end')).toBe('url(#m)')
     })
 
+    it('leaves out the face the page draws in, and nothing else, as nothing dropped', () => {
+        const face = '<style data-face="">@font-face{font-family:x;src:url(data:font/woff2;base64,AAAA)}</style>'
+        const { svg, dropped } = savedSvg(
+            `<svg xmlns="${SVG}">${face}<style>g{fill:red}</style><rect width="1" height="1"/></svg>`,
+            'white',
+        )
+        expect(dropped).toEqual([])
+        expect(svg).not.toContain('font-face')
+        expect(read(svg).querySelector('style')?.textContent).toBe('g{fill:red}')
+    })
+
     it('covers its whole size with the background when it has no view box', () => {
         const { svg } = savedSvg(`<svg xmlns="${SVG}" width="10" height="10"><rect width="1" height="1"/></svg>`, 'x')
         const backdrop = read(svg).documentElement.firstElementChild

@@ -32,6 +32,11 @@ test("the sample plan's Mermaid block is drawn as its diagram, its source under 
     await toggle.click()
     await expect.poll(() => inSight(source)).toBe(false)
 
+    // Drawn in the app's mono face, which the picture carries, since an image can use no other.
+    const svg = decodeURIComponent((await diagram.getAttribute('src')) ?? '')
+    expect(svg).toContain('@font-face')
+    expect(svg).toContain("'IBM Plex Mono'")
+
     // The block is still its Markdown, written back as it was read.
     await page.getByRole('button', { name: 'Show Markdown' }).click()
     await expect(page.getByLabel('Plan Markdown')).toContainText('```mermaid\nsequenceDiagram\n    participant Page')
@@ -142,7 +147,10 @@ test('every kind of diagram saves as an SVG with nothing left out, which draws o
                 ),
             [shown, saved.svg],
         )
-        expect(kept).toEqual([drawn[0], 'rect[fill height width x y]', ...drawn.slice(1)])
+        // But the face the page draws it in, which the file leaves to the reader's monospace.
+        const drawnHere = drawn.filter((element) => !element.startsWith('style[data-face]'))
+        expect(drawnHere).toHaveLength(drawn.length - 1)
+        expect(kept).toEqual([drawnHere[0], 'rect[fill height width x y]', ...drawnHere.slice(1)])
         const opened = await openOnItsOwn(context, saved.path)
         expect(opened.width).toBeGreaterThan(50)
         expect(opened.fetched).toEqual([])
