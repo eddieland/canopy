@@ -109,7 +109,11 @@ def test_the_contract_names_each_repository_with_a_list() -> None:
     assert text.startswith("\n\nThe operator keeps a checklist for `api`, `web`: rules no linter checks.")
     # Where the hook reads each list, for a worker whose push's output reaches it cut short.
     assert "Each list is also in `$CANOPY_ANSWERS/checklists/<repository>.md`" in text
-    assert '"checklist":{"<repository>":' in text
+    # What each answer is, the `result` tool's input says: the prompt points at the field.
+    assert text.endswith(
+        "Answer every item of each list in your result's `checklist`, under its repository, none left out, whether or "
+        "not your push was held.",
+    )
 
 
 def test_answers_are_counted_per_repository_and_item_over_the_window(tmp_path: Path, journals: Journals) -> None:

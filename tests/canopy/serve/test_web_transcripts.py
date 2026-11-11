@@ -311,7 +311,7 @@ def test_a_chore_runs_page_is_its_row_and_the_whole_of_what_it_reported(backend:
     # A summary longer than a row carries is cut there; the page's is the whole of it, and the harness's note is apart.
     summary = "\n".join(f"- repository {i}: {' '.join(['clean'] * 20)}" for i in range(20))
     assert len(summary) > views.SUMMARY_LENGTH
-    note = "the chore's last line was not a valid result; its findings are not recorded"
+    note = "the chore reported no result; its findings are not recorded"
     with backend.open() as ctx:
         ctx.conn.execute(
             "UPDATE chore_runs SET result_json = ? WHERE id = 1",
