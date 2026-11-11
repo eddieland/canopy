@@ -28,9 +28,7 @@ describe('a Mermaid diagram', () => {
 
     it('of another kind is refused, naming the kinds that are drawn', async () => {
         expect(await readDiagram('pie\n  "a": 1')).toEqual({
-            error:
-                'a pie diagram is not drawn here, only flowchart, sequenceDiagram, stateDiagram, classDiagram, ' +
-                'and erDiagram',
+            error: 'pie is not drawn here, only flowchart, sequenceDiagram, stateDiagram, classDiagram, and erDiagram',
         })
     })
 })

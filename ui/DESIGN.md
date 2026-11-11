@@ -1068,10 +1068,12 @@ reader, so no table repeats them.
   a link is underlined in `muted-foreground` with its address on hover, never a link. A Mermaid code block is drawn as
   its diagram (`src/lib/plan-diagram.ts`), an image in a hairline box, drawn again when the theme or palette changes,
   as wide as it is drawn or narrower to fit, but never under three quarters of that, past which its labels go unread:
-  a wider one scrolls, each edge faded while there is more past it (`diagram-image`, `edge-fade`), as the guide's do,
-  with a `Source` toggle under it and its actions in its corner (A block's actions, below); its code shows while
-  toggled on, while the cursor is in it, or while a comment or a change is marked in it, and out of sight it is
-  clipped, not removed, so a screen reader still reads it; one that
+  a wider one scrolls, each edge faded while there is more past it (`diagram-image`, `edge-fade`), as the guide's do.
+  Every kind is drawn in one hand (`themeCss` in `src/lib/diagram.ts`): one label size, one corner, one line weight, a
+  subgraph dashed, a sequence's actors once, at its top, and its captions lifted off the lifelines they cross. A
+  `Source` toggle sits under it and its actions in its corner (A block's actions, below); its code shows while toggled
+  on, while the cursor is in it, or while a comment or a change is marked in it, and out of sight it is clipped, not
+  removed, so a screen reader still reads it; one that
   cannot be drawn shows its code and why. The toolbar (`Toolbar`, below) is `icon-xs` toggles in groups split by
   hairlines, then `Comment`, enabled while text is selected; each control's tooltip names it and the shortcut the editor
   binds to it, on this keyboard, and declares the same keys as `aria-keyshortcuts`. The paragraph's style and the

@@ -206,7 +206,7 @@ function Diagram({ lines, page }: { lines: string[]; page: string }) {
     // edges faded where there is more (`diagram-image`, `edge-fade`).
     const width = drawn.width === undefined ? undefined : ({ '--diagram-width': `${drawn.width}px` } as CSSProperties)
     return (
-        <figure className="group/block relative rounded-md border px-4 py-5">
+        <figure className="group/block relative rounded-md border bg-surface px-4 py-5">
             {actions}
             <div ref={(box) => (box === null ? undefined : markOverflowEdges(box))} className="edge-fade">
                 <img
