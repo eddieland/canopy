@@ -1164,7 +1164,9 @@ reader, so no table repeats them.
   wanted, is a copy button; its other forms are a menu after it, in words, as a drawn diagram's picture is (`Copy as
   image`, `Save as PNG`, `Save as SVG`: on `surface`, the PNG twice its size, the SVG cut down to what canopy keeps
   (D131), named for the plan, its kind, and its place, `ABC-102-plan-2-sequence-1.png`, or on a guide page for its
-  title). They show while the block is hovered, holds the
+  title), and as a plan's table's rows are (`Copy for a spreadsheet`, tab-separated text and an HTML table together;
+  `Save as CSV`, `ABC-102-plan-2-table-1.csv`), after its copy as Markdown. A cell a spreadsheet would run as a formula
+  goes as text (`src/lib/table-export.ts`). They show while the block is hovered, holds the
   caret, one of them holds the focus, or their menu is open, and always on a touch screen, kept in place out of sight so
   nothing moves; a block marks itself `group/block` and is positioned. A plan's blocks are drawn by ProseMirror, so each
   keeps an element for its actions (`src/lib/block-slots.ts`) which the page fills through a portal, in its own tree.

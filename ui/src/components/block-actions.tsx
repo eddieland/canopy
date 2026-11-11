@@ -1,4 +1,4 @@
-import { Copy, Download, ImageDown } from 'lucide-react'
+import { Copy, Download, ImageDown, Sheet } from 'lucide-react'
 import { useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
@@ -12,6 +12,8 @@ import type { BlockSlot } from '@/lib/block-slots'
 import { diagramPng, diagramSurface, kindWord } from '@/lib/diagram-picture'
 import { savedSvg } from '@/lib/diagram-svg'
 import { saveFile } from '@/lib/save-file'
+import { csv, htmlTable, tabSeparated } from '@/lib/table-export'
+import type { Rows } from '@/lib/table-export'
 
 /** A diagram's picture as the page shows it, and the kind mermaid read it as. */
 export interface DrawnPicture {
@@ -61,6 +63,77 @@ export function CodeActions({ text }: { text: string }) {
 }
 
 /**
+ * A table's actions: its Markdown copied, as the plan's file writes it; and its rows copied for a spreadsheet, as
+ * tab-separated text and an HTML table together, or saved as CSV, named `name` (`ABC-102-plan-2-table-1`). A cell a
+ * spreadsheet would run as a formula goes as text (`src/lib/table-export.ts`).
+ */
+export function TableActions({
+    rows,
+    markdown,
+    name,
+}: {
+    /** Its rows, the header row first, each cell its words. */
+    rows: Rows
+    /** The table as the plan's Markdown writes it. */
+    markdown: string
+    /** What a file of its rows is named, without its extension. */
+    name: string
+}) {
+    const toast = useToast()
+    const file = `${name}.csv`
+    const canCopy = globalThis.isSecureContext && 'ClipboardItem' in globalThis
+    function save() {
+        // With a byte-order mark, so Excel reads it as UTF-8 rather than guess.
+        saveFile(new Blob(['\uFEFF', csv(rows)], { type: 'text/csv;charset=utf-8' }), file)
+        toast({ title: 'Saved the table as CSV', detail: file, tone: 'done' })
+    }
+    async function copy() {
+        try {
+            await navigator.clipboard.write([
+                new ClipboardItem({
+                    'text/plain': new Blob([tabSeparated(rows)], { type: 'text/plain' }),
+                    'text/html': new Blob([htmlTable(rows)], { type: 'text/html' }),
+                }),
+            ])
+            toast({ title: 'Copied the table for a spreadsheet', detail: `${rows.length} rows`, tone: 'done' })
+        } catch (error) {
+            toast({ title: 'Could not copy the table', detail: reason(error), tone: 'failed' })
+        }
+    }
+    return (
+        <>
+            <CopyButton text={markdown} label="table as Markdown" />
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        aria-label="Copy or save the rows"
+                        title="Copy or save the rows"
+                        className="-my-1"
+                    >
+                        <Sheet />
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                    {canCopy && (
+                        <DropdownMenuItem onSelect={() => void copy()}>
+                            <Copy aria-hidden />
+                            Copy for a spreadsheet
+                        </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem onSelect={save}>
+                        <Download aria-hidden />
+                        Save as CSV
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
+        </>
+    )
+}
+
+/**
  * The actions of the blocks of a plan's document, the editor `owner`'s, each drawn into its block's room for them
  * (`src/lib/block-slots.ts`): through a portal, so they render in the page's tree, with its toasts, though ProseMirror
  * draws the block around them. A diagram's picture is saved named `name`, then its kind and which of its document's
@@ -69,11 +142,23 @@ export function CodeActions({ text }: { text: string }) {
 export function PlanBlockActions({ owner, name }: { owner: object; name: string }) {
     const slots = blockSlots(owner)
     const blocks = inDocumentOrder(useSyncExternalStore(slots.subscribe, slots.snapshot))
-    // Each diagram's place among the document's diagrams, by its id.
+    // Each diagram's and each table's place among the document's of its kind, by its id.
     const diagrams = blocks.filter((block) => block.kind === 'diagram').map((block) => block.id)
+    const tables = blocks.filter((block) => block.kind === 'table').map((block) => block.id)
     return blocks.map((block) => {
         if (block.kind === 'code') {
             return createPortal(<CodeActions text={block.text} />, block.slot, String(block.id))
+        }
+        if (block.kind === 'table') {
+            return createPortal(
+                <TableActions
+                    rows={block.rows}
+                    markdown={block.markdown}
+                    name={`${name}-table-${tables.indexOf(block.id) + 1}`}
+                />,
+                block.slot,
+                String(block.id),
+            )
         }
         const place = diagrams.indexOf(block.id) + 1
         return createPortal(

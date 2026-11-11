@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises'
+
 import { expect, test } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
@@ -491,6 +493,41 @@ test.describe('copying out of the plan', () => {
         await select(page, 'iter_rows()')
         await page.keyboard.press('ControlOrMeta+c')
         expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('iter_rows()')
+    })
+
+    test("a table's actions copy its Markdown, its rows for a spreadsheet, and save them as CSV", async ({ page }) => {
+        const table = plan(page).locator('.plan-table')
+        await table.hover()
+        await table.getByRole('button', { name: 'Copy table as Markdown' }).click()
+        const markdown = await page.evaluate(() => navigator.clipboard.readText())
+        expect(markdown).toMatch(/^\| Repository +\| File +\| Why +\|\n/u)
+        expect(markdown).toContain('`app/reports/export.py`')
+
+        await table.hover()
+        await table.getByRole('button', { name: 'Copy or save the rows' }).click()
+        await page.getByRole('menuitem', { name: 'Copy for a spreadsheet' }).click()
+        await expect(page.getByRole('status').filter({ hasText: 'Copied the table for a spreadsheet' })).toBeVisible()
+        const copied = await page.evaluate(async () => {
+            const [item] = await navigator.clipboard.read()
+            return {
+                text: await (await item?.getType('text/plain'))?.text(),
+                html: await (await item?.getType('text/html'))?.text(),
+            }
+        })
+        expect(copied.text?.split('\n')[1]).toBe('web\tapp/reports/export.py\tthe new route')
+        expect(copied.html).toContain('<th>Repository</th>')
+
+        await table.hover()
+        await table.getByRole('button', { name: 'Copy or save the rows' }).click()
+        const saving = page.waitForEvent('download')
+        await page.getByRole('menuitem', { name: 'Save as CSV' }).click()
+        const download = await saving
+        expect(download.suggestedFilename()).toBe('plan-table-1.csv')
+        const file = await readFile(await download.path(), 'utf8')
+        expect(file.split('\r\n').slice(0, 2)).toEqual([
+            '\uFEFFRepository,File,Why',
+            'web,app/reports/export.py,the new route',
+        ])
     })
 
     test("a code block's copy button copies its code as the fence holds it, shown while it is pointed at", async ({

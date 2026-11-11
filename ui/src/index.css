@@ -1920,8 +1920,8 @@
              * reader reads the code that draws the picture. */
             @apply sr-only;
         }
-        /* A code block, positioned for its actions in its corner. */
-        & .plan-code {
+        /* A code block and a table, positioned for their actions in their corner. */
+        & :is(.plan-code, .plan-table) {
             @apply relative;
         }
         & .plan-diagram-figure {
