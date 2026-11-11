@@ -1176,9 +1176,9 @@ reader, so no table repeats them.
   shows it from the workspace root (`CopyablePath`); until the root is read there is no button, so a copy is never the
   short path. The button is a ghost `icon-xs` with the `Copy` icon, muted until hovered; a click shows `Check` in the
   accent, or `X` in `status-failed` when the browser refuses, and names what happened, and a toast says the same with
-  the text it copied. In a dense list it shows only while its row is hovered or it has the focus, keeping its space so nothing
-  moves, and always on a touch screen. The clipboard needs a secure context, so elsewhere there is no button and the
-  text stays selectable.
+  the text it copied. In a dense list it shows only while its row is hovered or it has the focus, keeping its space so
+  nothing moves, and always on a touch screen. The clipboard needs a secure context, so elsewhere there is no button
+  and the text stays selectable.
 - **A toast** (`Toaster`, `useToast` in `src/hooks/use-toast.ts`) says what an action did when the place it was done
   shows too little of it: a copy names what it copied, a draft's send what it sent. It sits at the bottom center of the
   window on `surface` with a hairline, a `Check` in the accent or an `X` in `status-failed`, its title, and a line under
