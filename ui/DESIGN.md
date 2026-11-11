@@ -1084,9 +1084,12 @@ reader, so no table repeats them.
   editable where the plan is, the changes, the outline, and the toolbar stepping aside; and `Outline ▾`
   (`src/lib/plan-outline.ts`), the plan's headings, the section scrolled to in the accent, each `##` section's row on a
   ticket's newest plan ending in `read` and `a concern` marks, this browser's alone (`src/lib/plan-marks.ts`), never
-  the journal, which hold while the section's words are as marked, so a rewritten section is unread again. While the
-  changes are marked, a commented passage drops its tint, so no word wears a comment's and a change's at once, but keeps
-  an underline in the accent. The header is `sticky`, and what the editor scrolls into view stops below it. A commented
+  the journal, which hold while the section's words are as marked, so a rewritten section is unread again; then a menu
+  that copies or saves the plan's Markdown whole, as the page shows it (`PlanFileMenu`), named as `canopy archive`
+  names the plan, the same menu a task's report and a feedback plan's file carry. Its file's path closes the page's
+  description, on a line of its own, with a copy button. While the changes are marked, a commented passage drops its
+  tint, so no word wears a comment's and a change's at once, but keeps an underline in the accent. The header is
+  `sticky`, and what the editor scrolls into view stops below it. A commented
   passage sits on the accent's tint; the open one, or the one being commented on, darker and underlined; the cursor in
   a passage opens its thread, and so does a click on its card, or Tab into it, which leaves the plan where it is;
   the cursor leaving it, or Escape, closes it. A thread is its passage quoted, the comment and its replies as text with
