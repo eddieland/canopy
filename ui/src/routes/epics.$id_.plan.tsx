@@ -48,11 +48,11 @@ function EpicPlanPage() {
             links={
                 data !== undefined &&
                 file !== undefined && (
-                    // Under the description, the hash its approval takes, then where its file is.
-                    <>
+                    // Under the description, the hash its approval takes, then where its file is, on one line.
+                    <div className="flex flex-wrap items-center gap-x-6">
                         <EpicPlanHash plans={data} />
                         <PlanFileLine path={file.path} />
-                    </>
+                    </div>
                 )
             }
         >
