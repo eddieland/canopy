@@ -99,6 +99,8 @@ class Checked:
 class Group(BaseModel):
     """The follow-up tickets a worker filed, a group of its result's fields (`core.run_result`) while it may file."""
 
+    model_config = ConfigDict(frozen=True, defer_build=True)
+
     created: dict[StrictStr, StrictStr | None] = Field(
         default_factory=dict,
         description="Every follow-up ticket you created in the tracker, by its key, with the repository its body "
@@ -109,6 +111,8 @@ class Group(BaseModel):
 
 class TaskGroup(BaseModel):
     """The tickets a one-off task's worker filed, a group of its result's fields while it may file."""
+
+    model_config = ConfigDict(frozen=True, defer_build=True)
 
     created: list[StrictStr] = Field(
         default_factory=list,

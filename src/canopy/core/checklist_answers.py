@@ -281,6 +281,8 @@ class Held(BaseModel):
 class Group(BaseModel):
     """A run's answers to the operator's checklists, a group of its result's fields (`core.run_result`)."""
 
+    model_config = ConfigDict(frozen=True, defer_build=True)
+
     checklist: dict[StrictStr, dict[StrictStr, Literal["pass", "fixed", "n/a"] | Held]] = Field(
         default_factory=dict,
         description="Under each repository your message says has a checklist, every item of its list by its id, none "

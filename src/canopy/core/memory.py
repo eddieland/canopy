@@ -312,6 +312,8 @@ _KEPT = "Kept by canopy, never posted, and read by the operator: mention none of
 class NotesGroup(BaseModel):
     """The notes a run may write, a group of its result's fields (`core.run_result`) while ticket notes are on."""
 
+    model_config = ConfigDict(frozen=True, defer_build=True)
+
     notes: list[Note] = Field(
         default_factory=list,
         description=f"At most {MAX_NOTES_PER_RUN} notes for this ticket's later runs, about this ticket's work that "
@@ -326,6 +328,8 @@ class NotesGroup(BaseModel):
 class DropNotesGroup(BaseModel):
     """The notes a run may drop, a group of its result's fields while it is shown its ticket's notes."""
 
+    model_config = ConfigDict(frozen=True, defer_build=True)
+
     drop_notes: list[StrictStr] = Field(
         default_factory=list,
         description="The keys of notes your message shows that no longer hold, such as one about a failure since "
@@ -335,6 +339,8 @@ class DropNotesGroup(BaseModel):
 
 class ProposalsGroup(BaseModel):
     """The lessons a run may propose, a group of its result's fields while proposals are on."""
+
+    model_config = ConfigDict(frozen=True, defer_build=True)
 
     proposals: list[Proposal] = Field(
         default_factory=list,
@@ -349,6 +355,8 @@ class ProposalsGroup(BaseModel):
 
 class CitedGroup(BaseModel):
     """The memories a run cites, a group of its result's fields while it is shown any."""
+
+    model_config = ConfigDict(frozen=True, defer_build=True)
 
     memory_used: list[StrictInt] = Field(
         default_factory=list,

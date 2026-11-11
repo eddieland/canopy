@@ -70,7 +70,8 @@ BRANCH = f"agent/{KEY}-work"
 LABEL = "agent-ready-tester"
 #: The PR WORKER_DONE reports, as a URL that names no PR, so no source reads it.
 WORKER_PR = "https://example.test/pr/1"
-WORKER_DONE = json.dumps({"status": "done", "branch": BRANCH, "pr": WORKER_PR, "summary": "did it"})
+#: A `done` worker's result in the tests' workspace of one repository, `repo`, as its `result` call reports it.
+WORKER_DONE = json.dumps({"status": "done", "branch": BRANCH, "prs": {"repo": WORKER_PR}, "summary": "did it"})
 #: The PR a worker that sends drafts opens (`sends_drafts`).
 DRAFTS_PR = "https://github.com/acme/api/pull/7"
 #: A PR the tests' `vcs` source reads, open with nothing on it, unless a test's GitHub state says otherwise. A ticket

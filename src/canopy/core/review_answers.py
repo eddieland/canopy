@@ -99,6 +99,8 @@ class Entry(BaseModel):
 class Group(BaseModel):
     """A resume's answers to its review's findings, a group of its result's fields (`core.run_result`)."""
 
+    model_config = ConfigDict(frozen=True, defer_build=True)
+
     review_answers: list[Entry] = Field(
         default_factory=list,
         description="One entry for each finding your message lists under canopy's review, and none when it lists "

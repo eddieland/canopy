@@ -288,6 +288,8 @@ _DRAFTS = (
 class DraftsGroup(BaseModel):
     """The comments a run drafts on its PRs, a group of its result's fields (`core.run_result`) under `approve`."""
 
+    model_config = ConfigDict(frozen=True, defer_build=True)
+
     drafts: list[Annotated[ThreadDraft | PrDraft, Field(discriminator="on")]] = Field(
         default_factory=list,
         description=_DRAFTS,
@@ -296,6 +298,8 @@ class DraftsGroup(BaseModel):
 
 class TicketDraftsGroup(BaseModel):
     """The comments a run drafts on its PRs and its ticket, where canopy can post the ticket's for the operator."""
+
+    model_config = ConfigDict(frozen=True, defer_build=True)
 
     drafts: list[Annotated[ThreadDraft | PrDraft | TicketDraft, Field(discriminator="on")]] = Field(
         default_factory=list,

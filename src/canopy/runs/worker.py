@@ -353,6 +353,8 @@ class Report(BaseModel):
 class FlakyGroup(BaseModel):
     """What a `resume` says of a failed check it left as not the change's, a group of its result's fields (§23)."""
 
+    model_config = ConfigDict(frozen=True, defer_build=True)
+
     flaky: StrictBool = Field(
         default=False,
         description="True when you left a failed check a rerun would pass, which the change did not cause, such as a "
@@ -426,6 +428,8 @@ class PlanReport(BaseModel):
 
 class PlanReviewGroup(BaseModel):
     """Whether a plan needs the operator's review, a group of a planner's result's fields where it may say so."""
+
+    model_config = ConfigDict(frozen=True, defer_build=True)
 
     review: Literal["needed", "not_needed"] = Field(
         default="needed",
