@@ -384,3 +384,39 @@ test("what a diagram's labels write as HTML stays text, and its config cannot sa
     expect(await page.evaluate(() => 'pwned' in globalThis)).toBe(false)
     expect(fetched).toEqual([])
 })
+
+test('a diagram too wide to read narrowed scrolls instead, its far edge faded', async ({ page }) => {
+    const chain = Array.from({ length: 12 }, (_, i) => `N${i}[Step ${i} of the export]`).join(' --> ')
+    await writePlan(page, `# Plan\n\n\`\`\`mermaid\nflowchart LR\n    ${chain}\n\`\`\`\n`)
+    const diagram = plan(page).getByRole('img', { name: /^A flowchart/u })
+    await expect(diagram).toBeVisible()
+    const shown = await diagram.evaluate((image: HTMLImageElement) => ({
+        drawn: image.naturalWidth,
+        shown: image.getBoundingClientRect().width,
+        room: image.parentElement?.clientWidth ?? 0,
+    }))
+    // Wider than the plan, so it is not shown whole; but at three quarters of its size at least, not shrunk to fit.
+    expect(shown.drawn).toBeGreaterThan(shown.room / 0.75)
+    expect(shown.shown).toBeGreaterThanOrEqual(Math.floor(shown.drawn * 0.75))
+
+    const scroll = diagram.locator('xpath=..')
+    await expect(scroll).toHaveAttribute('data-more-end')
+    await expect(scroll).not.toHaveAttribute('data-more-start')
+    await scroll.evaluate((box) => {
+        box.scrollLeft = box.scrollWidth
+    })
+    await expect(scroll).toHaveAttribute('data-more-start')
+    await expect(scroll).not.toHaveAttribute('data-more-end')
+})
+
+test('a diagram that fits is drawn at its own size, not stretched', async ({ page }) => {
+    await writePlan(page, '# Plan\n\n```mermaid\nflowchart LR\n    A[web] --> B[api]\n```\n')
+    const diagram = plan(page).getByRole('img', { name: /^A flowchart/u })
+    await expect(diagram).toBeVisible()
+    const width = await diagram.evaluate((image: HTMLImageElement) => ({
+        drawn: image.naturalWidth,
+        shown: image.getBoundingClientRect().width,
+    }))
+    expect(Math.abs(width.shown - width.drawn)).toBeLessThan(1)
+    await expect(diagram.locator('xpath=..')).not.toHaveAttribute('data-more-end')
+})

@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { Fragment, useState } from 'react'
+import type { CSSProperties } from 'react'
 
 import { BlockActions, DiagramActions } from '@/components/block-actions'
 import { Code } from '@/components/code'
@@ -9,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useDiagram } from '@/hooks/use-diagram'
 import { DIAGRAM_FENCE, anchor, diagramTitle, plainText } from '@/lib/guide'
 import type { GuidePiece } from '@/lib/guide'
+import { markOverflowEdges } from '@/lib/overflow-edges'
 import { ALIGN } from '@/lib/rich-text'
 import type { Align, Block, Line } from '@/lib/rich-text'
 import { fileWords } from '@/lib/save-file'
@@ -200,15 +202,22 @@ function Diagram({ lines, page }: { lines: string[]; page: string }) {
             </figure>
         )
     }
+    // As wide as it is drawn, or narrower to fit, but never so narrow its labels go unread: past that it scrolls, its
+    // edges faded where there is more (`diagram-image`, `edge-fade`).
+    const width = drawn.width === undefined ? undefined : ({ '--diagram-width': `${drawn.width}px` } as CSSProperties)
     return (
-        <figure className="group/block relative overflow-x-auto rounded-md border px-4 py-5">
+        <figure className="group/block relative rounded-md border px-4 py-5">
             {actions}
-            <img
-                src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(drawn.svg)}`}
-                alt={title ?? 'A diagram'}
-                className="mx-auto h-auto max-w-full"
-                onError={() => setUnread(drawn.svg)}
-            />
+            <div ref={(box) => (box === null ? undefined : markOverflowEdges(box))} className="edge-fade">
+                <img
+                    src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(drawn.svg)}`}
+                    alt={title ?? 'A diagram'}
+                    data-width={drawn.width === undefined ? undefined : ''}
+                    style={width}
+                    className="diagram-image"
+                    onError={() => setUnread(drawn.svg)}
+                />
+            </div>
         </figure>
     )
 }

@@ -260,6 +260,31 @@
 }
 
 /*
+ * A box that scrolls sideways, each edge faded while there is more past it (src/lib/overflow-edges.ts marks which), so
+ * the operator sees there is more where the scrollbar stays hidden until a scroll.
+ */
+@utility edge-fade {
+    overflow-x: auto;
+    --fade-start: 0px;
+    --fade-end: 0px;
+    &[data-more-start] {
+        --fade-start: 2.5rem;
+    }
+    &[data-more-end] {
+        --fade-end: 2.5rem;
+    }
+    &:is([data-more-start], [data-more-end]) {
+        mask-image: linear-gradient(
+            to right,
+            transparent,
+            black var(--fade-start),
+            black calc(100% - var(--fade-end)),
+            transparent
+        );
+    }
+}
+
+/*
  * A block's actions (src/components/block-actions.tsx): a diagram's, a code block's, in a row at the block's top right
  * corner, over it, on its surface. Shown while the block, an ancestor marked `group/block`, is hovered, a plan's
  * diagram holds the caret (`plan-diagram-editing`), an action holds the focus, or its menu is open, and always on a
@@ -279,6 +304,22 @@
     }
     @media print {
         display: none;
+    }
+}
+
+/*
+ * A diagram's picture, in a plan or the guide: as wide as it is drawn, narrower to fit what holds it, but never under
+ * three quarters of that, past which its labels are too small to read; there, what holds it scrolls (`edge-fade`).
+ * Centred while it fits. Its width is the diagram's, `--diagram-width`, set with `data-width` where the SVG says it.
+ */
+@utility diagram-image {
+    display: block;
+    height: auto;
+    max-width: 100%;
+    margin-inline: auto;
+    &[data-width] {
+        max-width: none;
+        width: clamp(calc(var(--diagram-width) * 0.75), 100%, var(--diagram-width));
     }
 }
 
@@ -323,8 +364,9 @@
         & .plan-diagram-figure img[data-drawn-dark] {
             filter: invert(1) hue-rotate(180deg);
         }
-        & .tableWrapper {
+        & :is(.tableWrapper, .plan-diagram-scroll) {
             overflow: visible;
+            mask-image: none;
         }
         & .plan-doc :is(th, td) {
             overflow-wrap: anywhere;
@@ -1980,13 +2022,16 @@
             @apply relative;
         }
         & .plan-diagram-figure {
-            @apply relative m-0 flex flex-col items-center gap-2 rounded-md border bg-surface p-3;
+            @apply relative m-0 flex flex-col gap-2 rounded-md border bg-surface p-3;
         }
         & .plan-diagram[data-diagram='pending'] .plan-diagram-figure {
             @apply hidden;
         }
+        & .plan-diagram-scroll {
+            @apply edge-fade;
+        }
         & .plan-diagram-figure img {
-            @apply h-auto max-w-full;
+            @apply diagram-image;
         }
         & .plan-diagram-figure figcaption {
             /* Clear of the actions in the figure's corner, when the caption is all the figure holds. */

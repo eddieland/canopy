@@ -19,6 +19,7 @@ import type { EditorView, NodeView, ViewMutationRecord } from '@tiptap/pm/view'
 import { blockSlots, newSlotId } from '@/lib/block-slots'
 import type { BlockSlots } from '@/lib/block-slots'
 import type { Drawn, NotDrawn } from '@/lib/diagram'
+import { markOverflowEdges } from '@/lib/overflow-edges'
 import { CodeView } from '@/lib/plan-code'
 
 // Kept in step with DIAGRAM_LANGUAGE in src/lib/diagram.ts, which loads only when a diagram is drawn.
@@ -117,6 +118,7 @@ class DiagramView implements NodeView {
     private draws = 0
     private timer: ReturnType<typeof setTimeout> | undefined
     private readonly unsubscribe: () => void
+    private readonly unmark: () => void
 
     constructor(node: ProseMirrorNode, slots: BlockSlots) {
         this.text = node.textContent
@@ -132,7 +134,11 @@ class DiagramView implements NodeView {
         this.figure = child(this.dom, 'figure')
         this.figure.className = 'plan-diagram-figure'
         this.figure.contentEditable = 'false'
-        this.image = child(this.figure, 'img')
+        // The picture scrolls in a box of its own, so a diagram too wide to read narrowed scrolls rather than shrinks,
+        // and the caption and the toggle stay put.
+        const scroll = child(this.figure, 'div')
+        scroll.className = 'plan-diagram-scroll'
+        this.image = child(scroll, 'img')
         this.image.alt = 'A diagram'
         this.image.hidden = true
         // A picture the browser cannot read is a diagram not drawn, shown as its code and why, not a broken image
@@ -156,6 +162,7 @@ class DiagramView implements NodeView {
         this.actions = child(this.figure, 'div')
         this.actions.className = 'block-actions'
 
+        this.unmark = markOverflowEdges(scroll)
         this.unsubscribe = onThemeChange(() => {
             this.draw()
         })
@@ -196,6 +203,7 @@ class DiagramView implements NodeView {
         clearTimeout(this.timer)
         this.draws += 1
         this.unsubscribe()
+        this.unmark()
         this.slots.remove(this.id)
     }
 
@@ -232,6 +240,7 @@ class DiagramView implements NodeView {
         this.dom.dataset['diagram'] = 'drawn'
         const name = KIND_NAMES[result.kind] ?? 'diagram'
         this.image.alt = `${/^[aeiou]/u.test(name) ? 'An' : 'A'} ${name}, drawn from the Mermaid source beside it`
+        showWidth(this.image, result.width)
         this.image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(result.svg)}`
         this.image.toggleAttribute('data-drawn-dark', dark)
         this.image.hidden = false
@@ -250,6 +259,17 @@ class DiagramView implements NodeView {
             this.picture = undefined
             this.publish()
         }
+    }
+}
+
+// The width a diagram's picture is drawn at, which `diagram-image` (src/index.css) keeps it near; none, where the SVG
+// does not say, leaves it as wide as it is, or narrower to fit.
+function showWidth(image: HTMLImageElement, width: number | undefined): void {
+    image.toggleAttribute('data-width', width !== undefined)
+    if (width === undefined) {
+        image.style.removeProperty('--diagram-width')
+    } else {
+        image.style.setProperty('--diagram-width', `${width}px`)
     }
 }
 
