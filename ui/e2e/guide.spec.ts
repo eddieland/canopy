@@ -142,6 +142,28 @@ test.describe("a diagram's actions", () => {
     })
 })
 
+test.describe("a code block's actions", () => {
+    test.use({ permissions: ['clipboard-read', 'clipboard-write'] })
+
+    test('copy a command as the page writes it, shown while the block is pointed at', async ({ page }) => {
+        await page.goto('guide/dictation')
+        const block = page
+            .getByTestId('guide-page')
+            .getByText('ssh -N -L 8765:127.0.0.1:8765 you@loop-host', { exact: true })
+            .locator('..')
+        const copy = block.getByRole('button', { name: 'Copy code' })
+        await expect(copy.locator('..')).toHaveCSS('opacity', '0')
+        await block.hover()
+        await expect(copy.locator('..')).toHaveCSS('opacity', '1')
+        await copy.click()
+        await expect(page.getByRole('status').filter({ hasText: 'Copied code' })).toBeVisible()
+        // No newline after it, so pasted into a shell it waits for Enter.
+        await expect
+            .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+            .toBe('ssh -N -L 8765:127.0.0.1:8765 you@loop-host')
+    })
+})
+
 test('a page the guide does not have is the 404', async ({ page }) => {
     await page.goto('guide/no-such-page')
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Nothing here')

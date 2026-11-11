@@ -20,6 +20,14 @@ export function DiagramActions({ source }: { source: string }) {
 }
 
 /**
+ * A code block's actions: its code copied, exactly as the fence holds it, without the fence's lines or a newline after
+ * the last, so a command pasted into a shell waits for Enter.
+ */
+export function CodeActions({ code }: { code: string }) {
+    return <CopyButton text={code} label="code" />
+}
+
+/**
  * The actions of the blocks of a plan's document, the editor `owner`'s, each drawn into its block's room for them
  * (`src/lib/block-slots.ts`): through a portal, so they render in the page's tree, with its toasts, though ProseMirror
  * draws the block around them.
@@ -27,5 +35,11 @@ export function DiagramActions({ source }: { source: string }) {
 export function PlanBlockActions({ owner }: { owner: object }) {
     const slots = blockSlots(owner)
     const blocks = useSyncExternalStore(slots.subscribe, slots.snapshot)
-    return blocks.map((block) => createPortal(<DiagramActions source={block.source} />, block.slot, String(block.id)))
+    return blocks.map((block) =>
+        createPortal(
+            block.kind === 'diagram' ? <DiagramActions source={block.source} /> : <CodeActions code={block.source} />,
+            block.slot,
+            String(block.id),
+        ),
+    )
 }

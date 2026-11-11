@@ -261,15 +261,16 @@
 
 /*
  * A block's actions (src/components/block-actions.tsx): a diagram's, a code block's, in a row at the block's top right
- * corner, over it, on its surface. Shown while the block, an ancestor marked `group/block`, is hovered, or an action
- * holds the focus, and always on a touch screen, which has no hover; kept in place out of sight, so nothing moves as
- * they show. Never printed.
+ * corner, over it, on its surface. Shown while the block, an ancestor marked `group/block`, is hovered or holds the
+ * caret (a plan's block marked `block-caret`, src/lib/plan-diagram.ts), or an action holds the focus, and always on a
+ * touch screen, which has no hover; kept in place out of sight, so nothing moves as they show. Never printed. Here, not
+ * beside the plan's rules, as a rule in the components layer loses to a utility whatever its specificity.
  */
 @utility block-actions {
     @apply absolute top-1.5 right-1.5 z-10 flex items-center gap-0.5 rounded-md bg-surface p-0.5 opacity-0;
     transition: opacity 150ms;
     &:focus-within,
-    :where(.group\/block:hover) & {
+    :where(.group\/block:hover, .block-caret) & {
         opacity: 1;
     }
     @media (pointer: coarse) {
@@ -1872,6 +1873,10 @@
             @apply bg-transparent p-0;
             font-size: inherit;
         }
+        /* A code block other than a diagram, which holds its actions in its corner (src/lib/plan-diagram.ts). */
+        & .plan-code {
+            @apply relative;
+        }
         & hr {
             @apply my-1 border-t;
         }
@@ -1921,10 +1926,6 @@
         }
         & .plan-diagram-figure {
             @apply relative m-0 flex flex-col items-center gap-2 rounded-md border bg-surface p-3;
-        }
-        /* Its actions show while its code is being edited too, as while it is hovered. */
-        & .plan-diagram-editing .block-actions {
-            @apply opacity-100;
         }
         & .plan-diagram[data-diagram='pending'] .plan-diagram-figure {
             @apply hidden;

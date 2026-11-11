@@ -186,7 +186,7 @@ function Diagram({ lines }: { lines: string[] }) {
         return (
             <figure className="group/block relative flex flex-col gap-2">
                 {actions}
-                <CodeBlock lines={lines} lang={DIAGRAM_FENCE} className={GUIDE_BLOCK} />
+                <CodeBlock lines={lines} lang={DIAGRAM_FENCE} copy={false} className={GUIDE_BLOCK} />
                 <figcaption className="text-sm text-muted-foreground">
                     Not drawn: {'error' in drawn ? drawn.error : UNREADABLE}.
                 </figcaption>

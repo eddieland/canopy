@@ -135,7 +135,8 @@ three tickets or more opens its breakdown with the order they're built in, drawn
 Point at a diagram and **Copy Mermaid source** appears in its top right corner. It copies the code exactly as the
 plan's file holds it, without the fence, ready to paste into a PR description, an issue, or a doc: GitHub draws
 Mermaid, and so do most of the places you'd want it. A diagram that couldn't be drawn copies the same way, so you
-can fix it in an editor that says more than `Parse error on line 3`.
+can fix it in an editor that says more than `Parse error on line 3`. Any other code block has **Copy code** in the
+same corner, for the command or the config a plan spells out.
 
 The code is still the plan. **Source**, under the diagram, shows it; so does putting the cursor in it, which the arrow
 keys do from the line above or below, and which is how you edit one, with the diagram redrawn under it as you stop

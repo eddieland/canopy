@@ -151,3 +151,40 @@ describe('a Mermaid code block', () => {
         expect(decodeURIComponent(image.getAttribute('src') ?? '')).toContain('B->>A: bye')
     })
 })
+
+describe('a code block in another language', () => {
+    const CODE = '```sh\nuv run pytest -q\n```'
+
+    it('keeps room beside its code for its actions, saying what they act on as its code is edited', () => {
+        const { editor, root } = open(`# Plan\n\n${CODE}\n`)
+        const slots = blockSlots(editor)
+        const [block] = slots.snapshot()
+        expect(block?.kind).toBe('code')
+        expect(block?.source).toBe('uv run pytest -q')
+        // Beside the `pre`, not in it, so they stay in its corner as it scrolls sideways, and are no part of its code.
+        const pre = within(root).getByText('uv run pytest -q').closest('pre')
+        expect(block?.slot.parentElement).toBe(pre?.parentElement)
+        expect(pre?.contains(block?.slot ?? null)).toBe(false)
+
+        editor.commands.insertContentAt(codeEnd(editor), ' --lf')
+        expect(slots.snapshot().map((each) => [each.id, each.source])).toEqual([[block?.id, 'uv run pytest -q --lf']])
+        expect(editor.getMarkdown()).toContain('```sh\nuv run pytest -q --lf\n```')
+
+        editor.commands.setContent('# No code here', { contentType: 'markdown' })
+        expect(slots.snapshot()).toEqual([])
+    })
+
+    it("gives its room to a diagram's actions when it becomes one", async () => {
+        const { editor, root } = open(CODE)
+        editor.commands.command(({ tr }) => {
+            tr.setNodeAttribute(0, 'language', 'mermaid')
+            return true
+        })
+        await within(root).findByRole('img')
+        expect(
+            blockSlots(editor)
+                .snapshot()
+                .map((each) => each.kind),
+        ).toEqual(['diagram'])
+    })
+})

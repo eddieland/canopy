@@ -31,6 +31,11 @@ The guide comes in four parts, in the order you'll need them.
 You don't have to come in through the front door. Every page of the app has a book at its top right that opens the
 part of this guide about that page, so the answer to "what is this?" is one click from the thing you're asking about.
 
+When a page here tells you to run something, point at the code block and **Copy code** appears in its top right
+corner. It copies the block as written, without a newline after the last line, so a command pasted into your shell
+waits for you to press Enter instead of running the moment it lands. The same button sits on every code block in a
+plan and in a conversation.
+
 ## The pages
 
 The nav on the left lists them, most used first. If you learn only one, learn Attention.

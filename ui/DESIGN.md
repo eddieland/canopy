@@ -1160,20 +1160,23 @@ reader, so no table repeats them.
   however many repositories. The Work panel keeps each repository's PR beside its phase; those lines scroll inside the
   panel past a few, so its total cost, its actions, and the reply stay in reach.
 - **A block's actions** (`BlockActions`, `src/components/block-actions.tsx`): what takes a block of a document
-  elsewhere, a diagram's Mermaid source among them, sits in a row at the block's top right corner, over it, on
-  `surface`: ghost `icon-xs` buttons, each named on hover, as a copy button is (below). They show while the block is
-  hovered, holds the caret, or one of them holds the focus, and always on a touch screen, kept in place out of sight so
-  nothing moves; a block marks itself `group/block` and is positioned. A plan's blocks are drawn by ProseMirror, so each
-  keeps an element for its actions (`src/lib/block-slots.ts`) which the page fills through a portal, in its own tree.
-  They are never printed.
+  elsewhere, a diagram's Mermaid source or a code block's code, in a plan, the guide, or rich text, sits in a row at the
+  block's top right corner, over it, on `surface`, outside anything that scrolls in the block: ghost `icon-xs` buttons,
+  each named on hover, as a copy button is (below). A diagram's code shows no copy of its own beside its diagram's. They
+  show while the block is hovered, holds the caret, or one of them holds the focus, and always on a touch screen, kept
+  in place out of sight so nothing moves; a block marks itself `group/block` and is positioned. A plan's blocks are
+  drawn by ProseMirror, so each keeps an element for its actions (`src/lib/block-slots.ts`) which the page fills through
+  a portal, in its own tree. They are never printed.
 - **Text to paste elsewhere** has a copy button after it (`Copyable`, `CopyButton`): a branch, a path, a session id, a
-  review's commit, whole though the page shows its first 7 characters. A path copies whole though the page shows it
-  from the workspace root (`CopyablePath`); until the root is read there is no button, so a copy is never the short
-  path. The button is a ghost `icon-xs` with the `Copy` icon, muted until hovered; a click shows `Check` in the accent,
-  or `X` in `status-failed` when the browser refuses, and names what happened, and a toast says the same with the text
-  it copied. In a dense list it shows only while its row is hovered or it has the focus, keeping its space so nothing
-  moves, and always on a touch screen. The clipboard needs a secure context, so elsewhere there is no button and the
-  text stays selectable.
+  review's commit, whole though the page shows its first 7 characters, and a code block, in its corner (A block's
+  actions), its characters as the fence holds them with no newline after the last, so a pasted command waits for Enter,
+  and whole though rich text shows it cut short. Not a diff's code, which is no block to paste. A path copies whole
+  though the page shows it from the workspace root (`CopyablePath`); until the root is read there is no button, so a
+  copy is never the short path. The button is a ghost `icon-xs` with the `Copy` icon, muted until hovered; a click shows
+  `Check` in the accent, or `X` in `status-failed` when the browser refuses, and names what happened, and a toast says
+  the same with the text it copied. In a dense list it shows only while its row is hovered or it has the focus, keeping
+  its space so nothing moves, and always on a touch screen. The clipboard needs a secure context, so elsewhere there is
+  no button and the text stays selectable.
 - **A toast** (`Toaster`, `useToast` in `src/hooks/use-toast.ts`) says what an action did when the place it was done
   shows too little of it: a copy names what it copied, a draft's send what it sent. It sits at the bottom center of the
   window on `surface` with a hairline, a `Check` in the accent or an `X` in `status-failed`, its title, and a line under

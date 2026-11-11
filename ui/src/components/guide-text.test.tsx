@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { drawDiagram } from '@/lib/diagram'
@@ -100,6 +100,19 @@ describe('GuideText', () => {
 
         expect(container.textContent).toBe(lines.join('\n'))
     })
+
+    it('copies its characters exactly from its corner, without its fence or a newline after the last', async () => {
+        vi.stubGlobal('isSecureContext', true)
+        const write = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue()
+        const lines = ['ssh -N -L 8765:127.0.0.1:8765 you@loop-host']
+        await renderRouted(<GuideText blocks={[{ kind: 'code', lines, lang: 'sh' }]} page="dictation" />)
+
+        fireEvent.click(screen.getByRole('button', { name: 'Copy code' }))
+        await act(async () => {
+            await Promise.resolve()
+        })
+        expect(write).toHaveBeenCalledWith('ssh -N -L 8765:127.0.0.1:8765 you@loop-host')
+    })
 })
 
 describe('a diagram in the guide', () => {
@@ -125,6 +138,17 @@ describe('a diagram in the guide', () => {
         expect(await screen.findByText('Not drawn: Parse error on line 3.')).toBeDefined()
         expect(screen.getByText('wait --> tick', { exact: false })).toBeDefined()
         expect(screen.queryByRole('img')).toBeNull()
+    })
+
+    it("copies its Mermaid source, not its code's, when it cannot be drawn: one button for the one block", async () => {
+        vi.stubGlobal('isSecureContext', true)
+        vi.mocked(drawDiagram).mockResolvedValue({ error: 'Parse error on line 3' })
+        await renderRouted(<GuideText blocks={[{ kind: 'code', lines, lang: 'mermaid' }]} page="overview" />)
+
+        await screen.findByText('Not drawn: Parse error on line 3.')
+        expect(screen.getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual([
+            'Copy Mermaid source',
+        ])
     })
 
     it('shows its code, and why, when the browser cannot read the picture drawn', async () => {

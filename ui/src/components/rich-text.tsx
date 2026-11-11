@@ -54,7 +54,7 @@ export function RichText({
     return (
         <div className={cn('flex min-w-0 flex-col gap-1.5 text-sm wrap-break-word', className)}>
             {shown.map((block, i) => (
-                <BlockView key={i} block={block} prose={prose} look={{ pullRequests, raised }} />
+                <BlockView key={i} block={block} whole={blocks[i]} prose={prose} look={{ pullRequests, raised }} />
             ))}
             {cut.hidden > 0 && <MoreLines hidden={cut.hidden} open={open} onToggle={() => setOpen(!open)} />}
         </div>
@@ -102,7 +102,8 @@ interface Look {
     raised: boolean
 }
 
-function BlockView({ block, prose, look }: { block: Block; prose: boolean; look: Look }) {
+// `whole` is the block before `lines` cut it short, for what a code block's copy button copies.
+function BlockView({ block, whole, prose, look }: { block: Block; whole?: Block; prose: boolean; look: Look }) {
     switch (block.kind) {
         case 'paragraph': {
             return (
@@ -149,7 +150,13 @@ function BlockView({ block, prose, look }: { block: Block; prose: boolean; look:
             return (
                 <blockquote className="flex flex-col gap-1.5 border-l-2 pl-3 text-muted-foreground">
                     {block.blocks.map((inner, i) => (
-                        <BlockView key={i} block={inner} prose={prose} look={look} />
+                        <BlockView
+                            key={i}
+                            block={inner}
+                            whole={whole?.kind === 'quote' ? whole.blocks[i] : undefined}
+                            prose={prose}
+                            look={look}
+                        />
                     ))}
                 </blockquote>
             )
@@ -190,6 +197,7 @@ function BlockView({ block, prose, look }: { block: Block; prose: boolean; look:
                 <CodeBlock
                     lines={block.lines}
                     lang={block.lang}
+                    copy={(whole?.kind === 'code' ? whole : block).lines.join('\n')}
                     className={cn(
                         'rounded-sm border px-2 py-1.5 text-code leading-relaxed',
                         look.raised ? 'bg-background' : 'bg-surface-raised',

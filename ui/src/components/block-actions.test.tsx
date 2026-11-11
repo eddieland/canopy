@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ToastContext } from '@/hooks/use-toast'
 import { blockSlots, newSlotId } from '@/lib/block-slots'
+import type { BlockSlot } from '@/lib/block-slots'
 import type { NewToast } from '@/lib/toasts'
 
 import { PlanBlockActions } from './block-actions'
@@ -10,19 +11,23 @@ import { PlanBlockActions } from './block-actions'
 let toasts: NewToast[] = []
 
 // A plan's document, as the editor that owns it, with the room its diagrams keep for their actions.
-function planDocument(): { owner: object; put: (source: string) => HTMLElement; remove: (slot: HTMLElement) => void } {
+function planDocument(): {
+    owner: object
+    put: (source: string, kind?: BlockSlot['kind']) => HTMLElement
+    remove: (slot: HTMLElement) => void
+} {
     const owner = {}
     const slots = blockSlots(owner)
     const ids = new Map<HTMLElement, number>()
     return {
         owner,
-        put: (source) => {
+        put: (source, kind = 'diagram') => {
             const slot = document.createElement('div')
             document.body.append(slot)
             const id = newSlotId()
             ids.set(slot, id)
             act(() => {
-                slots.put({ id, kind: 'diagram', slot, source })
+                slots.put({ id, kind, slot, source })
             })
             return slot
         },
@@ -73,6 +78,27 @@ describe("a plan's diagram's actions", () => {
             { title: 'Copied Mermaid source', detail: 'sequenceDiagram\n    A->>B: hi', tone: 'done' },
         ])
         expect(within(first).getByRole('button', { name: 'Copy Mermaid source' })).toBeDefined()
+    })
+
+    it("are a code block's copy of its code, beside a diagram's of its source", async () => {
+        const write = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue()
+        const plan = planDocument()
+        renderActions(plan.owner)
+        const diagram = plan.put('flowchart LR\n    A --> B')
+        const code = plan.put('uv run pytest -q\n  --lf', 'code')
+
+        expect(
+            within(code)
+                .getAllByRole('button')
+                .map((button) => button.getAttribute('aria-label')),
+        ).toEqual(['Copy code'])
+        expect(within(diagram).getByRole('button', { name: 'Copy Mermaid source' })).toBeDefined()
+        fireEvent.click(within(code).getByRole('button', { name: 'Copy code' }))
+        await act(async () => {
+            await Promise.resolve()
+        })
+        expect(write).toHaveBeenCalledWith('uv run pytest -q\n  --lf')
+        expect(toasts).toEqual([{ title: 'Copied code', detail: 'uv run pytest -q\n  --lf', tone: 'done' }])
     })
 
     it('go when their diagram does', () => {

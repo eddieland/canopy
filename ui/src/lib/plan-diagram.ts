@@ -7,7 +7,8 @@
 // The figure keeps room at its top right for the diagram's actions, which the page draws there (src/lib/block-slots.ts,
 // src/components/block-actions.tsx).
 //
-// A code block of any other language draws as it always has, a `pre` around a `code`, as `CodeBlock` renders it.
+// A code block of any other language draws as `CodeBlock` renders one, a `pre` around a `code`, with room at its top
+// right for its actions too.
 import { Extension } from '@tiptap/core'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state'
@@ -25,8 +26,11 @@ const LANGUAGE = 'mermaid'
 const UNREADABLE = 'the browser cannot read its picture'
 // How long the code rests after a keystroke before its diagram is drawn again, in milliseconds.
 const REST_MS = 400
-// The class the code block holding the caret wears, which shows its code.
+// The class the diagram holding the caret wears, which shows its code.
 const EDITING = 'plan-diagram-editing'
+// The class any code block holding the caret wears, a diagram's included, which shows its actions (`block-actions`,
+// src/index.css).
+const CARET = 'block-caret'
 // The arrow keys, and the way each goes.
 const ARROWS: Partial<Record<string, 'left' | 'right' | 'up' | 'down'>> = {
     ArrowLeft: 'left',
@@ -46,7 +50,7 @@ export const PlanDiagrams = Extension.create({
                 key: new PluginKey('planDiagrams'),
                 props: {
                     nodeViews: {
-                        codeBlock: (node) => (isDiagram(node) ? new DiagramView(node, slots) : codeView(node)),
+                        codeBlock: (node) => (isDiagram(node) ? new DiagramView(node, slots) : codeView(node, slots)),
                     },
                     decorations: (state) => (editor.isEditable ? editing(state) : DecorationSet.empty),
                     handleKeyDown: (view, event) => editor.isEditable && enterDiagram(view, event),
@@ -61,14 +65,15 @@ export function isDiagram(node: ProseMirrorNode): boolean {
     return node.type.name === 'codeBlock' && node.attrs['language'] === LANGUAGE
 }
 
-// The diagram's code block that holds the caret, marked so, or none.
+// The code block that holds the caret, marked so, or none.
 function editing(state: EditorState): DecorationSet {
     const { $from } = state.selection
-    if (!state.selection.empty || !isDiagram($from.parent)) {
+    if (!state.selection.empty || $from.parent.type.name !== 'codeBlock') {
         return DecorationSet.empty
     }
     const start = $from.before()
-    return DecorationSet.create(state.doc, [Decoration.node(start, start + $from.parent.nodeSize, { class: EDITING })])
+    const marked = { class: isDiagram($from.parent) ? `${EDITING} ${CARET}` : CARET }
+    return DecorationSet.create(state.doc, [Decoration.node(start, start + $from.parent.nodeSize, marked)])
 }
 
 // An arrow key at the edge of a block, going toward a diagram beside it, puts the caret in the diagram's code: at its
@@ -95,19 +100,48 @@ function enterDiagram(view: EditorView, event: KeyboardEvent): boolean {
     return true
 }
 
-// A code block that is not a diagram, as `CodeBlock` renders one.
-function codeView(node: ProseMirrorNode): NodeView {
-    const dom = document.createElement('pre')
-    const contentDOM = child(dom, 'code')
+// A code block that is not a diagram, as `CodeBlock` renders one, and room in its corner for its actions, outside the
+// `pre`, so they stay there as it scrolls sideways.
+function codeView(node: ProseMirrorNode, slots: BlockSlots): NodeView {
     const language: unknown = node.attrs['language']
+    const id = newSlotId()
+    let text = node.textContent
+    const dom = document.createElement('div')
+    // A block whose actions show while it is hovered (`block-actions`, src/index.css).
+    dom.className = 'plan-code group/block'
+    const contentDOM = child(child(dom, 'pre'), 'code')
     if (typeof language === 'string' && language) {
         contentDOM.className = `language-${language}`
     }
+    const actions = child(dom, 'div')
+    actions.className = 'block-actions'
+    actions.contentEditable = 'false'
+    // Says what its actions act on now: its code.
+    const publish = () => {
+        slots.put({ id, kind: 'code', slot: actions, source: text })
+    }
+    publish()
     return {
         dom,
         contentDOM,
         // Drawn again if it changes language, which may make it a diagram.
-        update: (next) => next.type === node.type && next.attrs['language'] === language,
+        update: (next) => {
+            if (next.type !== node.type || next.attrs['language'] !== language) {
+                return false
+            }
+            if (next.textContent !== text) {
+                text = next.textContent
+                publish()
+            }
+            return true
+        },
+        // Its actions are not the document: what changes in them, and what is done to them, is their own.
+        stopEvent: (event) => event.target instanceof globalThis.Node && actions.contains(event.target),
+        ignoreMutation: (mutation) =>
+            mutation.type !== 'selection' && (mutation.target === dom || actions.contains(mutation.target)),
+        destroy: () => {
+            slots.remove(id)
+        },
     }
 }
 

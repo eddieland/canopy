@@ -83,6 +83,33 @@ test.describe("a diagram's actions", () => {
     })
 })
 
+test.describe("a code block's actions", () => {
+    test.use({ permissions: ['clipboard-read', 'clipboard-write'] })
+
+    test('copy its code as the plan holds it, shown while pointed at or holding the caret', async ({ page }) => {
+        await write(page, '# Plan\n\nRun:\n\n```sh\nuv run pytest -q\n```\n\nThen ship it.\n')
+        const doc = plan(page)
+        const code = doc.getByText('uv run pytest -q', { exact: true })
+        const block = code.locator('xpath=ancestor::pre/..')
+        // The plan's one code block's, which holds while its code changes.
+        const copy = doc.getByRole('button', { name: 'Copy code' })
+        await expect(copy.locator('..')).toHaveCSS('opacity', '0')
+        await block.hover()
+        await expect(copy.locator('..')).toHaveCSS('opacity', '1')
+        await copy.click()
+        await expect(page.getByRole('status').filter({ hasText: 'Copied code' })).toBeVisible()
+        await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('uv run pytest -q')
+
+        // An edit to its code is what it copies next, and the caret in it shows its actions, the pointer elsewhere.
+        await clickAtEnd(code)
+        await page.keyboard.type(' --lf')
+        await page.mouse.move(0, 0)
+        await expect(copy.locator('..')).toHaveCSS('opacity', '1')
+        await copy.click()
+        await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('uv run pytest -q --lf')
+    })
+})
+
 test('the caret moved into a diagram shows its source, and an edit there draws it again', async ({ page }) => {
     const doc = plan(page)
     const diagram = doc.getByRole('img', { name: /^A sequence diagram/u })

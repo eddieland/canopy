@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { renderRouted } from '@/test-utils'
@@ -145,6 +145,34 @@ describe('RichText, further forms', () => {
             'https://ci.example.test/7',
             'https://evil.test',
         ])
+    })
+})
+
+describe("RichText's code block", () => {
+    it('copies its characters exactly, without its fence or a newline after its last line', async () => {
+        vi.stubGlobal('isSecureContext', true)
+        const write = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue()
+        render(<RichText text={'Run it:\n\n```sh\nuv run pytest -q\n  --lf\n```\n'} />)
+
+        fireEvent.click(screen.getByRole('button', { name: 'Copy code' }))
+        await act(async () => {
+            await Promise.resolve()
+        })
+        expect(write).toHaveBeenCalledWith('uv run pytest -q\n  --lf')
+    })
+
+    it('copies the whole block, though the text is shown cut short in it', async () => {
+        vi.stubGlobal('isSecureContext', true)
+        const write = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue()
+        const code = ['one', 'two', 'three', 'four', 'five', 'six']
+        render(<RichText text={['```', ...code, '```'].join('\n')} lines={2} />)
+        expect(screen.queryByText(/three/u)).toBeNull()
+
+        fireEvent.click(screen.getByRole('button', { name: 'Copy code' }))
+        await act(async () => {
+            await Promise.resolve()
+        })
+        expect(write).toHaveBeenCalledWith(code.join('\n'))
     })
 })
 

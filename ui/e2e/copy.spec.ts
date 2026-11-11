@@ -60,6 +60,22 @@ test("a slot's copy buttons show only while its row is hovered, and copy its pat
     expect(await clipboard(page)).toBe(`${await workspaceRoot(page)}/.treehouse/web-3f9c2a1b/1/web`)
 })
 
+test("a code block in a conversation copies from its corner, without its last line's newline", async ({ page }) => {
+    await page.goto('tickets/ABC-103')
+    await settled(page)
+    const block = page
+        .getByTestId('conversation')
+        .getByText(/^uv run pytest -q tests\/invoices/u)
+        .locator('..')
+    const copy = block.getByRole('button', { name: 'Copy code' })
+    await expect(copy.locator('..')).toHaveCSS('opacity', '0')
+    await block.hover()
+    await expect(copy.locator('..')).toHaveCSS('opacity', '1')
+    await copy.click()
+    await expect(page.getByRole('status').filter({ hasText: 'Copied code' })).toBeVisible()
+    expect(await clipboard(page)).toBe('uv run pytest -q tests/invoices\n12 passed')
+})
+
 test("a run's worktree and log paths copy whole, though the page shows them from the workspace root", async ({
     page,
 }) => {
