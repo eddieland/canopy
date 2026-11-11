@@ -260,6 +260,24 @@ for (const theme of THEMES) {
     }
 }
 
+// A feedback plan's file opened, laid out as a document with its table and diagram drawn, in each theme: the stale
+// plan's, which holds both.
+for (const theme of THEMES) {
+    test(`a feedback plan's file opened in ${theme}`, async ({ page }) => {
+        await page.clock.setFixedTime(NOW)
+        await storeTheme(page, theme)
+        await signIn(page)
+        await page.goto(`pull-requests/pr?url=${encodeURIComponent('https://github.com/acme/web/pull/88')}`)
+        await settled(page)
+        const panel = page.getByTestId('feedback-plan')
+        await panel.getByRole('button', { name: 'Show the plan' }).click()
+        await expect(panel.getByRole('img', { name: /^A flowchart|^The search inputs/u })).toBeVisible()
+        // The document alone, grown to its height: the panel above it is in the images before these.
+        const doc = panel.getByRole('document', { name: /^feedback-plan:\d+$/u })
+        await screenshotPart(page, doc, `feedback-plan-opened-${theme}.png`)
+    })
+}
+
 // A tick's output as plain text: no color of its own, so dark alone.
 test("a tick's output shown in dark", async ({ page }) => {
     await page.clock.setFixedTime(NOW)
