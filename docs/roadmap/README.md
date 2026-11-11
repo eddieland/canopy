@@ -109,6 +109,8 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M70. A code outline for agents](M70-a-code-outline-for-agents.md): in progress.
 - [M71. Leaner tool results for every agent](M71-leaner-tool-results.md): in progress.
 - [M72. Search across every session the runtime keeps](M72-search-across-every-session.md): in progress.
+- [M73. Questions answered by the operator's own provider](M73-questions-answered-by-the-operators-own-provider.md):
+  not started.
 
 ## Deferred, with the trigger that would unblock each
 
