@@ -159,6 +159,12 @@ runs, the overseer's decisions, and ticks, each in its own panel, at most 20 of 
 run. It doesn't search transcripts, reviews, a task's report, or agent memory. While the next search loads, the last
 one's results stay, dimmed, so the page never blanks between keystrokes. The box's clear button starts over.
 
+With `sessions.search` set to `titles`, two more panels follow the journal's: the agent runtime's sessions outside
+canopy, yours, and canopy's own, each the newest 20 whose title holds every word. A subagent's is found too, marked as
+one. Yours carries the command that reopens it; canopy's opens the run that made it. The search reads titles only,
+never what a session said, so a session called `fix it` is found by `fix` and by nothing it fixed. The whole list is on
+[Sessions](sessions).
+
 A task's reference alone, `task:4`, opens that task on Enter instead of searching for it: faster than remembering
 which page it was on.
 

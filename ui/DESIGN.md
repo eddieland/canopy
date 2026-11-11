@@ -1477,7 +1477,18 @@ reader, so no table repeats them.
   hits, in the server's order, its count in the header (`newest 20` when the source has more). A hit is a row: where it
   opens, its label as a chip, the snippet with the query's words marked on the accent's tint (`src/lib/search.ts`), and
   its age. A snippet links nothing, since it may cut a URL short. While the next query's hits load, the last ones stay,
-  dimmed to 60%. While empty, the field's end also holds the jump palette's keys in a keycap that opens it.
+  dimmed to 60%. While empty, the field's end also holds the jump palette's keys in a keycap that opens it. After the
+  journal's panels come the runtime's sessions' two, outside canopy then canopy's, each only with hits, their rows the
+  Sessions page's with the words marked in the title; a subagent's, found apart from its parent, carries its chip.
+- **The Sessions page** (`/workspace/sessions`, `SessionRows`) lists the runtime's sessions under Workspace, beside
+  the runs: one panel, its header naming whose they are, with two filter chips, `outside canopy` (the default) and
+  `canopy's`, and an `archived` toggle chip, as the runs page's filters look. A row reads where it opens, then its chips
+  (`subagent`, `archived`), its title, its cost, and its age: one of canopy's leads with its run's reference, linking
+  its page, and one outside with its directory in mono, cut to fit and whole in its tip, and the command that reopens
+  it under its title, a `Copyable` that shows its button on hover. A subagent's row follows its parent's, its title and
+  command a step in per level, so a tree reads without lines drawn. A line under the list, in muted text, says how far
+  the loop's read has come, and links to the longest list when more match. At `sessions.search = "off"` the panel is
+  one `Empty` saying how to turn it on, and the header holds no count.
 - **The jump palette** (`JumpPalette`, `src/components/shell/jump-palette.tsx`) jumps to a ticket from anywhere: `⌘K`
   opens and closes it, from a text field too, as a `Dialog` in the window's top sixth over the canvas. Its field is over
   the tickets viewed last, newest first, without the one on screen, so `⌘K` Enter goes back to the ticket before it;

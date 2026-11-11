@@ -301,6 +301,14 @@ export const TIPS = {
         'Hot take: every review comment you have written twice is a checklist item in disguise.',
         'Did you know? A held push is not a rejected push. It is a push that was asked a question.',
     ],
+    '/workspace/sessions': [
+        "It looks like you're looking for a session. Was it called 'fix it'? They are all called 'fix it'.",
+        'Unhelpful tip: name your sessions well. Future you is a stranger with your keyboard.',
+        'Fun fact: a subagent is a session that a session started. I am a sprig that nobody started.',
+        'Dear diary, searched for a session about leaves. Found three about logs. Close enough.',
+        'Hot take: the archived ones are not gone. They are just pretending, like me at standup.',
+        'Did you know? The copy button gives you the way back in. I would keep it somewhere safe.',
+    ],
     '/components': [
         "It looks like you're looking at buttons. Would you like me to press one? I can't. No hands.",
         'Unhelpful tip: every chip here is a different color, and none of them is green. I asked.',
