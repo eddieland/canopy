@@ -390,7 +390,8 @@ theirs: their MCP servers, providers, and rules reach every run, as they would t
 - `canopy-worker`, `canopy-worker-private`, `canopy-planner`, and `canopy-reviewer` get, as their body, the fixed
   instructions of the prompt their run starts with: what is above its run marker, which holds nothing of one run's
   own, no ticket, slot, branch, or attempt. So every run of a kind under one config shares a body, a snapshot, and the
-  prefix the provider caches, as the overseer's ticks do (§33, The split). The run's message is the rest: `## Run`,
+  prefix the provider caches, as the overseer's ticks do: OpenCode caches an agent's tools and body apart from the
+  run's environment, a sandboxed run's included (MEASUREMENTS 2026-10-23). The run's message is the rest: `## Run`,
   with its values, then the sections only some runs get. A prompt without the marker, an older override's, or a
   template that runs an agent canopy does not ship, is sent whole as the message, and the definition keeps its stub.
 - Every definition gets the artifact store's MCP server denied whole, and an agent `artifacts.publish_roles` names its
@@ -410,10 +411,9 @@ that writes, a worker or the planner, loads a skill in the operator's home as it
 chores, which write nothing, may also read the files beside it.
 `runtime.pr_skill` names a skill workers open PRs with (§8); prefer that to a prompt override.
 
-canopy ships one plugin, `canopy.js`, whose jobs are a clock that tells a running agent the minutes left, a split under
-OpenCode 1 that lets an unsandboxed run's first call read its agent's tools and body from the provider's cache, which
-OpenCode 2 needs no split for, and, under OpenCode 2, holding a session's first prompt until its MCP tools are
-registered and explaining a call its permission rules refuse; they, and what OpenCode does with a plugin, are §33.
+canopy ships one plugin, `canopy.js`, whose jobs include a clock that tells a running agent the minutes left, holding
+a session's first prompt until its MCP tools are registered, and explaining a call its permission rules refuse; they,
+and what OpenCode does with a plugin, are §33.
 
 ### Each agent's model
 

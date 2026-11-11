@@ -627,20 +627,20 @@ Controls now:
   a repository's definition of the same agent, allowing a command canopy's
   denies, does not make it run.
 - canopy's own code runs inside every agent process that loads its definitions: canopy's plugin, whose jobs are the
-  clock, the split, the nudge for a stale update and the answer to its question (DESIGN §41), asking a run the
+  clock, the nudge for a stale update and the answer to its question (DESIGN §41), asking a run the
   operator stopped to wrap up (§22), telling a run that a message from the operator waits (§44), moving a shell
   command's
-  leading `cd` into its working directory, and, under OpenCode 2, holding a session's first prompt until its MCP tools
-  are registered and explaining a call its permission rules refuse (DESIGN §33), from the snapshot. canopy takes the
+  leading `cd` into its working directory, holding a session's first prompt until its MCP tools
+  are registered, and explaining a call its permission rules refuse (DESIGN §33), from the snapshot. canopy takes the
   snapshot's write permission away once it is written, the operator's included, so no run changes it through its
   permissions or its sandbox, and the runtime installs nothing into it. The plugin reads four variables,
-  `CANOPY_DEADLINE`, `CANOPY_RUN_ID`, `CANOPY_ANSWERS`, and `CANOPY_PLAN`, the clock, the system prompt the runtime hands
-  it, which it cuts in two without changing its text, each tool call's tool and session, which the nudge counts in its
+  `CANOPY_DEADLINE`, `CANOPY_RUN_ID`, `CANOPY_ANSWERS`, and `CANOPY_PLAN`, the clock, each tool call's tool and
+  session, which the nudge counts in its
   session, the step titles of a `status` call in a run that follows a plan, which the nudge restates with the plan's
   path, so its line carries only canopy's words and the worker's own,
   three files, the answer, the ask to wrap up, and the mark of the newest message, an id and nothing of its text,
   canopy writes in the run's answers directory, through the runtime's own
-  `node:fs`, and under OpenCode 2 the runtime's MCP servers' states and its tools' names, and a refused call's
+  `node:fs`, the runtime's MCP servers' states and its tools' names, and a refused call's
   permission and resources, whose reason, what the agent is told of the refusal, it sets; it writes no file, refuses no
   call, grants no tool, and catches its own errors. The one call it changes is a shell command that opens with
   `cd <dir> &&`, whose directory becomes the call's working directory, which the runtime's `external_directory` rule

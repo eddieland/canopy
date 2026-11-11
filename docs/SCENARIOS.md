@@ -66,25 +66,12 @@ any OpenCode upgrade, and before relying on a permission they check.
   session id, and, for a failed run, its runtime error.
 - **S61. The clock** (M57). Give a worker a 5-minute `runtime.worker_timeout_minutes` and a toy ticket it cannot finish
   in that time, once unsandboxed and once under `canopy-sandbox`. Expect canopy's `[canopy]` line in its transcript in
-  its last minute, after a built-in tool's output and first in an MCP tool's result, the longer wording once, and a push
+  its last minute, first in a tool's result, a built-in's and an MCP tool's alike, the longer wording once, and a push
   before the kill; and no `node_modules` or `package.json` written into the snapshot. Then run it in a repository with a
   `.opencode/` directory, sandboxed with the registry refused, and time the wait before the session starts. Record the
   times in `MEASUREMENTS.md`. Then count, by kind, the runs that ended `timeout` over a week of real use, and how many
   pushed after canopy's line, against the same count for the runs on snapshots before the clock (M57's Stage 0), with
   each one's transcript read for edits after its last commit, the work the slot took with it.
-- **S65. The split** (#923). Confirmed against OpenCode's source (1.19.3), not in a run: the plugin finds where the
-  environment starts by the lines `session/system.ts` writes. With S40's recorder, unsandboxed, run two workers in two
-  slots, then two reviews, each pair within five minutes. Expect two system blocks in every request, the first the
-  agent's body alone and equal across the pair, each with a breakpoint; and the second run's first call reading the
-  tools and the body from the cache, writing only from the environment on. One system block means OpenCode changed those
-  lines: the split leaves the prompt as it was. Record the tables in `MEASUREMENTS.md`. Then, over a week of real use,
-  compare `canopy spend --json`'s first calls for the `workers`, `plans`, and `reviews` kinds on the snapshot with the
-  split against the one before it: expect `cold_share` to fall where unsandboxed runs of one kind start within five
-  minutes of each other, and no change otherwise, sandboxed runs' included. No fall at all means the split found no
-  boundary, or such runs are too rare for it to pay. Since each run's prompt splits at its run marker (DESIGN §13),
-  the body is its kind's fixed instructions, 1.6k to 2.4k tokens more than the stub it was: expect the pair's first
-  system block to hold them, and the second run's first call to write only its environment and its `## Run` message.
-  A snapshot is now a kind's and no longer one for every run, so compare each kind's first calls on its own.
 - **S70. Sandboxed runs keep you logged in** (M26). Confirmed in OpenCode's source (1.19.3), not in a run. With
   every agent command sandboxed (`docs/SANDBOX.md`) and an OAuth login in your OpenCode, a provider's and a remote
   MCP server's, run the loop past the login's expiry. Expect a run's log to say `canopy-sandbox: copied back the
@@ -271,11 +258,10 @@ Each records its numbers in `MEASUREMENTS.md`, as a dated section.
   as canopy does, with the operator's own HOME, so that the skills their home holds are listed as in a real run
   (2026-10-21 F52), and once more with `OPENCODE_DISABLE_EXTERNAL_SKILLS=1` for the rows that compare. Expect
   OpenCode's own prompt absent and the agent's body first; no schema for a tool a definition denies outright; and,
-  against the latest such section (2026-10-21), a difference only where the change made one. A body the split cannot
-  find means OpenCode moved it. Record the tables in `MEASUREMENTS.md`. After an OpenCode upgrade, record one agent
-  twice more, in two directories, unsandboxed, and compare the two requests as 2026-10-19's second section did: expect
-  them to share the tools and the body, which canopy's plugin splits from the rest (F50, S65), and nothing if it did
-  not (F48). Sandboxed, expect them to share nothing: the shell tool names each run's own `TMPDIR`.
+  against the latest such section (2026-10-21), a difference only where the change made one. Record the tables in
+  `MEASUREMENTS.md`. After an OpenCode upgrade, record one agent twice more, in two directories, and once more with a
+  `TMPDIR` of its own, as a sandboxed run has, and compare the requests as 2026-10-23's second section did: expect them
+  to share the tools and the body, each with a breakpoint of its own, and to differ only in the environment.
   Of the tracker's server, expect the overseer, the reviewer, and the chore sent only its read tools (Jira's 12 by
   default). Off a GitHub tracker, expect both workers and the planner sent none of GitHub's issue tools (`issue_read`,
   `issue_write`, `list_issues`, `search_issues`, `list_issue_types`, `list_issue_fields`, `get_label`; #436): about
@@ -385,3 +371,8 @@ Retired 2026-10-23. The overseer has no shell; it mirrors through a tool (M48).
 
 - **S4. A heredoc `canopy` command** (M19). No heredoc is left to admit: a comment's body is a field of the `mirror`
   tool.
+
+Retired 2026-11-11. The plugin's split was OpenCode 1's alone, and is gone with it.
+
+- **S65. The split** (#923). OpenCode 2 caches an agent's tools and body apart from the run's environment
+  (MEASUREMENTS 2026-10-23), so nothing is left to cut.

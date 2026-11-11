@@ -1,19 +1,15 @@
-// The refusal, the plugin's job under OpenCode 2 that tells an agent why the run's permission rules refused a call
-// (DESIGN §33), under Node's own test runner: `make test-plugin`.
-// It is driven as OpenCode 2.1.2 drives it: its `execute.after` hook is handed a failed call's event, whose error wraps
-// the `Permission.BlockedError` the rules failed it with; the agent is told that inner error's message, which reads its
-// `reason`, and with none, `Permission denied:` and the permission.
+// The refusal, the plugin's job that tells an agent why the run's permission rules refused a call (DESIGN §33), under
+// Node's own test runner: `make test-plugin`.
+// It is driven as the agent runtime drives it: its hook after a tool call is handed a failed call's event, whose error
+// wraps the `Permission.BlockedError` the rules failed it with; the agent is told that inner error's message, which
+// reads its `reason`, and with none, `Permission denied:` and the permission.
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const plugin = path.join(here, "..", "..", ".agents", "plugins", "canopy.js");
-const { default: canopy } = await import(pathToFileURL(plugin).href);
+import { completed, failed as failedCall, plugin } from "./runtime.mjs";
 
-/** A refusal as OpenCode 2 makes one: its message is its reason, or with none, the permission alone. */
+/** A refusal as the runtime makes one: its message is its reason, or with none, the permission alone. */
 class BlockedError extends Error {
     constructor(permission, resources, reason) {
         super();
@@ -29,39 +25,15 @@ class BlockedError extends Error {
     }
 }
 
-/** Run OpenCode 2's entry point as 2 does, and return the hook it registered after each tool call. */
+/** Load the plugin as the runtime does, and return the hook it registered after each tool call. */
 async function after() {
-    let registered;
-    const ctx = {
-        tool: {
-            hook: async (name, callback) => {
-                if (name === "execute.after") {
-                    registered = callback;
-                }
-                return { dispose: async () => {} };
-            },
-            list: async () => [],
-        },
-        session: { hook: async () => ({ dispose: async () => {} }) },
-        mcp: { list: async () => ({ data: [] }) },
-    };
-    await canopy.setup(ctx);
-    return registered;
+    return (await plugin()).after;
 }
 
 /** A failed call's event, its error wrapping `cause` as the runtime's own tools wrap a refusal. */
 function failed(cause, tool = "shell") {
     const message = cause instanceof Error ? cause.message : "it failed";
-    return {
-        tool,
-        sessionID: "ses_1",
-        agent: "canopy-worker",
-        messageID: "m",
-        id: "call_1",
-        input: {},
-        status: "error",
-        error: { _tag: "Tool.Error", message, error: cause },
-    };
+    return failedCall({ _tag: "Tool.Error", message, error: cause }, { tool });
 }
 
 test("a refused shell command is told what it asked for, and that the refusal is meant", async () => {
@@ -122,8 +94,7 @@ test("another failure, and a completed call, are left as they are", async () => 
     const plain = failed("not an error at all");
     await hook(plain);
     assert.equal(plain.error.error, "not an error at all");
-    const done = { ...failed(undefined), status: "completed", result: { content: "ok" } };
-    delete done.error;
+    const done = completed({ content: "ok" });
     await hook(done);
     assert.deepEqual(done.result, { content: "ok" });
 });
