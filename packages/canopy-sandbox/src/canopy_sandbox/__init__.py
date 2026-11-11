@@ -596,14 +596,23 @@ def load_template(role: str) -> object:
     Raises:
         SandboxError: it is missing, unreadable, or not JSON.
     """
-    base = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    path = Path(base) / "canopy" / "sandbox" / f"{role}.json"
+    path = template_path(role)
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         raise SandboxError(f"no policy template at {path}; run `canopy sandbox setup`") from None
     except (OSError, ValueError) as e:
         raise SandboxError(f"the policy template {path} could not be read: {e}") from None
+
+
+def template_path(role: str) -> Path:
+    """Return where the policy template for `role` is read from: `$XDG_CONFIG_HOME/canopy/sandbox/ROLE.json`.
+
+    Returns:
+        The file, under `~/.config` when XDG_CONFIG_HOME is unset or empty. It may not exist.
+    """
+    base = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
+    return Path(base) / "canopy" / "sandbox" / f"{role}.json"
 
 
 def find_srt() -> Path:

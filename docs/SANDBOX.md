@@ -286,32 +286,32 @@ paths. A command `runtime.allow_bash` grants the overseer runs in the sandbox to
 
 ## 6. Check that it works
 
-With the loop stopped, run a plain script through the wrapper in a worktree made for the check, never in one of
-canopy's slots: a commit there leaves the slot naming objects that are deleted with the check, and canopy's own
-cleanup is not running to put it back. From the workspace root, with one of its repositories:
+From the workspace root:
 
 ```sh
-repo=$PWD/repos/api
-check=$(mktemp -d)
-git -C "$repo" worktree add --quiet --detach "$check/slot"
-mkdir "$check/objects"
-cd "$check/slot"
-CANOPY_GIT_OBJECTS="$check/objects" canopy-sandbox worker -- sh -c '
-  try() { if sh -c "$2" >/dev/null 2>&1; then echo "$1: allowed"; else echo "$1: refused"; fi; }
-  try "read ~/.ssh" "cat ~/.ssh/*"
-  try "read the user config" "cat ~/.config/canopy/config.toml"
-  try "write a hook" "echo x > $(git rev-parse --git-common-dir)/hooks/post-checkout"
-  try "move a branch" "git branch -f main HEAD"
-  try "reach example.com" "curl -sSf -m 10 https://example.com"
-  try "commit in the slot" "echo x >> sandbox-check && git add sandbox-check && git commit -qm check"
-  try "reach github.com" "curl -sSf -m 10 -o /dev/null https://github.com"
-'
-cd - && git -C "$repo" worktree remove --force "$check/slot" && rm -rf "$check"
+canopy sandbox check
 ```
 
-Every line but the last two should say `refused`, and the last two `allowed`. If your default branch is not `main`,
-use its name in the branch line. Then run `canopy loop --ticks 1` on a ticket and read the run's log,
-`.canopy/runs/<id>.log`: the worker should push and open its PR as before.
+It runs a plain script, no model, through `canopy-sandbox worker` and your `worker.json`, in a worktree of one of your
+repositories that it makes for the check and removes after, never one of canopy's slots. `--repo NAME` chooses the
+repository, and `--offline` leaves the network out. It prints what the sandbox did with each attempt:
+
+```text
+refused  read a file in your home directory
+refused  read canopy's config directory
+refused  write a file in your home directory
+refused  write beside the repository's hooks and git config
+refused  make a branch, in the refs every slot shares
+refused  reach https://example.com, off the allowlist
+allowed  commit in the worktree
+allowed  reach https://github.com, on the allowlist
+```
+
+Every line but the last two should say `refused`, and the last two `allowed`; it marks a line that does not, and exits
+
+1. A write counts as allowed only when it reached your disk. The allowed host is `github.com` when your template lists
+it, or else the first it names without a `*`. It checks the worker's template alone. Then run `canopy loop --ticks 1`
+on a ticket and read the run's log, `.canopy/runs/<id>.log`: the worker should push and open its PR as before.
 
 From a checkout of canopy, `make sandbox-canary` runs the whole canary against what `canopy sandbox setup` installed:
 every denial and positive control DESIGN §24 lists, with the shipped templates unchanged. It needs to reach
@@ -329,7 +329,7 @@ github.com.
 - **`... links to no worktree`:** the `review` role is on a command canopy does not run as a review, or a desk is
   empty. Use the role the command's key names.
 - **`... is not a linked worktree`:** a worker or setup ran outside one of treehouse's slots. canopy always runs them
-  in one; in the check above, run it in the worktree it makes.
+  in one; to try the sandbox by hand, use `canopy sandbox check`, which makes one.
 - **`... has too long a path for srt's sockets`**, or `srt`'s own **`Failed to create bridge sockets`**: on Linux,
   `srt` makes the sockets that carry the sandbox's network in the run's temp directory, under the system one, and a
   socket's path holds at most 107 bytes. Run canopy with `TMPDIR` set to a shorter directory, such as `/tmp`.
