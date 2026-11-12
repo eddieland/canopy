@@ -302,3 +302,50 @@ def test_a_change_to_a_file_the_config_no_longer_resolves_to_is_refused(ctx: Con
     assert (saving.value.guard, deleting.value.guard) == ("stale", "stale")
     assert "now resolves to" in saving.value.reason
     assert not (tmp_path / "new.md").exists()
+
+
+def test_a_file_in_the_versions_directory_not_named_as_a_version_is_never_listed_counted_or_pruned(
+    ctx: Context,
+    tmp_path: Path,
+) -> None:
+    cfg = with_paths(ctx, instructions=tmp_path / "instructions")
+    saved = save(cfg, ctx, "worker", "First.", None)
+    save(cfg, ctx, "worker", "Second.", saved.sha256)
+    directory = ctx.ws.state_dir / standing.VERSIONS_DIR / "worker"
+    # A hand-made name, and one shaped as a time that is none: a thirteenth month.
+    strays = [directory / "notes-edit.md", directory / "20261332T000000000000Z-edit.md"]
+    for stray in strays:
+        stray.write_text("not a version\n")
+
+    assert kept(ctx, "worker") == [("edit", "First.\n")]
+    assert standing.read(cfg, ctx.ws.state_dir, "worker").versions == 1
+    read: str | None = standing.read(cfg, ctx.ws.state_dir, "worker").sha256
+    for n in range(standing.KEEP_VERSIONS + 2):
+        read = save(cfg, ctx, "worker", f"Version {n}.", read).sha256
+    assert len(kept(ctx, "worker")) == standing.KEEP_VERSIONS
+    assert all(stray.exists() for stray in strays)
+
+
+def test_a_change_refused_at_the_last_moment_keeps_no_version(ctx: Context, tmp_path: Path) -> None:
+    defaults = tmp_path / "instructions"
+    defaults.mkdir(mode=0o700)
+    path = defaults / "worker.md"
+    path.write_text(RULES)
+    cfg = with_paths(ctx, instructions=defaults)
+    real_kept = standing._kept  # noqa: SLF001  (the seam between the first check and the last)
+
+    def edited_meanwhile(at: Path, before: standing._Reading) -> bytes:
+        # The operator's own editor saves just after the change's first check passed.
+        path.write_text("A hand edit.\n")
+        return real_kept(at, before)
+
+    with mock.patch.object(standing, "_kept", side_effect=edited_meanwhile):
+        with pytest.raises(conversation.Refused) as saving:
+            save(cfg, ctx, "worker", "From the page.", sha(RULES))
+        path.write_text(RULES)
+        with pytest.raises(conversation.Refused) as deleting:
+            delete(cfg, ctx, "worker", sha(RULES))
+
+    assert (saving.value.guard, deleting.value.guard) == ("stale", "stale")
+    assert path.read_text() == "A hand edit.\n"
+    assert kept(ctx, "worker") == []
