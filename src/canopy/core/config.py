@@ -950,7 +950,8 @@ class Runtime(Section):
     sandbox_repos: Annotated[tuple[RepoName, ...], Scope.PRIVATE] = ()
     #: MCP servers of the operator's own runtime config that canopy's runs never start, for every role or each its own
     #: (DESIGN §13). Private: the servers are the operator's, as their runtime config is.
-    mcp_servers: Annotated[McpServers, Scope.PRIVATE] = McpServers()
+    # A factory, so importing config builds no model (`tests/canopy/test_models.py`).
+    mcp_servers: Annotated[McpServers, Scope.PRIVATE] = Field(default_factory=McpServers)
 
     @model_validator(mode="before")
     @classmethod

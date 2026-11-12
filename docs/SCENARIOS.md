@@ -45,7 +45,7 @@ any OpenCode upgrade, and before relying on a permission they check.
   transcript naming the command or the address and carrying canopy's `[canopy]` line, the second saying the agent has
   no web tools, and the worker going on without trying either another way. Bare `Permission denied:` means 2 no longer
   tells the agent the inner error's reason: the refusal holds as before, unexplained.
-- **S81. A server kept out of canopy's runs** (taken on request 2026-11-12). Confirmed in the binaries of OpenCode
+- **S81. A server kept out of canopy's runs** (taken on request 2026-11-12, #2343). Confirmed in the binaries of OpenCode
   1.19.5 and a 2 dev build (2026-11-09), not in a run. Name a server of your OpenCode config in
   `runtime.mcp_servers`'s `disabled`, and another in `[runtime.mcp_servers.overseer]`'s alone, and run a tick and a
   worker. Expect `canopy agents` to list the first among the disabled and the second as the overseer's, and each run's
