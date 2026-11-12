@@ -67,7 +67,10 @@ any OpenCode upgrade, and before relying on a permission they check.
 - **S61. The clock** (M57). Give a worker a 5-minute `runtime.worker_timeout_minutes` and a toy ticket it cannot finish
   in that time, once unsandboxed and once under `canopy-sandbox`. Expect canopy's `[canopy]` line in its transcript in
   its last minute, first in a tool's result, a built-in's and an MCP tool's alike, the longer wording once, and a push
-  before the kill; and no `node_modules` or `package.json` written into the snapshot. Then run it in a repository with a
+  before the kill; and no `node_modules` or `package.json` written into the snapshot. Then have it run a command that
+  outlasts the run with no timeout (`sleep 600`, its call's `timeout` 0): expect OpenCode to end the command by the
+  middle of the last stretch, its result saying the command exceeded its timeout and carrying canopy's line, and a
+  push before the kill (read from OpenCode 2.2.5's build, not yet in a run). Then run it in a repository with a
   `.opencode/` directory, sandboxed with the registry refused, and time the wait before the session starts. Record the
   times in `MEASUREMENTS.md`. Then count, by kind, the runs that ended `timeout` over a week of real use, and how many
   pushed after canopy's line, against the same count for the runs on snapshots before the clock (M57's Stage 0), with

@@ -549,7 +549,8 @@ Controls in code, not prompts:
 - A run's progress (DESIGN §41) neither extends a run nor holds a slot: what an agent says of where it stands changes
   no guard.
 - The clock (DESIGN §33) is advice, not a limit: near its timeout an agent hears the minutes left, from the same clock
-  the harness kills it by, and nothing it does with them extends the run or holds off the kill.
+  the harness kills it by, and nothing it does with them extends the run or holds off the kill. The clock ends a shell
+  command short of the kill by cutting its call's timeout, and never lengthens one.
 - A tick that cannot acquire the lock exits immediately.
 - Reviews: one `done` review per commit, or per commit and persona for a request naming several (DESIGN §31), each
   counting toward `policy.max_reviews_per_pr` per PR (raised only by the operator, in config or
@@ -638,22 +639,25 @@ Controls now:
   permission rules refuse (DESIGN §33), from the snapshot. canopy takes the snapshot's write permission away once it is
   written, the operator's included, so no run changes it through its permissions or its sandbox, and the runtime
   installs nothing into it. The plugin reads four variables, `CANOPY_DEADLINE`, `CANOPY_RUN_ID`, `CANOPY_ANSWERS`, and
-  `CANOPY_PLAN`, the clock, each tool call's tool and session, which the nudge counts in its session, the step titles of
-  a `status` call in a run that follows a plan, which the nudge restates with the plan's path, so its line carries only
-  canopy's words and the worker's own, three files, the answer, the ask to wrap up, and the mark of the newest message,
-  an id and nothing of its text, canopy writes in the run's answers directory, through the runtime's own `node:fs`, the
-  runtime's MCP servers' states and its tools' names, and a refused call's permission and resources, whose reason, what
-  the agent is told of the refusal, it sets; it writes no file, refuses no call, grants no tool, and catches its own
-  errors. The one call it changes is a shell command that opens with `cd <dir> &&`, whose directory becomes the call's
-  working directory, which the runtime's `external_directory` rule then checks, with the rest of the command from it, as
-  it checks any call's: so the plugin reaches nothing the `cd` could not. A repository's own plugins already load in the
-  same process (T7). The answers directory is the run's own, in the state directory beside its other files, made before
-  the agent starts and removed once it ends; a sandboxed run may read it and nothing else of the state directory, and
-  write none of it (§24); a one-off task's run has one too, for the operator's messages to it. An unsandboxed run could
-  write the ask to wrap up, as it could any of the operator's files; it could only tell itself to end early, keeping its
-  work. canopy's `messages` tool, beside `status` on the run's own server, reads the messages' file in the same
-  directory and writes nothing; it opens no journal, so a sandboxed run, and the servers it starts, reach no more than
-  before.
+  `CANOPY_PLAN`, the clock, a shell call's timeout, each tool call's tool and session, which the nudge counts in its
+  session, the step titles of a `status` call in a run that follows a plan, which the nudge restates with the plan's
+  path, so its line carries only canopy's words and the worker's own, three files, the answer, the ask to wrap up, and
+  the mark of the newest message, an id and nothing of its text, canopy writes in the run's answers directory, through
+  the runtime's own `node:fs`, the runtime's MCP servers' states and its tools' names, and a refused call's permission
+  and resources, whose reason, what the agent is told of the refusal, it sets; it writes no file, refuses no call,
+  grants no tool, and catches its own errors. The one call it changes is a shell call, in two ways. One whose command
+  opens with `cd <dir> &&` has that directory made the call's working directory, which the runtime's
+  `external_directory` rule then checks, with the rest of the command from it, as it checks any call's: so the plugin
+  reaches nothing the `cd` could not. And one that names a timeout its command would outlast the run by has that timeout
+  cut, so that the runtime ends the command before canopy's kill would: the plugin only ever shortens a timeout the call
+  names, so the command runs no longer than it would have and reaches nothing more (T3). A repository's own plugins
+  already load in the same process (T7). The answers directory is the run's own, in the state directory beside its other
+  files, made before the agent starts and removed once it ends; a sandboxed run may read it and nothing else of the
+  state directory, and write none of it (§24); a one-off task's run has one too, for the operator's messages to it. An
+  unsandboxed run could write the ask to wrap up, as it could any of the operator's files; it could only tell itself to
+  end early, keeping its work. canopy's `messages` tool, beside `status` on the run's own server, reads the messages'
+  file in the same directory and writes nothing; it opens no journal, so a sandboxed run, and the servers it starts,
+  reach no more than before.
 - canopy's git hooks, from the same snapshot, run in every worker's git (T5). Their `pre-push` holds a worker's first
   push of a stretch for its repository's checklist (DESIGN §42): it reads one more file, the slot's list in the run's
   answers directory, which the run cannot write, and writes one marker, the run's id and the time, in the slot's own

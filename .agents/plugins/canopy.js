@@ -1,17 +1,19 @@
 // canopy's plugin for a running agent: each job canopy asks of the agent process, as hooks the runtime calls. Its
 // first job is the clock (DESIGN §33): near the end of the run's time, one line on each tool call's result tells the
-// agent the minutes left before canopy stops the run, so it keeps its work before the kill.
+// agent the minutes left before canopy stops the run, so it keeps its work before the kill; and a shell command that
+// would outlast the run, whose call would return no result to carry the line, has its timeout cut to end in time.
 //
 // The agent runtime loads it from canopy's snapshot of its definitions, inside every agent process, sandboxed or not
 // (TRUST_MODEL T4). So it is plain JavaScript that imports nothing but the runtime's own `node:fs`, and that only when
 // a job reads a file canopy wrote, so it loads with no network; and each job does as little as it can: it reads only
-// what it is handed for that job (the clock, CANOPY_DEADLINE and the time; the nudge, CANOPY_RUN_ID and each call's
-// tool and session, and in a run that follows a plan, CANOPY_PLAN and the steps of each `status` call; the answer, the
-// wrap-up, and the message, CANOPY_RUN_ID and each its one file canopy writes in the directory CANOPY_ANSWERS names;
-// the directory, a shell call's command and working directory; the wait, the MCP servers' names and states and the
-// tools' names; the refusal, a refused call's permission and resources), changes only what its hook is handed, writes
-// no file, refuses no call, and grants no tool. Each job's hooks run in its own try, in the order of `JOBS`, so a job
-// that throws neither fails a call that has already run nor keeps the jobs after it from theirs.
+// what it is handed for that job (the clock, CANOPY_DEADLINE, the time, and a shell call's timeout; the nudge,
+// CANOPY_RUN_ID and each call's tool and session, and in a run that follows a plan, CANOPY_PLAN and the steps of each
+// `status` call; the answer, the wrap-up, and the message, CANOPY_RUN_ID and each its one file canopy writes in the
+// directory CANOPY_ANSWERS names; the directory, a shell call's command and working directory; the wait, the MCP
+// servers' names and states and the tools' names; the refusal, a refused call's permission and resources), changes only
+// what its hook is handed, writes no file, refuses no call, and grants no tool. Each job's hooks run in its own try, in
+// the order of `JOBS`, so a job that throws neither fails a call that has already run nor keeps the jobs after it from
+// theirs.
 //
 // Its second is the nudge (DESIGN §41): in a worker's, planner's, reviewer's, or one-off task's run, after a number of
 // tool calls with no call of canopy's `status` tool, one line on the next tool call's result asks the agent to post an
@@ -71,6 +73,8 @@
 const SHARE = 5;
 /** The most seconds before the deadline the clock warns from, however long the run. */
 const MOST_SECONDS = 600;
+/** The share of that warning a shell command may run into before the clock ends it: its first half. */
+const RUN_INTO = 2;
 /** What every line of canopy's starts with, as the prompts name it. */
 const MARK = "[canopy]";
 /** A run that keeps progress, as CANOPY_RUN_ID names it: a worker's or a planner's id, a review's, `review-7`, or a
@@ -241,9 +245,17 @@ function contentOf(result) {
 }
 
 /**
- * The clock's hooks: the one that tells a tool call's result the minutes left, or none without a deadline.
+ * The clock's hooks: the one that tells a tool call's result the minutes left, and the one that keeps a shell command
+ * from outlasting the run, or none without a deadline.
  *
  * It counts the warning's start from its own load, at the session's start, so it needs no second variable.
+ *
+ * A line reaches the agent on a call's result, and a shell command still running when canopy stops the run returns
+ * none: the agent hears nothing, and what it has not pushed goes with the run. So before each shell call the clock
+ * cuts the timeout the call names to end the command by the middle of the warning (`endWithin`), where the runtime ends
+ * it and says so in a result that carries the minutes left, with the other half left to keep the work. It only ever
+ * shortens a timeout the call names, so the command reaches nothing more and runs no longer than it would have; a call
+ * past that middle is left as it is, since the kill is the limit (TRUST_MODEL T3).
  *
  * @returns {Job} The clock's hooks.
  */
@@ -254,9 +266,16 @@ function clock() {
     }
     const loaded = Date.now() / 1000;
     const warnFrom = deadline - Math.min(Math.max(deadline - loaded, 0) / SHARE, MOST_SECONDS);
+    // In whole milliseconds, as the shell tool takes a timeout and the runtime's clock tells the time.
+    const endBy = Math.floor((deadline - (deadline - warnFrom) / RUN_INTO) * 1000);
     /** @type {Set<string>} */
     const warned = new Set();
     return {
+        before: async (event) => {
+            if (SHELL_TOOLS.has(event.tool)) {
+                endWithin(event.input, endBy - Date.now());
+            }
+        },
         after: async (event, content) => {
             const now = Date.now() / 1000;
             if (now < warnFrom) {
@@ -281,6 +300,35 @@ function readDeadline() {
         return null;
     }
     return Number(raw);
+}
+
+/**
+ * Cut the timeout a shell call names, in place, so that its command ends within `most` milliseconds, when it would
+ * not.
+ *
+ * The runtime's shell tool takes `timeout` in milliseconds, 0 for no timeout at all, and ends a command that passes
+ * it, saying so in the call's result (OpenCode 2.2.5's build, read 2026-11-12). A call left as it is: one whose
+ * command ends sooner; one that names no timeout, which the tool's own default ends, a default canopy does not assume,
+ * so that it neither lengthens a timeout nor follows a default that moved; one with no time left to end in; one that
+ * runs its command in the background, which returns at once; and one whose timeout is no number.
+ *
+ * @param {unknown} input
+ * @param {number} most
+ * @returns {void}
+ */
+function endWithin(input, most) {
+    if (input === null || typeof input !== "object") {
+        return;
+    }
+    const call = /** @type {{ timeout?: unknown, background?: unknown }} */ (input);
+    const asked = call.timeout;
+    if (call.background === true || typeof asked !== "number") {
+        return;
+    }
+    // A timeout of 0 is none at all, so it is never set to less than a millisecond.
+    if (most >= 1 && (asked === 0 || asked > most)) {
+        call.timeout = most;
+    }
 }
 
 /**
