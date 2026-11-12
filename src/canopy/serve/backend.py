@@ -75,6 +75,7 @@ def _skills(ctx: Context) -> Skills:
         cwd=ctx.ws.root,
         definitions_dir=snapshot,
         agents=runtime_definitions.agent_names(),
+        disabled=ctx.config.runtime.disabled_mcp_servers,
     )
 
 

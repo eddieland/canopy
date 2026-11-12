@@ -79,6 +79,9 @@ class _Agent(BaseModel):
 class _Server(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
 
+    #: None for an entry OpenCode ignores, which starts no server: one of `enabled` alone, as canopy turns off a name
+    #: the operator's config does not have.
+    type: StrictStr | None = None
     enabled: StrictBool = True
 
 
@@ -126,11 +129,12 @@ def offerings(
         config, files = ask.listed()
     except _FailedError as e:
         return Offerings(error=str(e))
-    servers = tuple(config.mcp)
+    typed = {name: server for name, server in config.mcp.items() if server.type is not None}
+    servers = tuple(typed)
     skills = tuple(f.name for f in files)
     return Offerings(
         servers=servers,
-        disabled_servers=tuple(name for name, server in config.mcp.items() if not server.enabled),
+        disabled_servers=tuple(name for name, server in typed.items() if not server.enabled),
         skills=skills,
         agents=tuple(_offer(ask, agent, servers=servers, skills=skills) for agent in agents),
     )
@@ -142,16 +146,17 @@ def skills(
     cwd: Path,
     definitions_dir: Path,
     agents: Collection[str],  # noqa: ARG001  (`debug skill` loads the definitions itself: no agent to wait on)
+    env: Mapping[str, str] | None = None,
 ) -> Skills:
     """Ask OpenCode every skill it finds, started in `cwd` with canopy's definitions in `definitions_dir`.
 
-    One `opencode debug skill`, and no agent's rules.
+    One `opencode debug skill`, and no agent's rules, started with `env` too, when given.
 
     Returns:
         Each skill as OpenCode read it; only `error` when it could not list them.
     """
     try:
-        return Skills(_Ask(runner, _OPENCODE, cwd, {CONFIG_DIR_ENV: str(definitions_dir)}).skills())
+        return Skills(_Ask(runner, _OPENCODE, cwd, {**(env or {}), CONFIG_DIR_ENV: str(definitions_dir)}).skills())
     except _FailedError as e:
         return Skills(error=str(e))
 

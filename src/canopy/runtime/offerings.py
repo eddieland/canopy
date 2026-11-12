@@ -57,18 +57,21 @@ def skills(
     cwd: Path,
     definitions_dir: Path,
     agents: Collection[str],
+    disabled: Iterable[str] = (),
 ) -> Skills:
     """Ask the runtime `version` runs every skill it finds, started in `cwd` with canopy's definitions.
 
     The definitions are in `definitions_dir`, and `agents` are canopy's, which a runtime whose plugins load them waits
-    on. Cheaper than `offerings`: no agent's rules are read.
+    on. Cheaper than `offerings`: no agent's rules are read. The operator's servers `disabled` names are turned off,
+    as in `offerings`, so the runtime does not start them to answer.
 
     Returns:
         Each skill as the runtime read it, its description, file, and text, sorted by name; only `error` when the
         runtime could not list them.
     """
     implementation = pick(version, one.offerings, two.offerings)
-    return implementation.skills(runner, cwd=cwd, definitions_dir=definitions_dir, agents=agents)
+    env = servers.env({}, version=version, cwd=cwd, disabled=disabled)
+    return implementation.skills(runner, cwd=cwd, definitions_dir=definitions_dir, agents=agents, env=env)
 
 
 class Probe:

@@ -320,7 +320,17 @@ that blocks no command, as a worker does. OpenCode sends the schema of each tool
 description of each skill it may load, with every model call, so each one costs every tick and run, and is one more
 thing a steered agent could reach. `canopy agents` shows what each of canopy's agents is offered now.
 
-To take some away, add rules for canopy's agents, by name, to the `agent` block of `~/.config/opencode/opencode.json`.
+A server none of canopy's agents uses is best turned off for its runs, in canopy's config, so no run even starts it: a
+deny rule below only hides its tools, and each run, and each `canopy agents`, still starts and connects to it. Your own
+OpenCode sessions still start it.
+
+```toml
+[runtime]
+disabled_mcp_servers = ["figma", "playwright"]
+```
+
+To take away from only some agents what others need, add rules for canopy's agents, by name, to the `agent` block of
+`~/.config/opencode/opencode.json`.
 OpenCode merges that block into canopy's definitions, which canopy writes to `.canopy/runtime/<digest>/` and renders
 from its own config. Never edit them there: they are read-only, and canopy writes a new snapshot when its config
 changes. The rules reach agents started after you save them; a run already going keeps what it started with. For

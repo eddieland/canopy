@@ -220,6 +220,16 @@ def test_the_skills_are_listed_as_the_server_read_them_once_canopy_s_agents_load
     assert serve.loading == 0  # asked only once the agents had loaded
 
 
+def test_the_server_is_started_with_the_environment_it_is_given() -> None:
+    """The operator's servers that config turns off for canopy's runs are off in the server asked too."""
+    serve = Serve({"canopy-worker": []})
+    env = {"OPENCODE_CONFIG_CONTENT": '{"mcp": {"servers": {"slack": {"enabled": false}}}}'}
+    offerings.skills(serve, cwd=Path("/ws"), definitions_dir=Path("/defs"), agents=["canopy-worker"], env=env)
+    offerings.offerings(serve, cwd=Path("/ws"), definitions_dir=Path("/defs"), agents=["canopy-worker"], env=env)
+    assert {ran[2]["OPENCODE_CONFIG_CONTENT"] for ran in serve.ran} == {env["OPENCODE_CONFIG_CONTENT"]}
+    assert {ran[2]["OPENCODE_CONFIG_DIR"] for ran in serve.ran} == {"/defs"}
+
+
 def test_what_opencode_prints_past_a_pipes_buffer_is_read() -> None:
     long = {"id": "long", "name": "long", "description": "x" * PIPE_BUFFER}
     found = offered(Serve({"canopy-worker": []}, skills=[*SKILLS, long]), "canopy-worker")

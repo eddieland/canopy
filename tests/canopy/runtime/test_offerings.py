@@ -110,7 +110,26 @@ def test_canopy_agents_says_a_server_config_turns_off_is_off(
     assert json.loads(capsys.readouterr().out)["disabled_servers"] == []
     canopy_env.configure(canopy_env.user_file, {"runtime": {"disabled_mcp_servers": ["github"]}})
     assert main(["agents", "--json"]) == 0
-    assert json.loads(capsys.readouterr().out)["disabled_servers"] == ["github"]
+    printed = capsys.readouterr()
+    assert json.loads(printed.out)["disabled_servers"] == ["github"]
+    assert printed.err == ""
+
+
+@pytest.mark.opencode1  # the fake above plays OpenCode 1's `debug`
+@pytest.mark.usefixtures("opencode")
+def test_canopy_agents_warns_of_a_server_to_turn_off_the_runtime_does_not_have(
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Its entry has no type, which OpenCode ignores and starts nothing for: no server, and nothing to turn off."""
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"disabled_mcp_servers": ["github", "slack"]}})
+    assert main(["agents", "--json"]) == 0
+    printed = capsys.readouterr()
+    found = json.loads(printed.out)
+    assert (found["servers"], found["disabled_servers"]) == (["github"], ["github"])
+    assert printed.err == (
+        "runtime.disabled_mcp_servers names slack, which your runtime config does not have: nothing to turn off.\n"
+    )
 
 
 def test_canopy_agents_fails_when_opencode_cannot_say(

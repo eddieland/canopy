@@ -36,6 +36,14 @@ def cmd_agents(click_ctx: click.Context, *, as_json: bool) -> int:
     except reports.Refused as e:
         raise CliError(str(e)) from None
     failed = found.error is not None or any(a.error is not None for a in found.agents)
+    unknown = [s for s in ctx.config.runtime.disabled_mcp_servers if s not in found.servers]
+    if found.error is None and unknown:
+        # Not an error: canopy never reads the runtime's config, which may change after canopy's is loaded.
+        click.echo(
+            f"runtime.disabled_mcp_servers names {', '.join(unknown)}, which your runtime config does not have: "
+            "nothing to turn off.",
+            err=True,
+        )
     if as_json:
         click.echo(reports.agents_json(found, allows))
         return int(failed)

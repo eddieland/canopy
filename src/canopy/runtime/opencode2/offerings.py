@@ -192,16 +192,24 @@ def offerings(
     )
 
 
-def skills(runner: procs.Runner, *, cwd: Path, definitions_dir: Path, agents: Collection[str]) -> Skills:
+def skills(
+    runner: procs.Runner,
+    *,
+    cwd: Path,
+    definitions_dir: Path,
+    agents: Collection[str],
+    env: Mapping[str, str] | None = None,
+) -> Skills:
     """Ask OpenCode every skill it finds, started in `cwd` with canopy's definitions in `definitions_dir`.
 
-    The server is asked once `agents`, canopy's, have loaded, which says its plugins have loaded the definitions.
+    The server is asked once `agents`, canopy's, have loaded, which says its plugins have loaded the definitions. It is
+    started with `env` too, when given.
 
     Returns:
         Each skill as the server read it; only `error` when it could not list them.
     """
     try:
-        loaded = _load(runner, _OPENCODE, cwd, {CONFIG_DIR_ENV: str(definitions_dir)}, agents)
+        loaded = _load(runner, _OPENCODE, cwd, {**(env or {}), CONFIG_DIR_ENV: str(definitions_dir)}, agents)
     except _FailedError as e:
         return Skills(error=str(e))
     return Skills(loaded.skill_files)

@@ -80,6 +80,10 @@ worker_timeout_minutes = 45
 # all three take, but a model: [runtime.models] chooses that.
 # worker_cmd_prefix = "canopy-sandbox worker --read {definitions_dir} --"
 # worker_cmd_suffix = "--log-level INFO"
+# Optional: MCP servers of your runtime config that none of canopy's runs starts, such as ones no agent of canopy's
+# uses that are slow to start. Your own sessions still start them. Not the tracker's or the artifact store's server.
+# `canopy agents` lists them as off, and names one your runtime config does not have.
+# disabled_mcp_servers = ["figma", "playwright"]
 # Optional: commands an agent may run beyond its own bash rules, such as a tracker's CLI for the overseer while its MCP
 # server is down. An allow in your runtime's own config cannot beat canopy's deny; these can (DESIGN §13). The
 # overseer, planner, worker, and worker-private take them; the overseer, which acts through canopy's tools and has no
