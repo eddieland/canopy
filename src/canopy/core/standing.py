@@ -56,10 +56,11 @@ NO_VERSION = "no_version"
 # How much of a file each read takes.
 _CHUNK = 64 * 1024
 
-# A version's name: when it was kept, to the microsecond, in UTC, so names sort as times do; then what made it.
+#: A version's name: when it was kept, to the microsecond, in UTC, so names sort as times do; then what made it.
 _STAMP = "%Y%m%dT%H%M%S%fZ"
-# A name of that shape: anything else in the directory is not a version, and is never listed, counted, or pruned.
-_VERSION_NAME = re.compile(r"\d{8}T\d{12}Z-(?:edit|delete)\.md")
+#: A name of that shape, in ASCII digits alone: anything else in the directory is not a version, and is never listed,
+#: counted, or pruned.
+_VERSION_NAME = re.compile(r"[0-9]{8}T[0-9]{12}Z-(?:edit|delete)\.md")
 
 # The most of a file the page is shown: past the bound, so the operator can trim one from the page, but not without end.
 _MAX_SHOWN = 16 * MAX_BYTES
@@ -265,10 +266,12 @@ def delete(
         _check_unchanged(path, before, read_sha256)
         with _directory(path, make=False) as dir_fd:
             old = None if before.head is None else _kept(path, before)
-            # Read again just before keeping and removing it, as a save does before its rename.
-            _check_unchanged(path, _read(path), read_sha256)
+            # Read again before keeping it, so a delete refused here keeps no version, and once more after, just before
+            # removing it, as a save does around its rename: a hand edit is lost only if it lands in that last moment.
+            _check_still(path, read_sha256)
             if old is not None:
                 _keep(state_dir, agent, old, "delete")
+                _check_still(path, read_sha256)
             try:
                 os.unlink(path.name, dir_fd=dir_fd)
             except OSError as e:
@@ -309,6 +312,19 @@ def versions(state_dir: Path, agent: StandingAgent) -> list[Version]:
             ),
         )
     return found
+
+
+def _check_still(path: Path, read_sha256: str | None) -> None:
+    """Read the file again and refuse a change to it unless it is still the one the page read.
+
+    Raises:
+        Refused: `stale` when it changed; `unsafe_file` when it can no longer be read, rather than a server error.
+    """
+    try:
+        now = _read(path)
+    except OSError as e:
+        raise Refused(UNSAFE_FILE, f"{path} cannot be read: {e.strerror}") from None
+    _check_unchanged(path, now, read_sha256)
 
 
 def _same_file(config: Config, agent: StandingAgent, read_path: Path) -> Path:
@@ -533,6 +549,8 @@ def _replace(
         # Read again just before the rename, so a hand edit is lost only if it lands in that last moment.
         _check_unchanged(path, _read(path), read_sha256)
         keep()
+        # And once more, as keeping it took a moment of its own.
+        _check_unchanged(path, _read(path), read_sha256)
         # A rename replaces the name itself, never what a link there names.
         os.rename(temporary, path.name, src_dir_fd=dir_fd, dst_dir_fd=dir_fd)
     except Refused:

@@ -349,3 +349,61 @@ def test_a_change_refused_at_the_last_moment_keeps_no_version(ctx: Context, tmp_
     assert (saving.value.guard, deleting.value.guard) == ("stale", "stale")
     assert path.read_text() == "A hand edit.\n"
     assert kept(ctx, "worker") == []
+
+
+def test_a_hand_edit_while_a_version_is_kept_refuses_the_change(ctx: Context, tmp_path: Path) -> None:
+    defaults = tmp_path / "instructions"
+    defaults.mkdir(mode=0o700)
+    path = defaults / "worker.md"
+    path.write_text(RULES)
+    cfg = with_paths(ctx, instructions=defaults)
+    real_keep = standing._keep  # noqa: SLF001  (the moment between the last two checks)
+
+    def edited_meanwhile(state_dir: Path, agent: StandingAgent, data: bytes, kind: standing.VersionKind) -> None:
+        real_keep(state_dir, agent, data, kind)
+        path.write_text("A hand edit.\n")
+
+    with mock.patch.object(standing, "_keep", side_effect=edited_meanwhile):
+        with pytest.raises(conversation.Refused) as saving:
+            save(cfg, ctx, "worker", "From the page.", sha(RULES))
+        path.write_text(RULES)
+        with pytest.raises(conversation.Refused) as deleting:
+            delete(cfg, ctx, "worker", sha(RULES))
+
+    assert (saving.value.guard, deleting.value.guard) == ("stale", "stale")
+    assert path.read_text() == "A hand edit.\n"
+
+
+def test_a_name_in_digits_of_another_script_is_not_a_version(ctx: Context, tmp_path: Path) -> None:
+    cfg = with_paths(ctx, instructions=tmp_path / "instructions")
+    saved = save(cfg, ctx, "worker", "First.", None)
+    save(cfg, ctx, "worker", "Second.", saved.sha256)
+    arabic_indic = "".join(chr(0x0660 + int(d)) for d in "20261112")
+    (ctx.ws.state_dir / standing.VERSIONS_DIR / "worker" / f"{arabic_indic}T000000000000Z-edit.md").write_text("x\n")
+
+    assert standing.read(cfg, ctx.ws.state_dir, "worker").versions == 1
+
+
+def test_a_delete_whose_last_read_fails_is_refused_not_an_error(ctx: Context, tmp_path: Path) -> None:
+    defaults = tmp_path / "instructions"
+    defaults.mkdir(mode=0o700)
+    path = defaults / "overseer.md"
+    path.write_text(RULES)
+    cfg = with_paths(ctx, instructions=defaults)
+    real_read = standing._read  # noqa: SLF001  (the first read succeeds; the one before the unlink does not)
+    reads: list[Path] = []
+
+    def unreadable_later(at: Path) -> standing._Reading:
+        reads.append(at)
+        if len(reads) > 1:
+            raise PermissionError(13, "Permission denied")
+        return real_read(at)
+
+    with (
+        mock.patch.object(standing, "_read", side_effect=unreadable_later),
+        pytest.raises(conversation.Refused) as refused,
+    ):
+        delete(cfg, ctx, "overseer", sha(RULES))
+
+    assert refused.value.guard == "unsafe_file"
+    assert path.read_text() == RULES
