@@ -105,14 +105,23 @@ class _FailedError(Exception):
     """A debug command could not be run, failed, or printed what canopy cannot read."""
 
 
-def offerings(runner: procs.Runner, *, cwd: Path, definitions_dir: Path, agents: Sequence[str]) -> Offerings:
+def offerings(
+    runner: procs.Runner,
+    *,
+    cwd: Path,
+    definitions_dir: Path,
+    agents: Sequence[str],
+    env: Mapping[str, str] | None = None,
+) -> Offerings:
     """Ask OpenCode what it offers each of `agents`, started in `cwd` with canopy's definitions in `definitions_dir`.
+
+    It is started with `env` too, when given, as a run is given its servers (`canopy.runtime.servers`).
 
     Returns:
         The servers and skills OpenCode has, and what each agent is offered of them; with `error` set, and nothing
         else, when the servers or the skills could not be listed, and an agent's `error` set when its rules could not.
     """
-    ask = _Ask(runner, _OPENCODE, cwd, {CONFIG_DIR_ENV: str(definitions_dir)})
+    ask = _Ask(runner, _OPENCODE, cwd, {**(env or {}), CONFIG_DIR_ENV: str(definitions_dir)})
     try:
         config, files = ask.listed()
     except _FailedError as e:

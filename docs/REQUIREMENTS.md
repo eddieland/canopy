@@ -117,6 +117,8 @@ Built. Command templates add canopy's definitions directory with `OPENCODE_CONFI
 operator's global and repository config rather than replacing it, so the operator's MCP servers and skills load in
 every run (§13). Constraints the operator should know:
 
+- A server of theirs that canopy's runs do not need, such as a slow one each run would wait on, can be kept out of
+  them: `runtime.disabled_mcp_servers` turns it off in every run, though not the tracker's or the artifact store's.
 - A skill in `$HOME` that workers or the planner use must be a single `SKILL.md`: their `external_directory: deny` lets
   them load the skill but not read files beside it, since their edit tool would reach whatever it allowed (§13). The
   reviewer and chores, which write nothing, also read the files beside a skill in `~/.claude/skills`,

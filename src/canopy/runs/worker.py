@@ -865,7 +865,15 @@ def _run_agent(
     served: dict[str, Sequence[str]] = {cards.SERVER: cards.SERVER_COMMAND}
     if run["kind"] in (policy.PLAN, policy.FEEDBACK_PLAN):
         served[git_tools.SERVER] = git_tools.command({s.repo: s.path for s in slots})
-    env |= servers.env(served, version=ctx.config.runtime.version, cwd=ctx.workspace.root.absolute()) | reports.env()
+    env |= (
+        servers.env(
+            served,
+            version=ctx.config.runtime.version,
+            cwd=ctx.workspace.root.absolute(),
+            disabled=ctx.config.runtime.disabled_mcp_servers,
+        )
+        | reports.env()
+    )
     env |= commit_hooks.env(
         snapshot,
         marks,

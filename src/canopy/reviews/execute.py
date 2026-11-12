@@ -310,7 +310,12 @@ def reviewer(
     served = {git_tools.SERVER: git_tools.command({start.CHECKOUT_LINK: slot}), cards.SERVER: cards.SERVER_COMMAND}
     env = {
         conversation.RUN_ID_ENV: run,
-        **servers.env(served, version=ctx.config.runtime.version, cwd=ctx.ws.root.absolute()),
+        **servers.env(
+            served,
+            version=ctx.config.runtime.version,
+            cwd=ctx.ws.root.absolute(),
+            disabled=ctx.config.runtime.disabled_mcp_servers,
+        ),
         **(reports or result.REVIEW.asked()).env(),
     }
     # An eval's review keeps no card, so it is asked nothing (DESIGN §21).

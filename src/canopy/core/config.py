@@ -495,6 +495,17 @@ def _server_name(value: str) -> str:
 
 ToolPart = Annotated[str, AfterValidator(_tool_part)]
 
+
+def _operator_server(value: str) -> str:
+    # canopy gives each run its own servers, `canopy` and `canopy_*`, in the same inline config (DESIGN §27).
+    if value == "canopy" or value.startswith("canopy_"):
+        raise ValueError(f"{value!r} is one of canopy's own MCP servers, which its runs need")
+    return value
+
+
+#: An MCP server of the operator's own runtime config, by its name there: never one of canopy's.
+OperatorServer = Annotated[ToolPart, AfterValidator(_operator_server)]
+
 TICKET_KEY = "{key}"
 MAX_LINK_URL = 500
 
@@ -870,6 +881,9 @@ class Runtime(Section):
     #: `setup_cmd`, and a review's, with the role each takes (DESIGN §24). Names need not be in this workspace's map,
     #: as the user file serves every workspace. Private: it decides what a run may reach (TRUST_MODEL T4, T7).
     sandbox_repos: Annotated[tuple[RepoName, ...], Scope.PRIVATE] = ()
+    #: MCP servers of the operator's own runtime config, by name, that none of canopy's runs starts: each run turns
+    #: them off (DESIGN §13). Private: the servers are the operator's, as their runtime config is.
+    disabled_mcp_servers: Annotated[tuple[OperatorServer, ...], Scope.PRIVATE] = ()
 
     @model_validator(mode="before")
     @classmethod
@@ -1770,6 +1784,21 @@ class Config(Section):
                 raise ValueError(
                     f"chores.{name}.model needs runtime.chore_cmd to run canopy's chore agent, {agents.CHORE}, which "
                     "canopy copies for the chore with its model, or a cmd of the chore's own that does",
+                )
+        return self
+
+    @model_validator(mode="after")
+    def _needed_servers_stay_on(self) -> Config:
+        # Workers write to the tracker through its server, and agents publish through the store's (DESIGN §22, §38).
+        tracker = self.tracker.tools()
+        needed = {
+            "the tracker's": tracker.server if tracker is not None else "",
+            "the artifact store's": self.artifacts.mcp_server,
+        }
+        for whose, server in needed.items():
+            if server and server in self.runtime.disabled_mcp_servers:
+                raise ValueError(
+                    f"runtime.disabled_mcp_servers names {server}, {whose} MCP server, which canopy's runs need",
                 )
         return self
 

@@ -38,6 +38,7 @@ from tests.canopy.helpers import (
     ticket_sets,
     tools_of,
     tools_printed,
+    turned_off_servers,
     unit_of,
     with_events,
     worker_does,
@@ -81,7 +82,10 @@ def test_worker_that_pushes_is_done(scenario: Scenario, git_pool: GitPool, treeh
     # canopy's `status` server, the one server of canopy's a worker is given (DESIGN §41).
     assert inline_servers(w) == {cards.SERVER: [*cards.SERVER_COMMAND]}
     assert w["env"] == {
-        **{name: w["env"][name] for name in servers.env({}, version=scenario.env.runtime, cwd=scenario.env.root)},
+        **{
+            name: w["env"][name]
+            for name in servers.env({}, version=scenario.env.runtime, cwd=scenario.env.root, disabled=())
+        },
         "CANOPY_RUN_ID": str(run.id),
         # What its `result` call reports: a worker's result, with the groups this run is asked for (DESIGN §13).
         "CANOPY_RESULT": "worker:created,drafts",
@@ -117,10 +121,21 @@ def test_a_worker_inherits_no_server_its_process_was_given(scenario: Scenario) -
         {"canopy_chore": ["canopy", "_mcp", "--chore"]},
         cwd=scenario.env.root,
         version=scenario.env.runtime,
+        disabled=(),
     )
     with mock.patch.dict(os.environ, given):
         scenario.run(worker=pushes())
     [w] = agent_runs(scenario.agent_log)
+    assert inline_servers(w).keys() == {cards.SERVER}
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_the_servers_config_turns_off_never_start_in_the_overseers_run_or_the_workers(scenario: Scenario) -> None:
+    """The operator's servers that config keeps out of canopy's runs are off in each run, beside canopy's own."""
+    scenario.configures(runtime={"disabled_mcp_servers": ["slack", "browser"]})
+    scenario.tick(dispatches("PROJ-1"), worker=pushes())
+    overseer, w = agent_runs(scenario.agent_log)
+    assert turned_off_servers(overseer) == turned_off_servers(w) == {"slack", "browser"}
     assert inline_servers(w).keys() == {cards.SERVER}
 
 

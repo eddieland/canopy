@@ -1103,6 +1103,7 @@ def _run_overseer(
         {mcp.SERVER: mcp.COMMAND},
         version=ctx.config.runtime.version,
         cwd=ctx.repo_root,
+        disabled=ctx.config.runtime.disabled_mcp_servers,
         timeout_seconds=timeout_minutes * 60,
     )
     log.info("running overseer", extra={"cmd": argv[0], "timeout_minutes": timeout_minutes})

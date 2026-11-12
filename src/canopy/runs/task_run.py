@@ -606,7 +606,12 @@ def _run_agent(
     # It says where its work stands through canopy's `status` tool, which writes nothing, and asks no question there:
     # its question is its final line's, which a reply to the task answers (DESIGN §36, §41).
     served = {cards.SERVER: cards.SERVER_COMMAND}
-    env |= servers.env(served, version=ctx.config.runtime.version, cwd=ctx.workspace.root.absolute())
+    env |= servers.env(
+        served,
+        version=ctx.config.runtime.version,
+        cwd=ctx.workspace.root.absolute(),
+        disabled=ctx.config.runtime.disabled_mcp_servers,
+    )
     answers = starts.answers_dir(Path(run.log_path))
     listed = checklists.file_of(answers, run.repo)
     held = {slot: listed} if listed.is_file() else {}

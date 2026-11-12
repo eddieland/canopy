@@ -316,7 +316,12 @@ def _run_agent(
         tidy.OBJECTS_ENV: str(epic_runs.objects_dir(Path(run.log_path))),
     }
     served = {cards.SERVER: cards.SERVER_COMMAND, git_tools.SERVER: git_tools.command(trees)}
-    env |= servers.env(served, version=runtime.version, cwd=ctx.workspace.root.absolute())
+    env |= servers.env(
+        served,
+        version=runtime.version,
+        cwd=ctx.workspace.root.absolute(),
+        disabled=runtime.disabled_mcp_servers,
+    )
     reports = CONTRACT.asked()
     env |= reports.env()
     result = ctx.runner.run(

@@ -112,6 +112,8 @@ def test_needs_human_label_is_set_by_the_workspace_and_overridden_by_the_user(ca
         ("personas", "planner = 'skeptic'"),
         ("personas", "reviewer = 'lenient'"),
         ("runtime", "hide_models = ['acme/*']"),
+        # The servers are the operator's own, as their runtime config is.
+        ("runtime", "disabled_mcp_servers = ['slack']"),
         # Traces would leave the operator's machine for a host whoever controls the workspace file chose.
         ("telemetry", "traces = 'otlp'"),
         ("telemetry", "endpoint = 'https://collector.example'"),
@@ -404,6 +406,15 @@ def test_required_keys_name_both_files(canopy_env: CanopyEnv) -> None:
         ("[runtime]\nreview_temperature = '0.1'\n", r"runtime\.review_temperature: Input should be a valid number"),
         ("[runtime]\noverseer_temperature = -0.5\n", "must be from 0 to 2, or -1 to set none"),
         ("[runtime]\nsandbox_repos = ['API']\n", "repository name 'API' must match"),
+        # canopy gives each run its own servers in the same inline config.
+        ("[runtime]\ndisabled_mcp_servers = ['canopy']\n", "'canopy' is one of canopy's own MCP servers"),
+        ("[runtime]\ndisabled_mcp_servers = ['canopy_run']\n", "'canopy_run' is one of canopy's own MCP servers"),
+        ("[runtime]\ndisabled_mcp_servers = ['my.server']\n", "'my.server' must match"),
+        # Workers write to the tracker through its server, here the Jira provider's default.
+        (
+            "[runtime]\ndisabled_mcp_servers = ['atlassian']\n",
+            r"names atlassian, the tracker's MCP server, which canopy's runs need",
+        ),
         (
             "[runtime]\nsandbox_repos = ['api']\nworker_cmd_prefix = 'canopy-sandbox worker --'\n",
             r"runtime\.worker_cmd_prefix starts with canopy-sandbox, and runtime\.sandbox_repos has canopy add it",
@@ -421,6 +432,24 @@ def test_invalid_values(canopy_env: CanopyEnv, user_extra: str, message: str) ->
     text = text.replace(header, f"{header}\n{line}", 1) if header in text else f"{text}\n{header}\n{line}\n"
     canopy_env.write_user(text)
     with pytest.raises(ConfigError, match=message):
+        load(canopy_env.root, canopy_env.user_file)
+
+
+def test_disabled_mcp_servers_names_the_operators_own(canopy_env: CanopyEnv) -> None:
+    """A hyphen survives OpenCode's sanitizing, so `canopy-docs` names no server of canopy's."""
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"disabled_mcp_servers": ["slack", "canopy-docs"]}})
+
+    assert load(canopy_env.root, canopy_env.user_file).runtime.disabled_mcp_servers == ("slack", "canopy-docs")
+
+
+def test_disabled_mcp_servers_may_not_name_the_artifact_stores(canopy_env: CanopyEnv) -> None:
+    """Agents publish through the store's server (DESIGN §38)."""
+    canopy_env.configure(
+        canopy_env.user_file,
+        {"runtime": {"disabled_mcp_servers": ["louvre"]}, "artifacts": {"mcp_server": "louvre"}},
+    )
+
+    with pytest.raises(ConfigError, match="names louvre, the artifact store's MCP server, which canopy's runs need"):
         load(canopy_env.root, canopy_env.user_file)
 
 

@@ -269,6 +269,7 @@ def offered(ctx: Context) -> tuple[Offerings, dict[str, tuple[str, ...]]]:
         cwd=ctx.ws.root,
         definitions_dir=snapshot,
         agents=runtime_definitions.agent_names(),
+        disabled=ctx.config.runtime.disabled_mcp_servers,
     )
     return found, bash_allows.by_agent(ctx.config.runtime.allow_bash)
 
