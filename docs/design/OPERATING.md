@@ -277,8 +277,10 @@ skill the workers load (§17). `tracker.query` finds candidates; it does not aut
 **Traces.** canopy records what it does as OpenTelemetry spans only once the operator's `telemetry.traces` turns them
 on; off, no span is made and OpenTelemetry is not loaded. Each tick is a trace of its own, with a span for each of its
 steps, and so is each run it starts, in a process of its own, linked to the step that started it: every process canopy
-starts is given the current span as `TRACEPARENT`. Each command canopy runs and waits for is a span, named for its
-program and subcommand, `git fetch`, with its exit code, never its other arguments or what it read or printed. Each span
+starts is given the current span as `TRACEPARENT`. A run's span says what canopy chose for it (its role, kind, attempt,
+model, and sandbox), and a tick or run that ends in a failing status is a failed span, as one that raised is. Each
+command canopy runs and waits for is a span, named for its program and subcommand, `git fetch`, with its exit code,
+never its other arguments or what it read or printed. Each span
 adds up the journal queries run under it and how long they took, and a query slower than 50 ms is a span of its own,
 holding its SQL, which is canopy's code alone, never a value bound to it. Within a run, the overseer's included, each
 model call and each tool call is a span, at the times the runtime printed, under OpenTelemetry's conventions for
