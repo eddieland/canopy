@@ -28,7 +28,7 @@ import functools
 import logging
 import shutil
 from collections.abc import Callable, Collection, Iterable, Mapping
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
@@ -133,6 +133,7 @@ def abandoned(conn: sqlite3.Connection, tick_ids: Iterable[int]) -> None:
         tick = records.select(records.Tick).where("id = ?", tick_id).one(conn)
         if tick is not None:
             metrics.count("canopy.ticks", status=TickStatus.ABANDONED, dry_run=tick.dry_run)
+        tick_closed(conn, tick_id)
         overseer_ended(conn, tick_id)
 
 
@@ -151,12 +152,17 @@ def active(conn: sqlite3.Connection, capacity: Capacity) -> None:
     """Set the runs of each role at work now, and how full each role's `capacity` is, as a tick closes."""
     if not metrics.enabled():
         return
-    running: dict[RunTable, int] = {}
-    for table in ROLES:
-        query = sql.select("count(*)").from_("{}", sql.name(table)).where("status = 'running'")
-        running[table] = int(sql.execute(conn, query).fetchone()[0])
+    # One statement, so one snapshot of the journal: a run that starts or ends meanwhile is in every count or in none.
+    each = (
+        sql.select("? AS run_table, count(*) AS running", table)
+        .from_("{}", sql.name(table))
+        .where("status = 'running'")
+        for table in ROLES
+    )
+    counts = sql.union(*each, every=True)
+    running = {row.run_table: row.running for row in records.fetch_all(conn, _Running, counts)}
     for role in dict.fromkeys(ROLES.values()):
-        at_work = sum(n for table, n in running.items() if ROLES[table] is role)
+        at_work = sum(running[table] for table, owner in ROLES.items() if owner is role)
         metrics.gauge("canopy.runs.active", at_work, role=role)
     limits = {
         Role.WORKER: capacity.max_workers,
@@ -192,13 +198,13 @@ def tickets(conn: sqlite3.Connection) -> None:
         sql.select("subject_id").from_("starts").where("subject_kind = 'ticket' AND status = ?", StartStatus.STOPPED)
     )
     query = (
-        sql.select("phase, count(*)")
+        sql.select("phase, count(*) AS tickets")
         .from_("tickets")
         .where("done = 0 AND phase IS NOT NULL")
         .where("key NOT IN ({})", stopped)
         .group_by("phase")
     )
-    found = {Phase(row[0]): int(row[1]) for row in sql.execute(conn, query).fetchall()}
+    found = {row.phase: row.tickets for row in records.fetch_all(conn, _InPhase, query)}
     for phase in Phase:
         metrics.gauge("canopy.tickets", found.get(phase, 0), phase=phase)
 
@@ -215,6 +221,22 @@ def disk(state_dir: Path) -> None:
     if not metrics.enabled():
         return
     metrics.gauge("canopy.disk.free", shutil.disk_usage(state_dir).free, unit="By")
+
+
+@dataclass(frozen=True)
+class _Running(records.View):
+    """How many of one run table's runs are at work."""
+
+    run_table: str
+    running: int
+
+
+@dataclass(frozen=True)
+class _InPhase(records.View):
+    """How many open tickets are in one phase."""
+
+    phase: Phase
+    tickets: int
 
 
 #: Each token type, by the column that holds it.

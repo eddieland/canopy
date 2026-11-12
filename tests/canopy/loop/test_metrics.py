@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -12,7 +13,7 @@ from canopy.core import db, overseer_runs, run_metrics
 from canopy.core.run_metrics import Role
 from canopy.core.vocab import Phase, TickStatus
 from canopy.infra import metrics
-from tests.canopy.helpers import KEY, in_tick, waits
+from tests.canopy.helpers import KEY, in_tick, raises, waits
 from tests.canopy.scenario_helpers import dispatches
 
 if TYPE_CHECKING:
@@ -80,7 +81,7 @@ def test_a_tick_sets_what_the_loop_holds_as_it_closes(scenario: Scenario) -> Non
     scenario.seen()
     db.change_ticket(scenario.conn, KEY, "phase", Phase.READY)
     began = time.time()
-    scenario.tick(dispatches())
+    scenario.tick(dispatches(), raises("PROJ-9", "needs_human"))
     metrics.configure(Path(), "off")
     found = points(scenario.env.state_dir / metrics.METRICS_FILE_NAME)
     gauges: dict[str, list[tuple[dict[str, object], float]]] = {}
@@ -94,8 +95,7 @@ def test_a_tick_sets_what_the_loop_holds_as_it_closes(scenario: Scenario) -> Non
     assert began - 1 <= at <= time.time() + 1
     # Each label a word of its vocabulary, and every phase set, an empty one to 0.
     tickets = {str(labels["phase"]): value for labels, value in gauges["canopy.tickets"]}
-    assert set(tickets) == {phase.value for phase in Phase}
-    assert sum(tickets.values()) == 1
+    assert tickets == {phase.value: 1 if phase is Phase.READY else 0 for phase in Phase}
     used = {str(labels["role"]): value for labels, value in gauges["canopy.capacity.used"]}
     limit = {str(labels["role"]): value for labels, value in gauges["canopy.capacity.limit"]}
     roles = {Role.WORKER.value, Role.REVIEW.value, Role.TASK.value, Role.CHORE.value}
@@ -104,10 +104,13 @@ def test_a_tick_sets_what_the_loop_holds_as_it_closes(scenario: Scenario) -> Non
     assert limit == {Role.WORKER.value: 3, Role.REVIEW.value: 1, Role.TASK.value: 1, Role.CHORE.value: 2}
     # The run the tick started was at work as it closed.
     assert used[Role.WORKER.value] == 1
-    [(open_labels, _)] = gauges["canopy.attention.open"]
+    # The one item the overseer raised, as the tick published it.
+    [(open_labels, open_items)] = gauges["canopy.attention.open"]
+    assert (open_labels, open_items) == ({}, 1)
+    # The free space where the state directory is, give or take what the disk gained or lost since.
     [(disk_labels, free)] = gauges["canopy.disk.free"]
-    assert (open_labels, disk_labels) == ({}, {})
-    assert free > 0
+    assert disk_labels == {}
+    assert abs(free - shutil.disk_usage(scenario.env.state_dir).free) < 2**30
 
 
 def test_a_ticket_done_or_stopped_is_not_counted_in_its_phase(scenario: Scenario) -> None:
@@ -144,6 +147,9 @@ def test_a_tick_a_dead_process_left_is_counted_as_the_next_closes_it(scenario: S
     found = [(n, labels) for n, labels, _ in points(scenario.env.state_dir / metrics.METRICS_FILE_NAME)]
     assert ("canopy.ticks", {"status": "abandoned", "dry_run": False}) in found
     assert ("canopy.runs", {"role": "overseer", "status": "abandoned"}) in found
+    # When the next tick closed it, beside when that tick closed itself.
+    assert ("canopy.tick.last", {"status": "abandoned"}) in found
+    assert ("canopy.tick.last", {"status": "ok"}) in found
 
 
 def test_a_metric_that_fails_is_logged_and_never_fails_the_tick(scenario: Scenario) -> None:
