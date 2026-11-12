@@ -173,6 +173,24 @@ def here() -> Here | None:
     return Here(get_current())
 
 
+def ids() -> tuple[str, str] | None:
+    """The trace and span ids of the span open now, in hex as OTLP JSON spells them, for a log line to name.
+
+    Outside every span of this process's own, that is the span its parent passed in `TRACEPARENT`, if any.
+
+    Returns:
+        The trace id and the span id, or None while tracing is off or no span is open.
+    """
+    if _tracing.tracer is None:
+        return None
+    from opentelemetry.trace import get_current_span  # noqa: PLC0415  (imported only once tracing is on)
+
+    context = get_current_span().get_span_context()
+    if not context.is_valid:
+        return None
+    return f"{context.trace_id:032x}", f"{context.span_id:016x}"
+
+
 def interval(
     name: str,
     under: Here | None,

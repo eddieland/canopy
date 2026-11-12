@@ -289,7 +289,8 @@ query, a header, or the body, and never joining a trace a client names. A span h
 statuses, counts, cost), never text canopy read, which is untrusted and may be private (TRUST_MODEL T2). Spans go to
 `<state_dir>/traces.jsonl`, readable by the operator alone, as OTLP JSON for a collector they run to read, or, with
 `traces = "otlp"`, are posted to the OTLP/HTTP endpoint the operator names: in batches, following no redirect, and
-dropped when the endpoint does not take them, so a collector that is down costs a span, never a step (D132).
+dropped when the endpoint does not take them, so a collector that is down costs a span, never a step (D132). While
+traces are on, each line of `canopy.log` names the trace and span it was logged in, which no caller can set.
 
 **Metrics.** `telemetry.metrics` does the same for metrics: how many runs of each role ended and how, how long they ran,
 what they cost, and their tokens, by model; each tick, and how long it took; and how many runs are at work. A run is

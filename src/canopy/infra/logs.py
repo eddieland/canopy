@@ -1,7 +1,8 @@
 """JSON-lines logging to `<state_dir>/canopy.log`.
 
 Every record carries `tick_id` (null outside a tick). Code logs through `for_tick`, which returns an adapter that stamps
-the id, so a tick's lines can be pulled out with one filter.
+the id, so a tick's lines can be pulled out with one filter. While tracing is on, a record made in a span also carries
+its `trace_id` and `span_id`, as the traces spell them, so a run's lines can be matched to its spans.
 """
 
 from __future__ import annotations
@@ -17,15 +18,19 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, TextIO, override
 
+from canopy.infra import tracing
+
 LOG_FILE_NAME = "canopy.log"
 #: A rotated log's name, `canopy.log.1` the newest, and its number.
 ROTATED_RE = re.compile(rf"{re.escape(LOG_FILE_NAME)}\.(\d+)")
 _LOGGER = "canopy"
 _STANDARD_ATTRS = frozenset(vars(logging.makeLogRecord({})))
+#: The keys only the span a record was made in sets, never an `extra`, so a line cannot name a span it was not in.
+_SPAN_KEYS = frozenset({"trace_id", "span_id"})
 
 
 class JsonFormatter(logging.Formatter):
-    """Formats a record as one JSON object with `ts`, `level`, `msg`, `tick_id`, and any extras."""
+    """Formats a record as one JSON object with `ts`, `level`, `msg`, `tick_id`, its span's ids, and any extras."""
 
     @override
     def format(self, record: logging.LogRecord) -> str:
@@ -35,8 +40,11 @@ class JsonFormatter(logging.Formatter):
             "msg": record.getMessage(),
             "tick_id": getattr(record, "tick_id", None),
         }
+        # Read as the record is formatted: `configure`'s handler formats it in the thread, and the span, that logged it.
+        if (span := tracing.ids()) is not None:
+            line["trace_id"], line["span_id"] = span
         for key, value in vars(record).items():
-            if key not in _STANDARD_ATTRS and key not in line:
+            if key not in _STANDARD_ATTRS and key not in _SPAN_KEYS and key not in line:
                 line[key] = value
         if record.exc_info:
             line["exc"] = self.formatException(record.exc_info)
