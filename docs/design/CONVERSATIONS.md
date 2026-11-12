@@ -142,8 +142,9 @@ and its controls TRUST_MODEL T8's.
 ### Search
 
 One box finds a ticket or a task, or the run or tick that said something, by substring over the journal's text. It
-serves only what the other pages serve, so T8 is unchanged. Rejected for now: SQLite's FTS5, whose index is three
-times the text.
+serves only what the other pages serve, so T8 is unchanged. While `sessions.search` is `titles`, two more panels find
+the runtime's sessions by their titles (§13), the operator's own and canopy's apart, as the Sessions page lists them.
+Rejected for now: SQLite's FTS5, whose index is three times the text.
 
 ### Trust model changes
 
@@ -151,6 +152,7 @@ Private tickets and tracker comments changed TRUST_MODEL T1 and T6, and the web 
 public tickets (D089) changed T1: one authorizes a `resume` as an authorized reply does. Seen marks changed T8: the web
 writes what no CLI verb does (D127). Limits and trust (M41) changed T8 too: the web writes a few config keys, limits
 within bounds and trust only stricter (D128). Dictation changed T8: the web runs the operator's own command on a recording.
+The Sessions page changed T8: the web serves the titles of sessions the journal holds nothing else of.
 
 ### Open
 

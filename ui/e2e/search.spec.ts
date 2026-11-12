@@ -31,12 +31,19 @@ test('typing in the box opens the search, its hits grouped by source and linked 
 
 test('every source that holds a word has its panel, in the server order', async ({ page }) => {
     await page.goto('search?q=web')
-    await expect(page.getByTestId('search-results').locator('> section')).toHaveCount(4)
+    await expect(page.getByTestId('search-results').locator('> section')).toHaveCount(5)
     const order = await page
         .getByTestId('search-results')
         .locator('> section')
         .evaluateAll((panels) => panels.map((p) => p.dataset['testid']))
-    expect(order).toEqual(['search-ticket', 'search-message', 'search-chore_run', 'search-decision'])
+    // The runtime's sessions after the journal's: canopy's reviews of web's PRs hold it in their titles.
+    expect(order).toEqual([
+        'search-ticket',
+        'search-message',
+        'search-chore_run',
+        'search-decision',
+        'search-sessions-canopy',
+    ])
 
     // A chore run's hit is named as the run, and opens the run's page, not its chore's.
     await page
@@ -45,6 +52,27 @@ test('every source that holds a word has its panel, in the server order', async 
         .first()
         .click()
     await expect(page).toHaveURL(/\/chores\/[\w-]+\/runs\/\d+$/u)
+})
+
+test("the runtime's sessions are found by their titles: yours with the command, canopy's opening its run", async ({
+    page,
+}) => {
+    await page.goto('search?q=deploy')
+    const yours = page.getByTestId('search-sessions-outside')
+    await expect(yours.getByRole('heading', { name: 'Sessions outside canopy' })).toBeVisible()
+    // Newest first, its subagent's among them, marked as one, each with the command that reopens it.
+    await expect(yours.getByTestId('session')).toHaveText([
+        /subagent.*Find where deploy\.sh waits on the health check/u,
+        /Why does the deploy script hang on staging\?.*opencode --session ses_op_deploy$/u,
+    ])
+    await expect(yours.locator('mark')).toHaveText(['deploy', 'deploy'])
+    await expect(page.getByTestId('search-sessions-canopy')).toHaveCount(0)
+
+    await page.goto('search?q=login+redirect')
+    const canopys = page.getByTestId('search-sessions-canopy')
+    await expect(canopys.getByTestId('session')).toHaveCount(1)
+    await canopys.getByRole('link', { name: 'run:41' }).click()
+    await expect(page).toHaveURL(/\/workspace\/runs\/41$/u)
 })
 
 test("a task is found by its text, named by its first line, and its run's report opens the run", async ({ page }) => {

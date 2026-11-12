@@ -102,8 +102,9 @@ test("each series has one name in the totals, the legend, and the table, and the
     ]
     await expect(page.getByTestId('spend-legend').getByRole('listitem')).toHaveText(series)
     await expect(page.getByTestId('spend-table').locator('thead th')).toHaveText(['day', ...series, 'total', 'done'])
-    // The totals name the overseer's whole before idle ticks' part of it, as canopy spend's columns do. The mock's
-    // week has no dry run, and its loop never read the sessions outside canopy: the line under the tiles says so.
+    // The totals name the overseer's whole before idle ticks' part of it, as canopy spend's columns do, and the
+    // sessions outside canopy last, which the mock's loop read. Its week has no dry run: the line under the tiles says
+    // so.
     const totals = page.getByTestId('spend-totals').locator('dt')
     await expect(totals).toHaveText([
         'total',
@@ -114,12 +115,11 @@ test("each series has one name in the totals, the legend, and the table, and the
         'chores',
         'reviews',
         'tasks',
+        'outside canopy',
         'tickets done',
         'per ticket done',
     ])
-    await expect(page.getByTestId('spend-total-folded')).toHaveText(
-        'No dry runs, sessions outside canopy not read yet.',
-    )
+    await expect(page.getByTestId('spend-total-folded')).toHaveText('No dry runs.')
     await expect(page.getByText('other ticks')).toHaveCount(0)
 })
 
@@ -476,7 +476,8 @@ test('a week of one priced day draws one narrow bar, its segments apart, and the
             }),
         )
     ).toSorted((a, b) => a.top - b.top)
-    expect(segments).toHaveLength(7)
+    // Each kind of run's, and the sessions outside canopy's.
+    expect(segments).toHaveLength(8)
     for (const [i, segment] of segments.entries()) {
         expect(segment.bottom - segment.top).toBeGreaterThanOrEqual(1.99)
         const below = segments[i + 1]
@@ -553,13 +554,13 @@ test("the header's budget says the month is headed over, the numbers on hover, a
     await settled(page)
     // The mock's budget is $40, and its month's pace passes it.
     const readout = page.getByTestId('budget-readout')
-    await expect(readout).toHaveText('39%')
+    await expect(readout).toHaveText('51%')
     await expect(readout).toHaveAttribute('data-state', 'headed')
-    await expect(readout).toHaveAccessibleName(/^Headed over: \$15\.76 of \$40 \(39%\), on pace for \$/u)
+    await expect(readout).toHaveAccessibleName(/^Headed over: \$20\.53 of \$40 \(51%\), on pace for \$/u)
     await readout.hover()
     const card = page.getByTestId('budget-card')
     await expect(card).toContainText('Headed over')
-    await expect(card).toContainText('39%, $15.76 of $40')
+    await expect(card).toContainText('51%, $20.53 of $40')
     await readout.click()
     await expect(page).toHaveURL(/\/reports\/spend$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Spend')
@@ -572,21 +573,19 @@ test('this month reads against the budget whatever the window, and is headed ove
     const budget = page.getByTestId('spend-budget')
     await expect(budget).toContainText('October 2026')
     await expect(page.getByTestId('spend-budget-text')).toContainText('Headed over')
-    await expect(page.getByTestId('spend-budget-text')).toHaveText('Headed over: $15.76 of $40 (39%)')
+    await expect(page.getByTestId('spend-budget-text')).toHaveText('Headed over: $20.53 of $40 (51%)')
     await expect(page.getByTestId('spend-budget-pace')).toHaveText(/^On pace to spend \$[\d.]+ of \$40\.$/u)
-    // The mock's loop never read the runtime's sessions, so the month is canopy's runs alone, and says so.
+    // The mock's loop read the runtime's sessions, so the month is canopy's runs and the sessions outside canopy, as
+    // of that read.
     await expect(page.getByTestId('spend-budget-parts')).toHaveText(
-        "Canopy's runs $15.76. Sessions outside canopy count once canopy loop has read them.",
+        /^Canopy's runs \$15\.76, outside canopy \$4\.77, as of Oct 8 .+\.$/u,
     )
     await page.getByTestId('spend-window-30').click()
-    await expect(page.getByTestId('spend-budget-text')).toContainText('$15.76 of $40 (39%)')
-    // Nor does the panel of every session list any: it says why.
-    await expect(page.getByTestId('spend-sessions')).toContainText(
-        "canopy loop has not read the runtime's sessions yet",
-    )
-    // Nor do the totals give them a tile of a dash: the line under the tiles says they wait on the loop.
-    await expect(page.getByTestId('spend-total-outside')).toHaveCount(0)
-    await expect(page.getByTestId('spend-total-folded')).toContainText('sessions outside canopy not read yet')
+    await expect(page.getByTestId('spend-budget-text')).toContainText('$20.53 of $40 (51%)')
+    // The panel of every session counts them apart from canopy's, and the totals give them a tile.
+    await expect(page.getByTestId('spend-sessions')).toContainText('outside canopy')
+    await expect(page.getByTestId('spend-total-outside')).toHaveCount(1)
+    await expect(page.getByTestId('spend-total-folded')).not.toContainText('not read yet')
     // The mock alerts at half and four fifths of the budget too: each a tick over the bar labelled with its percent,
     // and the mark across it labelled with the day.
     await expect(page.getByTestId('spend-budget-alert-50')).toHaveText('50%')

@@ -58,6 +58,7 @@ interface SubPage {
         | '/workspace/ticks'
         | '/workspace/worktrees'
         | '/workspace/checklists'
+        | '/workspace/sessions'
         | '/pull-requests/reviews'
         | '/reports/spend'
         | '/reports/checklist'
@@ -128,6 +129,11 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string; pages?: SubPage[] }[
                 to: '/workspace/checklists',
                 label: 'Checklists',
                 hint: "Each repository's checklist, item by item, as the next worker run in it hears it",
+            },
+            {
+                to: '/workspace/sessions',
+                label: 'Sessions',
+                hint: "Every session the agent runtime keeps, yours and canopy's runs', and how to get back into one",
             },
         ],
     },

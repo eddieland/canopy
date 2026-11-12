@@ -934,12 +934,13 @@ Controls:
   has a shell.
 - Every session's title (DESIGN §13): while the private `sessions.search` is `titles`, the journal keeps the title of
   every session the runtime keeps, as it keeps their spend: private tickets' runs' and the operator's own, in any
-  directory, among them. Only the operator reads them: `canopy sessions` refuses inside a tick or a run, and no tool,
-  report, or prompt section serves them, so no run reads another ticket's work or the operator's own through canopy.
-  A directory `sessions.exclude` names is listed nowhere, and `off`, the default, keeps no title. A title kept before
-  either change stays in the journal until the loop's next read drops it, which it does before it reads anything;
-  until then nothing lists it, since the command lists by the config in force and refuses at `off`. An unsandboxed
-  run could already read the runtime's record itself, the standing residual.
+  directory, among them. Only the operator reads them: `canopy sessions` refuses inside a tick or a run, the web UI
+  serves them only to the listener secret's holder (T8), and no tool, report, or prompt section serves them, so no run
+  reads another ticket's work or the operator's own through canopy. A directory `sessions.exclude` names is listed
+  nowhere, and `off`, the default, keeps no title. A title kept before either change stays in the journal until the
+  loop's next read drops it, which it does before it reads anything; until then nothing lists it, since the command
+  and the web UI list by the config in force, and the command refuses and the web UI serves none at `off`. An
+  unsandboxed run could already read the runtime's record itself, the standing residual.
 - Opt-in: a sandboxed run (T4) reads none of the operator's secrets under `$HOME` but what its template re-allows, and
   reaches the network only through `srt`'s proxy, which connects to the hosts on the operator's allowlist and to no
   other, and to no loopback, link-local, or cloud metadata address, nor the host's own, whatever name resolves there.
@@ -1155,6 +1156,14 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   read from Linux's `/proc`, the kernel's threads left out. A command line holds whatever its program was given, an
   argument that is a token included, and may belong to another account on the machine; `ps` shows the same to anyone
   logged in there. It is read only while the page asks, from no path a request names, and rendered as text.
+- It serves the titles of the runtime's sessions (DESIGN §13), on the Sessions page and the search's two panels of
+  them, while the private `sessions.search` is `titles`: what it never served before, since a session outside canopy,
+  the operator's own work in any directory and another workspace's runs, has no other page, and one of canopy's keeps
+  its title past its run's log's retention. Each title is the journal's, as the loop's read kept it: one line, bounded,
+  nothing hidden in it, rendered as text; a search is words found as text, never a pattern. Beside it, the session's
+  directory, cost, and the command that reopens it in the runtime, for the operator to copy; the page runs nothing. It
+  lists none in a directory `sessions.exclude` names, and at `off`, the default, it serves no session at all, whatever
+  the journal still holds. It reads, and writes nothing.
 - It serves the models the runtime lists (DESIGN §13), read when the operator opens a ticket's Model menu: it runs
   the runtime's list command, as `canopy models` does, through the process seam in the workspace root with a 30-second
   timeout, taking nothing from the request, and serves only the lines that are model ids. A choice of model is looked
@@ -1268,8 +1277,9 @@ to their ceilings for that workspace, and that outlives a new secret until the o
 log: the residual is spend, bounded by the ceilings, never authority. It can also shorten a retention to its floor, so a
 tick removes history older than that, the floor's worth always kept. Plain HTTP on a private address can be read on
 the network (D076), transcripts included: a secret a worker's tool printed into its log is then on the network too.
-Tick now, asked again and again, runs the overseer back to back, past `loop.min_gap_minutes`, as `t` held down at the
-loop's terminal would.
+So are the titles of the operator's own sessions, at `titles`, and whoever holds a session reads what the operator's
+sessions in other directories were about, by title; `off`, the default, serves none. Tick now, asked again and again,
+runs the overseer back to back, past `loop.min_gap_minutes`, as `t` held down at the loop's terminal would.
 
 ## 6. What canopy must never do
 

@@ -1,9 +1,22 @@
 import { keepPreviousData, queryOptions } from '@tanstack/react-query'
 
 import { api, unwrap } from './client'
+import type { SessionsWhose } from './types'
 
 /** The window a spend breakdown reads: local days, by the day, or clock hours, by the hour. */
 export type SpendBreakdownRange = { days: number; hours?: undefined } | { hours: number; days?: undefined }
+
+/** Which of the runtime's sessions a list asks for: `/api/sessions`'s query. */
+export interface SessionsFind {
+    /** Whose: those outside canopy, or canopy's runs'. */
+    whose: SessionsWhose
+    /** The words every title holds; none lists every one. */
+    q?: string | undefined
+    /** Whether the sessions the runtime archived are listed too. */
+    archived?: boolean | undefined
+    /** How many at most, newest first. */
+    limit?: number | undefined
+}
 
 /**
  * Query keys and fetchers, one place for each. The SSE stream writes into these same keys (live.ts), so a key used
@@ -86,6 +99,7 @@ export const keys = {
     // Tick now's request, a mutation's key: every Tick now shares it, so the header sees the one asked for.
     tickNow: ['tick-now'] as const,
     search: (q: string) => ['search', q] as const,
+    sessions: (find: SessionsFind) => ['sessions', find] as const,
     // The reviews list, the reviews waiting on a tick, and each review's page share a prefix, so one invalidation
     // marks them all stale.
     reviews: ['reviews'] as const,
@@ -658,6 +672,19 @@ export function searchQuery(q: string) {
     return queryOptions({
         queryKey: keys.search(q),
         queryFn: async ({ signal }) => unwrap(await api.GET('/api/search', { params: { query: { q } }, signal })),
+        placeholderData: keepPreviousData,
+    })
+}
+
+/**
+ * The runtime's sessions `find` asks for (DESIGN §13), newest first, as `canopy sessions` lists them: none while
+ * `sessions.search` is `off`. Not on the stream: the loop reads the runtime's record between ticks, so a list read
+ * again when the page opens is as fresh as it gets. The previous list stays on screen while the next one loads.
+ */
+export function sessionsQuery(find: SessionsFind) {
+    return queryOptions({
+        queryKey: keys.sessions(find),
+        queryFn: async ({ signal }) => unwrap(await api.GET('/api/sessions', { params: { query: find }, signal })),
         placeholderData: keepPreviousData,
     })
 }

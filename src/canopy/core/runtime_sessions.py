@@ -38,6 +38,9 @@ if TYPE_CHECKING:
 DIRECTORIES = 10
 #: The tables of this journal's agent runs, each with the session its run ran in.
 RUN_TABLES: tuple[RunTable, ...] = ("ticks", "runs", "chore_runs", "review_runs", "task_runs", "epic_runs")
+#: How many sessions up a subagent's is looked for the session of canopy's it ran for: far deeper than any runtime
+#: nests them, and a bound on a parent chain a run wrote into a loop.
+MAX_DEPTH = 50
 
 
 @dataclass(frozen=True)
@@ -280,33 +283,44 @@ def sessions_in(since: str, until: str | None, state_dir: Path) -> sql.Select:
     `tokens_*`, and `ours`, true for canopy's; and its `session_id`, `parent_id`, `updated_at`, `title`, and
     `archived_at`, for a list of the sessions (`canopy.core.session_list`).
 
+    Whether a session is canopy's is read for the window's sessions alone, walking up from each through the sessions
+    it ran for, and each run table is asked by its index of sessions: the read costs what the window holds, however
+    many runs the journal has recorded.
+
     Returns:
         The select, for a caller to sum as it needs.
     """
-    ran = sql.union(
-        *(sql.select("session_id").from_("{}", sql.name(t)).where("session_id IS NOT NULL") for t in RUN_TABLES),
-    )
+    ran = sql.any_of(*(sql.frag("EXISTS (SELECT 1 FROM {} WHERE session_id = u.at)", sql.name(t)) for t in RUN_TABLES))
     # The runtime records the directory a session started in as the process's working directory, its real path.
     home = str(state_dir.resolve())
     below = f"{home.rstrip('/')}/"
+    window = sql.select("session_id").from_("runtime_sessions").where("started_at >= ?", since)
+    if until is not None:
+        window = window.where("started_at < ?", until)
     found = (
         sql.select(
             "s.started_at, s.directory, s.cost_usd, s.tokens_input, s.tokens_output, s.tokens_reasoning,"
             " s.tokens_cache_read, s.tokens_cache_write, s.session_id IN (SELECT session_id FROM ours) AS ours,"
             " s.session_id, s.parent_id, s.updated_at, s.title, s.archived_at",
         )
-        .with_("ran(session_id) AS ({})", ran)
+        # Each of the window's sessions, and each session it ran for, however deep, within a bound on a parent chain
+        # a run wrote into a loop: a session is canopy's when one it ran for is.
         .with_(
-            "home(session_id) AS (SELECT session_id FROM runtime_sessions"
-            " WHERE directory = ? OR substr(directory, 1, ?) = ?)",
+            "up(origin, at, depth) AS (SELECT session_id, session_id, 0 FROM ({}) AS w"
+            " UNION SELECT u.origin, s.parent_id, u.depth + 1 FROM up u JOIN runtime_sessions s"
+            " ON s.session_id = u.at WHERE s.parent_id IS NOT NULL AND u.depth < ?)",
+            window,
+            MAX_DEPTH,
+            recursive=True,
+        )
+        # One a run of this journal's names, or one that ran in or below the state directory.
+        .with_(
+            "ours(session_id) AS (SELECT DISTINCT u.origin FROM up u LEFT JOIN runtime_sessions h"
+            " ON h.session_id = u.at WHERE h.directory = ? OR substr(h.directory, 1, ?) = ? OR {})",
             home,
             len(below),
             below,
-        )
-        .with_(
-            "ours(session_id) AS (SELECT session_id FROM ran UNION SELECT session_id FROM home"
-            " UNION SELECT s.session_id FROM runtime_sessions s JOIN ours o ON s.parent_id = o.session_id)",
-            recursive=True,
+            ran,
         )
         .from_("runtime_sessions s")
         .where("s.started_at >= ?", since)

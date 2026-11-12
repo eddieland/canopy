@@ -169,8 +169,11 @@ draft's: a search within 0.25 s, and an index no larger than a quarter of the ru
 both, the widest, `read`, with its slowest search at 0.027 s and its largest index 0.6% of the database, where a plain
 scan takes about 70 s, so stage 0's rule gives stage 2 `read`. The operator's call on the cut (2026-11-11): `read`, as
 the rule gives. Stage 1 begun 2026-11-11: the two keys, the read keeping each title and archive under either runtime
-version and starting again from the first session when a key changes, and `canopy sessions [WORDS]`; the web UI's
-Sessions page, the search page's two panels, and TRUST_MODEL T8 for them, are next. The reopen command, `opencode
+version and starting again from the first session when a key changes, and `canopy sessions [WORDS]`. Stage 1 built
+2026-11-11: the web UI's Sessions page, under Workspace, and the search page's two panels, with TRUST_MODEL T8 for
+them; telling canopy's sessions from the rest now reads only the sessions a window or a list holds, by an index of
+each run table's sessions, after the mock journal's sessions showed the spend's read growing with every run recorded.
+Stage 1's live checks, at `titles`, wait on the operator. The reopen command, `opencode
 --session ID` in the session's directory, is OpenCode 1's, assumed of 2 and not yet run. Settled 2026-11-11, at the
 operator's ask to resolve what was open, for the operator to change. The sessions OpenCode 1 left in its own tables get
 no reader: OpenCode 1 is deprecated and kept only until it is dropped (AGENTS.md). Stage 0's command counts them,

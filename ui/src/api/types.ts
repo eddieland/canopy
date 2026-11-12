@@ -452,6 +452,16 @@ export type SearchResults = Schemas['SearchResults']
 export type SearchHit = Schemas['SearchHit']
 /** Where a search hit is (DESIGN §22, Search), in the order the search reads them. */
 export type SearchSource = Schemas['SearchSource']
+/** The runtime's sessions, newest first, or the newest whose title holds every word, and how far the read has come. */
+export type SessionList = Schemas['SessionList']
+/** A session the runtime keeps, as the list shows it. */
+export type RuntimeSession = Schemas['RuntimeSession']
+/** The run of canopy's that made a session, or the session a subagent of it ran for, and the page it opens. */
+export type SessionRun = Schemas['SessionRun']
+/** How far the loop's read of the runtime's record has come. */
+export type SessionsProgress = Schemas['SessionsProgress']
+/** Whose sessions a list holds: those outside canopy, or canopy's runs'. */
+export type SessionsWhose = Schemas['SessionsWhose']
 /** A PR the operator asked canopy to review that no review of is running yet: it waits on a tick (DESIGN §21). */
 export type RequestedReview = Schemas['RequestedReview']
 /** One review run of a PR at a commit (DESIGN §21): canopy's own review, never on the PR (D114). */

@@ -491,9 +491,12 @@ The same read keeps each session's title, and whether the runtime archived it, w
 `titles`, so the operator can find one of their own among canopy's many: `canopy sessions` lists every session newest
 first, a subagent's under the one it ran for, the archived only when asked, or finds the newest whose title holds every
 word given. Those outside canopy are listed apart from canopy's, each with the command that reopens it in the runtime
-in its directory, and each of canopy's names the run that made it. A title is data: one line, bounded, nothing hidden
-in it, rendered as text and put in no prompt, and no tool serves the list to an agent. At `off`, the default, no title
-is read or kept; a directory the private `sessions.exclude` names keeps no title and is listed nowhere. A change to
+in its directory, and each of canopy's names the run that made it. The web UI's Sessions page lists the same, opening
+on the operator's own so canopy's count never buries them, each of canopy's opening its run's page, and the search
+page finds them in two panels of their own (§22). A title is data: one line, bounded, nothing hidden in it, rendered
+as text and put in no prompt, and no tool serves the list to an agent. At `off`, the default, no title is read, kept,
+or served; a directory the private
+`sessions.exclude` names keeps no title and is listed nowhere. A change to
 either drops, on the loop's next read, every title kept that the setting now keeps none of, and starts the read again
 from the first session, so every session is read as the setting now says.
 
