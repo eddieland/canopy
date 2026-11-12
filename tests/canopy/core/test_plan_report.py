@@ -99,6 +99,26 @@ def test_each_plan_goes_one_way_and_its_ticket_counts_the_resumes_after_its_appr
     assert (found.count(Outcome.REPLACED), found.count(Outcome.WAITING)) == (1, 1)
 
 
+def test_a_long_plan_goes_in_a_bucket_by_two_pages_up_to_ten(conn: sqlite3.Connection, canopy_env: CanopyEnv) -> None:
+    """Past six pages the lengths cut at eight and ten, and ten pages and up is the last."""
+    now = datetime.now(UTC)
+    for key, steps in (("PROJ-1", 330), ("PROJ-2", 430), ("PROJ-3", 600)):
+        steps_text = "# Plan\n\n" + "\n".join(f"- step {i}" for i in range(steps)) + "\n"
+        plan(
+            conn,
+            key,
+            earlier(now, 1),
+            level=PlannerApproval.OFF,
+            channel="web",
+            wait=1,
+            text=(canopy_env.state_dir, steps_text),
+        )
+
+    found = plan_report.report(conn, canopy_env.state_dir, now, 7)
+
+    assert [(n.low, n.high, n.plans) for n in found.lengths] == [(300, 400, 1), (400, 500, 1), (500, None, 1)]
+
+
 def test_a_week_with_no_plan_has_nothing_to_show(conn: sqlite3.Connection, canopy_env: CanopyEnv) -> None:
     """No plan, no rows: the groups and lengths are empty, not zeros."""
     found = plan_report.report(conn, canopy_env.state_dir, datetime.now(UTC), 7)
