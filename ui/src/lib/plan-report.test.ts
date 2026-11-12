@@ -59,20 +59,26 @@ describe('plan report', () => {
             { low: 0, high: 50 },
             { low: 50, high: 100 },
             { low: 200, high: 300 },
-            { low: 300, high: null },
+            { low: 300, high: 400 },
+            { low: 400, high: 500 },
+            { low: 500, high: null },
         ]
         expect(buckets.map((b) => lengthText(b, 50))).toEqual([
             'under 1 page',
             '1–2 pages',
             '4–6 pages',
-            '6 pages and up',
+            '6–8 pages',
+            '8–10 pages',
+            '10 pages and up',
         ])
         expect(lengthText({ low: 50, high: null }, 50)).toBe('1 page and up')
         expect(buckets.map((b) => lengthLinesText(b))).toEqual([
             'under 50 lines',
             '50–100 lines',
             '200–300 lines',
-            '300 lines and up',
+            '300–400 lines',
+            '400–500 lines',
+            '500 lines and up',
         ])
     })
 
