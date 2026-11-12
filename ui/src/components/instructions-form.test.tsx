@@ -1,10 +1,10 @@
-import { useQuery } from '@tanstack/react-query'
-import { cleanup, fireEvent, screen, within } from '@testing-library/react'
+import { QueryClient, useQuery } from '@tanstack/react-query'
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { api } from '@/api/client'
-import { instructionsQuery } from '@/api/queries'
+import { instructionsQuery, keys } from '@/api/queries'
 import type { AgentInstructions, InstructionsList, InstructionsVersions } from '@/api/types'
 import { renderRouted } from '@/test-utils'
 
@@ -52,9 +52,10 @@ const VERSIONS: InstructionsVersions = {
     keep: 10,
 }
 
-// Each change the server stand-in was sent, and what it answers a save with.
+// What the server stand-in lists, each change it was sent, and what it answers a save with.
+let listed: InstructionsList = LIST
 let sent: { method: string; path: string; body: unknown }[] = []
-let answer: (agent: string, text: string) => Response
+let answer: (agent: string, text: string) => Response | Promise<Response>
 
 const server: Middleware = {
     async onRequest({ request }) {
@@ -63,20 +64,26 @@ const server: Middleware = {
             return Response.json(VERSIONS)
         }
         if (request.method === 'GET') {
-            return Response.json(LIST)
+            return Response.json(listed)
         }
         const body = (await request.json()) as { text?: string }
         sent.push({ method: request.method, path, body })
         const agent = path.split('/')[3] ?? ''
-        const was = LIST.files.find((f) => f.agent === agent)
-        if (path.endsWith('/delete')) {
-            return Response.json({ ...was, text: null, sha256: null, missing: true, versions: 1 })
+        const was = listed.files.find((f) => f.agent === agent)
+        const answered = path.endsWith('/delete')
+            ? Response.json({ ...was, text: null, sha256: null, missing: true, versions: 1 })
+            : await answer(agent, body.text ?? '')
+        // What a change wrote is what the next read lists, as the server's file would be.
+        if (answered.ok) {
+            const written = (await answered.clone().json()) as AgentInstructions
+            listed = { ...listed, files: listed.files.map((f) => (f.agent === agent ? written : f)) }
         }
-        return answer(agent, body.text ?? '')
+        return answered
     },
 }
 
 beforeEach(() => {
+    listed = LIST
     sent = []
     answer = (agent, text) => {
         const was = LIST.files.find((f) => f.agent === agent)
@@ -90,14 +97,30 @@ afterEach(() => {
     cleanup()
 })
 
+// A promise held until the test opens it: a request answered only then.
+function gate(): { held: Promise<null>; open: () => void } {
+    const openers: (() => void)[] = []
+    const held = new Promise<null>((resolve) => {
+        openers.push(() => resolve(null))
+    })
+    return {
+        held,
+        open: () => {
+            for (const opener of openers) {
+                opener()
+            }
+        },
+    }
+}
+
 // The page as its route draws it: the form over the files as the query holds them, so a change's answer reaches it.
 function Page() {
     const { data } = useQuery(instructionsQuery)
     return data === undefined ? null : <InstructionsForm list={data} />
 }
 
-async function renderPage() {
-    const rendered = await renderRouted(<Page />, { at: '/settings/instructions' })
+async function renderPage(client = new QueryClient()) {
+    const rendered = await renderRouted(<Page />, { at: '/settings/instructions', client })
     await screen.findByTestId('instructions-worker')
     return rendered
 }
@@ -153,7 +176,11 @@ describe('InstructionsForm', () => {
 
         await within(panel('worker')).findByText('Saved worker-instructions.md: runs started from now read it.')
         expect(sent).toEqual([
-            { method: 'PUT', path: '/api/instructions/worker', body: { text: 'Run the linters.', sha256: 'aaa' } },
+            {
+                method: 'PUT',
+                path: '/api/instructions/worker',
+                body: { text: 'Run the linters.', path: WORKER, sha256: 'aaa' },
+            },
         ])
         expect(text.value).toBe('Run the linters.\n')
         expect(panel('worker').dataset['changed']).toBeUndefined()
@@ -189,7 +216,7 @@ describe('InstructionsForm', () => {
             {
                 method: 'PUT',
                 path: '/api/instructions/overseer',
-                body: { text: 'Dispatch urgent first.', sha256: null },
+                body: { text: 'Dispatch urgent first.', path: `${CONFIG}/instructions/overseer.md`, sha256: null },
             },
         ])
         expect(field('overseer', 'Overseer').value).toBe('Dispatch urgent first.\n')
@@ -209,7 +236,13 @@ describe('InstructionsForm', () => {
         fireEvent.click(button(within(reviewer).getByRole('group', { name: 'Delete reviewer.md?' }), 'Delete'))
 
         await within(reviewer).findByText('Deleted reviewer.md: runs started from now read none.')
-        expect(sent).toEqual([{ method: 'POST', path: '/api/instructions/reviewer/delete', body: { sha256: 'rrr' } }])
+        expect(sent).toEqual([
+            {
+                method: 'POST',
+                path: '/api/instructions/reviewer/delete',
+                body: { path: `${CONFIG}/instructions/reviewer.md`, sha256: 'rrr' },
+            },
+        ])
         expect(within(reviewer).queryByRole('textbox')).toBeNull()
         expect(button(reviewer, 'Create')).toBeTruthy()
     })
@@ -271,5 +304,46 @@ describe('InstructionsForm', () => {
         await within(panel('worker')).findByText(/refused \(stale\)/u)
         // What was written stays, to save again once the file is read again.
         expect(text.value).toBe('Short.')
+    })
+
+    it('refuses to save an edit over a file read again since it began, and says so', async () => {
+        const client = new QueryClient()
+        await renderPage(client)
+        fireEvent.change(field('worker', 'Worker'), { target: { value: 'Mine.' } })
+        expect(within(panel('worker')).queryByTestId('instructions-behind')).toBeNull()
+
+        // Changed by hand meanwhile, and read again: the edit keeps the version it began from.
+        listed = {
+            ...LIST,
+            files: LIST.files.map((f) => (f.agent === 'worker' ? { ...f, text: 'Theirs.\n', sha256: 'ccc' } : f)),
+        }
+        await client.refetchQueries({ queryKey: keys.instructions })
+        await within(panel('worker')).findByTestId('instructions-behind')
+        fireEvent.click(button(panel('worker'), 'Save'))
+
+        await waitFor(() => expect(sent).toHaveLength(1))
+        expect(sent.at(-1)).toEqual({
+            method: 'PUT',
+            path: '/api/instructions/worker',
+            body: { text: 'Mine.', path: WORKER, sha256: 'aaa' },
+        })
+    })
+
+    it('keeps words typed while a save was on its way', async () => {
+        const save = gate()
+        answer = async (agent, text) => {
+            await save.held
+            const was = LIST.files.find((f) => f.agent === agent)
+            return Response.json({ ...was, text: `${text}\n`, sha256: 'bbb', problem: null, missing: false })
+        }
+        await renderPage()
+        fireEvent.change(field('worker', 'Worker'), { target: { value: 'First.' } })
+        fireEvent.click(button(panel('worker'), 'Save'))
+        fireEvent.change(field('worker', 'Worker'), { target: { value: 'First. Second.' } })
+
+        save.open()
+        await waitFor(() => expect(button(panel('worker'), 'Save').disabled).toBe(false))
+        expect(field('worker', 'Worker').value).toBe('First. Second.')
+        expect(indexEntry('Worker unsaved')).toBeTruthy()
     })
 })

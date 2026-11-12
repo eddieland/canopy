@@ -22,8 +22,19 @@ import { fileName, instructionsState, READERS, savedBytes, unsavedClause } from 
 import type { InstructionsReader, InstructionsState } from '@/lib/instructions'
 import { cn } from '@/lib/utils'
 
-/** What the operator has written and not saved, by agent: none for an agent whose field holds its file's text. */
-type Drafts = Partial<Record<InstructionsAgent, string>>
+/** What the operator has written for one agent and not saved, and the version of its file the edit began from. */
+interface Draft {
+    /** The text in its editor. */
+    text: string
+    /** The hash of the file as the page read it when the edit began, which a save names; null for no file then. */
+    base: string | null
+}
+
+/** Each agent's edit not saved: none for an agent whose field holds its file's text. */
+type Drafts = Partial<Record<InstructionsAgent, Draft>>
+
+/** A change a panel sends: a save of its text over the version its edit began from, or a delete of its file. */
+type Change = { kind: 'save'; text: string; base: string | null } | { kind: 'delete' }
 
 // The accent hairline at the start of what holds an unsaved change, as a config page's changed row wears it.
 const CHANGED = 'relative before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-accent'
@@ -55,14 +66,28 @@ export function InstructionsForm({ list }: { list: InstructionsList }) {
         withResolver: true,
     })
 
-    function draft(of: InstructionsAgent, text: string | undefined) {
+    // An edit keeps the version it began from, so a read since, which changes the file's hash under it, cannot make a
+    // save of it land on text the operator never saw: the save names the version the edit began from.
+    function draft(of: InstructionsAgent, text: string | undefined, base: string | null) {
         setDrafts((was) => {
             const next = { ...was }
             if (text === undefined) {
                 delete next[of]
             } else {
-                next[of] = text
+                next[of] = { text, base: was[of]?.base ?? base }
             }
+            return next
+        })
+    }
+
+    // After a save of `text`: the edit ends only if it is still that text, so words typed while it was sent stay.
+    function saved(of: InstructionsAgent, text: string) {
+        setDrafts((was) => {
+            if (was[of]?.text !== text) {
+                return was
+            }
+            const next = { ...was }
+            delete next[of]
             return next
         })
     }
@@ -111,7 +136,8 @@ export function InstructionsForm({ list }: { list: InstructionsList }) {
                                 file={file}
                                 maxBytes={list.max_bytes}
                                 draft={drafts[reader.agent]}
-                                onDraft={(text) => draft(reader.agent, text)}
+                                onDraft={(text) => draft(reader.agent, text, file.sha256)}
+                                onSaved={(text) => saved(reader.agent, text)}
                             />
                         )
                     })}
@@ -152,49 +178,58 @@ function InstructionsFile({
     maxBytes,
     draft,
     onDraft,
+    onSaved,
 }: {
     reader: InstructionsReader
     file: AgentInstructions
     maxBytes: number
-    draft: string | undefined
+    draft: Draft | undefined
     onDraft: (text: string | undefined) => void
+    onSaved: (text: string) => void
 }) {
     const client = useQueryClient()
     const [creating, setCreating] = useState(false)
     const [confirming, setConfirming] = useState(false)
     const saved = file.text ?? ''
-    const text = draft ?? saved
+    const text = draft?.text ?? saved
+    // The file changed under the edit since it began: a save of it is refused, rather than written over that change.
+    const behind = draft !== undefined && draft.base !== file.sha256
     const bytes = savedBytes(text)
     const over = bytes > maxBytes
     const state = instructionsState(file)
     const chip = STATE_CHIP[state]
     const name = fileName(file.path)
 
-    function changed(written: AgentInstructions) {
+    function changed(written: AgentInstructions, change: Change) {
         client.setQueryData<InstructionsList>(keys.instructions, (was) =>
             was === undefined
                 ? was
                 : { ...was, files: was.files.map((f) => (f.agent === written.agent ? written : f)) },
         )
-        void client.invalidateQueries({ queryKey: keys.instructionsVersions(written.agent) })
-        onDraft(undefined)
+        // Read the rest again too: another agent's key may name the same file.
+        void client.invalidateQueries({ queryKey: keys.instructions })
+        if (change.kind === 'save') {
+            onSaved(change.text)
+        } else {
+            onDraft(undefined)
+        }
         setCreating(false)
         setConfirming(false)
     }
 
     // One mutation for both, so what it says, and any refusal, is always the latest change's.
     const change = useMutation({
-        mutationFn: (kind: 'save' | 'delete') =>
-            kind === 'save'
-                ? saveInstructions(file.agent, text, file.sha256)
-                : deleteInstructions(file.agent, file.sha256 ?? ''),
+        mutationFn: (to: Change) =>
+            to.kind === 'save'
+                ? saveInstructions(file.agent, to.text, file.path, to.base)
+                : deleteInstructions(file.agent, file.path, file.sha256 ?? ''),
         onSuccess: changed,
     })
     const pending = change.isPending
     // A default not there shows no editor until Create, or a restored version, opens one.
     const editing = (file.text !== null || file.missing) && (state !== 'none' || creating || draft !== undefined)
     const outcome = change.isSuccess
-        ? change.variables === 'save'
+        ? change.variables.kind === 'save'
             ? `Saved ${name}: runs started from now read it.`
             : `Deleted ${name}: runs started from now read none.`
         : null
@@ -246,7 +281,10 @@ function InstructionsFile({
             {editing ? (
                 <PanelFooter>
                     <div className="flex flex-wrap items-center gap-2">
-                        <Button onClick={() => change.mutate('save')} disabled={draft === undefined || over || pending}>
+                        <Button
+                            onClick={() => change.mutate({ kind: 'save', text, base: draft?.base ?? file.sha256 })}
+                            disabled={draft === undefined || over || pending}
+                        >
                             <Save />
                             Save
                         </Button>
@@ -304,7 +342,7 @@ function InstructionsFile({
                             <Button
                                 variant="destructive"
                                 size="sm"
-                                onClick={() => change.mutate('delete')}
+                                onClick={() => change.mutate({ kind: 'delete' })}
                                 disabled={pending}
                             >
                                 Delete
@@ -315,6 +353,12 @@ function InstructionsFile({
                         </fieldset>
                     ) : (
                         <p className="text-xs text-muted-foreground">{saveText(name, file.missing)}</p>
+                    )}
+                    {behind && (
+                        <p className="text-xs text-status-blocked" data-testid="instructions-behind">
+                            {name} changed since you began this edit, so Save is refused: Revert shows it as it is now,
+                            then redo yours.
+                        </p>
                     )}
                     <Notice error={change.error}>{draft === undefined ? outcome : null}</Notice>
                 </PanelFooter>

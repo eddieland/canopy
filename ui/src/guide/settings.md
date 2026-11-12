@@ -148,8 +148,10 @@ ten.
 
 A save writes the file in place, and every run started from then on reads the new text; a run already going keeps the
 prompt it started with. If the file changed since the page read it, say you edited it in your own editor meanwhile,
-the change is refused rather than quietly flattening your other edit: **Read again**, under the title, then decide
-which of you was right. It keeps whatever you haven't saved. Leave the page with an edit unsaved and it asks first, as
+the change is refused rather than quietly flattening your other edit. **Read again**, under the title, fetches the file
+as it is now and keeps whatever you haven't saved, but an edit you began before the file changed stays refused, and its
+panel says so: **Revert** shows the file as it is now, and then you redo yours. Choosing which of you was right is a
+job for a person, not a hash. Leave the page with an edit unsaved and it asks first, as
 a plan does.
 
 The page never chooses which file: it won't write a key or aim an agent at some other file of yours. That's on purpose.

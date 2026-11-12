@@ -14,6 +14,7 @@ versions in the operator-only state directory, the newest `KEEP_VERSIONS`, which
 from __future__ import annotations
 
 import contextlib
+import errno
 import hashlib
 import os
 import secrets
@@ -50,6 +51,9 @@ TOO_LARGE = "too_large"
 STALE = "stale"
 UNSAFE_FILE = "unsafe_file"
 NO_VERSION = "no_version"
+
+# How much of a file each read takes.
+_CHUNK = 64 * 1024
 
 # A version's name: when it was kept, to the microsecond, in UTC, so names sort as times do; then what made it.
 _STAMP = "%Y%m%dT%H%M%S%fZ"
@@ -106,10 +110,21 @@ class Version:
 
 @dataclass(frozen=True)
 class _Reading:
-    """What a read of a file found: its bytes and mode, or that there is none."""
+    """What a read of a file found, or that there is none: the start of its bytes, its hash and size, and its mode."""
 
-    data: bytes | None
+    #: Its first `_MAX_SHOWN` bytes and one more, so a file past them is known as such; None when there is none.
+    head: bytes | None
+    #: The SHA-256, hex, of all its bytes; None when there is none.
+    sha256: str | None
+    #: Its size in bytes.
+    size: int
+    #: Its permission bits; None when there is none.
     mode: int | None
+
+    @property
+    def whole(self) -> bytes | None:
+        """All its bytes, when the read kept them all: None when there is no file, or it is past `_MAX_SHOWN`."""
+        return self.head if self.head is not None and self.size <= _MAX_SHOWN else None
 
 
 def key_of(agent: StandingAgent) -> str:
@@ -151,18 +166,26 @@ def read(config: Config, state_dir: Path, agent: StandingAgent) -> Instructions:
         return found(None, None, r.reason)
     except OSError as e:
         return found(None, None, f"cannot be read: {e.strerror}")
-    if reading.data is None:
+    if reading.head is None:
         # The default not there is no instructions at all; a file the key names not there refuses every run.
         why = None if source == "default" else "missing: every run of it is refused until it exists"
         return found(None, None, why, missing=True)
     text = None
-    if len(reading.data) <= _MAX_SHOWN:
+    if reading.whole is not None:
         with contextlib.suppress(UnicodeDecodeError):
-            text = reading.data.decode("utf-8")
-    return found(text, hashlib.sha256(reading.data).hexdigest(), _problem(reading.data))
+            text = reading.whole.decode("utf-8")
+    return found(text, reading.sha256, _problem(reading))
 
 
-def save(config: Config, state_dir: Path, agent: StandingAgent, text: str, *, read_sha256: str | None) -> Instructions:
+def save(
+    config: Config,
+    state_dir: Path,
+    agent: StandingAgent,
+    text: str,
+    *,
+    read_path: Path,
+    read_sha256: str | None,
+) -> Instructions:
     """Write the operator's `text` over `agent`'s standing instructions file, as their own editor would.
 
     The page saves through this (TRUST_MODEL T8), over the agent's file, which it makes when it is not there, readable
@@ -174,8 +197,9 @@ def save(config: Config, state_dir: Path, agent: StandingAgent, text: str, *, re
         The file as saved.
 
     Raises:
-        Refused: `inside_run` inside one of canopy's own runs; `too_large` for text over `MAX_BYTES`; `stale` when
-            the file changed since the page read it, by `read_sha256`, None for a file that was not there;
+        Refused: `inside_run` inside one of canopy's own runs; `too_large` for text over `MAX_BYTES`, or a file there
+            past what a version keeps; `stale` when the agent's file is not `read_path`, the one the page read, since
+            the config was read again, or it changed since, by `read_sha256`, None for a file that was not there;
             `unsafe_file` for a file that is a link, not a regular file, or not the operator's, or a directory that is
             not theirs or that a group or others may write in.
     """
@@ -185,20 +209,27 @@ def save(config: Config, state_dir: Path, agent: StandingAgent, text: str, *, re
     data = text.encode("utf-8")
     if len(data) > MAX_BYTES:
         raise Refused(TOO_LARGE, f"the text is {len(data)} bytes; a run takes at most {MAX_BYTES}")
-    path = config.paths.instructions_file(agent)
+    path = _same_file(config, agent, read_path)
     configured = config.paths.configured_instructions(agent) is not None
     # One change at a time in this workspace, so two made on the same read cannot both pass the hash check.
     with lock.hold(state_dir / "instructions.lock", wait=True):
         before = _read(path)
         _check_unchanged(path, before, read_sha256)
         with _directory(path, make=not configured) as dir_fd:
-            if before.data is not None:
-                _keep(state_dir, agent, before.data, "edit")
+            if before.head is not None:
+                _keep(state_dir, agent, _kept(path, before), "edit")
             _replace(dir_fd, path, before, data, read_sha256)
     return read(config, state_dir, agent)
 
 
-def delete(config: Config, state_dir: Path, agent: StandingAgent, *, read_sha256: str) -> Instructions:
+def delete(
+    config: Config,
+    state_dir: Path,
+    agent: StandingAgent,
+    *,
+    read_path: Path,
+    read_sha256: str,
+) -> Instructions:
     """Delete `agent`'s default standing instructions file, keeping it among its versions first.
 
     Only the default, `<paths.instructions>/<agent>.md`: a run reads it only while it is there, so once it is gone the
@@ -209,11 +240,12 @@ def delete(config: Config, state_dir: Path, agent: StandingAgent, *, read_sha256
 
     Raises:
         Refused: `inside_run` inside one of canopy's own runs; `configured` when `paths.<agent>_instructions` names
-            the file; `stale` when it is not there, or changed since the page read it, by `read_sha256`;
+            the file; `stale` when the agent's file is not `read_path`, or it is not there, or changed since the page
+            read it, by `read_sha256`;
             `unsafe_file` as `save` refuses it.
     """
     conversation.check_operator()
-    path = config.paths.instructions_file(agent)
+    path = _same_file(config, agent, read_path)
     if config.paths.configured_instructions(agent) is not None:
         raise Refused(
             CONFIGURED,
@@ -224,8 +256,8 @@ def delete(config: Config, state_dir: Path, agent: StandingAgent, *, read_sha256
         before = _read(path)
         _check_unchanged(path, before, read_sha256)
         with _directory(path, make=False) as dir_fd:
-            if before.data is not None:
-                _keep(state_dir, agent, before.data, "delete")
+            if before.head is not None:
+                _keep(state_dir, agent, _kept(path, before), "delete")
             try:
                 os.unlink(path.name, dir_fd=dir_fd)
             except OSError as e:
@@ -243,7 +275,7 @@ def versions(state_dir: Path, agent: StandingAgent) -> list[Version]:
     directory = state_dir / VERSIONS_DIR / agent
     for name in reversed(_version_names(state_dir, agent)):
         try:
-            data = _read(directory / name).data
+            data = _read(directory / name).whole
         except (Refused, OSError):
             continue
         if data is None:
@@ -265,6 +297,24 @@ def versions(state_dir: Path, agent: StandingAgent) -> list[Version]:
             ),
         )
     return found
+
+
+def _same_file(config: Config, agent: StandingAgent, read_path: Path) -> Path:
+    """Return `agent`'s file, refusing a change when it is not the one the page read.
+
+    The config may have been read again since, naming another file: a change made on the page's read of one must not
+    land on the other.
+
+    Returns:
+        The agent's file.
+
+    Raises:
+        Refused: `stale` when it is not `read_path`.
+    """
+    path = config.paths.instructions_file(agent)
+    if path != read_path:
+        raise Refused(STALE, f"{key_of(agent)} now resolves to {path}, not {read_path}; read it again")
+    return path
 
 
 def _version_names(state_dir: Path, agent: StandingAgent) -> list[str]:
@@ -310,43 +360,74 @@ def _prune(directory: Path, names: Sequence[str]) -> None:
             (directory / name).unlink()
 
 
-def _problem(data: bytes) -> str | None:
-    """Why a run would refuse a file of `data`, as the prompts read it, or None when it would read it.
+def _problem(reading: _Reading) -> str | None:
+    """Why a run would refuse the file `reading` read, as the prompts read it, or None when it would read it.
 
     Returns:
         The reason, or None.
     """
-    if len(data) > MAX_BYTES:
-        return f"{len(data)} bytes, over the {MAX_BYTES} a run takes: every run of it is refused until it is trimmed"
+    if reading.size > MAX_BYTES:
+        return f"{reading.size} bytes, over the {MAX_BYTES} a run takes: every run of it is refused until it is trimmed"
     try:
-        data.decode("utf-8")
+        (reading.head or b"").decode("utf-8")
     except UnicodeDecodeError:
         return "not UTF-8: every run of it is refused until it is"
     return None
 
 
+def _kept(path: Path, before: _Reading) -> bytes:
+    """All of the file `before` read, to keep as a version before a change.
+
+    Returns:
+        Its bytes.
+
+    Raises:
+        Refused: `too_large` for a file past `_MAX_SHOWN`, which no version keeps: trimmed by hand, it can be changed.
+    """
+    if before.whole is None:
+        raise Refused(
+            TOO_LARGE,
+            f"{path} is {before.size} bytes, more than a version keeps; trim it by hand before changing it here",
+        )
+    return before.whole
+
+
 def _read(path: Path) -> _Reading:
     """Read the file at `path` without following a link, refusing one that is not the operator's own regular file.
 
+    It is opened without blocking, and checked as opened, so a link, a pipe, or another account's file put in its
+    place after any check is refused rather than read. Only its first `_MAX_SHOWN` bytes and one more are kept; the
+    rest is hashed as it is read, so a huge file costs the server no more memory than a small one.
+
     Returns:
-        Its bytes and mode, or none of either when there is no file.
+        What it read, or a reading of none when there is no file.
 
     Raises:
         Refused: `unsafe_file` for a link, anything but a regular file, or a file of another account's.
         OSError: The file is there and cannot be read.
     """
+    unsafe = f"{path} is a symlink, not a regular file, or not yours; the web UI writes only a file of your own"
     try:
-        st = path.lstat()
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     except FileNotFoundError:
-        return _Reading(None, None)
-    if not stat.S_ISREG(st.st_mode) or st.st_uid != os.getuid():
-        raise Refused(
-            UNSAFE_FILE,
-            f"{path} is a symlink, not a regular file, or not yours; the web UI writes only a file of your own",
-        )
-    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        return _Reading(None, None, 0, None)
+    except OSError as e:
+        if e.errno == errno.ELOOP:
+            raise Refused(UNSAFE_FILE, unsafe) from None
+        raise
     with os.fdopen(fd, "rb") as f:
-        return _Reading(f.read(), stat.S_IMODE(st.st_mode))
+        st = os.fstat(f.fileno())
+        if not stat.S_ISREG(st.st_mode) or st.st_uid != os.getuid():
+            raise Refused(UNSAFE_FILE, unsafe)
+        digest = hashlib.sha256()
+        head = bytearray()
+        size = 0
+        while chunk := f.read(_CHUNK):
+            digest.update(chunk)
+            size += len(chunk)
+            if len(head) <= _MAX_SHOWN:
+                head += chunk[: _MAX_SHOWN + 1 - len(head)]
+        return _Reading(bytes(head), digest.hexdigest(), size, stat.S_IMODE(st.st_mode))
 
 
 def _check_unchanged(path: Path, before: _Reading, read_sha256: str | None) -> None:
@@ -355,8 +436,7 @@ def _check_unchanged(path: Path, before: _Reading, read_sha256: str | None) -> N
     Raises:
         Refused: `stale` when the file's hash is not `read_sha256`, or it is there when the page read none.
     """
-    found = None if before.data is None else hashlib.sha256(before.data).hexdigest()
-    if found != read_sha256:
+    if before.sha256 != read_sha256:
         raise Refused(STALE, f"{path} changed since the page read it; read it again and redo the change")
 
 
@@ -388,7 +468,10 @@ def _directory(path: Path, *, make: bool) -> Iterator[int]:
         # As D053 holds the private config: no one else may write there, a group included, or they could put a file of
         # their own in place of the temporary one between its write and its rename.
         if st.st_uid != os.getuid() or st.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
-            raise Refused(UNSAFE_FILE, f"{path.parent} is not yours, or others may write in it; write {path} by hand")
+            raise Refused(
+                UNSAFE_FILE,
+                f"{path.parent} is not yours, or a group or others may write in it; write {path} by hand",
+            )
         yield dir_fd
     finally:
         os.close(dir_fd)

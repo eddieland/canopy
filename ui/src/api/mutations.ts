@@ -757,24 +757,34 @@ export async function saveConfig(hash: string, changes: Record<string, ConfigVal
 }
 
 /**
- * Write the operator's `text` over an agent's standing instructions file, over the version the page read (`sha256`,
- * null for a file that was missing). Refused `stale` when the file changed since, `not_set` when the config names none,
- * `too_large` past the bound a run takes, and `unsafe_file` for a link or a file not the operator's.
+ * Write the operator's `text` over an agent's standing instructions file, `path` as the page read it, over the version
+ * the edit began from (`sha256`, null for a file that was missing). Refused `stale` when the agent's file is another
+ * now or changed since, `too_large` past the bound a run takes, and `unsafe_file` for a link or a file not theirs.
  */
 export async function saveInstructions(
     agent: InstructionsAgent,
     text: string,
+    path: string,
     sha256: string | null,
 ): Promise<AgentInstructions> {
-    return unwrap(await api.PUT('/api/instructions/{agent}', { params: { path: { agent } }, body: { text, sha256 } }))
+    return unwrap(
+        await api.PUT('/api/instructions/{agent}', { params: { path: { agent } }, body: { text, path, sha256 } }),
+    )
 }
 
 /**
- * Delete an agent's default standing instructions file, over the version the page read, keeping it among its versions
- * first: its runs then hear none. Refused `configured` for a file the agent's key names, and `stale` when it changed.
+ * Delete an agent's default standing instructions file, `path` as the page read it, over the version it read, keeping
+ * it among its versions first: its runs then hear none. Refused `configured` for a file the agent's key names, and
+ * `stale` when the agent's file is another now or changed.
  */
-export async function deleteInstructions(agent: InstructionsAgent, sha256: string): Promise<AgentInstructions> {
-    return unwrap(await api.POST('/api/instructions/{agent}/delete', { params: { path: { agent } }, body: { sha256 } }))
+export async function deleteInstructions(
+    agent: InstructionsAgent,
+    path: string,
+    sha256: string,
+): Promise<AgentInstructions> {
+    return unwrap(
+        await api.POST('/api/instructions/{agent}/delete', { params: { path: { agent } }, body: { path, sha256 } }),
+    )
 }
 
 /** After a pause, a resume, or a notice set or cleared: show the state it left now, rather than wait for the stream. */

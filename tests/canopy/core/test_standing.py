@@ -30,6 +30,23 @@ def sha(text: str) -> str:
     return hashlib.sha256(text.encode()).hexdigest()
 
 
+def save(cfg: Config, ctx: Context, agent: StandingAgent, text: str, read: str | None) -> standing.Instructions:
+    """Save `text` as the page would, over the agent's file as `cfg` resolves it and the version `read`."""
+    return standing.save(
+        cfg,
+        ctx.ws.state_dir,
+        agent,
+        text,
+        read_path=cfg.paths.instructions_file(agent),
+        read_sha256=read,
+    )
+
+
+def delete(cfg: Config, ctx: Context, agent: StandingAgent, read: str) -> standing.Instructions:
+    """Delete as the page would, the agent's file as `cfg` resolves it, over the version `read`."""
+    return standing.delete(cfg, ctx.ws.state_dir, agent, read_path=cfg.paths.instructions_file(agent), read_sha256=read)
+
+
 def kept(ctx: Context, agent: StandingAgent) -> list[tuple[str, str | None]]:
     """Each kept version of `agent`'s file, newest first, as what made it and its text."""
     return [(v.kind, v.text) for v in standing.versions(ctx.ws.state_dir, agent)]
@@ -89,7 +106,7 @@ def test_a_save_replaces_the_text_a_run_reads_and_keeps_the_old_as_a_version(ctx
     path.chmod(0o640)
     cfg = with_paths(ctx, worker=path)
 
-    saved = standing.save(cfg, ctx.ws.state_dir, "worker", "Run the linters first.", read_sha256=sha(RULES))
+    saved = save(cfg, ctx, "worker", "Run the linters first.", sha(RULES))
 
     # A line is ended, as an editor would.
     assert path.read_text() == "Run the linters first.\n"
@@ -109,7 +126,7 @@ def test_a_save_makes_an_agents_default_and_its_directory_for_the_operator_alone
     cfg = with_paths(ctx, instructions=defaults)
     assert prompts.chore_instructions(cfg) == "None."
 
-    saved = standing.save(cfg, ctx.ws.state_dir, "chore", "Name a CI job by its workflow file.", read_sha256=None)
+    saved = save(cfg, ctx, "chore", "Name a CI job by its workflow file.", None)
 
     assert defaults.stat().st_mode & 0o777 == 0o700
     assert (defaults / "chore.md").stat().st_mode & 0o777 == 0o600
@@ -119,7 +136,7 @@ def test_a_save_makes_an_agents_default_and_its_directory_for_the_operator_alone
 
 def test_a_save_makes_a_missing_file_a_key_names(ctx: Context, tmp_path: Path) -> None:
     path = tmp_path / "reviewer.md"
-    saved = standing.save(with_paths(ctx, reviewer=path), ctx.ws.state_dir, "reviewer", RULES, read_sha256=None)
+    saved = save(with_paths(ctx, reviewer=path), ctx, "reviewer", RULES, None)
 
     assert path.read_text() == RULES
     assert path.stat().st_mode & 0o777 == 0o600
@@ -132,7 +149,7 @@ def test_a_delete_removes_a_default_so_its_runs_read_none_and_keeps_it(ctx: Cont
     (defaults / "overseer.md").write_text(RULES)
     cfg = with_paths(ctx, instructions=defaults)
 
-    gone = standing.delete(cfg, ctx.ws.state_dir, "overseer", read_sha256=sha(RULES))
+    gone = delete(cfg, ctx, "overseer", sha(RULES))
 
     assert not (defaults / "overseer.md").exists()
     assert (gone.missing, gone.problem, gone.versions) == (True, None, 1)
@@ -145,7 +162,7 @@ def test_a_file_a_key_names_is_never_deleted(ctx: Context, tmp_path: Path) -> No
     path.write_text(RULES)
 
     with pytest.raises(conversation.Refused) as refused:
-        standing.delete(with_paths(ctx, worker=path), ctx.ws.state_dir, "worker", read_sha256=sha(RULES))
+        delete(with_paths(ctx, worker=path), ctx, "worker", sha(RULES))
 
     assert refused.value.guard == "configured"
     assert "paths.worker_instructions" in refused.value.reason
@@ -156,7 +173,7 @@ def test_the_newest_ten_versions_are_kept_newest_first(ctx: Context, tmp_path: P
     cfg = with_paths(ctx, instructions=tmp_path / "instructions")
     read: str | None = None
     for n in range(12):
-        read = standing.save(cfg, ctx.ws.state_dir, "worker", f"Version {n}.", read_sha256=read).sha256
+        read = save(cfg, ctx, "worker", f"Version {n}.", read).sha256
 
     found = kept(ctx, "worker")
     assert len(found) == standing.KEEP_VERSIONS
@@ -178,9 +195,9 @@ def test_a_change_to_a_file_other_than_the_one_read_is_refused(ctx: Context, tmp
     cfg = with_paths(ctx, instructions=defaults)
 
     with pytest.raises(conversation.Refused) as saving:
-        standing.save(cfg, ctx.ws.state_dir, "worker", "new", read_sha256=given)
+        save(cfg, ctx, "worker", "new", given)
     with pytest.raises(conversation.Refused) as deleting:
-        standing.delete(cfg, ctx.ws.state_dir, "worker", read_sha256=given or sha("never read\n"))
+        delete(cfg, ctx, "worker", given or sha("never read\n"))
 
     assert (saving.value.guard, deleting.value.guard) == ("stale", "stale")
     assert path.read_text() == RULES
@@ -193,7 +210,7 @@ def test_a_save_past_the_bound_a_run_takes_is_refused(ctx: Context, tmp_path: Pa
     text = "…" * (prompts.MAX_STANDING_BYTES // 3 + 1)
 
     with pytest.raises(conversation.Refused) as refused:
-        standing.save(with_paths(ctx, worker=path), ctx.ws.state_dir, "worker", text, read_sha256=None)
+        save(with_paths(ctx, worker=path), ctx, "worker", text, None)
 
     assert refused.value.guard == "too_large"
     assert not path.exists()
@@ -207,7 +224,7 @@ def test_a_save_through_a_link_is_refused_and_writes_nothing(ctx: Context, tmp_p
     cfg = with_paths(ctx, worker=path)
 
     with pytest.raises(conversation.Refused) as refused:
-        standing.save(cfg, ctx.ws.state_dir, "worker", "new", read_sha256=sha(RULES))
+        save(cfg, ctx, "worker", "new", sha(RULES))
 
     assert refused.value.guard == "unsafe_file"
     assert target.read_text() == RULES
@@ -223,7 +240,7 @@ def test_a_save_in_a_directory_others_may_write_in_is_refused(ctx: Context, tmp_
     path = shared / "worker.md"
 
     with pytest.raises(conversation.Refused) as refused:
-        standing.save(with_paths(ctx, worker=path), ctx.ws.state_dir, "worker", RULES, read_sha256=None)
+        save(with_paths(ctx, worker=path), ctx, "worker", RULES, None)
 
     assert refused.value.guard == "unsafe_file"
     assert not path.exists()
@@ -237,10 +254,51 @@ def test_a_change_inside_a_run_is_refused(ctx: Context, tmp_path: Path) -> None:
 
     with mock.patch.dict(os.environ, {conversation.RUN_ID_ENV: "7"}):
         with pytest.raises(conversation.Refused) as saving:
-            standing.save(cfg, ctx.ws.state_dir, "overseer", RULES, read_sha256=None)
+            save(cfg, ctx, "overseer", RULES, None)
         with pytest.raises(conversation.Refused) as deleting:
-            standing.delete(cfg, ctx.ws.state_dir, "chore", read_sha256=sha(RULES))
+            delete(cfg, ctx, "chore", sha(RULES))
 
     assert (saving.value.guard, deleting.value.guard) == ("inside_run", "inside_run")
     assert not (defaults / "overseer.md").exists()
     assert (defaults / "chore.md").read_text() == RULES
+
+
+def test_a_huge_file_is_hashed_whole_but_kept_only_in_part_and_never_changed_here(ctx: Context, tmp_path: Path) -> None:
+    path = tmp_path / "worker.md"
+    big = b"x" * (20 * prompts.MAX_STANDING_BYTES)
+    path.write_bytes(big)
+    cfg = with_paths(ctx, worker=path)
+
+    found = standing.read(cfg, ctx.ws.state_dir, "worker")
+
+    assert (found.text, found.sha256) == (None, hashlib.sha256(big).hexdigest())
+    assert (found.problem or "").startswith(f"{len(big)} bytes, over ")
+    with pytest.raises(conversation.Refused) as refused:
+        save(cfg, ctx, "worker", "Trimmed.", found.sha256)
+    assert refused.value.guard == "too_large"
+    assert path.read_bytes() == big
+
+
+def test_a_pipe_in_a_files_place_is_refused_without_waiting_on_it(ctx: Context, tmp_path: Path) -> None:
+    path = tmp_path / "worker.md"
+    os.mkfifo(path)
+    cfg = with_paths(ctx, worker=path)
+
+    assert (standing.read(cfg, ctx.ws.state_dir, "worker").problem or "").startswith(f"{path} is a symlink, not a")
+    with pytest.raises(conversation.Refused) as refused:
+        save(cfg, ctx, "worker", RULES, None)
+    assert refused.value.guard == "unsafe_file"
+
+
+def test_a_change_to_a_file_the_config_no_longer_resolves_to_is_refused(ctx: Context, tmp_path: Path) -> None:
+    read = tmp_path / "old.md"
+    cfg = with_paths(ctx, worker=tmp_path / "new.md")
+
+    with pytest.raises(conversation.Refused) as saving:
+        standing.save(cfg, ctx.ws.state_dir, "worker", RULES, read_path=read, read_sha256=None)
+    with pytest.raises(conversation.Refused) as deleting:
+        standing.delete(cfg, ctx.ws.state_dir, "worker", read_path=read, read_sha256=sha(RULES))
+
+    assert (saving.value.guard, deleting.value.guard) == ("stale", "stale")
+    assert "now resolves to" in saving.value.reason
+    assert not (tmp_path / "new.md").exists()

@@ -44,6 +44,12 @@ describe('instructionsLine', () => {
     })
 })
 
+describe('instructionsLine with a blank file', () => {
+    it('counts a blank file as none, as a run reads it', () => {
+        expect(instructionsLine([file(), file({ text: '  \n' })])).toBe('1 of 2 agents hear standing instructions')
+    })
+})
+
 describe('unsavedClause', () => {
     it('names every agent with an edit not saved, in a list a sentence can hold', () => {
         expect(unsavedClause(['Worker'])).toBe('your edits to the worker instructions are not saved')

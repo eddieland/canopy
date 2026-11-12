@@ -10,6 +10,8 @@ started keeps the prompt it read.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import APIRouter
 
 from canopy.core import conversation, prompts, standing
@@ -48,13 +50,14 @@ def instructions_list(backend: BackendDep) -> InstructionsList:
 def instructions_save(agent: InstructionsAgent, body: InstructionsSave, backend: BackendDep) -> AgentInstructions:
     """Write the text over the agent's file, or make it when it is not there, keeping the file as it was first.
 
-    Refused, writing nothing: `inside_run`; `too_large` past `max_bytes`; `stale` when the file changed since `sha256`
-    was read; `unsafe_file` for a link, a file not the operator's, or a directory a group or others may write in.
+    Refused, writing nothing: `inside_run`; `too_large` past `max_bytes`; `stale` when the agent's file is not `path`,
+    or it changed since `sha256` was read; `unsafe_file` for a link, a file not the operator's, or a directory a group
+    or others may write in.
     """
     with backend.open() as ctx:
         cfg, state_dir = ctx.config, ctx.ws.state_dir
     try:
-        saved = standing.save(cfg, state_dir, agent, body.text, read_sha256=body.sha256)
+        saved = standing.save(cfg, state_dir, agent, body.text, read_path=Path(body.path), read_sha256=body.sha256)
     except conversation.Refused as r:
         raise RefusedError(r) from None
     _logged("standing instructions saved", saved, body.sha256)
@@ -76,7 +79,7 @@ def instructions_delete(agent: InstructionsAgent, body: InstructionsDelete, back
     with backend.open() as ctx:
         cfg, state_dir = ctx.config, ctx.ws.state_dir
     try:
-        deleted = standing.delete(cfg, state_dir, agent, read_sha256=body.sha256)
+        deleted = standing.delete(cfg, state_dir, agent, read_path=Path(body.path), read_sha256=body.sha256)
     except conversation.Refused as r:
         raise RefusedError(r) from None
     _logged("standing instructions deleted", deleted, body.sha256)

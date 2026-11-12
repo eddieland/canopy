@@ -60,13 +60,21 @@ def test_the_page_reads_each_agents_file_and_saves_one_over_the_version_it_read(
         "versions": 0,
     }
 
-    saved = c.put("/api/instructions/worker", json={"text": "Run the linters.", "sha256": sha(RULES)}, headers=headers)
+    saved = c.put(
+        "/api/instructions/worker",
+        json={"text": "Run the linters.", "path": str(path), "sha256": sha(RULES)},
+        headers=headers,
+    )
     assert saved.status_code == 200, saved.text
     assert (saved.json()["text"], saved.json()["versions"]) == ("Run the linters.\n", 1)
     assert path.read_text() == "Run the linters.\n"
 
     # The same read again is stale now; the file is left as the first save wrote it.
-    again = c.put("/api/instructions/worker", json={"text": "Something else", "sha256": sha(RULES)}, headers=headers)
+    again = c.put(
+        "/api/instructions/worker",
+        json={"text": "Something else", "path": str(path), "sha256": sha(RULES)},
+        headers=headers,
+    )
     assert refused(again).startswith("stale: ")
     assert path.read_text() == "Run the linters.\n"
 
@@ -81,17 +89,26 @@ def test_a_default_is_made_and_deleted_and_a_file_a_key_names_is_not(ctx: Contex
     defaults = tmp_path / "instructions"
     c, headers = signed_in_client(instructed(ctx, path, defaults))
 
-    made = c.put("/api/instructions/overseer", json={"text": "Dispatch urgent first."}, headers=headers)
+    overseer = str(defaults / "overseer.md")
+    made = c.put(
+        "/api/instructions/overseer",
+        json={"text": "Dispatch urgent first.", "path": overseer},
+        headers=headers,
+    )
     assert made.status_code == 200, made.text
     assert (defaults / "overseer.md").read_text() == "Dispatch urgent first.\n"
 
-    gone = c.post("/api/instructions/overseer/delete", json={"sha256": made.json()["sha256"]}, headers=headers)
+    gone = c.post(
+        "/api/instructions/overseer/delete",
+        json={"path": overseer, "sha256": made.json()["sha256"]},
+        headers=headers,
+    )
     assert gone.status_code == 200, gone.text
     assert (gone.json()["missing"], gone.json()["versions"]) == (True, 1)
     assert not (defaults / "overseer.md").exists()
     assert c.get("/api/instructions/overseer/versions").json()["versions"][0]["kind"] == "delete"
 
-    kept = c.post("/api/instructions/worker/delete", json={"sha256": sha(RULES)}, headers=headers)
+    kept = c.post("/api/instructions/worker/delete", json={"path": str(path), "sha256": sha(RULES)}, headers=headers)
     assert refused(kept).startswith("configured: ")
     assert path.read_text() == RULES
 
@@ -101,7 +118,7 @@ def test_a_change_inside_a_run_is_refused(ctx: Context, tmp_path: Path) -> None:
     c, headers = signed_in_client(instructed(ctx, path, tmp_path / "instructions"))
 
     with mock.patch.dict(os.environ, {conversation.RUN_ID_ENV: "7"}):
-        inside = c.put("/api/instructions/worker", json={"text": RULES}, headers=headers)
+        inside = c.put("/api/instructions/worker", json={"text": RULES, "path": str(path)}, headers=headers)
         assert refused(inside).startswith("inside_run: ")
     assert not path.exists()
 
@@ -109,4 +126,15 @@ def test_a_change_inside_a_run_is_refused(ctx: Context, tmp_path: Path) -> None:
 def test_an_agent_the_page_does_not_know_is_not_a_file(ctx: Context) -> None:
     c, headers = signed_in_client(ctx)
 
-    assert c.put("/api/instructions/planner", json={"text": RULES}, headers=headers).status_code == 422
+    assert c.put("/api/instructions/planner", json={"text": RULES, "path": "x"}, headers=headers).status_code == 422
+
+
+def test_text_a_little_past_the_bound_is_the_saves_own_refusal(ctx: Context, tmp_path: Path) -> None:
+    path = tmp_path / "worker.md"
+    c, headers = signed_in_client(instructed(ctx, path, tmp_path / "instructions"))
+
+    over = "x" * (prompts.MAX_STANDING_BYTES + 1)
+    saved = c.put("/api/instructions/worker", json={"text": over, "path": str(path)}, headers=headers)
+
+    assert refused(saved).startswith("too_large: ")
+    assert not path.exists()

@@ -74,8 +74,10 @@ class InstructionsVersions(Model):
 
 
 class InstructionsDelete(Model):
-    """A deletion of one agent's default file, over the version the page read."""
+    """A deletion of one agent's default file, over the file and version the page read."""
 
+    path: str
+    """The file the page read, `AgentInstructions.path`: the delete is refused if the agent's file is another now."""
     sha256: str
     """The hash the page read, `AgentInstructions.sha256`."""
 
@@ -90,9 +92,12 @@ class InstructionsList(Model):
 
 
 class InstructionsSave(Model):
-    """The operator's new text for one agent's standing instructions file, over the version the page read."""
+    """The operator's new text for one agent's standing instructions file, over the file and version the page read."""
 
-    text: Annotated[str, Field(max_length=prompts.MAX_STANDING_BYTES)]
-    """The whole text, in UTF-8 at most `max_bytes` bytes; empty leaves the agent's runs no instructions to read."""
+    # Bounded well past `max_bytes`, as a body, so text a little over it is the save's own `too_large` refusal.
+    text: Annotated[str, Field(max_length=16 * prompts.MAX_STANDING_BYTES)]
+    """The whole text; a save takes at most `max_bytes` bytes of it in UTF-8. Empty leaves the agent's runs none."""
+    path: str
+    """The file the page read, `AgentInstructions.path`: the save is refused if the agent's file is another now."""
     sha256: str | None = None
-    """The hash the page read, `AgentInstructions.sha256`; None for a file that was missing, which the save makes."""
+    """The hash the page read, `AgentInstructions.sha256`; None for a file that was not there, which the save makes."""

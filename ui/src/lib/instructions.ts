@@ -42,16 +42,18 @@ export function instructionsState(file: AgentInstructions): InstructionsState {
 }
 
 /**
- * The page's state in a line: how many agents hear standing instructions, then how many files are missing and how many
- * a run would refuse, each left out at none.
+ * The page's state in a line: how many agents hear standing instructions, a blank file counted as none, then how many
+ * files are missing and how many a run would refuse, each left out at none.
  */
 export function instructionsLine(files: readonly AgentInstructions[]): string {
     const states = files.map((file) => instructionsState(file))
     const count = (state: InstructionsState) => states.filter((s) => s === state).length
     const missing = count('missing')
     const refused = count('refused')
+    // A blank file is read as none, as a run reads it.
+    const heard = files.filter((f) => instructionsState(f) === 'set' && (f.text ?? '').trim() !== '').length
     return [
-        `${count('set')} of ${files.length} agents hear standing instructions`,
+        `${heard} of ${files.length} agents hear standing instructions`,
         missing > 0 ? `${missing} ${missing === 1 ? 'file' : 'files'} missing` : null,
         refused > 0 ? `${refused} ${refused === 1 ? 'file' : 'files'} a run would refuse` : null,
     ]
