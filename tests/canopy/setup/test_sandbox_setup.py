@@ -216,6 +216,8 @@ def test_a_template_kept_that_lets_a_run_read_a_directory_with_a_credential_is_t
         str(canopy_env.home / ".config" / "git"),
         "~/.config/git/credentials",
     ]
+    # What srt lets a run write it lets it read, and a path is the same however it is spelled.
+    old["filesystem"]["allowWrite"] += ["~/.local/../.cargo/"]
     (templates / "worker.json").write_text(json.dumps(old))
 
     report = sandbox.run_setup(SubprocessRunner(), "linux")
@@ -223,7 +225,8 @@ def test_a_template_kept_that_lets_a_run_read_a_directory_with_a_credential_is_t
     [todo] = report.todo
     git_dir = canopy_env.home / ".config" / "git"
     assert todo.startswith(
-        f"{templates / 'worker.json'} lets a sandboxed run read ~/.cargo, {git_dir}, and with them "
+        f"{templates / 'worker.json'} lets a sandboxed run read ~/.cargo, {git_dir}, ~/.local/../.cargo/, and "
+        "with them "
         "~/.cargo/credentials.toml, ~/.config/git/credentials:",
     )
 

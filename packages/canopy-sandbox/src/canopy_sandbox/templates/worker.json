@@ -51,6 +51,7 @@
       "~/.local/share/uv",
       "~/.nvm",
       "~/.cargo/bin",
+      "~/.cargo/env",
       "~/.cargo/registry",
       "~/.cargo/git",
       "~/.rustup",

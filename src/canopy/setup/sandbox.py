@@ -103,7 +103,7 @@ Add it to both, as the shipped template does (docs/SANDBOX.md)."""
 CREDENTIAL_DIRS = ((".cargo", "credentials.toml"), (".config/git", "credentials"))
 CREDENTIAL_READ = """\
 {template} lets a sandboxed run read {paths}, and with them {files}: tokens of yours, such as crates.io's, or what
-git's store helper saved. Name what a build reads instead, as the shipped template does: ~/.cargo/bin,
+git's store helper saved. Name what a build reads instead, as the shipped template does: ~/.cargo/bin, ~/.cargo/env,
 ~/.cargo/registry, and ~/.cargo/git, and ~/.config/git/config, ~/.config/git/ignore, and ~/.config/git/attributes
 (docs/SANDBOX.md)."""
 # The roles whose command is OpenCode, which keeps its data, logins included, in the run's own data directory.
@@ -230,30 +230,30 @@ def _data_todo(template: Path, role: str) -> str | None:
 
 
 def _secret_todo(template: Path) -> str | None:
-    """Say which of `template`'s `allowRead` entries let a run read a credential under HOME, if any.
+    """Say which of `template`'s `allowRead` and `allowWrite` entries let a run read a credential under HOME, if any.
 
-    An entry does when it is one of `CREDENTIAL_DIRS`, or a directory that holds one. An entry that names the
-    credential's own file is the operator's choice, as for a push through git's store helper, and is left alone.
+    An entry does when it is one of `CREDENTIAL_DIRS`, or a directory that holds one, however it spells the path: srt
+    binds what it allows writing readable too. An entry that names the credential's own file is the operator's choice,
+    as for a push through git's store helper, and is left alone.
 
     Returns:
-        The paragraph for the operator, or None for a template that needs nothing, or cannot be read.
+        The paragraph for the operator, or None for a template that needs nothing, or cannot be read: the wrapper
+        refuses to run with one it cannot read.
     """
     try:
         policy = json.loads(template.read_text(encoding="utf-8"))
-        readable: object = policy["filesystem"].get("allowRead", [])
+        lists: list[object] = [policy["filesystem"].get(key, []) for key in ("allowRead", "allowWrite")]
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return None
-    if not isinstance(readable, list):
-        return None
-    entries: list[object] = readable
+    entries: list[object] = [entry for entries in lists if isinstance(entries, list) for entry in entries]
     named: list[str] = []
     files: list[str] = []
     for entry in entries:
         if not isinstance(entry, str) or entry.startswith("@"):
             continue
-        place = Path(entry).expanduser()
+        place = Path(os.path.realpath(Path(entry).expanduser()))
         for directory, file in CREDENTIAL_DIRS:
-            secret = Path.home() / directory
+            secret = Path(os.path.realpath(Path.home() / directory))
             if place == secret or place in secret.parents:
                 named.append(entry)
                 files.append(f"~/{directory}/{file}")
