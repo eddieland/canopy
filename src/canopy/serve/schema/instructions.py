@@ -5,6 +5,7 @@ Built on `schema.Model`, as every API type is (schema/__init__.py).
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Annotated, Literal
 
 from pydantic import Field
@@ -28,17 +29,55 @@ class AgentInstructions(Model):
     agent: InstructionsAgent
     """The agent whose runs read it."""
     key: str
-    """The config key that names the file, `paths.<agent>_instructions`."""
-    path: str | None = None
-    """The file; None when the key names none, so the agent's runs read no standing instructions."""
+    """The config key that would name the file, `paths.<agent>_instructions`."""
+    path: str
+    """The file: the one the key names, or the agent's default, `<paths.instructions>/<agent>.md`."""
+    source: Literal["config", "default"]
+    """`config` when the key names the file; `default` when it is unset: a run reads the default while it is there."""
     text: str | None = None
     """Its text, the operator's own words; None when there is no file or `problem` says why it cannot be shown."""
     sha256: str | None = None
-    """The SHA-256, hex, of the file's bytes, which a save names as the version it replaces; None when there is none."""
+    """The SHA-256, hex, of the file's bytes, which a change names as the version it replaces; None with no file."""
     problem: str | None = None
-    """Why a run of the agent would refuse the file, or the page cannot show it; None when it is usable."""
+    """Why a run of the agent would refuse the file, or the page cannot show it; None when it is usable, or a default
+    that is not there."""
     missing: bool = False
-    """Whether the config names a file that is not there, which a save makes."""
+    """Whether there is no file: a run then reads none, or for a file the key names, is refused. A save makes it."""
+    versions: int = 0
+    """How many versions of it are kept: each the file as it was before a change."""
+
+
+class InstructionsVersion(Model):
+    """The file as it was before one change, kept among its agent's versions."""
+
+    id: str
+    """Its name among them."""
+    at: datetime
+    """When it was kept: when the change it went before was made."""
+    kind: Literal["edit", "delete"]
+    """What made it: a save over the file, or its deletion."""
+    sha256: str
+    """The SHA-256, hex, of its bytes."""
+    size: int
+    """Its size in bytes."""
+    text: str | None = None
+    """Its text, the operator's own words; None when it is not UTF-8 or too large to show."""
+
+
+class InstructionsVersions(Model):
+    """The kept versions of one agent's file, newest first."""
+
+    versions: list[InstructionsVersion] = []
+    """Each one, newest first."""
+    keep: int
+    """How many are kept: a change past them drops the oldest."""
+
+
+class InstructionsDelete(Model):
+    """A deletion of one agent's default file, over the version the page read."""
+
+    sha256: str
+    """The hash the page read, `AgentInstructions.sha256`."""
 
 
 class InstructionsList(Model):

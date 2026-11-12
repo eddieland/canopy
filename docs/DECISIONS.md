@@ -606,11 +606,12 @@ such as a shipped migration, may still cite one, and git history has its text.
 - Rejected: repairing or re-asking for a printed line; a server that writes the result to a file, which would let an
   agent's process write what canopy records.
 
-## D134. The web UI edits the text of the standing instructions files, never which files
+## D134. The web UI edits each agent's standing instructions file, and makes and deletes a default, never choosing one
 
-- The settings page writes each agent's `paths.*_instructions` file through `core/standing.py`, with a plan edit's
-  guards (TRUST_MODEL T8). No `paths.*` key becomes writable: D128's allowlist is unchanged.
-- Why: the operator (2026-11-12) asked to see and edit them there; they are the operator's words, as a plan edit is.
-- Residual: a save outlives the secret and is read as words by every later run of its agent; the `.bak` beside the
-  file, the log's hashes, and the page itself show a change the operator did not make.
-- Rejected: choosing the file from the page, which would let a stolen session point an agent at any file of theirs.
+- The instructions page writes an agent's file through `core/standing.py`, with a plan edit's guards (TRUST_MODEL T8):
+  the one `paths.<agent>_instructions` names, else `<paths.instructions>/<agent>.md`, which a run reads only while it
+  is there. It makes and deletes that default, never deletes a keyed file, and writes no `paths.*` key (D128 holds).
+- Why: the operator (2026-11-12) asked to see, edit, create, and delete them there, keeping a few versions of edits.
+- Residual: a change outlives the secret and is read as words by every later run of its agent; the newest ten
+  versions in the state directory, the log's hashes, and the page itself show a change the operator did not make.
+- Rejected: choosing the file, or writing the key, from the page: a stolen session could point an agent at any file.

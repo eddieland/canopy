@@ -979,7 +979,7 @@ def standing_instructions(config: Config) -> str:
     Raises:
         PromptError: The file cannot be read, is not UTF-8, or is over `MAX_STANDING_BYTES`.
     """
-    return _standing(config.paths.worker_instructions, "worker")
+    return _standing(config.paths.instructions_read("worker"), "worker")
 
 
 def overseer_instructions(config: Config) -> str:
@@ -991,7 +991,7 @@ def overseer_instructions(config: Config) -> str:
     Raises:
         PromptError: The file cannot be read, is not UTF-8, or is over `MAX_STANDING_BYTES`.
     """
-    return _standing(config.paths.overseer_instructions, "overseer")
+    return _standing(config.paths.instructions_read("overseer"), "overseer")
 
 
 def reviewer_instructions(config: Config) -> str:
@@ -1003,7 +1003,7 @@ def reviewer_instructions(config: Config) -> str:
     Raises:
         PromptError: The file cannot be read, is not UTF-8, or is over `MAX_STANDING_BYTES`.
     """
-    return _standing(config.paths.reviewer_instructions, "reviewer")
+    return _standing(config.paths.instructions_read("reviewer"), "reviewer")
 
 
 def chore_instructions(config: Config) -> str:
@@ -1014,7 +1014,7 @@ def chore_instructions(config: Config) -> str:
     Raises:
         PromptError: The file cannot be read, is not UTF-8, or is over `MAX_STANDING_BYTES`.
     """
-    return _standing(config.paths.chore_instructions, "chore")
+    return _standing(config.paths.instructions_read("chore"), "chore")
 
 
 def standing_section(text: str, reader: Reader) -> str:
@@ -1043,7 +1043,7 @@ def render_overseer(config: Config) -> str:
     except (OSError, UnicodeDecodeError) as e:
         raise PromptError(f"cannot read the overseer prompt {path}: {e}") from e
     section, plain = (f"{{{{{n}}}}}" for n in REQUIRED_STANDING)
-    if config.paths.overseer_instructions is not None and section not in text and plain not in text:
+    if config.paths.instructions_read("overseer") is not None and section not in text and plain not in text:
         raise PromptError(f"{path}: missing required placeholder {section} or {plain}")
     standing = overseer_instructions(config)
     return text.replace(section, standing_section(standing, "overseer")).replace(plain, standing)
@@ -1127,7 +1127,7 @@ def render_worker(
     rebase = REQUIRED_REBASE if config.trust.rebase and kind in COMMITS else ()
     noticed = REQUIRED_NOTICE if notice is not None else ()
     required = (*pr_skill, *rebase, *noticed, *_persona_required(persona), *required)
-    standing = (REQUIRED_STANDING,) if config.paths.worker_instructions is not None else ()
+    standing = (REQUIRED_STANDING,) if config.paths.instructions_read("worker") is not None else ()
     one_of = (*standing, *((_required_attribution(config),) if kind in COMMITS else ()))
     return render(config, name, values, required=(*base, *required), one_of=one_of)
 
@@ -1166,7 +1166,7 @@ def render_reviewer(
         "PERSONA": persona.text if persona is not None else "",
         "PLAN": plan or None,
     }
-    standing = (REQUIRED_STANDING,) if config.paths.reviewer_instructions is not None else ()
+    standing = (REQUIRED_STANDING,) if config.paths.instructions_read("reviewer") is not None else ()
     noticed = REQUIRED_NOTICE if notice is not None else ()
     noted = REQUIRED_NOTES if notes else ()
     followed = REQUIRED_PREVIOUS_REVIEW if previous else ()
@@ -1208,7 +1208,7 @@ def render_task(
     pr_skill = REQUIRED_PR_SKILL if config.runtime.pr_skill else ()
     noticed = REQUIRED_NOTICE if notice is not None else ()
     attached = REQUIRED_ATTACHMENTS if values["ATTACHMENTS"] is not None else ()
-    standing = (REQUIRED_STANDING,) if config.paths.worker_instructions is not None else ()
+    standing = (REQUIRED_STANDING,) if config.paths.instructions_read("worker") is not None else ()
     required = (*REQUIRED_TASK, *pr_skill, *noticed, *attached)
     return render(config, TASK, values, required=required, one_of=(*standing, _required_attribution(config)))
 
@@ -1233,7 +1233,7 @@ def render_reviser(
         **_standing_values(reviewer_instructions(config), "reviewer"),
         "PERSONA": persona.text if persona is not None else "",
     }
-    standing = (REQUIRED_STANDING,) if config.paths.reviewer_instructions is not None else ()
+    standing = (REQUIRED_STANDING,) if config.paths.instructions_read("reviewer") is not None else ()
     required = (*REQUIRED_REVISER, *_persona_required(persona))
     return render(config, REVISER, values, required=required, one_of=standing)
 

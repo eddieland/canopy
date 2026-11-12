@@ -43,6 +43,7 @@ from canopy.core import (
     records,
     review_runs,
     sql,
+    standing,
     workspace,
 )
 from canopy.core.context import db_path
@@ -148,9 +149,10 @@ trusted_reviewers = ["canopy:review", "lint-bot"]
 [paths]
 # `web`'s and `api`'s lists; `mobile` keeps none.
 checklists = "{checklists}"
-# The worker's and the reviewer's, so the settings page has files to show; the overseer and chores hear none.
+# The worker's, named here, so the instructions page has a file it edits and never deletes. The reviewer's is its
+# default, in `instructions/` beside this file, which the page may delete; the overseer and chores hear none, which it
+# may make.
 worker_instructions = "{config}/worker-instructions.md"
-reviewer_instructions = "{config}/reviewer-instructions.md"
 
 [runtime]
 # The mock's transcripts are in the events of version 1 (`transcripts`), deprecated: it runs 1 until they are ported.
@@ -341,6 +343,32 @@ Flag a behavior change that has no test. Leave formatting to the linters: a find
 """
 
 
+# The worker's file as it read before its last two saves, each kept as a version, so the page has some to list.
+_WORKER_VERSIONS = (
+    (timedelta(days=-6), "## Commits\n\n- Commit a review's fixes as new commits.\n"),
+    (
+        timedelta(days=-2, hours=-3),
+        (
+            "## Commits\n\n- Commit a review's fixes as new commits; never squash a branch a reviewer has read.\n"
+            "- Run `npm run lint` before every push.\n"
+        ),
+    ),
+)
+
+
+def _instructions(config_dir: Path, state_dir: Path) -> None:
+    # The worker's file the config names, the reviewer's default, and the worker's kept versions, each named as
+    # `standing` names a version it keeps: when it was kept, then what made it.
+    (config_dir / "worker-instructions.md").write_text(_WORKER_INSTRUCTIONS)
+    (config_dir / "instructions").mkdir(mode=0o700)
+    (config_dir / "instructions" / "reviewer.md").write_text(_REVIEWER_INSTRUCTIONS)
+    directory = state_dir / standing.VERSIONS_DIR / "worker"
+    directory.parent.mkdir(mode=0o700)
+    directory.mkdir(mode=0o700)
+    for offset, text in _WORKER_VERSIONS:
+        (directory / f"{(T0 + offset).strftime('%Y%m%dT%H%M%S%fZ')}-edit.md").write_text(text)
+
+
 def seed(directory: Path) -> Backend:
     """Write a workspace, a user config, and a seeded journal under `directory`, and return a Backend over them.
 
@@ -359,8 +387,6 @@ def seed(directory: Path) -> Backend:
     for name, title in ((CHORE, "Dependency advisories"), ("build-health", "Build health")):
         (prompts / f"{name}.md").write_text(f"# {title}\n\nCheck {name} for the mock workspace.\n")
     checklists.write(user_file.parent / "checklists")
-    (user_file.parent / "worker-instructions.md").write_text(_WORKER_INSTRUCTIONS)
-    (user_file.parent / "reviewer-instructions.md").write_text(_REVIEWER_INSTRUCTIONS)
     user_file.write_text(
         _USER_TOML.replace("{chores}", str(prompts))
         .replace("{config}", str(user_file.parent))
@@ -370,6 +396,7 @@ def seed(directory: Path) -> Backend:
     ws = workspace.load(root)
     cfg = config.load(root, user_file)
     workspace.ensure_state_dir(ws.state_dir)
+    _instructions(user_file.parent, ws.state_dir)
     slots_by_repo = _pools(root)
     # ABC-103's desk is open, on a slot of web's, and opening or closing one leases or returns a slot of these.
     opened = desks.Desks(root, slots_by_repo, at)

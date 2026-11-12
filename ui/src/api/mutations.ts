@@ -769,6 +769,14 @@ export async function saveInstructions(
     return unwrap(await api.PUT('/api/instructions/{agent}', { params: { path: { agent } }, body: { text, sha256 } }))
 }
 
+/**
+ * Delete an agent's default standing instructions file, over the version the page read, keeping it among its versions
+ * first: its runs then hear none. Refused `configured` for a file the agent's key names, and `stale` when it changed.
+ */
+export async function deleteInstructions(agent: InstructionsAgent, sha256: string): Promise<AgentInstructions> {
+    return unwrap(await api.POST('/api/instructions/{agent}/delete', { params: { path: { agent } }, body: { sha256 } }))
+}
+
 /** After a pause, a resume, or a notice set or cleared: show the state it left now, rather than wait for the stream. */
 export function showLoop(client: QueryClient, loop: LoopState): void {
     client.setQueryData(keys.loop, loop)

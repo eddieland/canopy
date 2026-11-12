@@ -1,19 +1,22 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useBlocker } from '@tanstack/react-router'
-import { Save, Undo2 } from 'lucide-react'
+import { FilePlus, History, Save, Trash2, Undo2, X } from 'lucide-react'
 import { useState } from 'react'
 
-import { saveInstructions } from '@/api/mutations'
-import { keys } from '@/api/queries'
-import type { AgentInstructions, InstructionsAgent, InstructionsList } from '@/api/types'
+import { deleteInstructions, saveInstructions } from '@/api/mutations'
+import { instructionsVersionsQuery, keys } from '@/api/queries'
+import type { AgentInstructions, InstructionsAgent, InstructionsList, InstructionsVersion } from '@/api/types'
+import { Age } from '@/components/age'
 import { Code } from '@/components/code'
 import { ConfirmLeave } from '@/components/confirm-leave'
 import { CopyButton } from '@/components/copy-button'
+import { Disclosure } from '@/components/disclosure'
 import { MarkdownField } from '@/components/markdown-field'
 import { Notice } from '@/components/notice'
 import { Panel, PanelFooter, PanelHeader } from '@/components/panel'
 import { Chip } from '@/components/status'
 import { Button } from '@/components/ui/button'
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { useFirstInView } from '@/hooks/use-first-in-view'
 import { fileName, instructionsState, READERS, savedBytes, unsavedClause } from '@/lib/instructions'
 import type { InstructionsReader, InstructionsState } from '@/lib/instructions'
@@ -27,8 +30,8 @@ const CHANGED = 'relative before:absolute before:inset-y-0 before:left-0 before:
 
 // Each state's chip in its panel's header, or none for a file a run reads as it is.
 const STATE_CHIP: Record<InstructionsState, { tone: 'plain' | 'failed'; meaning: string } | null> = {
-    none: { tone: 'plain', meaning: 'the config names no file, so its runs read none' },
-    missing: { tone: 'failed', meaning: 'the config names a file that is not there: every run of it is refused' },
+    none: { tone: 'plain', meaning: 'no file: its runs read none until you create one' },
+    missing: { tone: 'failed', meaning: 'its key names a file that is not there: every run of it is refused' },
     refused: { tone: 'failed', meaning: 'a run of it would refuse the file, and so every run of it is refused' },
     set: null,
 }
@@ -37,8 +40,9 @@ const STATE_CHIP: Record<InstructionsState, { tone: 'plain' | 'failed'; meaning:
  * Every agent's standing instructions file (DESIGN §12), each in a panel of its own: where it is, why a run would
  * refuse it, and its text in the Markdown editor, saved from its panel's foot over the version the page read. An index
  * of the agents sits beside them, marking the one in view and each with an edit not saved; each panel is its agent's
- * anchor (`#worker`). Leaving with an edit not saved asks first. Only a file the config names is written, never which
- * file (TRUST_MODEL T8).
+ * anchor (`#worker`). Leaving with an edit not saved asks first. An agent with no file creates its default, and a
+ * default can be deleted; a file a key names is only edited, and the page never chooses which file (TRUST_MODEL T8).
+ * Each panel lists its kept versions on demand, and restores one into its editor.
  */
 export function InstructionsForm({ list }: { list: InstructionsList }) {
     const [drafts, setDrafts] = useState<Drafts>({})
@@ -138,8 +142,9 @@ function IndexState({ file }: { file: AgentInstructions | undefined }) {
 
 /**
  * One agent's file in its panel: which runs read it and where it is, why a run would refuse it, then its text in the
- * editor, and in the panel's foot Save and Revert, what a save writes and what the text costs against the bound, then
- * what a save did. An agent whose key names no file says so, with no editor; one whose file cannot be shown says why.
+ * editor, and in the panel's foot Save and Revert, what a save writes, what the text costs against the bound, Delete
+ * for a default, then what a change did. An agent with no file says so and offers Create, which opens an empty editor;
+ * one whose file cannot be shown says why. Under it, its kept versions, read when opened.
  */
 function InstructionsFile({
     reader,
@@ -155,24 +160,44 @@ function InstructionsFile({
     onDraft: (text: string | undefined) => void
 }) {
     const client = useQueryClient()
+    const [creating, setCreating] = useState(false)
+    const [confirming, setConfirming] = useState(false)
     const saved = file.text ?? ''
     const text = draft ?? saved
     const bytes = savedBytes(text)
     const over = bytes > maxBytes
-    const mutation = useMutation({
-        mutationFn: () => saveInstructions(file.agent, text, file.sha256),
-        onSuccess: (written) => {
-            client.setQueryData<InstructionsList>(keys.instructions, (was) =>
-                was === undefined
-                    ? was
-                    : { ...was, files: was.files.map((f) => (f.agent === written.agent ? written : f)) },
-            )
-            onDraft(undefined)
-        },
-    })
     const state = instructionsState(file)
     const chip = STATE_CHIP[state]
-    const editable = file.path !== null && (file.text !== null || file.missing)
+    const name = fileName(file.path)
+
+    function changed(written: AgentInstructions) {
+        client.setQueryData<InstructionsList>(keys.instructions, (was) =>
+            was === undefined
+                ? was
+                : { ...was, files: was.files.map((f) => (f.agent === written.agent ? written : f)) },
+        )
+        void client.invalidateQueries({ queryKey: keys.instructionsVersions(written.agent) })
+        onDraft(undefined)
+        setCreating(false)
+        setConfirming(false)
+    }
+
+    // One mutation for both, so what it says, and any refusal, is always the latest change's.
+    const change = useMutation({
+        mutationFn: (kind: 'save' | 'delete') =>
+            kind === 'save'
+                ? saveInstructions(file.agent, text, file.sha256)
+                : deleteInstructions(file.agent, file.sha256 ?? ''),
+        onSuccess: changed,
+    })
+    const pending = change.isPending
+    // A default not there shows no editor until Create, or a restored version, opens one.
+    const editing = (file.text !== null || file.missing) && (state !== 'none' || creating || draft !== undefined)
+    const outcome = change.isSuccess
+        ? change.variables === 'save'
+            ? `Saved ${name}: runs started from now read it.`
+            : `Deleted ${name}: runs started from now read none.`
+        : null
     return (
         <Panel
             id={reader.agent}
@@ -186,25 +211,30 @@ function InstructionsFile({
             </PanelHeader>
             <div className="flex flex-col gap-2 p-3">
                 <p className="text-sm text-muted-foreground">
-                    Read by {reader.reaches}.{' '}
-                    {file.path === null ? (
-                        <>
-                            <Code>{file.key}</Code> names no file, so none of them hears any. Name one in your{' '}
-                            <Code>config.toml</Code> and Reload, on Settings, to write it here.
-                        </>
-                    ) : (
-                        <span className="inline-flex items-center gap-1" data-testid="instructions-path">
-                            <Code>{file.path}</Code>
-                            <CopyButton text={file.path} label={`${reader.label.toLowerCase()} instructions path`} />
-                        </span>
-                    )}
+                    Read by {reader.reaches}.{state === 'none' && !editing && <> None yet, so they hear nothing.</>}
+                </p>
+                {/* Where the file is, on a line of its own, and whether its key names it or it is the default. */}
+                <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                    <span className="inline-flex min-w-0 items-center gap-1" data-testid="instructions-path">
+                        <Code className="break-all">{file.path}</Code>
+                        <CopyButton text={file.path} label={`${reader.label.toLowerCase()} instructions path`} />
+                    </span>
+                    <span>
+                        {file.source === 'config' ? (
+                            <>
+                                named by <Code>{file.key}</Code>
+                            </>
+                        ) : (
+                            'its default, in your instructions folder'
+                        )}
+                    </span>
                 </p>
                 {file.problem !== null && (
                     <p className="text-sm text-status-failed" data-testid="instructions-problem">
                         {file.problem}
                     </p>
                 )}
-                {editable && (
+                {editing && (
                     <MarkdownField
                         value={text}
                         onValueChange={(value) => onDraft(value === saved ? undefined : value)}
@@ -213,24 +243,35 @@ function InstructionsFile({
                     />
                 )}
             </div>
-            {editable && file.path !== null && (
+            {editing ? (
                 <PanelFooter>
                     <div className="flex flex-wrap items-center gap-2">
-                        <Button
-                            onClick={() => mutation.mutate()}
-                            disabled={draft === undefined || over || mutation.isPending}
-                        >
+                        <Button onClick={() => change.mutate('save')} disabled={draft === undefined || over || pending}>
                             <Save />
                             Save
                         </Button>
-                        <Button
-                            variant="outline"
-                            onClick={() => onDraft(undefined)}
-                            disabled={draft === undefined || mutation.isPending}
-                        >
-                            <Undo2 />
-                            Revert
-                        </Button>
+                        {state === 'none' ? (
+                            <Button
+                                variant="outline"
+                                onClick={() => {
+                                    onDraft(undefined)
+                                    setCreating(false)
+                                }}
+                                disabled={pending}
+                            >
+                                <X />
+                                Cancel
+                            </Button>
+                        ) : (
+                            <Button
+                                variant="outline"
+                                onClick={() => onDraft(undefined)}
+                                disabled={draft === undefined || pending}
+                            >
+                                <Undo2 />
+                                Revert
+                            </Button>
+                        )}
                         <span
                             className={cn(
                                 'ml-auto readout text-xs',
@@ -241,23 +282,160 @@ function InstructionsFile({
                             {bytes.toLocaleString()} of {maxBytes.toLocaleString()} bytes
                             {over && ': a run would refuse it'}
                         </span>
+                        {file.source === 'default' && !file.missing && !confirming && (
+                            // The quietest of the row, at its end, as a forget is: the loudest button is clicked first.
+                            <Button
+                                variant="ghost"
+                                className="text-status-failed"
+                                onClick={() => setConfirming(true)}
+                                disabled={pending}
+                            >
+                                <Trash2 />
+                                Delete
+                            </Button>
+                        )}
                     </div>
-                    <p className="text-xs text-muted-foreground">{saveText(file.path, file.missing)}</p>
-                    <Notice error={mutation.error}>
-                        {mutation.isSuccess && draft === undefined
-                            ? `Saved ${fileName(file.path)}: runs started from now read it.`
-                            : null}
-                    </Notice>
+                    {confirming ? (
+                        <fieldset
+                            aria-label={`Delete ${name}?`}
+                            className="flex flex-wrap items-center gap-2 text-xs text-status-failed"
+                        >
+                            <span>Delete {name}? Its runs then hear nothing; its text is kept among the versions.</span>
+                            <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => change.mutate('delete')}
+                                disabled={pending}
+                            >
+                                Delete
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={() => setConfirming(false)} disabled={pending}>
+                                Keep it
+                            </Button>
+                        </fieldset>
+                    ) : (
+                        <p className="text-xs text-muted-foreground">{saveText(name, file.missing)}</p>
+                    )}
+                    <Notice error={change.error}>{draft === undefined ? outcome : null}</Notice>
                 </PanelFooter>
+            ) : (
+                state === 'none' && (
+                    <PanelFooter>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Button variant="outline" onClick={() => setCreating(true)}>
+                                <FilePlus />
+                                Create
+                            </Button>
+                        </div>
+                        <Notice error={change.error}>{outcome}</Notice>
+                    </PanelFooter>
+                )
+            )}
+            {file.versions > 0 && (
+                <Versions
+                    agent={file.agent}
+                    count={file.versions}
+                    onRestore={(version) => onDraft(version === saved ? undefined : version)}
+                />
             )}
         </Panel>
     )
 }
 
-// What Save will do, the line under it: write the file, keeping the one there, or make the one the config names.
-function saveText(path: string, missing: boolean): string {
-    const name = fileName(path)
+/**
+ * An agent's kept versions, under a disclosure, read when it opens: each the file as it was before an edit or a
+ * delete, when, its size, its text on Show, and Restore, which puts that text in the editor as an edit to save.
+ */
+function Versions({
+    agent,
+    count,
+    onRestore,
+}: {
+    agent: InstructionsAgent
+    count: number
+    onRestore: (text: string) => void
+}) {
+    const [open, setOpen] = useState(false)
+    const read = useQuery({ ...instructionsVersionsQuery(agent), enabled: open })
+    return (
+        <Collapsible asChild open={open} onOpenChange={setOpen}>
+            <div className="border-t px-3 py-1.5">
+                <Disclosure
+                    open={open}
+                    what={`versions (${count})`}
+                    of={agent}
+                    className="-ml-2"
+                    data-testid="instructions-versions"
+                />
+                <CollapsibleContent className="pb-1.5">
+                    {read.isPending && <p className="text-xs text-muted-foreground">Reading the versions…</p>}
+                    <Notice error={read.error} />
+                    {read.data !== undefined && (
+                        <ul className="divide-y" aria-label={`Versions of the ${agent} instructions`}>
+                            {read.data.versions.map((version) => (
+                                <VersionRow key={version.id} version={version} onRestore={onRestore} />
+                            ))}
+                        </ul>
+                    )}
+                    {read.data !== undefined && (
+                        <p className="pt-1 text-xs text-muted-foreground">
+                            The last {read.data.keep} are kept; a change past them drops the oldest.
+                        </p>
+                    )}
+                </CollapsibleContent>
+            </div>
+        </Collapsible>
+    )
+}
+
+/** One kept version: when, before what, its size, then Show for its text and Restore into the editor. */
+function VersionRow({ version, onRestore }: { version: InstructionsVersion; onRestore: (text: string) => void }) {
+    const [shown, setShown] = useState(false)
+    const { text } = version
+    return (
+        <li className="flex flex-col gap-1.5 py-1.5" data-testid="instructions-version">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <History aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
+                <span className="text-sm">
+                    Before {version.kind === 'delete' ? 'a delete' : 'an edit'}, <Age variant="ago" at={version.at} />
+                </span>
+                <span className="readout text-xs text-muted-foreground">{version.size.toLocaleString()} bytes</span>
+                <span className="ml-auto flex items-center gap-1">
+                    <Button variant="ghost" size="xs" onClick={() => setShown(!shown)} disabled={text === null}>
+                        {shown ? 'Hide' : 'Show'}
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="xs"
+                        onClick={() => {
+                            if (text !== null) {
+                                onRestore(text)
+                            }
+                        }}
+                        disabled={text === null}
+                        title="Puts this text in the editor, to save as any edit"
+                    >
+                        Restore
+                    </Button>
+                </span>
+            </div>
+            {shown && text !== null && (
+                <pre
+                    className={cn(
+                        'max-h-60 overflow-auto rounded-sm bg-surface-raised p-2',
+                        'font-mono text-xs whitespace-pre-wrap',
+                    )}
+                >
+                    {text}
+                </pre>
+            )}
+        </li>
+    )
+}
+
+// What Save will do, the line under it: write the file, keeping the one there as a version, or make it.
+function saveText(name: string, missing: boolean): string {
     return missing
         ? `Save makes ${name}, readable by you alone.`
-        : `Save writes ${name}, keeping the file as it was as ${name}.bak.`
+        : `Save writes ${name}, keeping the file as it was among its versions.`
 }

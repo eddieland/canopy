@@ -198,12 +198,37 @@ test("an agent's standing instructions are saved from their page under Settings,
     await ask.getByRole('button', { name: 'Stay' }).click()
     await expect(page).toHaveURL(/\/settings\/instructions$/u)
 
-    await reviewer.getByRole('button', { name: 'Save' }).click()
-    await expect(reviewer.getByRole('status')).toContainText('Saved reviewer-instructions.md')
+    await reviewer.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(reviewer.getByRole('status')).toContainText('Saved reviewer.md')
     await expect(index.getByRole('link', { name: 'Reviewer', exact: true })).toBeVisible()
-    // Read again from the file, as a fresh page would.
+    // Read again from the file, as a fresh page would; the text it replaced is a version now, which restores.
     await page.reload()
     await expect(field).toHaveValue(`${[...kept, line].join('\n')}\n`)
+    await reviewer.getByTestId('instructions-versions').click()
+    await reviewer.getByTestId('instructions-version').first().getByRole('button', { name: 'Restore' }).click()
+    await expect(index.getByRole('link', { name: 'Reviewer unsaved' })).toBeVisible()
+    await reviewer.getByRole('button', { name: 'Revert' }).click()
+})
+
+test('an agent with no instructions gets a file created on its page, and loses it to a delete', async ({ page }) => {
+    await page.goto('settings/instructions#overseer')
+    const overseer = page.getByRole('region', { name: 'Overseer instructions' })
+    await expect(overseer).toContainText('None yet, so they hear nothing.')
+    await overseer.getByRole('button', { name: 'Create' }).click()
+    await overseer
+        .getByRole('textbox', { name: 'Overseer standing instructions' })
+        .fill('Dispatch urgent tickets first.')
+    await overseer.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(overseer.getByRole('status')).toContainText('Saved overseer.md')
+
+    await overseer.getByRole('button', { name: 'Delete' }).click()
+    await overseer.getByRole('group', { name: 'Delete overseer.md?' }).getByRole('button', { name: 'Delete' }).click()
+    await expect(overseer.getByRole('status')).toContainText('Deleted overseer.md')
+    await expect(overseer.getByRole('button', { name: 'Create' })).toBeVisible()
+    // The worker's file is named by its key: edited, never deleted.
+    await expect(
+        page.getByRole('region', { name: 'Worker instructions' }).getByRole('button', { name: 'Delete' }),
+    ).toHaveCount(0)
 })
 
 test('the settings page saves a limit and drops a trusted reviewer, but offers nothing past its ceiling', async ({

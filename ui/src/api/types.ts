@@ -109,6 +109,10 @@ export type PersonaList = Schemas['PersonaList']
 export type InstructionsList = Schemas['InstructionsList']
 /** One agent's standing instructions file as it stands: where it is, its text, its hash, and any problem with it. */
 export type AgentInstructions = Schemas['AgentInstructions']
+/** The kept versions of one agent's standing instructions file, newest first, and how many are kept. */
+export type InstructionsVersions = Schemas['InstructionsVersions']
+/** One kept version of an agent's file: the file as it was before an edit or a delete, with its text. */
+export type InstructionsVersion = Schemas['InstructionsVersion']
 /** The agent a standing instructions file reaches: the worker, the overseer, the reviewer, or every chore. */
 export type InstructionsAgent = AgentInstructions['agent']
 /** Every skill the runtime finds for canopy's agents, with each one's file and text (DESIGN §13). */

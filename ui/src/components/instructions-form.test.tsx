@@ -5,60 +5,79 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { api } from '@/api/client'
 import { instructionsQuery } from '@/api/queries'
-import type { AgentInstructions, InstructionsList } from '@/api/types'
+import type { AgentInstructions, InstructionsList, InstructionsVersions } from '@/api/types'
 import { renderRouted } from '@/test-utils'
 
 import { InstructionsForm } from './instructions-form'
 
-const WORKER = '/home/me/.config/canopy/worker.md'
-const REVIEWER = '/home/me/.config/canopy/reviewer.md'
+const CONFIG = '/home/me/.config/canopy'
+const WORKER = `${CONFIG}/worker-instructions.md`
 const RULES = 'Commit review fixes as new commits.\n'
+const REVIEWS = 'Flag a change with no test.\n'
 
 function file(agent: AgentInstructions['agent'], over: Partial<AgentInstructions> = {}): AgentInstructions {
     return {
         agent,
         key: `paths.${agent}_instructions`,
-        path: null,
+        path: `${CONFIG}/instructions/${agent}.md`,
+        source: 'default',
         text: null,
         sha256: null,
         problem: null,
-        missing: false,
+        missing: true,
+        versions: 0,
         ...over,
     }
 }
 
 const LIST: InstructionsList = {
     files: [
-        file('worker', { path: WORKER, text: RULES, sha256: 'aaa' }),
+        file('worker', { path: WORKER, source: 'config', text: RULES, sha256: 'aaa', missing: false, versions: 2 }),
         file('overseer'),
-        file('reviewer', {
-            path: REVIEWER,
+        file('reviewer', { text: REVIEWS, sha256: 'rrr', missing: false }),
+        file('chore', {
+            path: `${CONFIG}/chores.md`,
+            source: 'config',
             problem: 'missing: every run of it is refused until it exists',
-            missing: true,
         }),
-        file('chore'),
     ],
     max_bytes: 40,
 }
 
-// Each save the server stand-in was sent, and what it answers one with.
-let saves: { path: string; body: unknown }[] = []
+const VERSIONS: InstructionsVersions = {
+    versions: [
+        { id: 'b', at: '2026-10-06T09:00:00Z', kind: 'edit', sha256: 'v2', size: 30, text: 'Run the linters first.\n' },
+        { id: 'a', at: '2026-10-02T09:00:00Z', kind: 'edit', sha256: 'v1', size: 20, text: 'Commit small.\n' },
+    ],
+    keep: 10,
+}
+
+// Each change the server stand-in was sent, and what it answers a save with.
+let sent: { method: string; path: string; body: unknown }[] = []
 let answer: (agent: string, text: string) => Response
 
 const server: Middleware = {
     async onRequest({ request }) {
         const path = new URL(request.url).pathname
-        if (request.method === 'PUT') {
-            const body = (await request.json()) as { text: string; sha256: string | null }
-            saves.push({ path, body })
-            return answer(path.split('/').at(-1) ?? '', body.text)
+        if (path.endsWith('/versions')) {
+            return Response.json(VERSIONS)
         }
-        return Response.json(LIST)
+        if (request.method === 'GET') {
+            return Response.json(LIST)
+        }
+        const body = (await request.json()) as { text?: string }
+        sent.push({ method: request.method, path, body })
+        const agent = path.split('/')[3] ?? ''
+        const was = LIST.files.find((f) => f.agent === agent)
+        if (path.endsWith('/delete')) {
+            return Response.json({ ...was, text: null, sha256: null, missing: true, versions: 1 })
+        }
+        return answer(agent, body.text ?? '')
     },
 }
 
 beforeEach(() => {
-    saves = []
+    sent = []
     answer = (agent, text) => {
         const was = LIST.files.find((f) => f.agent === agent)
         return Response.json({ ...was, text: `${text}\n`, sha256: 'bbb', problem: null, missing: false })
@@ -71,7 +90,7 @@ afterEach(() => {
     cleanup()
 })
 
-// The page as its route draws it: the form over the files as the query holds them, so a save's answer reaches it.
+// The page as its route draws it: the form over the files as the query holds them, so a change's answer reaches it.
 function Page() {
     const { data } = useQuery(instructionsQuery)
     return data === undefined ? null : <InstructionsForm list={data} />
@@ -91,8 +110,8 @@ function field(agent: AgentInstructions['agent'], label: string): HTMLTextAreaEl
     return within(panel(agent)).getByRole<HTMLTextAreaElement>('textbox', { name: `${label} standing instructions` })
 }
 
-function button(agent: AgentInstructions['agent'], name: string): HTMLButtonElement {
-    return within(panel(agent)).getByRole<HTMLButtonElement>('button', { name })
+function button(at: HTMLElement, name: string): HTMLButtonElement {
+    return within(at).getByRole<HTMLButtonElement>('button', { name: new RegExp(`^${name}$`, 'u') })
 }
 
 function indexEntry(name: string): HTMLElement {
@@ -111,69 +130,125 @@ describe('InstructionsForm', () => {
         ])
         expect(indexEntry('Worker').getAttribute('href')).toBe('/settings/instructions#worker')
         expect(indexEntry('Overseer none').getAttribute('href')).toBe('/settings/instructions#overseer')
-        expect(indexEntry('Reviewer missing')).toBeTruthy()
+        expect(indexEntry('Chores missing')).toBeTruthy()
         expect(panel('worker').id).toBe('worker')
+        expect(panel('worker').textContent).toContain('named by paths.worker_instructions')
     })
 
     it("saves an agent's edit from its panel's foot, over the version it read", async () => {
         await renderPage()
         const text = field('worker', 'Worker')
         expect(text.value).toBe(RULES)
-        expect(panel('worker').textContent).toContain(WORKER)
         expect(panel('worker').textContent).toContain(
-            'Save writes worker.md, keeping the file as it was as worker.md.bak.',
+            'Save writes worker-instructions.md, keeping the file as it was among its versions.',
         )
-        expect(button('worker', 'Save').disabled).toBe(true)
+        expect(button(panel('worker'), 'Save').disabled).toBe(true)
 
         fireEvent.change(text, { target: { value: 'Run the linters.' } })
         // 16 bytes, and the newline the save adds.
         expect(within(panel('worker')).getByTestId('instructions-bytes').textContent).toBe('17 of 40 bytes')
         expect(panel('worker').dataset['changed']).toBe('true')
         expect(indexEntry('Worker unsaved')).toBeTruthy()
-        fireEvent.click(button('worker', 'Save'))
+        fireEvent.click(button(panel('worker'), 'Save'))
 
-        await within(panel('worker')).findByText('Saved worker.md: runs started from now read it.')
-        expect(saves).toEqual([{ path: '/api/instructions/worker', body: { text: 'Run the linters.', sha256: 'aaa' } }])
+        await within(panel('worker')).findByText('Saved worker-instructions.md: runs started from now read it.')
+        expect(sent).toEqual([
+            { method: 'PUT', path: '/api/instructions/worker', body: { text: 'Run the linters.', sha256: 'aaa' } },
+        ])
         expect(text.value).toBe('Run the linters.\n')
         expect(panel('worker').dataset['changed']).toBeUndefined()
-        expect(button('worker', 'Save').disabled).toBe(true)
     })
 
     it('reverts an edit to the text the file holds', async () => {
         await renderPage()
         fireEvent.change(field('worker', 'Worker'), { target: { value: 'Draft' } })
 
-        fireEvent.click(button('worker', 'Revert'))
+        fireEvent.click(button(panel('worker'), 'Revert'))
 
         expect(field('worker', 'Worker').value).toBe(RULES)
         expect(indexEntry('Worker')).toBeTruthy()
     })
 
-    it('says an agent whose key names no file hears none, with no editor and no actions', async () => {
+    it('creates the default of an agent with no file, from an editor Create opens and Cancel closes', async () => {
         await renderPage()
+        const overseer = panel('overseer')
+        expect(overseer.textContent).toContain('None yet, so they hear nothing.')
+        expect(within(overseer).queryByRole('textbox')).toBeNull()
 
-        expect(panel('overseer').textContent).toContain(
-            'paths.overseer_instructions names no file, so none of them hears any.',
-        )
-        expect(within(panel('overseer')).queryByRole('textbox')).toBeNull()
-        expect(within(panel('overseer')).queryByRole('button', { name: 'Save' })).toBeNull()
+        fireEvent.click(button(overseer, 'Create'))
+        fireEvent.click(button(overseer, 'Cancel'))
+        expect(within(overseer).queryByRole('textbox')).toBeNull()
+
+        fireEvent.click(button(overseer, 'Create'))
+        expect(overseer.textContent).toContain('Save makes overseer.md, readable by you alone.')
+        fireEvent.change(field('overseer', 'Overseer'), { target: { value: 'Dispatch urgent first.' } })
+        fireEvent.click(button(overseer, 'Save'))
+
+        await within(overseer).findByText('Saved overseer.md: runs started from now read it.')
+        expect(sent).toEqual([
+            {
+                method: 'PUT',
+                path: '/api/instructions/overseer',
+                body: { text: 'Dispatch urgent first.', sha256: null },
+            },
+        ])
+        expect(field('overseer', 'Overseer').value).toBe('Dispatch urgent first.\n')
     })
 
-    it('says a file the config names is missing, and makes it on a save', async () => {
+    it('deletes a default after asking once more, and never offers to delete a file a key names', async () => {
         await renderPage()
-        expect(within(panel('reviewer')).getByTestId('instructions-problem').textContent).toMatch(/^missing: /u)
-        expect(panel('reviewer').textContent).toContain('Save makes reviewer.md, readable by you alone.')
-        const text = field('reviewer', 'Reviewer')
-        expect(text.value).toBe('')
+        const reviewer = panel('reviewer')
+        expect(within(panel('worker')).queryByRole('button', { name: 'Delete' })).toBeNull()
 
-        fireEvent.change(text, { target: { value: 'Flag missing tests.' } })
-        fireEvent.click(button('reviewer', 'Save'))
+        fireEvent.click(button(reviewer, 'Delete'))
+        const ask = within(reviewer).getByRole('group', { name: 'Delete reviewer.md?' })
+        fireEvent.click(button(ask, 'Keep it'))
+        expect(sent).toEqual([])
 
-        await within(panel('reviewer')).findByText('Saved reviewer.md: runs started from now read it.')
-        expect(saves).toEqual([
-            { path: '/api/instructions/reviewer', body: { text: 'Flag missing tests.', sha256: null } },
+        fireEvent.click(button(reviewer, 'Delete'))
+        fireEvent.click(button(within(reviewer).getByRole('group', { name: 'Delete reviewer.md?' }), 'Delete'))
+
+        await within(reviewer).findByText('Deleted reviewer.md: runs started from now read none.')
+        expect(sent).toEqual([{ method: 'POST', path: '/api/instructions/reviewer/delete', body: { sha256: 'rrr' } }])
+        expect(within(reviewer).queryByRole('textbox')).toBeNull()
+        expect(button(reviewer, 'Create')).toBeTruthy()
+    })
+
+    it('lists the kept versions when opened, and restores one into the editor as an edit to save', async () => {
+        await renderPage()
+        const worker = panel('worker')
+        expect(within(panel('overseer')).queryByTestId('instructions-versions')).toBeNull()
+
+        fireEvent.click(within(worker).getByTestId('instructions-versions'))
+        const [newest, oldest, ...rest] = await within(worker).findAllByTestId('instructions-version')
+        if (newest === undefined || oldest === undefined) {
+            throw new Error('two versions were listed')
+        }
+        expect(rest).toEqual([])
+        expect([newest, oldest].map((r) => r.textContent)).toEqual([
+            expect.stringContaining('Before an edit'),
+            expect.stringContaining('Before an edit'),
         ])
-        expect(within(panel('reviewer')).queryByTestId('instructions-problem')).toBeNull()
+        fireEvent.click(button(newest, 'Show'))
+        expect(newest.textContent).toContain('Run the linters first.')
+
+        fireEvent.click(button(oldest, 'Restore'))
+        expect(field('worker', 'Worker').value).toBe('Commit small.\n')
+        expect(indexEntry('Worker unsaved')).toBeTruthy()
+    })
+
+    it('says a file a key names is missing, and makes it on a save', async () => {
+        await renderPage()
+        const chore = panel('chore')
+        expect(within(chore).getByTestId('instructions-problem').textContent).toMatch(/^missing: /u)
+        expect(field('chore', 'Chores').value).toBe('')
+        expect(within(chore).queryByRole('button', { name: 'Delete' })).toBeNull()
+
+        fireEvent.change(field('chore', 'Chores'), { target: { value: 'Name a CI job by its file.' } })
+        fireEvent.click(button(chore, 'Save'))
+
+        await within(chore).findByText('Saved chores.md: runs started from now read it.')
+        expect(within(chore).queryByTestId('instructions-problem')).toBeNull()
     })
 
     it('holds a save past the bound a run takes, and names a refusal by its guard', async () => {
@@ -189,10 +264,10 @@ describe('InstructionsForm', () => {
         expect(within(panel('worker')).getByTestId('instructions-bytes').textContent).toBe(
             '42 of 40 bytes: a run would refuse it',
         )
-        expect(button('worker', 'Save').disabled).toBe(true)
+        expect(button(panel('worker'), 'Save').disabled).toBe(true)
 
         fireEvent.change(text, { target: { value: 'Short.' } })
-        fireEvent.click(button('worker', 'Save'))
+        fireEvent.click(button(panel('worker'), 'Save'))
         await within(panel('worker')).findByText(/refused \(stale\)/u)
         // What was written stays, to save again once the file is read again.
         expect(text.value).toBe('Short.')

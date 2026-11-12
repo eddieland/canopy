@@ -13,24 +13,25 @@ function file(over: Partial<AgentInstructions> = {}): AgentInstructions {
         sha256: 'aaa',
         problem: null,
         missing: false,
+        source: 'config',
+        versions: 0,
         ...over,
     }
 }
 
 describe('instructionsState', () => {
-    it('tells a file read as it is from none, a missing one, and one a run would refuse', () => {
+    it('tells a file read as it is from a default not there, a missing key file, and one a run would refuse', () => {
         expect(instructionsState(file())).toBe('set')
-        expect(instructionsState(file({ path: null, text: null, sha256: null }))).toBe('none')
-        expect(instructionsState(file({ text: null, sha256: null, problem: 'missing: …', missing: true }))).toBe(
-            'missing',
-        )
+        const gone = { text: null, sha256: null, missing: true }
+        expect(instructionsState(file({ ...gone, source: 'default' }))).toBe('none')
+        expect(instructionsState(file({ ...gone, problem: 'missing: …' }))).toBe('missing')
         expect(instructionsState(file({ problem: '5000 bytes, over the 4096 a run takes' }))).toBe('refused')
     })
 })
 
 describe('instructionsLine', () => {
     it('counts the agents that hear instructions, then the files missing and refused, each left out at none', () => {
-        const none = file({ path: null, text: null, sha256: null })
+        const none = file({ source: 'default', text: null, sha256: null, missing: true })
         expect(instructionsLine([file(), none, none, none])).toBe('1 of 4 agents hear standing instructions')
         expect(
             instructionsLine([

@@ -20,24 +20,23 @@ export const READERS: readonly InstructionsReader[] = [
 
 /** What the instructions page shows on every visit, on its title's hover. */
 export const INSTRUCTIONS_HELP =
-    'What each agent hears from you on every run, after its prompt’s own obligations, which come first. Each file ' +
-    'is yours, named by paths.*_instructions in your config: the page edits its text, never which file. A save ' +
-    'keeps the file as it was beside it as <name>.bak. Every run started after a save reads it; one already going ' +
-    'keeps the prompt it has.'
+    'What each agent hears from you on every run, after its prompt’s own obligations, which come first. An agent’s ' +
+    'file is the one its paths.*_instructions key names, else <agent>.md in your instructions folder, which you can ' +
+    'create and delete here; a file a key names is only edited. Each change keeps the file as it was among the ' +
+    'agent’s last 10 versions, in this workspace’s .canopy/. Every run started after a change reads it; one already ' +
+    'going keeps the prompt it has.'
 
 /**
- * Where an agent's file stands: `none` when its key names no file, `missing` when the file it names is not there,
- * `refused` when a run of the agent would refuse it, `set` otherwise.
+ * Where an agent's file stands: `none` when it has no file, its default not there, which Create makes; `missing` when
+ * the file its key names is not there, which refuses every run; `refused` when a run of it would refuse the file;
+ * `set` otherwise.
  */
 export type InstructionsState = 'none' | 'missing' | 'refused' | 'set'
 
-/** Where `file` stands, for its chip and the page's line. */
+/** Where `file` stands, for its chip, the index, and the page's line. */
 export function instructionsState(file: AgentInstructions): InstructionsState {
-    if (file.path === null) {
-        return 'none'
-    }
     if (file.missing) {
-        return 'missing'
+        return file.source === 'default' ? 'none' : 'missing'
     }
     return file.problem === null ? 'set' : 'refused'
 }

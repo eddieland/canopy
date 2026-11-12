@@ -115,13 +115,21 @@ for up to a week, for outages with ambitions.
 
 ## Standing instructions
 
-What each agent hears from you on every run: the files your config names with `paths.worker_instructions`,
-`paths.overseer_instructions`, `paths.reviewer_instructions`, and `paths.chore_instructions`. **Open** takes you to a
-page of its own with all four, one panel each, so you can read what every agent is told without clicking through. The
-worker's reaches every implement, resume, plan, and task run, the overseer's every tick, and the other two every review
-and every chore run, after the chore's own prompt. Each comes after its prompt's own rules, which win where the two
-disagree. The line under the title says how many agents hear anything and whether a file is missing or refused; hover
-the title for the page's rules. See [config files](config-files) for the keys.
+What each agent hears from you on every run. **Open** takes you to a page of its own with all four, one panel each, so
+you can read what every agent is told without clicking through. The worker's file reaches every implement, resume,
+plan, and task run, the overseer's every tick, and the other two every review and every chore run, after the chore's
+own prompt. Each comes after its prompt's own rules, which win where the two disagree. The line under the title says
+how many agents hear anything and whether a file is missing or refused; hover the title for the page's rules.
+
+Each agent's file is the one its key names, `paths.worker_instructions` and friends (see
+[config files](config-files)), or, with no key, `<agent>.md` in your instructions folder, `instructions/` beside your
+`config.toml`: `worker.md`, `overseer.md`, `reviewer.md`, `chore.md`. A run reads that default only while it's there,
+so an agent with neither hears nothing. Its panel says so and offers **Create**, which opens an empty editor; **Save**
+makes the file, readable by you alone, and **Cancel** thinks better of it. A default can be deleted from its panel's
+foot: **Delete** asks once more, then the file goes and the agent's runs hear nothing from then on. A file a key names
+is yours to edit here but not to delete, since a run whose named file is gone is refused outright; empty it, or unset
+the key. If that key's file doesn't exist yet, the panel says every run of that agent is refused until it does, and
+**Save** makes it.
 
 The agents are listed beside the page, or over it in a narrow window, and each is a link to its panel:
 `/settings/instructions#reviewer` opens the page there. An agent with no file says `none` in the list, and one whose
@@ -132,18 +140,21 @@ Each file opens in the same editor you write replies in, toolbar and **Preview**
 foot is in bytes, as a run counts them: past 4,096 a run refuses the file outright rather than read half of it, so
 **Save** waits until you trim. **Revert** puts back what the file holds.
 
-**Save** writes the file in place, keeps the old one beside it as `<name>.bak` (the line over the button names both),
-and every run started from then on reads the new text; a run already going keeps the prompt it started with. If the
-file changed since the page read it, say you edited it in your own editor meanwhile, the save is refused rather than
-quietly flattening your other edit: **Read again**, under the title, then decide which of you was right. It keeps
-whatever you haven't saved. Leave the page with an edit unsaved and it asks first, as a plan does. A file your config
-names that doesn't exist yet is flagged, since every run of that agent is refused until it does, and **Save** makes
-it, readable by you alone.
+Every save and delete keeps the file as it was first: the last 10 versions of each agent's, in this workspace's
+`.canopy/`. **Show versions** under a panel lists them, newest first, each with when and before what. **Show** reads
+one, and **Restore** puts its text in the editor as an ordinary unsaved edit, so you can look before you **Save**. The
+eleventh change drops the oldest, so if a version matters, keep it somewhere a little more permanent than a list of
+ten.
 
-The page edits text, never which file: an agent whose key names no file says so and offers no editor. Name one in your
-`config.toml` and **Reload** on Settings. That's on purpose. Anyone holding a session here can put words in every
-later run's mouth, and a new secret doesn't take them back, so the page can't also aim an agent at some other file of
-yours. If a change shows up that you didn't make, the `.bak` has what was there before.
+A save writes the file in place, and every run started from then on reads the new text; a run already going keeps the
+prompt it started with. If the file changed since the page read it, say you edited it in your own editor meanwhile,
+the change is refused rather than quietly flattening your other edit: **Read again**, under the title, then decide
+which of you was right. It keeps whatever you haven't saved. Leave the page with an edit unsaved and it asks first, as
+a plan does.
+
+The page never chooses which file: it won't write a key or aim an agent at some other file of yours. That's on purpose.
+Anyone holding a session here can put words in every later run's mouth, or delete a default to quiet one, and a new
+secret doesn't take either back. If a change shows up that you didn't make, the versions have what was there before.
 
 ## Loop settings
 
