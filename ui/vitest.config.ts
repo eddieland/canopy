@@ -20,6 +20,14 @@ export default defineConfig({
     },
     test: {
         environment: 'happy-dom',
+        // Each file's tests run in a context of their own (its page, its globals, its modules), in worker processes
+        // that stay up through the run, not in a new process and a new happy-dom for every file, which was most of
+        // the run's time. The cost is memory, about two and a half times as much. What a file leaves in `process` or
+        // in Node's own modules reaches the files after it in the same worker: a test restores what it changes there.
+        pool: 'vmForks',
+        // Loaded through Vite, not by the pool's own loader of packages, which misreads khroma's relative imports;
+        // mermaid, so that its import of khroma goes through Vite too.
+        server: { deps: { inline: [/\/node_modules\/(?:mermaid|khroma)\//u] } },
         include: ['src/**/*.test.{ts,tsx}'],
         restoreMocks: true,
         unstubGlobals: true,
