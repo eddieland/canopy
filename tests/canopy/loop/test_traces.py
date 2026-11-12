@@ -8,12 +8,11 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from canopy.core.vocab import TickStatus
-from canopy.infra import procs, tracing
+from canopy.infra import tracing
 from tests.canopy.helpers import KEY, listed, spans
 from tests.canopy.scenario_helpers import dispatches, fails
 
 if TYPE_CHECKING:
-    import sqlite3
     from pathlib import Path
 
     from tests.canopy.scenario_helpers import Scenario
@@ -30,8 +29,7 @@ def test_a_run_is_a_trace_of_its_own_linked_to_the_tick_that_started_it(scenario
     scenario.seen()
     ticked = scenario.tick(dispatches())
     [ran] = ticked.runs
-    exited(ran.row)
-    traced = last_of_each(scenario)
+    traced = last_of_each(scenario, waiting_for="run")
     tick = traced["tick"]
     # The tick's journal totals hold each of its steps'.
     queries = int(tick["attributes"].pop("canopy.journal_queries"))
@@ -103,14 +101,21 @@ def test_a_workspace_that_does_not_trace_writes_no_traces(scenario: Scenario) ->
     assert not (scenario.env.state_dir / tracing.TRACES_FILE_NAME).exists()
 
 
-def exited(row: sqlite3.Row, timeout: float = 30) -> None:
-    """Wait for a detached run's process to exit: it closes its row, then ends its span and writes it as it exits."""
+def last_of_each(
+    scenario: Scenario,
+    *,
+    waiting_for: str | None = None,
+    timeout: float = 30,
+) -> dict[str, dict[str, Any]]:
+    """The last span of each name the workspace traced, once a span named `waiting_for`, if any, is among them.
+
+    A detached run closes its row before it ends its span and writes it, as its process exits.
+    """
+    path = scenario.env.state_dir / tracing.TRACES_FILE_NAME
     deadline = time.monotonic() + timeout
-    while procs.alive(int(row["pid"])):
-        assert time.monotonic() < deadline, f"run {row['id']} did not exit within {timeout}s"
+    while True:
+        traced = {s["name"]: s for s in spans(path)}
+        if waiting_for is None or waiting_for in traced:
+            return traced
+        assert time.monotonic() < deadline, f"no {waiting_for} span within {timeout}s"
         time.sleep(0.05)
-
-
-def last_of_each(scenario: Scenario) -> dict[str, dict[str, Any]]:
-    """The last span of each name the workspace traced."""
-    return {s["name"]: s for s in spans(scenario.env.state_dir / tracing.TRACES_FILE_NAME)}
