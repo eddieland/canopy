@@ -17,6 +17,7 @@ import contextlib
 import errno
 import hashlib
 import os
+import re
 import secrets
 import stat
 from dataclasses import dataclass
@@ -28,7 +29,7 @@ from canopy.core.conversation import Refused
 from canopy.infra import lock
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Sequence
+    from collections.abc import Callable, Iterator, Sequence
     from pathlib import Path
 
     from canopy.core.config import Config, StandingAgent
@@ -55,8 +56,11 @@ NO_VERSION = "no_version"
 # How much of a file each read takes.
 _CHUNK = 64 * 1024
 
-# A version's name: when it was kept, to the microsecond, in UTC, so names sort as times do; then what made it.
+#: A version's name: when it was kept, to the microsecond, in UTC, so names sort as times do; then what made it.
 _STAMP = "%Y%m%dT%H%M%S%fZ"
+#: A name of that shape, in ASCII digits alone: anything else in the directory is not a version, and is never listed,
+#: counted, or pruned.
+_VERSION_NAME = re.compile(r"[0-9]{8}T[0-9]{12}Z-(?:edit|delete)\.md")
 
 # The most of a file the page is shown: past the bound, so the operator can trim one from the page, but not without end.
 _MAX_SHOWN = 16 * MAX_BYTES
@@ -216,9 +220,14 @@ def save(
         before = _read(path)
         _check_unchanged(path, before, read_sha256)
         with _directory(path, make=not configured) as dir_fd:
-            if before.head is not None:
-                _keep(state_dir, agent, _kept(path, before), "edit")
-            _replace(dir_fd, path, before, data, read_sha256)
+            # Taken now, so a file too large to keep refuses the save before anything is written.
+            old = None if before.head is None else _kept(path, before)
+
+            def keep_old() -> None:
+                if old is not None:
+                    _keep(state_dir, agent, old, "edit")
+
+            _replace(dir_fd, path, before, data, read_sha256, keep=keep_old)
     return read(config, state_dir, agent)
 
 
@@ -256,8 +265,13 @@ def delete(
         before = _read(path)
         _check_unchanged(path, before, read_sha256)
         with _directory(path, make=False) as dir_fd:
-            if before.head is not None:
-                _keep(state_dir, agent, _kept(path, before), "delete")
+            old = None if before.head is None else _kept(path, before)
+            # Read again before keeping it, so a delete refused here keeps no version, and once more after, just before
+            # removing it, as a save does around its rename: a hand edit is lost only if it lands in that last moment.
+            _check_still(path, read_sha256)
+            if old is not None:
+                _keep(state_dir, agent, old, "delete")
+                _check_still(path, read_sha256)
             try:
                 os.unlink(path.name, dir_fd=dir_fd)
             except OSError as e:
@@ -282,6 +296,7 @@ def versions(state_dir: Path, agent: StandingAgent) -> list[Version]:
             continue
         stem = name.removesuffix(".md")
         stamp, _, kind = stem.partition("-")
+        at = datetime.strptime(stamp, _STAMP).replace(tzinfo=UTC)
         text = None
         if len(data) <= _MAX_SHOWN:
             with contextlib.suppress(UnicodeDecodeError):
@@ -289,7 +304,7 @@ def versions(state_dir: Path, agent: StandingAgent) -> list[Version]:
         found.append(
             Version(
                 id=stem,
-                at=datetime.strptime(stamp, _STAMP).replace(tzinfo=UTC),
+                at=at,
                 kind="delete" if kind == "delete" else "edit",
                 sha256=hashlib.sha256(data).hexdigest(),
                 size=len(data),
@@ -297,6 +312,19 @@ def versions(state_dir: Path, agent: StandingAgent) -> list[Version]:
             ),
         )
     return found
+
+
+def _check_still(path: Path, read_sha256: str | None) -> None:
+    """Read the file again and refuse a change to it unless it is still the one the page read.
+
+    Raises:
+        Refused: `stale` when it changed; `unsafe_file` when it can no longer be read, rather than a server error.
+    """
+    try:
+        now = _read(path)
+    except OSError as e:
+        raise Refused(UNSAFE_FILE, f"{path} cannot be read: {e.strerror}") from None
+    _check_unchanged(path, now, read_sha256)
 
 
 def _same_file(config: Config, agent: StandingAgent, read_path: Path) -> Path:
@@ -327,7 +355,22 @@ def _version_names(state_dir: Path, agent: StandingAgent) -> list[str]:
         names = [p.name for p in (state_dir / VERSIONS_DIR / agent).iterdir()]
     except OSError:
         return []
-    return sorted(n for n in names if n.endswith(("-edit.md", "-delete.md")) and not n.startswith("."))
+    return sorted(n for n in names if _is_version(n))
+
+
+def _is_version(name: str) -> bool:
+    """Whether `name` is one `_keep` gives a version: its shape, and a time that is one, not a thirteenth month.
+
+    Returns:
+        True for a version's name.
+    """
+    if not _VERSION_NAME.fullmatch(name):
+        return False
+    try:
+        datetime.strptime(name.partition("-")[0], _STAMP)  # noqa: DTZ007  (read for its validity alone)
+    except ValueError:
+        return False
+    return True
 
 
 def _keep(state_dir: Path, agent: StandingAgent, data: bytes, kind: VersionKind) -> None:
@@ -477,8 +520,19 @@ def _directory(path: Path, *, make: bool) -> Iterator[int]:
         os.close(dir_fd)
 
 
-def _replace(dir_fd: int, path: Path, before: _Reading, data: bytes, read_sha256: str | None) -> None:
+def _replace(
+    dir_fd: int,
+    path: Path,
+    before: _Reading,
+    data: bytes,
+    read_sha256: str | None,
+    *,
+    keep: Callable[[], None],
+) -> None:
     """Write `data` at `path` through a temporary file in its directory, `dir_fd`, renamed into place.
+
+    `keep` runs once the file is known unchanged, just before the rename, so a save refused at that last moment has
+    kept no version of the file and pruned none.
 
     Raises:
         Refused: `unsafe_file` for a file that could not be written; `stale` when the file changed while it was saved.
@@ -493,6 +547,9 @@ def _replace(dir_fd: int, path: Path, before: _Reading, data: bytes, read_sha256
             f.flush()
             os.fsync(f.fileno())
         # Read again just before the rename, so a hand edit is lost only if it lands in that last moment.
+        _check_unchanged(path, _read(path), read_sha256)
+        keep()
+        # And once more, as keeping it took a moment of its own.
         _check_unchanged(path, _read(path), read_sha256)
         # A rename replaces the name itself, never what a link there names.
         os.rename(temporary, path.name, src_dir_fd=dir_fd, dst_dir_fd=dir_fd)
