@@ -147,8 +147,9 @@ the way gets the credit, or the blame, for those too. **whole run** puts the res
 held more than once has a stretch for each hold, `after list 1`, `after list 2`, and one held in several repositories
 has each stretch in its own repository's Diff. A stretch whose diff canopy couldn't keep as the run ended, or that
 [garbage collection](running-the-loop#garbage-collection) has since removed, says so on that line rather than quietly
-leaving it out. Past five stretches, which takes some doing, the page shows the first five and `canopy show run:ID`
-names the rest.
+leaving it out; its **Show diff** stays where it was, greyed out, so the switch doesn't jump out from under your
+cursor. Past five stretches, which takes some doing, the page shows the first five and `canopy show run:ID` names the
+rest.
 
 A run that ended `unpushed` still shows what it did: the change up to the last commit it made in its worktree, with a
 **not on origin** chip, since the commits themselves went with the slot. It's the closest you'll get to the work the
