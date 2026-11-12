@@ -13,6 +13,7 @@ import { TaskRunLink } from '@/components/task-link'
 import { TickLink } from '@/components/tick-link'
 import { Timestamp } from '@/components/timestamp'
 import { Tip } from '@/components/tip'
+import { directoryTail, sessionName } from '@/lib/sessions'
 
 /** No words to mark: a list read without any. */
 const NO_WORDS: readonly string[] = []
@@ -28,7 +29,7 @@ export function SessionRows({
     sessions: readonly RuntimeSession[]
     words?: readonly string[]
 }) {
-    return sessions.map((s) => <SessionRow key={s.session_id} session={s} words={words} depth={0} />)
+    return sessions.map((s) => <SessionRow key={s.session_id} session={s} words={words} depth={0} parent={null} />)
 }
 
 /**
@@ -59,22 +60,42 @@ export function SessionsProgressLine({ progress }: { progress: SessionsProgress 
     )
 }
 
-/** A session's row, then its subagents' under it, a step deeper. */
-function SessionRow({ session, words, depth }: { session: RuntimeSession; words: readonly string[]; depth: number }) {
+/**
+ * A session's row, then its subagents' under it, a step deeper. `parent` names the session it ran for, which a screen
+ * reader hears with its `subagent` chip, since the indent shows it only to the eye.
+ */
+function SessionRow({
+    session,
+    words,
+    depth,
+    parent,
+}: {
+    session: RuntimeSession
+    words: readonly string[]
+    depth: number
+    parent: string | null
+}) {
+    const name = sessionName(session)
     return (
         <>
-            <ListRow kind="session" className="items-baseline" data-testid="session">
+            {/* `group/copy`: the command's copy button shows while the pointer is anywhere over the row. */}
+            <ListRow kind="session" className="group/copy items-baseline" data-testid="session">
                 <span className="flex min-w-0">
                     <Where session={session} />
                 </span>
                 <span className="flex min-w-0 gap-1">
-                    {session.parent_id !== null && <Chip>subagent</Chip>}
+                    {session.parent_id !== null && (
+                        <Chip>
+                            subagent<span className="sr-only"> of {parent ?? `session ${session.parent_id}`}</span>
+                        </Chip>
+                    )}
                     {session.archived && <Chip>archived</Chip>}
                 </span>
-                {/* Indented a step for each session it ran for, so a subagent's reads as under its parent's. */}
-                <span className="min-w-0 truncate text-sm" style={{ paddingInlineStart: `${depth}rem` }}>
+                {/* Indented a step for each session it ran for, so a subagent's reads as under its parent's. In
+                    medium weight, as a run's title is, so it reads as the row's name. */}
+                <span className="min-w-0 truncate text-sm font-medium" style={{ paddingInlineStart: `${depth}rem` }}>
                     {session.title === null ? (
-                        <span className="text-muted-foreground">no title</span>
+                        <span className="font-normal text-muted-foreground">no title</span>
                     ) : (
                         <MarkedText text={session.title} words={words} />
                     )}
@@ -85,15 +106,16 @@ function SessionRow({ session, words, depth }: { session: RuntimeSession; words:
                     <RowLine from="title" style={{ paddingInlineStart: `${depth}rem` }}>
                         <Copyable
                             text={session.reopen}
-                            label="reopen command"
+                            label={`reopen command of ${name}`}
                             reveal
+                            words
                             className="font-mono text-xs text-muted-foreground"
                         />
                     </RowLine>
                 )}
             </ListRow>
             {session.subagents.map((s) => (
-                <SessionRow key={s.session_id} session={s} words={words} depth={depth + 1} />
+                <SessionRow key={s.session_id} session={s} words={words} depth={depth + 1} parent={name} />
             ))}
         </>
     )
@@ -101,15 +123,15 @@ function SessionRow({ session, words, depth }: { session: RuntimeSession; words:
 
 /**
  * Where a session opens: the page of the run of canopy's that made it, or, for one outside canopy or one no run
- * names, the directory it ran in, cut to fit and whole on hover.
+ * names, the end of the directory it ran in, the whole on hover, so the title beside it keeps the width.
  */
 function Where({ session }: { session: RuntimeSession }) {
     if (session.made_by !== null) {
         return <RunOf run={session.made_by} />
     }
     return (
-        <Tip fact={session.directory} mono whenCut>
-            <span className="truncate font-mono text-xs text-muted-foreground">{session.directory}</span>
+        <Tip fact={session.directory} mono>
+            <span className="truncate font-mono text-xs text-muted-foreground">{directoryTail(session.directory)}</span>
         </Tip>
     )
 }

@@ -48,15 +48,15 @@ function SessionsPage() {
     return (
         <>
             <PageHeader title="Sessions">
-                Every session the agent runtime keeps, newest first: your own, in any directory, each with the command
-                that reopens it, or canopy&apos;s, each opening the run that made it, a subagent&apos;s under the
-                session it ran for. As <Code>canopy sessions</Code> lists them; Search finds them by their titles.
+                Sessions the agent runtime keeps, newest first. Yours come with the command that reopens them;
+                canopy&apos;s open the run that made them. Search finds them by title.
             </PageHeader>
             {/* The previous list stays while the next one loads, dimmed so it does not read as its answer. */}
             <Panel className={cn('transition-opacity', isPlaceholderData && 'opacity-60')}>
                 <PanelHeader label={WHOSE_LABEL[whose]}>
                     <span className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
                         <nav aria-label="Whose sessions" className="flex items-center gap-1">
+                            <span className="mr-1 font-mono text-xs text-muted-foreground">whose</span>
                             {SESSIONS_WHOSE.map((w) => (
                                 <FilterLink
                                     key={w}
@@ -67,16 +67,15 @@ function SessionsPage() {
                                 </FilterLink>
                             ))}
                         </nav>
-                        <nav aria-label="Archived sessions" className="flex items-center gap-1">
-                            <FilterLink
-                                search={{ canopy, archived: archived === true ? undefined : true, all }}
-                                selected={archived === true}
-                            >
-                                archived
-                            </FilterLink>
-                        </nav>
+                        {/* A toggle, not a third choice of whose: set apart by a rule, and pressed or not. */}
+                        <span className="flex items-center border-l pl-3">
+                            <ArchivedToggle search={{ canopy, archived, all }} />
+                        </span>
                         {data !== undefined && data.search !== 'off' && (
-                            <span className="readout text-xs text-muted-foreground" data-testid="sessions-count">
+                            <span
+                                className="border-l pl-3 readout text-xs text-muted-foreground"
+                                data-testid="sessions-count"
+                            >
                                 {data.more ? `newest ${sessionsShown(data.sessions)}` : sessionsShown(data.sessions)}
                             </span>
                         )}
@@ -114,16 +113,17 @@ function Listed({ list, archived, all }: { list: SessionList; archived: boolean;
             )}
             <p className="border-t px-3 py-2 text-xs text-muted-foreground" data-testid="sessions-progress">
                 <SessionsProgressLine progress={list.progress} />
-                {list.more && !all && (
+                {/* The way to the longest list, and back from it, one link in the same place, so its focus stays. */}
+                {(list.more || all) && (
                     <>
                         {' '}
-                        More match than these:{' '}
+                        {all ? null : 'More match than these: '}
                         <Link
                             to="/workspace/sessions"
-                            search={(prev) => ({ ...prev, all: true })}
+                            search={(prev) => ({ ...prev, all: all ? undefined : true })}
                             className="text-accent underline-offset-4 hover:underline"
                         >
-                            list up to {SESSIONS_MAX}
+                            {all ? `list the newest ${SESSIONS_LISTED}` : `list up to ${SESSIONS_MAX}`}
                         </Link>
                         .
                     </>
@@ -143,7 +143,17 @@ function emptyWords(whose: SessionsWhose, readAt: string | null, archived: boole
     return archived ? `${noun} yet` : `${noun} the runtime has not archived`
 }
 
-/** A filter chip, the runs page's look: this page with `search`, marked when it is the one shown. */
+// A filter chip's look, the runs page's: muted, and on the accent's tint while chosen.
+const CHIP = [
+    'flex h-6 items-center gap-1.5 rounded-sm px-2 font-mono text-xs text-muted-foreground',
+    'hover:bg-surface-raised hover:text-foreground',
+    'data-[selected=true]:bg-accent/16 data-[selected=true]:text-foreground',
+]
+
+/**
+ * A filter chip: this page with `search`, marked when it is the one shown. The router marks it the current page only
+ * when its search is the page's own, a key it leaves out included, so the default chip is not current under the other.
+ */
 function FilterLink({
     search,
     selected,
@@ -157,14 +167,32 @@ function FilterLink({
         <Link
             to="/workspace/sessions"
             search={search}
+            activeOptions={{ explicitUndefined: true }}
             data-selected={selected}
-            className={cn(
-                'flex h-6 items-center gap-1.5 rounded-sm px-2 font-mono text-xs text-muted-foreground',
-                'hover:bg-surface-raised hover:text-foreground',
-                'data-[selected=true]:bg-accent/16 data-[selected=true]:text-foreground',
-            )}
+            className={cn(CHIP)}
         >
             {children}
+        </Link>
+    )
+}
+
+/**
+ * The `archived` chip, a toggle kept in `?archived=true` as memory's history toggle is: pressed, the list holds the
+ * sessions the runtime archived too.
+ */
+function ArchivedToggle({ search }: { search: SessionsSearch }) {
+    const on = search.archived === true
+    return (
+        <Link
+            to="/workspace/sessions"
+            search={{ ...search, archived: on ? undefined : true }}
+            // Never the current page: the toggle's search always differs from the page's in the key it flips.
+            activeOptions={{ explicitUndefined: true }}
+            aria-pressed={on}
+            data-selected={on}
+            className={cn(CHIP)}
+        >
+            archived
         </Link>
     )
 }

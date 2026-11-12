@@ -12,14 +12,15 @@ const SHOWN_MS = 1500
 
 /**
  * Text the operator may want to paste elsewhere (a branch, a path, a session id), then a `CopyButton` for it. The text
- * wraps anywhere, as a field's value does; `children` shows something other than what is copied, such as a commit's
- * first 7 characters for its whole hash.
+ * wraps anywhere, as a field's value does, or with `words` at its spaces first, as a command reads best; `children`
+ * shows something other than what is copied, such as a commit's first 7 characters for its whole hash.
  */
 export function Copyable({
     text,
     label,
     children,
     reveal = false,
+    words = false,
     className,
 }: {
     /** What the button copies, exactly as written. */
@@ -30,12 +31,14 @@ export function Copyable({
     children?: ReactNode
     /** Show the button only while its row is hovered, as `CopyButton`'s `reveal` does. */
     reveal?: boolean
+    /** Wrap at the text's spaces, and inside a word only where one is longer than the line: a command's. */
+    words?: boolean
     /** Classes for the whole, such as its font. */
     className?: string
 }) {
     return (
         <span className={cn('inline-flex max-w-full min-w-0 items-center gap-1', className)}>
-            <span className="min-w-0 break-all">{children ?? text}</span>
+            <span className={cn('min-w-0', words ? 'wrap-anywhere' : 'break-all')}>{children ?? text}</span>
             <CopyButton text={text} label={label} reveal={reveal} />
         </span>
     )

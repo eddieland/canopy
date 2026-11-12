@@ -23,6 +23,20 @@ export const WHOSE_CHIP: Record<SessionsWhose, string> = {
     canopy: "canopy's",
 }
 
+/** A session as words name it: its title, or `session ID` for one with none. */
+export function sessionName(session: Pick<RuntimeSession, 'title' | 'session_id'>): string {
+    return session.title ?? `session ${session.session_id}`
+}
+
+/**
+ * The end of a directory a row has room for: its last two parts after `…/`, the whole when it has no more, so the
+ * title beside it keeps the width. `/home/op/acme/infra` is `…/acme/infra`.
+ */
+export function directoryTail(directory: string): string {
+    const parts = directory.split('/').filter(Boolean)
+    return parts.length <= 2 ? directory : `…/${parts.slice(-2).join('/')}`
+}
+
 /** How many sessions a list shows, its subagents' among them, which sit under the session they ran for. */
 export function sessionsShown(sessions: readonly RuntimeSession[]): number {
     return sessions.reduce((n, s) => n + 1 + sessionsShown(s.subagents), 0)

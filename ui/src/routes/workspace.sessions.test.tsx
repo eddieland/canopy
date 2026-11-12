@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } from '@tanstack/react-router'
 import type { AnyRouter } from '@tanstack/react-router'
 import { cleanup, render, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { keys } from '@/api/queries'
 import type { SessionsFind } from '@/api/queries'
@@ -10,8 +10,14 @@ import type { RuntimeSession, SessionList, SessionRun } from '@/api/types'
 
 import { Route } from './workspace.sessions'
 
+beforeEach(() => {
+    // The clipboard needs a secure context, which happy-dom is not: without one, no copy button renders.
+    vi.stubGlobal('isSecureContext', true)
+})
+
 afterEach(() => {
     cleanup()
+    vi.unstubAllGlobals()
 })
 
 const READ: SessionList['progress'] = {
@@ -86,8 +92,10 @@ async function renderPage(at: string, lists: Partial<Record<SessionList['whose']
     const client = new QueryClient({ defaultOptions: { queries: { enabled: false } } })
     for (const [whose, list] of Object.entries(lists)) {
         for (const archived of [false, true]) {
-            const find: SessionsFind = { whose: whose === 'canopy' ? 'canopy' : 'outside', archived, limit: 50 }
-            client.setQueryData(keys.sessions(find), list)
+            for (const limit of [50, 500]) {
+                const find: SessionsFind = { whose: whose === 'canopy' ? 'canopy' : 'outside', archived, limit }
+                client.setQueryData(keys.sessions(find), list)
+            }
         }
     }
     const root = createRootRoute()
@@ -122,9 +130,22 @@ describe('the sessions page', () => {
             expect.stringContaining('no title'),
         ])
         const sub = within(rows()[1] ?? document.body)
-        expect(sub.getByText('subagent')).toBeTruthy()
+        // The indent shows its parent to the eye; its chip names it to a screen reader.
+        expect(sub.getByText('subagent').textContent).toBe('subagent of Why does the deploy script hang on staging?')
         expect(sub.getByText('cd /home/op/acme/infra && opencode --session ses_find')).toBeTruthy()
+        // Each copy button names the session it copies the command of; one with no title by its id.
+        expect(sub.getByRole('button', { name: 'Copy reopen command of Find where deploy.sh waits' })).toBeTruthy()
+        expect(
+            within(rows()[2] ?? document.body).getByRole('button', {
+                name: 'Copy reopen command of session ses_untitled',
+            }),
+        ).toBeTruthy()
+        // A directory's end, its whole on hover, so the title keeps the width.
+        expect(within(rows()[0] ?? document.body).getByText('…/acme/infra')).toBeTruthy()
         expect(screen.getByTestId('sessions-count').textContent).toBe('3')
+        const archived = screen.getByRole('link', { name: 'archived' })
+        expect(archived.getAttribute('aria-pressed')).toBe('false')
+        expect(archived.getAttribute('aria-current')).toBeNull()
         expect(screen.getByTestId('sessions-progress').textContent).toMatch(
             /^Read every session updated up to .*last read/u,
         )
@@ -145,9 +166,19 @@ describe('the sessions page', () => {
         // None of canopy's has a command to copy: its page is the way back.
         expect(screen.queryByText(/opencode --session/u)).toBeNull()
         const whose = screen.getByRole('navigation', { name: 'Whose sessions' })
-        expect(within(whose).getByRole('link', { name: 'outside canopy' }).getAttribute('href')).toBe(
-            '/workspace/sessions',
-        )
+        const outside = within(whose).getByRole('link', { name: 'outside canopy' })
+        expect(outside.getAttribute('href')).toBe('/workspace/sessions')
+        // Only the chosen chip is the current page, though the default's search is a part of this one's.
+        expect(outside.getAttribute('aria-current')).toBeNull()
+        expect(within(whose).getByRole('link', { name: "canopy's" }).getAttribute('aria-current')).toBe('page')
+    })
+
+    it('presses archived while the archived are listed, and never marks it the current page', async () => {
+        await renderPage('/workspace/sessions?archived=true', { outside: OUTSIDE })
+        const archived = await screen.findByRole('link', { name: 'archived' })
+        expect(archived.getAttribute('aria-pressed')).toBe('true')
+        expect(archived.getAttribute('aria-current')).toBeNull()
+        expect(archived.getAttribute('href')).toBe('/workspace/sessions')
     })
 
     it('lists none while sessions.search is off, and says how to turn it on', async () => {
@@ -170,6 +201,12 @@ describe('the sessions page', () => {
         expect((await screen.findByTestId('sessions-count')).textContent).toBe('newest 3')
         const more = screen.getByRole('link', { name: 'list up to 500' })
         expect(more.getAttribute('href')).toBe('/workspace/sessions?all=true')
+    })
+
+    it('links back to the newest 50 from the longest list, in the same place', async () => {
+        await renderPage('/workspace/sessions?all=true', { outside: OUTSIDE })
+        const back = await screen.findByRole('link', { name: 'list the newest 50' })
+        expect(back.getAttribute('href')).toBe('/workspace/sessions')
     })
 
     it('says the loop has read nothing yet, before its first read', async () => {

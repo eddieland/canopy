@@ -31,19 +31,21 @@ on the loop's next read, and the page lists nothing meanwhile.
 
 Each row is a session: where it opens, its title, what it cost, and when it started. A subagent's session sits under
 the one it ran for, its title a step in, marked `subagent`. The runtime's own list leaves archived sessions out, and so
-does this page until you press `archived`. It shows the newest 50; when more match, the line at its foot links to the
-newest 500, and the same line says how far the loop's read has come.
+does this page until you press `archived`. It shows the newest 50 sessions with their subagents under them, so the
+count in the header, which counts every row, can read higher: `newest 53`. When more match, the line at its foot links
+to the newest 500, and back; the same line says how far the loop's read has come.
 
 **Outside canopy**, the default, is yours, in any directory, and other workspaces' canopy runs, which this workspace
-doesn't know. A row shows the directory the session ran in, and under its title the command that reopens it there:
+doesn't know. A row shows the end of the directory the session ran in, `…/acme/infra`, the whole on hover, and under
+its title the command that reopens it there:
 
 ```sh
 cd /home/you/acme/infra && opencode --session ses_3f9c2a1b
 ```
 
-Hover the row and copy it. **canopy's** lists this workspace's runs' sessions instead, each opening the page of what
-made it: a tick, a run, a review, a chore run, a task's run, or an epic. That page has its transcript while the run's
-log is kept.
+Hover the row, or tab to it, and its copy button shows beside the command. **canopy's** lists this workspace's runs'
+sessions instead, each opening the page of what made it: a tick, a run, a review, a chore run, a task's run, or an
+epic. That page has its transcript while the run's log is kept.
 
 ## Finding one
 
