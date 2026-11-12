@@ -697,7 +697,7 @@ def test_a_disagreement_says_whether_it_is_about_the_phase_the_decision_or_both(
         phases.record_overseer(conn, tick_id)
     [compared] = phases.compare(conn, tick_id)
     assert compared.mismatch == mismatch, compared.why
-    assert (compared.verdict == "agrees") == (mismatch is None)
+    assert compared.verdict == ("agrees" if mismatch is None else "disagrees")
 
 
 def changes_requested(

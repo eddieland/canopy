@@ -175,6 +175,9 @@ def test_a_row_is_counted_again_over_the_tickets_it_alone_held_for(
 
     assert counts(found.rows) == [("ci_red", 2, 2, 1, 2, 1), ("changes_requested", 1, 1, 0, 1, 0)]
     assert counts(found.alone) == [("ci_red", 1, 1, 1, 1, 1)]
+    as_json = found.as_json()
+    assert as_json["alone"] == [vars(r) for r in found.alone]
+    assert as_json["alone"] != as_json["rows"]
     assert sorted((d.ticket_key, d.mismatch) for d in found.disagreements) == [("PROJ-1", "both"), ("PROJ-2", "phase")]
 
 
