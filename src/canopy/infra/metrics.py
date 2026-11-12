@@ -73,11 +73,18 @@ def enabled() -> bool:
     return _metrics.meter is not None
 
 
-def configure(state_dir: Path, metrics: Metrics, endpoint: str | None = None) -> None:
+def configure(
+    state_dir: Path,
+    metrics: Metrics,
+    endpoint: str | None = None,
+    *,
+    resource: Mapping[str, str] | None = None,
+) -> None:
     """Turn this process's metrics on or off, as `metrics` says, as every command does when it opens its workspace.
 
-    `otlp` sends them to `endpoint`, an OTLP/HTTP endpoint's base URL, which config requires for it. A second call with
-    the same settings changes nothing.
+    `otlp` sends them to `endpoint`, an OTLP/HTTP endpoint's base URL, which config requires for it. Their resource
+    names this workspace (`otlp.resource`), with the operator's own `resource` attributes. A second call with the same
+    settings changes nothing.
 
     Raises:
         ValueError: `metrics` is `otlp` and `endpoint` names none.
@@ -92,13 +99,28 @@ def configure(state_dir: Path, metrics: Metrics, endpoint: str | None = None) ->
                 msg = "telemetry.metrics = 'otlp' needs telemetry.endpoint"
                 raise ValueError(msg)
             target = endpoint.rstrip("/") + METRICS_PATH
+    # The resource is a setting only while metrics go somewhere: off is off, whatever workspace it is in.
+    settings = _Settings(metrics, target, state_dir, dict(resource or {})) if target is not None else None
     # Held across the check and the change: the web server's threads may each open a workspace at once.
     with _CONFIGURING:
-        if (metrics, target) == (_metrics.metrics, _metrics.target):
+        if settings == _metrics.settings:
             return
         _metrics.stop()
-        if target is not None:
-            _metrics.start(metrics, target)
+        if settings is not None:
+            _metrics.start(settings)
+
+
+@dataclass(frozen=True)
+class _Settings:
+    """Where a process's metrics go, and what their resource is made from: what a second `configure` compares."""
+
+    metrics: Metrics
+    #: The file's path, or the endpoint's URL for metrics.
+    target: str
+    #: The state directory, which keeps the workspace's `service.instance.id`.
+    state_dir: Path
+    #: The operator's own resource attributes.
+    resource: Mapping[str, str]
 
 
 @dataclass
@@ -108,9 +130,8 @@ class _Metrics:
     Process-wide, as tracing's provider is: a metric is recorded deep in code that has no `Context` to pass it through.
     """
 
-    metrics: Metrics = "off"
-    #: The file's path, or the endpoint's URL for metrics.
-    target: str | None = None
+    #: Where metrics go, or None while they are off.
+    settings: _Settings | None = None
     provider: MeterProvider | None = None
     meter: Meter | None = None
     #: Each instrument made so far, by kind and name: made once, on first use.
@@ -118,8 +139,8 @@ class _Metrics:
     histograms: dict[str, Histogram] = field(default_factory=dict)
     gauges: dict[str, _Gauge] = field(default_factory=dict)
 
-    def start(self, metrics: Metrics, target: str) -> None:
-        """Send this process's metrics to `target`, every `EXPORT_EVERY_MILLIS` and as it exits."""
+    def start(self, settings: _Settings) -> None:
+        """Send this process's metrics where `settings` says, every `EXPORT_EVERY_MILLIS` and as it exits."""
         # Imported here, never at import time: a process that records no metric never loads OpenTelemetry.
         from opentelemetry.sdk.metrics import MeterProvider  # noqa: PLC0415
         from opentelemetry.sdk.metrics.export import MetricExporter, PeriodicExportingMetricReader  # noqa: PLC0415
@@ -127,20 +148,23 @@ class _Metrics:
         from canopy.infra import otlp, otlp_metrics  # noqa: PLC0415
 
         exporter: MetricExporter = (
-            otlp_metrics.MetricHttpExporter(target)
-            if metrics == "otlp"
-            else otlp_metrics.MetricFileExporter(Path(target))
+            otlp_metrics.MetricHttpExporter(settings.target)
+            if settings.metrics == "otlp"
+            else otlp_metrics.MetricFileExporter(Path(settings.target))
         )
         reader = PeriodicExportingMetricReader(exporter, export_interval_millis=EXPORT_EVERY_MILLIS)
-        provider = MeterProvider(resource=otlp.resource(), metric_readers=[reader])
-        self.metrics, self.target = metrics, target
+        provider = MeterProvider(
+            resource=otlp.resource(settings.state_dir, settings.resource),
+            metric_readers=[reader],
+        )
+        self.settings = settings
         self.provider, self.meter = provider, provider.get_meter("canopy")
 
     def stop(self) -> None:
         """Send what is left, close the provider, if any, and record nothing more."""
         if self.provider is not None:
             self.provider.shutdown()
-        self.metrics, self.target, self.provider, self.meter = "off", None, None, None
+        self.settings, self.provider, self.meter = None, None, None
         self.counters.clear()
         self.histograms.clear()
         self.gauges.clear()

@@ -12,9 +12,12 @@ that endpoint or none.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
+import tempfile
+import uuid
 from collections.abc import Mapping, Sequence
 from importlib.metadata import version
 from pathlib import Path
@@ -34,6 +37,8 @@ if TYPE_CHECKING:
 FILE_MODE = 0o600
 #: The service every signal's resource names.
 SERVICE = "canopy"
+#: The file in the state directory that keeps the workspace's `service.instance.id`: a random id, made once.
+INSTANCE_FILE_NAME = "instance-id"
 #: How long a post may take: the longest an endpoint that is down delays a process's exit, which sends what is left.
 TIMEOUT_SECONDS = 5
 
@@ -80,13 +85,58 @@ class HttpExporter(SpanExporter):
         """Nothing to close: each post opens and closes its own connection."""
 
 
-def resource() -> Resource:
-    """What every signal canopy sends says it came from: canopy, at the version installed.
+def resource(state_dir: Path, extra: Mapping[str, str]) -> Resource:
+    """What every signal canopy sends says it came from: canopy, at the version installed, in this workspace.
+
+    `service.instance.id` tells one workspace from another, on one machine or many, without naming its path. `extra`
+    holds the operator's own attributes (`telemetry.resource`), which never replace canopy's.
 
     Returns:
         The resource, for a provider of spans or of metrics.
     """
-    return Resource.create({"service.name": SERVICE, "service.version": version("canopy")})
+    own = {"service.name": SERVICE, "service.version": version("canopy")}
+    instance = instance_id(state_dir)
+    if instance is not None:
+        own["service.instance.id"] = instance
+    return Resource.create({**extra, **own})
+
+
+def instance_id(state_dir: Path) -> str | None:
+    """The workspace's instance id, kept in `INSTANCE_FILE_NAME` in `state_dir`, made by the first process to need it.
+
+    Returns:
+        The id, or None, logged, when it can be neither made nor read: telemetry never fails what canopy was doing,
+        and OpenTelemetry's SDK then names this process alone, at random, as it would by default.
+    """
+    path = state_dir / INSTANCE_FILE_NAME
+    try:
+        if not path.exists():
+            _make_instance_id(path)
+        return str(uuid.UUID(path.read_text(encoding="utf-8").strip()))
+    except (OSError, ValueError) as e:
+        _LOG.warning(
+            "telemetry sent without service.instance.id",
+            extra={"file": str(path), "error": type(e).__name__},
+        )
+        return None
+
+
+def _make_instance_id(path: Path) -> None:
+    """Write a random id at `path`, readable by the operator alone, unless another process wrote one first.
+
+    It is written whole to a file of its own and linked into place, so no process reads half an id, and of two that
+    race, the one linked first is kept, and each reads it back.
+    """
+    fd, made = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+    try:
+        try:
+            os.write(fd, f"{uuid.uuid4()}\n".encode())
+        finally:
+            os.close(fd)
+        with contextlib.suppress(FileExistsError):
+            os.link(made, path)
+    finally:
+        Path(made).unlink()
 
 
 def append_line(path: Path, request: Mapping[str, object]) -> bool:

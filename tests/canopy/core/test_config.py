@@ -115,6 +115,8 @@ def test_needs_human_label_is_set_by_the_workspace_and_overridden_by_the_user(ca
         # Traces would leave the operator's machine for a host whoever controls the workspace file chose.
         ("telemetry", "traces = 'otlp'"),
         ("telemetry", "endpoint = 'https://collector.example'"),
+        # What every signal says of where it came from, which leaves the machine with it.
+        ("telemetry", "resource = { 'deployment.environment.name' = 'prod' }"),
         # Every session's title, the operator's own work in any directory among it, would be listed and served.
         ("sessions", "search = 'titles'"),
         # A shared file could bring an excluded directory's sessions back.
@@ -165,6 +167,44 @@ def test_an_otlp_endpoint_canopy_cannot_send_to_plainly_is_refused(
 ) -> None:
     canopy_env.append_user(f"\n[telemetry]\n{toml}")
     with pytest.raises(ConfigError, match=message):
+        load(canopy_env.root, canopy_env.user_file)
+
+
+def test_the_private_file_adds_resource_attributes_to_canopys_own(canopy_env: CanopyEnv) -> None:
+    assert load(canopy_env.root, canopy_env.user_file).telemetry.resource == {}
+    attributes = {"deployment.environment.name": "laptop", "host.name": "studio", "k8s.pod.name": "canopy-0"}
+    canopy_env.configure(canopy_env.private_file, {"telemetry": {"resource": attributes}})
+    assert load(canopy_env.root, canopy_env.user_file).telemetry.resource == attributes
+
+
+@pytest.mark.parametrize(
+    ("key", "value", "message"),
+    [
+        ("service.name", "evil", "is set by canopy itself"),
+        ("service.instance.id", "x", "is set by canopy itself"),
+        ("Host.Name", "x", "lowercase words"),
+        ("deployment..name", "x", "lowercase words"),
+        ("a" * 129, "x", "at most 128 characters"),
+        ("host.name", "", "1 to 256 printable characters"),
+        ("host.name", "two\nlines", "1 to 256 printable characters"),
+        ("host.name", "x" * 257, "1 to 256 printable characters"),
+    ],
+)
+def test_a_resource_attribute_canopy_sets_or_otel_would_not_name_so_is_refused(
+    canopy_env: CanopyEnv,
+    key: str,
+    value: str,
+    message: str,
+) -> None:
+    canopy_env.configure(canopy_env.private_file, {"telemetry": {"resource": {key: value}}})
+    with pytest.raises(ConfigError, match=message):
+        load(canopy_env.root, canopy_env.user_file)
+
+
+def test_the_resource_takes_a_bounded_number_of_attributes(canopy_env: CanopyEnv) -> None:
+    attributes = {f"canopy_test.a{i}": "x" for i in range(config.MAX_RESOURCE_ATTRIBUTES + 1)}
+    canopy_env.configure(canopy_env.private_file, {"telemetry": {"resource": attributes}})
+    with pytest.raises(ConfigError, match=r"telemetry\.resource: Dictionary should have at most 32 items"):
         load(canopy_env.root, canopy_env.user_file)
 
 

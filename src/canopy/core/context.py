@@ -35,8 +35,9 @@ def open_at(start: Path, runner: procs.Runner, *, migrate: bool = True) -> Conte
     # Logs and overseer output live here; they are for the operator only (TRUST_MODEL T2).
     workspace.ensure_state_dir(ws.state_dir)
     logs.configure(ws.state_dir)
-    tracing.configure(ws.state_dir, cfg.telemetry.traces, cfg.telemetry.endpoint)
-    metrics.configure(ws.state_dir, cfg.telemetry.metrics, cfg.telemetry.endpoint)
+    telemetry = cfg.telemetry
+    tracing.configure(ws.state_dir, telemetry.traces, telemetry.endpoint, resource=telemetry.resource)
+    metrics.configure(ws.state_dir, telemetry.metrics, telemetry.endpoint, resource=telemetry.resource)
     conn = db.connect(db_path(ws))
     if migrate:
         # The tick migrates under its lock; everything else migrates on open, which is a no-op inside a tick.

@@ -1224,6 +1224,39 @@ def _otlp_endpoint(value: str) -> str:
     return _ui_url(value).rstrip("/")
 
 
+#: How many attributes `telemetry.resource` may add, and how long each name and value may be.
+MAX_RESOURCE_ATTRIBUTES = 32
+MAX_RESOURCE_KEY = 128
+MAX_RESOURCE_VALUE = 256
+#: A resource attribute's name as OpenTelemetry's conventions spell one: lowercase words of letters, digits, and `_`,
+#: joined by `.`, such as `deployment.environment.name`.
+RESOURCE_KEY_RE = re.compile(r"[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*")
+#: The resource attributes canopy sets itself (`otlp.resource`), which `telemetry.resource` may not.
+CANOPY_RESOURCE_KEYS = ("service.name", "service.version", "service.instance.id")
+
+
+def _resource_key(value: str) -> str:
+    if len(value) > MAX_RESOURCE_KEY or not RESOURCE_KEY_RE.fullmatch(value):
+        raise ValueError(
+            f"{value[:MAX_RESOURCE_KEY]!r} must be at most {MAX_RESOURCE_KEY} characters of lowercase words of "
+            "letters, digits, and '_', joined by '.', such as 'deployment.environment.name'",
+        )
+    if value in CANOPY_RESOURCE_KEYS:
+        raise ValueError(f"{value!r} is set by canopy itself, and cannot be replaced")
+    return value
+
+
+def _resource_value(value: str) -> str:
+    if not value or len(value) > MAX_RESOURCE_VALUE or not value.isprintable():
+        raise ValueError(f"must be one line of 1 to {MAX_RESOURCE_VALUE} printable characters")
+    return value
+
+
+#: A `telemetry.resource` attribute's name, and its value.
+ResourceKey = Annotated[StrictStr, AfterValidator(_resource_key)]
+ResourceValue = Annotated[StrictStr, AfterValidator(_resource_value)]
+
+
 #: How much of the runtime's sessions canopy lists and finds (ROADMAP M72): none; or each one's title.
 type SessionSearch = Literal["off", "titles"]
 
@@ -1265,6 +1298,13 @@ class Telemetry(Section):
     #: An OTLP/HTTP endpoint's base URL, such as a collector's `http://localhost:4318`: spans go to `/v1/traces` under
     #: it, and metrics to `/v1/metrics`. Read only while `traces` or `metrics` is `otlp`, which needs it.
     endpoint: Annotated[Annotated[StrictStr, AfterValidator(_otlp_endpoint)] | None, Scope.PRIVATE] = None
+    #: Attributes every span's and metric's resource adds to canopy's own, such as `deployment.environment.name` or
+    #: `host.name`: sent as written, so it holds only what the operator chooses to send.
+    resource: Annotated[
+        dict[ResourceKey, ResourceValue],
+        Scope.PRIVATE,
+        Field(max_length=MAX_RESOURCE_ATTRIBUTES),
+    ] = {}
 
     @model_validator(mode="after")
     def _otlp_needs_an_endpoint(self) -> Telemetry:

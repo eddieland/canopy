@@ -507,7 +507,9 @@ Controls:
 - Listeners follow T8. No outbound calls from the harness except through the
   configured commands, and one the operator turns on in their own config: `telemetry.traces` or `telemetry.metrics`
   set to `"otlp"` posts canopy's spans or metrics, which hold its own facts and never text it read, a metric's labels
-  only words of its closed vocabularies and configured models (D132), to the OTLP/HTTP endpoint they name, from
+  only words of its closed vocabularies and configured models (D132), under a resource naming canopy, its version, a
+  random id for the workspace, never its path, and only the attributes the operator's `telemetry.resource` adds,
+  to the OTLP/HTTP endpoint they name, from
   `infra/otlp.py` alone, through no proxy, following no redirect and carrying no credential; a shared workspace file
   can set none of these keys.
   canopy ships programs that make the others, each a separate distribution it runs only as a command.
