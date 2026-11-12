@@ -151,7 +151,8 @@ def save(config: Config, state_dir: Path, agent: Agent, text: str, *, read_sha25
         Refused: `inside_run` inside one of canopy's own runs; `not_set` when the config names no file for `agent`;
             `too_large` for text over `prompts.MAX_STANDING_BYTES`; `stale` when the file changed since the page read
             it, by `read_sha256`, None for a file that was missing; `unsafe_file` for a file that is a link, not a
-            regular file, or not the operator's, or a directory that is not theirs or that others may write in.
+            regular file, or not the operator's, or a directory that is not theirs or that a group or others may write
+            in.
     """
     conversation.check_operator()
     path = path_of(config, agent)
@@ -239,7 +240,9 @@ def _write(path: Path, before: _Reading, data: bytes, read_sha256: str | None) -
         raise Refused(UNSAFE_FILE, f"cannot open {path.parent}: {e.strerror}") from None
     try:
         st = os.fstat(dir_fd)
-        if st.st_uid != os.getuid() or st.st_mode & stat.S_IWOTH:
+        # As D053 holds the private config: no one else may write there, a group included, or they could put a file of
+        # their own in place of the temporary one between its write and its rename.
+        if st.st_uid != os.getuid() or st.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
             raise Refused(UNSAFE_FILE, f"{path.parent} is not yours, or others may write in it; write {path} by hand")
         mode = before.mode if before.mode is not None else 0o600
         if before.data is not None:

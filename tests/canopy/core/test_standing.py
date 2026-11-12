@@ -159,10 +159,11 @@ def test_a_save_through_a_link_is_refused_and_writes_nothing(ctx: Context, tmp_p
     assert (standing.read(with_paths(ctx, worker=path), "worker").problem or "").startswith(f"{path} is a symlink")
 
 
-def test_a_save_in_a_directory_others_may_write_in_is_refused(ctx: Context, tmp_path: Path) -> None:
+@pytest.mark.parametrize("mode", [pytest.param(0o777, id="others"), pytest.param(0o770, id="its group")])
+def test_a_save_in_a_directory_others_may_write_in_is_refused(ctx: Context, tmp_path: Path, mode: int) -> None:
     shared = tmp_path / "shared"
     shared.mkdir()
-    shared.chmod(0o777)
+    shared.chmod(mode)
     path = shared / "worker.md"
 
     with pytest.raises(conversation.Refused) as refused:
