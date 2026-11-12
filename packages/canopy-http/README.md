@@ -29,8 +29,7 @@ What it promises:
   | `RateLimitedError` | a 429, or a 403 naming `Retry-After`                     | yes       |
   | `NotSentError`     | no connection could be made                              | yes       |
   | `UntrustedError`   | the service's certificate is not one the system trusts   | yes       |
-  | `FailedError`      | a server error, or a reply that broke off or is not JSON | no        |
-  |                    | or that `json`'s `failed` reads as a failure             |           |
+  | `FailedError`      | a server error; a reply cut off, not JSON, or `failed`   | no        |
   | `TimedOutError`    | no answer in time                                        | no        |
 
 - **Retries only where safe.** A request is sent again, after each of `Retry.pauses`, when that cannot do it twice:
