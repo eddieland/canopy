@@ -35,16 +35,15 @@ if TYPE_CHECKING:
 type Metrics = Literal["off", "file", "otlp"]
 #: A metric's label: a word of one of canopy's closed vocabularies, or a flag (D132).
 type Label = StrEnum | bool
-#: Each metric canopy records, as `INSTRUMENTS` describes it.
-type MetricName = Literal[
-    "canopy.ticks",
-    "canopy.tick.duration",
-    "canopy.runs",
-    "canopy.run.duration",
-    "canopy.cost",
-    "canopy.tokens",
-    "canopy.runs.active",
-]
+#: Each counter canopy records, which `count` alone takes.
+type CounterName = Literal["canopy.ticks", "canopy.runs", "canopy.cost", "canopy.tokens"]
+#: Each histogram canopy records, which `record` alone takes.
+type HistogramName = Literal["canopy.tick.duration", "canopy.run.duration"]
+#: Each gauge canopy sets, which `gauge` alone takes.
+type GaugeName = Literal["canopy.runs.active"]
+#: Each metric canopy records, as `INSTRUMENTS` describes it. A name is one kind of instrument only: the type checker
+#: refuses a histogram's name to `count`, so no name is exported as two kinds.
+type MetricName = CounterName | HistogramName | GaugeName
 
 #: The file metrics are appended to, as OTLP JSON, a line per export, in the state directory.
 METRICS_FILE_NAME = "metrics.jsonl"
@@ -82,21 +81,21 @@ INSTRUMENTS: Mapping[MetricName, Instrument] = {
 }
 
 
-def count(name: MetricName, value: float = 1, *, unit: str = "1", model: str | None = None, **labels: Label) -> None:
+def count(name: CounterName, value: float = 1, *, unit: str = "1", model: str | None = None, **labels: Label) -> None:
     """Add `value` to the counter `name`, under `labels`, and the model that did the work, if any."""
     meter = _metrics.meter
     if meter is not None:
         _metrics.counter(meter, name, unit).add(value, _labelled(labels, model))
 
 
-def record(name: MetricName, value: float, *, unit: str, model: str | None = None, **labels: Label) -> None:
+def record(name: HistogramName, value: float, *, unit: str, model: str | None = None, **labels: Label) -> None:
     """Record `value`, in `unit`, in the histogram `name`, under `labels`, and the model that did the work, if any."""
     meter = _metrics.meter
     if meter is not None:
         _metrics.histogram(meter, name, unit).record(value, _labelled(labels, model))
 
 
-def gauge(name: MetricName, value: float, *, unit: str = "1", **labels: Label) -> None:
+def gauge(name: GaugeName, value: float, *, unit: str = "1", **labels: Label) -> None:
     """Set the gauge `name`, under `labels`, to `value`, what it is now."""
     meter = _metrics.meter
     if meter is not None:
@@ -184,7 +183,7 @@ class _Metrics:
         self.histograms.clear()
         self.gauges.clear()
 
-    def counter(self, meter: Meter, name: MetricName, unit: str) -> Counter:
+    def counter(self, meter: Meter, name: CounterName, unit: str) -> Counter:
         """The counter `name`, made on first use.
 
         Returns:
@@ -194,7 +193,7 @@ class _Metrics:
             self.counters[name] = meter.create_counter(name, unit=unit, description=INSTRUMENTS[name].description)
         return self.counters[name]
 
-    def histogram(self, meter: Meter, name: MetricName, unit: str) -> Histogram:
+    def histogram(self, meter: Meter, name: HistogramName, unit: str) -> Histogram:
         """The histogram `name`, made on first use.
 
         Returns:
@@ -210,7 +209,7 @@ class _Metrics:
             )
         return self.histograms[name]
 
-    def gauge(self, meter: Meter, name: MetricName, unit: str) -> _Gauge:
+    def gauge(self, meter: Meter, name: GaugeName, unit: str) -> _Gauge:
         """The gauge `name`, made on first use.
 
         Returns:

@@ -70,9 +70,16 @@ def test_counts_histograms_and_gauges_are_written_as_otlp_json(metered: Path, tm
     assert (labels(active), active["asInt"]) == ({"role": "worker"}, "3")
 
 
-def test_every_metric_name_is_described() -> None:
-    assert set(metrics.INSTRUMENTS) == set(get_args(metrics.MetricName.__value__))
+def test_every_metric_name_is_described_and_of_one_kind() -> None:
+    """Each name is described, and is a counter's, a histogram's, or a gauge's alone; only a histogram has bounds."""
+    counters, histograms, gauges = (
+        set(get_args(kind.__value__)) for kind in (metrics.CounterName, metrics.HistogramName, metrics.GaugeName)
+    )
+    assert counters.isdisjoint(histograms | gauges)
+    assert histograms.isdisjoint(gauges)
+    assert set(metrics.INSTRUMENTS) == counters | histograms | gauges
     assert all(instrument.description for instrument in metrics.INSTRUMENTS.values())
+    assert {name for name, instrument in metrics.INSTRUMENTS.items() if instrument.bounds} == histograms
 
 
 def test_each_histogram_is_exported_with_its_description_and_bounds_in_seconds(metered: Path, tmp_path: Path) -> None:
