@@ -63,6 +63,9 @@ whether a `resume` for `ci` turned them green on the next head, whether a rerun 
 flaky check without anyone's say-so, how long each PR stayed red, approximate because it runs on when a source
 observed the runs, and whether flaky kicks (§23) came back red. A commit status has no run id, so canopy tells its runs
 apart by what it saw of the status at a head; a rerun that ended as the last did, seen only ended, is not counted.
+The Connectors page reads the sources' runs (§30) over the same local days, a tick's and each poll's alike: how each
+source's runs ended, how long they took against its timeout, the lines canopy refused, and each source now, as
+`canopy status` names it. It counts runs the attention list never shows, since only a tick's raises `connector_failed`.
 The Reviews page counts feedback as the monthly report does, by reviewer, trusted or not, with each first review's wait
 on GitHub's clock alone: a PR with no such time is counted apart, never given a proxy. Beside it, the feedback plans
 (§32) with how each was approved and the planner's estimate beside the resumes that followed, and canopy's own

@@ -1,8 +1,8 @@
 """The reports (DESIGN §11, §42): what each local calendar month cost, in dollars and tokens, and what it got done.
 
 And how worker runs answered each repository's checklist over the last days, how the last days' runs ended, as
-`canopy health` reads them, what CI did on the PRs canopy observed, where their review feedback came from, and how
-plans were approved. Reads only.
+`canopy health` reads them, what CI did on the PRs canopy observed, where their review feedback came from, how plans
+were approved, and how each connector's runs ended. Reads only.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from canopy.serve import checklist_views, monthly, report_views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.schema.checklist import ChecklistCounts
 from canopy.serve.schema.ci import CiReport
+from canopy.serve.schema.connector_report import ConnectorsReport
 from canopy.serve.schema.health import HealthReport
 from canopy.serve.schema.plan_report import PlansReport
 from canopy.serve.schema.reports import MonthlyReport
@@ -144,3 +145,27 @@ def plans_report(
     """
     with backend.open() as ctx:
         return report_views.plans_report(backend, ctx, days)
+
+
+@router.get(
+    "/reports/connectors",
+    operation_id="getConnectorsReport",
+    summary="Get how the sources' runs ended over the last days",
+)
+def connectors_report(
+    backend: BackendDep,
+    days: Annotated[
+        int,
+        Query(
+            ge=1,
+            le=spending.MAX_DAYS,
+            description=f"How many local days to read, today's so far included: 1 to {spending.MAX_DAYS}.",
+        ),
+    ] = spending.DEFAULT_DAYS,
+) -> ConnectorsReport:
+    """Each source now, its runs by how they ended and how long they took, each day's short ones, and refused lines.
+
+    A tick's runs and the loop's polls between ticks both count; only a tick's raises `connector_failed`.
+    """
+    with backend.open() as ctx:
+        return report_views.connectors_report(backend, ctx, days)

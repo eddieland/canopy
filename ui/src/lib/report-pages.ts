@@ -8,6 +8,7 @@ export interface ReportPage {
         | '/reports/checklist'
         | '/reports/health'
         | '/reports/ci'
+        | '/reports/connectors'
         | '/reports/reviews'
         | '/reports/plans'
     /** Its name. */
@@ -37,6 +38,11 @@ export const REPORT_PAGES = [
         to: '/reports/ci',
         label: 'CI',
         hint: 'Which checks fail, what fixing them cost, and whether flaky kicks worked',
+    },
+    {
+        to: '/reports/connectors',
+        label: 'Connectors',
+        hint: "How each source's runs ended, how long they took, and how fresh what it read is",
     },
     {
         to: '/reports/reviews',

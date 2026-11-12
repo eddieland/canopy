@@ -17,8 +17,9 @@ call on each one's row (§8). Every run on T0's day that ended reported its firs
 and the runtime's version the history's last week used, so the spend page's weekly hit rate goes on from it (§13).
 Each feature's fixtures are in a module of their own in this package, named for the feature, which `seed` calls: plans,
 memory, chore runs, review runs, review replies, feedback plans in each state, personas, one-off tasks, the worker
-runs' answers to the checklists, the PRs' check runs, GitHub's times on the PRs, the runs' transcripts, epics, the
-months before T0, whose landed tickets the reports page shows, and the machine (a fixed reading).
+runs' answers to the checklists, the PRs' check runs, the connectors' runs, GitHub's times on the PRs, the runs'
+transcripts, epics, the months before T0, whose landed tickets the reports page shows, and the machine (a fixed
+reading).
 Times are fixed around 2026-10-08 12:00 UTC, so a test that freezes the browser's clock gets the same page every time.
 `changes` moves the running run's cost now and then, which the event stream then shows.
 """
@@ -55,6 +56,7 @@ from canopy.serve.mock import (
     checklists,
     chores,
     ci,
+    connectors,
     desks,
     drafts,
     epics,
@@ -114,7 +116,7 @@ _USER_TOML = """\
 labels = ["agent-ready-mock"]
 
 # The tracker source config requires (DESIGN §30). The mock runs no tick, so it reads nothing, and `.example` names no
-# host anyway.
+# host anyway: its runs in the journal are fixtures (`connectors`).
 [connect.sources.jira]
 kind = "tracker"
 cmd = "canopy-connect-jira --site jira.example"
@@ -386,6 +388,7 @@ def seed(directory: Path) -> Backend:
             checklists.seed(ctx.conn)
             run_diffs.seed(ctx.conn)
             ci.seed(ctx.conn, at)
+            connectors.seed(ctx.conn, at)
             _first_calls(ctx.conn)
             _attachments(ctx.conn)
             # Last but `_every_kind`, so the messages their approvals wrote take ids after every other fixture's.
