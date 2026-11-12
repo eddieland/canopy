@@ -48,7 +48,7 @@ From `ui/` (or `make ui-check`, `make ui-e2e`, `make ui-fmt` from the root):
 |---|---|
 | `npm run dev` | Vite on 127.0.0.1:5173, proxying `/api` to `npm run dev:api` (FastAPI over a mock journal on :8765) |
 | `npm run check` | format check, lint, typecheck, unit tests, build: what CI runs |
-| `npm run fmt:check`, `lint`, `typecheck` | its pieces, one at a time; `lint` and `typecheck` run `gen` first |
+| `npm run fmt:check`, `lint`, `typecheck` | its pieces, one at a time; `lint` and `typecheck` run `gen` first, and `typecheck` checks only what changed since its last run |
 | `npm test -- <files>` | the Vitest files named |
 | `npm run fmt` | remove unused imports (oxlint), then format and sort imports with oxfmt |
 | `npm run gen` | write the uncommitted route tree and API types (from `canopy.serve`'s schema) where stale |

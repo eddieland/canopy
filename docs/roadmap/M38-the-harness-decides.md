@@ -197,6 +197,14 @@ does not show, or with a unit holding a row or stale, stays the overseer's, none
 `skip` (`not_labeled`) for an open ticket with no queue label, not one the operator started, that the tracker query last
 returned, with no row holding for it or a unit and none stale; one the query did not return is let go unlisted, as
 before. Chosen conservatively, for the operator to change: a candidate no row holds for stays the overseer's. Built
+(2026-11-12), so the disagreements can be judged: `canopy agreement` counts each row again over the tickets it alone
+held for, the only ones the harness takes; says of each disagreement whether it is about the phase the overseer left,
+its decision, or both, the decision of a subject left at a phase no row held for now held to what the rows that did
+hold allow; and takes a `wait` beside an item the overseer keeps as agreeing, which closes the gap above. It reads the
+ticks already recorded, so the two weeks are read again by running it. Chosen conservatively, for the operator to
+change: an item the overseer keeps stands, for a past tick, from its record until the overseer's next decision about
+the ticket, outside a dry run, that is not a `wait` or an attention item, what ended it then not being in the journal
+now. Built
 (2026-11-12): the `review_request` row, on the same measurement, its five situations with no disagreement. For the
 operator's request on a PR that is no ticket's, the harness records its `wait` and ends it before the overseer, as
 the derivation reads it, and after the overseer starts its review at an unreviewed head, first in §7's order, in each

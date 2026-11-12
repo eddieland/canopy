@@ -291,9 +291,10 @@ def test_canopy_agreement_counts_the_requests_row_and_lists_its_disagreements(
     assert disagreed.why == f"derived start at {HEAD}; decided wait"
     assert disagreed.rationale == "the author is still pushing"
     out = scenario.operator("agreement", "--days", "1").out
-    [counted] = [line.split() for line in out.splitlines() if line.startswith("review_request")]
-    assert counted == ["review_request", "2", "1", "1", "1", "1"]
-    assert f"  {PR}  review_request  tick {waited.tick.id}: derived start at {HEAD}; decided wait\n" in out
+    # Its line in the table of every row, then in the table of each row alone.
+    counted, _ = (line.split() for line in out.splitlines() if line.startswith("review_request"))
+    assert counted == ["review_request", "2", "1", "1", "0", "1", "1", "0"]
+    assert f"  {PR}  review_request  [action]  tick {waited.tick.id}: derived start at {HEAD}; decided wait\n" in out
     assert "      the author is still pushing\n" in out
 
 

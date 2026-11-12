@@ -14,6 +14,11 @@ for it or one of its units; one with no row is counted under `closed` when the t
 `none`. A situation is a ticket under a row: the same PR decided again each tick is one situation, however many ticks
 decided it (MEASUREMENTS 2026-10-15 F26), so the count is a floor. A disagreement is grouped by its ticket and the
 comparison's words, with the ticks it held across and the overseer's latest rationale.
+
+Two things make a row's count read for what the harness would take. A ticket under several rows counts against each,
+whichever the disagreement was about, so each row is counted again over the tickets it alone held for, the only ones
+the harness takes whole (§37). And a disagreement about the phase alone, the overseer's decision one the rows that held
+allow, is counted apart from one about what it did (`phases.Mismatch`).
 """
 
 from __future__ import annotations
@@ -52,9 +57,13 @@ class RowCounts:
     decisions: int
     agrees: int
     disagrees: int
+    #: Of `disagrees`, those about the phase alone: the overseer's decision was one the rows that held allow.
+    phase_only: int
     #: The distinct tickets the row held for, and those of them that disagreed in some tick.
     situations: int
     disagreeing: int
+    #: Of `disagreeing`, those whose every disagreement was about the phase alone.
+    disagreeing_phase_only: int
 
 
 @dataclass(frozen=True)
@@ -67,6 +76,8 @@ class Disagreement:
     rows: Sequence[str]
     #: The comparison's words: what the overseer set or decided, and what the rows allowed.
     why: str
+    #: What it is about: the phase alone, the decision, or both.
+    mismatch: phases.Mismatch
     ticks: int
     first_tick: int
     last_tick: int
@@ -108,6 +119,8 @@ class Agreement:
     stale_requests: int
     #: Per row, in `ROW_ORDER`, those that held at least once.
     rows: Sequence[RowCounts] = ()
+    #: The same, over the tickets each row alone held for: no other row held for the ticket or one of its units.
+    alone: Sequence[RowCounts] = ()
     #: Newest first.
     disagreements: Sequence[Disagreement] = ()
     sources: Sequence[SourceCost] = field(default_factory=tuple)
@@ -117,7 +130,7 @@ class Agreement:
 
         Returns:
             `since`, `until`, `days`, `ticks`, `decisions`, `stale`, `stale_tickets`, `stale_requests`, then `rows`,
-            `disagreements`, and `sources`, each a list of objects with its dataclass's fields.
+            `alone`, `disagreements`, and `sources`, each a list of objects with its dataclass's fields.
         """
         return {
             "since": self.since,
@@ -129,6 +142,7 @@ class Agreement:
             "stale_tickets": self.stale_tickets,
             "stale_requests": self.stale_requests,
             "rows": [vars(r) for r in self.rows],
+            "alone": [vars(r) for r in self.alone],
             "disagreements": [{**vars(d), "rows": list(d.rows)} for d in self.disagreements],
             "sources": [vars(s) for s in self.sources],
         }
@@ -167,10 +181,53 @@ def agreement(conn: sqlite3.Connection, now: datetime, days: int) -> Agreement:
         stale=tally.stale,
         stale_tickets=len(tally.stale_tickets),
         stale_requests=len(tally.stale_requests),
-        rows=tally.rows(),
+        rows=tally.every.rows(),
+        alone=tally.alone.rows(),
         disagreements=tally.grouped(),
         sources=_sources(conn, since, until),
     )
+
+
+@dataclass
+class _Counts:
+    """The subjects compared under each row, as they are read."""
+
+    verdicts: Counter[tuple[str, phases.Verdict]] = field(default_factory=Counter[tuple[str, phases.Verdict]])
+    phase_only: Counter[str] = field(default_factory=Counter[str])
+    situations: dict[str, set[str]] = field(default_factory=dict[str, set[str]])
+    disagreeing: dict[str, set[str]] = field(default_factory=dict[str, set[str]])
+    # Of the disagreeing, those with a disagreement about what the overseer did, not its phase alone.
+    acted: dict[str, set[str]] = field(default_factory=dict[str, set[str]])
+
+    def add(self, key: str, rows: Sequence[str], compared: phases.Compared) -> None:
+        """Count subject `key`'s comparison under each of `rows`."""
+        for row in rows:
+            self.verdicts[row, compared.verdict] += 1
+            self.situations.setdefault(row, set()).add(key)
+            if compared.mismatch is None:
+                continue
+            self.disagreeing.setdefault(row, set()).add(key)
+            if compared.mismatch == "phase":
+                self.phase_only[row] += 1
+            else:
+                self.acted.setdefault(row, set()).add(key)
+
+    def rows(self) -> list[RowCounts]:
+        """Return the counts of each row that held, in `ROW_ORDER`."""
+        return [
+            RowCounts(
+                row=row,
+                decisions=self.verdicts[row, "agrees"] + self.verdicts[row, "disagrees"],
+                agrees=self.verdicts[row, "agrees"],
+                disagrees=self.verdicts[row, "disagrees"],
+                phase_only=self.phase_only[row],
+                situations=len(self.situations[row]),
+                disagreeing=len(self.disagreeing.get(row, ())),
+                disagreeing_phase_only=len(self.disagreeing.get(row, set()) - self.acted.get(row, set())),
+            )
+            for row in ROW_ORDER
+            if row in self.situations
+        ]
 
 
 @dataclass
@@ -181,12 +238,13 @@ class _Tally:
     stale: int = 0
     stale_tickets: set[str] = field(default_factory=set[str])
     stale_requests: set[str] = field(default_factory=set[str])
-    verdicts: Counter[tuple[str, phases.Verdict]] = field(default_factory=Counter[tuple[str, phases.Verdict]])
-    situations: dict[str, set[str]] = field(default_factory=dict[str, set[str]])
-    disagreeing: dict[str, set[str]] = field(default_factory=dict[str, set[str]])
-    # By ticket and the comparison's words: the rows, the ticks, and the rationale, each the latest tick's.
-    found: dict[tuple[str, str], tuple[Sequence[str], list[int], str]] = field(
-        default_factory=dict[tuple[str, str], tuple[Sequence[str], list[int], str]],
+    #: Each subject under every row that held for it, and under its row when that was its only one.
+    every: _Counts = field(default_factory=_Counts)
+    alone: _Counts = field(default_factory=_Counts)
+    # By ticket and the comparison's words: the rows, the ticks, the rationale, and what it is about, each the latest
+    # tick's.
+    found: dict[tuple[str, str], tuple[Sequence[str], list[int], str, phases.Mismatch]] = field(
+        default_factory=dict[tuple[str, str], tuple[Sequence[str], list[int], str, phases.Mismatch]],
     )
 
     def read(self, conn: sqlite3.Connection, tick_id: int) -> None:
@@ -195,52 +253,35 @@ class _Tally:
         rationale = _rationales(conn, tick_id)
         for compared in phases.compare(conn, tick_id):
             key = compared.ticket_key
-            rows = held.get(key, (NONE,))
-            self.add(tick_id, key, rows, verdict=compared.verdict, why=compared.why, rationale=rationale.get(key, ""))
+            self.add(tick_id, key, held.get(key, (NONE,)), compared, rationale=rationale.get(key, ""))
         for asked in requested_reviews.compare(conn, tick_id):
-            url = asked.pr_url
-            self.add(tick_id, url, (REQUEST,), verdict=asked.verdict, why=asked.why, rationale=rationale.get(url, ""))
+            # A request has no phase the overseer sets: a disagreement on one is about what it did.
+            mismatch: phases.Mismatch | None = "action" if asked.verdict == "disagrees" else None
+            compared = phases.Compared(asked.pr_url, asked.verdict, asked.why, mismatch)
+            self.add(tick_id, asked.pr_url, (REQUEST,), compared, rationale=rationale.get(asked.pr_url, ""))
 
     def add(
         self,
         tick_id: int,
         key: str,
         rows: Sequence[str],
+        compared: phases.Compared,
         *,
-        verdict: phases.Verdict,
-        why: str | None,
         rationale: str,
     ) -> None:
         """Add one subject's comparison in tick `tick_id`: a ticket's, or a request's, keyed by its PR's URL."""
         self.decisions += 1
-        if verdict == "stale":
+        if compared.verdict == "stale":
             self.stale += 1
             (self.stale_requests if REQUEST in rows else self.stale_tickets).add(key)
             return
-        for row in rows:
-            self.verdicts[row, verdict] += 1
-            self.situations.setdefault(row, set()).add(key)
-            if verdict == "disagrees":
-                self.disagreeing.setdefault(row, set()).add(key)
-        if verdict == "disagrees":
-            said = why or ""
-            _, seen, _ = self.found.get((key, said), ((), [], ""))
-            self.found[key, said] = (rows, [*seen, tick_id], rationale)
-
-    def rows(self) -> list[RowCounts]:
-        """Return the counts of each row that held, in `ROW_ORDER`."""
-        return [
-            RowCounts(
-                row=row,
-                decisions=self.verdicts[row, "agrees"] + self.verdicts[row, "disagrees"],
-                agrees=self.verdicts[row, "agrees"],
-                disagrees=self.verdicts[row, "disagrees"],
-                situations=len(self.situations[row]),
-                disagreeing=len(self.disagreeing.get(row, ())),
-            )
-            for row in ROW_ORDER
-            if row in self.situations
-        ]
+        self.every.add(key, rows, compared)
+        if len(rows) == 1:
+            self.alone.add(key, rows, compared)
+        if compared.mismatch is not None:
+            said = compared.why or ""
+            _, seen, _, _ = self.found.get((key, said), ((), [], "", compared.mismatch))
+            self.found[key, said] = (rows, [*seen, tick_id], rationale, compared.mismatch)
 
     def grouped(self) -> list[Disagreement]:
         """Return each disagreement, the one held in the newest tick first."""
@@ -249,12 +290,13 @@ class _Tally:
                 ticket_key=key,
                 rows=rows,
                 why=why,
+                mismatch=mismatch,
                 ticks=len(seen),
                 first_tick=seen[0],
                 last_tick=seen[-1],
                 rationale=rationale,
             )
-            for (key, why), (rows, seen, rationale) in self.found.items()
+            for (key, why), (rows, seen, rationale, mismatch) in self.found.items()
         ]
         return sorted(found, key=lambda d: (-d.last_tick, d.ticket_key, d.why))
 

@@ -92,9 +92,9 @@ ticket's and unit's phase, its next action and the actions a choice allows, and 
 the operator's review requests (§21), whether §37 would start its review, wait, or end it. A subject that depends on a
 stale or missing observation is derived as stale and counted apart, never as a disagreement. It records every row of
 §7 that held, as §7 has no order yet, beside the phase the overseer left each subject at, and agrees when that phase is
-one of the rows and the overseer's decision one that row allows; a request agrees when the overseer started, waited
-on, or ended it as derived. The overseer is shown a ticket's (above), not a request's; by itself it changes no
-attention item, cursor, phase, or guard.
+one of the rows and the overseer's decision one that row allows, or a `wait` beside an attention item that stands on
+the ticket (§14); a request agrees when the overseer started, waited on, or ended it as derived. The overseer is shown
+a ticket's (above), not a request's; by itself it changes no attention item, cursor, phase, or guard.
 
 ### Checks that are not CI
 

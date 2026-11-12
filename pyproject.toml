@@ -30,7 +30,7 @@ classifiers = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "anyio>=4.15.1",
+    "anyio>=4.16.0",
     "canopy-artifacts",
     "canopy-github",
     "canopy-jira",
@@ -144,11 +144,11 @@ dev = [
     "canopy-review-bench",
     "editorconfig-checker>=3.11.1",
     "httpx2>=2.16.0",
-    "hypothesis>=6.170.13",
+    "hypothesis>=6.170.14",
     # Holds what an MCP tool returns to the schema it lists, as a client would check it (tests/canopy/loop/test_mcp.py).
     "jsonschema>=4.26.0",
     # Git hooks (prek.toml) that run the formatters and linters on a commit: `make hooks` installs them.
-    "prek>=0.5.7",
+    "prek>=0.5.10",
     "pyrefly>=1.4.0",
     "pytest>=9.2.0",
     # Line and branch coverage: `make coverage`, and `make check COVERAGE=1`, whose coverage.xml CI sends to Codecov.
@@ -162,7 +162,7 @@ dev = [
     # Security lint for the GitHub workflows, beside actionlint's correctness checks: pins, triggers, token handling.
     # jsonschema's types, for the type checker.
     "types-jsonschema>=4.26.0.20261006",
-    "zizmor>=1.31.1",
+    "zizmor>=1.32.0",
 ]
 
 [tool.ruff]

@@ -109,7 +109,8 @@ entry = "sh -c 'make -s tests/plugins/node_modules && npm --prefix tests/plugins
 files = "^(\\.agents/plugins/|tests/plugins/)"
 pass_filenames = false
 
-# ui/'s type-aware lint and type check take half a minute each, too long for every commit, so they wait for a push.
+# ui/'s type-aware lint takes about ten seconds and its type check up to half a minute, when much has changed since
+# its last run: too long for every commit, so they wait for a push.
 [[repos]]
 repo = "local"
 

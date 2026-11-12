@@ -359,15 +359,16 @@ function NewestPlan({
         setConfirming(false)
         // The comments the notes carry, resolved once they are sent: the implement has them, so they ask for nothing.
         const sent = notes === '' ? [] : notable.map((thread) => thread.id)
-        // Whether the journal holds the decision: a refused one keeps the picks it would have sent.
-        let made = false
+        // Whether the journal holds the decision: a refused one keeps the picks it would have sent. A field, not a
+        // variable: the compiler refuses a variable the async work reassigns.
+        const decision = { made: false }
         act(
             async () => {
                 if (dirty && action === 'approve') {
                     await save()
                 }
                 const decided = await decidePlan(ticketKey, action, notes === '' ? undefined : notes)
-                made = true
+                decision.made = true
                 await Promise.all(
                     sent.map(async (id) => changePlanThread(ticketKey, await serverId(id), { resolved: true })),
                 )
@@ -383,7 +384,7 @@ function NewestPlan({
             // Sent with the notes, or taken as the planner chose. Dropped once the plan is read again as decided, so
             // an answer just sent never shows as the planner's choice meanwhile.
             () => {
-                if (made) {
+                if (decision.made) {
                     clearPicks(ticketKey)
                 }
             },

@@ -1,5 +1,8 @@
 {
   "compilerOptions": {
+    // Keeps what `tsc -b` checked in tsBuildInfoFile, so the next run checks only what changed since. Without it
+    // a project that emits nothing is out of date on every run, and checked whole.
+    "incremental": true,
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
     "target": "es2023",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],

@@ -481,12 +481,16 @@ function useFlight(body: RefObject<SVGGElement | null>, shadow: RefObject<SVGGEl
         if (flier === null || floor === null || still) {
             return
         }
-        let at: Spot = { x: 0, y: 0 }
-        let flying: Animation[] = []
-        let timer: ReturnType<typeof globalThis.setTimeout> | undefined
-        // When the leg flying now lands.
-        let lands = 0
+        // Where it is, the animations flying it, the timer for its next leg, and when the leg flying now lands. One
+        // object's fields, not variables: the compiler refuses a variable a callback reassigns after render.
+        const flight: {
+            at: Spot
+            flying: Animation[]
+            timer: ReturnType<typeof globalThis.setTimeout> | undefined
+            lands: number
+        } = { at: { x: 0, y: 0 }, flying: [], timer: undefined, lands: 0 }
         const fly = () => {
+            const { at } = flight
             const leg = nextLeg(at, sky())
             const span = leg.ms + leg.rest + HOLD_MS
             const landed = leg.ms / span
@@ -507,24 +511,24 @@ function useFlight(body: RefObject<SVGGElement | null>, shadow: RefObject<SVGGEl
                     id: 'ghost-flight-shadow',
                 }),
             ]
-            for (const animation of flying) {
+            for (const animation of flight.flying) {
                 animation.cancel()
             }
-            flying = next
-            at = leg.to
-            lands = performance.now() + leg.ms
-            timer = globalThis.setTimeout(fly, leg.ms + leg.rest)
+            flight.flying = next
+            flight.at = leg.to
+            flight.lands = performance.now() + leg.ms
+            flight.timer = globalThis.setTimeout(fly, leg.ms + leg.rest)
         }
-        timer = globalThis.setTimeout(fly, FIRST_LEG_MS)
+        flight.timer = globalThis.setTimeout(fly, FIRST_LEG_MS)
         comeDown.current = () => {
-            if (!inSky(at, sky())) {
-                globalThis.clearTimeout(timer)
-                timer = globalThis.setTimeout(fly, Math.max(0, lands - performance.now()))
+            if (!inSky(flight.at, sky())) {
+                globalThis.clearTimeout(flight.timer)
+                flight.timer = globalThis.setTimeout(fly, Math.max(0, flight.lands - performance.now()))
             }
         }
         return () => {
-            globalThis.clearTimeout(timer)
-            for (const animation of flying) {
+            globalThis.clearTimeout(flight.timer)
+            for (const animation of flight.flying) {
                 animation.cancel()
             }
             comeDown.current = null
