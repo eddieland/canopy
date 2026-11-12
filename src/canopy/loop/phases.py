@@ -418,10 +418,10 @@ def _overseers(decision: records.Decision) -> bool:
 def _kept(conn: sqlite3.Connection, tick_id: int, keys: Collection[str]) -> set[str]:
     """The tickets among `keys` on which an item the overseer keeps stood in tick `tick_id` (`core.kept_items`).
 
-    One it recorded in that tick, or in an earlier live `ok` tick with no decision of its own about the ticket since
-    but a `wait` or an attention item. What ended an item then is not in the journal as it stands now, a cursor having
-    moved on, so it is read from what the overseer did: whatever ends one gives it something to decide, and a dispatch
-    or a `done` after the record is taken as its end.
+    One it recorded in that tick, or in an earlier live `ok` tick with no decision of its own about the ticket since,
+    outside a dry run, but a `wait` or an attention item. What ended an item then is not in the journal as it stands
+    now, a cursor having moved on, so it is read from what the overseer did: whatever ends one gives it something to
+    decide, and a dispatch or a `done` after the record is taken as its end.
 
     Returns:
         Their keys.
@@ -459,10 +459,18 @@ def _kept(conn: sqlite3.Connection, tick_id: int, keys: Collection[str]) -> set[
         .where_in("ticket_key", before)
         .all(conn)
     )
+    # A dry run starts nothing, so what it decided ends nothing (D036).
+    ticks = {d.tick_id for d in since}
+    dry = (
+        {t.id for t in records.select(records.Tick).where("dry_run").where_in("id", ticks).all(conn)}
+        if ticks
+        else set[int]()
+    )
     acted = {
         str(d.ticket_key)
         for d in since
         if d.tick_id > before[str(d.ticket_key)]
+        and d.tick_id not in dry
         and _overseers(d)
         and d.action != "wait"
         and not d.action.startswith(_ATTENTION)

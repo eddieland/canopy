@@ -739,9 +739,12 @@ def test_a_wait_agrees_while_an_item_the_overseer_keeps_stands(canopy_env: Canop
     unit(canopy_env, conn)
     kept = changes_requested(canopy_env, conn, ("attention:needs_author", True), ("wait", False))
     waited = changes_requested(canopy_env, conn, ("wait", False))
+    # A dry run's `resume` starts nothing, so the item stands through it.
+    changes_requested(canopy_env, conn, ("dispatch:resume", False), dry_run=True)
+    still = changes_requested(canopy_env, conn, ("wait", False))
     resumed = changes_requested(canopy_env, conn, ("dispatch:resume", False))
     after = changes_requested(canopy_env, conn, ("wait", False))
-    assert [verdict_of(conn, t) for t in (kept, waited, resumed)] == ["agrees", "agrees", "agrees"]
+    assert [verdict_of(conn, t) for t in (kept, waited, still, resumed)] == ["agrees"] * 4
     # The `resume` took the item as ended, so a `wait` after it is held to the row again.
     assert verdict_of(conn, after) == "disagrees"
 
