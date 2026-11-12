@@ -130,24 +130,22 @@ test("a shell command that would outlast the run ends by the middle of the warni
     assert.equal(await timeoutOf(short.before, { timeout: 0 }), 8.5 * 60_000);
 });
 
-test("a command that ends sooner keeps the timeout it asked for, or the tool's own", async () => {
+test("a command that ends sooner keeps the timeout it asked for", async () => {
     const { before } = await load(60);
     at(20 * 60);
     assert.equal(await timeoutOf(before, { timeout: 600_000 }), 600_000);
-    assert.equal(await timeoutOf(before), undefined);
     // To the second: 35 minutes are left before the middle of the warning.
     assert.equal(await timeoutOf(before, { timeout: 35 * 60_000 }), 35 * 60_000);
     assert.equal(await timeoutOf(before, { timeout: 35 * 60_000 + 1 }), 35 * 60_000);
 });
 
-test("a call that names no timeout is cut once the tool's own two minutes would pass the middle", async () => {
+test("a call that names no timeout is left to the tool's own, however near the middle it starts", async () => {
     const { before } = await load(60);
-    at(53 * 60);
-    assert.equal(await timeoutOf(before), undefined);
-    assert.equal(await timeoutOf(before, { timeout: null }), null);
-    at(53 * 60 + 1);
-    assert.equal(await timeoutOf(before), 119_000);
-    assert.equal(await timeoutOf(before, { timeout: null }), 119_000);
+    for (const seconds of [20 * 60, 53 * 60 + 1, 55 * 60 - 1]) {
+        at(seconds);
+        assert.equal(await timeoutOf(before), undefined, String(seconds));
+        assert.equal(await timeoutOf(before, { timeout: null }), null, String(seconds));
+    }
 });
 
 test("the command the clock ends returns inside the warning, so its result carries the minutes left", async () => {

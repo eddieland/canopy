@@ -75,8 +75,6 @@ const SHARE = 5;
 const MOST_SECONDS = 600;
 /** The share of that warning a shell command may run into before the clock ends it: its first half. */
 const RUN_INTO = 2;
-/** How long the runtime's shell tool lets a command run when its call names no timeout, in milliseconds. */
-const SHELL_TIMEOUT_MS = 120_000;
 /** What every line of canopy's starts with, as the prompts name it. */
 const MARK = "[canopy]";
 /** A run that keeps progress, as CANOPY_RUN_ID names it: a worker's or a planner's id, a review's, `review-7`, or a
@@ -254,10 +252,10 @@ function contentOf(result) {
  *
  * A line reaches the agent on a call's result, and a shell command still running when canopy stops the run returns
  * none: the agent hears nothing, and what it has not pushed goes with the run. So before each shell call the clock
- * cuts the call's timeout to end the command by the middle of the warning (`endWithin`), where the runtime ends it and
- * says so in a result that carries the minutes left, with the other half left to keep the work. It only ever shortens
- * a timeout, so the command reaches nothing more and runs no longer than it would have; a call past that middle is
- * left as it is, since the kill is the limit (TRUST_MODEL T3).
+ * cuts the timeout the call names to end the command by the middle of the warning (`endWithin`), where the runtime ends
+ * it and says so in a result that carries the minutes left, with the other half left to keep the work. It only ever
+ * shortens a timeout the call names, so the command reaches nothing more and runs no longer than it would have; a call
+ * past that middle is left as it is, since the kill is the limit (TRUST_MODEL T3).
  *
  * @returns {Job} The clock's hooks.
  */
@@ -305,12 +303,14 @@ function readDeadline() {
 }
 
 /**
- * Cut a shell call's timeout, in place, so that its command ends within `most` milliseconds, when it would not.
+ * Cut the timeout a shell call names, in place, so that its command ends within `most` milliseconds, when it would
+ * not.
  *
- * The runtime's shell tool takes `timeout` in milliseconds, `SHELL_TIMEOUT_MS` when the call names none and 0 for no
- * timeout at all, and ends a command that passes it, saying so in the call's result (OpenCode 2.2.5's build, read
- * 2026-11-12). A call left as it is: one whose command ends sooner, one with no time left to end in, one that runs its
- * command in the background, which returns at once, and one whose timeout is no number the tool takes.
+ * The runtime's shell tool takes `timeout` in milliseconds, 0 for no timeout at all, and ends a command that passes
+ * it, saying so in the call's result (OpenCode 2.2.5's build, read 2026-11-12). A call left as it is: one whose
+ * command ends sooner; one that names no timeout, which the tool's own default ends, a default canopy does not assume,
+ * so that it neither lengthens a timeout nor follows a default that moved; one with no time left to end in; one that
+ * runs its command in the background, which returns at once; and one whose timeout is no number.
  *
  * @param {unknown} input
  * @param {number} most
@@ -321,7 +321,7 @@ function endWithin(input, most) {
         return;
     }
     const call = /** @type {{ timeout?: unknown, background?: unknown }} */ (input);
-    const asked = call.timeout ?? SHELL_TIMEOUT_MS;
+    const asked = call.timeout;
     if (call.background === true || typeof asked !== "number") {
         return;
     }

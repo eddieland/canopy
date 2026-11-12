@@ -41,10 +41,10 @@ tool's result after the hook, keeping its head; so the tracker's, GitHub's, and 
 it too. Counting from its own load, at the session's start, keeps it to one variable.
 
 A shell command still running when canopy stops the run returns no result, so no line reaches the agent, and what it
-has not pushed goes with its slot. So before each shell call (`execute.before`) the clock cuts the call's timeout to
-end the command by the middle of that last stretch: OpenCode ends it there and says so, in a result that carries the
-minutes left, and the other half is the agent's to keep its work. It only ever shortens a timeout, and leaves as they
-are a command that ends sooner, one started past that middle, and one run in the background, which returns at once.
+has not pushed goes with its slot. So the clock cuts short a timeout a shell call names, to end the command by the
+middle of that last stretch: its result then carries the minutes left, and the other half is the agent's to keep its
+work. It only ever shortens a timeout: a command that would end sooner, one whose call names no timeout, one started
+past that middle, and one run in the background are left as they are.
 
 What lets it run inside every agent process (TRUST_MODEL T4):
 
@@ -70,8 +70,7 @@ These rest on OpenCode's source at 2.1.2, read 2026-10-22 and read again on an u
 every config directory, the snapshot's last, so a repository's own plugins already run in the agent's process (T7);
 it loads a plugin file only by a default export with an id and a `setup` that registers hooks, and logs any other and
 runs without it; a hook that throws fails the call; and every tool's result is truncated after the hook. A hook before
-a call changes the input the tool runs with (read 2026-11-02), and the shell tool ends a command that passes its call's
-timeout and says so in the call's result (2.2.5's build, read 2026-11-12).
+a call changes the input the tool runs with (read 2026-11-02).
 
 ### A shell command's leading `cd`
 

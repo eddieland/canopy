@@ -643,15 +643,16 @@ Controls now:
   grants no tool, and catches its own errors. The one call it changes is a shell call, in two ways. One whose command
   opens with `cd <dir> &&` has that directory made the call's working directory, which the runtime's
   `external_directory` rule then checks, with the rest of the command from it, as it checks any call's: so the plugin
-  reaches nothing the `cd` could not. And one whose command would outlast the run has its timeout cut, so that the
-  runtime ends the command before canopy's kill would: the plugin only ever shortens a timeout, so the command runs no
-  longer than it would have and reaches nothing more (T3). A repository's own plugins already load in the same process
-  (T7). The answers directory is the run's own, in the state directory beside its other files, made before the agent
-  starts and removed once it ends; a sandboxed run may read it and nothing else of the state directory, and write none
-  of it (§24); a one-off task's run has one too, for the operator's messages to it. An unsandboxed run could write the
-  ask to wrap up, as it could any of the operator's files; it could only tell itself to end early, keeping its work.
-  canopy's `messages` tool, beside `status` on the run's own server, reads the messages' file in the same directory and
-  writes nothing; it opens no journal, so a sandboxed run, and the servers it starts, reach no more than before.
+  reaches nothing the `cd` could not. And one that names a timeout its command would outlast the run by has that timeout
+  cut, so that the runtime ends the command before canopy's kill would: the plugin only ever shortens a timeout the call
+  names, so the command runs no longer than it would have and reaches nothing more (T3). A repository's own plugins
+  already load in the same process (T7). The answers directory is the run's own, in the state directory beside its other
+  files, made before the agent starts and removed once it ends; a sandboxed run may read it and nothing else of the
+  state directory, and write none of it (§24); a one-off task's run has one too, for the operator's messages to it. An
+  unsandboxed run could write the ask to wrap up, as it could any of the operator's files; it could only tell itself to
+  end early, keeping its work. canopy's `messages` tool, beside `status` on the run's own server, reads the messages'
+  file in the same directory and writes nothing; it opens no journal, so a sandboxed run, and the servers it starts,
+  reach no more than before.
 - canopy's git hooks, from the same snapshot, run in every worker's git (T5). Their `pre-push` holds a worker's first
   push of a stretch for its repository's checklist (DESIGN §42): it reads one more file, the slot's list in the run's
   answers directory, which the run cannot write, and writes one marker, the run's id and the time, in the slot's own
