@@ -12,7 +12,7 @@ from typing import Annotated, Literal
 
 from pydantic import Field
 
-from canopy.serve.schema import Message, Model, RunState
+from canopy.serve.schema import Attachments, Message, Model, RunState
 
 type EpicStanding = Annotated[
     Literal["queued", "planning", "proposed", "approved", "unplanned", "stopped"],
@@ -215,6 +215,8 @@ class EpicDetail(Model):
     """Every plan run of it, the oldest first."""
     messages: list[Message]
     """The operator's replies to it, the oldest first: each its next plan run's to read."""
+    attachments: Attachments
+    """What the operator attached to it, which its plan runs and every run of its members read, and the limits."""
     plan: EpicPlanSummary | None = None
     """Its current plan, the one waiting on the operator or approved; None while it has neither."""
     outline: EpicOutline | None = None

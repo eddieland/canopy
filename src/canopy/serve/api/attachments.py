@@ -1,9 +1,9 @@
-"""Files the operator attaches to a ticket or a task (DESIGN §22): what `canopy attach` and `canopy detach` do.
+"""Files the operator attaches to a ticket, a task, or an epic (DESIGN §22): what `canopy attach` and `detach` do.
 
 An upload is the file's bytes as the request's body, one file a request, which the guard bounds (guard.py) above the
 largest attachment `policy` allows. Each write goes through `canopy.runs.attachments`, with channel `web`, so its
-guards are the CLI's: only UTF-8 text, within the limits, on a ticket canopy knows or a task not stopped (TRUST_MODEL
-T1, T8). What a ticket's or a task's page shows of them comes with the page's own read.
+guards are the CLI's: only UTF-8 text, within the limits, on a ticket canopy knows or a task or an epic not stopped
+(TRUST_MODEL T1, T8). What a ticket's, a task's, or an epic's page shows of them comes with the page's own read.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from canopy.infra import logs
 from canopy.runs import attachments
 from canopy.serve import views
 from canopy.serve.api.deps import BackendDep
-from canopy.serve.api.refs import REFUSED, WEB, RefusedError, TaskId, TicketKey
+from canopy.serve.api.refs import REFUSED, WEB, EpicId, RefusedError, TaskId, TicketKey
 from canopy.serve.schema import Attached, Detached
 
 if TYPE_CHECKING:
@@ -96,6 +96,34 @@ async def attach_task(task_id: TaskId, name: AttachmentName, request: Request, b
 def detach_task(task_id: TaskId, name: AttachmentName, backend: BackendDep) -> Detached:
     """`canopy detach task:N NAME`: its file is deleted, and later runs no longer get it. Refused `unknown` for none."""
     return _detach(backend, conversation.Ref(conversation.TASK, str(task_id)), name)
+
+
+@router.put(
+    "/epics/{epic_id}/attachments/{name}",
+    operation_id="attachEpic",
+    summary="Attach a file to an epic",
+    responses=REFUSED,
+    openapi_extra=_BODY,
+)
+async def attach_epic(epic_id: EpicId, name: AttachmentName, request: Request, backend: BackendDep) -> Attached:
+    """`canopy attach epic:N FILE --name NAME`: keep the body's text as NAME, for its plan runs and its members' runs.
+
+    Refused as the CLI is: `unknown` for an epic canopy has no record of, `stopped` for one the operator stopped,
+    `bad_name`, `not_text`, `empty`, `too_large`, `too_many`, and `taken`.
+    """
+    ref = conversation.Ref(conversation.EPIC, str(epic_id))
+    return await run_in_threadpool(_attach, backend, ref, name, await request.body())
+
+
+@router.delete(
+    "/epics/{epic_id}/attachments/{name}",
+    operation_id="detachEpic",
+    summary="Remove an epic's attachment",
+    responses=REFUSED,
+)
+def detach_epic(epic_id: EpicId, name: AttachmentName, backend: BackendDep) -> Detached:
+    """`canopy detach epic:N NAME`: its file is deleted, and later runs no longer get it. Refused `unknown` for none."""
+    return _detach(backend, conversation.Ref(conversation.EPIC, str(epic_id)), name)
 
 
 def _attach(backend: Backend, ref: conversation.Ref, name: str, data: bytes) -> Attached:

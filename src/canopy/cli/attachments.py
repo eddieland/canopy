@@ -1,4 +1,4 @@
-"""`canopy attach` and `canopy detach`: text files on a ticket or a task, for its runs to read (DESIGN §22).
+"""`canopy attach` and `canopy detach`: text files on a ticket, a task, or an epic, for its runs to read (DESIGN §22).
 
 Both write through `canopy.runs.attachments`, which refuses inside canopy's own ticks and runs (`inside_run`) and holds
 attachments to `policy`'s limits; `canopy show` lists a subject's attachments with `listed`.
@@ -29,12 +29,13 @@ CLI = "cli"
 @click.option("--name", metavar="NAME", help="What runs see it as. The file's own name, made plain, by default.")
 @click.pass_context
 def cmd_attach(click_ctx: click.Context, ref: str, file: str, name: str | None) -> int:
-    """Attach FILE, a text file such as a design doc, to a ticket or `task:N`, or stdin with `-` and --name.
+    """Attach FILE, a text file such as a design doc, to a ticket, `task:N`, or `epic:N`, or stdin with `-` and --name.
 
     Each later run of it gets a copy beside its worktree, outside git, and reads it as data: say what to do with it in
-    a reply, or in the task's text. Only UTF-8 text is taken; export a PDF or a document as Markdown or plain text
-    first. policy.max_attachments, max_attachment_kib, and max_attachments_total_kib bound what one ticket or task
-    holds. `canopy detach` removes one.
+    a reply, or in the task's or the epic's text. An epic's go to its plan runs and to every run of each of its member
+    tickets, beside the ticket's own. Only UTF-8 text is taken; export a PDF or a document as Markdown or plain text
+    first. policy.max_attachments, max_attachment_kib, and max_attachments_total_kib bound what one ticket, task, or
+    epic holds. `canopy detach` removes one.
     """
     subject = _ref(ref, "attach")
     chosen = name if name is not None else (None if file == "-" else attachments.name_from(file))
@@ -73,7 +74,7 @@ def cmd_attach(click_ctx: click.Context, ref: str, file: str, name: str | None) 
 @click.argument("name", metavar="NAME")
 @click.pass_context
 def cmd_detach(click_ctx: click.Context, ref: str, name: str) -> int:
-    """Remove the attachment NAME from a ticket or `task:N`: its file is deleted, and later runs no longer get it.
+    """Remove the attachment NAME from a ticket, `task:N`, or `epic:N`: its file is deleted, and later runs lose it.
 
     A run already working keeps its copy. `canopy show REF` lists the attachments it has.
     """

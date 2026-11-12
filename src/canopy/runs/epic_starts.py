@@ -17,10 +17,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import agent_models, db, epics, plans, pools, prompts
+from canopy.core import agent_models, conversation, db, epics, plans, pools, prompts
 from canopy.core.vocab import RunStatus
 from canopy.infra import lock, logs, procs
-from canopy.runs import dispatch, epic_runs
+from canopy.runs import attachments, dispatch, epic_runs
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -166,6 +166,11 @@ def _spawn(ctx: Context, epic: records.Epic, run_id: int, names: Sequence[str]) 
             f"Message {m.id}, {m.at}:\n\n{m.body}" for m in epics.messages_of(ctx.conn, epic.id)
         )
         or None,
+        # `_epic` copies them into its desk, as a ticket's run gets its own (DESIGN §22).
+        "ATTACHMENTS": prompts.attachments_note(
+            Path(run.desk_path) / attachments.RUN_DIR,
+            attachments.sizes(attachments.held_at(ctx.conn, _ref(epic), run.started_at)),
+        ),
         "PLAN_OUT": plans.WRITTEN,
         "PLAN_FILE": plans.REPLACED,
         "MAX_PLAN_CHARS": str(plans.MAX_CHARS),
@@ -184,6 +189,10 @@ def _spawn(ctx: Context, epic: records.Epic, run_id: int, names: Sequence[str]) 
         raise _NotStarted(str(e)) from e
     db.claim_run(ctx.conn, "epic_runs", run_id, pid)
     return pid
+
+
+def _ref(epic: records.Epic) -> conversation.Ref:
+    return conversation.Ref(conversation.EPIC, str(epic.id))
 
 
 def _give_back(ctx: Context, leases: Sequence[tuple[str, pools.Lease]], log: logs.TickAdapter) -> None:

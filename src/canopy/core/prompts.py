@@ -597,13 +597,16 @@ def epic_trivial(level: PlannerApproval) -> str:
 def render_epic_plan(config: Config, values: Mapping[str, str | None]) -> str:
     """Return an epic planner's prompt (DESIGN §43) with every `{{NAME}}` replaced from `values`.
 
-    It must carry `REQUIRED_EPIC_PLAN`.
+    It must carry `REQUIRED_EPIC_PLAN`, and `REQUIRED_ATTACHMENTS` when `values` names attachments.
 
     Returns:
         The rendered prompt.
     """
     trivial = epic_trivial(config.policy.planner_may_approve)
-    return render(config, EPIC_PLAN, {**values, "TRIVIAL": trivial}, required=REQUIRED_EPIC_PLAN)
+    attached = REQUIRED_ATTACHMENTS if values.get("ATTACHMENTS") is not None else ()
+    # An epic with none leaves the section out.
+    values = {"ATTACHMENTS": None, **values, "TRIVIAL": trivial}
+    return render(config, EPIC_PLAN, values, required=(*REQUIRED_EPIC_PLAN, *attached))
 
 
 def reasons_note(reasons: Sequence[str], *, private: bool) -> str:
@@ -669,19 +672,36 @@ def review_plan_note(copy: Path, outline: Sequence[str] | None, *, by_planner: b
     return "\n".join([*lines, *_outline(outline)])
 
 
-def attachments_note(directory: Path, files: Sequence[tuple[str, str]]) -> str | None:
-    """Return a worker's or a task's `{{ATTACHMENTS}}`: where its copies of its subject's attachments are (DESIGN §22).
+def attachments_note(
+    directory: Path,
+    files: Sequence[tuple[str, str]],
+    *,
+    epic: str | None = None,
+    epic_files: Sequence[tuple[str, str]] = (),
+) -> str | None:
+    """Return a run's `{{ATTACHMENTS}}`: where its copies of its subject's attachments are, and its epic's (DESIGN §22).
 
-    `files` are each attachment's name, which is plain (`attachments.NAME_RE`), and its size as said to a person. The
-    text is never in the prompt: the worker reads each copy as it needs it.
+    `files` are each attachment's path under `directory`, its name, which is plain (`attachments.NAME_RE`), and its size
+    as said to a person. `epic_files` are a member ticket's epic's, `epic`, the same way. The text is never in the
+    prompt: the agent reads each copy as it needs it.
 
     Returns:
-        A line naming the directory, then one per file; or None for a subject with none, which leaves the section out.
+        A line naming the directory, then one per file, its epic's in a group of their own; or None for a run with
+        none, which leaves the section out.
     """
-    if not files:
+    if not files and not epic_files:
         return None
-    lines = [f"Copies written for this run alone, in `{directory}`:", ""]
-    return "\n".join([*lines, *(f"- `{directory / name}` ({size})" for name, size in files)])
+    lines = [f"Copies written for this run alone, in `{directory}`:"]
+    if files:
+        lines += ["", *(f"- `{directory / name}` ({size})" for name, size in files)]
+    if epic_files:
+        lines += [
+            "",
+            f"Attached to `{epic}`, the epic this ticket is a member of, for every run of it and of its tickets:",
+            "",
+            *(f"- `{directory / name}` ({size})" for name, size in epic_files),
+        ]
+    return "\n".join(lines)
 
 
 def _outline(outline: Sequence[str]) -> list[str]:

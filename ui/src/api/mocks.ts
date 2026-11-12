@@ -26,7 +26,7 @@ import type {
     TicketSummary,
 } from './types'
 
-/** A ticket's or a task's attachments while it has none, under the default limits (DESIGN §22). */
+/** A ticket's, a task's, or an epic's attachments while it has none, under the default limits (DESIGN §22). */
 export const mockNoAttachments: Attachments = {
     items: [],
     max_files: 5,
@@ -434,6 +434,7 @@ export const mockEpicDetails: EpicDetail[] = [
             },
         ],
         messages: [],
+        attachments: mockNoAttachments,
         plan: {
             id: 1,
             run_id: 1,
@@ -569,6 +570,7 @@ export const mockEpicDetails: EpicDetail[] = [
                 comment: null,
             },
         ],
+        attachments: mockNoAttachments,
         plan: {
             id: 3,
             run_id: 3,
@@ -655,6 +657,7 @@ export const mockEpicDetails: EpicDetail[] = [
             },
         ],
         messages: [],
+        attachments: mockNoAttachments,
         plan: null,
         outline: null,
     },
@@ -665,6 +668,7 @@ export const mockEpicDetails: EpicDetail[] = [
         max_plan_attempts: 3,
         runs: [],
         messages: [],
+        attachments: mockNoAttachments,
         plan: null,
         outline: null,
     },

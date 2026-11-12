@@ -867,7 +867,7 @@ def _left(ctx: Context, key: str) -> list[passed_reviews.Left]:
 
 
 def attachments_of(ctx: Context, ref: conversation.Ref) -> Attachments:
-    """A ticket's or a task's attachments, as `canopy show` lists them, with the limits they are held to (§22).
+    """A ticket's, a task's, or an epic's attachments, as `canopy show` lists them, with their limits (§22).
 
     Returns:
         Each attachment it holds, and `policy`'s limits.

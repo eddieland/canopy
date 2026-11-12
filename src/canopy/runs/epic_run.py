@@ -41,7 +41,7 @@ from canopy.core.config import render_command
 from canopy.core.vocab import RunStatus
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import logs, procs, stopping
-from canopy.runs import checkpoint, desks, epic_runs, epic_starts, tidy
+from canopy.runs import attachments, checkpoint, desks, epic_runs, epic_starts, tidy
 from canopy.runs.checkpoint import SetupError
 from canopy.runtime import project_config, servers, stdout
 
@@ -245,15 +245,26 @@ def _desk_files(ctx: Context, run: records.EpicRun, current: records.EpicPlan | 
     """Return the files the desk starts with: the epic's current plan, as the plan this run replaces and as its file.
 
     Read bounded and never through a link, as any plan is (DESIGN §25); one that is no longer a plan is left out. The
-    plan's file starts as that plan, which the planner edits; a first plan's starts with none.
+    plan's file starts as that plan, which the planner edits; a first plan's starts with none. Beside them, the copies
+    of the epic's attachments its prompt names that it still holds, read again against their hashes (§22).
 
     Returns:
-        The files by name, empty when the epic has no current plan.
+        The files by their paths in the desk, empty when the epic has no current plan and no attachments.
+
+    Raises:
+        SetupError: an attachment's file is gone or changed since it was attached, so the planner is never run.
     """
-    if current is None:
-        return {}
-    reading = plans.read(epics.plan_path(ctx.state_dir, run.epic_id, current.run_id))
-    return {plans.REPLACED: reading.text, plans.WRITTEN: reading.text} if reading.text is not None else {}
+    found: dict[str, str] = {}
+    if current is not None:
+        reading = plans.read(epics.plan_path(ctx.state_dir, run.epic_id, current.run_id))
+        if reading.text is not None:
+            found = {plans.REPLACED: reading.text, plans.WRITTEN: reading.text}
+    subject = conversation.Ref(conversation.EPIC, str(run.epic_id))
+    try:
+        attached = attachments.copies(ctx.conn, ctx.state_dir, subject, run.started_at)
+    except attachments.AttachmentFileError as e:
+        raise SetupError(f"{e}; the planner did not start") from e
+    return found | {f"{attachments.RUN_DIR}/{c.name}": c.text for c in attached}
 
 
 def _run_agent(
@@ -301,6 +312,8 @@ def _run_agent(
     try:
         desk = desks.make(ctx.workspace.root, epic_runs.desk_key(run.epic_id), trees.items())
         for name, text in desk_files.items():
+            # The attachments' copies are in a directory of their own.
+            attachments.make_parents(desk, name)
             logs.write_private(desk / name, text)
     except (desks.DeskError, OSError) as e:
         raise SetupError(str(e)) from e

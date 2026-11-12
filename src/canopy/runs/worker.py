@@ -830,8 +830,8 @@ def _run_agent(
         cwd = desks.make(ctx.workspace.root, str(run["ticket_key"]), trees)
         for name, text in (desk_files or {}).items():
             try:
-                # The attachments' copies are in a directory of their own (`_place_attachments`).
-                (cwd / name).parent.mkdir(mode=0o700, exist_ok=True)
+                # The attachments' copies are in a directory of their own, an epic's inside it (`_place_attachments`).
+                attachments.make_parents(cwd, name)
                 logs.write_private(cwd / name, text)
             except OSError as e:
                 raise SetupError(f"could not write {name} in the desk {cwd}: {e}") from e
@@ -1670,23 +1670,24 @@ def _committed_copy(slot: _Slot, branch: str, name: str) -> str:
 
 
 def _attachment_copies(ctx: Context, run: sqlite3.Row) -> list[attachments.Copy]:
-    """Return the ticket's attachments the run's prompt names and the ticket still holds, read again (DESIGN §22).
+    """Return the attachments the run's prompt names and their subject still holds, read again (DESIGN §22, §43).
+
+    The ticket's, and its epic's, for a member.
 
     Returns:
-        Their copies, in the order they were attached.
+        Their copies, the ticket's first, each in the order they were attached.
 
     Raises:
         SetupError: an attachment's file is gone or changed since it was attached, so the worker gets none of them.
     """
-    ref = conversation.Ref(conversation.TICKET, str(run["ticket_key"]))
     try:
-        return attachments.copies(ctx.conn, ctx.state_dir, ref, str(run["started_at"]))
+        return attachments.ticket_copies(ctx.conn, ctx.state_dir, str(run["ticket_key"]), str(run["started_at"]))
     except attachments.AttachmentFileError as e:
         raise SetupError(f"{e}; the worker did not start") from e
 
 
 def _place_attachments(run: sqlite3.Row, slots: Sequence[_Slot], found: Sequence[attachments.Copy]) -> dict[str, str]:
-    """Put the run's copies of its ticket's attachments where it starts: in its desk, or in its one worktree (§22).
+    """Put the run's copies of its attachments where it starts: in its desk, or in its one worktree (§22, §43).
 
     In a worktree they are in a directory at its root that git ignores, made afresh.
 

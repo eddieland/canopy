@@ -887,8 +887,11 @@ export async function refreshTask(client: QueryClient, id: number): Promise<void
     ])
 }
 
-/** What an attachment is on: a ticket, by its key, or a task, by its id (DESIGN §22). */
-export type AttachmentSubject = { kind: 'ticket'; key: string } | { kind: 'task'; id: number }
+/** What an attachment is on: a ticket, by its key, or a task or an epic, by its id (DESIGN §22). */
+export type AttachmentSubject =
+    | { kind: 'ticket'; key: string }
+    | { kind: 'task'; id: number }
+    | { kind: 'epic'; id: number }
 
 /**
  * `canopy attach REF FILE --name NAME`: keep `text`, a file read as UTF-8, as NAME, for the subject's later runs to
@@ -900,6 +903,14 @@ export async function attachFile(subject: AttachmentSubject, name: string, text:
         return unwrap(
             await api.PUT('/api/tickets/{key}/attachments/{name}', {
                 params: { path: { key: subject.key, name } },
+                ...sent,
+            }),
+        )
+    }
+    if (subject.kind === 'epic') {
+        return unwrap(
+            await api.PUT('/api/epics/{epic_id}/attachments/{name}', {
+                params: { path: { epic_id: subject.id, name } },
                 ...sent,
             }),
         )
@@ -917,6 +928,13 @@ export async function detachFile(subject: AttachmentSubject, name: string): Prom
     if (subject.kind === 'ticket') {
         return unwrap(
             await api.DELETE('/api/tickets/{key}/attachments/{name}', { params: { path: { key: subject.key, name } } }),
+        )
+    }
+    if (subject.kind === 'epic') {
+        return unwrap(
+            await api.DELETE('/api/epics/{epic_id}/attachments/{name}', {
+                params: { path: { epic_id: subject.id, name } },
+            }),
         )
     }
     return unwrap(
@@ -941,9 +959,15 @@ export async function dictate(recording: Blob): Promise<Dictated> {
     )
 }
 
-/** After an attachment changed: read its ticket or task again now. */
-export function refreshSubject(client: QueryClient, subject: AttachmentSubject): Promise<void> {
-    return subject.kind === 'ticket' ? refreshTicket(client, subject.key) : refreshTask(client, subject.id)
+/** After an attachment changed: read its ticket, task, or epic again now. */
+export async function refreshSubject(client: QueryClient, subject: AttachmentSubject): Promise<void> {
+    if (subject.kind === 'ticket') {
+        return refreshTicket(client, subject.key)
+    }
+    if (subject.kind === 'task') {
+        return refreshTask(client, subject.id)
+    }
+    await client.invalidateQueries({ queryKey: keys.epic(subject.id) })
 }
 
 /** A submission id for a reply form, drawn when the form is rendered and kept until the reply is recorded. */
