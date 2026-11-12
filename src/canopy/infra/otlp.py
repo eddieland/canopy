@@ -39,6 +39,9 @@ FILE_MODE = 0o600
 SERVICE = "canopy"
 #: The file in the state directory that keeps the workspace's `service.instance.id`: a random id, made once.
 INSTANCE_FILE_NAME = "instance-id"
+#: This process's `service.instance.id` when the workspace's can be neither made nor read: one id, so its spans and
+#: its metrics still name the same instance.
+_PROCESS_INSTANCE = str(uuid.uuid4())
 #: How long a post may take: the longest an endpoint that is down delays a process's exit, which sends what is left.
 TIMEOUT_SECONDS = 5
 
@@ -94,10 +97,11 @@ def resource(state_dir: Path, extra: Mapping[str, str]) -> Resource:
     Returns:
         The resource, for a provider of spans or of metrics.
     """
-    own = {"service.name": SERVICE, "service.version": version("canopy")}
-    instance = instance_id(state_dir)
-    if instance is not None:
-        own["service.instance.id"] = instance
+    own = {
+        "service.name": SERVICE,
+        "service.version": version("canopy"),
+        "service.instance.id": instance_id(state_dir) or _PROCESS_INSTANCE,
+    }
     return Resource.create({**extra, **own})
 
 
@@ -106,7 +110,7 @@ def instance_id(state_dir: Path) -> str | None:
 
     Returns:
         The id, or None, logged, when it can be neither made nor read: telemetry never fails what canopy was doing,
-        and OpenTelemetry's SDK then names this process alone, at random, as it would by default.
+        and `resource` then names this process alone, the same for its spans and its metrics.
     """
     path = state_dir / INSTANCE_FILE_NAME
     try:
@@ -129,10 +133,9 @@ def _make_instance_id(path: Path) -> None:
     """
     fd, made = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
     try:
-        try:
-            os.write(fd, f"{uuid.uuid4()}\n".encode())
-        finally:
-            os.close(fd)
+        # Written whole or raised: a short write never leaves part of an id to link into place.
+        with os.fdopen(fd, "w", encoding="utf-8") as made_file:
+            made_file.write(f"{uuid.uuid4()}\n")
         with contextlib.suppress(FileExistsError):
             os.link(made, path)
     finally:

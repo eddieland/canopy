@@ -179,8 +179,9 @@ def test_a_name_canopy_cannot_read_is_left_out_and_fails_nothing(tmp_path: Path)
     (tmp_path / otlp.INSTANCE_FILE_NAME).write_text("not an id\n")
     assert otlp.instance_id(tmp_path) is None
     attributes = otlp.resource(tmp_path, {"service.name": "not canopy", "host.name": "studio"}).attributes
-    # OpenTelemetry's SDK names the process instead, as it does by default.
+    # The process is named instead, by one id, so its spans and its metrics name the same instance.
     assert attributes["service.instance.id"] != "not an id"
+    assert otlp.resource(tmp_path, {}).attributes["service.instance.id"] == attributes["service.instance.id"]
     # The operator's own attributes never replace canopy's.
     assert (attributes["service.name"], attributes["host.name"]) == ("canopy", "studio")
 
