@@ -33,8 +33,8 @@ MAX_BODY = 8000
 RETRY_PAUSES: Sequence[float] = (1.0, 3.0)
 # How much of GitHub's reply an error quotes.
 _MAX_REPLY = 500
-# How GitHub's GraphQL API starts the error it answers a query it failed to run with, most often one that ran past its
-# time limit, though it answers with a 200. The rest names when, and the request ID GitHub's support asks for.
+#: How GitHub's GraphQL API starts the error it answers a query it failed to run with, most often one that ran past
+#: its time limit, though it answers with a 200. The rest names when, and the request ID GitHub's support asks for.
 _FAILED_TO_RUN = "Something went wrong while executing your query"
 # A query, which reads and so may be sent again, as a mutation may not: the operation each document names first.
 _QUERY = re.compile(r"\s*query\b")
@@ -244,7 +244,7 @@ class Client:
         try:
             parsed = self._http.json("POST", self._url, body=request, again=again, failed=_failed_to_run)
         except canopy_http.FailedError as e:
-            raise ServerError(f"{e} (sent {e.tries} times)" if e.tries > 1 else str(e), certain=False) from e
+            raise ServerError(f"{e} (tried {e.tries} times)" if e.tries > 1 else str(e), certain=False) from e
         except canopy_http.HttpError as e:
             raise GitHubError(str(e), certain=e.certain) from e
         body = obj(parsed, "reply")
@@ -260,6 +260,9 @@ def _failed_to_run(parsed: object) -> str | None:
 
     The error is GitHub's, not a refusal of the query or of the token, so the try fails as a server error does: a query
     is sent again, and a mutation may have been carried out. GitHub's words are kept, as they hold its request ID.
+
+    Args:
+        parsed: GitHub's reply, parsed from its JSON.
 
     Returns:
         Why the try failed, or None when GitHub ran the query.

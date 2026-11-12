@@ -67,7 +67,7 @@ class HttpError(Exception):
         self.certain = certain
         self.status = status
         self.wait = wait
-        #: How many times the request was sent before it was given up on.
+        #: How many times the request was tried before it was given up on, a try that never left among them.
         self.tries = 1
 
 

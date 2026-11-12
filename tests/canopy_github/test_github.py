@@ -833,7 +833,7 @@ def test_a_query_github_fails_to_run_each_time_says_so_and_keeps_its_request_id(
     code, lines, err = read(url, {"prs": [PR]})
     assert (code, lines) == (1, [{"kind": "end", "prs": []}])
     assert f"cannot read {PR}: GitHub failed to run the query, likely a timeout or a brief outage on its side" in err
-    assert f"{WENT_WRONG} (sent 3 times)" in err
+    assert f"{WENT_WRONG} (tried 3 times)" in err
     assert "refused" not in err
 
 
