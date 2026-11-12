@@ -220,6 +220,13 @@ def test_the_skills_are_listed_as_the_server_read_them_once_canopy_s_agents_load
     assert serve.loading == 0  # asked only once the agents had loaded
 
 
+def test_an_entry_of_enabled_alone_turns_off_the_definition_before_it_and_is_no_server_alone() -> None:
+    """As a run's inline config turns off the operator's servers: OpenCode merges it into their definitions."""
+    inline = {"type": "document", "info": {"mcp": {"servers": {"github": {"enabled": False}, "x": {"enabled": False}}}}}
+    found = offered(Serve({"canopy-worker": []}, config=[*CONFIG, inline]), "canopy-worker")
+    assert (found.servers, found.disabled_servers) == (("github", "sentry.io", "canopy"), ("github", "sentry.io"))
+
+
 def test_the_server_is_started_with_the_environment_it_is_given() -> None:
     """The operator's servers that config turns off for canopy's runs are off in the server asked too."""
     serve = Serve({"canopy-worker": []})

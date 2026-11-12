@@ -409,7 +409,10 @@ def test_required_keys_name_both_files(canopy_env: CanopyEnv) -> None:
         # canopy gives each run its own servers in the same inline config.
         ("[runtime]\ndisabled_mcp_servers = ['canopy']\n", "'canopy' is one of canopy's own MCP servers"),
         ("[runtime]\ndisabled_mcp_servers = ['canopy_run']\n", "'canopy_run' is one of canopy's own MCP servers"),
-        ("[runtime]\ndisabled_mcp_servers = ['my.server']\n", "'my.server' must match"),
+        # A dot is `_` in a tool's name, so `canopy.run` would answer for canopy's `canopy_run` tools.
+        ("[runtime]\ndisabled_mcp_servers = ['canopy.run']\n", "'canopy.run' is one of canopy's own MCP servers"),
+        ("[runtime]\ndisabled_mcp_servers = ['']\n", "must be a printable name"),
+        ('[runtime]\ndisabled_mcp_servers = ["a\\tb"]\n', "must be a printable name"),
         # Workers write to the tracker through its server, here the Jira provider's default.
         (
             "[runtime]\ndisabled_mcp_servers = ['atlassian']\n",
@@ -437,18 +440,19 @@ def test_invalid_values(canopy_env: CanopyEnv, user_extra: str, message: str) ->
 
 def test_disabled_mcp_servers_names_the_operators_own(canopy_env: CanopyEnv) -> None:
     """A hyphen survives OpenCode's sanitizing, so `canopy-docs` names no server of canopy's."""
-    canopy_env.configure(canopy_env.user_file, {"runtime": {"disabled_mcp_servers": ["slack", "canopy-docs"]}})
+    servers = ["slack", "canopy-docs", "sentry.io"]
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"disabled_mcp_servers": servers}})
 
-    assert load(canopy_env.root, canopy_env.user_file).runtime.disabled_mcp_servers == ("slack", "canopy-docs")
+    assert load(canopy_env.root, canopy_env.user_file).runtime.disabled_mcp_servers == tuple(servers)
 
 
-def test_disabled_mcp_servers_may_not_name_the_artifact_stores(canopy_env: CanopyEnv) -> None:
-    """Agents publish through the store's server (DESIGN §38)."""
-    canopy_env.configure(
-        canopy_env.user_file,
-        {"runtime": {"disabled_mcp_servers": ["louvre"]}, "artifacts": {"mcp_server": "louvre"}},
-    )
+def test_disabled_mcp_servers_may_not_name_the_artifact_store_agents_publish_to(canopy_env: CanopyEnv) -> None:
+    """Agents publish through the store's server (DESIGN §38); one no agent publishes to may be kept out."""
+    store: dict[str, object] = {"mcp_server": "louvre", "publish_roles": []}
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"disabled_mcp_servers": ["louvre"]}, "artifacts": store})
+    assert load(canopy_env.root, canopy_env.user_file).runtime.disabled_mcp_servers == ("louvre",)
 
+    canopy_env.configure(canopy_env.user_file, {"artifacts": {"publish_roles": ["worker"]}})
     with pytest.raises(ConfigError, match="names louvre, the artifact store's MCP server, which canopy's runs need"):
         load(canopy_env.root, canopy_env.user_file)
 

@@ -496,15 +496,23 @@ def _server_name(value: str) -> str:
 ToolPart = Annotated[str, AfterValidator(_tool_part)]
 
 
+#: The longest name of an operator's MCP server canopy takes: OpenCode takes any, and this one bounds a config file.
+MAX_SERVER_NAME = 100
+
+
 def _operator_server(value: str) -> str:
-    # canopy gives each run its own servers, `canopy` and `canopy_*`, in the same inline config (DESIGN §27).
-    if value == "canopy" or value.startswith("canopy_"):
-        raise ValueError(f"{value!r} is one of canopy's own MCP servers, which its runs need")
+    if not value.isprintable() or not value.strip() or len(value) > MAX_SERVER_NAME:
+        raise ValueError(f"{value!r} must be a printable name of at most {MAX_SERVER_NAME} characters")
+    # canopy gives each run its own servers, `canopy` and `canopy_*`, in the same inline config (DESIGN §27), and
+    # OpenCode names a server's tools by its name with each character outside `[A-Za-z0-9_-]` made `_`.
+    tools = "".join(c if c.isascii() and (c.isalnum() or c in "_-") else "_" for c in value)
+    if tools == "canopy" or tools.startswith("canopy_"):
+        raise ValueError(f"{value!r} is one of canopy's own MCP servers, or names their tools, which its runs need")
     return value
 
 
-#: An MCP server of the operator's own runtime config, by its name there: never one of canopy's.
-OperatorServer = Annotated[ToolPart, AfterValidator(_operator_server)]
+#: An MCP server of the operator's own runtime config, by its name there, which may be any: never one of canopy's.
+OperatorServer = Annotated[StrictStr, AfterValidator(_operator_server)]
 
 TICKET_KEY = "{key}"
 MAX_LINK_URL = 500
@@ -1789,11 +1797,13 @@ class Config(Section):
 
     @model_validator(mode="after")
     def _needed_servers_stay_on(self) -> Config:
-        # Workers write to the tracker through its server, and agents publish through the store's (DESIGN §22, §38).
+        # Workers write to the tracker through its server, and the agents that publish through the store's (DESIGN
+        # §22, §38); a store no agent publishes to may be kept out.
         tracker = self.tracker.tools()
+        publishing = self.artifacts.publishing()
         needed = {
             "the tracker's": tracker.server if tracker is not None else "",
-            "the artifact store's": self.artifacts.mcp_server,
+            "the artifact store's": publishing.server if publishing is not None and publishing.agents else "",
         }
         for whose, server in needed.items():
             if server and server in self.runtime.disabled_mcp_servers:
