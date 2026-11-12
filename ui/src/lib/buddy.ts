@@ -348,6 +348,13 @@ export const TIPS = {
         'Hot take: comments in a config file are love letters. This page keeps every one.',
         'Did you know? A change here is for this workspace only. I am for every workspace.',
     ],
+    '/settings_/instructions': [
+        "It looks like you're writing standing instructions. Mine say: water me. Nobody reads them.",
+        'Unhelpful tip: 4,096 bytes is a lot of instructions. It is not enough for my demands.',
+        'Dear diary, they told every worker to run the linters first. Nobody told me anything. I am a plant.',
+        'Fun fact: a save keeps the old file as .bak. I keep my old leaves. Same idea.',
+        "Hot take: the prompt's own rules come first. Yours come second. Mine come never.",
+    ],
     '/settings_/skills': [
         "It looks like you're reading skills. Mine: photosynthesis. No SKILL.md needed.",
         'Unhelpful tip: a skill nobody loads still costs every call. Like a hat nobody wears.',

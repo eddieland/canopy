@@ -14,7 +14,6 @@ import { Disclosure } from '@/components/disclosure'
 import { ShellPreview } from '@/components/ghost-shell'
 import { HatPreview } from '@/components/hat'
 import { Input } from '@/components/input'
-import { InstructionsPanel } from '@/components/instructions-panel'
 import { Notice } from '@/components/notice'
 import { NoticeForm } from '@/components/notice-form'
 import { PageHeader, Panel, PanelHeader } from '@/components/panel'
@@ -121,7 +120,7 @@ function SettingsPage() {
             <AttentionPanel />
             <ReviewsPanel />
             <NoticePanel />
-            <InstructionsPanel />
+            <InstructionsLinkPanel />
             <LimitsPanel />
             <ModelsPanel />
             <SkillsPanel />
@@ -792,6 +791,27 @@ function AttentionPanel() {
                     />
                     Hide chore findings
                 </label>
+            </div>
+        </Panel>
+    )
+}
+
+/** Where each agent's standing instructions are read and edited: a page of their own, an editor each. */
+function InstructionsLinkPanel() {
+    return (
+        <Panel>
+            <PanelHeader label="Standing instructions" />
+            <div className="flex items-center justify-between gap-4 p-3">
+                <p className="text-sm text-muted-foreground">
+                    What the worker, overseer, reviewer, and chores hear from you on every run: the files your config
+                    names, read and edited here.
+                </p>
+                <Button asChild variant="outline" data-testid="instructions-open">
+                    <Link to="/settings/instructions">
+                        Open
+                        <ChevronRight />
+                    </Link>
+                </Button>
             </div>
         </Panel>
     )

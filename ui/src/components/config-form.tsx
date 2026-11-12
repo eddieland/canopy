@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { useFirstInView } from '@/hooks/use-first-in-view'
 import {
     bandCounts,
     bandsMatching,
@@ -166,7 +167,7 @@ function Form({
     const matched = bandsMatching(bands, q, touched)
     const drawn = matched.filter(({ keys }) => keys.length > 0)
     const matching = drawn.reduce((count, { keys }) => count + keys.length, 0)
-    const inView = useBandInView(drawn.map(({ group }) => bandId(group.title)).join(' '))
+    const inView = useFirstInView(drawn.map(({ group }) => bandId(group.title)).join(' '))
     // The row the page was opened at (`#capacity.max_workers`): scrolled to, and lit once, until its light has played.
     const hash = useLocation({ select: (location) => location.hash })
     const [lit, setLit] = useState<string>()
@@ -387,44 +388,6 @@ function Form({
 /** A band's id on the page, which its index entry links to: `band-retention-budget`. */
 function bandId(title: string): string {
     return `band-${groupSlug(title)}`
-}
-
-/**
- * The band most in view, by its id, of the bands `ids` names (space-separated, in page order): the first whose panel
- * crosses the top half of the page's scroll. Undefined until the page has scrolled them into view, or where the browser
- * cannot say.
- */
-function useBandInView(ids: string): string | undefined {
-    const [shown, setShown] = useState<ReadonlySet<string>>(new Set())
-    useEffect(() => {
-        if (typeof IntersectionObserver === 'undefined') {
-            return
-        }
-        const observer = new IntersectionObserver(
-            (entries) =>
-                setShown((was) => {
-                    const now = new Set(was)
-                    for (const entry of entries) {
-                        if (entry.isIntersecting) {
-                            now.add(entry.target.id)
-                        } else {
-                            now.delete(entry.target.id)
-                        }
-                    }
-                    return now
-                }),
-            // The top half of the scroll: a band counts once it reaches there, and until it leaves the top.
-            { rootMargin: '0px 0px -50% 0px' },
-        )
-        for (const id of ids.split(' ').filter((one) => one !== '')) {
-            const band = document.querySelector(`#${CSS.escape(id)}`)
-            if (band !== null) {
-                observer.observe(band)
-            }
-        }
-        return () => observer.disconnect()
-    }, [ids])
-    return ids.split(' ').find((id) => shown.has(id))
 }
 
 /**

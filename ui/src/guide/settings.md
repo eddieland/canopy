@@ -115,28 +115,35 @@ for up to a week, for outages with ambitions.
 
 ## Standing instructions
 
-What each agent hears from you on every run, the files your config names with `paths.worker_instructions`,
-`paths.overseer_instructions`, `paths.reviewer_instructions`, and `paths.chore_instructions`. Pick **Worker**,
-**Overseer**, **Reviewer**, or **Chores** in the panel's header; the line under it says which runs read that file and
-where it lives. The worker's reaches every implement, resume, plan, and task run, the overseer's every tick, and the
-other two every review and every chore run, after the chore's own prompt. Each comes after its prompt's own rules, which
-win where the two disagree. See [config files](config-files) for the keys.
+What each agent hears from you on every run: the files your config names with `paths.worker_instructions`,
+`paths.overseer_instructions`, `paths.reviewer_instructions`, and `paths.chore_instructions`. **Open** takes you to a
+page of its own with all four, one panel each, so you can read what every agent is told without clicking through. The
+worker's reaches every implement, resume, plan, and task run, the overseer's every tick, and the other two every review
+and every chore run, after the chore's own prompt. Each comes after its prompt's own rules, which win where the two
+disagree. The line under the title says how many agents hear anything and whether a file is missing or refused; hover
+the title for the page's rules. See [config files](config-files) for the keys.
 
-The file opens in the same editor you write replies in, toolbar and **Preview** included. The count under it is in
-bytes, as a run counts them: past 4,096 a run refuses the file outright rather than read half of it, so **Save** waits
-until you trim. Switch to another agent mid-edit and nothing is lost: its name in the header gets a dot until you save
-or **Revert**.
+The agents are listed beside the page, or over it in a narrow window, and each is a link to its panel:
+`/settings/instructions#reviewer` opens the page there. An agent with no file says `none` in the list, and one whose
+runs are refused because of its file says `missing` or `refused`, in red, since a worker that won't start is worth a
+glance. A file you've edited and not saved says `unsaved`, and its panel gets a line down its edge.
 
-**Save** writes the file in place, keeps the old one beside it as `<name>.bak`, and every run started from then on
-reads the new text; a run already going keeps the prompt it started with. If the file changed since the page read it,
-say you edited it in your own editor meanwhile, the save is refused rather than quietly flattening your other edit:
-**Read again**, then decide which of you was right. A file your config names but that doesn't exist yet is flagged,
-since every run of that agent is refused until it does, and **Save** makes it, readable by you alone.
+Each file opens in the same editor you write replies in, toolbar and **Preview** included. The count in the panel's
+foot is in bytes, as a run counts them: past 4,096 a run refuses the file outright rather than read half of it, so
+**Save** waits until you trim. **Revert** puts back what the file holds.
+
+**Save** writes the file in place, keeps the old one beside it as `<name>.bak` (the line over the button names both),
+and every run started from then on reads the new text; a run already going keeps the prompt it started with. If the
+file changed since the page read it, say you edited it in your own editor meanwhile, the save is refused rather than
+quietly flattening your other edit: **Read again**, under the title, then decide which of you was right. It keeps
+whatever you haven't saved. Leave the page with an edit unsaved and it asks first, as a plan does. A file your config
+names that doesn't exist yet is flagged, since every run of that agent is refused until it does, and **Save** makes
+it, readable by you alone.
 
 The page edits text, never which file: an agent whose key names no file says so and offers no editor. Name one in your
-`config.toml` and **Reload** below. That's on purpose. Anyone holding a session here can put words in every later
-run's mouth, and a new secret doesn't take them back, so the page can't also aim an agent at some other file of yours.
-If a change shows up that you didn't make, the `.bak` has what was there before.
+`config.toml` and **Reload** on Settings. That's on purpose. Anyone holding a session here can put words in every
+later run's mouth, and a new secret doesn't take them back, so the page can't also aim an agent at some other file of
+yours. If a change shows up that you didn't make, the `.bak` has what was there before.
 
 ## Loop settings
 
