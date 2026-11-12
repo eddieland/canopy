@@ -72,6 +72,9 @@ run included, so one filter pulls out everything a tick did:
 jq -c 'select(.tick_id == 12)' .canopy/canopy.log
 ```
 
+With `telemetry.traces` on, a line logged inside a span also has its `trace_id` and `span_id`, spelled as
+`traces.jsonl` spells them, so a run's lines line up with its trace.
+
 Its `loop started` line names the loop's pid. A live tick rotates the log past `retention.log_max_mib`, 50 MiB, to
 `canopy.log.1`, the newest, keeping `retention.log_keep`, three. The overseer's own output for each tick is on
 [the tick's page](ticks#a-ticks-page).
