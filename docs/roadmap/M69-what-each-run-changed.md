@@ -12,8 +12,7 @@ page shows yet. The run's own change, what this run did to the branch, is kept n
 takes its work with it when its object directory goes.
 
 This milestone makes a run's change a journal fact, kept for every worker's and task's run, and shows it where the
-operator judges the run: its page, its PR's, and the CLI. Four stages, in order, each in its own PRs; stage 4 waits for
-its own go-ahead.
+operator judges the run: its page, its PR's, and the CLI. Three stages, in order, each in its own PRs.
 
 - **Stage 1, the record.** As a worker's or a task's run ends (§8 step 5, after the push and before a flaky kick
   rewrites the branch), `_run` and `_task` record, per slot, the commit origin's branch held when the run started, or
@@ -51,10 +50,6 @@ its own go-ahead.
   order, with the flaky kicks between them (§23, `from_head` to `to_head`) and the harness's own pushes marked, so the
   operator reads who put what on the branch without leaving canopy. `canopy show run:ID` lists them too. The subjects
   are a worker's text, shown to the operator as text and given to no agent (T1).
-- **Stage 4, the files against the plan (its own go-ahead).** With a run's diff kept, the files it touched are known in
-  code: #1868's first step holds them to the files the ticket's approved plan names in its steps (§25), and the run's
-  page says which files no step named and which steps touched nothing. No model, no attention item until real use asks
-  for one. The operator decides whether to build this once stages 1 to 3 have been in real use.
 - **What stays as it is.** The overseer's state block carries none of this (§6's cache, T1): a diff is for the operator,
   and the reviewer and the planner read git themselves through canopy's tools (§27). A review's kept diff and its
   findings' anchors are unchanged, and so is the diff of two commits that places a late finding (§21), which the kept
@@ -66,7 +61,10 @@ its own go-ahead.
   worktrees page does today); the diffs in the journal rather than files beside the log (the journal stays small, and
   §26 already retires a run's files); a diff per commit (one per run is what the operator reads, and stage 3's list
   names the commits); a model's summary of the change (the run's own summary is that, and a diff is the fact under it);
-  a page of the repository's history (canopy's record is the loop's own work, not the repository's).
+  a page of the repository's history (canopy's record is the loop's own work, not the repository's); holding the files a
+  run touched to the files its approved plan's steps name (#1868's first step, a stage 4 dropped 2026-11-12 on the
+  operator's word), since a path in a step is a weak sign of the step done, most runs touch tests and docs no step names,
+  and the reviewer already checks the change against the plan's steps (§21).
 - **Design and TRUST_MODEL.** DESIGN §45 states the promise, written ahead of the code: the range, the commits, and the
   kept diffs, which the pages rely on; stage 1's PR changes it only where the build makes it. In that PR, §29's sentence
   that keeps a diff under `approve` changes to say every run keeps one; §42's sentence on the stretch diff names where
@@ -132,8 +130,8 @@ a PR's runs list puts each run's commits there under its range, with the kick ca
 history. Chosen conservatively, for the operator to change: another co-author is any `Co-authored-by` trailer canopy
 did not form, since canopy knows no runtime's; a commit counts as canopy's push when the push check pushed it, never a
 kick's copy, which the kick's line names. The mock's runs 39 and 45 and task 1's run carry commits, so the screenshots
-of `workspace/runs/39`, `tasks/1/runs/1`, and PR 88's page are to be taken again. Stage 4 waits for its own go-ahead,
-after stages 1 to 3 have been in real use. Live check next: this milestone's Accept, stage 3's line included.
+of `workspace/runs/39`, `tasks/1/runs/1`, and PR 88's page are to be taken again. Stage 4, the files against the
+plan, was dropped 2026-11-12 (Rejected, above). Live check next: this milestone's Accept, stage 3's line included.
 Measured 2026-11-10 (MEASUREMENTS "2026-11-10: M69, the disk canopy's files take"): the journal's diff tables take about
 160 KiB for the 78 runs with changes recorded since 2026-11-09, and garbage collection does not count the kept diff
 files apart from the run's others. The operator's word (2026-11-10): a run's Diff page did replace GitHub's compare view
