@@ -4,34 +4,44 @@ A run's metrics are recorded once, where its row is closed and after the transac
 whatever process closes it: the run's own, or a tick's reconcile for a run whose process died. So a run that crashed
 is counted as one that ended well is, and what is counted is what the journal holds. A tick's overseer runs are
 recorded as the tick closes, or, for a tick whose process died, as the next tick closes it `abandoned`, counting the
-tick too. The runs at work are a gauge the tick sets as it closes. Recording a metric never fails what closed the row:
-what goes wrong is logged, and the metric is lost.
+tick too. What the loop holds now is a set of gauges the tick sets as it closes, so a collector can tell whether the
+loop still ticks and whether work piles up. Recording a metric never fails what closed the row: what goes wrong is
+logged, and the metric is lost.
 
-    canopy.runs            count     role, status, kind (a worker's)    each run that ended
-    canopy.run.duration    seconds   role, status                       how long it ran
-    canopy.cost            USD       role, model                        what it cost, as the runtime reported
-    canopy.tokens          tokens    role, model, type                  its tokens, by type
-    canopy.runs.active     gauge     role                               the runs at work as a tick closes
-    canopy.ticks           count     status, dry_run                    a tick a dead process left (`tick` the rest)
+    canopy.runs              count     role, status, kind (a worker's)    each run that ended
+    canopy.run.duration      seconds   role, status                       how long it ran
+    canopy.cost              USD       role, model                        what it cost, as the runtime reported
+    canopy.tokens            tokens    role, model, type                  its tokens, by type
+    canopy.runs.active       gauge     role                               the runs at work as a tick closes
+    canopy.ticks             count     status, dry_run                    a tick a dead process left (`tick` the rest)
+    canopy.tick.last         seconds   status                             when the last tick of a status closed
+    canopy.tickets           gauge     phase                              the open tickets the loop works, by phase
+    canopy.capacity.used     gauge     role                               the runs that fill a role's capacity
+    canopy.capacity.limit    gauge     role                               that capacity, as config sets it
+    canopy.attention.open    gauge                                        the items waiting on the operator
+    canopy.disk.free         bytes                                        free space where the state directory is
 """
 
 from __future__ import annotations
 
 import functools
 import logging
-from collections.abc import Callable, Iterable, Mapping
+import shutil
+from collections.abc import Callable, Collection, Iterable, Mapping
 from dataclasses import asdict
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from canopy.core import records, sql
-from canopy.core.vocab import OverseerRunStatus, TickStatus
+from canopy.core.vocab import OverseerRunStatus, Phase, StartStatus, TickStatus
 from canopy.infra import metrics
 
 if TYPE_CHECKING:
     import sqlite3
+    from pathlib import Path
 
+    from canopy.core.config import Capacity
     from canopy.core.db import RunTable
 
 
@@ -126,14 +136,85 @@ def abandoned(conn: sqlite3.Connection, tick_ids: Iterable[int]) -> None:
         overseer_ended(conn, tick_id)
 
 
+#: The run tables whose running runs fill each role's capacity: every run that holds a slot fills `max_workers`, a
+#: review's and a task's within it, and a chore runs apart (DESIGN §6, §19, §21, §36). A worker's are `db.SLOT_TABLES`.
+FILLED_BY: Mapping[Role, Collection[RunTable]] = {
+    Role.WORKER: ("runs", "review_runs", "task_runs", "epic_runs"),
+    Role.REVIEW: ("review_runs",),
+    Role.TASK: ("task_runs",),
+    Role.CHORE: ("chore_runs",),
+}
+
+
 @_never_raises
-def active(conn: sqlite3.Connection) -> None:
-    """Set `canopy.runs.active` to the runs of each role at work now, as a tick closes."""
+def active(conn: sqlite3.Connection, capacity: Capacity) -> None:
+    """Set the runs of each role at work now, and how full each role's `capacity` is, as a tick closes."""
     if not metrics.enabled():
         return
-    for table, role in ROLES.items():
-        running = sql.select("count(*)").from_("{}", sql.name(table)).where("status = 'running'")
-        metrics.gauge("canopy.runs.active", int(sql.execute(conn, running).fetchone()[0]), role=role)
+    running: dict[RunTable, int] = {}
+    for table in ROLES:
+        query = sql.select("count(*)").from_("{}", sql.name(table)).where("status = 'running'")
+        running[table] = int(sql.execute(conn, query).fetchone()[0])
+    for role in dict.fromkeys(ROLES.values()):
+        at_work = sum(n for table, n in running.items() if ROLES[table] is role)
+        metrics.gauge("canopy.runs.active", at_work, role=role)
+    limits = {
+        Role.WORKER: capacity.max_workers,
+        Role.REVIEW: capacity.max_reviews,
+        Role.TASK: capacity.max_tasks,
+        Role.CHORE: capacity.max_chores,
+    }
+    for role, tables in FILLED_BY.items():
+        metrics.gauge("canopy.capacity.used", sum(running[t] for t in tables), role=role)
+        metrics.gauge("canopy.capacity.limit", limits[role], role=role)
+
+
+@_never_raises
+def tick_closed(conn: sqlite3.Connection, tick_id: int) -> None:
+    """Set `canopy.tick.last`, under tick `tick_id`'s status, to when it closed: no tick for long is a loop stopped."""
+    if not metrics.enabled():
+        return
+    tick = records.select(records.Tick).where("id = ?", tick_id).one(conn)
+    if tick is not None and tick.ended_at is not None:
+        metrics.gauge("canopy.tick.last", _moment(tick.ended_at).timestamp(), unit="s", status=tick.status)
+
+
+@_never_raises
+def tickets(conn: sqlite3.Connection) -> None:
+    """Set `canopy.tickets` to the open tickets in each phase: neither done nor stopped, so the ones the loop works.
+
+    A ticket's phase is the one its row holds, as the overseer or the harness last set it; one with none set yet is in
+    no phase. A phase no open ticket is in is set to 0, so a phase emptied since the last tick reads empty.
+    """
+    if not metrics.enabled():
+        return
+    stopped = (
+        sql.select("subject_id").from_("starts").where("subject_kind = 'ticket' AND status = ?", StartStatus.STOPPED)
+    )
+    query = (
+        sql.select("phase, count(*)")
+        .from_("tickets")
+        .where("done = 0 AND phase IS NOT NULL")
+        .where("key NOT IN ({})", stopped)
+        .group_by("phase")
+    )
+    found = {Phase(row[0]): int(row[1]) for row in sql.execute(conn, query).fetchall()}
+    for phase in Phase:
+        metrics.gauge("canopy.tickets", found.get(phase, 0), phase=phase)
+
+
+@_never_raises
+def attention(open_items: int) -> None:
+    """Set `canopy.attention.open` to the `open_items` on the attention list as the tick published it."""
+    metrics.gauge("canopy.attention.open", open_items)
+
+
+@_never_raises
+def disk(state_dir: Path) -> None:
+    """Set `canopy.disk.free` to the bytes free where `state_dir` is, which `loop.min_free_disk_mib` guards (§6)."""
+    if not metrics.enabled():
+        return
+    metrics.gauge("canopy.disk.free", shutil.disk_usage(state_dir).free, unit="By")
 
 
 #: Each token type, by the column that holds it.

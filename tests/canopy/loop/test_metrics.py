@@ -8,8 +8,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from unittest import mock
 
-from canopy.core import overseer_runs
-from canopy.core.vocab import TickStatus
+from canopy.core import db, overseer_runs, run_metrics
+from canopy.core.run_metrics import Role
+from canopy.core.vocab import Phase, TickStatus
 from canopy.infra import metrics
 from tests.canopy.helpers import KEY, in_tick, waits
 from tests.canopy.scenario_helpers import dispatches
@@ -19,6 +20,15 @@ if TYPE_CHECKING:
 
 #: How long a detached run's process may take to exit, sending its metrics as it does.
 DEADLINE_SECONDS = 30
+#: The gauges of what the loop holds, each set as a tick closes or publishes its attention list.
+LOOP_GAUGES = {
+    "canopy.tick.last",
+    "canopy.tickets",
+    "canopy.capacity.used",
+    "canopy.capacity.limit",
+    "canopy.attention.open",
+    "canopy.disk.free",
+}
 
 
 def points(path: Path) -> list[tuple[str, dict[str, object], dict[str, Any]]]:
@@ -63,6 +73,60 @@ def test_a_tick_and_the_run_it_starts_are_counted(scenario: Scenario) -> None:
     assert any(n == "canopy.runs" and labels["role"] == "overseer" for n, labels, _ in found)
     active = {str(labels["role"]) for n, labels, _ in found if n == "canopy.runs.active"}
     assert active == {"worker", "task", "review", "chore"}
+
+
+def test_a_tick_sets_what_the_loop_holds_as_it_closes(scenario: Scenario) -> None:
+    scenario.configures("private", telemetry={"metrics": "file"}, capacity={"max_workers": 3, "max_chores": 2})
+    scenario.seen()
+    db.change_ticket(scenario.conn, KEY, "phase", Phase.READY)
+    began = time.time()
+    scenario.tick(dispatches())
+    metrics.configure(Path(), "off")
+    found = points(scenario.env.state_dir / metrics.METRICS_FILE_NAME)
+    gauges: dict[str, list[tuple[dict[str, object], float]]] = {}
+    for name, labels, point in found:
+        if name in LOOP_GAUGES:
+            value = float(point["asDouble"]) if "asDouble" in point else float(point["asInt"])
+            gauges.setdefault(name, []).append((labels, value))
+    assert set(gauges) == LOOP_GAUGES
+    [(last, at)] = gauges["canopy.tick.last"]
+    assert last == {"status": TickStatus.OK.value}
+    assert began - 1 <= at <= time.time() + 1
+    # Each label a word of its vocabulary, and every phase set, an empty one to 0.
+    tickets = {str(labels["phase"]): value for labels, value in gauges["canopy.tickets"]}
+    assert set(tickets) == {phase.value for phase in Phase}
+    assert sum(tickets.values()) == 1
+    used = {str(labels["role"]): value for labels, value in gauges["canopy.capacity.used"]}
+    limit = {str(labels["role"]): value for labels, value in gauges["canopy.capacity.limit"]}
+    roles = {Role.WORKER.value, Role.REVIEW.value, Role.TASK.value, Role.CHORE.value}
+    assert set(used) == set(limit) == roles
+    # As config sets them, `max_reviews` and `max_tasks` by default.
+    assert limit == {Role.WORKER.value: 3, Role.REVIEW.value: 1, Role.TASK.value: 1, Role.CHORE.value: 2}
+    # The run the tick started was at work as it closed.
+    assert used[Role.WORKER.value] == 1
+    [(open_labels, _)] = gauges["canopy.attention.open"]
+    [(disk_labels, free)] = gauges["canopy.disk.free"]
+    assert (open_labels, disk_labels) == ({}, {})
+    assert free > 0
+
+
+def test_a_ticket_done_or_stopped_is_not_counted_in_its_phase(scenario: Scenario) -> None:
+    scenario.configures("private", telemetry={"metrics": "file"})
+    scenario.seen(KEY, "PROJ-2", "PROJ-3")
+    scenario.operator("start", "PROJ-2")
+    scenario.operator("stop", "PROJ-2")
+    for key in (KEY, "PROJ-2", "PROJ-3"):
+        db.change_ticket(scenario.conn, key, "phase", Phase.BLOCKED)
+    db.change_ticket(scenario.conn, "PROJ-3", "done", 1)
+    scenario.tick(*waits(KEY))
+    metrics.configure(Path(), "off")
+    found = points(scenario.env.state_dir / metrics.METRICS_FILE_NAME)
+    counted = sum(int(point["asInt"]) for name, _, point in found if name == "canopy.tickets")
+    assert counted == 1
+
+
+def test_a_workers_capacity_is_filled_by_every_run_that_holds_a_slot() -> None:
+    assert set(run_metrics.FILLED_BY[Role.WORKER]) == set(db.SLOT_TABLES)
 
 
 def test_a_workspace_that_does_not_meter_writes_no_metrics(scenario: Scenario) -> None:
