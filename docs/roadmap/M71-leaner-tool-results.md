@@ -154,4 +154,8 @@ runtime's reader hands it the command, and OpenCode 2's hands it for a tool name
 (`runtime/opencode2/transcript.py`), so the calls the operator's record names `bash` are one row. OpenCode 2.2.5's
 build, read and not run, takes `bash` as another name for its `shell`. That reader takes `bash` for the shell too since
 2026-11-11, a call being printed under the name its agent gave. So stages 2 and 3 wait only on a new measurement, in a
-section of its own, with the shell's rows and what `status` sent, read against the same threshold.
+section of its own, with the shell's rows and what `status` sent, read against the same threshold. Stage 1's steer on a
+cut `canopy_git_diff` built 2026-11-11 against the fakes: a cut patch ends with one line saying how many of the files
+it changed it kept whole and naming `stat` and `paths`, and a cut `stat` one saying how many it listed and naming
+`paths`, each line after the bound, where the cut's line was already. `grep` already named `offset`, and the other
+tools keep the line they had; stage 0's command, run again, measures it.

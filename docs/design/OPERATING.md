@@ -63,6 +63,9 @@ whether a `resume` for `ci` turned them green on the next head, whether a rerun 
 flaky check without anyone's say-so, how long each PR stayed red, approximate because it runs on when a source
 observed the runs, and whether flaky kicks (§23) came back red. A commit status has no run id, so canopy tells its runs
 apart by what it saw of the status at a head; a rerun that ended as the last did, seen only ended, is not counted.
+The Connectors page reads the sources' runs (§30) over the same local days, a tick's and each poll's alike: how each
+source's runs ended, how long they took against its timeout, the lines canopy refused, and each source now, as
+`canopy status` names it. It counts runs the attention list never shows, since only a tick's raises `connector_failed`.
 The Reviews page counts feedback as the monthly report does, by reviewer, trusted or not, with each first review's wait
 on GitHub's clock alone: a PR with no such time is counted apart, never given a proxy. Beside it, the feedback plans
 (§32) with how each was approved and the planner's estimate beside the resumes that followed, and canopy's own
@@ -233,6 +236,8 @@ Rules:
 - `canopy sandbox setup` copies the sandbox templates to the user config directory, never over one there, installs the
   pinned `srt`, and checks what needs root to install; it exits 1 while anything left would make the sandbox weaker
   than §24 says. It writes no config (D117).
+- `canopy sandbox check` tries, through the wrapper and the operator's worker template, what a sandboxed worker must
+  not do and what it must still do, in a worktree it makes and removes, and exits 1 where the sandbox did not hold.
 - Pool sizes (`capacity.slots_per_repo`, `[capacity.repo_slots]`) are private, so a team's map cannot grow the
   operator's disk use; unset leaves pools unmanaged (§18). `pools.backend` may be switched with runs in flight.
 - Remotes should be HTTPS with a credential helper: a sandboxed worker cannot reach the SSH agent socket. `canopy
@@ -390,7 +395,8 @@ theirs: their MCP servers, providers, and rules reach every run, as they would t
 - `canopy-worker`, `canopy-worker-private`, `canopy-planner`, and `canopy-reviewer` get, as their body, the fixed
   instructions of the prompt their run starts with: what is above its run marker, which holds nothing of one run's
   own, no ticket, slot, branch, or attempt. So every run of a kind under one config shares a body, a snapshot, and the
-  prefix the provider caches, as the overseer's ticks do (§33, The split). The run's message is the rest: `## Run`,
+  prefix the provider caches, as the overseer's ticks do: OpenCode caches an agent's tools and body apart from the
+  run's environment, a sandboxed run's included (MEASUREMENTS 2026-10-23). The run's message is the rest: `## Run`,
   with its values, then the sections only some runs get. A prompt without the marker, an older override's, or a
   template that runs an agent canopy does not ship, is sent whole as the message, and the definition keeps its stub.
 - Every definition gets the artifact store's MCP server denied whole, and an agent `artifacts.publish_roles` names its
@@ -410,10 +416,9 @@ that writes, a worker or the planner, loads a skill in the operator's home as it
 chores, which write nothing, may also read the files beside it.
 `runtime.pr_skill` names a skill workers open PRs with (§8); prefer that to a prompt override.
 
-canopy ships one plugin, `canopy.js`, whose jobs are a clock that tells a running agent the minutes left, a split under
-OpenCode 1 that lets an unsandboxed run's first call read its agent's tools and body from the provider's cache, which
-OpenCode 2 needs no split for, and, under OpenCode 2, holding a session's first prompt until its MCP tools are
-registered and explaining a call its permission rules refuse; they, and what OpenCode does with a plugin, are §33.
+canopy ships one plugin, `canopy.js`, whose jobs include a clock that tells a running agent the minutes left, holding
+a session's first prompt until its MCP tools are registered, and explaining a call its permission rules refuse; they,
+and what OpenCode does with a plugin, are §33.
 
 ### Each agent's model
 

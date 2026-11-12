@@ -16,7 +16,7 @@ test('the nav opens Reports on its cards, then the months since the workspace be
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Reports')
     // A card for each page under Reports, each its page's line over 30 days.
     const cards = page.getByRole('navigation', { name: 'Report pages' }).getByRole('link')
-    await expect(cards).toHaveCount(6)
+    await expect(cards).toHaveCount(7)
     await expect(page.getByTestId('reports-card-spend-line')).toHaveText(/ over 30 days · /u)
     await expect(page.getByTestId('reports-card-health-line')).toHaveText(/ over 30 days$/u)
     // The mock's workspace took canopy up in April: the page opens there, no span pressed.

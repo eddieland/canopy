@@ -5,33 +5,44 @@ run that did not read everything it was asked raises the harness's `connector_fa
 the cause is gone at the first tick whose run reads everything. A poll raises nothing: the attention list is a tick's,
 and the next tick runs the source again. An observation's age is read from its own row, so a subject a run did not
 read whole keeps the age of the read that did.
+
+Beside them, for the web UI's Connectors report, each source's runs over a window of local days, as `canopy health`
+reads its window (DESIGN §11): how they ended, a tick's apart from a poll's, how long they took against the source's
+timeout, the lines they recorded and canopy refused, each day's that read less than asked, and the newest of those.
 """
 
 from __future__ import annotations
 
 import json
+import math
+import statistics
+from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, Literal, NamedTuple, cast
 
-from canopy.core import db, records, sql
+from canopy.core import db, records, spend, sql
 from canopy.core.vocab import ConnectorRunStatus, SourceKind
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Collection
+    from collections.abc import Collection, Iterable, Mapping, Sequence
 
     from canopy.core.config import Config, Source
     from canopy.core.observe import Observed, Request
 
 #: The attention reason a source's run that read less than it was asked raises (DESIGN §14, §30): the harness's.
 FAILED_REASON = "connector_failed"
+#: The newest runs that read less than asked a report lists, across every source.
+NEWEST = 20
 
 
 #: A table of what a connector observed.
 type _Observed = Literal["observed_tickets", "observed_prs"]
 #: The column naming each of its rows' subject.
 type _Subject = Literal["key", "url"]
+#: A run's lines by kind: those it recorded, or those canopy refused.
+type _Lines = Literal["recorded", "refused"]
 
 
 def record(
@@ -175,6 +186,163 @@ def statuses(conn: sqlite3.Connection, config: Config, now: datetime) -> list[So
     return found
 
 
+@dataclass(frozen=True)
+class Lines:
+    """One kind of line a source's runs in a window recorded, or canopy refused: how many, in how many runs."""
+
+    source: str
+    #: The kind of line, as the connectors' contract names it: `ticket`, `pr`, `comment`.
+    line: str
+    #: How many lines of it.
+    lines: int
+    #: In how many runs.
+    runs: int
+    #: When the latest of those runs started.
+    last_at: str
+
+
+@dataclass(frozen=True)
+class SourceRuns:
+    """One source's runs that started in a window: how they ended, how long they took, and the lines they read."""
+
+    source: str
+    #: The kind of its newest run in the window.
+    kind: SourceKind
+    #: Its runs.
+    runs: int
+    #: Of those, the ones a tick made; the rest are the loop's polls between ticks.
+    ticks: int
+    #: The ones that read everything they were asked.
+    ok: int
+    #: The ones that ended with their `end` line but read less than asked.
+    partial: int
+    #: The ones that recorded nothing.
+    failed: int
+    #: Their median length, in minutes.
+    median_minutes: float
+    #: The length nine in ten of them came in at or under, by nearest rank, in minutes.
+    p90_minutes: float
+    #: The longest of them, in minutes.
+    longest_minutes: float
+    #: The source's `timeout_minutes` as configured now; None for a source no longer configured.
+    limit_minutes: int | None
+    #: The lines its runs recorded, by kind of line.
+    recorded: Mapping[str, int]
+    #: The lines canopy refused of its runs, by kind of line.
+    refused: Mapping[str, int]
+
+    @property
+    def polls(self) -> int:
+        """Its runs the loop's polls between ticks made."""
+        return self.runs - self.ticks
+
+    @property
+    def short(self) -> int:
+        """Its runs that read less than they were asked: `partial` and `failed` together."""
+        return self.partial + self.failed
+
+
+@dataclass(frozen=True)
+class Day:
+    """One local day of a window: each source's runs that started in it and read less than they were asked."""
+
+    #: The day, `YYYY-MM-DD`, as `spend.local_day` names it.
+    day: str
+    #: When it starts: its local midnight, a journal time.
+    start: str
+    #: Each source's runs that ended `partial` or `failed`, in `Connectors.sources` order.
+    short: Sequence[int]
+
+
+@dataclass(frozen=True)
+class Connectors:
+    """The sources' runs that started in a window, `[since, until)`: by source, by day, and the newest short of it."""
+
+    since: str
+    until: str
+    days: int
+    #: A row per source that ran in the window, in the order a tick runs them, then any no longer configured, by name.
+    sources: Sequence[SourceRuns] = ()
+    #: Every day of the window, oldest first.
+    per_day: Sequence[Day] = ()
+    #: The newest runs that read less than asked, at most `NEWEST`, the newest first.
+    newest: Sequence[records.ConnectorRun] = ()
+    #: The kinds of line canopy refused, by source in `sources` order, then the most lines first.
+    refusals: Sequence[Lines] = ()
+
+    @property
+    def runs(self) -> int:
+        """The window's runs, of every source."""
+        return sum(s.runs for s in self.sources)
+
+    @property
+    def short(self) -> int:
+        """Of those, the ones that read less than they were asked."""
+        return sum(s.short for s in self.sources)
+
+    @property
+    def refused(self) -> int:
+        """The lines canopy refused of them."""
+        return sum(r.lines for r in self.refusals)
+
+
+def report(conn: sqlite3.Connection, config: Config, now: datetime, days: int) -> Connectors:
+    """The sources' runs of the last `days` local days, today's so far included, by start.
+
+    Returns:
+        The report; a window with no run in it has every day, and empty lists.
+    """
+    return between(conn, config, *spend.window(now, days))
+
+
+def between(conn: sqlite3.Connection, config: Config, start: datetime, end: datetime) -> Connectors:
+    """The sources' runs that started from one local midnight, `start`, to another, `end`.
+
+    Each source is held to its `timeout_minutes` as `config` sets it now.
+
+    Returns:
+        The report, as `report` gives it for any such window: the one before a page's among them.
+    """
+    since = db.format_time(start)
+    until = db.format_time(end)
+    window = ("started_at >= ? AND started_at < ?", since, until)
+    each = (
+        sql.select(
+            "source, kind, status, tick_id IS NOT NULL, (julianday(ended_at) - julianday(started_at)) * 1440, {}",
+            spend.DAY,
+        )
+        .from_("connector_runs")
+        .where(*window)
+        .order_by("id")
+    )
+    with db.read_snapshot(conn):
+        ran = [_ran(row) for row in sql.execute(conn, each)]
+        recorded = _lines(conn, "recorded", since, until)
+        refused = _lines(conn, "refused", since, until)
+        newest = (
+            records.select(records.ConnectorRun)
+            .where(*window)
+            .where("status != ?", ConnectorRunStatus.OK)
+            .order_by("started_at DESC, id DESC")
+            .limit(NEWEST)
+            .all(conn)
+        )
+    configured = config.connect.named()
+    names = _ordered({r.source for r in ran}, configured)
+    return Connectors(
+        since=since,
+        until=until,
+        days=spend.days_between(start, end),
+        sources=[
+            _source_runs([r for r in ran if r.source == name], configured.get(name), recorded, refused)
+            for name in names
+        ],
+        per_day=_per_day(ran, names, start, end),
+        newest=newest,
+        refusals=[r for name in names for r in sorted(refused.get(name, ()), key=lambda r: (-r.lines, r.line))],
+    )
+
+
 def _ages(conn: sqlite3.Connection, request: str | None) -> tuple[list[str], int]:
     """When each ticket and PR a recorded request named was last observed, and how many never were.
 
@@ -215,3 +383,89 @@ def _observed_at(
         .where("{} IN (SELECT value FROM json_each(?))", sql.name(column), json.dumps(sorted(subjects))),
     )
     return {str(r[0]): str(r[1]) for r in rows}
+
+
+class _Ran(NamedTuple):
+    """One run of a window, as `between` reads it."""
+
+    source: str
+    kind: SourceKind
+    status: ConnectorRunStatus
+    #: Whether a tick made it, rather than a poll.
+    by_tick: bool
+    #: Its length, in minutes; a clock that went back reads 0.
+    minutes: float
+    #: The local day it started on, as `spend.local_day` names it.
+    day: str
+
+
+# A row of `between`'s read: source, kind, status, whether a tick made it, its length in minutes, and its local day.
+def _ran(row: Sequence[object]) -> _Ran:
+    source, kind, status, by_tick, minutes, day = row
+    return _Ran(
+        source=str(source),
+        kind=SourceKind(str(kind)),
+        status=ConnectorRunStatus(str(status)),
+        by_tick=bool(by_tick),
+        minutes=max(float(minutes) if isinstance(minutes, (int, float)) else 0.0, 0.0),
+        day=str(day),
+    )
+
+
+# The sources that ran, in the order a tick runs those configured, then those no longer configured, by name.
+def _ordered(ran: Collection[str], configured: Mapping[str, Source]) -> list[str]:
+    return [name for name in configured if name in ran] + sorted(name for name in ran if name not in configured)
+
+
+# One source's row, from its runs of the window, oldest first, and every source's lines by kind.
+def _source_runs(
+    ran: Sequence[_Ran],
+    source: Source | None,
+    recorded: Mapping[str, Sequence[Lines]],
+    refused: Mapping[str, Sequence[Lines]],
+) -> SourceRuns:
+    name = ran[-1].source
+    statuses = Counter(r.status for r in ran)
+    minutes = sorted(r.minutes for r in ran)
+    return SourceRuns(
+        source=name,
+        kind=ran[-1].kind,
+        runs=len(ran),
+        ticks=sum(r.by_tick for r in ran),
+        ok=statuses[ConnectorRunStatus.OK],
+        partial=statuses[ConnectorRunStatus.PARTIAL],
+        failed=statuses[ConnectorRunStatus.FAILED],
+        median_minutes=statistics.median(minutes),
+        p90_minutes=minutes[math.ceil(0.9 * len(minutes)) - 1],
+        longest_minutes=minutes[-1],
+        limit_minutes=None if source is None else source.timeout_minutes,
+        recorded={r.line: r.lines for r in recorded.get(name, ())},
+        refused={r.line: r.lines for r in refused.get(name, ())},
+    )
+
+
+# Every day of the window, oldest first, with each source's runs that started in it and read less than asked.
+def _per_day(ran: Iterable[_Ran], names: Sequence[str], start: datetime, end: datetime) -> list[Day]:
+    starts = spend.day_starts(start, spend.days_between(start, end))
+    short = {day: [0] * len(names) for day in starts}
+    for run in ran:
+        # A day the clock puts outside the window's names is in none of them, as `spend` leaves it.
+        if run.status is not ConnectorRunStatus.OK and run.day in short:
+            short[run.day][names.index(run.source)] += 1
+    return [Day(day=day, start=at, short=short[day]) for day, at in starts.items()]
+
+
+# The lines the window's runs recorded, or canopy refused, by source, each kind with its lines, the runs that had any,
+# and when the latest of those started.
+def _lines(conn: sqlite3.Connection, column: _Lines, since: str, until: str) -> dict[str, list[Lines]]:
+    summed = (
+        sql.select("r.source, j.key, sum(j.value), count(DISTINCT r.id), max(r.started_at)")
+        .from_("connector_runs AS r, json_each(r.{}) AS j", sql.name(column))
+        .where("r.started_at >= ? AND r.started_at < ?", since, until)
+        .where("j.value > 0")
+        .group_by("r.source, j.key")
+    )
+    found: dict[str, list[Lines]] = {}
+    for source, line, lines, runs, last in sql.execute(conn, summed):
+        found.setdefault(str(source), []).append(Lines(str(source), str(line), int(lines), int(runs), str(last)))
+    return found

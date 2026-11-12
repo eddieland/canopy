@@ -5,7 +5,7 @@ included: it renames the actions `bash` to `shell`, `task` to `subagent`, and `w
 rules' order, and evaluates them as 1 did, the last matching rule deciding, and a tool whose last matching rule denies
 it with the pattern `*` not sent at all. So canopy's definitions, and how config is rendered into them, are OpenCode 1's
 (`canopy.runtime.opencode.definitions`), shared rather than copied, and only what OpenCode 2 adds is here. The plugin
-is shared too: its default export holds an entry point for each major version (DESIGN §33).
+is not shared: its default export holds OpenCode 2's entry point alone (DESIGN §33).
 
 It adds one file, and links others. OpenCode 2's commands share a background service unless told otherwise, and the
 service keeps the config and environment of whichever command started it. A config directory with a `service.json`

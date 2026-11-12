@@ -6,6 +6,7 @@ import type { TaskRun, TaskSummary } from '@/api/types'
 import { CopyablePath } from '@/components/copy-button'
 import { Empty, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { PlanDocument } from '@/components/plan-editor'
+import { PlanFileMenu } from '@/components/plan-file-menu'
 import { Chip } from '@/components/status'
 import { TaskRunLink } from '@/components/task-link'
 import { taskRunRef } from '@/lib/refs'
@@ -51,6 +52,13 @@ export function TaskReportPanel({
                         <span className="readout text-xs text-muted-foreground">
                             from <TaskRunLink task={task.id} run={run.id} />
                         </span>
+                        {data?.text !== undefined && data.text !== null && (
+                            <PlanFileMenu
+                                markdown={() => data.text ?? ''}
+                                file={`task-${task.id}-report.md`}
+                                what="report"
+                            />
+                        )}
                     </span>
                 )}
             </PanelHeader>
@@ -63,7 +71,12 @@ export function TaskReportPanel({
             ) : (
                 <>
                     {/* A new hash is new text: the document reads its Markdown once. */}
-                    <PlanDocument key={data.sha256 ?? ''} markdown={data.text} label={`Report from ${ref ?? ''}`} />
+                    <PlanDocument
+                        key={data.sha256 ?? ''}
+                        markdown={data.text}
+                        label={`Report from ${ref ?? ''}`}
+                        name={`task-${task.id}-report`}
+                    />
                     <p className="border-t px-3 py-2 font-mono text-xs text-muted-foreground">
                         <CopyablePath path={data.path} label="report path" />
                     </p>

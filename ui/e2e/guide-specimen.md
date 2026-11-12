@@ -37,3 +37,16 @@ amet = 3
 
 At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque
 corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident.
+
+| Lorem | Ipsum | Dolor |
+| --- | --- | ---: |
+| `sit amet` | consectetur adipiscing elit | 3 |
+| `sed do` | eiusmod tempor incididunt ut labore | 120 |
+
+```mermaid
+flowchart TD
+    accTitle: Lorem ipsum dolor
+    A[Lorem ipsum] --> B[Dolor sit]
+    B -->|amet| C[Consectetur]
+    B --> D[Adipiscing elit]
+```

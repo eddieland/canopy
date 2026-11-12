@@ -97,7 +97,8 @@
 
     /* The CI page's red checks by day (src/lib/ci.ts): a series per check name, by rank, the most often red first, and
      * the rest as one in a neutral. Fills, never text and never state: hues apart from the spend series and from the
-     * status reds and greens, so a check never reads as a kind of run, or as passed or failed. */
+     * status reds and greens, so a check never reads as a kind of run, or as passed or failed. The Connectors page's
+     * sources take them too, by their order (src/lib/connectors.ts). */
     --check-1: oklch(0.5 0.17 295);
     --check-2: oklch(0.52 0.11 215);
     --check-3: oklch(0.6 0.13 85);

@@ -39,6 +39,7 @@ from canopy.core import checklists, commit_hooks, conversation, db
 from canopy.infra import procs
 from canopy.infra.procs import SubprocessRunner
 from canopy.loop import mcp
+from canopy.setup import sandbox_check
 from tests.canopy.helpers import (
     InlineRunner,
     answered_lines,
@@ -732,6 +733,16 @@ def test_canopys_hook_holds_a_sandboxed_workers_push_and_marks_the_hold_in_the_s
     assert sent.ok, sent.stderr
     assert "[canopy]" not in sent.stderr
     assert git("rev-parse", "refs/heads/work", cwd=remote) == git("rev-parse", "HEAD", cwd=canary.slot)
+
+
+def test_the_operators_check_passes_where_the_sandbox_holds(canary: Canary) -> None:
+    """`canopy sandbox check` (docs/SANDBOX.md): against a fake srt, which sandboxes nothing, it fails every denial."""
+    report = sandbox_check.run_check(SubprocessRunner(), canary.primary)
+
+    assert report.error == ""
+    assert [attempt.name for attempt in report.attempts if not attempt.ok] == []
+    assert len(report.attempts) == 8  # the network's two among them
+    assert report.skipped == ()
 
 
 def test_a_worker_runs_under_the_system_temp_directory(canary: Canary) -> None:

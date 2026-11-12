@@ -248,6 +248,13 @@ export const TIPS = {
         'Hot take: a flaky test is just a test with moods. I also have moods.',
         'Haiku: e2e is red / rebase, push, and wait again / the same test, still red',
     ],
+    '/reports/connectors': [
+        "It looks like you're checking the connectors. They read the tracker so you don't have to.",
+        'Unhelpful tip: a source that never runs is never stale. It is also never anything else.',
+        'Dear diary, a poll timed out at two minutes. I time out at two seconds. Nobody counts mine.',
+        'Hot take: a 503 is the tracker saying "not now". I say it to bedtime.',
+        'Haiku: poll, poll, and poll again / the tracker says nothing new / ok, all the same',
+    ],
     '/reports/reviews': [
         "It looks like you're waiting on a review. I review everything instantly. Nobody asks me.",
         'Unhelpful tip: a PR nobody reviews has no changes requested. Technically flawless.',

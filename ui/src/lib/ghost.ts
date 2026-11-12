@@ -184,6 +184,13 @@ export const GHOST_TIPS = {
         'Grimoire: a cooldown is a resume told to wait for its checks. Patience is a weapon.',
         'Dear Traveler, a check went green on the next head. Took a few tries. Like most of my revives.',
     ],
+    '/reports/connectors': [
+        'Eyes up, Guardian. The connectors. Our scouts in the field.',
+        'Field report: a partial read. The scout came back, minus one ticket. Happens in the Dreaming City.',
+        "Scanning... a poll timed out. The tracker went dark. I've seen Hive do that on purpose.",
+        "Grimoire: a refused line is intel canopy wouldn't take. Bad intel is worse than none.",
+        'Dear Traveler, stale means old intel. Fresh scouts, Guardian. Always fresh scouts.',
+    ],
     '/reports/reviews': [
         'Eyes up, Guardian. A review requested. The wait begins.',
         'Field report: changes requested. The Cabal call that diplomacy.',

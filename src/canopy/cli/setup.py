@@ -1,7 +1,7 @@
-"""`canopy init`, `canopy skill`, `canopy completion`, `canopy secret`, and `canopy sandbox setup`: setting canopy up.
+"""`canopy init`, `canopy skill`, `canopy completion`, `canopy secret`, and `canopy sandbox`: setting canopy up.
 
 `canopy skill` is for the operator's own agent sessions, `canopy completion` for their shell, `canopy secret` for the
-web UI, and `canopy sandbox setup` for sandboxed runs.
+web UI, and `canopy sandbox setup` and `check` for sandboxed runs.
 """
 
 from __future__ import annotations
@@ -16,12 +16,13 @@ import click
 from click.shell_completion import BashComplete, FishComplete, ShellComplete, ZshComplete
 
 from canopy.cli import workspace as cli_workspace
-from canopy.cli.common import CliError, runner_of
+from canopy.cli.common import CliError, require_workspace, runner_of
+from canopy.cli.params import REPO
 from canopy.core import config, conversation, hostgit, workspace
 from canopy.infra import procs, resources
 from canopy.runtime import project_config
 from canopy.serve import secret
-from canopy.setup import init
+from canopy.setup import init, sandbox_check
 from canopy.setup import sandbox as setup_sandbox
 from canopy.setup import workspace as setup_workspace
 
@@ -221,6 +222,61 @@ def cmd_sandbox_setup(click_ctx: click.Context) -> int:
         click.echo()
         click.echo(suggestion, nl=False)
     return 1 if report.todo else 0
+
+
+@sandbox_group.command("check")
+@click.option("--repo", type=REPO, help="The repository to check in. The first one cloned, when not given.")
+@click.option("--offline", is_flag=True, help="Leave the network unchecked.")
+@click.pass_context
+def cmd_sandbox_check(click_ctx: click.Context, repo: str | None, *, offline: bool) -> int:
+    """Check that the sandbox holds on this machine, for a worker.
+
+    Runs a plain script, no model, through canopy-sandbox and your worker.json, in a worktree of a repository made for
+    the check and removed after. The script tries what a sandboxed worker must not do: read and write your home
+    directory, read canopy's config, write beside the repository's hooks, make a branch, and reach a host off the
+    allowlist. And what it must still do: commit, and reach an allowed host. Exits 1 when the sandbox let through what
+    it should refuse, refused what it should allow, or did not run. Run `canopy sandbox setup` first.
+    """
+    report = sandbox_check.run_check(runner_of(click_ctx), _primary_clone(repo), network=not offline)
+    for attempt in report.attempts:
+        did = "allowed" if attempt.allowed else "refused"
+        wrong = "" if attempt.ok else f"   <- should be {'allowed' if attempt.expected else 'refused'}"
+        click.echo(f"{did}  {attempt.name}{wrong}")
+    for note in report.skipped:
+        click.echo(f"Note: {note}")
+    for path in report.left:
+        click.echo(f"Left behind, for you to remove: {path}")
+    if report.error:
+        raise CliError(report.error)
+    failed = [attempt for attempt in report.attempts if not attempt.ok]
+    if failed:
+        raise CliError(
+            f"the sandbox did not hold at {len(failed)} of {len(report.attempts)} attempts. Check the worker template "
+            "and what `canopy sandbox setup` says is left to do (docs/SANDBOX.md).",
+        )
+    if report.left:
+        raise CliError("the sandbox held, but the check could not remove everything it made: see above.")
+    click.echo(f"\nThe sandbox holds for a worker: {len(report.attempts)} of {len(report.attempts)} attempts.")
+    return 0
+
+
+def _primary_clone(name: str | None) -> Path:
+    """Return the primary clone of the repository `name`, or of the workspace's first cloned one.
+
+    Raises:
+        CliError: there is no workspace here, no such repository in it, or none cloned.
+    """
+    try:
+        ws = workspace.load(require_workspace())
+    except config.ConfigError as e:
+        raise CliError(str(e)) from e
+    repos = [repo for repo in ws.repos if name in {None, repo.name}]
+    if not repos:
+        raise CliError(f"no repository named {name} in this workspace")
+    cloned = [repo for repo in repos if repo.cloned]
+    if not cloned:
+        raise CliError("no repository is cloned here to check in; run `canopy workspace sync` first")
+    return cloned[0].path
 
 
 def _runtime(runner: procs.Runner, user_file: Path) -> config.Runtime:

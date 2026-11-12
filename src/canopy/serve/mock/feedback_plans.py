@@ -76,6 +76,18 @@ Run 45 moved `setLoading(false)` into a `finally`, skipped for an aborted reques
 bob asks why 250 ms when the other inputs debounce at 300. Keep 250, which the ticket asks for, and move it into
 `SEARCH_DEBOUNCE_MS` in `src/search/constants.ts`, so the inputs stop drifting apart.
 
+| File | Change |
+| --- | --- |
+| `src/search/constants.ts` | add `SEARCH_DEBOUNCE_MS = 250` |
+| `src/search/SearchInput.tsx` | read it in place of `250` |
+
+```mermaid
+flowchart LR
+    accTitle: The search inputs read one debounce
+    Constants[search: constants.ts] --> Search[search: SearchInput]
+    Constants --> Filter[search: FilterInput]
+```
+
 ## Checks
 
 No check has run at the head yet.

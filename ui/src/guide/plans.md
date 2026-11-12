@@ -71,7 +71,8 @@ planner's choices, and says so itself. In Attention, a `plan review` row says `2
 so you can tell a plan with questions from a rubber stamp before you open either.
 
 There, the plan opens in an editor. The page's title names the plan and its ticket, and the line under it says which
-run wrote it, when you approved it and how, whether its file was edited since, and its effort. A member of an epic
+run wrote it, when you approved it and how, whether its file was edited since, and its effort, then where its file
+is, with a copy button, for your own editor. A member of an epic
 gets one more line: `follows epic:2's plan`, the start of that plan's hash, and when you approved it, since its planner
 read the epic's approved plan beside the ticket. When you've approved a newer plan of the epic since, the line says so
 and when, and leaves what changed for you to read on [the epic's plan page](epics#an-epics-plan). The **Plan** panel's
@@ -96,6 +97,19 @@ the section most like it when the heading was renamed. So a section the planner 
 heading instead of being struck out in one place and pasted green in another, and one it dropped folds into a single
 **Section removed** line where it used to be. Open that line to read what went; it was probably the part you liked.
 
+The last button in the Plan panel's header takes the plan whole: **Copy as Markdown**, or **Save as .md**, for the
+PR that implements it, another agent, or a design review. What you get is what the page shows, your edits included;
+if they aren't saved yet, the toast says so, since a copy of a plan nobody saved is a copy of a plan nobody has. The
+file is named as `canopy archive` names it (`412-APPROVED-export-reports-as-csv.md`), so the same plan has the same
+name however it left. The same button sits on an earlier plan, an epic's plan, a feedback plan's file, and a task's
+report.
+
+Printing a plan, or saving it as a PDF from the print dialog, gives you the plan alone, as a document: one line
+naming its ticket, which plan it is, where it stands, and when it was written, then the plan, with none of the page's
+buttons, comments, or rail around it. It prints in the light theme whatever you read it in, so a dark theme doesn't
+put pale grey text on white paper, and diagrams and tables are kept to a page where they fit, wrapped rather than cut
+off where they don't. Your printer will still find a way to jam.
+
 **Outline**, at the right of the Plan panel's header, lists the plan's headings, each step indented under its
 section, and goes to the one you pick, with the cursor in it if you can edit. Every plan has the same headings (Goal,
 Acceptance, Context, and so on down to Risks), so after a few plans you'll know where Steps is without looking, and
@@ -117,6 +131,16 @@ a ticket that needs none, it says so and names `canopy plan KEY`. If a plan's fi
 the page names the problem and the path instead of opening an empty editor, since an empty plan approved is the most
 expensive kind.
 
+A code block has a copy button in its top right corner while you point at it, here and on every page of this guide.
+It copies the code alone, without the fence and without a newline after the last line, so a command pasted into a
+shell waits for you to press Enter rather than running the moment it lands.
+
+A table in a plan has the same corner. Its copy button copies the table as the Markdown the plan's file holds, ready
+for a PR description; the menu beside it has **Copy for a spreadsheet**, which pastes into Sheets, Excel, or Numbers as
+cells, and **Save as CSV**. A cell that starts with `=`, `+`, `-`, or `@` goes as text, behind a `'` that tells the
+spreadsheet so, and a planner's `=HYPERLINK(...)` arrives as words rather than as a formula in your sheet. A spreadsheet
+opening the CSV may show that `'`; better a stray apostrophe than a cell that runs. Numbers like `-3` stay numbers.
+
 ## Diagrams
 
 A code block fenced as `mermaid` is drawn as the diagram it describes: a flowchart, a sequence diagram, a state
@@ -124,22 +148,45 @@ diagram, a class diagram, or an entity relationship diagram, which covers how mo
 a status may become, what a new type holds, and how a migration's tables relate. A part the plan adds or changes ends
 its label with `(new)` or `(changed)`, so you can see what moves without reading the whole picture. A picture of the
 call order is quicker to check than three paragraphs about it, and quicker to catch being wrong. It's drawn in your
-theme's colors, and again when you change them.
+theme's colors, and again when you change them. One wider than
+the plan is narrowed to fit, but only so far: past three quarters of its size its labels would be too small to read,
+so it scrolls sideways instead, its edge faded where there's more. A twelve-step chain drawn left to right will make
+you scroll; that's the diagram's fault, not yours.
 
 Planners draw one wherever the work has a shape: a plan that changes how two parts talk, adds a status, or reorders a
 flow has at least one, usually in Context for how things stand and again under the step that changes them. They say
 the same in prose, since the worker after them reads the code, not the picture, and they reach for a table the same
-way, for the files a step changes or the risks beside their way back. A typo fix still gets none. An epic's plan of
+way, for the files a step changes or the risks beside their way back. They're asked to draw top-down, name each part
+`repository: thing`, keep a table to four columns, and title each diagram, and the title shows as its caption. A
+typo fix still gets none. An epic's plan of
 three tickets or more opens its breakdown with the order they're built in, drawn.
+
+Point at a diagram and **Copy Mermaid source** appears in its top right corner. It copies the code exactly as the
+plan's file holds it, without the fence, ready to paste into a PR description, an issue, or a doc: GitHub draws
+Mermaid, and so do most of the places you'd want it. A diagram that couldn't be drawn copies the same way, so you
+can fix it in an editor that says more than `Parse error on line 3`.
+
+For the places that don't speak Mermaid (Slack, a slide, an email), the picture's menu beside it has **Copy as
+image** and **Save as PNG**. Either way you get the diagram at twice its size on its own background, so it reads on
+any page, named for where it came from: `ABC-102-plan-2-sequence-1.png` is plan 2's first diagram, a sequence diagram.
+It's drawn in the theme you're looking at, so a dark theme saves a dark picture; your slide template may have views.
+
+**Save as SVG** saves the same picture as vectors, for a slide that gets scaled or an editor that wants to restyle
+it. It isn't Mermaid's file as it came: canopy keeps the shapes, text, and styles the diagram draws with and drops
+anything else, links and scripts first, so the file opened on its own can't run or load anything, same as the picture
+on the page. A model wrote the diagram, and a model doesn't get to put a script on your desktop by drawing a box.
 
 The code is still the plan. **Source**, under the diagram, shows it; so does putting the cursor in it, which the arrow
 keys do from the line above or below, and which is how you edit one, with the diagram redrawn under it as you stop
 typing. A comment or a change marked in the code shows it too, since that's where those live. A diagram Mermaid can't
-read, or one of a kind not drawn here, shows its code and, under it, `Not drawn:` and why.
+read, one of a kind not drawn here, or one whose picture your browser can't read, shows its code and, under it,
+`Not drawn:` and why.
 
 A planner's diagram comes from the ticket's text like the rest of the plan, so it's drawn as a picture and nothing
-more: its labels stay words, and nothing in it can run, click through, or load from anywhere. It can still be a
-confident drawing of the wrong thing, and so can a whiteboard.
+more: its labels stay words, and nothing in it can run, click through, or load from anywhere. A link written into one
+(`click A href "…"`) is dropped from the picture, its node drawn like the rest; the address is still there in the
+code, for whoever wants to read where it was pointing. A diagram can still be a confident drawing of the wrong thing,
+and so can a whiteboard.
 
 ## Commenting
 

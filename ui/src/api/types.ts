@@ -271,6 +271,20 @@ export type CiPullRequest = Schemas['CiPullRequest']
 export type CiVerdict = Schemas['CiVerdict']
 /** The window before a CI report's: its heads, green first, red runs, and fixes. */
 export type CiPrevious = Schemas['CiPrevious']
+/** How each source's runs ended over a window, how long they took, and how fresh each source reads now. */
+export type ConnectorsReport = Schemas['ConnectorsReport']
+/** A source that reads, as `canopy status` names it: its latest run, and how old its observations are. */
+export type ConnectorsSource = Schemas['ConnectorsSource']
+/** One source's runs in a window: how they ended, how long they took, and the lines they read. */
+export type ConnectorsSourceRuns = Schemas['ConnectorsSourceRuns']
+/** One local day's runs that read less than asked, by source. */
+export type ConnectorsDay = Schemas['ConnectorsDay']
+/** A run that read less than it was asked. */
+export type ConnectorsRun = Schemas['ConnectorsRun']
+/** One kind of line canopy refused of a source's runs in a window. */
+export type ConnectorsRefusal = Schemas['ConnectorsRefusal']
+/** The window before a Connectors report's: its runs, the short ones, and the lines refused. */
+export type ConnectorsPrevious = Schemas['ConnectorsPrevious']
 /** Where a window's review feedback came from, how long it took, and what answering it cost. */
 export type ReviewsReport = Schemas['ReviewsReport']
 /** A PR in a window: its feedback, how soon its first review came, and what answering cost. */

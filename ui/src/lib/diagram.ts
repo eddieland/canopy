@@ -4,12 +4,14 @@
 // setting any of it back, or the theme, layout, or CSS. Only the kinds a plan has use for are drawn; any other is
 // refused as such. The SVG is a string for an `<img>` (src/lib/plan-diagram.ts, src/hooks/use-diagram.ts), where the
 // browser runs no script, follows no link, and fetches nothing, so a gap in mermaid's sanitizer reaches nothing shown.
+// A link a diagram writes (`click A href "…"`) is dropped from it all the same, its node drawn as any other.
 // While it draws, mermaid lays the SVG out in the page, off screen, for a moment: there `strict` is the guard. Only
 // this module imports mermaid, and only on demand.
 //
 // An image draws with its own colors and fonts, not the page's: the colors are read from the theme's tokens as each
 // diagram is drawn, so a theme or palette changed redraws it, and the font is the system's, which the image can use,
 // since one measured in the page's bundled font but drawn in another would clip its labels.
+import plexMono from '@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2?inline'
 import mermaid from 'mermaid'
 import type { MermaidConfig } from 'mermaid'
 
@@ -19,6 +21,8 @@ export interface Drawn {
     svg: string
     /** The kind mermaid read it as. */
     kind: string
+    /** How wide it is drawn, in CSS pixels, as its SVG says; never shown much narrower (`diagram-image`). */
+    width?: number | undefined
 }
 
 /** A diagram that was not drawn, and why, in a line for the operator. */
@@ -61,8 +65,33 @@ const SECURE = [
 ]
 // A plan is at most tens of thousands of characters; a diagram is a small part of it.
 const MAX_TEXT = 20_000
-// The font every system has, which an image can draw with.
-const FONT = 'ui-sans-serif, system-ui, sans-serif'
+// The app's mono face, which its data, names, and labels are set in, as a diagram's parts are names: IBM Plex Mono in
+// every palette. An image can use a font only if its SVG carries it, so each diagram carries Plex Mono's Latin
+// regular, about 20KB as a data URL, inside the image, which fetches nothing. Mermaid measures its labels in the page,
+// where the same face is loaded, so what it measures is what the image draws.
+const FONT = "'IBM Plex Mono', ui-monospace, monospace"
+// The face as the SVG carries it, marked as canopy's own, which a saved file leaves out (src/lib/diagram-svg.ts).
+const FACE = `<style data-face="">${fontFace(plexMono)}</style>`
+// One size for every label in every kind: the app's data size, under the plan's text, as its tables are.
+const FONT_SIZE = 13
+// The width a flowchart's label wraps at: wide enough that a module's name, `api: ReportQuery.iter_rows`, wraps between
+// words, never inside one, which is all mermaid can do with a word longer than the width.
+const WRAP_AT = 260
+// A shape's corner: a step under the figure's own, so a node reads as held by it.
+const RADIUS = 4
+// The keyword that opens each kind mermaid reads but canopy does not draw, where it is not mermaid's own name for it:
+// what the planner wrote, so `Not drawn:` names it as written.
+const KEYWORDS: Partial<Record<string, string>> = {
+    requirement: 'requirementDiagram',
+    gitGraph: 'gitGraph',
+    xychart: 'xychart-beta',
+}
+// The namespaces of an SVG's own elements, and of the `xlink:href` mermaid writes a link with.
+const SVG = 'http://www.w3.org/2000/svg'
+const XLINK = 'http://www.w3.org/1999/xlink'
+// Why a picture is not shown when the browser cannot read it as SVG, as a plan's diagram says it too
+// (src/lib/plan-diagram.ts).
+const UNREADABLE = 'the browser cannot read its picture'
 
 // How a diagram is read, drawn or not: at mermaid's strictest, whatever the diagram asks.
 const READ: MermaidConfig = {
@@ -83,13 +112,18 @@ let drawn = 0
 export async function drawDiagram(source: string): Promise<Drawn | NotDrawn> {
     mermaid.initialize(configuration())
     try {
+        // Measured in the face it is drawn in: a page that has set nothing in it yet has not loaded it.
+        await document.fonts.load(`${FONT_SIZE}px 'IBM Plex Mono'`)
         const read = await kindOf(source)
         if (typeof read !== 'string') {
             return read
         }
         drawn += 1
         const { svg } = await mermaid.render(`plan-diagram-${drawn}`, source)
-        return { svg, kind: read }
+        const picture = withoutLinks(svg)
+        return typeof picture === 'string'
+            ? { svg: withFace(picture), kind: read, width: naturalWidth(picture) }
+            : picture
     } catch (error) {
         return { error: firstLine(error) }
     }
@@ -114,7 +148,7 @@ async function kindOf(source: string): Promise<string | NotDrawn> {
     const { diagramType } = await mermaid.parse(source)
     return KINDS.has(diagramType)
         ? diagramType
-        : { error: `a ${diagramType} diagram is not drawn here, only ${KIND_NAMES}` }
+        : { error: `${KEYWORDS[diagramType] ?? diagramType} is not drawn here, only ${KIND_NAMES}` }
 }
 
 function configuration(): MermaidConfig {
@@ -123,7 +157,6 @@ function configuration(): MermaidConfig {
     const raised = token('--surface-raised')
     const ink = token('--foreground')
     const muted = token('--muted-foreground')
-    const edge = token('--border')
     // Each size is the one a node, a line, and a label are drawn at, without a layout's own `useMaxWidth`, which
     // would make the image as wide as whatever holds it rather than as wide as it is.
     const natural = { useMaxWidth: false }
@@ -133,15 +166,31 @@ function configuration(): MermaidConfig {
         look: 'classic',
         layout: 'dagre',
         fontFamily: FONT,
-        flowchart: natural,
-        sequence: natural,
-        state: natural,
-        class: natural,
-        er: natural,
+        // Mermaid copies this over a sequence diagram's own sizes, so the label size is set here as well as below.
+        fontSize: FONT_SIZE,
+        // Spaced as the app is, densely: mermaid's own spacing is a slide's.
+        flowchart: { ...natural, wrappingWidth: WRAP_AT, nodeSpacing: 32, rankSpacing: 36, padding: 10 },
+        // Its actors once, at the top: drawn again at the foot, they take a sixth of its height to say nothing new.
+        sequence: {
+            ...natural,
+            mirrorActors: false,
+            // At the text's edge, as every other kind is, not 50px in.
+            diagramMarginX: 8,
+            diagramMarginY: 8,
+            actorMargin: 32,
+            boxMargin: 6,
+            messageMargin: 28,
+            width: 120,
+            height: 40,
+        },
+        state: { ...natural, padding: 6, nodeSpacing: 32, rankSpacing: 36 },
+        class: { ...natural, padding: 6 },
+        er: { ...natural, entityPadding: 10, minEntityWidth: 80, minEntityHeight: 40 },
+        themeCSS: themeCss(background),
         themeVariables: {
             darkMode: document.documentElement.classList.contains('dark'),
             fontFamily: FONT,
-            fontSize: '14px',
+            fontSize: `${FONT_SIZE}px`,
             background,
             primaryColor: raised,
             primaryTextColor: ink,
@@ -153,10 +202,12 @@ function configuration(): MermaidConfig {
             titleColor: ink,
             edgeLabelBackground: background,
             clusterBkg: background,
-            clusterBorder: edge,
+            // A subgraph and a note are outlined as a node is, a subgraph's dashed: in `--border`, at 1.4:1 to the
+            // canvas, they were too faint to see.
+            clusterBorder: muted,
             noteBkgColor: raised,
             noteTextColor: ink,
-            noteBorderColor: edge,
+            noteBorderColor: muted,
             actorBkg: raised,
             actorBorder: muted,
             actorTextColor: ink,
@@ -178,6 +229,25 @@ function configuration(): MermaidConfig {
     }
 }
 
+// What every kind draws alike, as the document around it does: one corner and one line weight for every shape and
+// edge, and a sequence's captions and messages lifted off the lifelines they cross by a halo of the canvas, as an
+// edge's label sits on its own patch of it. Mermaid puts this before its own rules, so each wins by `!important`.
+function themeCss(canvas: string): string {
+    const shapes = '.node rect, .cluster rect, rect.actor, rect.note, .note rect, .statediagram-state rect, rect.basic'
+    const lines = [
+        '.flowchart-link, .edgePath .path, .transition, .messageLine0, .messageLine1',
+        '.actor-line, .loopLine, .node rect, .node polygon, .node circle, .node path',
+        '.cluster rect, rect.actor, rect.note, .statediagram-state rect, rect.basic',
+    ].join(', ')
+    return [
+        `${shapes} { rx: ${RADIUS}px !important; ry: ${RADIUS}px !important; }`,
+        `${lines} { stroke-width: 1px !important; }`,
+        `.cluster rect { stroke-dasharray: 4 3 !important; }`,
+        `.messageText, .loopText, .loopText tspan { paint-order: stroke; stroke: ${canvas} !important;`,
+        ` stroke-width: 6px !important; stroke-linejoin: round; }`,
+    ].join('\n')
+}
+
 // A token's color as `#rrggbb`, which mermaid can lighten and darken: tokens are written in oklch, which it cannot
 // read, so each is painted on a pixel and read back.
 function tokenReader(): (token: string) => string {
@@ -195,6 +265,35 @@ function tokenReader(): (token: string) => string {
     }
 }
 
+// `svg` with each link a diagram wrote (`click A href "…"`) turned into the group it wraps, which draws its node where
+// it was, or why it cannot be shown. mermaid keeps such a link at `strict`, as an `<a>` with an `xlink:href` whose
+// prefix it never declares, so the browser could not read the picture at all; and a link in a plan is not a link
+// (D113). A picture with no link is returned as mermaid wrote it.
+function withoutLinks(svg: string): string | NotDrawn {
+    if (!/<a\b/u.test(svg)) {
+        return svg
+    }
+    const declared = /^<svg\b[^>]*\sxmlns:xlink=/u.test(svg)
+        ? svg
+        : svg.replace(/^<svg\b/u, `<svg xmlns:xlink="${XLINK}"`)
+    const picture = new DOMParser().parseFromString(declared, 'image/svg+xml')
+    if (picture.querySelector('parsererror') !== null) {
+        return { error: UNREADABLE }
+    }
+    // A list as it stands, which `getElementsByTagName`'s would not: it would shrink as each link is replaced.
+    for (const link of picture.querySelectorAll('a')) {
+        const group = picture.createElementNS(SVG, 'g')
+        for (const attribute of link.attributes) {
+            if (attribute.localName !== 'href' && attribute.localName !== 'target') {
+                group.setAttributeNS(attribute.namespaceURI, attribute.name, attribute.value)
+            }
+        }
+        group.append(...link.childNodes)
+        link.replaceWith(group)
+    }
+    return new XMLSerializer().serializeToString(picture)
+}
+
 // The first line of what mermaid threw, which says where it could not read; the rest points at it in the source.
 function firstLine(error: unknown): string {
     const message = error instanceof Error ? error.message : String(error)
@@ -204,4 +303,21 @@ function firstLine(error: unknown): string {
         ?.trim()
         .replace(/[.:]+$/u, '')
     return line || 'mermaid could not read it'
+}
+
+// The width the SVG's root is drawn at, which mermaid writes as an attribute when a layout has no `useMaxWidth`.
+function naturalWidth(svg: string): number | undefined {
+    const width = /^<svg\b[^>]*?\swidth="(?<width>\d+(?:\.\d+)?)(?:px)?"/u.exec(svg)?.groups?.['width']
+    return width === undefined ? undefined : Number(width)
+}
+
+// The SVG with the face its labels are set in carried inside it, as the first thing in it: mermaid's own styles drop an
+// `@font-face`, and an image can use no font it does not carry.
+function withFace(svg: string): string {
+    return svg.replace(/<svg\b[^>]*>/u, (open) => `${open}${FACE}`)
+}
+
+// The face's rule, its file `font` as a data URL.
+function fontFace(font: string): string {
+    return `@font-face{font-family:'IBM Plex Mono';font-weight:400;src:url(${font})}`
 }

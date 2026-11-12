@@ -153,8 +153,8 @@ rule down its left edge, with the reply the planner would draft. Where it propos
 already waits on the same thread, it says so: the plan's resume writes a new reply there, and sending the draft first
 answers ahead of it. Both may go, or one; the page won't pick for you. A review, or an item with no thread on this page,
 shows its proposed reply in its row instead. **Show the plan**, at the panel's foot, unfolds the plan's file as it
-stands, as plain text, so an enthusiastic `<img>` in a coworker's comment stays a string of characters, in the rows as
-in the file.
+stands, laid out as a ticket's plan is, its tables and diagrams drawn. An enthusiastic `<img>` in a coworker's comment
+still stays a string of characters, in the rows as in the file.
 
 A plan goes `stale` when the PR moves after it was written: a new comment or reply, an edit, a resolved thread, a new
 head, a check that changed its mind, a conflict that came or went, or a blocker that merged. The panel lists each

@@ -315,11 +315,12 @@ describe('FeedbackPlanPanel', () => {
         expect(within(row).queryByRole('link')).toBeNull()
         expect(row.textContent).toContain('the review 4102337001')
         fireEvent.click(screen.getByRole('button', { name: 'Show the plan' }))
-        const shown = screen.getByTestId('feedback-plan-text')
-        // Its HTML stays its characters, and Markdown is not drawn.
-        expect(shown.textContent).toBe(text)
-        expect(shown.querySelector('img')).toBeNull()
-        expect(shown.querySelector('strong')).toBeNull()
+        const shown = await screen.findByRole('document', { name: 'feedback-plan:1' })
+        // Laid out as a document, its Markdown drawn, but its HTML stays its characters.
+        expect(within(shown).getByRole('heading', { name: 'Plan' })).toBeDefined()
+        expect(within(shown).getByRole('strong').textContent).toBe('not bold')
+        expect(shown.textContent).toContain('<img src=x onerror=alert(1)>')
+        expect(within(shown).queryByRole('img')).toBeNull()
     })
 
     it('names a failed check, a conflict, and a merged blocker by what they are, with no author', async () => {

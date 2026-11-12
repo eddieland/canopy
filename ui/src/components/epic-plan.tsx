@@ -20,6 +20,7 @@ import { epicApprovedText, epicRepliedText } from '@/lib/outcomes'
 import { decisionAnswers, decisionsTold, planDecisions } from '@/lib/plan-decisions'
 import type { PlanDecision } from '@/lib/plan-decisions'
 import { clearPicks, pickOption, usePlanPicks } from '@/lib/plan-picks'
+import { printLine } from '@/lib/plan-print'
 import { approveLabel } from '@/lib/plan-state'
 import { epicRef, epicRunRef } from '@/lib/refs'
 
@@ -125,12 +126,11 @@ function NewestPlan({
             }
         } catch (error: unknown) {
             setFailure(error)
-        } finally {
-            setBusy(false)
-            // No stream event carries an epic: its page and the list read it again.
-            void client.invalidateQueries({ queryKey: keys.epic(epic) })
-            void client.invalidateQueries({ queryKey: keys.epics })
         }
+        setBusy(false)
+        // No stream event carries an epic: its page and the list read it again.
+        void client.invalidateQueries({ queryKey: keys.epic(epic) })
+        void client.invalidateQueries({ queryKey: keys.epics })
     }
 
     function approve() {
@@ -163,6 +163,8 @@ function NewestPlan({
             editable={false}
             comments={false}
             decides={waits}
+            name={`epic-${epic}-plan-${newest.plan.id}`}
+            printLine={printLine(`epic:${epic}`, newest.plan.id, newest.plan.status, newest.plan.created_at)}
             previous={
                 before?.text === null || before?.text === undefined
                     ? undefined
@@ -344,6 +346,7 @@ function EarlierPlan({ epic, file }: { epic: number; file: EpicPlanFile }) {
                                 onThreadsChange={ignore}
                                 editable={false}
                                 comments={false}
+                                name={`epic-${epic}-plan-${file.plan.id}`}
                             />
                         </div>
                     )}

@@ -63,6 +63,7 @@ interface SubPage {
         | '/reports/checklist'
         | '/reports/health'
         | '/reports/ci'
+        | '/reports/connectors'
         | '/reports/reviews'
         | '/reports/plans'
     label: string

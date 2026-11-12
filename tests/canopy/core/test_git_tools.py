@@ -92,6 +92,43 @@ def test_diff_with_stat_lists_each_file_changed_in_place_of_the_patch(repo: Repo
     assert only.endswith("\n\n1\t1\tretry.py")
 
 
+def test_a_cut_diff_ends_with_the_fields_that_narrow_the_next_call(repo: Repo) -> None:
+    """A patch cut names stat and paths, and how many files it kept whole; a stat cut names paths."""
+    for n in range(40):
+        (repo.path / f"file{n:02}.txt").write_text(f"line {n}\n")
+    git("add", ".", cwd=repo.path)
+    git("commit", "--quiet", "-m", "many files", cwd=repo.path)
+    at = repo.checkouts
+    with mock.patch.object(git_tools, "MAX_CHARS", 1000):
+        patch = git_tools.diff(RUNNER, at, git_tools.Diff(base="main", head="feature"))
+    with mock.patch.object(git_tools, "MAX_CHARS", 300):
+        stat = git_tools.diff(RUNNER, at, git_tools.Diff(base="main", head="feature", stat=True))
+    kept, _, steer = patch.rpartition("\n")
+    # Cut in file07.txt's patch, after its first lines: the seven before it are whole.
+    assert kept.endswith("\ndiff --git a/file07.txt b/file07.txt\nnew file mode 100644\n")
+    assert steer == (
+        "[cut at 1000 characters, with 7 of the 42 files changed whole: stat lists each with its lines added and "
+        "removed, and paths reads them a few at a time]"
+    )
+    # Cut where file07.txt's patch starts: the seven before it are whole still.
+    whole = git_tools.diff(RUNNER, at, git_tools.Diff(base="main", head="feature"))
+    at_patch = whole.removeprefix(f"{git_tools.DATA_NOTE}\n\n").index("diff --git a/file07.txt") + 1
+    with mock.patch.object(git_tools, "MAX_CHARS", at_patch):
+        edge = git_tools.diff(RUNNER, at, git_tools.Diff(base="main", head="feature"))
+    assert f"\n+line 6\n\n[cut at {at_patch} characters, with 7 of the 42 files changed whole: " in edge
+    listed, _, steer = stat.rpartition("\n")
+    assert listed.removeprefix(f"{git_tools.DATA_NOTE}\n\n").splitlines()[-1] == "1\t0\tfile19.txt"
+    assert steer == (
+        "[cut at 300 characters, with 20 of the 42 files changed listed: name a directory in paths to list the files "
+        "under it]"
+    )
+    # The next call, narrowed as the steer says, reads what was cut, whole, within the same bound.
+    with mock.patch.object(git_tools, "MAX_CHARS", 1000):
+        rest = git_tools.diff(RUNNER, at, git_tools.Diff(base="main", head="feature", paths=["file39.txt", "retry.py"]))
+    assert "[cut at" not in rest
+    assert "+line 39" in rest
+
+
 def test_grep_finds_a_text_in_the_files_at_a_commit(repo: Repo) -> None:
     (repo.path / "lib").mkdir()
     (repo.path / "lib" / "use.py").write_text("from retry import retry\nretry()\nRETRY = 3\n")
@@ -422,7 +459,13 @@ def test_what_a_tool_returns_is_bounded(repo: Repo) -> None:
     body, _, note = cut.rpartition("\n")
     assert len(body) <= 300 + len(git_tools.DATA_NOTE) + 2
     assert body.endswith("\n")  # cut at a line's end
-    assert note == "[cut at 300 characters: name fewer paths, or a narrower range]"
+    assert note == (
+        "[cut at 300 characters, with 0 of the 3 files changed whole: stat lists each with its lines added and "
+        "removed, and paths reads them a few at a time]"
+    )
+    with mock.patch.object(git_tools, "MAX_CHARS", 300):
+        shown = git_tools.show(RUNNER, repo.checkouts, git_tools.Show(rev="feature", path="big.txt"))
+    assert shown.endswith("\n[cut at 300 characters: name fewer paths, or a narrower range]")
     # grep lists the matches that fit, and says where the next start.
     with mock.patch.object(git_tools, "MAX_CHARS", 1500):
         fitted = git_tools.grep(RUNNER, repo.checkouts, git_tools.Grep(rev="HEAD", text="line", limit=500))

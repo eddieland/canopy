@@ -53,7 +53,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `spend-overseer`, `-idle`, `-workers`, `-plans`, `-chores`, `-reviews`, `-tasks`, `-dry-run` | Spend series fills. |
 | `spend-outside` | The spend series of the sessions outside canopy: no run of canopy's. |
 | `context-carried`, `context-added` | The context chart's fills: what a model call carried, and what it added. |
-| `check-1` to `check-4`, `check-other` | The CI page's red checks, by rank, and the rest. |
+| `check-1` to `check-4`, `check-other` | The CI page's checks by rank, and the rest; the Connectors page's sources. |
 | `wait-1` to `wait-4` | How long something took, the quickest first: Reviews' first reviews, Health's run lengths. |
 | `answer-pass`, `-fixed`, `-held`, `-na`, `-unanswered` | The checklist page's answers: an item's bar, and by week. |
 | `proposal-change`, `-decline`, `-ask` | A feedback plan's proposal chip: what it does with an item, never a state. |
@@ -510,7 +510,12 @@ whole either side.
   `####`, the body's size in semibold. Two steps of heading, so a section stands a quarter above the body and a
   subsection apart from it by weight alone. A plan's size is the operator's (Settings): Normal is these, and the other
   sizes move the body and both headings together, the one place a size outside the steps appears. The guide stays at
-  Normal. Code is set as everywhere else (`Code`, Rich text). Its measure is fixed, `max-w-3xl`. What lays a document
+  Normal. Code is set as everywhere else (`Code`, Rich text). A table is `document-table`, in a plan, the guide, and
+  rich text alike: the measure's full width at least, wider where what it holds needs it, a hairline under its head
+  and each row, no grid and no fill, its first column flush with the text, its head in `panel-label` as the app's own
+  tables' are, its figures tabular, and a step under the text around it in `em`, so a plan's size moves it too. Code
+  in a cell breaks where it must, keeping room for a dozen characters, and drops its chip; a table still too wide
+  scrolls, its edges faded while there is more (`edge-fade`). Its measure is fixed, `max-w-3xl`. What lays a document
   out, the guide's rules between sections or a plan's margin, is its surface's own; its type is not.
 - **`ReviewsTable`** and **`RunsTable`**: review runs and runs, one row each, on every page that lists them. On the
   page of what they belong to, the columns that would repeat it go, as a `ListRow` kind of their own. The reviews one
@@ -1021,7 +1026,8 @@ reader, so no table repeats them.
 - **Rich text** (`RichText`, `src/lib/rich-text.ts`) lays out what an agent wrote, a summary, a rationale, and a
   conversation's message: line breaks kept, `-` and `1.` lists, headings as a `font-semibold` line, `#` and `##` a step
   over `###` (`text-base`, a small step, as the page's heading ladder does not apply inside a bubble), `>` quotes as
-  their own blocks, a `---` rule as a hairline, a pipe table with its columns aligned by their colons, fenced code as a
+  their own blocks, a `---` rule as a hairline, a pipe table as a document's (`document-table`, A document) with its
+  columns aligned by their colons, fenced code as a
   `surface-raised` block, colored as the guide's is in the language its fence names (`CodeBlock`), and `code`,
   **strong**, *emphasis*, and ~~struck~~ inline. Code, inline or fenced, is `text-code`: a step under its line on a sans
   palette, where the change of face sets it apart, and the line's own size on a mono one, where a smaller copy of the
@@ -1045,11 +1051,11 @@ reader, so no table repeats them.
   (`waiting on you`, not `blocked`), and leaves how the code does it to the code and why to the design, in the voice
   `AGENTS.md` sets. An empty fence that names one of the repository's example files after its language (`EMBEDS`)
   shows that file whole, as it is when the guide is built, so a page never keeps a copy of one. A code block is colored
-  as a diff's code is (A review), in the language its fence names, plain until its grammar has loaded. A
-  ```` ```mermaid ```` fence is drawn as its diagram, as a plan's is (D131), named by its `accTitle`, and
-  `guide.test.ts` fails on one mermaid cannot read or with no `accTitle`. A diagram is for a shape the prose would take
-  paragraphs to hold, beside the prose, never instead of it. A new page is a file there and a line in its group in
-  `SOURCES`.
+  as a diff's code is (A review), in the language its fence names, plain until its grammar has loaded, and copied from
+  its corner. A ```` ```mermaid ```` fence is drawn as its diagram, as a plan's is (D131), in a panel of its own whose
+  head is its `accTitle`, which names it, with its actions in its corner, and `guide.test.ts` fails on one mermaid
+  cannot read or with no `accTitle`. A diagram is for a shape the prose would take paragraphs to hold, beside the
+  prose, never instead of it. A new page is a file there and a line in its group in `SOURCES`.
 - **A question before losing work** (`AlertDialog`): a page that holds the operator's work not yet saved or sent asks
   before it is left, in a dialog centred over the canvas: its question as the title (`Leave this page?`), what leaving
   loses under it, then an outline `Stay`, which takes the focus and which Escape gives, and `Leave` in `destructive`. A
@@ -1066,9 +1072,17 @@ reader, so no table repeats them.
   so opening one never scrolls the page away from what it is on. The plan is laid out as a document (`.plan-doc`), in a
   document's type (A document, under Primitives). What the plan holds as characters (HTML, an image) is muted monospace;
   a link is underlined in `muted-foreground` with its address on hover, never a link. A Mermaid code block is drawn as
-  its diagram (`src/lib/plan-diagram.ts`), an image in a hairline box, drawn again when the theme or palette changes,
-  with a `Source` toggle under it; its code shows while toggled on, while the cursor is in it, or while a comment or a
-  change is marked in it, and out of sight it is clipped, not removed, so a screen reader still reads it; one that
+  its diagram (`src/lib/plan-diagram.ts`), a section of the plan's panel rather than a card in it: a hairline, a head
+  in `panel-label` naming it, by its `accTitle` or else its kind, with `Source` at its right as a panel head's control
+  is, and the picture at the text's edge. It is drawn in the app's data dialect, Plex Mono at 13px and spaced densely,
+  the face carried inside the image since an image can use no other, and drawn again when the theme or palette changes,
+  as wide as it is drawn or narrower to fit, but never under three quarters of that, past which its labels go unread:
+  a wider one scrolls, each edge faded while there is more past it (`diagram-image`, `edge-fade`), as the guide's do.
+  Every kind is drawn in one hand (`themeCss` in `src/lib/diagram.ts`): one label size, one corner, one line weight, a
+  subgraph dashed, a sequence's actors once, at its top, and its captions lifted off the lifelines they cross. Its
+  actions sit in its head before `Source` (A block's actions, below). Its code shows, under the picture, while `Source`
+  is on, while the cursor is in it, or while a comment or a change is marked in it, and out of sight it is clipped, not
+  removed, so a screen reader still reads it; one that
   cannot be drawn shows its code and why. The toolbar (`Toolbar`, below) is `icon-xs` toggles in groups split by
   hairlines, then `Comment`, enabled while text is selected; each control's tooltip names it and the shortcut the editor
   binds to it, on this keyboard, and declares the same keys as `aria-keyshortcuts`. The paragraph's style and the
@@ -1083,9 +1097,16 @@ reader, so no table repeats them.
   editable where the plan is, the changes, the outline, and the toolbar stepping aside; and `Outline ▾`
   (`src/lib/plan-outline.ts`), the plan's headings, the section scrolled to in the accent, each `##` section's row on a
   ticket's newest plan ending in `read` and `a concern` marks, this browser's alone (`src/lib/plan-marks.ts`), never
-  the journal, which hold while the section's words are as marked, so a rewritten section is unread again. While the
-  changes are marked, a commented passage drops its tint, so no word wears a comment's and a change's at once, but keeps
-  an underline in the accent. The header is `sticky`, and what the editor scrolls into view stops below it. A commented
+  the journal, which hold while the section's words are as marked, so a rewritten section is unread again; then a menu
+  that copies or saves the plan's Markdown whole, as the page shows it (`PlanFileMenu`), named as `canopy archive`
+  names the plan, the same menu a task's report and a feedback plan's file carry. Its file's path closes the page's
+  description, on a line of its own, with a copy button. A page's plan prints alone, as a document, under a line naming
+  its ticket, plan, status, and date, in the light theme whatever the screen shows (`src/lib/plan-print.ts`): no
+  shell, header, toolbar, foot, decisions, or comments, a diagram and a table each kept to a page where they fit, a
+  table and a code block wrapped, and a diagram's picture still drawn dark turned round (`invert` with its hues
+  kept). While the changes are marked, a commented passage drops its
+  tint, so no word wears a comment's and a change's at once, but keeps an underline in the accent. The header is
+  `sticky`, and what the editor scrolls into view stops below it. A commented
   passage sits on the accent's tint; the open one, or the one being commented on, darker and underlined; the cursor in
   a passage opens its thread, and so does a click on its card, or Tab into it, which leaves the plan where it is;
   the cursor leaving it, or Escape, closes it. A thread is its passage quoted, the comment and its replies as text with
@@ -1157,14 +1178,29 @@ reader, so no table repeats them.
   with more than one link is one button saying how many (`3 PRs`) that opens them as a menu, so the links stay one line
   however many repositories. The Work panel keeps each repository's PR beside its phase; those lines scroll inside the
   panel past a few, so its total cost, its actions, and the reply stay in reach.
+- **A block's actions** (`BlockActions`, `src/components/block-actions.tsx`): what takes a block of a document
+  elsewhere, a diagram's Mermaid source among them, sits in a row at the block's top right corner, over it, on
+  `surface`, or in a plan's diagram's head, before `Source`: ghost `icon-xs` buttons, each named on hover, as a copy
+  button is (below). The block's text, the form most wanted, is a copy button; its other forms are a menu after it, in
+  words, as a drawn diagram's picture is (`Copy as image`, `Save as PNG`, `Save as SVG`: on `surface`, the PNG twice its
+  size, the SVG cut down to what canopy keeps (D131), named for the plan, its kind, and its place,
+  `ABC-102-plan-2-sequence-1.png`, or on a guide page for its title), and as a plan's table's rows are (`Copy for a
+  spreadsheet`, tab-separated text and an HTML table together; `Save as CSV`, `ABC-102-plan-2-table-1.csv`), after its
+  copy as Markdown. A cell a spreadsheet would run as a formula goes as text (`src/lib/table-export.ts`). They show
+  while the block is hovered, holds the caret, one of them holds the focus, or their menu is open, and always on a touch
+  screen, kept in place out of sight so nothing moves; a block marks itself `group/block` and is positioned. A plan's
+  blocks are drawn by ProseMirror, so each keeps an element for its actions (`src/lib/block-slots.ts`) which the page
+  fills through a portal, in its own tree. They are never printed.
 - **Text to paste elsewhere** has a copy button after it (`Copyable`, `CopyButton`): a branch, a path, a session id, a
-  review's commit, whole though the page shows its first 7 characters. A path copies whole though the page shows it
-  from the workspace root (`CopyablePath`); until the root is read there is no button, so a copy is never the short
-  path. The button is a ghost `icon-xs` with the `Copy` icon, muted until hovered; a click shows `Check` in the accent,
-  or `X` in `status-failed` when the browser refuses, and names what happened, and a toast says the same with the text
-  it copied. In a dense list it shows only while its row is hovered or it has the focus, keeping its space so nothing
-  moves, and always on a touch screen. The clipboard needs a secure context, so elsewhere there is no button and the
-  text stays selectable.
+  review's commit, whole though the page shows its first 7 characters. A code block, in a plan, the guide, or rich text,
+  has one in its corner (A block's actions), which copies its code as the fence holds it, no newline after its last
+  line, so a command pasted in a shell waits for Enter; a diff's code has none. A path copies whole though the page
+  shows it from the workspace root (`CopyablePath`); until the root is read there is no button, so a copy is never the
+  short path. The button is a ghost `icon-xs` with the `Copy` icon, muted until hovered; a click shows `Check` in the
+  accent, or `X` in `status-failed` when the browser refuses, and names what happened, and a toast says the same with
+  the text it copied. In a dense list it shows only while its row is hovered or it has the focus, keeping its space so
+  nothing moves, and always on a touch screen. The clipboard needs a secure context, so elsewhere there is no button
+  and the text stays selectable.
 - **A toast** (`Toaster`, `useToast` in `src/hooks/use-toast.ts`) says what an action did when the place it was done
   shows too little of it: a copy names what it copied, a draft's send what it sent. It sits at the bottom center of the
   window on `surface` with a hairline, a `Check` in the accent or an `X` in `status-failed`, its title, and a line under
@@ -1406,7 +1442,8 @@ reader, so no table repeats them.
   said as `MemoryText`, and where it is, a router `Link` to the thread's card or a link out; under that, muted, its
   proposal as a chip in its tone, its author, and the plan's words), and in its foot the operator's words and `Approve
   whole` or `Approve N of M`, its command on hover, an approval done as the `ApprovedBand` a ticket's plan gets, then a
-  `Disclosure` of the plan's file. An item an approval did not tick is `for the next plan` wherever the page says so,
+  `Disclosure` of the plan's file, laid out read only as a document (`PlanDocument`, as a task's report is), loaded
+  once opened. An item an approval did not tick is `for the next plan` wherever the page says so,
   and its box is named `approve item N`, never `left out` or `leave`: `leave` is a proposal, to leave the item be, which
   ticking it approves; the CLI's flag stays `--leave`, on the button's hover. Each proposal's chip has a quiet tone of
   its own (`proposal-*`), so `change`, the one that edits code, stands out, `decline` and `ask` sit apart from it and

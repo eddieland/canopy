@@ -103,4 +103,7 @@ before is closed too; `canopy sandbox setup` says when one still names it. Readi
 it drops a login it cannot decode, and the whole of `mcp-auth.json` for one bad entry, so what comes back is checked
 field by field against the shapes OpenCode writes (DESIGN §24). The canary's new cases pass under `srt` 0.0.79
 and bubblewrap 0.9 on Ubuntu 24.04, and fail under the fake `srt`, as its others do.
+`canopy sandbox check` (2026-11-11, the operator's ask) is the guide's check as a command, for a machine with canopy
+installed and no checkout: a script through the wrapper in a worktree it makes and removes, writes checked on the
+host; the canary runs it under the real `srt`.
 Next: the canary on the operator's Linux and macOS machines, then a day of `canopy loop` with sandboxed workers.
