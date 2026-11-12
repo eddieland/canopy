@@ -75,8 +75,9 @@ approves it. A member of no entry, one touching security, credentials, destructi
 whose own setting asks for a plan, is never trivial.
 
 **Upward.** A member's plan whose `Decisions` depart from a contract or a requirement names those ids, and the harness
-raises `epic_drift` (§14). The operator settles it by approving the epic plan amended to the member's choice, approving
-the member's plan as written, which accepts the departure for it alone, or asking for a new plan of either.
+raises `epic_drift` (§14); such a plan waits on the operator, whatever `policy.planner_may_approve` says. The operator
+settles it by approving the epic plan amended to the member's choice, approving the member's plan as written, which
+accepts the departure for it alone, or asking for a new plan of either.
 
 ### When its plan changes
 

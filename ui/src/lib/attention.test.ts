@@ -79,6 +79,7 @@ describe('severity', () => {
         expect(severity(item('a', 'untrusted_artifact_comment', '2026-10-08T12:00:00Z'))).toBe('waiting')
         expect(severity(item('a', 'drafts_waiting', '2026-10-08T12:00:00Z'))).toBe('waiting')
         expect(severity(item('a', 'plan_review', '2026-10-08T12:00:00Z'))).toBe('waiting')
+        expect(severity(item('a', 'epic_drift', '2026-10-08T12:00:00Z'))).toBe('waiting')
         expect(severity(item('a', 'review_waiting', '2026-10-08T12:00:00Z'))).toBe('waiting')
         expect(severity(item('a', 'review_unsettled', '2026-10-08T12:00:00Z'))).toBe('waiting')
         expect(severity(item('a', 'review_rebuttal', '2026-10-08T12:00:00Z'))).toBe('waiting')

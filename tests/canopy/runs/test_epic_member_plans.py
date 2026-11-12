@@ -1,13 +1,16 @@
 """A member ticket's plan and work, within its epic's approved plan, which its planner and worker read as approved."""
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 from canopy.core import epics, plans
-from canopy.core.vocab import PlannerApproval, RunKind, RunStatus
+from canopy.core.vocab import PlannerApproval, PlanStatus, RunKind, RunStatus
 from canopy.infra import procs
+from canopy.loop import harness_items
 from tests.canopy.helpers import (
     BRANCH,
+    EPIC_PLAN,
     KEY,
     agent_runs,
     commands_run,
@@ -24,36 +27,6 @@ from tests.conftest import GitPool
 
 PLAN = dispatches(kind=RunKind.PLAN)
 TEXT = "# Plan for PROJ-1\n\n## Goal\n\nMove the store.\n\n## Epic\n\nCovers R1; provides C1.\n"
-EPIC_PLAN = """\
-# Epic: sessions
-
-## Goal
-
-Sessions survive a restart.
-
-## Requirements
-
-- **R1.** Sessions survive a restart of the API.
-
-## Contracts
-
-- **C1.** The store's read interface. Provided by B1.
-
-## Breakdown
-
-### B1. Move the store
-
-- Covers: R1
-- Provides: C1
-- Uses: none
-- Repositories: repo
-- After: none
-- Trivial: no
-
-## Decisions
-
-## Out of scope
-"""
 #: `EPIC_PLAN` with a second entry, which a later approval of `EPIC_PLAN` drops.
 TWO_ENTRIES = EPIC_PLAN.replace(
     "## Decisions",
@@ -165,6 +138,79 @@ def test_an_override_without_the_epic_is_refused_once_its_plan_is_approved(
     [(action, rationale)] = scenario.refuses(PLAN)
     assert action == "refused:bad_prompt"
     assert "missing required placeholder {{EPIC}}" in rationale
+
+
+def drift_items(scenario: Scenario) -> dict[str | None, str]:
+    """The `epic_drift` items the harness raises now, each its ticket's detail."""
+    ctx = inline_context(scenario.env)
+    found = harness_items.raised(ctx, None, datetime.now(UTC))
+    return {i.ticket_key: i.detail for i in found if i.reason == harness_items.EPIC_DRIFT}
+
+
+def test_a_planner_that_departs_from_the_epic_raises_epic_drift_naming_the_member(
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    """The ids its result names are held to the epic's plan: an entry, an unknown id, or no id at all is dropped."""
+    assert git_pool.slots
+    approved_epic(scenario, "--entry", "B1")
+    result = {"status": "done", "summary": "planned it", "drift": ["R1", "C1", "B1", "R9", "C1", "nonsense"]}
+    run = scenario.run(PLAN, worker=planner_does(plan=TEXT, result=result))
+    assert run.status is RunStatus.DONE
+    assert '`drift` too, as `["R2", "C1"]`' in run.prompt
+    [plan] = plans.history(scenario.conn, KEY)
+    assert plan.epic_drift == "C1, R1"
+    assert json.loads(run.row["result_json"])["drift"] == ["C1", "R1"]
+    assert drift_items(scenario) == {
+        KEY: (
+            f"plan {plan.id} of {KEY} departs from epic:1's C1, R1: approve it as written (canopy plan {KEY} "
+            f"--approve), or ask for a new plan of either (canopy reply {KEY}, canopy reply epic:1)"
+        ),
+    }
+
+
+def test_a_planner_that_keeps_to_the_epic_raises_none(scenario: Scenario, git_pool: GitPool) -> None:
+    """No drift, or only ids the epic's plan does not hold, records none and raises nothing."""
+    assert git_pool.slots
+    approved_epic(scenario, "--entry", "B1")
+    result = {"status": "done", "summary": "planned it", "drift": ["R7", "B1"]}
+    run = scenario.run(PLAN, worker=planner_does(plan=TEXT, result=result))
+    assert run.status is RunStatus.DONE
+    [plan] = plans.history(scenario.conn, KEY)
+    assert plan.epic_drift is None
+    assert drift_items(scenario) == {}
+
+
+def test_a_ticket_of_no_epic_is_not_asked_for_drift(scenario: Scenario, git_pool: GitPool) -> None:
+    """Outside an epic there is no plan to depart from: its result tool takes no `drift`, and refuses one."""
+    assert git_pool.slots
+    result = {"status": "done", "summary": "planned it", "drift": ["R1"]}
+    run = scenario.run(PLAN, worker=planner_does(plan=TEXT, result=result))
+    assert run.status is RunStatus.UNKNOWN
+    assert "drift" not in run.prompt
+    assert plans.history(scenario.conn, KEY) == []
+
+
+def test_a_plan_that_departs_waits_on_the_operator_though_its_planner_says_it_needs_no_review(
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    """Only the operator settles a departure: `policy.planner_may_approve` does not approve such a plan."""
+    assert git_pool.slots
+    scenario.configures("private", policy={"planner_may_approve": True})
+    approved_epic(scenario, "--entry", "B1")
+    result = {
+        "status": "done",
+        "summary": "planned it",
+        "review": "not_needed",
+        "review_reason": "Small.",
+        "drift": ["C1"],
+    }
+    run = scenario.run(PLAN, worker=planner_does(plan=TEXT, result=result))
+    assert run.status is RunStatus.DONE
+    [plan] = plans.history(scenario.conn, KEY)
+    assert (plan.status, plan.approved_channel) == (PlanStatus.PROPOSED, None)
+    assert KEY in drift_items(scenario)
 
 
 def test_a_members_worker_reads_its_epics_approved_plan_ignored_and_gone_after(

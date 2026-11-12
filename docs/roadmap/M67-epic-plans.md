@@ -102,3 +102,8 @@ that still marks it keeps it so, one that drops the mark makes it wait on its ow
 (`epics.plan_needed`). Chosen conservatively, for the operator to change: with `planner_may_approve` off no mark
 counts, whatever a plan says; a member registered against an entry the plan dropped is not trivial; and a plan of its
 own written before the mark is left as it is. Left for this bullet: the web UI's approval naming the members reached.
+Built 2026-11-06, upward: a member's planner names in its result's `drift` the ids of the epic plan it departs from,
+held to that plan's requirements and contracts, recorded with its plan, and the harness raises `epic_drift` on the
+member while that plan waits, ending as §43 says, a reply to the epic after the plan being its ask for a new epic plan,
+or once the ticket is done or stopped. Chosen conservatively, for the operator to change: the item also ends when the
+ticket leaves the epic, and a plan with drift is never approved on its planner's word.

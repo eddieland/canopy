@@ -309,7 +309,9 @@ Controls:
   and none is run when it no longer matches; the epic's plan describes the work, as the ticket does, and widens nothing
   a planner or a worker may do. An entry's `trivial` mark is its planner's word, which counts only in a plan the
   operator approved and while `policy.planner_may_approve` is on: a member whose every entry it marks skips a plan of
-  its own, the operator's approval of the epic's plan standing for it, never one the operator asked to plan. A
+  its own, the operator's approval of the epic's plan standing for it, never one the operator asked to plan. Where a
+  member's plan departs from the epic's, the ids its result names are its word, data: canopy keeps only those the epic
+  plan holds and raises `epic_drift` naming them, and such a plan is never approved on its planner's word. A
   re-approval's ids are compared, as data, with the plan approved before it; a member the change reaches is told the
   changed ids as data, never an instruction, and no run in flight is paused.
 - Attachments (DESIGN §22, ROADMAP M63) are written and removed only through `runs/attachments.py` by a channel that
