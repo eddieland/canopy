@@ -3,12 +3,12 @@
 import json
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, get_args
 
 import pytest
 
 from canopy.core.run_metrics import Role
-from canopy.core.vocab import RunStatus
+from canopy.core.vocab import RunStatus, TickStatus
 from canopy.infra import metrics
 
 
@@ -68,6 +68,44 @@ def test_counts_histograms_and_gauges_are_written_as_otlp_json(metered: Path, tm
     assert (duration["count"], duration["sum"], found["canopy.run.duration"]["unit"]) == ("1", 12.5, "s")
     [active] = found["canopy.runs.active"]["gauge"]["dataPoints"]
     assert (labels(active), active["asInt"]) == ({"role": "worker"}, "3")
+
+
+def test_every_metric_name_is_described_and_of_one_kind() -> None:
+    """Each name is described, and is a counter's, a histogram's, or a gauge's alone; only a histogram has bounds."""
+    counters, histograms, gauges = (
+        set(get_args(kind.__value__)) for kind in (metrics.CounterName, metrics.HistogramName, metrics.GaugeName)
+    )
+    assert counters.isdisjoint(histograms | gauges)
+    assert histograms.isdisjoint(gauges)
+    assert set(metrics.INSTRUMENTS) == counters | histograms | gauges
+    assert all(instrument.description for instrument in metrics.INSTRUMENTS.values())
+    assert {name for name, instrument in metrics.INSTRUMENTS.items() if instrument.bounds} == histograms
+
+
+def test_each_histogram_is_exported_with_its_description_and_bounds_in_seconds(metered: Path, tmp_path: Path) -> None:
+    histograms = {name: i for name, i in metrics.INSTRUMENTS.items() if i.bounds}
+    assert set(histograms) == {"canopy.tick.duration", "canopy.run.duration"}
+    # A tick of a fraction of a second, and a run of some hours: each past what the SDK's default bounds tell apart.
+    metrics.record("canopy.tick.duration", 0.3, unit="s", status=TickStatus.OK)
+    metrics.record("canopy.run.duration", 20_000, unit="s", role=Role.WORKER, status=RunStatus.DONE)
+    metrics.configure(tmp_path, "off")
+    found = exported(metered)
+    for name, instrument in histograms.items():
+        [point] = found[name]["histogram"]["dataPoints"]
+        assert found[name]["description"] == instrument.description
+        assert point["explicitBounds"] == list(instrument.bounds)
+        # Neither lands in the first bucket nor past the last.
+        [bucket] = [i for i, n in enumerate(point["bucketCounts"]) if n != "0"]
+        assert 0 < bucket < len(instrument.bounds)
+
+
+def test_counters_and_gauges_are_exported_with_their_descriptions(metered: Path, tmp_path: Path) -> None:
+    metrics.count("canopy.ticks", status=TickStatus.OK, dry_run=False)
+    metrics.gauge("canopy.runs.active", 1, role=Role.WORKER)
+    metrics.configure(tmp_path, "off")
+    found = exported(metered)
+    for name in ("canopy.ticks", "canopy.runs.active"):
+        assert found[name]["description"] == metrics.INSTRUMENTS[name].description
 
 
 def test_otlp_metrics_without_an_endpoint_are_refused(tmp_path: Path) -> None:
