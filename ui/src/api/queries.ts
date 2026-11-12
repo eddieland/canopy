@@ -123,6 +123,8 @@ export const keys = {
     config: ['config'] as const,
     // Under the config's key, so what marks the config stale, a save that reloads the loop, marks it stale too.
     configModels: ['config', 'models'] as const,
+    // Under the config's key too, so a reload, which may name other files, reads them again.
+    instructions: ['config', 'instructions'] as const,
     models: ['models'] as const,
     skills: ['skills'] as const,
     checklists: ['checklists'] as const,
@@ -738,6 +740,15 @@ export const freshModelsQuery = queryOptions({
     queryFn: async ({ signal }) =>
         unwrap(await api.GET('/api/models', { params: { query: { refresh: true } }, signal })),
     staleTime: 0,
+})
+
+/**
+ * Each agent's standing instructions file, as the loop's config names it. Not on the stream, since they are files the
+ * operator edits: read whenever the settings page opens, again after a reload, and set by each save.
+ */
+export const instructionsQuery = queryOptions({
+    queryKey: keys.instructions,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/instructions', { signal })),
 })
 
 /**

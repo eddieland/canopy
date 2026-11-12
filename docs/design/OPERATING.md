@@ -267,7 +267,8 @@ such as a CI outage, belongs in a notice to workers (§8). `paths.overseer_instr
 rendered at the end of its prompt, which comes first, and a file canopy cannot use fails the tick before the overseer
 starts. `paths.reviewer_instructions` and `paths.chore_instructions` are the same for every review and every chore run,
 which a file canopy cannot use refuses as `bad_prompt`; a chore's follow its own prompt, which comes first. Each file
-reaches only its own role's prompts, and a role without one has no section for them.
+reaches only its own role's prompts, and a role without one has no section for them. The settings page (§22) shows each
+file and edits its text, never which file (TRUST_MODEL T8, D134).
 
 `tracker.provider` is a free-form name the harness never branches on; prompts use it to name the `tracker-<provider>`
 skill the workers load (§17). `tracker.query` finds candidates; it does not authorize them (§17). It is shared: the

@@ -14,6 +14,7 @@ import { Disclosure } from '@/components/disclosure'
 import { ShellPreview } from '@/components/ghost-shell'
 import { HatPreview } from '@/components/hat'
 import { Input } from '@/components/input'
+import { InstructionsPanel } from '@/components/instructions-panel'
 import { Notice } from '@/components/notice'
 import { NoticeForm } from '@/components/notice-form'
 import { PageHeader, Panel, PanelHeader } from '@/components/panel'
@@ -59,8 +60,8 @@ import { useTheme } from '@/theme/use-theme'
 
 /**
  * What this browser keeps (the theme, the clock, a plan's text size, the send key, chores' findings on the attention
- * list, the review personas, the fun, the session), the loop settings of the workspace's config, and
- * reloading the loop's config.
+ * list, the review personas, the fun, the session), the loop settings of the workspace's config, the standing
+ * instructions files it names, and reloading the loop's config.
  */
 export const Route = createFileRoute('/settings')({
     component: SettingsPage,
@@ -111,7 +112,7 @@ function SettingsPage() {
             <PageHeader title="Settings">
                 The theme, the clock, a plan&apos;s text size, the send key, chores&apos; findings on the attention
                 list, your review personas, and the fun are kept in this browser. Everything else canopy reads from its
-                config files, whose loop settings can be changed here.
+                config files, whose loop settings, and the standing instructions files they name, can be changed here.
             </PageHeader>
             <ThemePanel />
             <ClockPanel />
@@ -120,6 +121,7 @@ function SettingsPage() {
             <AttentionPanel />
             <ReviewsPanel />
             <NoticePanel />
+            <InstructionsPanel />
             <LimitsPanel />
             <ModelsPanel />
             <SkillsPanel />

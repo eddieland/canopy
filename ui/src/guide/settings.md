@@ -1,10 +1,10 @@
 # Settings
 
-A handful of things you set from the browser: how the UI looks and sends, a notice for every worker, your loop
-settings, reloading your config, and the fun. It also shows, read only, which model each agent runs on and the
-skills the runtime finds. It opens from the rail's foot, beside the guide. The theme, the clock, a plan's text size,
-the send key, whether attention lists chore findings, your review personas, and the fun are kept in this browser;
-everything else canopy reads from its config files, as it always did.
+A handful of things you set from the browser: how the UI looks and sends, a notice for every worker, each agent's
+standing instructions, your loop settings, reloading your config, and the fun. It also shows, read only, which model
+each agent runs on and the skills the runtime finds. It opens from the rail's foot, beside the guide. The theme, the
+clock, a plan's text size, the send key, whether attention lists chore findings, your review personas, and the fun are
+kept in this browser; everything else canopy reads from its config files, as it always did.
 
 ## Theme
 
@@ -112,6 +112,31 @@ setting another replaces it. While it's in force, a banner above every page show
 **Clear**: see [the banner](overview#the-header) for what each does.
 A run already going keeps the prompt it started with, so a notice reaches only the runs after it. The CLI can set one
 for up to a week, for outages with ambitions.
+
+## Standing instructions
+
+What each agent hears from you on every run, the files your config names with `paths.worker_instructions`,
+`paths.overseer_instructions`, `paths.reviewer_instructions`, and `paths.chore_instructions`. Pick **Worker**,
+**Overseer**, **Reviewer**, or **Chores** in the panel's header; the line under it says which runs read that file and
+where it lives. The worker's reaches every implement, resume, plan, and task run, the overseer's every tick, and the
+other two every review and every chore run, after the chore's own prompt. Each comes after its prompt's own rules, which
+win where the two disagree. See [config files](config-files) for the keys.
+
+The file opens in the same editor you write replies in, toolbar and **Preview** included. The count under it is in
+bytes, as a run counts them: past 4,096 a run refuses the file outright rather than read half of it, so **Save** waits
+until you trim. Switch to another agent mid-edit and nothing is lost: its name in the header gets a dot until you save
+or **Revert**.
+
+**Save** writes the file in place, keeps the old one beside it as `<name>.bak`, and every run started from then on
+reads the new text; a run already going keeps the prompt it started with. If the file changed since the page read it,
+say you edited it in your own editor meanwhile, the save is refused rather than quietly flattening your other edit:
+**Read again**, then decide which of you was right. A file your config names but that doesn't exist yet is flagged,
+since every run of that agent is refused until it does, and **Save** makes it, readable by you alone.
+
+The page edits text, never which file: an agent whose key names no file says so and offers no editor. Name one in your
+`config.toml` and **Reload** below. That's on purpose. Anyone holding a session here can put words in every later
+run's mouth, and a new secret doesn't take them back, so the page can't also aim an agent at some other file of yours.
+If a change shows up that you didn't make, the `.bak` has what was there before.
 
 ## Loop settings
 

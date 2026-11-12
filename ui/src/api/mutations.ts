@@ -14,6 +14,7 @@ import type {
     LeftSent,
     AgentModel,
     Answered,
+    AgentInstructions,
     AgentPersona,
     Attached,
     Detached,
@@ -29,6 +30,7 @@ import type {
     FeedbackPlanApproved,
     Forgot,
     Granted,
+    InstructionsAgent,
     Limit,
     LoopState,
     LessonEditRequest,
@@ -752,6 +754,19 @@ export function refreshMemory(client: QueryClient): Promise<void> {
  */
 export async function saveConfig(hash: string, changes: Record<string, ConfigValue>): Promise<ConfigSaved> {
     return unwrap(await api.PATCH('/api/config', { body: { hash, changes } }))
+}
+
+/**
+ * Write the operator's `text` over an agent's standing instructions file, over the version the page read (`sha256`,
+ * null for a file that was missing). Refused `stale` when the file changed since, `not_set` when the config names none,
+ * `too_large` past the bound a run takes, and `unsafe_file` for a link or a file not the operator's.
+ */
+export async function saveInstructions(
+    agent: InstructionsAgent,
+    text: string,
+    sha256: string | null,
+): Promise<AgentInstructions> {
+    return unwrap(await api.PUT('/api/instructions/{agent}', { params: { path: { agent } }, body: { text, sha256 } }))
 }
 
 /** After a pause, a resume, or a notice set or cleared: show the state it left now, rather than wait for the stream. */

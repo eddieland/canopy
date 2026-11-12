@@ -175,6 +175,29 @@ test('the settings page asks the loop to read its config again and says what it 
     )
 })
 
+test("the settings page saves an agent's standing instructions, and reads them back from the file", async ({
+    page,
+}) => {
+    await page.goto('settings')
+    const reviewer = page.getByTestId('instructions-reviewer')
+    await page.getByRole('radio', { name: 'Reviewer' }).click()
+    const field = reviewer.getByRole('textbox', { name: 'Reviewer standing instructions' })
+    await expect(field).toHaveValue(/^Flag a behavior change/u)
+    // A line of its own, so a retry of this test saves the same file again rather than one it grew.
+    const line = 'Ask for a test of every bug fix.'
+    const kept = (await field.inputValue()).split('\n').filter((l) => l !== line && l !== '')
+    await field.fill([...kept, line].join('\n'))
+    await expect(page.getByRole('radio', { name: 'Reviewer unsaved' })).toBeVisible()
+    await reviewer.getByRole('button', { name: 'Save' }).click()
+    await expect(reviewer.getByRole('status')).toContainText('Saved ')
+    await expect(page.getByRole('radio', { name: 'Reviewer', exact: true })).toBeVisible()
+
+    // Read again from the file, as a fresh page would.
+    await page.reload()
+    await page.getByRole('radio', { name: 'Reviewer' }).click()
+    await expect(field).toHaveValue(`${[...kept, line].join('\n')}\n`)
+})
+
 test('the settings page saves a limit and drops a trusted reviewer, but offers nothing past its ceiling', async ({
     page,
 }) => {

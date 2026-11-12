@@ -148,6 +148,9 @@ trusted_reviewers = ["canopy:review", "lint-bot"]
 [paths]
 # `web`'s and `api`'s lists; `mobile` keeps none.
 checklists = "{checklists}"
+# The worker's and the reviewer's, so the settings page has files to show; the overseer and chores hear none.
+worker_instructions = "{config}/worker-instructions.md"
+reviewer_instructions = "{config}/reviewer-instructions.md"
 
 [runtime]
 # The mock's transcripts are in the events of version 1 (`transcripts`), deprecated: it runs 1 until they are ported.
@@ -320,6 +323,24 @@ def _pools(root: Path) -> dict[str, list[pools.Slot]]:
     }
 
 
+#: The operator's standing instructions to every worker, as the settings page shows them.
+_WORKER_INSTRUCTIONS = """\
+## Commits
+
+- Commit a review's fixes as new commits; never squash a branch a reviewer has read.
+- Run `npm run lint` and the unit tests the change reaches before every push.
+
+## Pull requests
+
+Keep the description to what a reviewer needs at a glance: what changed, and why.
+"""
+
+#: The operator's standing instructions to every reviewer.
+_REVIEWER_INSTRUCTIONS = """\
+Flag a behavior change that has no test. Leave formatting to the linters: a finding about it is noise.
+"""
+
+
 def seed(directory: Path) -> Backend:
     """Write a workspace, a user config, and a seeded journal under `directory`, and return a Backend over them.
 
@@ -338,8 +359,11 @@ def seed(directory: Path) -> Backend:
     for name, title in ((CHORE, "Dependency advisories"), ("build-health", "Build health")):
         (prompts / f"{name}.md").write_text(f"# {title}\n\nCheck {name} for the mock workspace.\n")
     checklists.write(user_file.parent / "checklists")
+    (user_file.parent / "worker-instructions.md").write_text(_WORKER_INSTRUCTIONS)
+    (user_file.parent / "reviewer-instructions.md").write_text(_REVIEWER_INSTRUCTIONS)
     user_file.write_text(
         _USER_TOML.replace("{chores}", str(prompts))
+        .replace("{config}", str(user_file.parent))
         .replace("{checklists}", str(user_file.parent / "checklists"))
         .replace("{excluded}", sessions.EXCLUDED),
     )

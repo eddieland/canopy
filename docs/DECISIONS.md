@@ -605,3 +605,12 @@ such as a shipped migration, may still cite one, and git history has its text.
   field of its contract's model (`core.run_result`), never prose in a prompt.
 - Rejected: repairing or re-asking for a printed line; a server that writes the result to a file, which would let an
   agent's process write what canopy records.
+
+## D134. The web UI edits the text of the standing instructions files, never which files
+
+- The settings page writes each agent's `paths.*_instructions` file through `core/standing.py`, with a plan edit's
+  guards (TRUST_MODEL T8). No `paths.*` key becomes writable: D128's allowlist is unchanged.
+- Why: the operator (2026-11-12) asked to see and edit them there; they are the operator's words, as a plan edit is.
+- Residual: a save outlives the secret and is read as words by every later run of its agent; the `.bak` beside the
+  file, the log's hashes, and the page itself show a change the operator did not make.
+- Rejected: choosing the file from the page, which would let a stolen session point an agent at any file of theirs.

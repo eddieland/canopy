@@ -105,6 +105,12 @@ export type ChoreModel = Schemas['ChoreModel']
 export type PersonaChoice = Schemas['PersonaChoice']
 /** Every persona a run could get, and the one a review request that chooses none is reviewed in (DESIGN §31). */
 export type PersonaList = Schemas['PersonaList']
+/** Every agent's standing instructions file, and the most bytes of one a run takes (DESIGN §12). */
+export type InstructionsList = Schemas['InstructionsList']
+/** One agent's standing instructions file as it stands: where it is, its text, its hash, and any problem with it. */
+export type AgentInstructions = Schemas['AgentInstructions']
+/** The agent a standing instructions file reaches: the worker, the overseer, the reviewer, or every chore. */
+export type InstructionsAgent = AgentInstructions['agent']
 /** Every skill the runtime finds for canopy's agents, with each one's file and text (DESIGN §13). */
 export type SkillList = Schemas['SkillList']
 /** A skill the runtime finds: its file, where that is, and its text. */

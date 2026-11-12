@@ -7,7 +7,8 @@ are the same ones, or, for what no command would do (marking reviews seen), a co
 refusal is a 409 naming it, and a write that waited out another writer's hold on the journal a 503 saying so. A forget
 also carries the ticket's key as the operator typed it. A reload asks the loop to read its config again, as SIGHUP
 does; it writes nothing. A config save writes the limits and, toward stricter, the trust settings in the workspace's
-private file, and then asks for a reload.
+private file, and then asks for a reload. A standing instructions save writes the text of a file the config
+already names, never which file.
 """
 
 from __future__ import annotations
@@ -28,6 +29,7 @@ from canopy.serve.api import (
     epics,
     events,
     host,
+    instructions,
     loop,
     memory,
     models,
@@ -80,6 +82,7 @@ _RESOURCES = (
     personas,
     models,
     skills,
+    instructions,
     drafts,
     memory,
     checklists,

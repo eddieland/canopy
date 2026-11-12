@@ -1222,7 +1222,15 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   are the operator's own words on a plan (DESIGN §25): an edit of a
   plan's file, saved as the operator's own editor would, operator-only and never through a link, only over the
   ticket's current plan, never while a plan run for it is running, and never over a file that changed since the
-  editor read it; and the operator's comments on a plan's passages, in the journal. It also writes the limits and
+  editor read it; and the operator's comments on a plan's passages, in the journal. It also writes the text of the
+  operator's standing instructions files (DESIGN §12, D134): only the file a `paths.*_instructions` key already names,
+  never which file; refused inside a tick or run (`inside_run`); only the operator's own regular file, never through a
+  link nor in a directory another account may write in; never over a file that changed since the page read it; never
+  past the bound a run takes. A named file that is missing is made, readable by the operator alone. The file as it was
+  is kept beside it as `<name>.bak`, and each save is logged with both hashes, never the text. Residual: as a config
+  write does, a save outlives the secret, and its text is read as the operator's words by every later run of its
+  agent, so a stolen session could steer them until the operator reads the page or the file and edits it back; a new
+  secret does not undo it. It also writes the limits and
   trust settings below, in the workspace's private file. Nothing else, but the record of its writes above. A reload
   reads only the operator's own files, and a `serve.*` change waits for a restart, so the listener's bind and port
   never change under it. A forget must carry the ticket's key
