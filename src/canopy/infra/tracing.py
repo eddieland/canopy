@@ -227,10 +227,17 @@ def carrier() -> dict[str, str]:
     return {key.upper(): value for key, value in found.items()}
 
 
-def configure(state_dir: Path, traces: Traces, endpoint: str | None = None) -> None:
+def configure(
+    state_dir: Path,
+    traces: Traces,
+    endpoint: str | None = None,
+    *,
+    resource: Mapping[str, str] | None = None,
+) -> None:
     """Turn this process's tracing on or off, as `traces` says, as every command does when it opens its workspace.
 
-    `otlp` sends spans to `endpoint`, an OTLP/HTTP endpoint's base URL, which config requires for it. Turned on, the
+    `otlp` sends spans to `endpoint`, an OTLP/HTTP endpoint's base URL, which config requires for it. Every span's
+    resource names this workspace (`otlp.resource`), with the operator's own `resource` attributes. Turned on, the
     process's first span continues the trace `TRACEPARENT` names, if its parent passed one. A second call with the same
     settings, as each of `canopy _mcp`'s tool calls makes, changes nothing.
 
@@ -247,13 +254,28 @@ def configure(state_dir: Path, traces: Traces, endpoint: str | None = None) -> N
                 msg = "telemetry.traces = 'otlp' needs telemetry.endpoint"
                 raise ValueError(msg)
             target = endpoint.rstrip("/") + TRACES_PATH
+    # The resource is a setting only while spans go somewhere: off is off, whatever workspace it is in.
+    settings = _Settings(traces, target, state_dir, dict(resource or {})) if target is not None else None
     # Held across the check and the change: the web server's threads may each open a workspace at once.
     with _CONFIGURING:
-        if (traces, target) == (_tracing.traces, _tracing.target):
+        if settings == _tracing.settings:
             return
         _tracing.stop()
-        if target is not None:
-            _tracing.start(traces, target)
+        if settings is not None:
+            _tracing.start(settings)
+
+
+@dataclass(frozen=True)
+class _Settings:
+    """Where a process's spans go, and what their resource is made from: what a second `configure` compares."""
+
+    traces: Traces
+    #: The file's path, or the endpoint's URL for spans.
+    target: str
+    #: The state directory, which keeps the workspace's `service.instance.id`.
+    state_dir: Path
+    #: The operator's own resource attributes.
+    resource: Mapping[str, str]
 
 
 @dataclass
@@ -263,16 +285,15 @@ class _Tracing:
     Process-wide, as logging's handlers are: a span is made deep in code that has no `Context` to pass it through.
     """
 
-    traces: Traces = "off"
-    #: The file's path, or the endpoint's URL for spans.
-    target: str | None = None
+    #: Where spans go, or None while tracing is off.
+    settings: _Settings | None = None
     provider: TracerProvider | None = None
     tracer: Tracer | None = None
     #: The token of the parent context attached from `TRACEPARENT`, to detach on `stop`.
     parent: object | None = None
 
-    def start(self, traces: Traces, target: str) -> None:
-        """Send this process's spans to `target`, continuing the trace in `TRACEPARENT` if there is one."""
+    def start(self, settings: _Settings) -> None:
+        """Send this process's spans where `settings` says, continuing the trace in `TRACEPARENT` if there is one."""
         # Imported here, never at import time: a process that traces nothing never loads OpenTelemetry.
         from opentelemetry import context  # noqa: PLC0415
         from opentelemetry.sdk.trace import TracerProvider  # noqa: PLC0415
@@ -284,18 +305,19 @@ class _Tracing:
 
         # Every span, whatever the parent says: the operator turned tracing on, and a `TRACEPARENT` canopy did not set,
         # from whatever started it, may say its trace is not sampled.
-        provider = TracerProvider(resource=otlp.resource(), sampler=ALWAYS_ON)
-        if traces == "otlp":
+        resource = otlp.resource(settings.state_dir, settings.resource)
+        provider = TracerProvider(resource=resource, sampler=ALWAYS_ON)
+        if settings.traces == "otlp":
             # Sent in batches, by a thread of the SDK's, so no step waits on the network; what is left is sent as the
             # process exits, within the exporter's timeout, so an endpoint that is down delays an exit by that alone.
-            provider.add_span_processor(BatchSpanProcessor(otlp.HttpExporter(target)))
+            provider.add_span_processor(BatchSpanProcessor(otlp.HttpExporter(settings.target)))
         else:
             # Each span is written as it ends: a detached run may be killed before a batch would have been.
-            provider.add_span_processor(SimpleSpanProcessor(otlp.FileExporter(Path(target))))
+            provider.add_span_processor(SimpleSpanProcessor(otlp.FileExporter(Path(settings.target))))
         inherited = {key.lower(): value for key, value in os.environ.items() if key in {TRACEPARENT, "TRACESTATE"}}
         parent = TraceContextTextMapPropagator().extract(inherited)
         self.parent = context.attach(parent) if inherited else None
-        self.traces, self.target = traces, target
+        self.settings = settings
         self.provider, self.tracer = provider, provider.get_tracer("canopy")
 
     def stop(self) -> None:
@@ -306,7 +328,7 @@ class _Tracing:
             from opentelemetry import context  # noqa: PLC0415
 
             context.detach(self.parent)  # pyrefly: ignore[bad-argument-type]  # the token `attach` returned
-        self.traces, self.target, self.provider, self.tracer, self.parent = "off", None, None, None, None
+        self.settings, self.provider, self.tracer, self.parent = None, None, None, None
 
 
 _tracing = _Tracing()

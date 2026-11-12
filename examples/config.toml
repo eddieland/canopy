@@ -344,6 +344,13 @@ cmd = "canopy-connect-jira --site acme.atlassian.net"
 # traces = "off"                         # or "file", or "otlp"
 # metrics = "off"                        # or "file" (.canopy/metrics.jsonl), or "otlp"
 # endpoint = "http://localhost:4318"     # for "otlp": spans go to /v1/traces under it, metrics to /v1/metrics
+#
+# Every span and metric names canopy, its version, and this workspace, by a random id kept in .canopy/instance-id and
+# never by its path. Attributes of your own go beside them, sent as written: at most 32, each a lowercase dotted name
+# and one line of text. canopy's own three cannot be replaced.
+# [telemetry.resource]
+# "deployment.environment.name" = "laptop"
+# "host.name" = "studio"
 
 # Optional: how long canopy keeps its own history (DESIGN §26); 0 keeps a kind forever. `canopy gc --dry-run` shows
 # what each kind holds and what a pass would remove. A live tick removes the files and the journal's rows once a day,
