@@ -254,8 +254,8 @@ def read_agents(ctx: Context, request: Agents) -> str:  # noqa: ARG001  (a listi
 def offered(ctx: Context) -> tuple[Offerings, dict[str, tuple[str, ...]], dict[str, tuple[str, ...]]]:
     """Ask the runtime what each of canopy's agents is offered, started as a run starts it, with canopy's definitions.
 
-    It is started with the servers `runtime.mcp_servers` turns off for every role, since it is asked about every agent
-    at once; those turned off for one role alone are that agent's, from config.
+    It is started with every server `runtime.mcp_servers` turns off for any role, so none of them starts to answer; it
+    is asked about every agent at once, so those turned off for only some roles are each agent's, from config.
 
     Returns:
         What it offers, the commands `runtime.allow_bash` gives each agent, and the servers `runtime.mcp_servers` turns
@@ -275,8 +275,12 @@ def offered(ctx: Context) -> tuple[Offerings, dict[str, tuple[str, ...]], dict[s
         cwd=ctx.ws.root,
         definitions_dir=snapshot,
         agents=runtime_definitions.agent_names(),
-        disabled=servers_off.everywhere(),
+        disabled=servers_off.named(),
     )
+    # Started with every server some role keeps out, so none starts to answer; one only some roles keep out is
+    # listed by agent, not as off for every agent.
+    some = set(servers_off.named()) - set(servers_off.everywhere())
+    found = dataclasses.replace(found, disabled_servers=tuple(s for s in found.disabled_servers if s not in some))
     return found, bash_allows.by_agent(ctx.config.runtime.allow_bash), _off_by_agent(servers_off)
 
 

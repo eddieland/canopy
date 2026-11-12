@@ -871,7 +871,7 @@ class McpServers(Section):
         return {role: self.disabled_for(role) for role in agent_models.AGENTS}
 
     def everywhere(self) -> tuple[str, ...]:
-        """The servers no run of any role starts, as a runtime asked about every agent at once is started.
+        """The servers no run of any role starts: off for every agent.
 
         Returns:
             Those every role's list names, in the order the first role's gives them.
