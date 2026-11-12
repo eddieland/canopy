@@ -445,6 +445,9 @@ def _locked(ctx: Context, *, dry_run: bool, woken_by: WokenBy | None) -> Outcome
             cost_usd=usage.cost_usd if usage is not None else None,
             new_tokens=usage.new_tokens if usage is not None else None,
         )
+        # A tick that did not end `ok` failed, though it raised nothing, or caught what it raised (D132).
+        if status is not TickStatus.OK:
+            traced.fail(status)
         return Outcome(tick_id, status, summary, usage)
 
     with tracing.span("tick", new_trace=True, tick_id=tick_id, dry_run=dry_run) as traced:

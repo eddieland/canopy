@@ -14,6 +14,10 @@ their values in comments.
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Set as AbstractSet
 
 
 class RunStatus(StrEnum):
@@ -57,6 +61,27 @@ class ReviewRunStatus(StrEnum):
 
 # Any run table's status, for the lifecycle every run table shares (`db.finish_run`).
 type AnyRunStatus = RunStatus | ChoreRunStatus | ReviewRunStatus
+
+#: The statuses a run ends in without having done its work: its agent reported it failed, left no result, ran out of
+#: time, or its process died, or a worker reported done with work it had not pushed. A run's span ends failed in one
+#: (D132). `done`, `ok`, and `blocked` are the agent's answer, and `stopped` the operator's doing, so none is a failure.
+FAILED_RUN_STATUSES: AbstractSet[AnyRunStatus] = frozenset(
+    {
+        RunStatus.FAILED,
+        RunStatus.UNKNOWN,
+        RunStatus.UNPUSHED,
+        RunStatus.CRASHED,
+        RunStatus.TIMEOUT,
+        ChoreRunStatus.FAILED,
+        ChoreRunStatus.UNKNOWN,
+        ChoreRunStatus.TIMEOUT,
+        ChoreRunStatus.CRASHED,
+        ReviewRunStatus.FAILED,
+        ReviewRunStatus.UNKNOWN,
+        ReviewRunStatus.TIMEOUT,
+        ReviewRunStatus.CRASHED,
+    },
+)
 
 
 class TickStatus(StrEnum):

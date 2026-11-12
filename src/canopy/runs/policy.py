@@ -277,6 +277,38 @@ def unit_attempts(conn: sqlite3.Connection, key: str, repo: str | None) -> dict[
     return attempts(conn, ticket=key).get(unit(key, repo), dict.fromkeys(KINDS, 0))
 
 
+def attempt_of(conn: sqlite3.Connection, run_id: int) -> int | None:
+    """Return run `run_id`'s attempt number, as its dispatch numbered it.
+
+    A run of a kind counted per ticket is its place among the ticket's runs of that kind; any other, its place among
+    the runs of the kind it counts as in the unit it covers that has the most. Only one run works a ticket at a time,
+    so the runs before it are those its dispatch counted.
+
+    Returns:
+        The number, or None for a run the journal does not hold.
+    """
+    run = records.select(records.Run).where("id = ?", run_id).one(conn)
+    if run is None:
+        return None
+    if run.kind in TICKET_KINDS:
+        earlier = (
+            sql.select("count(*)")
+            .from_("runs")
+            .where("ticket_key = ? AND kind = ? AND id <= ?", run.ticket_key, run.kind, run_id)
+        )
+        return int(sql.execute(conn, earlier).fetchone()[0])
+    per_unit = (
+        sql.select("count(DISTINCT r.id)")
+        .from_("runs r")
+        .join("run_slots s ON s.run_id = r.id")
+        .join("run_slots mine ON mine.run_id = ? AND mine.repo IS s.repo", run_id)
+        .where("r.ticket_key = ? AND r.id <= ?", run.ticket_key, run_id)
+        .where_in("r.kind", [kind for kind in RunKind if counted_as(kind) == counted_as(run.kind)])
+        .group_by("s.repo")
+    )
+    return max((int(row[0]) for row in sql.execute(conn, per_unit)), default=1)
+
+
 def ci_cooldowns(conn: sqlite3.Connection, config: Config, now: datetime) -> dict[Unit, datetime]:
     """Return, by unit, when a `resume` for CI alone may next run, for units still inside the cooldown.
 
