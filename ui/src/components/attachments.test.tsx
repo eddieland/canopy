@@ -120,9 +120,9 @@ describe('Attachments', () => {
         expect(await screen.findByText('Attached spec.md (39 bytes) to epic:3; its next run reads it.')).toBeTruthy()
         fireEvent.click(screen.getByRole('button', { name: 'Remove design.md' }))
         expect(await screen.findByText('Removed design.md from epic:3.')).toBeTruthy()
-        expect(sent.map((s) => [s.method, s.path])).toEqual([
-            ['PUT', '/api/epics/3/attachments/spec.md'],
-            ['DELETE', '/api/epics/3/attachments/design.md'],
+        expect(sent).toEqual([
+            { method: 'PUT', path: '/api/epics/3/attachments/spec.md', type: 'text/plain', body: DOC },
+            { method: 'DELETE', path: '/api/epics/3/attachments/design.md', type: null, body: '' },
         ])
     })
 

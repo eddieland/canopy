@@ -7,7 +7,7 @@ each in a group of their own; the epic's planner finds them at the top of its de
 from pathlib import Path
 
 from canopy.cli.main import main
-from canopy.core import contract, conversation, epics
+from canopy.core import contract, conversation, epics, records
 from canopy.core.vocab import RunKind, RunStatus
 from canopy.infra import logs
 from canopy.runs import attachments, epic_runs, epic_starts
@@ -61,6 +61,7 @@ def test_an_epic_takes_an_attachment_and_shows_it(scenario: Scenario) -> None:
     assert "Attachments (1):\n  spec.md  51 bytes  attached" in shown
     assert "Removed spec.md from epic:1." in scenario.operator("detach", "epic:1", "spec.md").out
     assert attachments.of(scenario.conn, EPIC) == []
+    assert not kept.exists()
 
 
 def test_an_unknown_or_stopped_epic_takes_no_attachment(scenario: Scenario, tmp_path: Path) -> None:
@@ -73,6 +74,9 @@ def test_an_unknown_or_stopped_epic_takes_no_attachment(scenario: Scenario, tmp_
     assert operator("epic", "submit", "Move sessions to the new store.") == 0
     assert operator("stop", "epic:1") == 0
     assert "attach refused (stopped)" in scenario.operator("attach", "epic:1", str(source), code=1).err
+    # Neither refusal recorded a row or wrote a file.
+    assert records.select(records.Attachment).all(scenario.conn) == []
+    assert not (scenario.env.state_dir / attachments.DIR_NAME / "epic.1").exists()
 
 
 def test_a_members_implement_finds_its_epics_files_beside_its_own(scenario: Scenario, git_pool: GitPool) -> None:
