@@ -108,7 +108,7 @@ def test_canopy_agents_says_a_server_config_turns_off_is_off(
     """The runtime is asked with the operator's servers turned off as each run turns them off."""
     assert main(["agents", "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["disabled_servers"] == []
-    canopy_env.configure(canopy_env.user_file, {"runtime": {"disabled_mcp_servers": ["github"]}})
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"mcp_servers": {"disabled": ["github"]}}})
     assert main(["agents", "--json"]) == 0
     printed = capsys.readouterr()
     assert json.loads(printed.out)["disabled_servers"] == ["github"]
@@ -122,14 +122,36 @@ def test_canopy_agents_warns_of_a_server_to_turn_off_the_runtime_does_not_have(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Its entry has no type, which OpenCode ignores and starts nothing for: no server, and nothing to turn off."""
-    canopy_env.configure(canopy_env.user_file, {"runtime": {"disabled_mcp_servers": ["github", "slack"]}})
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"mcp_servers": {"disabled": ["github", "slack"]}}})
     assert main(["agents", "--json"]) == 0
     printed = capsys.readouterr()
     found = json.loads(printed.out)
     assert (found["servers"], found["disabled_servers"]) == (["github"], ["github"])
     assert printed.err == (
-        "runtime.disabled_mcp_servers names slack, which your runtime config does not have: nothing to turn off.\n"
+        "runtime.mcp_servers names slack, which your runtime config does not have: nothing to turn off.\n"
     )
+
+
+@pytest.mark.opencode1  # the fake above plays OpenCode 1's `debug`
+@pytest.mark.usefixtures("opencode")
+def test_canopy_agents_says_which_agents_keep_a_server_out_of_their_own_runs(
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The runtime, asked about every agent at once, has on what some role starts: the rest is each agent's."""
+    tables: dict[str, object] = {"disabled": ["github"], "worker": {"disabled": []}}
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"mcp_servers": tables}})
+    assert main(["agents", "--json"]) == 0
+    found = json.loads(capsys.readouterr().out)
+    assert found["disabled_servers"] == []
+    off = {agent: ["github"] for agent in ("canopy-planner", "canopy-reviewer", "canopy-overseer", "canopy-chore")}
+    assert found["mcp_servers_off"] == off
+    assert main(["agents"]) == 0
+    out = capsys.readouterr().out
+    reviewer = out.split("\ncanopy-reviewer\n", 1)[1].split("\n\n", 1)[0]
+    assert "\n  off in its runs by runtime.mcp_servers: github" in reviewer
+    worker = out.split("\ncanopy-worker\n", 1)[1].split("\n\n", 1)[0]
+    assert "runtime.mcp_servers" not in worker
 
 
 def test_canopy_agents_fails_when_opencode_cannot_say(

@@ -37,7 +37,7 @@ def env(
     """The environment that gives a run each of canopy's servers `commands` names, each run as its command in `cwd`.
 
     The run is of the runtime `version` runs. Each server `disabled` names, of the operator's own runtime config
-    (`runtime.disabled_mcp_servers`), is turned off for the run, so it never starts.
+    (`runtime.mcp_servers`, for the run's role), is turned off for the run, so it never starts.
 
     `timeout_seconds`, when given, bounds each request the runtime makes of it, a tool call included; else the
     runtime's default does.

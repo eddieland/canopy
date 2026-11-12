@@ -610,7 +610,7 @@ def _run_agent(
         served,
         version=ctx.config.runtime.version,
         cwd=ctx.workspace.root.absolute(),
-        disabled=ctx.config.runtime.disabled_mcp_servers,
+        disabled=ctx.config.runtime.mcp_servers.disabled_for("worker"),
     )
     answers = starts.answers_dir(Path(run.log_path))
     listed = checklists.file_of(answers, run.repo)

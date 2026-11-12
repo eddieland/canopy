@@ -320,7 +320,7 @@ def _run_agent(
         served,
         version=runtime.version,
         cwd=ctx.workspace.root.absolute(),
-        disabled=runtime.disabled_mcp_servers,
+        disabled=runtime.mcp_servers.disabled_for("planner"),
     )
     reports = CONTRACT.asked()
     env |= reports.env()

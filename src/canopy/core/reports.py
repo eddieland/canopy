@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Annotated, Any
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr
 
 from canopy.core import (
+    agent_models,
     bash_allows,
     config,
     conversation,
@@ -250,11 +251,15 @@ def read_agents(ctx: Context, request: Agents) -> str:  # noqa: ARG001  (a listi
     return agents_json(*offered(ctx))
 
 
-def offered(ctx: Context) -> tuple[Offerings, dict[str, tuple[str, ...]]]:
+def offered(ctx: Context) -> tuple[Offerings, dict[str, tuple[str, ...]], dict[str, tuple[str, ...]]]:
     """Ask the runtime what each of canopy's agents is offered, started as a run starts it, with canopy's definitions.
 
+    It is started with the servers `runtime.mcp_servers` turns off for every role, since it is asked about every agent
+    at once; those turned off for one role alone are that agent's, from config.
+
     Returns:
-        What it offers, and the commands `runtime.allow_bash` gives each agent, by its name.
+        What it offers, the commands `runtime.allow_bash` gives each agent, and the servers `runtime.mcp_servers` turns
+        off for an agent beyond those, each by the agent's name.
 
     Raises:
         Refused: canopy's definitions could not be written for the runtime to read.
@@ -263,24 +268,42 @@ def offered(ctx: Context) -> tuple[Offerings, dict[str, tuple[str, ...]]]:
         snapshot = definitions.ensure(ctx.ws.state_dir, ctx.config)
     except definitions.DefinitionsError as e:
         raise Refused(f"agents: {e}") from None
+    servers_off = ctx.config.runtime.mcp_servers
     found = offerings.offerings(
         ctx.runner,
         version=ctx.config.runtime.version,
         cwd=ctx.ws.root,
         definitions_dir=snapshot,
         agents=runtime_definitions.agent_names(),
-        disabled=ctx.config.runtime.disabled_mcp_servers,
+        disabled=servers_off.everywhere(),
     )
-    return found, bash_allows.by_agent(ctx.config.runtime.allow_bash)
+    return found, bash_allows.by_agent(ctx.config.runtime.allow_bash), _off_by_agent(servers_off)
 
 
-def agents_json(found: Offerings, allows: Mapping[str, Sequence[str]]) -> str:
+def agents_json(found: Offerings, allows: Mapping[str, Sequence[str]], off: Mapping[str, Sequence[str]]) -> str:
     """What `offered` found, as `canopy agents --json` prints it.
 
     Returns:
         The JSON text.
     """
-    return report_json({**dataclasses.asdict(found), "allow_bash": {a: list(p) for a, p in allows.items()}})
+    return report_json(
+        {
+            **dataclasses.asdict(found),
+            "allow_bash": {a: list(p) for a, p in allows.items()},
+            "mcp_servers_off": {a: list(s) for a, s in off.items()},
+        },
+    )
+
+
+# The servers each agent's runs keep out beyond those every role's do, by the agent's name; none for an agent with none.
+def _off_by_agent(servers_off: config.McpServers) -> dict[str, tuple[str, ...]]:
+    everywhere = servers_off.everywhere()
+    return {
+        agent: own
+        for role, names in servers_off.by_role().items()
+        if (own := tuple(s for s in names if s not in everywhere))
+        for agent in agent_models.AGENTS[role]
+    }
 
 
 def tool_names() -> list[str]:

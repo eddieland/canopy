@@ -830,6 +830,65 @@ _AGENT_CMDS = {
 }
 
 
+class RoleMcpServers(Section):
+    """One role's `[runtime.mcp_servers.<role>]` table, which takes the place of the global list for that role."""
+
+    #: The operator's servers that no run of the role starts; empty starts every one, those turned off for every
+    #: other role included.
+    disabled: tuple[OperatorServer, ...] = ()
+
+
+class McpServers(Section):
+    """The `[runtime.mcp_servers]` table: MCP servers of the operator's runtime config that canopy's runs never start.
+
+    Each run is one agent in a runtime of its own, so each role may keep its own servers out (DESIGN §13). The roles
+    are `runtime.models`'s: a task's runs are the worker's, and an epic's the planner's.
+    """
+
+    #: The servers no run of any role starts, but a role with its own table.
+    disabled: tuple[OperatorServer, ...] = ()
+    overseer: RoleMcpServers | None = None
+    worker: RoleMcpServers | None = None
+    planner: RoleMcpServers | None = None
+    reviewer: RoleMcpServers | None = None
+    chore: RoleMcpServers | None = None
+
+    def disabled_for(self, role: agent_models.Role) -> tuple[str, ...]:
+        """The servers no run of `role` starts.
+
+        Returns:
+            The role's own list when it has a table, else the global one.
+        """
+        own: RoleMcpServers | None = getattr(self, role)
+        return own.disabled if own is not None else self.disabled
+
+    def by_role(self) -> dict[agent_models.Role, tuple[str, ...]]:
+        """Each role's servers, as `disabled_for` says.
+
+        Returns:
+            Every role by name, in `runtime.models`'s order.
+        """
+        return {role: self.disabled_for(role) for role in agent_models.AGENTS}
+
+    def everywhere(self) -> tuple[str, ...]:
+        """The servers no run of any role starts, as a runtime asked about every agent at once is started.
+
+        Returns:
+            Those every role's list names, in the order the first role's gives them.
+        """
+        lists = list(self.by_role().values())
+        return tuple(s for s in lists[0] if all(s in other for other in lists[1:]))
+
+    def named(self) -> tuple[str, ...]:
+        """Every server some role keeps out of its runs.
+
+        Returns:
+            Each once, in the order the global list, then each role's, first names it.
+        """
+        own = (t.disabled for t in (self.overseer, self.worker, self.planner, self.reviewer, self.chore) if t)
+        return tuple(dict.fromkeys(s for names in (self.disabled, *own) for s in names))
+
+
 class Runtime(Section):
     """The `[runtime]` table: agent command templates and timeouts."""
 
@@ -889,9 +948,9 @@ class Runtime(Section):
     #: `setup_cmd`, and a review's, with the role each takes (DESIGN §24). Names need not be in this workspace's map,
     #: as the user file serves every workspace. Private: it decides what a run may reach (TRUST_MODEL T4, T7).
     sandbox_repos: Annotated[tuple[RepoName, ...], Scope.PRIVATE] = ()
-    #: MCP servers of the operator's own runtime config, by name, that none of canopy's runs starts: each run turns
-    #: them off (DESIGN §13). Private: the servers are the operator's, as their runtime config is.
-    disabled_mcp_servers: Annotated[tuple[OperatorServer, ...], Scope.PRIVATE] = ()
+    #: MCP servers of the operator's own runtime config that canopy's runs never start, for every role or each its own
+    #: (DESIGN §13). Private: the servers are the operator's, as their runtime config is.
+    mcp_servers: Annotated[McpServers, Scope.PRIVATE] = McpServers()
 
     @model_validator(mode="before")
     @classmethod
@@ -1797,19 +1856,24 @@ class Config(Section):
 
     @model_validator(mode="after")
     def _needed_servers_stay_on(self) -> Config:
-        # Workers write to the tracker through its server, and the agents that publish through the store's (DESIGN
-        # §22, §38); a store no agent publishes to may be kept out.
+        # Every agent but the overseer reads or writes the tracker through its server, and the roles that publish
+        # write to the store through its own (DESIGN §22, §30, §38).
         tracker = self.tracker.tools()
-        publishing = self.artifacts.publishing()
-        needed = {
-            "the tracker's": tracker.server if tracker is not None else "",
-            "the artifact store's": publishing.server if publishing is not None and publishing.agents else "",
+        publishers = tuple(r for r in agent_models.AGENTS if r in self.artifacts.publish_roles)
+        needed: dict[str, tuple[str, Sequence[agent_models.Role]]] = {
+            "the tracker's": (
+                tracker.server if tracker is not None else "",
+                ("worker", "planner", "reviewer", "chore"),
+            ),
+            "the artifact store's": (self.artifacts.mcp_server, publishers),
         }
-        for whose, server in needed.items():
-            if server and server in self.runtime.disabled_mcp_servers:
-                raise ValueError(
-                    f"runtime.disabled_mcp_servers names {server}, {whose} MCP server, which canopy's runs need",
-                )
+        servers = self.runtime.mcp_servers
+        for whose, (server, roles) in needed.items():
+            for role in roles:
+                if server and server in servers.disabled_for(role):
+                    raise ValueError(
+                        f"runtime.mcp_servers turns off {server} for the {role}, {whose} MCP server, which it needs",
+                    )
         return self
 
     @property

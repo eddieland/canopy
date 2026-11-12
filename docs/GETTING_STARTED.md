@@ -320,44 +320,46 @@ that blocks no command, as a worker does. OpenCode sends the schema of each tool
 description of each skill it may load, with every model call, so each one costs every tick and run, and is one more
 thing a steered agent could reach. `canopy agents` shows what each of canopy's agents is offered now.
 
-A server none of canopy's agents uses is best turned off for its runs, in canopy's config, so no run even starts it: a
-deny rule below only hides its tools, and each run, and each `canopy agents`, still starts and connects to it. Your own
-OpenCode sessions still start it.
+To take a server away, turn it off for canopy's runs in canopy's config, for every agent or for some: no run of
+theirs even starts it, where a deny rule only hides its tools, and the server still starts and connects in every
+run. Your own OpenCode sessions still start it. For example, with `bigquery` and `kubernetes` servers only the
+workers use, and a `figma` server none does:
 
 ```toml
-[runtime]
-disabled_mcp_servers = ["figma", "playwright"]
+[runtime.mcp_servers]
+disabled = ["figma", "bigquery", "kubernetes"]
+
+# Both workers, and your tasks' runs: this list takes the place of the one above.
+[runtime.mcp_servers.worker]
+disabled = ["figma"]
 ```
 
-To take away from only some agents what others need, add rules for canopy's agents, by name, to the `agent` block of
+The roles are `runtime.models`'s: `overseer`, `worker`, `planner`, `reviewer`, and `chore`. Keep the tracker's server
+on for every role but the overseer, and the artifact store's for a role that publishes; canopy refuses a config that
+turns either off for a role that needs it. `canopy agents` lists what each agent's runs keep out, and names a server
+your OpenCode config does not have.
+
+To take away skills, or some of a server's tools, add rules for canopy's agents, by name, to the `agent` block of
 `~/.config/opencode/opencode.json`.
 OpenCode merges that block into canopy's definitions, which canopy writes to `.canopy/runtime/<digest>/` and renders
 from its own config. Never edit them there: they are read-only, and canopy writes a new snapshot when its config
 changes. The rules reach agents started after you save them; a run already going keeps what it started with. For
-example, with servers named `bigquery` and `kubernetes`, and Jira as the tracker:
+example, with Jira as the tracker:
 
 ```json
 {
   "agent": {
-    "canopy-overseer": {"permission": {"bigquery_*": "deny", "kubernetes_*": "deny"}},
-    "canopy-planner": {
-      "permission": {"bigquery_*": "deny", "kubernetes_*": "deny", "skill": {"*": "deny", "tracker-jira": "allow"}}
-    },
-    "canopy-reviewer": {
-      "permission": {"bigquery_*": "deny", "kubernetes_*": "deny", "skill": {"*": "deny", "tracker-jira": "allow"}}
-    },
-    "canopy-chore": {
-      "permission": {"bigquery_*": "deny", "kubernetes_*": "deny", "skill": {"*": "deny", "tracker-jira": "allow"}}
-    }
+    "canopy-planner": {"permission": {"skill": {"*": "deny", "tracker-jira": "allow"}}},
+    "canopy-reviewer": {"permission": {"skill": {"*": "deny", "tracker-jira": "allow"}}},
+    "canopy-chore": {"permission": {"skill": {"*": "deny", "tracker-jira": "allow"}}}
   }
 }
 ```
 
-- **A server, whole.** OpenCode names a server's tools `<server>_<tool>`, so `"<server>_*": "deny"` takes every tool of
-  it from that agent, and OpenCode stops sending them. The pattern also matches a server whose name starts with
-  `<server>_`, so `github_*` takes `github_enterprise` too; `canopy agents` shows each server's reach. Leave the
-  workers, `canopy-worker` and `canopy-worker-private`, the servers their tickets need, and leave the tracker's server
-  alone: canopy already narrows it to its reads for the agents that read the ticket.
+- **A server's tools.** OpenCode names a server's tools `<server>_<tool>`, so `"<server>_*": "deny"` takes every tool of
+  it from that agent, and an allow of one tool by name after it gives that one back. The pattern also matches a server
+  whose name starts with `<server>_`, so `github_*` takes `github_enterprise` too; `canopy agents` shows each server's
+  reach. Leave the tracker's server alone: canopy already narrows it to its reads for the agents that read the ticket.
 - **Skills.** The last rule that matches a skill's name decides, so `"*": "deny"` comes first and the tracker skill
   canopy ships for your tracker, `tracker-jira` or `tracker-github`, is allowed by name after it: the reviewer's and the
   planner's prompts load it. Leave the workers' skills alone, since they work with yours, such as `runtime.pr_skill`.

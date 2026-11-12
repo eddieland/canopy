@@ -130,12 +130,14 @@ def test_a_worker_inherits_no_server_its_process_was_given(scenario: Scenario) -
 
 
 @pytest.mark.usefixtures("git_pool")
-def test_the_servers_config_turns_off_never_start_in_the_overseers_run_or_the_workers(scenario: Scenario) -> None:
-    """The operator's servers that config keeps out of canopy's runs are off in each run, beside canopy's own."""
-    scenario.configures(runtime={"disabled_mcp_servers": ["slack", "browser"]})
+def test_the_servers_config_turns_off_never_start_in_the_runs_of_their_role(scenario: Scenario) -> None:
+    """The operator's servers config keeps out of a role's runs are off in each, beside canopy's own (DESIGN §13)."""
+    tables = {"disabled": ["slack", "browser"], "overseer": {"disabled": ["slack", "github"]}}
+    scenario.configures(runtime={"mcp_servers": tables})
     scenario.tick(dispatches("PROJ-1"), worker=pushes())
     overseer, w = agent_runs(scenario.agent_log)
-    assert turned_off_servers(overseer) == turned_off_servers(w) == {"slack", "browser"}
+    assert turned_off_servers(overseer) == {"slack", "github"}
+    assert turned_off_servers(w) == {"slack", "browser"}
     assert inline_servers(w).keys() == {cards.SERVER}
 
 

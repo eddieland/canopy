@@ -32,41 +32,50 @@ def cmd_agents(click_ctx: click.Context, *, as_json: bool) -> int:
     """
     ctx = open_context(click_ctx)
     try:
-        found, allows = reports.offered(ctx)
+        found, allows, off = reports.offered(ctx)
     except reports.Refused as e:
         raise CliError(str(e)) from None
     failed = found.error is not None or any(a.error is not None for a in found.agents)
-    unknown = [s for s in ctx.config.runtime.disabled_mcp_servers if s not in found.servers]
+    unknown = [s for s in ctx.config.runtime.mcp_servers.named() if s not in found.servers]
     if found.error is None and unknown:
         # Not an error: canopy never reads the runtime's config, which may change after canopy's is loaded.
         click.echo(
-            f"runtime.disabled_mcp_servers names {', '.join(unknown)}, which your runtime config does not have: "
+            f"runtime.mcp_servers names {', '.join(unknown)}, which your runtime config does not have: "
             "nothing to turn off.",
             err=True,
         )
     if as_json:
-        click.echo(reports.agents_json(found, allows))
+        click.echo(reports.agents_json(found, allows, off))
         return int(failed)
-    for line in render(found, allows):
+    for line in render(found, allows, off):
         click.echo(line)
     return int(failed)
 
 
-def render(found: Offerings, allows: Mapping[str, Sequence[str]]) -> list[str]:
+def render(
+    found: Offerings,
+    allows: Mapping[str, Sequence[str]],
+    off: Mapping[str, Sequence[str]],
+) -> list[str]:
     """What each agent is offered, as `canopy agents` prints it, with the commands `allows` gives it by agent name.
+
+    `off` names, by agent, the servers `runtime.mcp_servers` keeps out of that agent's runs alone: the runtime, asked
+    about every agent at once, was started with only those turned off for every one.
 
     Returns:
         Its lines, without line ends.
     """
     if found.error is not None:
         return [f"The runtime could not say what it offers: {found.error}"]
-    off = f" (off for every agent: {', '.join(found.disabled_servers)})" if found.disabled_servers else ""
+    shut = f" (off for every agent: {', '.join(found.disabled_servers)})" if found.disabled_servers else ""
     lines = [
-        f"MCP servers: {', '.join(found.servers) or 'none'}{off}.",
+        f"MCP servers: {', '.join(found.servers) or 'none'}{shut}.",
         f"Skills: {', '.join(found.skills) or 'none'}.",
     ]
     for offer in found.agents:
         lines.extend(["", *_agent(offer)])
+        if off.get(offer.agent):
+            lines.append(f"  off in its runs by runtime.mcp_servers: {', '.join(off[offer.agent])}")
         if allows.get(offer.agent):
             # A pattern holds no `;` (`canopy.core.bash_allows`), so it parts them unmistakably.
             lines.append(f"  bash allowed by runtime.allow_bash: {'; '.join(allows[offer.agent])}")

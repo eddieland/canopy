@@ -386,7 +386,7 @@ from config, and a run's from its prompt's fixed instructions (below), so a chan
 snapshot. OpenCode 2 reads the snapshot in place of the
 operator's own config directory, where 1 reads both, so its snapshot links to each config file of theirs, which stays
 theirs: their MCP servers, providers, and rules reach every run, as they would their own sessions, but for the servers
-they keep out of canopy's runs, which never start there. Among them:
+they keep out of canopy's runs, for every role or each its own, which never start there. Among them:
 
 - `canopy-worker-private` gets the tracker's MCP server and only the tools of it a private worker may call (§22).
 - `canopy-overseer` gets the overseer's prompt, or the operator's override (§12), as its body, and nothing of the

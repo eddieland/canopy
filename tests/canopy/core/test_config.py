@@ -113,7 +113,7 @@ def test_needs_human_label_is_set_by_the_workspace_and_overridden_by_the_user(ca
         ("personas", "reviewer = 'lenient'"),
         ("runtime", "hide_models = ['acme/*']"),
         # The servers are the operator's own, as their runtime config is.
-        ("runtime", "disabled_mcp_servers = ['slack']"),
+        ("runtime", "mcp_servers = { disabled = ['slack'] }"),
         # Traces would leave the operator's machine for a host whoever controls the workspace file chose.
         ("telemetry", "traces = 'otlp'"),
         ("telemetry", "endpoint = 'https://collector.example'"),
@@ -407,16 +407,25 @@ def test_required_keys_name_both_files(canopy_env: CanopyEnv) -> None:
         ("[runtime]\noverseer_temperature = -0.5\n", "must be from 0 to 2, or -1 to set none"),
         ("[runtime]\nsandbox_repos = ['API']\n", "repository name 'API' must match"),
         # canopy gives each run its own servers in the same inline config.
-        ("[runtime]\ndisabled_mcp_servers = ['canopy']\n", "'canopy' is one of canopy's own MCP servers"),
-        ("[runtime]\ndisabled_mcp_servers = ['canopy_run']\n", "'canopy_run' is one of canopy's own MCP servers"),
+        ("[runtime.mcp_servers]\ndisabled = ['canopy']\n", "'canopy' is one of canopy's own MCP servers"),
+        ("[runtime.mcp_servers]\ndisabled = ['canopy_run']\n", "'canopy_run' is one of canopy's own MCP servers"),
         # A dot is `_` in a tool's name, so `canopy.run` would answer for canopy's `canopy_run` tools.
-        ("[runtime]\ndisabled_mcp_servers = ['canopy.run']\n", "'canopy.run' is one of canopy's own MCP servers"),
-        ("[runtime]\ndisabled_mcp_servers = ['']\n", "must be a printable name"),
-        ('[runtime]\ndisabled_mcp_servers = ["a\\tb"]\n', "must be a printable name"),
+        ("[runtime.mcp_servers]\ndisabled = ['canopy.run']\n", "'canopy.run' is one of canopy's own MCP servers"),
+        ("[runtime.mcp_servers]\ndisabled = ['']\n", "must be a printable name"),
+        ('[runtime.mcp_servers]\ndisabled = ["a\\tb"]\n', "must be a printable name"),
+        ("[runtime.mcp_servers.reviewer]\ndisabled = ['canopy']\n", "'canopy' is one of canopy's own MCP servers"),
+        (
+            "[runtime.mcp_servers.tester]\ndisabled = ['x']\n",
+            r"runtime\.mcp_servers\[tester\]: Extra inputs are not permitted",
+        ),
         # Workers write to the tracker through its server, here the Jira provider's default.
         (
-            "[runtime]\ndisabled_mcp_servers = ['atlassian']\n",
-            r"names atlassian, the tracker's MCP server, which canopy's runs need",
+            "[runtime.mcp_servers]\ndisabled = ['atlassian']\n",
+            r"turns off atlassian for the worker, the tracker's MCP server, which it needs",
+        ),
+        (
+            "[runtime.mcp_servers.chore]\ndisabled = ['atlassian']\n",
+            r"turns off atlassian for the chore, the tracker's MCP server, which it needs",
         ),
         (
             "[runtime]\nsandbox_repos = ['api']\nworker_cmd_prefix = 'canopy-sandbox worker --'\n",
@@ -438,23 +447,59 @@ def test_invalid_values(canopy_env: CanopyEnv, user_extra: str, message: str) ->
         load(canopy_env.root, canopy_env.user_file)
 
 
-def test_disabled_mcp_servers_names_the_operators_own(canopy_env: CanopyEnv) -> None:
-    """A hyphen survives OpenCode's sanitizing, so `canopy-docs` names no server of canopy's."""
+def test_mcp_servers_names_the_operators_own(canopy_env: CanopyEnv) -> None:
+    """A hyphen survives OpenCode's sanitizing, so `canopy-docs` names no server of canopy's; a dot is any name's."""
     servers = ["slack", "canopy-docs", "sentry.io"]
-    canopy_env.configure(canopy_env.user_file, {"runtime": {"disabled_mcp_servers": servers}})
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"mcp_servers": {"disabled": servers}}})
 
-    assert load(canopy_env.root, canopy_env.user_file).runtime.disabled_mcp_servers == tuple(servers)
+    loaded = load(canopy_env.root, canopy_env.user_file).runtime.mcp_servers
+    assert loaded.by_role() == dict.fromkeys(("worker", "planner", "reviewer", "overseer", "chore"), tuple(servers))
+    assert loaded.everywhere() == loaded.named() == tuple(servers)
 
 
-def test_disabled_mcp_servers_may_not_name_the_artifact_store_agents_publish_to(canopy_env: CanopyEnv) -> None:
+def test_a_roles_own_mcp_servers_take_the_place_of_the_global_list(canopy_env: CanopyEnv) -> None:
+    """A role's table replaces the global list, so it may also start a server every other role keeps out."""
+    tables: dict[str, object] = {
+        "disabled": ["figma", "k8s"],
+        "reviewer": {"disabled": ["k8s", "github"]},
+        "worker": {"disabled": []},
+    }
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"mcp_servers": tables}})
+
+    loaded = load(canopy_env.root, canopy_env.user_file).runtime.mcp_servers
+    assert loaded.by_role() == {
+        "worker": (),
+        "planner": ("figma", "k8s"),
+        "reviewer": ("k8s", "github"),
+        "overseer": ("figma", "k8s"),
+        "chore": ("figma", "k8s"),
+    }
+    assert loaded.everywhere() == ()
+    assert loaded.named() == ("figma", "k8s", "github")
+
+
+def test_the_overseer_alone_may_keep_the_trackers_server_out(canopy_env: CanopyEnv) -> None:
+    """The overseer reads no tracker (DESIGN §30): every other role does, through its server."""
+    tables = {"overseer": {"disabled": ["atlassian"]}}
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"mcp_servers": tables}})
+
+    assert load(canopy_env.root, canopy_env.user_file).runtime.mcp_servers.disabled_for("overseer") == ("atlassian",)
+
+
+def test_mcp_servers_may_not_keep_the_artifact_store_from_a_role_that_publishes(canopy_env: CanopyEnv) -> None:
     """Agents publish through the store's server (DESIGN §38); one no agent publishes to may be kept out."""
     store: dict[str, object] = {"mcp_server": "louvre", "publish_roles": []}
-    canopy_env.configure(canopy_env.user_file, {"runtime": {"disabled_mcp_servers": ["louvre"]}, "artifacts": store})
-    assert load(canopy_env.root, canopy_env.user_file).runtime.disabled_mcp_servers == ("louvre",)
+    tables = {"disabled": ["louvre"]}
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"mcp_servers": tables}, "artifacts": store})
+    assert load(canopy_env.root, canopy_env.user_file).runtime.mcp_servers.everywhere() == ("louvre",)
 
     canopy_env.configure(canopy_env.user_file, {"artifacts": {"publish_roles": ["worker"]}})
-    with pytest.raises(ConfigError, match="names louvre, the artifact store's MCP server, which canopy's runs need"):
+    with pytest.raises(ConfigError, match="turns off louvre for the worker, the artifact store's MCP server"):
         load(canopy_env.root, canopy_env.user_file)
+
+    # The worker's own table may keep it on while every other role keeps it out.
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"mcp_servers": {**tables, "worker": {"disabled": []}}}})
+    assert load(canopy_env.root, canopy_env.user_file).runtime.mcp_servers.disabled_for("worker") == ()
 
 
 @pytest.mark.parametrize("wrapper", ["canopy-sandbox", "/opt/bin/canopy-sandbox"])

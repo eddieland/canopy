@@ -150,7 +150,7 @@ def run_env(ctx: Context, run_id: str) -> dict[str, str]:
             {SERVER: SERVER_COMMAND, reports.SERVER: reports.SERVER_COMMAND},
             version=ctx.config.runtime.version,
             cwd=root,
-            disabled=ctx.config.runtime.disabled_mcp_servers,
+            disabled=ctx.config.runtime.mcp_servers.disabled_for("chore"),
         ),
         # What its agent reports with the history server's `result` tool (DESIGN §13); a chore that runs the operator's
         # own command reads none of it, and prints its result.

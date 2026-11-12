@@ -314,7 +314,7 @@ def reviewer(
             served,
             version=ctx.config.runtime.version,
             cwd=ctx.ws.root.absolute(),
-            disabled=ctx.config.runtime.disabled_mcp_servers,
+            disabled=ctx.config.runtime.mcp_servers.disabled_for("reviewer"),
         ),
         **(reports or result.REVIEW.asked()).env(),
     }

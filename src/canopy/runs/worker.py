@@ -870,7 +870,7 @@ def _run_agent(
             served,
             version=ctx.config.runtime.version,
             cwd=ctx.workspace.root.absolute(),
-            disabled=ctx.config.runtime.disabled_mcp_servers,
+            disabled=ctx.config.runtime.mcp_servers.disabled_for(_role(run)),
         )
         | reports.env()
     )
@@ -1804,6 +1804,11 @@ def _release(ctx: Context, run: sqlite3.Row, slots: Collection[_Slot], log: logs
         tidied = tidied and ok
     if tidied:
         tidy.remove_objects(objects, log)
+
+
+# The role a run's agent is, as config names it: a plan's is the planner's (DESIGN §25).
+def _role(run: sqlite3.Row) -> agent_models.Role:
+    return "planner" if run["kind"] in (policy.PLAN, policy.FEEDBACK_PLAN) else "worker"
 
 
 def _objects(ctx: Context, run: sqlite3.Row) -> Path:
