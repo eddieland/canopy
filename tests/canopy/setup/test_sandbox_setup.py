@@ -202,6 +202,47 @@ def test_a_template_kept_that_names_the_operators_opencode_data_is_to_be_changed
     assert "add @DATA@ to\nboth" in todo
 
 
+def test_a_template_kept_that_lets_a_run_read_a_directory_with_a_credential_is_to_be_changed(
+    machine: Machine,
+    canopy_env: CanopyEnv,
+) -> None:
+    """Templates before #2313 named `~/.cargo` and `~/.config/git` whole, and srt's allowRead outranks its denyRead."""
+    machine.install(*LINUX_COMMANDS)
+    templates = canopy_env.home / ".config" / "canopy" / "sandbox"
+    templates.mkdir(parents=True)
+    old = json.loads((canopy_sandbox.TEMPLATES / "worker.json").read_text())
+    old["filesystem"]["allowRead"] += [
+        "~/.cargo",
+        str(canopy_env.home / ".config" / "git"),
+        "~/.config/git/credentials",
+    ]
+    # What srt lets a run write it lets it read, and a path is the same however it is spelled.
+    old["filesystem"]["allowWrite"] += ["~/.local/../.cargo/"]
+    (templates / "worker.json").write_text(json.dumps(old))
+
+    report = sandbox.run_setup(SubprocessRunner(), "linux")
+
+    [todo] = report.todo
+    git_dir = canopy_env.home / ".config" / "git"
+    assert todo.startswith(
+        f"{templates / 'worker.json'} lets a sandboxed run read ~/.cargo, {git_dir}, ~/.local/../.cargo/, and "
+        "with them "
+        "~/.cargo/credentials.toml, ~/.config/git/credentials:",
+    )
+
+
+def test_the_shipped_templates_name_no_directory_with_a_credential(machine: Machine, canopy_env: CanopyEnv) -> None:
+    machine.install(*LINUX_COMMANDS)
+    assert sandbox.run_setup(SubprocessRunner(), "linux").todo == []
+
+    again = sandbox.run_setup(SubprocessRunner(), "linux")
+
+    assert again.kept == [
+        canopy_env.home / ".config" / "canopy" / "sandbox" / f"{r}.json" for r in canopy_sandbox.ROLES
+    ]
+    assert again.todo == []
+
+
 @pytest.mark.parametrize("key", ["allowRead", "allowWrite"])
 def test_a_template_kept_without_the_runs_own_data_is_to_be_changed(
     machine: Machine,

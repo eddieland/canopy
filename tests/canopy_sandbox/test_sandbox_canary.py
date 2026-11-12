@@ -220,6 +220,12 @@ def canary(canopy_env: CanopyEnv, sandbox_runtime: Path, tmp_path: Path) -> Iter
     (home / ".config" / "canopy" / "listener-secret").write_text(f"{PLANTED}\n")
     (home / ".ssh" / "id_ed25519").write_text(f"{PLANTED}\n")
     (home / ".bashrc").write_text("# the operator's\n")
+    for directory, name in ((".cargo", "credentials.toml"), (".config/git", "credentials")):
+        (home / directory).mkdir(parents=True, exist_ok=True)
+        (home / directory / name).write_text(f"{PLANTED}\n")
+    (home / ".cargo" / "bin").mkdir()
+    (home / ".cargo" / "bin" / "tool").write_text("a toolchain\n")
+    (home / ".config" / "git" / "config").write_text("[canary]\n\ttoolchain = read\n")
     (home / ".cache" / "opencode").mkdir(parents=True)
     runtime_data = home / ".local" / "share" / "opencode"
     runtime_data.mkdir(parents=True)
@@ -290,6 +296,9 @@ def overseers_workspace(canopy_env: CanopyEnv) -> Path:
         pytest.param('cat "$1/secret"', id="state-dir"),
         pytest.param('cat "$1/config.toml"', id="private-config"),
         pytest.param('cat "$HOME/.local/share/opencode/opencode.db"', id="runtime-data"),
+        # Beside a toolchain and git's config, which a template allows reading: allowRead outranks denyRead.
+        pytest.param('cat "$HOME/.cargo/credentials.toml"', id="cargo-token"),
+        pytest.param('cat "$HOME/.config/git/credentials"', id="git-store-credentials"),
         pytest.param(f'grep -r {PLANTED.removeprefix("canary-")} "$HOME" "$1"', id="search"),
     ],
 )
@@ -743,6 +752,14 @@ def test_the_operators_check_passes_where_the_sandbox_holds(canary: Canary) -> N
     assert [attempt.name for attempt in report.attempts if not attempt.ok] == []
     assert len(report.attempts) == 8  # the network's two among them
     assert report.skipped == ()
+
+
+@pytest.mark.parametrize("role", ["worker", "setup"])
+def test_a_run_reads_its_toolchain_and_gits_config_beside_the_credentials_it_cannot(canary: Canary, role: str) -> None:
+    done = canary.run('cat "$HOME/.cargo/bin/tool" "$HOME/.config/git/config"', role=role)
+
+    assert done.ok, done.stderr
+    assert done.stdout.splitlines()[1:] == ["a toolchain", "[canary]", "\ttoolchain = read"]
 
 
 def test_a_worker_runs_under_the_system_temp_directory(canary: Canary) -> None:

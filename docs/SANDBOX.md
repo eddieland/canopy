@@ -157,10 +157,16 @@ unless an internal MCP service lives there. Behind a corporate proxy, which `srt
 own rules are the only ones.
 
 `filesystem.allowRead` re-allows what a run must read under `$HOME`, which `denyRead` hides. Trim the toolchains to
-the ones you build with, and add any that are missing: `~/.local/bin`, `~/.nvm`, `~/.cargo`, `~/.rustup`, `~/go`,
-and `~/.local/share/uv` are there. A toolchain is readable, not writable. Name each directory, never one that holds
-the role caches or the run directories, such as `~` or `/tmp`: `srt` would bind it back over them, so the wrapper
-refuses it.
+the ones you build with, and add any that are missing: `~/.local/bin`, `~/.nvm`, `~/.cargo/bin`, `~/.rustup`, `~/go`,
+and `~/.local/share/uv` are there. A toolchain is readable, not writable. `allowRead` outranks `denyRead`, so a
+directory you add is readable whole: where one holds a credential beside what a build reads, name the parts. The
+templates name `~/.cargo/bin`, `env`, `registry`, and `git`, not `~/.cargo`, whose `credentials.toml` is your
+crates.io token, and git's `config`, `ignore`, and `attributes` under `~/.config/git`, not the directory, where the
+store helper keeps `credentials`. `canopy sandbox setup` says when a template you kept names either whole. A file a
+template names is readable as it is: if your `~/.gitconfig` or `~/.config/git/config` holds a token, in a URL or an
+`http.extraHeader`, move it to a credential helper, or take the file out of `allowRead`. Name each directory, never
+one that holds the role caches or the run directories, such as `~` or `/tmp`: `srt` would bind it back over them, so
+the wrapper refuses it.
 
 Caches go in `@CACHE@`, the role's cache directory, which the templates allow reading and writing. Never put one of
 your own caches in `allowWrite`: your own tools run what is in them, outside the sandbox, so a run that can write one
@@ -173,8 +179,8 @@ wrapper's `--`, such as `env CARGO_HOME=/home/you/.cache/canopy/sandbox/worker/c
 words, and no shell expands `$HOME` in it. Two more you are likely to need:
 
 - **Push credentials.** A worker pushes from inside the sandbox, so its git credential helper does too. Add what the
-  helper reads: `~/.config/gh` for `gh auth setup-git`, `~/.git-credentials` for the store helper. That token is in
-  the worker's reach, as it is without a sandbox.
+  helper reads: `~/.config/gh` for `gh auth setup-git`, `~/.git-credentials` or `~/.config/git/credentials` for the
+  store helper. That token is in the worker's reach, as it is without a sandbox.
 - **A workspace outside `$HOME`.** Add the workspace to `denyRead` in each template, so its `.canopy/` stays hidden.
   The wrapper denies `.canopy/` itself when the run's directories name it, but a chore with a `cwd` of its own names
   none.
