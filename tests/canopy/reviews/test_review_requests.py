@@ -12,6 +12,7 @@ from canopy.cli.main import main
 from canopy.core import conversation, db, personas
 from canopy.core.config import load
 from canopy.core.context import Context
+from canopy.core.vocab import Decider
 from canopy.infra import resources
 from canopy.reviews import review_requests
 from tests.canopy.helpers import KEY, context, listed, operator, overseer_calls, personas_dir, ran_on, waits
@@ -481,7 +482,7 @@ def test_a_request_made_ends_the_loops_wait_and_one_changed_does_not(
     assert not review_requests.made_after(scenario.conn, changed)
 
 
-def test_the_state_block_carries_the_open_requests(
+def test_the_state_block_leaves_out_a_request_the_harness_answers(
     requests_env: CanopyEnv,
     scenario: Scenario,
     git_pool: GitPool,
@@ -491,16 +492,15 @@ def test_the_state_block_carries_the_open_requests(
     assert "reviews" not in scenario.state()
     scenario.operator("start", PR, "--review")
     failing = reviewer_reports({"status": "failed", "summary": "Could not read the diff."})
-    run_id = scenario.review(reviews(head(git_pool), PR), reviewer=failing).id
-    scenario.tick(*waits(KEY), dry_run=True)
+    scenario.review(reviews(head(git_pool), PR), reviewer=failing)
+    ticked = scenario.tick(*waits(KEY), dry_run=True)
     section = scenario.state()["reviews"]
     assert (section["agent_prs"], section.get("query")) == (False, None)
-    [requested] = section["requests"]
-    assert {k: requested[k] for k in ("url", "review_runs")} == {"url": PR, "review_runs": 1}
-    # The overseer matches the PR's URL to a repository by the map's clone URL.
-    assert [r["url"] for r in scenario.state()["repositories"]] == ["https://example.test/acme/repo.git"]
-    assert (requested["latest"]["run_id"], requested["latest"]["status"]) == (run_id, "failed")
-    assert [p["url"] for p in section["prs"]] == [PR]
+    # The harness answers a request on a PR that is no ticket's (DESIGN §37): the overseer is shown neither the
+    # request nor its PR's reviews, and the harness's answer is recorded about the PR.
+    assert (section.get("requests", []), section.get("prs", [])) == ([], [])
+    # PR is in none of the workspace's repositories, so its answer is the request's end, which a dry run only records.
+    assert ("review:end", Decider.HARNESS) in [(d.action, d.decider) for d in ticked.decisions if d.pr == PR]
 
 
 def test_the_web_channel_requests_and_stops_a_review_as_the_cli_does(ctx: Context) -> None:

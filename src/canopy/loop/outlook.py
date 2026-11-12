@@ -16,8 +16,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from canopy.core import chore_view, conversation, db
-from canopy.core.vocab import Phase, SourceKind
-from canopy.loop import harness, harness_dispatches, observations, phases
+from canopy.core.vocab import Phase, RequestAction, SourceKind
+from canopy.loop import harness, harness_dispatches, harness_reviews, observations, phases, requested_reviews
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -34,7 +34,8 @@ type Fact = tuple[str, ...]
 def read(ctx: Context, now: datetime) -> frozenset[Fact]:
     """Read what a tick would record and list at `now`, from the journal and the observations, recording nothing.
 
-    The harness's decisions and its dispatches to come; each ticket the state block would list to the overseer, with
+    The harness's decisions and its dispatches to come, and what it would do with each of the operator's review
+    requests it takes; each ticket the state block would list to the overseer, with
     the rows of §7 the derivation finds on it and its units, and the comments and review items past their cursors that
     it would show; each due chore; and the review query's PRs, when a source read it fresh.
 
@@ -47,6 +48,12 @@ def read(ctx: Context, now: datetime) -> frozenset[Fact]:
     decided = {d.key for d in decisions} | {r.key for r in runs}
     facts: set[Fact] = {("decision", d.key, d.action) for d in decisions}
     facts.update(("dispatch", r.key, r.repo) for r in runs)
+    # A review to start names its head, and an end its reason, so each is news once; a wait is the same poll after poll.
+    facts.update(
+        ("request", r.pr_url, r.action, (r.head_sha if r.action is RequestAction.START else r.reason) or "")
+        for r in requested_reviews.derive(ctx, now)
+        if r.stale is None and harness_reviews.takes(ctx.conn, r.pr_url)
+    )
     states = chore_view.states(ctx.conn, ctx.config, ctx.workspace)
     facts.update(("chore", c["name"]) for c in chore_view.state_section(states, now) if c["due"] and not c["running"])
     stopped = set(conversation.stopped(ctx.conn))

@@ -1,31 +1,31 @@
-"""The operator's review requests, derived in shadow (DESIGN §21, §30, §37): what the harness would do with each.
+"""The operator's review requests, derived (DESIGN §21, §30, §37): what the harness does with each.
 
-Each tick, beside §7's table (`phases`), the harness derives for each open request what §37's row for it would do:
+Each tick, beside §7's table (`phases`), the harness derives for each open request what §37's row for it does:
 start its review at the PR's head, wait, or end the request. It reads as the overseer's prompt has it: a PR in no
 repository of the workspace, or in one with no clone, ends `unknown_repo`, observed or not; one the `vcs` source left
 stale, or never read, waits on it, recorded as stale; a merged or closed one ends so; one whose head has its `done`
 review already, in each persona owed one, ends `reviewed`, as the `review-run` tool's refusal ends it; one with a review
-running in each persona still owed, or a draft, waits; any other starts. The rows go in `request_derivations`; nothing
-the overseer, a worker, or a guard reads changes, and the row stays the overseer's until a measurement shows the
-derivation right on it (§37, The evidence gate).
+running in each persona still owed, or a draft, waits; any other starts. The rows go in `request_derivations`, and the
+harness acts on those it takes (`loop.harness_reviews`); a request on one of the loop's own PRs stays the overseer's,
+with the derivation beside it in shadow.
 
 Agreement is computed from those rows and the overseer's decisions about the PR in the same tick, never stored
 (`compare`): a start agrees when the overseer asked for the review, whether a guard then refused it or it started, but
 for a refusal `reviewed`; a wait when it asked for none and ended nothing, a `review-wait` or no decision at all; an end
 when it ended the request for the same reason, or for `reviewed`, asked for the review and was refused `reviewed`. A
-request resting on a stale observation is counted apart, never as a disagreement.
+request resting on a stale observation is counted apart, never as a disagreement, and one the harness decided is not
+compared: the overseer decided nothing about it.
 """
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import TYPE_CHECKING, NamedTuple, assert_never
 
-from canopy.core import conversation, db, observe, records, review_runs
+from canopy.core import db, observe, records, review_runs
+from canopy.core.items import ACTION_PREFIX
 from canopy.core.vocab import Decider, PrState, RequestAction, ReviewRunStatus
-from canopy.loop.review_tools import END_ACTION
 from canopy.loop.tools import RAISED, UNNAMED
 from canopy.reviews import review_requests
 from canopy.reviews import start as review_start
@@ -36,7 +36,6 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from canopy.core.context import Context
-    from canopy.core.workspace import Repo, Workspace
     from canopy.loop.phases import Verdict
 
 #: The `refused:<guard>` decisions of the `review-end` tool, an end the overseer asked for, not a review.
@@ -47,14 +46,6 @@ _ATTENTION_REFUSALS = frozenset({f"refused:{RAISED}", f"refused:{UNNAMED}"})
 _REVIEWED = f"refused:{review_requests.REVIEWED}"
 #: The end each state of a PR that is not open makes of its request.
 _ENDS: Mapping[PrState, str] = {PrState.MERGED: review_requests.MERGED, PrState.CLOSED: review_requests.CLOSED}
-#: A PR's URL, `https://HOST/OWNER/REPO/pull/N`, as `conversation.PR_URL_RE` takes it: its host and repository.
-_PR_URL_RE = re.compile(r"https://(?P<host>[^\s/]+)/(?P<path>[^\s/]+/[^\s/]+)/pull/[0-9]+/?")
-#: A clone URL as `git clone` takes it: https (credentials allowed), ssh://, or scp-style SSH, with an optional `.git`
-#: and trailing slash. An SSH URL's port is the SSH server's, so it is not part of the host.
-_CLONE_RE = re.compile(
-    r"(?:https://(?:[^@/\s]+@)?(?P<https>[^/\s]+)/|ssh://(?:[^@/\s]+@)?(?P<ssh>[^/\s:]+)(?::[0-9]+)?/|"
-    r"[^@/\s:]+@(?P<scp>[^/\s:]+):)(?P<path>[^\s/]+/[^\s/]+?)(?:\.git)?/?",
-)
 
 
 @dataclass(frozen=True)
@@ -108,17 +99,23 @@ def compare(conn: sqlite3.Connection, tick_id: int) -> list[Compared]:
     of the tool records too. An attention item a guard recorded beside a refusal is the guard's, not a choice.
 
     Returns:
-        One comparison per request the tick derived, by the PR's URL.
+        One comparison per request the tick derived that the harness did not decide, by the PR's URL.
     """
     rows = records.select(records.RequestDerivation).where("tick_id = ?", tick_id).order_by("pr_url, id").all(conn)
     moves: dict[str, list[_Move]] = {}
+    by_harness: set[str] = set()
     for d in db.decisions_for_tick(conn, tick_id):
-        if d.pr is None or d.decider is Decider.HARNESS:
+        if d.pr is None:
+            continue
+        if d.decider is Decider.HARNESS:
+            # Its wait, end, review, or the refusal of one: an attention item beside it decides nothing.
+            if d.ticket_key is None and not d.action.startswith(ACTION_PREFIX):
+                by_harness.add(d.pr)
             continue
         move = _move(d)
         if move is not None:
             moves.setdefault(d.pr, []).append(move)
-    return [_compared(row, moves.get(row.pr_url, [])) for row in rows]
+    return [_compared(row, moves.get(row.pr_url, [])) for row in rows if row.pr_url not in by_harness]
 
 
 class _Move(NamedTuple):
@@ -148,7 +145,7 @@ def _move(decision: records.Decision) -> _Move | None:  # noqa: PLR0911  (one mo
         return None
     if action.startswith("refused:"):
         return _Move(RequestAction.START, None, f"review, {action.replace(':', ' ')}")
-    if action == END_ACTION:
+    if action == review_requests.END_ACTION:
         # A dry run's rationale says so before the reason: the reason is its last word either way.
         reason = decision.rationale.rpartition(" ")[2]
         return _Move(RequestAction.END, reason, f"end {reason}")
@@ -187,7 +184,7 @@ def _derived(ctx: Context, request: records.ReviewRequest, cutoff: datetime) -> 
     url = request.pr_url
     if not observe.is_pr_url(url):
         return Derived(request.id, url, RequestAction.WAIT, stale=f"{url} is not a PR's URL, so it is not observed")
-    repo = _repo_of(ctx.workspace, url)
+    repo = review_requests.repo_of(ctx.workspace, url)
     if repo is None or not repo.cloned:
         return Derived(request.id, url, RequestAction.END, review_requests.UNKNOWN_REPO)
     pr = records.select(records.ObservedPr).where("url = ?", url).one(ctx.conn)
@@ -199,26 +196,6 @@ def _derived(ctx: Context, request: records.ReviewRequest, cutoff: datetime) -> 
     if pr.head_sha is None:
         return Derived(request.id, url, RequestAction.WAIT, stale=f"{url}'s head not observed")
     return _at_head(ctx.conn, request, pr, pr.head_sha)
-
-
-def _repo_of(ws: Workspace, url: str) -> Repo | None:
-    """The workspace's repository whose clone URL names the same host, owner, and repository as the PR's URL `url`.
-
-    Returns:
-        The repository, or None when none does, or `url` is not a PR's.
-    """
-    pr = _PR_URL_RE.fullmatch(url)
-    if pr is None or conversation.PR_URL_RE.fullmatch(url) is None:
-        return None
-    wanted = (pr["host"].lower(), pr["path"].lower())
-    for repo in ws.repos:
-        clone = _CLONE_RE.fullmatch(repo.url or "")
-        if clone is None:
-            continue
-        host = clone["https"] or clone["ssh"] or clone["scp"]
-        if (host.lower(), clone["path"].lower()) == wanted:
-            return repo
-    return None
 
 
 def _stale(url: str, pr: records.ObservedPr | None, cutoff: datetime) -> str | None:

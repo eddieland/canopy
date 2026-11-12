@@ -15,8 +15,9 @@ from pydantic import ConfigDict, Field, StrictInt, WithJsonSchema
 from canopy.core import conversation, db, recorded_runs, review_revisions, review_runs
 from canopy.core.vocab import RecordedStatus
 from canopy.infra import logs
-from canopy.loop import attention
+from canopy.loop import attention, harness_reviews
 from canopy.loop.tools import (
+    DECIDED,
     RECORDED_DESCRIPTION,
     STARTS_AFTER,
     Key,
@@ -40,7 +41,7 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 #: The decision `review end` records: the overseer ended a review request no review of could answer.
-END_ACTION = "review:end"
+END_ACTION = review_requests.END_ACTION
 
 
 class ReviewRun(Request):
@@ -115,6 +116,7 @@ def review_run(ctx: Context, request: ReviewRun) -> Outcome[ReviewsStarted]:
         Refused: Outside a running tick, or a guard refused the review, which is recorded.
     """
     current = running_tick(ctx)
+    _check_decided(ctx, current.id, request.pr, "review-run")
     asked = review_start.Request(pr=request.pr, sha=request.sha, ticket=request.ticket, repo=request.repo)
     try:
         due = review_start.due(ctx, asked)
@@ -142,6 +144,19 @@ def review_run(ctx: Context, request: ReviewRun) -> Outcome[ReviewsStarted]:
         "\n".join(said),
         ReviewsStarted(pr=request.pr, dry_run=current.dry_run, reviews=tuple(started), waits=waits),
     )
+
+
+def _check_decided(ctx: Context, tick_id: int, pr: str, verb: str) -> None:
+    """Refuse `verb` about a PR whose review request the harness answers this tick (DESIGN §37).
+
+    The overseer was not shown the request, and the harness's answer stands: a steered overseer cannot overrule it
+    (TRUST_MODEL T1). The refusal is recorded, as a guard's is.
+
+    Raises:
+        Refused: The harness answers the request on `pr` this tick.
+    """
+    if (reason := harness_reviews.refuse_decided(ctx, tick_id, pr, verb)) is not None:
+        raise Refused(f"{verb} refused ({DECIDED}): {reason}; the refusal was recorded")
 
 
 def _review_one(
@@ -263,6 +278,8 @@ def review_wait(ctx: Context, request: ReviewWait) -> Outcome[ReviewWaitRecorded
         Refused: Outside a running tick, or reviews are off.
     """
     current = running_tick(ctx)
+    # Before whether reviews are on: the harness may have ended the only open request in this tick.
+    _check_decided(ctx, current.id, request.pr, "review-wait")
     if not review_requests.reviews_on(ctx.conn, ctx.config):
         raise Refused("reviews are off: no [review] agent_prs or query, and no open review request")
     db.record_decision(ctx.conn, current.id, request.ticket, "wait", request.rationale, pr=request.pr)
@@ -305,6 +322,7 @@ def review_end(ctx: Context, request: ReviewEnd) -> Outcome[ReviewEnded]:
     """
     current = running_tick(ctx)
     tick_id, dry_run, pr, reason = current.id, current.dry_run, request.pr, request.reason
+    _check_decided(ctx, tick_id, pr, "review-end")
     try:
         review_requests.end(ctx.conn, pr, reason, dry_run=dry_run)
     except conversation.Refused as r:

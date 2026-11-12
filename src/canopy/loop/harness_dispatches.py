@@ -25,7 +25,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import IntEnum
-from typing import TYPE_CHECKING, TypedDict, assert_never
+from typing import TYPE_CHECKING, NotRequired, TypedDict, assert_never
 
 from canopy.chores import start as chore_start
 from canopy.core import chore_view, conversation, db, records
@@ -143,6 +143,8 @@ class ToCome(TypedDict):
     holds_workers: int
     runs: list[RunToCome]
     chores: list[str]
+    #: The PRs whose requested reviews it starts (`loop.harness_reviews`); left out when it starts none.
+    reviews: NotRequired[list[str]]
 
 
 class RunToCome(TypedDict):
@@ -254,15 +256,18 @@ def rank_of(kind: RunKind, reasons: Iterable[ResumeReason]) -> Rank:
             assert_never(kind)
 
 
-def section(planned: Plan) -> ToCome | None:
+def section(planned: Plan, reviews: Sequence[str] = ()) -> ToCome | None:
     """The state block's `dispatches_to_come`, naming each and the workers its runs hold.
+
+    `reviews` are the PRs whose requested reviews the harness starts, which hold a review each, no worker.
 
     Returns:
         It, or None when the harness makes none this tick.
     """
-    if not planned.runs and not planned.chores:
+    if not planned.runs and not planned.chores and not reviews:
         return None
     return {
+        **({"reviews": list(reviews)} if reviews else {}),
         "holds_workers": len(planned.runs),
         "runs": [
             {"ticket": r.key, "repo": r.repo, "kind": RunKind.RESUME, "rows": [str(p) for p in r.phases]}

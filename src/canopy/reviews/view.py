@@ -140,10 +140,17 @@ class ReviewsSection(TypedDict):
     revisions: NotRequired[list[WantedRevision]]
 
 
-def state_section(conn: sqlite3.Connection, config: Config, now: datetime) -> ReviewsSection | None:
+def state_section(
+    conn: sqlite3.Connection,
+    config: Config,
+    now: datetime,
+    *,
+    taken: AbstractSet[str] = frozenset(),
+) -> ReviewsSection | None:
     """Return the state block's `reviews`, or None when reviews are off: then the block has no such key.
 
-    A revision the operator's note asks for keeps the key, with reviews otherwise off (DESIGN §34).
+    A revision the operator's note asks for keeps the key, with reviews otherwise off (DESIGN §34). `taken` are the
+    PRs whose requests the harness answers this tick, which `requests` leaves out (DESIGN §37).
     """
     if not review_requests.reviews_on(conn, config) and not review_revisions.on(conn, config):
         return None
@@ -187,7 +194,7 @@ def state_section(conn: sqlite3.Connection, config: Config, now: datetime) -> Re
             for h in settle.settling(conn, config, now)
         ],
         "prs": prs,
-        "requests": [_requested(conn, r) for r in review_requests.open_requests(conn)],
+        "requests": [_requested(conn, r) for r in review_requests.open_requests(conn) if r.pr_url not in taken],
         **({"revisions": revisions} if revisions else {}),
     }
 

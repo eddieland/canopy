@@ -57,6 +57,7 @@ from canopy.loop import (
     harness_cursors,
     harness_dispatches,
     harness_items,
+    harness_reviews,
     mcp,
     observations,
     phases,
@@ -254,7 +255,7 @@ def _render(
         c for c in chore_view.state_section(chore_view.states(ctx.conn, ctx.config, ctx.workspace), now) if c["when"]
     ]
     shown = [*(int(r["id"]) for r in running), *(r.id for r in last_runs.values())]
-    reviews = review_view.state_section(ctx.conn, ctx.config, now)
+    reviews = review_view.state_section(ctx.conn, ctx.config, now, taken=harness_reviews.taken(ctx.conn, tick_id))
     units = db.all_units(ctx.conn)
     # What each cursor names, so a live read of a stale subject can tell what it passed (DESIGN §35).
     cursors = [
@@ -275,7 +276,10 @@ def _render(
         stopped=stopped,
         recently_done=recently_done,
         harness=harness.section(by_harness),
-        dispatches_to_come=harness_dispatches.section(to_come),
+        dispatches_to_come=harness_dispatches.section(
+            to_come,
+            harness_reviews.reviews_to_come(harness_reviews.starts(ctx.conn, tick_id)),
+        ),
         units=units,
         last_runs=last_runs,
         run_slots=db.all_run_slots(ctx.conn, shown),
@@ -343,7 +347,7 @@ def _left(
     """What the state block leaves the overseer to judge, after the harness's decisions (DESIGN §37, §39).
 
     Each duty it owes, which before it runs is each one there is: a ticket listed or the query found, and a due chore
-    with a `when`. And the reviews it starts: the review query's, the operator's requests,
+    with a `when`. And the reviews it starts: the review query's, the operator's requests the harness does not answer,
     and the revisions their notes ask for.
 
     Returns:
@@ -635,6 +639,7 @@ def _decide_in_code(
         _record_from_causes(ctx, tick_id, derived, log)
         # Before the overseer, which is then shown only the tickets left to it (DESIGN §37).
         _harness_decides(ctx, tick_id, derived or [], log)
+        _harness_answers_requests(ctx, tick_id, log, dry_run=dry_run)
 
 
 def _overseer(
@@ -700,10 +705,10 @@ def _derive(ctx: Context, tick_id: int, log: logs.TickAdapter) -> list[phases.De
 
 
 def _derive_requests(ctx: Context, tick_id: int, log: logs.TickAdapter) -> None:
-    """Derive what the harness would do with each of the operator's open review requests, and record it (DESIGN §30).
+    """Derive what the harness does with each of the operator's open review requests, and record it (DESIGN §30).
 
-    In shadow: the overseer still decides every request, and only `canopy agreement` reads what this records. What it
-    raises is logged, never the tick's outcome.
+    The harness acts on those it takes (`loop.harness_reviews`); the rest are the overseer's, with this in shadow.
+    What it raises is logged, never the tick's outcome.
     """
     try:
         derived = requested_reviews.derive(ctx, datetime.now(UTC))
@@ -729,6 +734,17 @@ def _harness_decides(ctx: Context, tick_id: int, derived: Iterable[phases.Derive
         return
     if decided:
         log.info("harness decided", extra={"tickets": [d.key for d in decided]})
+
+
+def _harness_answers_requests(ctx: Context, tick_id: int, log: logs.TickAdapter, *, dry_run: bool) -> None:
+    """Record the harness's waits on the operator's review requests it takes, and end those that end (DESIGN §37).
+
+    Before the overseer, which is not shown them. What it raises is logged, never the tick's outcome.
+    """
+    try:
+        harness_reviews.decide(ctx, tick_id, dry_run=dry_run, log=log)
+    except Exception as e:
+        log.exception("the harness's answers to review requests raised", extra={"error": str(e)})
 
 
 def _spawn(ctx: Context, tick_id: int, log: logs.TickAdapter) -> None:
