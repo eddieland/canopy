@@ -8,8 +8,9 @@ may have been carried out, so a caller knows whether sending it again could do i
 A request is sent again, after each of `Retry.pauses`, when that cannot do it twice: when it never left, or when the
 service refused it and said how long to wait (a 429, or a refusal naming `Retry-After`) for no longer than
 `Retry.longest_wait`. A request its caller marks `again`, as a read is, is also sent again when it may have been
-carried out: a server error, or a reply that broke off or is not JSON when JSON was asked for. A request that timed out
-is never sent again: it has spent its timeout once already, which a connector's run cannot spend many times over.
+carried out: a server error, or a reply that broke off or is not JSON when JSON was asked for, or that reports a failure
+of the service's own though its status is a success. A request that timed out is never sent again: it has spent its
+timeout once already, which a connector's run cannot spend many times over.
 
 It honors the environment's proxy (`HTTPS_PROXY`) and certificates (`SSL_CERT_FILE`), as urllib did: an operator
 behind a proxy reaches the service through it, which sees the request as it would any other of theirs.
@@ -66,6 +67,8 @@ class HttpError(Exception):
         self.certain = certain
         self.status = status
         self.wait = wait
+        #: How many times the request was sent before it was given up on.
+        self.tries = 1
 
 
 class RefusedError(HttpError):
@@ -88,7 +91,10 @@ class UntrustedError(HttpError):
 
 
 class FailedError(HttpError):
-    """The service may have carried it out: it answered with a server error, or its reply broke off or is not JSON."""
+    """The service may have carried it out: it answered with a server error, or its reply broke off or is not JSON.
+
+    So is a success whose JSON its caller's `failed` reads as a failure of the service's own.
+    """
 
 
 class TimedOutError(HttpError):
@@ -178,8 +184,12 @@ class Client:
         params: Mapping[str, str] | None = None,
         headers: Mapping[str, str] | None = None,
         again: bool = False,
+        failed: Callable[[object], str | None] | None = None,
     ) -> object:
         """Send one request as `send` does, whose reply must be JSON: one that is not fails the try, as a page does.
+
+        `failed` reads the parsed reply and names a failure the service reports in a success, as GitHub's GraphQL API
+        does for a query it could not run; that try fails as a server error does, so `again` sends it again.
 
         Returns:
             The reply, parsed.
@@ -196,7 +206,7 @@ class Client:
             headers=headers,
             defaults={"Accept": "application/json"},
         )
-        return self._retrying(request, again=again, read=self._parse)
+        return self._retrying(request, again=again, read=lambda reply: self._parse(reply, failed))
 
     def _retrying[T](self, request: httpx2.Request, *, again: bool, read: Callable[[Reply], T]) -> T:
         """Send `request` and `read` its reply, and again after each pause while what went wrong allows it.
@@ -205,15 +215,18 @@ class Client:
             What `read` makes of the service's 2xx reply.
 
         Raises:
-            HttpError: It failed, or `read` raised one, each time it was sent.
+            HttpError: It failed, or `read` raised one, each time it was sent; its `tries` says how many times.
         """
         pauses = list(self._retry.pauses)
+        tries = 0
         while True:
+            tries += 1
             try:
                 return read(self._once(request))
             except HttpError as e:
                 wait = self._wait(e, pauses, again=again)
                 if wait is None:
+                    e.tries = tries
                     raise
                 time.sleep(wait)
 
@@ -288,20 +301,24 @@ class Client:
             raise RateLimitedError(message, certain=True, status=status, wait=wait)
         raise RefusedError(message, certain=True, status=status)
 
-    def _parse(self, reply: Reply) -> object:
-        """`reply` as JSON.
+    def _parse(self, reply: Reply, failed: Callable[[object], str | None] | None) -> object:
+        """`reply` as JSON, which `failed`, if given, finds no failure in.
 
         Returns:
             It, parsed.
 
         Raises:
-            FailedError: It is not JSON, as a service's error page answered with a 200 is not.
+            FailedError: It is not JSON, as a service's error page answered with a 200 is not, or `failed` named one.
         """
         try:
-            return json.loads(reply.text)
+            parsed: object = json.loads(reply.text)
         except json.JSONDecodeError as e:
             quote = f"{self.name}'s error page" if reply.page else reply.text[:MAX_QUOTE]
             raise FailedError(f"{self.name}'s reply is not JSON: {quote}", certain=False, status=reply.status) from e
+        why = None if failed is None else failed(parsed)
+        if why is not None:
+            raise FailedError(why, certain=False, status=reply.status)
+        return parsed
 
     def _wait(self, error: HttpError, pauses: list[float], *, again: bool) -> float | None:
         """How long to wait before sending again after `error`, taking a pause from `pauses`; None to send no more.

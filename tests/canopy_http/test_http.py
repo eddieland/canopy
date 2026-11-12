@@ -179,6 +179,23 @@ def test_a_reply_that_is_not_json_is_a_failed_try() -> None:
     assert tries() == 1
 
 
+def test_a_success_its_caller_reads_as_a_failure_is_a_failed_try() -> None:
+    failure = Answer(body=b'{"errors": ["down"]}')
+
+    def failed(parsed: object) -> str | None:
+        return "it failed" if isinstance(parsed, dict) and "errors" in parsed else None
+
+    with serving(failure, Answer()) as origin:
+        assert Client(origin, name="Svc", retry=QUICK).json("POST", "/", again=True, failed=failed) == {"ok": True}
+    with serving(failure) as origin, pytest.raises(FailedError, match=r"^it failed$") as given_up:
+        Client(origin, name="Svc", retry=QUICK).json("POST", "/", again=True, failed=failed)
+    assert not given_up.value.certain
+    assert (given_up.value.tries, tries()) == (3, 3)
+    with serving(failure) as origin, pytest.raises(FailedError) as once:
+        Client(origin, name="Svc", retry=QUICK).json("POST", "/", failed=failed)
+    assert (once.value.tries, tries()) == (1, 1)
+
+
 def test_a_request_that_never_left_is_sent_again_even_a_write() -> None:
     with serving(Answer()) as origin:
         pass

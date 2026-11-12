@@ -26,12 +26,16 @@ TIMEOUT_SECONDS = 30
 MERGE_INFO_PREVIEW = "application/vnd.github.merge-info-preview+json"
 # How much of a comment's or review's body is printed. canopy bounds what it records again.
 MAX_BODY = 8000
-#: How long a query GitHub answered with a server error, such as its unicorn page, or whose reply was cut off, waits
-#: before each new try: one try, then one more for each pause. A mutation is sent again only when it never left or
-#: GitHub refused it for its rate limit, as one GitHub failed to answer may have been carried out (canopy-http).
+#: How long a query GitHub answered with a server error, such as its unicorn page, or whose reply was cut off, or that
+#: GitHub failed to run, waits before each new try: one try, then one more for each pause. A mutation is sent again
+#: only when it never left or GitHub refused it for its rate limit, as one GitHub failed to answer may have been
+#: carried out (canopy-http).
 RETRY_PAUSES: Sequence[float] = (1.0, 3.0)
 # How much of GitHub's reply an error quotes.
 _MAX_REPLY = 500
+# How GitHub's GraphQL API starts the error it answers a query it failed to run with, most often one that ran past its
+# time limit, though it answers with a 200. The rest names when, and the request ID GitHub's support asks for.
+_FAILED_TO_RUN = "Something went wrong while executing your query"
 # A query, which reads and so may be sent again, as a mutation may not: the operation each document names first.
 _QUERY = re.compile(r"\s*query\b")
 _HOST = r"[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?(?::[0-9]{1,5})?"
@@ -73,8 +77,9 @@ class GitHubError(Exception):
 class ServerError(GitHubError):
     """GitHub answered with a server error, as when it shows its unicorn, or with what is not JSON, or broke off.
 
-    It may have carried the request out, so it is never `certain`. A query too heavy to answer in time gets one, and so
-    does one whose connection was reset, closed, or cut off before its reply came whole.
+    It may have carried the request out, so it is never `certain`. A query too heavy to answer in time gets one, whether
+    as a 502 or as the error GitHub's GraphQL API answers a query it failed to run with, and so does one whose
+    connection was reset, closed, or cut off before its reply came whole.
     """
 
 
@@ -223,23 +228,23 @@ class Client:
     def ask(self, document: str, variables: Mapping[str, object], *, retry: bool = True) -> Reply:
         """Send one query, which GitHub may answer in part: an error about one field leaves the rest of `data`.
 
-        A query GitHub answers with a server error, or whose reply breaks off, is sent again, after each of
-        `RETRY_PAUSES`, unless `retry` is false.
+        A query GitHub answers with a server error, or whose reply breaks off, or that GitHub failed to run, is sent
+        again, after each of `RETRY_PAUSES`, unless `retry` is false.
 
         Returns:
             The reply's `data`, and its errors.
 
         Raises:
-            ServerError: GitHub answered with a server error, or its reply broke off or is not JSON, a query each time
-                it was sent.
+            ServerError: GitHub answered with a server error, or its reply broke off or is not JSON, or it failed to run
+                the query, each time it was sent.
             GitHubError: GitHub refused it whole, or could not be reached.
         """
         again = retry and _QUERY.match(document) is not None
         request = {"query": document, "variables": dict(variables)}
         try:
-            parsed = self._http.json("POST", self._url, body=request, again=again)
+            parsed = self._http.json("POST", self._url, body=request, again=again, failed=_failed_to_run)
         except canopy_http.FailedError as e:
-            raise ServerError(str(e), certain=False) from e
+            raise ServerError(f"{e} (sent {e.tries} times)" if e.tries > 1 else str(e), certain=False) from e
         except canopy_http.HttpError as e:
             raise GitHubError(str(e), certain=e.certain) from e
         body = obj(parsed, "reply")
@@ -248,6 +253,27 @@ class Client:
         if errors and not isinstance(data, dict):
             raise GitHubError(refusal(errors), certain=True, types=error_types(errors))
         return Reply(obj(data, "data"), tuple(errors))
+
+
+def _failed_to_run(parsed: object) -> str | None:
+    """What GitHub said of a query it failed to run, as one past its time limit fails, though it answered with a 200.
+
+    The error is GitHub's, not a refusal of the query or of the token, so the try fails as a server error does: a query
+    is sent again, and a mutation may have been carried out. GitHub's words are kept, as they hold its request ID.
+
+    Returns:
+        Why the try failed, or None when GitHub ran the query.
+    """
+    if not isinstance(parsed, dict):
+        return None
+    errors = items(obj(parsed, "reply").get("errors"))
+    said = [m for e in errors if isinstance(m := e.get("message"), str) and m.startswith(_FAILED_TO_RUN)]
+    if not said:
+        return None
+    why = "; ".join(said)[:_MAX_REPLY]
+    return (
+        f"GitHub failed to run the query, likely a timeout or a brief outage on its side, not a matter of access: {why}"
+    )
 
 
 @dataclass(frozen=True)
