@@ -188,6 +188,7 @@ def test_a_chore_run_records_its_findings(canopy_env: CanopyEnv, chores: Path, a
             {history.SERVER: history.SERVER_COMMAND, reports.SERVER: reports.SERVER_COMMAND},
             cwd=canopy_env.root.absolute(),
             version=canopy_env.runtime,
+            disabled=(),
         )
         assert {name: agent["env"].get(name) for name in given} == given
         prompt = agent["argv"][-1]

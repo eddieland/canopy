@@ -865,7 +865,15 @@ def _run_agent(
     served: dict[str, Sequence[str]] = {cards.SERVER: cards.SERVER_COMMAND}
     if run["kind"] in (policy.PLAN, policy.FEEDBACK_PLAN):
         served[git_tools.SERVER] = git_tools.command({s.repo: s.path for s in slots})
-    env |= servers.env(served, version=ctx.config.runtime.version, cwd=ctx.workspace.root.absolute()) | reports.env()
+    env |= (
+        servers.env(
+            served,
+            version=ctx.config.runtime.version,
+            cwd=ctx.workspace.root.absolute(),
+            disabled=ctx.config.runtime.mcp_servers.disabled_for(_role(run)),
+        )
+        | reports.env()
+    )
     env |= commit_hooks.env(
         snapshot,
         marks,
@@ -1797,6 +1805,11 @@ def _release(ctx: Context, run: sqlite3.Row, slots: Collection[_Slot], log: logs
         tidied = tidied and ok
     if tidied:
         tidy.remove_objects(objects, log)
+
+
+# The role a run's agent is, as config names it: a plan's is the planner's (DESIGN §25).
+def _role(run: sqlite3.Row) -> agent_models.Role:
+    return "planner" if run["kind"] in (policy.PLAN, policy.FEEDBACK_PLAN) else "worker"
 
 
 def _objects(ctx: Context, run: sqlite3.Row) -> Path:

@@ -108,6 +108,16 @@ worker_timeout_minutes = 45
 # overseer = "provider/model"
 # chore = "provider/model"      # every chore without a model of its own
 
+# Optional: MCP servers of your runtime config that canopy's runs never start, such as ones an agent never uses that
+# are slow to start; your own sessions still start them. `disabled` holds for every role; a role's own table, with the
+# roles of [runtime.models], takes its place for that role. Not the tracker's server but for the overseer, nor the
+# artifact store's for a role that publishes. `canopy agents` lists what each agent's runs keep out
+# (docs/GETTING_STARTED.md).
+# [runtime.mcp_servers]
+# disabled = ["figma", "bigquery"]
+# [runtime.mcp_servers.worker]
+# disabled = ["figma"]
+
 [loop]
 # `canopy loop` waits this long after each tick ends. Every tick runs the overseer, so this sets its spend.
 interval_minutes = 15

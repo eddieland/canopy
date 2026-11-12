@@ -14,11 +14,12 @@ from __future__ import annotations
 import threading
 from typing import TYPE_CHECKING
 
+from canopy.runtime import servers
 from canopy.runtime.agents import AgentOffer
 from canopy.runtime.implementation import one, pick, two
 
 if TYPE_CHECKING:
-    from collections.abc import Collection, Mapping, Sequence
+    from collections.abc import Collection, Iterable, Mapping, Sequence
     from pathlib import Path
 
     from canopy.infra import procs
@@ -33,17 +34,20 @@ def offerings(
     cwd: Path,
     definitions_dir: Path,
     agents: Sequence[str],
+    disabled: Iterable[str] = (),
 ) -> Offerings:
     """Ask the runtime `version` runs what it offers each of `agents`, started in `cwd` with canopy's definitions.
 
-    The definitions are in `definitions_dir`.
+    The definitions are in `definitions_dir`. The runtime is started with the operator's servers `disabled` names
+    turned off, as each run is (`servers.env`), so it says they are.
 
     Returns:
         The MCP servers and skills the runtime has, and what each agent is offered of them; `error` set, and nothing
         else, when the runtime could not list them, and an agent's `error` when its rules could not be read.
     """
     implementation = pick(version, one.offerings, two.offerings)
-    return implementation.offerings(runner, cwd=cwd, definitions_dir=definitions_dir, agents=agents)
+    env = servers.env({}, version=version, cwd=cwd, disabled=disabled)
+    return implementation.offerings(runner, cwd=cwd, definitions_dir=definitions_dir, agents=agents, env=env)
 
 
 def skills(
@@ -53,18 +57,21 @@ def skills(
     cwd: Path,
     definitions_dir: Path,
     agents: Collection[str],
+    disabled: Iterable[str] = (),
 ) -> Skills:
     """Ask the runtime `version` runs every skill it finds, started in `cwd` with canopy's definitions.
 
     The definitions are in `definitions_dir`, and `agents` are canopy's, which a runtime whose plugins load them waits
-    on. Cheaper than `offerings`: no agent's rules are read.
+    on. Cheaper than `offerings`: no agent's rules are read. The operator's servers `disabled` names are turned off,
+    as in `offerings`, so the runtime does not start them to answer.
 
     Returns:
         Each skill as the runtime read it, its description, file, and text, sorted by name; only `error` when the
         runtime could not list them.
     """
     implementation = pick(version, one.offerings, two.offerings)
-    return implementation.skills(runner, cwd=cwd, definitions_dir=definitions_dir, agents=agents)
+    env = servers.env({}, version=version, cwd=cwd, disabled=disabled)
+    return implementation.skills(runner, cwd=cwd, definitions_dir=definitions_dir, agents=agents, env=env)
 
 
 class Probe:

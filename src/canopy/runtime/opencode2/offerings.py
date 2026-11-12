@@ -5,8 +5,8 @@ definitions say alone. OpenCode 2 has no command that prints the merge reliably:
 background service, and a private server answers before its plugins, canopy's definitions among them, have loaded, with
 no agent and no skill. So canopy starts `opencode serve` itself, on a port of the system's choosing, with a password of
 its own, and asks it through `opencode api --server`: `agent.list` until the agents have loaded, then `skill.list`,
-and `config.get` for the MCP servers, of which only their names, `disabled`, and `codemode` are read, since the rest
-may hold a secret. Then it stops the server.
+and `config.get` for the MCP servers, of which only their names, `type`, `disabled`, `enabled`, and `codemode` are
+read, since the rest may hold a secret. Then it stops the server.
 
 From those this applies OpenCode's own rules, read from its source at 2.1.2: an agent's rules are `{action, resource,
 effect}`, the last whose action and resource both match decides, and only a deny with the resource `*` keeps a tool from
@@ -122,7 +122,11 @@ class _Skills(BaseModel):
 class _McpServer(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
 
+    #: None for an entry that only turns a server on or off (`_merged`), which alone is no server.
+    type: StrictStr | None = None
     disabled: StrictBool = False
+    #: OpenCode 1's shape of the switch, which such an entry may set alone; None when it does not.
+    enabled: StrictBool | None = None
     codemode: StrictBool = True
 
 
@@ -164,15 +168,24 @@ class _FailedError(Exception):
     """The server could not be started, asked, or understood."""
 
 
-def offerings(runner: procs.Runner, *, cwd: Path, definitions_dir: Path, agents: Sequence[str]) -> Offerings:
+def offerings(
+    runner: procs.Runner,
+    *,
+    cwd: Path,
+    definitions_dir: Path,
+    agents: Sequence[str],
+    env: Mapping[str, str] | None = None,
+) -> Offerings:
     """Ask OpenCode what it offers each of `agents`, started in `cwd` with canopy's definitions in `definitions_dir`.
+
+    It is started with `env` too, when given, as a run is given its servers (`canopy.runtime.servers`).
 
     Returns:
         The servers and skills OpenCode has, and what each agent is offered of them; with `error` set, and nothing
         else, when they could not be listed, and an agent's `error` set when OpenCode has no such agent.
     """
     try:
-        loaded = _load(runner, _OPENCODE, cwd, {CONFIG_DIR_ENV: str(definitions_dir)}, agents)
+        loaded = _load(runner, _OPENCODE, cwd, {**(env or {}), CONFIG_DIR_ENV: str(definitions_dir)}, agents)
     except _FailedError as e:
         return Offerings(error=str(e))
     return Offerings(
@@ -183,16 +196,24 @@ def offerings(runner: procs.Runner, *, cwd: Path, definitions_dir: Path, agents:
     )
 
 
-def skills(runner: procs.Runner, *, cwd: Path, definitions_dir: Path, agents: Collection[str]) -> Skills:
+def skills(
+    runner: procs.Runner,
+    *,
+    cwd: Path,
+    definitions_dir: Path,
+    agents: Collection[str],
+    env: Mapping[str, str] | None = None,
+) -> Skills:
     """Ask OpenCode every skill it finds, started in `cwd` with canopy's definitions in `definitions_dir`.
 
-    The server is asked once `agents`, canopy's, have loaded, which says its plugins have loaded the definitions.
+    The server is asked once `agents`, canopy's, have loaded, which says its plugins have loaded the definitions. It is
+    started with `env` too, when given.
 
     Returns:
         Each skill as the server read it; only `error` when it could not list them.
     """
     try:
-        loaded = _load(runner, _OPENCODE, cwd, {CONFIG_DIR_ENV: str(definitions_dir)}, agents)
+        loaded = _load(runner, _OPENCODE, cwd, {**(env or {}), CONFIG_DIR_ENV: str(definitions_dir)}, agents)
     except _FailedError as e:
         return Skills(error=str(e))
     return Skills(loaded.skill_files)
@@ -367,14 +388,33 @@ def _loaded(client: _Client, wanted: Collection[str]) -> _Loaded:
     servers: dict[str, _McpServer] = {}
     for entry in entries:
         mcp = entry.info.mcp if entry.info is not None else None
-        # A later definition of a server replaces an earlier one whole.
-        servers.update(mcp.servers if mcp is not None else {})
+        for name, server in (mcp.servers if mcp is not None else {}).items():
+            merged = _merged(servers.get(name), server)
+            if merged is not None:
+                servers[name] = merged
     files = {s.id: SkillFile(s.id, s.description, s.path, s.content) for s in reversed(skills)}
     return _Loaded(
         agents={agent.id: agent.permissions for agent in agents},
         skill_files=tuple(files[name] for name in sorted(files)),
         servers=servers,
     )
+
+
+def _merged(earlier: _McpServer | None, later: _McpServer) -> _McpServer | None:
+    """The server that a later document's entry `later` leaves, over `earlier`, as OpenCode merges them.
+
+    A definition, with its type, replaces an earlier one whole: each document's is lowered with its own `enabled`. An
+    entry of `enabled` alone, as a run's inline config turns off a server of the operator's, is merged into the
+    definition before it; with none before it, OpenCode ignores it, an entry without a type, and it is no server.
+
+    Returns:
+        The server as merged, or None when there is still none.
+    """
+    if later.type is not None:
+        return later
+    if earlier is None or later.enabled is None:
+        return earlier
+    return earlier.model_copy(update={"disabled": not later.enabled})
 
 
 def _entries(printed: str) -> tuple[_Entry, ...]:
