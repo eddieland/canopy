@@ -30,7 +30,7 @@ export function Field({
         <>
             <dt className="panel-label">{label}</dt>
             <dd
-                className={cn('min-w-0 break-words', mono ? 'font-mono text-xs break-all' : 'text-sm', className)}
+                className={cn('min-w-0 wrap-break-word', mono ? 'font-mono text-xs break-all' : 'text-sm', className)}
                 {...props}
             >
                 {children}

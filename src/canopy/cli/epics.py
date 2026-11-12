@@ -367,7 +367,7 @@ def _show_reached(reached: epic_changes.Reached) -> None:
     for what, keys in (
         ("Plans superseded as stale, to be planned again", reached.stale),
         ("Implements held until you approve the plan again or ask for a new one (epic_changed)", reached.held),
-        ("Left as they are, each told at its next plan", reached.told),
+        ("Left as they are, each told at its next run", reached.told),
     ):
         if keys:
             click.echo(f"{what}: {', '.join(keys)}")

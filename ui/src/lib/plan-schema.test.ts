@@ -1,3 +1,4 @@
+import { within } from '@testing-library/react'
 import { Editor } from '@tiptap/core'
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -135,6 +136,14 @@ describe('planExtensions', () => {
     it('keeps a table', () => {
         const markdown = open('| File | Why |\n| --- | --- |\n| a.py | rows |').getMarkdown()
         expect(markdown).toContain('| a.py | rows |')
+    })
+
+    it("names a table's head cells as its columns' heads, and writes the table back as it was", () => {
+        const markdown = '| Key | Default |\n| --- | --- |\n| `retry.limit` | 4 |'
+        const editor = open(markdown)
+        const heads = within(editor.view.dom).getAllByRole('columnheader')
+        expect(heads.map((head) => head.textContent)).toEqual(['Key', 'Default'])
+        expect(editor.getMarkdown()).toContain('| `retry.limit` | 4')
     })
 
     it('keeps HTML and images as their characters, never as markup', () => {

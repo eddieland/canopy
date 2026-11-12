@@ -1,0 +1,244 @@
+# serializer version: 1
+# name: test_canopy_sessions_sizes_json_is_the_measurement
+  dict({
+    'canopy': list([
+      dict({
+        'archived': 0,
+        'name': 'overseer',
+        'sessions': 1,
+        'subagents': 0,
+      }),
+      dict({
+        'archived': 0,
+        'name': 'workers',
+        'sessions': 1,
+        'subagents': 2,
+      }),
+      dict({
+        'archived': 1,
+        'name': 'plans',
+        'sessions': 1,
+        'subagents': 0,
+      }),
+      dict({
+        'archived': 0,
+        'name': 'chores',
+        'sessions': 0,
+        'subagents': 0,
+      }),
+      dict({
+        'archived': 0,
+        'name': 'reviews',
+        'sessions': 0,
+        'subagents': 0,
+      }),
+      dict({
+        'archived': 0,
+        'name': 'tasks',
+        'sessions': 0,
+        'subagents': 0,
+      }),
+      dict({
+        'archived': 0,
+        'name': 'epics',
+        'sessions': 0,
+        'subagents': 0,
+      }),
+      dict({
+        'archived': 0,
+        'name': 'state_dir',
+        'sessions': 1,
+        'subagents': 0,
+      }),
+    ]),
+    'contentless_delete': '<contentless_delete>',
+    'cuts': list([
+      dict({
+        'chars': 56,
+        'cut': 'said',
+        'indexes': list([
+          dict({
+            'build_seconds': '<measured>',
+            'found': dict({
+              'seconds': '<measured>',
+              'sessions': 2,
+            }),
+            'positions': True,
+            'size_bytes': '<measured>',
+          }),
+          dict({
+            'build_seconds': '<measured>',
+            'found': dict({
+              'seconds': '<measured>',
+              'sessions': 2,
+            }),
+            'positions': False,
+            'size_bytes': '<measured>',
+          }),
+        ]),
+        'parts': list([
+          'title',
+          'sent',
+          'wrote',
+          'summary',
+        ]),
+        'rows': 5,
+        'scan': dict({
+          'seconds': '<seconds>',
+          'sessions': 2,
+        }),
+      }),
+      dict({
+        'chars': 68,
+        'cut': 'did',
+        'indexes': list([
+          dict({
+            'build_seconds': '<measured>',
+            'found': dict({
+              'seconds': '<measured>',
+              'sessions': 3,
+            }),
+            'positions': True,
+            'size_bytes': '<measured>',
+          }),
+          dict({
+            'build_seconds': '<measured>',
+            'found': dict({
+              'seconds': '<measured>',
+              'sessions': 3,
+            }),
+            'positions': False,
+            'size_bytes': '<measured>',
+          }),
+        ]),
+        'parts': list([
+          'title',
+          'sent',
+          'wrote',
+          'given',
+          'summary',
+        ]),
+        'rows': 7,
+        'scan': dict({
+          'seconds': '<seconds>',
+          'sessions': 3,
+        }),
+      }),
+      dict({
+        'chars': 98,
+        'cut': 'read',
+        'indexes': list([
+          dict({
+            'build_seconds': '<measured>',
+            'found': dict({
+              'seconds': '<measured>',
+              'sessions': 5,
+            }),
+            'positions': True,
+            'size_bytes': '<measured>',
+          }),
+          dict({
+            'build_seconds': '<measured>',
+            'found': dict({
+              'seconds': '<measured>',
+              'sessions': 5,
+            }),
+            'positions': False,
+            'size_bytes': '<measured>',
+          }),
+        ]),
+        'parts': list([
+          'title',
+          'sent',
+          'wrote',
+          'reasoning',
+          'given',
+          'returned',
+          'summary',
+        ]),
+        'rows': 11,
+        'scan': dict({
+          'seconds': '<seconds>',
+          'sessions': 5,
+        }),
+      }),
+    ]),
+    'databases': 1,
+    'earlier_only': 0,
+    'error': None,
+    'outside': list([
+      dict({
+        'archived': 1,
+        'name': '/home/me/notes',
+        'sessions': 3,
+        'subagents': 0,
+      }),
+      dict({
+        'archived': 0,
+        'name': '/work/web',
+        'sessions': 1,
+        'subagents': 0,
+      }),
+    ]),
+    'passed_over': 0,
+    'record_bytes': '<record_bytes>',
+    'skipped_rows': 0,
+    'skipped_sessions': 0,
+    'sqlite_version': '<sqlite_version>',
+    'status': 'found',
+    'text': list([
+      dict({
+        'canopy_chars': 4,
+        'canopy_rows': 1,
+        'outside_chars': 11,
+        'outside_rows': 1,
+        'part': 'title',
+      }),
+      dict({
+        'canopy_chars': 39,
+        'canopy_rows': 2,
+        'outside_chars': 18,
+        'outside_rows': 1,
+        'part': 'sent',
+      }),
+      dict({
+        'canopy_chars': 23,
+        'canopy_rows': 2,
+        'outside_chars': 0,
+        'outside_rows': 0,
+        'part': 'wrote',
+      }),
+      dict({
+        'canopy_chars': 0,
+        'canopy_rows': 0,
+        'outside_chars': 11,
+        'outside_rows': 1,
+        'part': 'reasoning',
+      }),
+      dict({
+        'canopy_chars': 8,
+        'canopy_rows': 1,
+        'outside_chars': 4,
+        'outside_rows': 1,
+        'part': 'given',
+      }),
+      dict({
+        'canopy_chars': 17,
+        'canopy_rows': 2,
+        'outside_chars': 2,
+        'outside_rows': 1,
+        'part': 'returned',
+      }),
+      dict({
+        'canopy_chars': 0,
+        'canopy_rows': 0,
+        'outside_chars': 0,
+        'outside_rows': 0,
+        'part': 'summary',
+      }),
+    ]),
+    'words': list([
+      'login',
+    ]),
+  })
+# ---

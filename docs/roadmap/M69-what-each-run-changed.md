@@ -31,15 +31,17 @@ its own go-ahead.
   paths; `--diff` prints the run's own change, for a pager. Garbage collection removes the files after `run_files_days`
   with the run's others (§26), a task run's files, which the pass leaves alone today, joining it, and the rows never:
   the range is how a later run, a kick, or the operator tells which commits were whose.
-- **Stage 2, shown.** The run's page gets a Diff panel of what the run changed, drawn by the diff panels a review's page
-  has (`DiffPanels`, D121), a joint run's one per repository, with a toggle to the branch against its base; an
-  `unpushed` run's says its diff is of work not on origin, and a run whose diff was not kept says so rather than showing
-  nothing. A run shown a checklist shows each kept stretch (#2071) under its Checklist panel, the diff of what it pushed
-  after the list, so the answers and the fix are read together. The PR's page shows its threads on the kept diff of the
-  latest run that pushed under every `trust.review_replies` setting, not only `approve`, since the diff is now always
-  there, and its runs list says each run's range. A task run's page shows its diff as a worker run's does. The ticket's
-  page runs list says each run's range in short commits, linking to the run. The CLI's surface is `canopy show`, above.
-  Guide pages: runs, pull requests, checklists, and tasks; screenshots of the run's and the PR's page.
+- **Stage 2, shown.** The run's page gets a Diff panel of what the run changed, a joint run's one per repository: a
+  summary of its range and the files and lines it touched, counted at the run's end, with the run's own diff, drawn by
+  the diff panels a review's page has (`DiffPanels`, D121), read only when the operator opens it, and a link to the PR's
+  page for the branch against its base; an `unpushed` run's says its diff is of work not on origin, and a run whose diff
+  was not kept says so rather than showing nothing. A run shown a checklist shows each kept stretch (#2071) under its
+  Checklist panel, the diff of what it pushed after the list, so the answers and the fix are read together. The PR's
+  page shows its threads on the kept diff of the latest run that pushed under every `trust.review_replies` setting, not
+  only `approve`, since the diff is now always there, and its runs list says each run's range. A task run's page shows
+  its diff as a worker run's does. The ticket's page runs list says each run's range in short commits and its lines
+  added and removed, opening the run at that repository's diff. The CLI's surface is `canopy show`, above. Guide pages:
+  runs, pull requests, checklists, and tasks; screenshots of the run's and the PR's page.
 - **Stage 3, the commits.** As stage 1 records the range, the run also records the commits in it, from `git log` of the
   two, bounded: each one's id, its subject, cut and every hidden character named as a tracker comment's is (§22),
   whether it carries canopy's trailer and the runtime's (T5), and whether the harness's fallback push, not the worker,
@@ -95,12 +97,45 @@ real use in `MEASUREMENTS.md`: the disk the kept diffs take per run and per day,
 the operator's word on whether the run's page replaced GitHub's compare for judging a run. Stage 3, once built: the PR's
 page lists the branch's commits run by run, kicks between them, matching `git log` of the branch.
 
-Status: in progress. Stage 1 built 2026-11-06 against the fakes: `_run` and `_task` record a `run_changes` row per
-slot after the push check and before a kick, keep `<id>.<repo>.change.diff` and the branch's `<id>.<repo>.diff` with its
-head for every run, mark an unpushed slot's last commit, record a crashed run's row as having read nothing, and print
-it all in `canopy show run:ID` and `task:N`, with `--diff` for the run's own change; garbage collection takes the new
-files with the run's others, a task run's too, and a checklist's stretches, which a pass had removed as unrecorded.
-Chosen conservatively, for the operator to change: the branch's diff is still the one file §29's PR page reads, so a
-PR's page under `post` shows its threads on it from now on; a run reconcile closes, and a plan run, records nothing; a
-run that crashes after its slots were read is recorded as having read nothing, its kept files left to garbage
-collection; `task:N --diff` prints the newest of its runs that recorded one.
+Status: in progress. Stage 1 built 2026-11-06 against the fakes: `_run` and `_task` record a `run_changes` row per slot
+after the push check and before a kick, keep `<id>.<repo>.change.diff` and the branch's `<id>.<repo>.diff` with its head
+for every run, mark an unpushed slot's last commit, record a crashed run's row as having read nothing, and print it all
+in `canopy show run:ID` and `task:N`, with `--diff` for the run's own change; garbage collection takes the new files
+with the run's others, a task run's too, and a checklist's stretches, which a pass had removed as unrecorded. Chosen
+conservatively, for the operator to change: the branch's diff is still the one file §29's PR page reads, so a PR's page
+under `post` shows its threads on it from now on; a run reconcile closes, and a plan run, records nothing; a run that
+crashes after its slots were read is recorded as having read nothing, its kept files left to garbage collection; `task:N
+--diff` prints the newest of its runs that recorded one. Stage 2 in part, 2026-11-07, against the fakes: a worker run's
+page, and a task run's, has a Diff panel per repository after its checklist, a summary of the range, the files, and
+their lines, which `git diff --numstat` counts as the run ends and `run_changes` and `run_change_files` keep (migration
+0012), so the page reads no diff file; `Show diff` reads the run's own diff from an endpoint of its own, once, and a
+link opens the PR's page for the branch against its base, the toggle to it dropped on the operator's review, since the
+two were the same diff for every run that started on its base. An unpushed slot is marked not on origin, a diff not kept
+says why or that retention removed it, and an ended run of a kind that records says it recorded nothing; a ticket's runs
+list names each run's range with its lines added and removed, opening the run at that repository's diff (the stretches
+under the checklist came 2026-11-06). The mock's runs 39, 40, and 37 and task 1's run show the states, so the
+screenshots of `workspace/runs/39`, `tasks/1/runs/1`, and the attention page, whose ticket shows its runs list, are to
+be taken again. The PR's page, 2026-11-09, against the fakes, which ends stage 2: its threads sit on the kept diff
+of the latest run that pushed under every `trust.review_replies` setting, which needed no change past stage 1's, so
+the build is the tests that hold it and the mock's ABC-130, whose `resume` worked under `post` and drafted nothing,
+on PR 61; with no diff kept, the page names the latest run that left its work on origin and why it kept none, in its
+Diff panel's words; its runs list names each run's range in the PR's repository alone, a joint run's other repository
+being its own PR's. The mock's run 45 now counts its change, so the screenshot of PR 88's page, whose runs list and
+threads panel both change, is to be taken again. Stage 3, 2026-11-10, against the fakes: as stage 1 reads the range,
+`_run` and `_task` log its commits, the newest 100 a row each in `run_commits` and all counted on `run_changes`
+(migration 0015), each with its subject cut and every hidden character named, whether it carries canopy's trailers and
+prefix and another co-author's, and whether the push check's own push put it on origin, which the check now reports;
+the note for a commit that lacks a mark stays. `canopy show run:ID` and `task:N` list them for the operator, and tell
+an agent reading the run, through `show-run` or inside a tick, only how many there were, since a subject is a worker's
+text. A run's page lists them under its Diff panel's files, each opening its page on GitHub through the PR's URL, and
+a PR's runs list puts each run's commits there under its range, with the kick canopy pushed after it, as the branch's
+history. Chosen conservatively, for the operator to change: another co-author is any `Co-authored-by` trailer canopy
+did not form, since canopy knows no runtime's; a commit counts as canopy's push when the push check pushed it, never a
+kick's copy, which the kick's line names. The mock's runs 39 and 45 and task 1's run carry commits, so the screenshots
+of `workspace/runs/39`, `tasks/1/runs/1`, and PR 88's page are to be taken again. Stage 4 waits for its own go-ahead,
+after stages 1 to 3 have been in real use. Live check next: this milestone's Accept, stage 3's line included.
+Measured 2026-11-10 (MEASUREMENTS "2026-11-10: M69, the disk canopy's files take"): the journal's diff tables take about
+160 KiB for the 78 runs with changes recorded since 2026-11-09, and garbage collection does not count the kept diff
+files apart from the run's others. The operator's word (2026-11-10): a run's Diff page did replace GitHub's compare view
+for judging a run. A follow-up, not a blocker: its UI and UX still need polish, for example with Impeccable. Not yet
+measured: the kept diffs' disk per run and per day, how many runs kept none and why, and a full week of it.

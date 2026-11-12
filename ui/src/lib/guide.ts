@@ -167,6 +167,7 @@ export const PAGE_GUIDES = {
     '/reports/checklist': 'reports#the-checklist-page',
     '/reports/health': 'reports#the-health-page',
     '/reports/ci': 'reports#the-ci-page',
+    '/reports/connectors': 'reports#the-connectors-page',
     '/reports/reviews': 'reports#the-reviews-page',
     '/reports/plans': 'reports#the-plans-page',
     '/memory': 'memory',
@@ -289,20 +290,6 @@ export function anchor(text: string): string {
 
 /** The fence's language that makes a code block of the guide a diagram, drawn by mermaid (D131). */
 export const DIAGRAM_FENCE = 'mermaid'
-
-/**
- * A diagram's name, from its source's `accTitle:` line: the picture's alternative text, which every diagram in the
- * guide has, since an image says nothing to a screen reader on its own.
- */
-export function diagramTitle(lines: readonly string[]): string | undefined {
-    for (const line of lines) {
-        const title = /^\s*accTitle\s*:\s*(?<title>.+?)\s*$/u.exec(line)?.groups?.['title']
-        if (title !== undefined) {
-            return title
-        }
-    }
-    return undefined
-}
 
 /** A line's text with its markup dropped: what a heading's anchor and a page's title are made from. */
 export function plainText(line: Line<GuidePiece>): string {

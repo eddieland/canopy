@@ -139,7 +139,7 @@ export function AppShell() {
                         over its border. */}
                             <span
                                 aria-hidden
-                                className="aurora pointer-events-none absolute inset-x-0 -bottom-px opacity-90"
+                                className="pointer-events-none aurora absolute inset-x-0 -bottom-px opacity-90"
                             />
                             <div className="flex items-center gap-2.5">
                                 <LiveMark stream={stream.status} />
@@ -195,7 +195,7 @@ export function AppShell() {
                                 <LoopDownBand />
                                 <NoticeBanner />
                                 <ViewTransition update={{ [IN_PAGE]: 'none', default: 'auto' }}>
-                                    <div className="stagger mx-auto flex max-w-[112rem] flex-col gap-6">
+                                    <div className="mx-auto flex max-w-shell stagger flex-col gap-6">
                                         <Outlet />
                                     </div>
                                 </ViewTransition>

@@ -30,19 +30,21 @@ const WASH: Record<Tone, string> = {
  * One counter. Its value keeps a fixed width and rolls when it changes, and it shows a skeleton only until the first
  * data arrives. Its test id is `counter-` and the label's first word, unless `testId` names one. The line under the
  * value is its children, and a counter given none has no line: one whose line would repeat what the page says
- * elsewhere.
+ * elsewhere. The line is cut to fit, whole in its tip, unless `wrap` lets it wrap, for a line whose end says which.
  */
 export function Counter({
     label,
     value,
     tone,
     testId,
+    wrap = false,
     children,
 }: {
     label: string
     value: number | string | undefined
     tone: Tone
     testId?: string
+    wrap?: boolean
     children?: ReactNode
 }) {
     return (
@@ -56,11 +58,13 @@ export function Counter({
             data-testid={`counter-${testId ?? label.toLowerCase().split(/[ ,]+/u)[0]}`}
         >
             <span className="panel-label">{label}</span>
-            <span className="readout h-8 text-3xl leading-8 font-medium">
+            <span className="h-8 readout text-3xl leading-8 font-medium">
                 {value === undefined ? <Skeleton className="h-7 w-12" /> : <RollingNumber value={String(value)} />}
             </span>
             {/* Cut to fit, so a line that grows with the workspace (pools unread) is whole in its tip. */}
-            {children === undefined ? null : (
+            {children === undefined ? null : wrap ? (
+                <span className="text-xs text-muted-foreground">{children}</span>
+            ) : (
                 <Clipped text={typeof children === 'string' ? children : ''} className="text-xs text-muted-foreground">
                     {children}
                 </Clipped>

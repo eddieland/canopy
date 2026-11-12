@@ -1,17 +1,29 @@
 """The reports, as the API sends them (DESIGN §11), by the backend's clock.
 
 What each local calendar month cost and got done, how the last days' runs ended, as `canopy health` reads them, what
-CI did on the PRs canopy observed, where their review feedback came from, and how plans were approved.
+CI did on the PRs canopy observed, where their review feedback came from, how plans were approved, and how each
+connector's runs ended.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from itertools import starmap
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, Literal, assert_never, cast
 
-from canopy.core import ci, db, health, plan_metrics, plan_report, review_report, runtime_sessions, spend
+from canopy.core import (
+    ci,
+    connector_runs,
+    db,
+    health,
+    plan_metrics,
+    plan_report,
+    review_report,
+    runtime_sessions,
+    spend,
+)
 from canopy.core.config import CANOPY_REVIEWER
+from canopy.core.vocab import ConnectorRunStatus, SourceKind
 from canopy.serve import monthly
 from canopy.serve.schema.ci import (
     CiCheck,
@@ -23,6 +35,17 @@ from canopy.serve.schema.ci import (
     CiPrevious,
     CiPullRequest,
     CiReport,
+)
+from canopy.serve.schema.connector_report import (
+    ConnectorKind,
+    ConnectorsDay,
+    ConnectorsPrevious,
+    ConnectorsRefusal,
+    ConnectorsReport,
+    ConnectorsRun,
+    ConnectorsSource,
+    ConnectorsSourceRuns,
+    ConnectorStatus,
 )
 from canopy.serve.schema.health import (
     HealthAsk,
@@ -74,6 +97,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from datetime import datetime, timedelta
 
+    from canopy.core import records
     from canopy.core.context import Context
     from canopy.core.vocab import PlannerApproval
     from canopy.serve.backend import Backend
@@ -223,6 +247,48 @@ def ci_report(backend: Backend, ctx: Context, days: int) -> CiReport:
             red=before.red,
             fixes=len(before.fixes),
             fixes_green=before.fixes_green,
+        ),
+    )
+
+
+def connectors_report(backend: Backend, ctx: Context, days: int) -> ConnectorsReport:
+    """How each source's runs of the last `days` local days ended, by the backend's clock, and each source now.
+
+    Returns:
+        The report, with `connect.max_age_minutes` and `retention.journal_days` beside it.
+    """
+    now = backend.clock()
+    # One snapshot, so a run recorded between the reads is in all of them or none.
+    with db.read_snapshot(ctx.conn):
+        sources = connector_runs.statuses(ctx.conn, ctx.config, now)
+        found = connector_runs.report(ctx.conn, ctx.config, now, days)
+        before = connector_runs.between(ctx.conn, ctx.config, *spend.window_before(found.since, days))
+    return ConnectorsReport(
+        days=found.days,
+        since=db.parse_time(found.since),
+        until=db.parse_time(found.until),
+        max_age_minutes=ctx.config.connect.max_age_minutes,
+        journal_days=ctx.config.retention.journal_days,
+        sources=[_connector_source(s) for s in sources],
+        runs=[_source_runs(s) for s in found.sources],
+        per_day=[ConnectorsDay(day=d.day, start=db.parse_time(d.start), short=list(d.short)) for d in found.per_day],
+        newest=[_connector_run(r) for r in found.newest],
+        refusals=[
+            ConnectorsRefusal(
+                source=r.source,
+                line=r.line,
+                lines=r.lines,
+                runs=r.runs,
+                last_at=db.parse_time(r.last_at),
+            )
+            for r in found.refusals
+        ],
+        previous=ConnectorsPrevious(
+            since=db.parse_time(before.since),
+            until=db.parse_time(before.until),
+            runs=before.runs,
+            short=before.short,
+            refused=before.refused,
         ),
     )
 
@@ -509,6 +575,85 @@ def _counts(found: Mapping[spend.Kind, int]) -> HealthCounts:
         reviews=found.get("reviews", 0),
         tasks=found.get("tasks", 0),
     )
+
+
+def _connector_source(found: connector_runs.SourceStatus) -> ConnectorsSource:
+    latest = found.latest
+    return ConnectorsSource(
+        name=found.name,
+        kind=_kind(found.kind),
+        run_id=None if latest is None else latest.id,
+        tick_id=None if latest is None else latest.tick_id,
+        status=None if latest is None else _status(latest.status),
+        ended_at=None if latest is None else db.parse_time(latest.ended_at),
+        missed=None if latest is None else latest.missed,
+        oldest_at=_time(found.oldest),
+        never=found.never,
+        stale=found.stale,
+        through=found.through,
+    )
+
+
+def _source_runs(found: connector_runs.SourceRuns) -> ConnectorsSourceRuns:
+    return ConnectorsSourceRuns(
+        source=found.source,
+        kind=_kind(found.kind),
+        runs=found.runs,
+        ticks=found.ticks,
+        polls=found.polls,
+        ok=found.ok,
+        partial=found.partial,
+        failed=found.failed,
+        median_minutes=found.median_minutes,
+        p90_minutes=found.p90_minutes,
+        longest_minutes=found.longest_minutes,
+        limit_minutes=found.limit_minutes,
+        recorded=dict(found.recorded),
+        refused=dict(found.refused),
+    )
+
+
+def _connector_run(found: records.ConnectorRun) -> ConnectorsRun:
+    started = db.parse_time(found.started_at)
+    return ConnectorsRun(
+        id=found.id,
+        source=found.source,
+        kind=_kind(found.kind),
+        tick_id=found.tick_id,
+        started_at=started,
+        minutes=max((db.parse_time(found.ended_at) - started).total_seconds() / 60, 0.0),
+        status=_status(found.status),
+        missed=found.missed or "",
+        stderr=found.stderr,
+    )
+
+
+# A source's kind as the API names it.
+def _kind(kind: SourceKind) -> ConnectorKind:
+    match kind:
+        case SourceKind.TRACKER:
+            return "tracker"
+        case SourceKind.VCS:
+            return "vcs"
+        case SourceKind.ARTIFACTS:
+            return "artifacts"
+        case SourceKind.SLACK:
+            return "slack"
+        case _:
+            assert_never(kind)
+
+
+# How a source's run ended, as the API names it.
+def _status(status: ConnectorRunStatus) -> ConnectorStatus:
+    match status:
+        case ConnectorRunStatus.OK:
+            return "ok"
+        case ConnectorRunStatus.PARTIAL:
+            return "partial"
+        case ConnectorRunStatus.FAILED:
+            return "failed"
+        case _:
+            assert_never(status)
 
 
 def _fix(found: ci.Fix) -> CiFix:

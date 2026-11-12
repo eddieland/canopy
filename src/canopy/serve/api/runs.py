@@ -1,7 +1,8 @@
-"""The runs (DESIGN §8), each one's session transcript and its log's end, and the answer to a running run's question.
+"""The runs (DESIGN §8), each one's session transcript and its log's end, and the operator's words to a running run.
 
 The transcript and the log are untrusted text. The answer is the operator's to the question a running run's card asks
-(§41), as `canopy reply run:ID LETTER` gives it.
+(§41), as `canopy reply run:ID LETTER` gives it; a message is the operator's own words to it (§44), as `canopy reply
+run:ID "..."` sends one.
 """
 
 from __future__ import annotations
@@ -15,8 +16,8 @@ from canopy.core import conversation
 from canopy.infra import logs
 from canopy.serve import views
 from canopy.serve.api.deps import BackendDep
-from canopy.serve.api.refs import REFUSED, WEB, RefusedError, RunId, not_found
-from canopy.serve.schema import Answered, AnswerRequest, Run, RunsSince
+from canopy.serve.api.refs import REFUSED, WEB, RefusedError, RepoName, RunId, not_found
+from canopy.serve.schema import Answered, AnswerRequest, ReplyRequest, ReviewDiff, Run, RunMessaged, RunsSince
 from canopy.serve.schema.transcript import RawOutput, Transcript
 
 TAG = "runs"
@@ -84,6 +85,22 @@ def run_output(run_id: RunId, backend: BackendDep) -> RawOutput:
     return found
 
 
+# A kept diff, read on each request within a review's diff's bounds, when the run's page opens it (DESIGN §45).
+@router.get(
+    "/runs/{run_id}/changes/{repo}",
+    operation_id="getRunChange",
+    summary="Get the diff of what a run changed in a repository",
+    responses=not_found("diff of this run's change"),
+)
+def run_change(run_id: RunId, repo: RepoName, backend: BackendDep) -> ReviewDiff:
+    """The diff of the run's own change to `repo`, from the commit it started from to the one it left: untrusted."""
+    with backend.open() as ctx:
+        found = views.run_change_diff(ctx, run_id, repo)
+    if found is None:
+        raise HTTPException(status_code=404, detail=f"run {run_id} kept no diff of its change to {repo}")
+    return found
+
+
 @router.post("/runs/{run_id}/answers", operation_id="answerRun", summary="Answer a run's question", responses=REFUSED)
 def answer(run_id: RunId, body: AnswerRequest, backend: BackendDep) -> Answered:
     """`canopy reply run:ID LETTER`: the operator's answer to the question the running run's card asks.
@@ -91,6 +108,46 @@ def answer(run_id: RunId, body: AnswerRequest, backend: BackendDep) -> Answered:
     Refused `moved_on` when its card asks another question than the one asked at `asked_at`, which the page showed.
     """
     return answered(backend, conversation.Ref(conversation.RUN, str(run_id)), body)
+
+
+@router.post(
+    "/runs/{run_id}/messages",
+    operation_id="messageRun",
+    summary="Send a running run a message",
+    responses=REFUSED,
+)
+def message(run_id: RunId, body: ReplyRequest, backend: BackendDep) -> RunMessaged:
+    """`canopy reply run:ID "..."`: the operator's message to a running worker or planner, in their own words (§44).
+
+    Recorded on the run's ticket through the function the CLI calls, with its guards, and written where its agent hears
+    on its next tool call that a message waits. Refused `ended` for a run no longer running, whose ticket takes the
+    reply instead, `too_many` past the most a run takes, `bad_body` for an empty text or one too long, and `inside_run`
+    inside a tick or a run. Idempotent on the submission id: a retried submission records nothing new.
+    """
+    ref = conversation.Ref(conversation.RUN, str(run_id))
+    with backend.open() as ctx:
+        try:
+            replied = conversation.reply(
+                ctx.conn,
+                ref,
+                body.body,
+                channel=WEB,
+                submission=body.submission,
+                state_dir=ctx.state_dir,
+            )
+        except conversation.Refused as r:
+            raise RefusedError(r) from None
+    _log.info(
+        "run messaged",
+        extra={
+            "subject": str(ref),
+            "message_id": replied.message_id,
+            "new": replied.new,
+            "told": replied.told,
+            "channel": WEB,
+        },
+    )
+    return RunMessaged(message_id=replied.message_id, new=replied.new, told=replied.told)
 
 
 def answered(backend: BackendDep, ref: conversation.Ref, body: AnswerRequest) -> Answered:

@@ -3,6 +3,7 @@
 // page colors, and the one the loop enforces, the tick's free-space floor, comes with each disk.
 
 import type { Disk, DiskUse, HostResources } from '@/api/types'
+import type { Trend } from '@/lib/trend'
 
 /** How pressed a resource is: fine, worth a look, or past what canopy works with. */
 export type Pressure = 'ok' | 'high' | 'critical'
@@ -13,8 +14,13 @@ export interface Concern {
     what: 'disk' | 'memory' | 'load'
     /** How pressed it is: never `ok`. */
     pressure: Exclude<Pressure, 'ok'>
-    /** What is wrong, in a sentence: `412 MiB free where the workspace is, under the tick's floor of 2 GiB`. */
+    /**
+     * What is wrong and what it costs, in a sentence: `412 MiB free where the workspace is, under the tick's floor of
+     * 2 GiB: no tick runs the overseer`.
+     */
     text: string
+    /** The way out, in a sentence, a config key in backticks: `Free space there, or lower ...`. */
+    way: string
 }
 
 /** Each pressure's text color: muted while fine, as what waits on the operator, as what is broken. */
@@ -50,6 +56,8 @@ const MEMORY_CRITICAL = 0.05
 // is heading somewhere; never under half a process, so a machine of one or two cores does not flap on noise.
 const LOAD_TREND_SHARE = 0.1
 const LOAD_TREND_FLOOR = 0.5
+// The furthest ahead a disk's hour of readings is worth extrapolating: past a day, an hour's slope says nothing.
+const FILL_HORIZON_MS = 24 * 3_600_000
 const UNITS = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB'] as const
 
 /**
@@ -95,6 +103,14 @@ export function diskPressure(disk: Disk): Pressure {
     return disk.free < Math.max(2 * floor, DISK_HIGH) ? 'high' : 'ok'
 }
 
+/**
+ * The memory in use past which memory turns `high`, of `total` there is: what its graph draws a line at, as a disk's
+ * draws the tick's floor.
+ */
+export function memoryHighAt(total: number): number {
+    return total * (1 - MEMORY_HIGH)
+}
+
 /** How pressed memory is, by the share still available; fine when the operating system does not say. */
 export function memoryPressure(memory: HostResources['memory']): Pressure {
     if (memory.total === null || memory.available === null || memory.total <= 0) {
@@ -131,6 +147,10 @@ export function concerns(host: HostResources): Concern[] {
                 what: 'disk',
                 pressure,
                 text: `${bytesText(disk.free)} free where ${diskHolds(disk)} ${verb}${under}`,
+                way:
+                    under === ''
+                        ? 'Free space there before a build fills it.'
+                        : 'Free space there, or lower the floor, `loop.min_free_disk_mib`, if a tick needs less.',
             })
         }
     }
@@ -139,7 +159,10 @@ export function concerns(host: HostResources): Concern[] {
         found.push({
             what: 'memory',
             pressure: memory,
-            text: `${bytesText(host.memory.available ?? 0)} of ${bytesText(host.memory.total ?? 0)} memory available`,
+            text:
+                `${bytesText(host.memory.available ?? 0)} of ${bytesText(host.memory.total ?? 0)} memory available: ` +
+                'a new agent or build may swap',
+            way: 'It frees as the running builds end; fewer runs at once, `capacity.max_workers`, leaves each more.',
         })
     }
     if (loadPressure(host.cpu) !== 'ok') {
@@ -150,6 +173,7 @@ export function concerns(host: HostResources): Concern[] {
             text:
                 `load at ${percentText((host.cpu.load?.[1] ?? 0) / cores)} of ${cores} cores over five minutes: ` +
                 'work waits for a processor',
+            way: 'It eases as the busy processes end; fewer runs at once, `capacity.max_workers`, keeps it lower.',
         })
     }
     return found.toSorted((a, b) => Number(b.pressure === 'critical') - Number(a.pressure === 'critical'))
@@ -203,4 +227,26 @@ export function loadTrend(cpu: HostResources['cpu']): 'rising' | 'steady' | 'fal
     }
     const step = Math.max(LOAD_TREND_FLOOR, (cpu.cores ?? 0) * LOAD_TREND_SHARE)
     return one - fifteen >= step ? 'rising' : fifteen - one >= step ? 'falling' : 'steady'
+}
+
+/**
+ * How long until a disk is full at the rate its free space fell over `free`'s readings, first to last, in
+ * milliseconds: what a build wrote and cleared again in between is no trend. Null while it did not fall, or would
+ * last past a day, where an hour's fall is no guide.
+ */
+export function fillsIn(free: Trend): number | null {
+    const first = free.points[0]
+    const last = free.points.at(-1)
+    if (first === undefined || last === undefined || last.at <= first.at || last.value >= first.value) {
+        return null
+    }
+    const left = (last.value * (last.at - first.at)) / (first.value - last.value)
+    return left <= FILL_HORIZON_MS ? left : null
+}
+
+/** How long until a disk is full, as its row says it: `full in about 3 h at this rate`, or minutes under an hour. */
+export function fillsInText(ms: number): string {
+    const minutes = Math.max(1, Math.round(ms / 60_000))
+    const about = minutes < 60 ? `${minutes} min` : `${Math.round(minutes / 60)} h`
+    return `full in about ${about} at this rate`
 }

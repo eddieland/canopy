@@ -63,6 +63,9 @@ class PlanFile(Model):
     """The persona its planner wrote in, and its instructions; none for a run from before canopy recorded one."""
     path: str
     """The file, under the state directory: the operator reads and edits it with their own tools too."""
+    archive_name: str
+    """Its name as `canopy archive` exports it, `412-APPROVED-export-reports-as-csv.md`: what a copy saved from the page
+    is named, so one plan has one name whichever way it left."""
     text: str | None = None
     """Its Markdown, or none when the file is not a plan any more: `problem` says why."""
     problem: str | None = None
@@ -120,7 +123,10 @@ class TicketPlans(Model):
     """A ticket's plans: whether it needs one, the newest as its file stands, the earlier ones, and the comments."""
 
     needed: bool
-    """Whether its implement waits on an approved plan, by its own setting or `policy.plan`."""
+    """Whether its implement waits on an approved plan, by its own setting, `policy.plan`, or its epic's plan."""
+    trivial: str | None = None
+    """Why its epic's approved plan marks it trivial, each entry's reason, which skips its own plan under
+    `policy.plan` (DESIGN §43); none when it does not."""
     setting: Literal["plan", "skip"] | None = None
     """The operator's own word for this ticket, which overrides the policy; none to follow it."""
     policy: Literal["off", "approve"]

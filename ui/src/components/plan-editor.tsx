@@ -28,8 +28,10 @@ import {
 import { Fragment, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 
+import { PlanBlockActions } from '@/components/block-actions'
 import { Panel, PanelFooter, PanelHeader } from '@/components/panel'
 import { DecisionsJump, PlanDecisions } from '@/components/plan-decisions'
+import { PlanFileMenu } from '@/components/plan-file-menu'
 import { AskForChanges, DraftForm, PlanThreads, ThreadCard } from '@/components/plan-threads'
 import type { Draft, ThreadActions } from '@/components/plan-threads'
 import { Button } from '@/components/ui/button'
@@ -61,6 +63,7 @@ import { markSection, marksOn, planSections, usePlanMarks } from '@/lib/plan-mar
 import type { PlanSection, SectionMark } from '@/lib/plan-marks'
 import { planOutline, sectionAt } from '@/lib/plan-outline'
 import type { OutlineEntry } from '@/lib/plan-outline'
+import { printsAPlan } from '@/lib/plan-print'
 import { planExtensions } from '@/lib/plan-schema'
 import { usePlanText } from '@/lib/plan-text'
 import {
@@ -82,6 +85,8 @@ import { cn } from '@/lib/utils'
 const APPLE = isApple(navigator.userAgent)
 // A plan that asks no open decision, or none the page answers.
 const NO_DECISIONS: readonly PlanDecision[] = []
+// A plan whose caller keeps no picks: each of its decisions has the planner's choice.
+const NO_PICKS: ReadonlyMap<number, string> = new Map()
 // The selection's bubble, by its key, so opening a comment can hide it.
 const BUBBLE = new PluginKey('planBubble')
 // How far below the top of the page the editor keeps what it scrolls into view, in pixels: the sticky header's height,
@@ -129,6 +134,9 @@ export function PlanEditor({
     onAskForChanges,
     asked = false,
     decisions = NO_DECISIONS,
+    picks = NO_PICKS,
+    onPick,
+    decisionsTold,
     actions,
     renderActions,
     actionsNote,
@@ -137,6 +145,10 @@ export function PlanEditor({
     marks,
     comments = true,
     decides = editable,
+    name = 'plan',
+    file,
+    unsaved = false,
+    printLine,
 }: {
     /** The plan, as Markdown. Read when the editor opens. */
     markdown: string
@@ -157,10 +169,20 @@ export function PlanEditor({
     /** Whether the operator asked for changes no planner has read yet, so that asking again is said as such. */
     asked?: boolean
     /**
-     * The plan's open decisions (`planDecisions`), answered under it while it may be edited (`PlanDecisions`): an
-     * answer goes with the approval's notes and with Ask for changes. None while the plan waits on no answer.
+     * The plan's open decisions (`planDecisions`), answered under it while its foot offers the operator's word on it
+     * (`PlanDecisions`): an answer goes with the approval's notes and with Ask for changes. None while the plan waits
+     * on no answer.
      */
     decisions?: readonly PlanDecision[]
+    /**
+     * The option the operator picked for each of those, by its number, the caller's to keep (`usePlanPicks`): those
+     * other than the planner's choice are answers. The caller drops them once an action sent them.
+     */
+    picks?: ReadonlyMap<number, string>
+    /** Called with a decision and the letter picked for it. */
+    onPick?: (decision: PlanDecision, letter: string) => void
+    /** What the decisions say under their heading, where an answer goes with one action alone (`decisionsTold`). */
+    decisionsTold?: string | undefined
     /** The caller's own word on the plan, such as Approve, at the start of the plan's foot. */
     actions?: ReactNode
     /**
@@ -196,6 +218,20 @@ export function PlanEditor({
      * plan read only that still waits on the operator's word.
      */
     decides?: boolean
+    /** What a file saved from the plan, such as a diagram's picture, is named for: `ABC-102-plan-2`. */
+    name?: string
+    /**
+     * What the plan's Markdown is saved as, whole: the name `canopy archive` gives it, where it has one, and `name`
+     * with `.md` by default.
+     */
+    file?: string
+    /** Whether the page holds edits the plan's file does not have yet, which a copy of it then carries. */
+    unsaved?: boolean
+    /**
+     * Given, the plan is the one its page prints, under this line naming it (`printLine`): the page prints it alone,
+     * in the light theme (`src/lib/plan-print.ts`).
+     */
+    printLine?: string | undefined
 }) {
     const editor = useEditor({
         extensions: planExtensions([
@@ -232,9 +268,7 @@ export function PlanEditor({
     const [draft, setDraft] = useState<Draft | undefined>(undefined)
     // The note on the whole plan, which goes with Ask for changes or with Approve, whichever the operator presses.
     const [note, setNote] = useState('')
-    // The option picked for each of the plan's decisions, by its number: those other than the planner's choice are
-    // answers, which go with the note.
-    const [picks, setPicks] = useState<ReadonlyMap<number, string>>(new Map())
+    // The picks other than the planner's choice are answers, which go with the note.
     const answers = decisionAnswers(decisions, picks)
     // The open decisions' panel, under the plan, and the sticky header and foot it is brought into view between.
     const decisionsPanel = useRef<HTMLElement>(null)
@@ -259,6 +293,8 @@ export function PlanEditor({
             return {
                 // Where each found thread starts, in plan order: what the list's order and its `passage gone` follow.
                 starts: [...(highlights?.ranges ?? new Map<string, Range>())].map(([id, range]) => [id, range.from]),
+                // The words each thread found on a reworded passage was written on, which its card names.
+                reworded: [...(highlights?.reworded ?? new Map<string, string>())],
                 active: highlights?.active,
                 // Where the comment being written starts, which places it among the threads.
                 draftFrom: highlights?.draft?.from,
@@ -269,6 +305,7 @@ export function PlanEditor({
         },
     })
     const starts = new Map(seen.starts as [string, number][])
+    const reworded = new Map(seen.reworded)
     const ordered = inPlanOrder(threads, starts)
     const draftFrom = seen.draftFrom
     const draftAt =
@@ -344,6 +381,10 @@ export function PlanEditor({
         editor.view.dispatch(tr)
     }, [editor, threads])
 
+    // The page prints this plan alone, in the light theme, while it shows it.
+    const printed = printLine !== undefined
+    useEffect(() => (printed ? printsAPlan() : undefined), [printed])
+
     useEffect(() => {
         // Without `false`, Tiptap emits `update` as if the operator had edited, and the plan, serialized again in the
         // editor's own Markdown, would read as changed.
@@ -367,21 +408,6 @@ export function PlanEditor({
         setChanged(now.trimEnd() !== original)
         onChange?.(now)
     })
-    const onPassageClick = useEffectEvent(({ id }: { id: string }) => activate(id, false))
-    const onCommentKey = useEffectEvent(() => startComment())
-    useEffect(() => {
-        const edit = () => onEdit()
-        const click = (event: { id: string }) => onPassageClick(event)
-        const key = () => onCommentKey()
-        editor.on('update', edit)
-        editor.on('planThreadActivate', click)
-        editor.on('planCommentRequest', key)
-        return () => {
-            editor.off('update', edit)
-            editor.off('planThreadActivate', click)
-            editor.off('planCommentRequest', key)
-        }
-    }, [editor])
 
     // The open decisions brought fully into view, clear of the sticky header and foot as tall as they are now (the
     // header's modes wrap on a narrow page, and a note being written makes the foot taller), so measured rather than
@@ -417,6 +443,17 @@ export function PlanEditor({
         editor.view.dispatch(tr)
     }
 
+    // Puts the cursor back in the plan after `range`, a comment's passage, as a shared document does once a comment is
+    // sent, resolved, or put aside: the keyboard carries on in the plan rather than from the top of the page, where the
+    // focus falls when the control that had it goes. With no passage, the plan takes the focus where its cursor was.
+    function backToPlan(range: Range | undefined) {
+        if (range === undefined) {
+            editor.commands.focus()
+        } else {
+            editor.commands.focus(range.to)
+        }
+    }
+
     function cancelComment() {
         const range = highlightsKey.getState(editor.state)?.draft
         setDraft(undefined)
@@ -437,17 +474,6 @@ export function PlanEditor({
         onThreadsChange(addThread(threads, { id, anchor, body, at: new Date().toISOString() }))
         editor.view.dispatch(withHighlight(editor.state.tr, { kind: 'add', id, range }))
         backToPlan(range)
-    }
-
-    // Puts the cursor back in the plan after `range`, a comment's passage, as a shared document does once a comment is
-    // sent, resolved, or put aside: the keyboard carries on in the plan rather than from the top of the page, where the
-    // focus falls when the control that had it goes. With no passage, the plan takes the focus where its cursor was.
-    function backToPlan(range: Range | undefined) {
-        if (range === undefined) {
-            editor.commands.focus()
-        } else {
-            editor.commands.focus(range.to)
-        }
     }
 
     // What the operator did to thread `id` from its card, then the cursor back after its passage: looked up first, as
@@ -511,6 +537,26 @@ export function PlanEditor({
         }
     }
 
+    // What the editor says of itself: an edit, a passage clicked, and the keys that start a comment. Below the
+    // functions these call, not above: the React Compiler does not compile a component that calls a function declared
+    // further down from a closure made before it, and leaves the whole editor unmemoized (`react/invariant` and
+    // `react/todo` in the lint). `backToPlan` sits above the functions that call it for the same reason.
+    const onPassageClick = useEffectEvent(({ id }: { id: string }) => activate(id, false))
+    const onCommentKey = useEffectEvent(() => startComment())
+    useEffect(() => {
+        const edit = () => onEdit()
+        const click = (event: { id: string }) => onPassageClick(event)
+        const key = () => onCommentKey()
+        editor.on('update', edit)
+        editor.on('planThreadActivate', click)
+        editor.on('planCommentRequest', key)
+        return () => {
+            editor.off('update', edit)
+            editor.off('planThreadActivate', click)
+            editor.off('planCommentRequest', key)
+        }
+    }, [editor])
+
     const open = threads.filter((thread) => !thread.resolved).length
     // What an approval would carry to the implement, for the caller's actions (`renderActions`).
     const notes = approvalNotes(threads, starts, onAskForChanges ? note : '', answers)
@@ -529,7 +575,7 @@ export function PlanEditor({
     const onDraftLeave = () => backToPlan(highlightsKey.getState(editor.state)?.draft)
     // While the plan's open decisions sit under its last line, the foot says how many, and goes to them.
     const jump =
-        editable && decisions.length > 0 ? (
+        decides && decisions.length > 0 ? (
             <DecisionsJump decisions={decisions} picks={picks} onJump={goToDecisions} />
         ) : undefined
 
@@ -545,11 +591,16 @@ export function PlanEditor({
                     // The comments take up to 24rem of what the page leaves beside the plan, and no less than 20; with
                     // none, the plan keeps the measure it has beside them.
                     comments
-                        ? '@min-[60rem]:grid-cols-[minmax(0,51rem)_minmax(20rem,24rem)]'
-                        : 'grid-cols-[minmax(0,51rem)]',
+                        ? '@min-[60rem]:grid-cols-[minmax(0,var(--container-plan))_minmax(20rem,24rem)]'
+                        : 'grid-cols-[minmax(0,var(--container-plan))]',
                 )}
             >
-                <Panel>
+                <Panel data-print-plan={printed || undefined}>
+                    {printed && (
+                        <p data-print-line className="hidden text-sm text-muted-foreground print:block">
+                            {printLine}
+                        </p>
+                    )}
                     <PanelHeader ref={planHeader} label="Plan" sticky>
                         <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
                             {status}
@@ -579,6 +630,11 @@ export function PlanEditor({
                                 Markdown
                             </Toggle>
                             {!raw && <OutlineMenu editor={editor} ticket={marks} />}
+                            <PlanFileMenu
+                                markdown={() => source ?? editor.getMarkdown()}
+                                file={file ?? `${name}.md`}
+                                unsaved={unsaved}
+                            />
                         </span>
                         {editable && !raw && (
                             <FormatBar editor={editor} canComment={seen.selected} onComment={startComment} />
@@ -587,8 +643,10 @@ export function PlanEditor({
                     <EditorContent
                         editor={editor}
                         data-plan-text={planText}
+                        data-print-body
                         className={cn('px-6 py-4', showChanges && 'plan-changes', raw && 'hidden')}
                     />
+                    <PlanBlockActions owner={editor} name={name} />
                     {source !== undefined && (
                         <div className="px-6 py-4">
                             <textarea
@@ -601,14 +659,15 @@ export function PlanEditor({
                             />
                         </div>
                     )}
-                    {editable && decisions.length > 0 && (
+                    {decides && decisions.length > 0 && (
                         // Under the plan, above its foot: read after the plan, as its Decisions are written to be,
                         // and answered just over the actions that send the answers.
                         <PlanDecisions
                             ref={decisionsPanel}
                             decisions={decisions}
                             picks={picks}
-                            onPick={(decision, letter) => setPicks(new Map(picks).set(decision, letter))}
+                            onPick={(decision, letter) => onPick?.(decision, letter)}
+                            told={decisionsTold}
                         />
                     )}
                     {editable && (
@@ -652,11 +711,7 @@ export function PlanEditor({
                                             edited={edited || changed}
                                             asked={asked}
                                             answers={answers}
-                                            onAsk={(message) => {
-                                                onAskForChanges(message)
-                                                // Sent: the planner has them, and the next plan answers them.
-                                                setPicks(new Map())
-                                            }}
+                                            onAsk={onAskForChanges}
                                             line={actionsNote}
                                             lead={jump}
                                             note={note}
@@ -686,6 +741,7 @@ export function PlanEditor({
                         <PlanThreads
                             threads={ordered}
                             found={new Set(starts.keys())}
+                            reworded={reworded}
                             active={seen.active}
                             draft={draftFloats ? undefined : draft}
                             draftAt={draftAt}
@@ -723,7 +779,14 @@ export function PlanEditor({
             )}
             {!draftFloats && floating !== undefined && (
                 <div ref={float} data-testid="plan-float" className={FLOAT}>
-                    <ThreadCard thread={floating} lost={false} active editable={editable} {...threadActions} />
+                    <ThreadCard
+                        thread={floating}
+                        lost={false}
+                        reworded={reworded.get(floating.id)}
+                        active
+                        editable={editable}
+                        {...threadActions}
+                    />
                 </div>
             )}
         </div>
@@ -736,7 +799,18 @@ export function PlanEditor({
  * their characters and draws no link, so untrusted text stays text, as a plan's does. `markdown` is read once: other
  * text is a new `key`.
  */
-export function PlanDocument({ markdown, label }: { markdown: string; label: string }) {
+export function PlanDocument({
+    markdown,
+    label,
+    name,
+}: {
+    /** The document, as Markdown. Read when it opens. */
+    markdown: string
+    /** What a screen reader calls it. */
+    label: string
+    /** What a file saved from it, such as a diagram's picture, is named for: `task-4-report`. */
+    name: string
+}) {
     const editor = useEditor({
         extensions: planExtensions(),
         content: markdown,
@@ -751,14 +825,19 @@ export function PlanDocument({ markdown, label }: { markdown: string; label: str
         },
     })
     const planText = usePlanText()
-    return <EditorContent editor={editor} data-plan-text={planText} className="px-6 py-4" />
+    return (
+        <>
+            <EditorContent editor={editor} data-plan-text={planText} className="px-6 py-4" />
+            <PlanBlockActions owner={editor} name={name} />
+        </>
+    )
 }
 
 // How many changes are marked, and buttons that step the cursor to the one before or after it.
 function ChangeSteps({ count, onStep }: { count: number; onStep: (step: 1 | -1) => void }) {
     return (
         <span className="flex items-center gap-0.5">
-            <span className="readout mr-1 text-xs text-muted-foreground">
+            <span className="mr-1 readout text-xs text-muted-foreground">
                 {count} {count === 1 ? 'change' : 'changes'}
             </span>
             <Button
@@ -805,6 +884,9 @@ function OutlineMenu({ editor, ticket }: { editor: Editor; ticket: string | unde
     const marking = sections.length > 0
     const [chose, setChose] = useState(false)
     const [reading, setReading] = useState<number | undefined>(undefined)
+    // The heading last gone to, by its position and words: on a page too short to scroll a late section to the top,
+    // the line that says which section is read never reaches it, so while it is still in view it is the one read.
+    const went = useRef<Pick<OutlineEntry, 'pos' | 'text'> | undefined>(undefined)
 
     function headingAt(entry: OutlineEntry): HTMLElement | undefined {
         const dom = editor.view.nodeDOM(entry.pos)
@@ -818,7 +900,23 @@ function OutlineMenu({ editor, ticket }: { editor: Editor; ticket: string | unde
         return sectionAt(tops, page + TOOLBAR_CLEARANCE)
     }
 
+    // The section gone to last, while its heading is still on screen and the page has not scrolled past it to a later
+    // one; else the one the page has scrolled to.
+    function sectionRead(): number | undefined {
+        const scrolled = sectionInView()
+        // By its words as well as where it starts, since an edit above it moves where it starts.
+        const index = outline.findIndex((entry) => entry.pos === went.current?.pos && entry.text === went.current.text)
+        const heading = index === -1 ? undefined : headingAt(outline[index] as OutlineEntry)?.getBoundingClientRect()
+        const shown = heading !== undefined && heading.top >= 0 && heading.bottom <= globalThis.innerHeight
+        if (shown && (scrolled === undefined || scrolled < index)) {
+            return index
+        }
+        went.current = undefined
+        return scrolled
+    }
+
     function go(entry: OutlineEntry) {
+        went.current = { pos: entry.pos, text: entry.text }
         setChose(editor.isEditable)
         if (editor.isEditable) {
             // Inside the heading, at its start. The heading is scrolled to below, to the page's top rather than the
@@ -833,7 +931,7 @@ function OutlineMenu({ editor, ticket }: { editor: Editor; ticket: string | unde
             onOpenChange={(open) => {
                 if (open) {
                     setChose(false)
-                    setReading(sectionInView())
+                    setReading(sectionRead())
                 }
             }}
         >

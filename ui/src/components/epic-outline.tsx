@@ -34,7 +34,7 @@ export function OutlinePanel({ outline, className }: { outline: EpicOutline | nu
 function Ids({ label, ids, entries }: { label: string; ids: readonly EpicId[]; entries: readonly EpicEntry[] }) {
     return (
         <section className="flex flex-col gap-1 border-b py-2.5 last:border-b-0">
-            <h3 className="panel-label px-3">{label}</h3>
+            <h3 className="px-3 panel-label">{label}</h3>
             {ids.length === 0 ? (
                 <p className="px-3 text-sm text-muted-foreground">none</p>
             ) : (

@@ -126,13 +126,17 @@ class Reading:
     problem: Problem | None
 
 
-def needed(policy: str, setting: PlanSetting | None) -> bool:
+def needed(policy: str, setting: PlanSetting | None, *, trivial: bool = False) -> bool:
     """Whether a ticket waits on an approved plan before its implement (DESIGN §25, Which tickets are planned).
 
+    `trivial` is whether it is a trivial member of an epic (`epics.trivial`, DESIGN §43), whose approved plan stands
+    for its own.
+
     Returns:
-        True when its own setting asks for a plan, or it has none and `policy`, `policy.plan`, is `"approve"`.
+        True when its own setting asks for a plan, or it has none, `policy`, `policy.plan`, is `"approve"`, and it is
+        not a trivial member.
     """
-    return setting is PlanSetting.PLAN or (setting is None and policy == "approve")
+    return setting is PlanSetting.PLAN or (setting is None and policy == "approve" and not trivial)
 
 
 @dataclass(frozen=True)
@@ -285,8 +289,11 @@ def state_section(
     *,
     attempts: int,
     limit: int,
+    trivial: bool = False,
 ) -> PlanState | None:
     """Return a ticket's plan for the overseer's state block, or None when plans do not touch it.
+
+    `trivial` is whether it is a trivial member of an epic, which needs no plan of its own (`needed`).
 
     A ticket that needs no plan, has none, and had no plan run has no `plan` key, so with `policy.plan` off the block
     is as it was before plans (DESIGN §25). Nor has a ticket with a branch, which is never planned (`ask`): its plan,
@@ -295,7 +302,7 @@ def state_section(
     if ticket.branch:
         return None
     key = ticket.key
-    needed_now = needed(policy.plan, ticket.plan_setting)
+    needed_now = needed(policy.plan, ticket.plan_setting, trivial=trivial)
     newest = records.select(records.Plan).where("ticket_key = ?", key).order_by("id DESC").limit(1).one(conn)
     run = (
         records.select(records.Run)

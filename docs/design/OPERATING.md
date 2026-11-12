@@ -63,6 +63,9 @@ whether a `resume` for `ci` turned them green on the next head, whether a rerun 
 flaky check without anyone's say-so, how long each PR stayed red, approximate because it runs on when a source
 observed the runs, and whether flaky kicks (§23) came back red. A commit status has no run id, so canopy tells its runs
 apart by what it saw of the status at a head; a rerun that ended as the last did, seen only ended, is not counted.
+The Connectors page reads the sources' runs (§30) over the same local days, a tick's and each poll's alike: how each
+source's runs ended, how long they took against its timeout, the lines canopy refused, and each source now, as
+`canopy status` names it. It counts runs the attention list never shows, since only a tick's raises `connector_failed`.
 The Reviews page counts feedback as the monthly report does, by reviewer, trusted or not, with each first review's wait
 on GitHub's clock alone: a PR with no such time is counted apart, never given a proxy. Beside it, the feedback plans
 (§32) with how each was approved and the planner's estimate beside the resumes that followed, and canopy's own
@@ -121,8 +124,8 @@ the private file, and a workspace file that sets one is a config error naming th
 Whoever controls a shared workspace file (anyone who can push to the repository holding it) must not run commands,
 choose prompts or models, spend money, authorize anyone, decide what is said in the operator's name, or loosen a
 guard; every key that does is private (TRUST_MODEL T7). Among them are every `runtime`, `notify`, `connect`,
-`chores`, `review`, `serve`, `memory`, `paths`, `capacity`, `loop`, and `telemetry` key, the queue labels, the
-repliers and trusted reviewers, the comment marks and commit trailer, `trust.rebase`, and `trust.max_flaky_kicks`.
+`chores`, `review`, `serve`, `memory`, `paths`, `capacity`, `loop`, `sessions`, and `telemetry` key, the queue labels,
+the repliers and trusted reviewers, the comment marks and commit trailer, `trust.rebase`, and `trust.max_flaky_kicks`.
 Unknown keys are errors in every file, and a removed key is an error that says what to do instead.
 
 **The private file's provenance.** The private file is under the workspace root, which may be a checkout of a shared
@@ -233,6 +236,8 @@ Rules:
 - `canopy sandbox setup` copies the sandbox templates to the user config directory, never over one there, installs the
   pinned `srt`, and checks what needs root to install; it exits 1 while anything left would make the sandbox weaker
   than §24 says. It writes no config (D117).
+- `canopy sandbox check` tries, through the wrapper and the operator's worker template, what a sandboxed worker must
+  not do and what it must still do, in a worktree it makes and removes, and exits 1 where the sandbox did not hold.
 - Pool sizes (`capacity.slots_per_repo`, `[capacity.repo_slots]`) are private, so a team's map cannot grow the
   operator's disk use; unset leaves pools unmanaged (§18). `pools.backend` may be switched with runs in flight.
 - Remotes should be HTTPS with a credential helper: a sandboxed worker cannot reach the SSH agent socket. `canopy
@@ -296,14 +301,14 @@ collector adds up across canopy's many short processes, to `<state_dir>/metrics.
 
 ## 13. Agent runtime
 
-OpenCode: OpenCode 1 by default, or OpenCode 2, 2.1.4 or later, when `runtime.version` is 2. The harness depends on
-one capability: run a named agent non-interactively in a given cwd with a prompt and read its stdout. MCP connectivity,
-OAuth, and tool permissions are the runtime's job. The runtime is swappable by editing the command templates (§12) and
-the `runtime` package (§5). Its surface, which the rest of canopy calls, names no runtime, and holds what any runtime's
-output is bounded by; its implementations alone know OpenCode, one per major version: its events, the format of
-canopy's definitions, and the config files the shadowing check reads (D009). `runtime.version` chooses which one every
-call goes to, and the default templates are that version's. A new runtime is a new implementation beside them. No
-interface: one runtime at a time.
+OpenCode: OpenCode 2, 2.1.4 or later, by default, or OpenCode 1, deprecated, when `runtime.version` is 1. The harness
+depends on one capability: run a named agent non-interactively in a given cwd with a prompt and read its stdout. MCP
+connectivity, OAuth, and tool permissions are the runtime's job. The runtime is swappable by editing the command
+templates (§12) and the `runtime` package (§5). Its surface, which the rest of canopy calls, names no runtime, and
+holds what any runtime's output is bounded by; its implementations alone know OpenCode, one per major version: its
+events, the format of canopy's definitions, and the config files the shadowing check reads (D009). `runtime.version`
+chooses which one every call goes to, and the default templates are that version's. A new runtime is a new
+implementation beside them. No interface: one runtime at a time.
 
 Agent definitions ship in `agents/`:
 
@@ -341,11 +346,19 @@ it, which approves every one instead.
 
 ### What a run prints
 
-Every agent's output is read the same way, whether the template asks for plain text or JSON events. A JSON result
-contract (§8, §18, §19, §21) is the last line of the text that starts with `{`; lines after it that do not are passed
-over, since a runtime or plugin may print after the agent's last word. A last object that does not validate is no
-result: canopy never falls back to an earlier one, which may be an example the agent quoted or a result it took back.
-The overseer's done token is a plain line anywhere in its final message (§6).
+Every agent but the overseer reports its result by calling `result`, a tool of a server canopy gives its run: beside
+`status` (§41) for a worker, planner, reviewer, or task's worker, and beside a chore's history (§19). Its arguments are
+the result's fields (§8, §18, §19, §21, §25, §36), so the runtime writes the JSON, and the tool's input schema, not the
+prompt, says what each field holds: the fields of the run's kind, and those this run is asked for, such as memory's
+while a tier is on (§28). It refuses any other field, and a result that does not validate, while the agent can still
+send it again. The server writes nothing: the harness reads the last call the server took from the events the run
+prints, as it reads an update, holds it to the same input, and then checks it as untrusted (D026). So config refuses a
+template of these agents that does not ask for the runtime's events, and nothing an agent prints is its result. The
+definitions allow the tool by exact name (§27). A run that reports none is `unknown`.
+
+A chore that runs the operator's own command or agent prints its result instead, one JSON line, the last of its text
+that starts with `{`: a line that is not JSON only for a few closing brackets, outside any string, is read with them
+put right. The overseer's done token is a plain line anywhere in its final message (§6).
 
 From the events the harness also reads, each validated (D026), the session id, the cost, the context used, and the
 tool calls by tool, a skill's by the skill it loaded, and records them on the tick or run (§11) with the digest of the
@@ -382,7 +395,8 @@ theirs: their MCP servers, providers, and rules reach every run, as they would t
 - `canopy-worker`, `canopy-worker-private`, `canopy-planner`, and `canopy-reviewer` get, as their body, the fixed
   instructions of the prompt their run starts with: what is above its run marker, which holds nothing of one run's
   own, no ticket, slot, branch, or attempt. So every run of a kind under one config shares a body, a snapshot, and the
-  prefix the provider caches, as the overseer's ticks do (§33, The split). The run's message is the rest: `## Run`,
+  prefix the provider caches, as the overseer's ticks do: OpenCode caches an agent's tools and body apart from the
+  run's environment, a sandboxed run's included (MEASUREMENTS 2026-10-23). The run's message is the rest: `## Run`,
   with its values, then the sections only some runs get. A prompt without the marker, an older override's, or a
   template that runs an agent canopy does not ship, is sent whole as the message, and the definition keeps its stub.
 - Every definition gets the artifact store's MCP server denied whole, and an agent `artifacts.publish_roles` names its
@@ -402,10 +416,9 @@ that writes, a worker or the planner, loads a skill in the operator's home as it
 chores, which write nothing, may also read the files beside it.
 `runtime.pr_skill` names a skill workers open PRs with (§8); prefer that to a prompt override.
 
-canopy ships one plugin, `canopy.js`, whose jobs are a clock that tells a running agent the minutes left, a split under
-OpenCode 1 that lets an unsandboxed run's first call read its agent's tools and body from the provider's cache, which
-OpenCode 2 needs no split for, and, under OpenCode 2, holding a session's first prompt until its MCP tools are
-registered and explaining a call its permission rules refuse; they, and what OpenCode does with a plugin, are §33.
+canopy ships one plugin, `canopy.js`, whose jobs include a clock that tells a running agent the minutes left, holding
+a session's first prompt until its MCP tools are registered, and explaining a call its permission rules refuse; they,
+and what OpenCode does with a plugin, are §33.
 
 ### Each agent's model
 
@@ -473,6 +486,16 @@ The budget, the web UI's counters, and the spend breakdown's totals, the session
 are all agent spend: canopy's runs and the sessions outside canopy, each canopy session counted once, as its run, and
 each says when the sessions were last read, since with the loop stopped none is. Rejected:
 listing sessions through the runtime's commands, which list one project's top-level sessions only.
+
+The same read keeps each session's title, and whether the runtime archived it, while the private `sessions.search` is
+`titles`, so the operator can find one of their own among canopy's many: `canopy sessions` lists every session newest
+first, a subagent's under the one it ran for, the archived only when asked, or finds the newest whose title holds every
+word given. Those outside canopy are listed apart from canopy's, each with the command that reopens it in the runtime
+in its directory, and each of canopy's names the run that made it. A title is data: one line, bounded, nothing hidden
+in it, rendered as text and put in no prompt, and no tool serves the list to an agent. At `off`, the default, no title
+is read or kept; a directory the private `sessions.exclude` names keeps no title and is listed nowhere. A change to
+either drops, on the loop's next read, every title kept that the setting now keeps none of, and starts the read again
+from the first session, so every session is read as the setting now says.
 
 ### The operator's skill
 

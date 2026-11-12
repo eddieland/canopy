@@ -66,30 +66,22 @@ any OpenCode upgrade, and before relying on a permission they check.
   session id, and, for a failed run, its runtime error.
 - **S61. The clock** (M57). Give a worker a 5-minute `runtime.worker_timeout_minutes` and a toy ticket it cannot finish
   in that time, once unsandboxed and once under `canopy-sandbox`. Expect canopy's `[canopy]` line in its transcript in
-  its last minute, after a built-in tool's output and first in an MCP tool's result, the longer wording once, and a push
+  its last minute, first in a tool's result, a built-in's and an MCP tool's alike, the longer wording once, and a push
   before the kill; and no `node_modules` or `package.json` written into the snapshot. Then run it in a repository with a
   `.opencode/` directory, sandboxed with the registry refused, and time the wait before the session starts. Record the
   times in `MEASUREMENTS.md`. Then count, by kind, the runs that ended `timeout` over a week of real use, and how many
   pushed after canopy's line, against the same count for the runs on snapshots before the clock (M57's Stage 0), with
   each one's transcript read for edits after its last commit, the work the slot took with it.
-- **S65. The split** (#923). Confirmed against OpenCode's source (1.19.3), not in a run: the plugin finds where the
-  environment starts by the lines `session/system.ts` writes. With S40's recorder, unsandboxed, run two workers in two
-  slots, then two reviews, each pair within five minutes. Expect two system blocks in every request, the first the
-  agent's body alone and equal across the pair, each with a breakpoint; and the second run's first call reading the
-  tools and the body from the cache, writing only from the environment on. One system block means OpenCode changed those
-  lines: the split leaves the prompt as it was. Record the tables in `MEASUREMENTS.md`. Then, over a week of real use,
-  compare `canopy spend --json`'s first calls for the `workers`, `plans`, and `reviews` kinds on the snapshot with the
-  split against the one before it: expect `cold_share` to fall where unsandboxed runs of one kind start within five
-  minutes of each other, and no change otherwise, sandboxed runs' included. No fall at all means the split found no
-  boundary, or such runs are too rare for it to pay. Since each run's prompt splits at its run marker (DESIGN §13),
-  the body is its kind's fixed instructions, 1.6k to 2.4k tokens more than the stub it was: expect the pair's first
-  system block to hold them, and the second run's first call to write only its environment and its `## Run` message.
-  A snapshot is now a kind's and no longer one for every run, so compare each kind's first calls on its own.
 - **S70. Sandboxed runs keep you logged in** (M26). Confirmed in OpenCode's source (1.19.3), not in a run. With
   every agent command sandboxed (`docs/SANDBOX.md`) and an OAuth login in your OpenCode, a provider's and a remote
   MCP server's, run the loop past the login's expiry. Expect a run's log to say `canopy-sandbox: copied back the
   refreshed tokens of ...`, and your own OpenCode, and the overseer's, still logged in after. After an OpenCode
   upgrade, check that `auth.json` and `mcp-auth.json` still have the shapes `canopy_sandbox/credentials.py` names.
+- **S77. The sandbox holds on this machine** (M26). `canopy sandbox check` has run under `srt` 0.0.81 and bubblewrap
+  on Linux, in CI's canary and a cloud container, never on macOS. After `canopy sandbox setup`, a change to
+  `worker.json`, or an upgrade of canopy or the OS, run it from the workspace root. Expect the commit and the allowed
+  host `allowed`, every other line `refused`, exit 0, and nothing of the check's left in your home directory or the
+  repository.
 
 ## Before a release
 
@@ -135,6 +127,13 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
   commit. Expect canopy's wrap-up line once in its transcript, on the next tool call; the worker to push what it has,
   start nothing new, and print a result line naming what remains; and the run to end on its own, well before its
   timeout, with no attention item while the ticket stays stopped. Note how many tool calls it took to end.
+- **S76. A result reported by a tool call** (#2245, taken on request 2026-11-10). Run a toy ticket through a `plan`,
+  an `implement`, a review with findings, and a `resume` for it, then a one-off task and a chore of canopy's chore
+  agent, once under each runtime version and the workers once under `canopy-sandbox`, with memory and
+  `trust.review_replies = "approve"` on. Expect each agent to call its `result` tool last and once, with the fields its
+  run was asked for and no JSON printed, each run to end with the status it reported, and the resume's answers, the
+  drafts, and the notes recorded. Note a call the tool refused and what the agent did next, an agent that printed a
+  result instead, and one that went on working after its call was taken.
 
 ### Several repositories
 
@@ -155,6 +154,10 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
   keep its comments, with only those two values changed, and `~/.config/canopy/config.toml` untouched. Then try a
   count past its ceiling and adding a reviewer back by hand-crafting the request: expect each refused, naming its
   guard, and the files unchanged.
+- **S77. A task keeps to its own work** (M61). `canopy task submit --project <project>` a planning task whose text
+  names an existing ticket and the code it is about, and asks for a PR. Expect its branch under `task/`, its PR a
+  draft, each ticket it filed in that project with no queue label and named by `canopy show task:N`, and the ticket it
+  named, on the tracker, with nothing canopy wrote. These are the prompt's rules, not guards.
 
 ### Reviews
 
@@ -223,6 +226,23 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
   as logins, a bot's ending `[bot]`. Make an open issue of another repository block a watched one: expect a `partial`
   run naming it, and the ticket stale. Run it once on a GitHub Enterprise server too, `--repo <host>/<owner>/<name>`,
   where an older server without issue dependencies fails every read, naming the field.
+- **S78. An artifact's comments, back to the ticket** (M62). With `[artifacts]` naming a real store, Louvre or the
+  local one, have a public ticket's worker publish an artifact. As someone in `authorized_authors`, comment on a
+  passage: expect `canopy status` to name the `artifacts` source with an `ok` run, the comment in the ticket's
+  conversation quoting its passage, and a `resume` whose worker publishes a new version that answers it, replies, and
+  resolves the thread. As someone not listed, comment too: expect `untrusted_artifact_comment` on the attention list
+  and no dispatch until the operator replies on the ticket. Run it again after a change to the store's feed.
+
+### Running agents
+
+- **S79. A card's question, answered** (M65). On a toy ticket with a plan, have a worker ask a question on its card,
+  once sandboxed and once not. Expect the card in the web UI within the run's first minutes, its steps the plan's;
+  answer with a letter on the run's page, and expect the agent to hear it on its next tool call, as its transcript
+  shows, and go on with that option. Run it again after an OpenCode upgrade or a change to the sandbox's templates.
+- **S80. A message to a running worker** (M68). On a toy ticket, once sandboxed and once not, send a running worker a
+  message from the ticket's page that narrows the ticket. Expect it told on its next tool call, the message fetched, as
+  its transcript and `canopy show run:ID` show, and its PR to keep to the narrower scope. Over a week of real use,
+  count from `canopy show` how many messages were fetched before their run ended, and record it in `MEASUREMENTS.md`.
 
 ### What canopy keeps
 
@@ -264,11 +284,10 @@ Each records its numbers in `MEASUREMENTS.md`, as a dated section.
   as canopy does, with the operator's own HOME, so that the skills their home holds are listed as in a real run
   (2026-10-21 F52), and once more with `OPENCODE_DISABLE_EXTERNAL_SKILLS=1` for the rows that compare. Expect
   OpenCode's own prompt absent and the agent's body first; no schema for a tool a definition denies outright; and,
-  against the latest such section (2026-10-21), a difference only where the change made one. A body the split cannot
-  find means OpenCode moved it. Record the tables in `MEASUREMENTS.md`. After an OpenCode upgrade, record one agent
-  twice more, in two directories, unsandboxed, and compare the two requests as 2026-10-19's second section did: expect
-  them to share the tools and the body, which canopy's plugin splits from the rest (F50, S65), and nothing if it did
-  not (F48). Sandboxed, expect them to share nothing: the shell tool names each run's own `TMPDIR`.
+  against the latest such section (2026-10-21), a difference only where the change made one. Record the tables in
+  `MEASUREMENTS.md`. After an OpenCode upgrade, record one agent twice more, in two directories, and once more with a
+  `TMPDIR` of its own, as a sandboxed run has, and compare the requests as 2026-10-23's second section did: expect them
+  to share the tools and the body, each with a breakpoint of its own, and to differ only in the environment.
   Of the tracker's server, expect the overseer, the reviewer, and the chore sent only its read tools (Jira's 12 by
   default). Off a GitHub tracker, expect both workers and the planner sent none of GitHub's issue tools (`issue_read`,
   `issue_write`, `list_issues`, `search_issues`, `list_issue_types`, `list_issue_fields`, `get_label`; #436): about
@@ -378,3 +397,8 @@ Retired 2026-10-23. The overseer has no shell; it mirrors through a tool (M48).
 
 - **S4. A heredoc `canopy` command** (M19). No heredoc is left to admit: a comment's body is a field of the `mirror`
   tool.
+
+Retired 2026-11-11. The plugin's split was OpenCode 1's alone, and is gone with it.
+
+- **S65. The split** (#923). OpenCode 2 caches an agent's tools and body apart from the run's environment
+  (MEASUREMENTS 2026-10-23), so nothing is left to cut.

@@ -51,6 +51,11 @@ from your file in exactly the shape below, and records no plan it cannot read so
   changes, by their names in your message, `After` the entries it must follow, and `Trivial` is `no`, or `yes,` and
   why, as below. A list is ids or names separated by commas, or `none`. Every requirement is covered by some entry,
   each contract has an entry that provides it, and an entry that provides an interface comes before one that uses it.
+
+  With three entries or more, open the section, before its first entry, with a ```` ```mermaid ```` `flowchart` of
+  the order, which canopy draws for the operator: a node for each entry, its id and a few words of its title, and an
+  arrow to it from each entry its `After` names, labeled with any contract it uses from that one. It draws what the
+  fields say, and never adds to them.
 - `## Decisions`: each choice the goal left open, a `### Decision N: <the question>` heading numbered from 1, then its
   options as `-` items, lettered from A and each with its why: `- **A (chosen):** <option>: <why>` for the one the plan
   follows, exactly one, and `- **B:** <option>: <why you rejected it>` for each other.
@@ -90,11 +95,12 @@ report `failed` with a summary saying why.
 
 ## Result
 
-Your last line of stdout must be exactly one JSON object and nothing after it. Only `done` records a plan, and only
-when `{{PLAN_OUT}}` holds one canopy can read: not empty, at most {{MAX_PLAN_CHARS}} characters, and its ids and
-breakdown in the shape above. The summary is your report to the operator: what the plan proposes, in a paragraph.
+Report your result by calling `canopy_run_result`, as the last thing you do: its arguments say what each field holds.
+Nothing you print is read as your result. If the call is refused, fix what the refusal names and call it again; once it
+is taken, end your run.
 
-{"status":"done|blocked|failed","summary":"<your report, line breaks sparingly>","question":"<only when blocked>"}
+Only `done` records a plan, and only when `{{PLAN_OUT}}` holds one canopy can read: not empty, at most
+{{MAX_PLAN_CHARS}} characters, and its ids and breakdown in the shape above.
 
 <!-- canopy: run -->
 

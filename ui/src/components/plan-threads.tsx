@@ -13,6 +13,7 @@ import { Chip } from '@/components/status'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { usePending } from '@/hooks/use-pending'
+import { ATOM, collapse } from '@/lib/plan-anchors'
 import { COMMENT_LABELS, withLabel } from '@/lib/plan-comment-labels'
 import { changeRequest, MAX_COMMENT, MAX_REQUEST } from '@/lib/plan-threads'
 import type { PlanThread } from '@/lib/plan-threads'
@@ -26,6 +27,9 @@ const READ_MEANING =
 
 // A change request that answers none of the plan's decisions.
 const NO_ANSWERS: readonly string[] = []
+
+// The most of the words a reworded passage was written on that its chip's tip quotes.
+const MAX_WAS = 160
 
 /** A comment being written: the passage it is on and what it says so far. */
 export interface Draft {
@@ -67,6 +71,7 @@ export interface ThreadActions {
 export function PlanThreads({
     threads,
     found,
+    reworded,
     active,
     draft,
     draftAt,
@@ -84,6 +89,8 @@ export function PlanThreads({
     threads: PlanThread[]
     /** The ids of the threads whose passage is in the plan. */
     found: ReadonlySet<string>
+    /** For each thread found on a passage reworded since it was written, the words it was written on. */
+    reworded?: ReadonlyMap<string, string>
     /** The thread open, if any. */
     active: string | undefined
     /** The comment being written, if one is. */
@@ -118,6 +125,7 @@ export function PlanThreads({
                 key={thread.id}
                 thread={thread}
                 lost={!found.has(thread.id)}
+                reworded={reworded?.get(thread.id)}
                 active={thread.id === active}
                 editable={editable}
                 {...actions}
@@ -155,7 +163,7 @@ export function PlanThreads({
             )}
             {lost.map((thread) => card(thread))}
             {resolved.length > 0 && (
-                <Collapsible open={showResolved} onOpenChange={setShowResolved} className="border-t px-1 py-1">
+                <Collapsible open={showResolved} onOpenChange={setShowResolved} className="border-t p-1">
                     <Disclosure open={showResolved} what={`${resolved.length} resolved`} />
                     <CollapsibleContent className="-mx-1 mt-1 border-t">
                         {resolved.map((thread) => (
@@ -163,6 +171,7 @@ export function PlanThreads({
                                 key={thread.id}
                                 thread={thread}
                                 lost={!found.has(thread.id)}
+                                reworded={reworded?.get(thread.id)}
                                 active={false}
                                 editable={editable}
                                 {...actions}
@@ -315,11 +324,13 @@ const COMMENT = 'comment'
 
 /**
  * A thread's card: its passage quoted, the comment and its replies, and what can be done with it. The open one sits
- * on the accent's tint; `lost` marks one whose passage is gone from the plan.
+ * on the accent's tint; `lost` marks one whose passage is gone from the plan, and `reworded` one found on words much
+ * like those it was written on, which its chip's tip quotes.
  */
 export function ThreadCard({
     thread,
     lost,
+    reworded,
     active,
     editable,
     onActivate,
@@ -334,6 +345,8 @@ export function ThreadCard({
     thread: PlanThread
     /** Whether its passage is gone from the plan. */
     lost: boolean
+    /** The words it was written on, when its passage was found reworded: an open thread's alone. */
+    reworded?: string | undefined
     /** Whether it is the thread open. */
     active: boolean
     /** Whether the operator can reply, edit, resolve, and delete. */
@@ -347,6 +360,8 @@ export function ThreadCard({
     const idle = editable && editing === undefined && !replying && !deleting
     // An open thread a planner has read as it stands, which Approve's notes leave out.
     const read = !thread.resolved && thread.read === true
+    // A resolved thread finds only its exact words: one marked reworded was reworded while open, and is no longer news.
+    const moved = reworded !== undefined && !lost && !thread.resolved
     // An open thread's words can be edited while nothing else in its card is open.
     const startEdit = idle && !thread.resolved
     // Reply shows on the card that is open, as a shared document's does, so the rest stay short and near their
@@ -420,10 +435,11 @@ export function ThreadCard({
                     </div>
                 )}
             </div>
-            {(lost || thread.resolved || read) && (
+            {(lost || moved || thread.resolved || read) && (
                 // On a line of their own, so the quote keeps the width the actions leave it.
                 <div className="flex gap-1.5">
                     {lost && <Chip>passage gone</Chip>}
+                    {moved && <Chip word="passage reworded" meaning={rewordedMeaning(reworded)} />}
                     {thread.resolved && <Chip>resolved</Chip>}
                     {read && <Chip word="planner read" meaning={READ_MEANING} />}
                 </div>
@@ -519,6 +535,14 @@ export function ThreadCard({
     )
 }
 
+// What the `passage reworded` chip means, in its tip: the words the comment was written on, without the placeholders
+// an image or HTML tag stands as in the editor's text, cut to `MAX_WAS`.
+function rewordedMeaning(was: string): string {
+    const words = collapse(was.replaceAll(ATOM, ''))
+    const quote = words.length > MAX_WAS ? `${words.slice(0, MAX_WAS).trimEnd()}…` : words
+    return `The plan no longer has the words this was written on, so it sits on the closest match: “${quote}”`
+}
+
 // Deleting a thread asks first, in its place, as a shared document does, since nothing brings a thread back: Delete or
 // Keep. The focus goes to Keep, the choice that loses nothing, and Escape keeps it too.
 function ConfirmDelete({ replies, onDelete, onKeep }: { replies: number; onDelete: () => void; onKeep: () => void }) {
@@ -553,7 +577,7 @@ function ConfirmDelete({ replies, onDelete, onKeep }: { replies: number; onDelet
 function Quote({ text, onClick }: { text: string; onClick?: (() => void) | undefined }) {
     const css = cn(
         'line-clamp-2 min-w-0 flex-1 border-l-2 border-accent/60 pl-2 text-left text-xs text-muted-foreground',
-        'break-words',
+        'wrap-break-word',
     )
     if (onClick === undefined) {
         return (

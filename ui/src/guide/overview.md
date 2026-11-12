@@ -170,49 +170,73 @@ find a ticket you haven't opened yet. The list lives in your browser, not the jo
 ## System resources
 
 The machine the loop runs on, read every ten seconds while the page is open: it's the machine serving the page, since
-`canopy loop` serves it. Anything under pressure is listed first, in amber or red, then four counters: the load over
-five minutes, the memory in use, the free space on the fullest disk canopy writes to, and how long the loop has been
-up. The load is the processes running or waiting for a core, averaged; it reads as a share of your cores, so 100% is
-every core busy and past it work queues, and the header's card says whether it's rising or falling.
+`canopy loop` serves it. The page leads with the answer. Anything under pressure is a band across the top, in amber or
+red, saying what it costs and the way out: `412 MiB free where the workspace is, under the tick's floor of 2 GiB: no
+tick runs the overseer`, with the key to change under it. With nothing under pressure, a calm line takes its place.
+Then three counters: the load over five minutes, with the average itself and which way it's heading, the memory in
+use, and the free space on the fullest disk canopy writes to. The load is the processes running or waiting for a core,
+averaged; it reads as a share of your cores, so 100% is every core busy and past it work queues.
 
-Under the counters, the last hour in graphs: the load over a minute as a share of your cores, how busy the cores were,
-the memory and swap in use against all there is, the stalls, the loop's own memory, and each disk's free space with the
-tick's floor drawn in. The load counts processes waiting on a disk as well as those waiting for a core, so a high load
-with idle cores is a machine stuck on I/O, not short of processors. The stalls say it outright: the share of each ten
-seconds some process waited for memory, or on a disk, which Linux 4.20 and later keep. The swap has no graph on a
-machine with none. The server takes these readings itself, every ten seconds from the moment it starts, whether or not
-anyone is looking, and keeps them in memory only. A restart starts the graphs over, and a gap in a line is a stretch
-the server wasn't reading. Point at a line to read any moment of it; the number over the graph turns into that
-moment's. It's the quickest way to answer "was it the build at 14:05?" without a monitoring stack you'd have to
-babysit too.
+What comes next depends on what's wrong. A disk under pressure puts the disks right under the counters, since that's
+what you came for; otherwise the processes come first.
 
-Under the graphs, the processes, as a tree: each under the process that started it, the busiest first, so a compiler
-three levels under a run's agent shows up under that agent rather than as a stray `rustc`. Each row has the process's
-name, its pid, its command line, the account it runs as, the processors it kept busy, and the memory it holds. CPU reads
-as `top` does, a share of one core: 100% is one core the whole time, so a parallel build can show 800%. It's measured
+The processes are a tree: each under the process that started it, the busiest first, so a compiler three levels under
+a run's agent shows up under that agent rather than as a stray `rustc`. It's the loop's tree: the loop at the top, the
+login it was started from named in one muted line over it, and under it each run's own process, tagged with its run
+and what it works on (`run:41 ABC-101`, `review:4 acme/web#88`, a chore's or a task's run), which opens the run. The
+journal records the pid of every run's process, so this is canopy's own word on which process is whose, not a guess
+from command lines. A run's row adds up everything under it, the agent, the build, every compiler, so you read what
+each run is costing you straight off it, and open or fold it for the detail. Whatever else on the machine is busy
+sits under **elsewhere**, where a stack of idle parents on the way to it is one muted line of names. If a compiler
+you don't recognise is eating the box, this is where you find out it isn't yours.
+
+Each row has the process's name, its pid, its command line, the account it runs as, the processors it kept busy, and
+the memory it holds, each over a thin bar: the processors against one core, the memory against all there is, so the
+hot rows stand out before you read a digit. CPU reads as `top` does, a share of one core: 100% is one core the whole
+time, so a parallel build can show 800%. Click the **cpu** or **memory** head to order each level by it. It's measured
 since the server's last read of the processes, ten seconds while the page is open; opening the page takes a second,
 since there's nothing to measure against yet. A process the load counts but isn't computing says so: `running` is on a
 core or waiting for one, and `waiting on a disk` is stuck on I/O, which raises the load while the processors sit idle.
-At first only the busy ones show, using 1% of a core or more, with every parent above them and the loop's own process;
-**All** shows every one. Fold a parent and its row adds up everything under it, the quick way to see what one run is
-costing you. The kernel's own threads are left out, and so is everything off Linux, where the standard library has no
-way to ask.
+Only the busy ones show, using 1% of a core or more, with the parents above them, the loop, and every run's process
+however idle; **All** shows every one, in one tree. Fold a parent and its row adds up everything under it. The page
+remembers **All**, the order, and what you folded in this browser, so it's as you left it when you come back. The
+kernel's own threads are left out.
 
-Under them, each disk canopy writes to: the workspace's, where agents check out and build; the journal's, with the
-runs' logs; and the temporary directory, which builds fill when nobody's looking. Two on one filesystem share a row,
-so their free space isn't counted twice. The workspace's and the journal's carry the floor `loop.min_free_disk_mib`
-sets, 2 GiB unless you changed it: under it, a tick runs no overseer, and the row turns red before the tick tells you.
-A disk turns amber under 10 GiB free, or twice the floor if that's more, and red under 1 GiB on any disk.
+Each disk canopy writes to has a row: the workspace's, where agents check out and build; the journal's, with the runs'
+logs; and the temporary directory, which builds fill when nobody's looking. Two on one filesystem share a row, so their
+free space isn't counted twice. Beside each is its last hour of free space, naming the hour's low when it was lower
+than now. When the free space fell over the hour, the row says when it'll be full at that rate, if that's within a day;
+an hour is too short to predict next week from. The workspace's and the journal's carry the floor
+`loop.min_free_disk_mib` sets, 2 GiB unless you changed it, drawn on the line too: under it, a tick runs no overseer,
+and the row turns red before the tick tells you. A disk turns amber under 10 GiB free, or twice the floor if that's
+more, and red under 1 GiB on any disk.
 
 Memory turns amber under 15% available and red under 5%. The load turns amber once the five minutes' average reaches
 the number of cores, where work starts queueing for a processor; it never turns red, since a busy machine still works,
 only slower.
 
-Then the processors and memory in full, the loop's own process (its pid, when it started, the memory it holds, its
-threads, and its open files against its limit), and the machine: its name, system, Python, and canopy's version. On
-Linux every figure is there. Elsewhere canopy reads what the standard library gives, so a Mac shows `not read on this
-system` for the memory available, the swap, and what the process holds; the load, the total memory, and the disks are
-there everywhere.
+Under them, the last hour in graphs, in two rows. The first, full height: the load over a minute as a share of your
+cores, the memory in use against all there is, and how busy the cores were. The second, half height, since they're
+flat nearly always: the swap in use, the stalls, and the loop's own memory. The load counts processes waiting on a disk
+as well as those waiting for a core, so a high load with idle cores is a machine stuck on I/O, not short of
+processors. The stalls say it outright: the share of each ten seconds some process waited for memory, or on a disk,
+which Linux 4.20 and later keep. The swap has no graph on a machine with none. A line under pressure takes its color,
+amber or red, and the memory's graph draws where it turns amber, `15% left`, as a disk's draws the tick's floor.
+
+The server takes these readings itself, every ten seconds from the moment it starts, whether or not anyone is looking,
+and keeps them in memory only. A restart starts the graphs over, and a gap in a line is a stretch the server wasn't
+reading. The panel's header says how long they cover and when the page last read them; if a read again fails, it
+turns amber and says so, so a page left open on a laptop that lost its network doesn't pass old figures off as live.
+Point at any graph and every one of them points at the same moment, each number turning into that moment's. It's the
+quickest way to answer "was it the build at 14:05?" across the load and the stalls at once, without a monitoring stack
+you'd have to babysit too.
+
+Last, folded until you open it, **Details**: what nothing above shows, the cores, the three load averages, the swap,
+the loop's peak memory, threads, and open files against its limit, and the Python and canopy it runs. The machine's
+name, system, and uptime, and how long the loop has been up, are in the line under the title. On Linux every figure is
+there. Elsewhere canopy reads what the standard library gives, so the load, the total memory, and the disks are there
+everywhere, and one line under the counters says that memory, stalls, and processes are read on Linux only, rather
+than a dozen fields saying so one at a time.
 
 ## Acting from the UI
 

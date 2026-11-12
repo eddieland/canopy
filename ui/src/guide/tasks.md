@@ -81,7 +81,8 @@ Stop.
 **Report** is the page's main content: the newest report a run left, laid out as a document. It is the agent's
 Markdown, drawn as a plan is, so headings, lists, and code read as they should and anything else (HTML, an image, a
 link) stays its characters. The header names the run that left it, and says `edited` when the file changed since its
-run wrote it. Under it is the file's path, to open in your editor. When there is no report yet, or its file is gone,
+run wrote it, and its last button copies the report as Markdown or saves it as `task-4-report.md`. Under it is the
+file's path, to open in your editor. When there is no report yet, or its file is gone,
 the panel says so.
 
 **What it left** gathers the rest: the repository, the branch (with a link out once a run pushed it), each run's
@@ -107,6 +108,11 @@ A task's worker pushes like any other, so in a repository you keep a [checklist]
 first push is held for the list too, and its answers sit in a **Checklist** panel under Run, with what it pushed after
 the list under them, as on [a worker run's page](runs#a-runs-page). A one-off task doesn't get a pass on the house rules
 just for being one-off.
+
+Then its **Diff**, what the run changed in the task's repository, its files, lines, and commits, with the diff itself
+behind **Show diff**, as on [a worker run's page](runs#a-runs-page). A task that went three rounds of `blocked` and your
+replies has three runs, and each one's diff is its own round's work, so you can see what your answer to its question
+actually bought.
 
 Under it is the **transcript**, the session's events read from the run's log: what the worker wrote, each tool call
 with its input and output, and what each model call cost, with the context chart one click away, as on a run's page.

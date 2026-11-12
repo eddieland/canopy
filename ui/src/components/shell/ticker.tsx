@@ -57,7 +57,7 @@ export function Ticker() {
                 <div
                     role="marquee"
                     aria-label="Headlines"
-                    className="ticker-window flex min-w-0 flex-1 items-center"
+                    className="flex min-w-0 flex-1 items-center ticker-window"
                     data-testid="ticker"
                     data-speed={speed}
                 >
@@ -105,7 +105,7 @@ function Crawl({ headline, rate, gap, onDone }: { headline: Headline; rate: numb
     return (
         <span
             ref={line}
-            className="animate-ticker shrink-0 text-xs whitespace-nowrap text-muted-foreground"
+            className="shrink-0 animate-ticker text-xs whitespace-nowrap text-muted-foreground"
             style={style}
             onAnimationIteration={(event) => {
                 // A flair's letters and colors loop too, and their iterations bubble up here: only the crawl's counts.

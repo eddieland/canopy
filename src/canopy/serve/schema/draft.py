@@ -138,8 +138,22 @@ class Thread(Model):
     """The drafts that answer it, the newest run's last."""
 
 
+class MissingDiff(Model):
+    """Why a PR's page has no diff to put its threads on: the latest run that left its work on origin kept none."""
+
+    run: int
+    """The run: the latest of the PR's unit that recorded what it left on origin."""
+    missing: str | None = None
+    """Why its end kept no diff of the branch; None when it kept one that is gone since."""
+    removed_after_days: int | None = None
+    """Retention removed the diff, this many days after the run ended (DESIGN §26); None when it did not."""
+
+
 class PullRequestThreads(Model):
-    """A PR's review threads on the diff of the latest run that kept one, and the drafts waiting to be sent."""
+    """A PR's review threads on the diff of the latest run that kept one, and the drafts waiting to be sent.
+
+    The threads sit on the diff under every `trust.review_replies` setting: every run keeps one (DESIGN §45).
+    """
 
     url: str
     """The PR's URL."""
@@ -155,6 +169,9 @@ class PullRequestThreads(Model):
     """The commit the diff was taken at, when it was kept."""
     diff: ReviewDiff | None = None
     """The diff; None when no run kept one."""
+    diff_missing: MissingDiff | None = None
+    """Why there is no diff, from the latest run of the PR's unit that recorded what it left on origin (DESIGN §45);
+    None while there is one, or when no run recorded what it left."""
     threads: list[Thread]
     """Its review threads, in file order, then by line."""
     pr_drafts: list[Draft]

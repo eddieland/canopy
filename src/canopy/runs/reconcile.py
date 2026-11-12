@@ -96,8 +96,9 @@ def run(ctx: Context, log: logs.TickAdapter) -> Reconciled:
     in_use = {str(r["ticket_key"]) for r in running} | {epic_runs.desk_key(r.epic_id) for r in plan_runs}
     for desk in desks.prune(ws.root, in_use):
         log.warning("desk with no running run; removed", extra={"desk": str(desk)})
-    if not running:
-        # No run is live, so no run of an earlier canopy is still loading its snapshot.
+    # Every kind of run loads a snapshot, and OpenCode 2 reads its agent from it again while the run goes on, so a
+    # live run of any kind keeps every snapshot. A chore whose `_chore` is gone, closed after this, holds one tick more.
+    if not any(db.running_runs(ctx.conn, table) for table in db.RUN_TABLES):
         _prune_definitions(ctx, log)
     busy = len(running) + len(reviews) + len(task_runs) + len(plan_runs)
     capacity = Capacity(max_workers=ctx.config.capacity.max_workers, running=busy)

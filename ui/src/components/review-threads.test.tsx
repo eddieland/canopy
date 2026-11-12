@@ -483,5 +483,67 @@ describe('ReviewThreads', () => {
             )
         await renderRouted(<ReviewThreads url={PR} />)
         expect((await screen.findByTestId('head-moved')).textContent).toContain('past the diff run:45 kept at aaaaaaa')
+        expect(screen.queryByTestId('diff-run')).toBeNull()
+    })
+
+    it('puts the threads on the diff the latest run kept under post, with no draft, and names that run', async () => {
+        const head = `e3a7d915${'9'.repeat(32)}`
+        const diff = {
+            files: [
+                {
+                    path: 'src/search/useSearch.ts',
+                    old_path: null,
+                    binary: false,
+                    hunks: [{ header: '', lines: [{ kind: 'add' as const, old: null, new: 16, text: 'finally' }] }],
+                },
+            ],
+            truncated: false,
+        }
+        answer = () =>
+            Response.json(
+                pullRequestThreads({
+                    review_replies: 'post',
+                    diff_run: 51,
+                    diff_head: head,
+                    diff,
+                    threads: [reviewThread({ file: 0, drafts: [] })],
+                }),
+            )
+        await renderRouted(<ReviewThreads url={PR} />)
+        const said = await screen.findByTestId('review-replies')
+        expect(said.textContent).toContain('trust.review_replies is post')
+        expect(screen.getByTestId('diff-run').textContent).toBe('Its threads sit on the branch as run:51 left it.')
+        expect(screen.getByRole('link', { name: 'run:51' }).getAttribute('href')).toBe('/workspace/runs/51')
+        expect(screen.queryByTestId('threads-elsewhere')).toBeNull()
+        expect(screen.queryByTestId('draft-list')).toBeNull()
+        expect(screen.getByText('Can it move into a `finally`?')).toBeDefined()
+    })
+
+    it('says why no run kept a diff, from the latest that left its work on origin, as its page does', async () => {
+        const crashed = 'the run crashed, so canopy read nothing of its slot and kept no diff'
+        answer = () =>
+            Response.json(pullRequestThreads({ diff_missing: { run: 52, missing: crashed, removed_after_days: null } }))
+        const { unmount } = await renderRouted(<ReviewThreads url={PR} />)
+        const whole = 'No run kept a diff of it, so its threads are listed whole.'
+        expect((await screen.findByTestId('diff-missing')).textContent).toBe(
+            `${whole} Its latest run, run:52: no diff kept: ${crashed}.`,
+        )
+        expect(screen.getByRole('link', { name: 'run:52' })).toBeDefined()
+        unmount()
+
+        answer = () =>
+            Response.json(pullRequestThreads({ diff_missing: { run: 52, missing: null, removed_after_days: 30 } }))
+        const removed = await renderRouted(<ReviewThreads url={PR} />)
+        expect((await screen.findByTestId('diff-missing')).textContent).toContain(
+            'run:52: removed after 30 days, as your [retention] keeps it.',
+        )
+        removed.unmount()
+
+        // No run recorded what it left on origin: nothing more to say.
+        answer = () => Response.json(pullRequestThreads())
+        await renderRouted(<ReviewThreads url={PR} />)
+        expect((await screen.findByTestId('diff-missing')).textContent).toBe(
+            'No run kept a diff of it, so its threads are listed whole.',
+        )
     })
 })

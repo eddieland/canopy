@@ -68,3 +68,28 @@ def test_a_shell_command_searches_when_a_stage_of_it_starts_a_search() -> None:
     quoted = ('echo "a; grep x"', "echo 'a | rg b'", 'grep "unclosed', "uv run pytest 2>&1 | tail")
     for command in ("uv run pytest -q", "git status", "cat src/a.py", "xargs grep x", "echo grep", "", *quoted):
         assert not report.shell_searches(command), command
+
+
+def test_a_shell_commands_stages_are_its_words_split_as_the_shell_splits_them() -> None:
+    """Past the variables each sets, line by line; a line whose quotes do not close has none."""
+    assert report.shell_stages("cd web && LC_ALL=C gh run view 7 | tail -n 5\nls") == [
+        ["cd", "web"],
+        ["gh", "run", "view", "7"],
+        ["tail", "-n", "5"],
+        ["ls"],
+    ]
+    assert report.shell_stages('echo "a; b"; X=1') == [["echo", "a; b"]]
+    assert report.shell_stages('grep "unclosed\nls') == [["ls"]]
+
+
+def test_a_kept_name_is_one_printable_line_within_its_bound() -> None:
+    assert report.kept_name("evil\x1b[31m\n tool") == "evil[31m tool"
+    assert report.kept_name("") == "?"
+    assert report.kept_name("t" * 500) == "t" * report.MAX_TOOL_NAME
+
+
+def test_a_sessions_title_is_one_line_with_nothing_hidden_within_its_bound() -> None:
+    assert report.session_title("  Fix the\r\nflaky\u2028test\u200d\u202e ") == "Fix the flaky test"
+    assert report.session_title("\x00\u200b") is None
+    assert report.session_title(7) is None
+    assert report.session_title("a " * 300) == ("a " * 100).strip()

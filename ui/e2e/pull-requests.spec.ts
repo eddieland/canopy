@@ -178,3 +178,15 @@ test('a PR named on a run, a review, a decision, or a ticket opens its page in o
         await expect(page.getByRole('heading', { level: 1 })).toHaveText(new RegExp(`^${name}( |$)`, 'u'))
     }
 })
+
+test("a feedback plan's file opens laid out as a document, its table and diagram drawn", async ({ page }) => {
+    await page.goto(`pull-requests/pr?url=${encodeURIComponent('https://github.com/acme/web/pull/88')}`)
+    await settled(page)
+    const panel = page.getByTestId('feedback-plan')
+    await panel.getByRole('button', { name: 'Show the plan' }).click()
+    const plan = panel.getByRole('document', { name: /^feedback-plan:\d+$/u })
+    await expect(plan.getByRole('heading', { name: 'Item 2468013601: change' })).toBeVisible()
+    await expect(plan.getByRole('columnheader', { name: 'File' })).toBeVisible()
+    // Named by its `accTitle`, as a titled diagram is.
+    await expect(plan.getByRole('img', { name: 'The search inputs read one debounce' })).toBeVisible()
+})

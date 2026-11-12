@@ -149,6 +149,38 @@ def test_a_disagreement_is_listed_once_per_ticket_and_reason_with_the_overseers_
     assert found.rationale == "no capacity"
 
 
+def test_a_row_is_counted_again_over_the_tickets_it_alone_held_for(
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+) -> None:
+    """A ticket under two rows counts against each, and under neither alone; one phase-only is counted apart."""
+    db.set_unit(conn, "PROJ-1", str(canopy_env.root), "repo", phase=Phase.CI_RUNNING)
+    db.set_unit(conn, "PROJ-2", str(canopy_env.root), "repo", phase=Phase.CI_RUNNING)
+    both = [
+        phases.Derived("PROJ-1", None, (), candidate=True, closed=False),
+        phases.Derived("PROJ-1", "repo", (Phase.CI_RED, Phase.CHANGES_REQUESTED)),
+    ]
+    red = [
+        phases.Derived("PROJ-2", None, (), candidate=True, closed=False),
+        phases.Derived("PROJ-2", "repo", (Phase.CI_RED,)),
+    ]
+    # Each unit is left at `ci_running`, which no row held: PROJ-1's `done` is allowed by neither row, PROJ-2's `wait`
+    # by `ci_red`, so only its phase is wrong.
+    decided = {"PROJ-1": [("done", "shelved", Decider.OVERSEER)], "PROJ-2": [("wait", "rerun", Decider.OVERSEER)]}
+    ticked(canopy_env, conn, [*both, *red], decided)
+    found = agreement.agreement(conn, datetime.now(UTC), 1)
+
+    def counts(rows: Sequence[agreement.RowCounts]) -> list[tuple[str, int, int, int, int, int]]:
+        return [(r.row, r.decisions, r.disagrees, r.phase_only, r.disagreeing, r.disagreeing_phase_only) for r in rows]
+
+    assert counts(found.rows) == [("ci_red", 2, 2, 1, 2, 1), ("changes_requested", 1, 1, 0, 1, 0)]
+    assert counts(found.alone) == [("ci_red", 1, 1, 1, 1, 1)]
+    as_json = found.as_json()
+    assert as_json["alone"] == [vars(r) for r in found.alone]
+    assert as_json["alone"] != as_json["rows"]
+    assert sorted((d.ticket_key, d.mismatch) for d in found.disagreements) == [("PROJ-1", "both"), ("PROJ-2", "phase")]
+
+
 def test_the_same_disagreement_across_ticks_is_one_entry_with_its_span(
     canopy_env: CanopyEnv,
     conn: sqlite3.Connection,
@@ -182,7 +214,7 @@ def test_a_window_of_only_stale_tickets_prints_no_row(canopy_env: CanopyEnv, con
     found = agreement.agreement(conn, datetime.now(UTC), 1)
     assert (list(found.rows), found.stale) == ([], 1)
     assert agreement_cli.render(found)[2:4] == [
-        "row  decisions  agree  disagree  situations  disagreeing",
+        "row  decisions  agree  disagree  phase only  situations  disagreeing  phase only",
         "Stale, counted apart: 1 decision on 1 ticket.",
     ]
 
@@ -233,8 +265,12 @@ def test_canopy_agreement_prints_the_last_days(canopy_env: CanopyEnv, capsys: py
         "decisions": 3,
         "agrees": 2,
         "disagrees": 1,
+        "phase_only": 0,
         "situations": 1,
         "disagreeing": 1,
+        "disagreeing_phase_only": 0,
     }
+    assert found["alone"] == found["rows"]
+    assert found["disagreements"][0]["mismatch"] == "action"
     assert found["disagreements"][0]["rows"] == ["ready"]
     assert main(["agreement", "--days", "0"]) == 2

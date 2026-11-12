@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { Check } from 'lucide-react'
-import { useId, useState } from 'react'
+import { lazy, Suspense, useId, useState } from 'react'
 import type { SubmitEvent } from 'react'
 
 import { ApiError } from '@/api/client'
@@ -15,6 +15,7 @@ import { MarkdownField } from '@/components/markdown-field'
 import { MemoryText } from '@/components/memory-text'
 import { Notice } from '@/components/notice'
 import { Panel, PanelFooter, PanelHeader } from '@/components/panel'
+import { PlanFileMenu } from '@/components/plan-file-menu'
 import { RunLink } from '@/components/run-link'
 import { SendKeycap } from '@/components/send-keycap'
 import { Chip } from '@/components/status'
@@ -22,12 +23,17 @@ import { TicketLink } from '@/components/ticket-link'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
+import { Skeleton } from '@/components/ui/skeleton'
 import { feedbackPlanApprovedText } from '@/lib/outcomes'
 import { messageAnchor } from '@/lib/refs'
 import { threadAnchor } from '@/lib/reviews'
 import { useSendKeys } from '@/lib/send-key'
 import type { Tone } from '@/lib/tone'
 import { cn } from '@/lib/utils'
+
+// The plan's file laid out as a document, its tables and diagrams drawn, as a ticket's plan and a task's report are;
+// loaded once it is opened, since what draws it (Tiptap, D120) is more script than the rest of the page needs.
+const PlanDocument = lazy(async () => ({ default: (await import('@/components/plan-editor')).PlanDocument }))
 
 // A plan's status in its chip's color: one waiting on the operator, stale or not, as a waiting draft is; an approved
 // one as what the loop is about to act on; a spent one plain.
@@ -77,6 +83,8 @@ export function FeedbackPlanPanel({ plan, onChange }: { plan: FeedbackPlan; onCh
     const open = plan.status !== 'spent'
     // Until it is approved, the line says what approving does; after, only where it stands.
     const deciding = plan.status === 'waiting' || plan.status === 'stale'
+    // Its file's text, or null where the file is gone or no longer a plan: then there is nothing to show or copy.
+    const text = plan.text
     return (
         <Panel id="feedback-plan" data-testid="feedback-plan" data-status={plan.status}>
             <PanelHeader label="Feedback plan">
@@ -95,7 +103,7 @@ export function FeedbackPlanPanel({ plan, onChange }: { plan: FeedbackPlan; onCh
                 {plan.status === 'stale' && <Stale plan={plan} />}
             </div>
             {open ? <Approve key={plan.id} plan={plan} onChange={onChange} /> : <ItemRows items={plan.items} />}
-            {plan.text === null ? (
+            {text === null ? (
                 <p className="border-t px-3 py-1.5 text-xs text-muted-foreground" data-testid="feedback-plan-no-file">
                     Its file is {plan.problem ?? 'unreadable'}:{' '}
                     <span data-testid="feedback-plan-path">{plan.path}</span>
@@ -105,10 +113,20 @@ export function FeedbackPlanPanel({ plan, onChange }: { plan: FeedbackPlan; onCh
                     <div className="flex items-center gap-2 px-3 py-1.5">
                         <Disclosure open={shown} what="the plan" />
                         <span className="text-xs text-muted-foreground">as its file stands now</span>
+                        <span className="ml-auto">
+                            <PlanFileMenu markdown={() => text} file={plan.archive_name} />
+                        </span>
                     </div>
                     <CollapsibleContent>
-                        <div className="border-t px-3 py-2 font-mono text-xs" data-testid="feedback-plan-text">
-                            <MemoryText text={plan.text} lines />
+                        <div className="border-t" data-testid="feedback-plan-text">
+                            <Suspense fallback={<Skeleton className="mx-6 my-4 h-24" />}>
+                                <PlanDocument
+                                    key={text}
+                                    markdown={text}
+                                    label={`feedback-plan:${plan.id}`}
+                                    name={`feedback-plan-${plan.id}`}
+                                />
+                            </Suspense>
                         </div>
                     </CollapsibleContent>
                 </Collapsible>
@@ -427,7 +445,7 @@ function ItemRows({
                                 className="mt-0.5"
                             />
                         )}
-                        <span className="readout shrink-0 text-xs text-muted-foreground" title={`id ${item.item_id}`}>
+                        <span className="shrink-0 readout text-xs text-muted-foreground" title={`id ${item.item_id}`}>
                             {item.number}.
                         </span>
                         <span className="min-w-0 grow" data-testid="feedback-plan-said">
@@ -451,7 +469,7 @@ function ItemRows({
                                 <MemoryText text={item.rationale} />
                             </span>
                         )}
-                        <span className="readout ml-auto">id {item.item_id}</span>
+                        <span className="ml-auto readout">id {item.item_id}</span>
                     </span>
                     {item.thread_id === null && item.reply !== null && (
                         <span className="flex flex-col gap-0.5" data-testid="feedback-plan-reply">

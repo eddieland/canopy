@@ -30,21 +30,19 @@ with no network, inside the sandbox too. It holds each job canopy asks of the ag
 job reads only what it is handed for that job, and its hooks run in a try of their own, so one that throws fails
 neither the call nor the jobs after it. A later job joins this file rather than shipping a plugin of its own, as the
 nudge for a stale update, the answer to its question, and a stop's wrap-up ask have (§22, §41), and the word that a
-message waits (§44). Both of OpenCode's major versions load the one file: its default export carries an entry point
-for each, and each version reads only its own, so binding OpenCode 2 (D009) keeps the clock.
+message waits (§44). OpenCode loads the file by its default export: an id, and a `setup` that registers the jobs'
+hooks.
 
-After each tool call that succeeds (`tool.execute.after`, MCP tools' included), once the run is in the last fifth of
+After each tool call that succeeds (`execute.after`, MCP tools' included), once the run is in the last fifth of
 the time it had when the plugin loaded, and never more than its last 10 minutes, the plugin adds one line to the call's
 result: the minutes left, and, the first time in a session, to finish what keeps the work (commit and push, or record
-its decisions) and print the result line. The line goes after a built-in tool's output, and first in an MCP tool's
-content, which OpenCode truncates after the hook keeping its head; so the tracker's, GitHub's, and the overseer's own
-tools (§27) carry it too. OpenCode 2 truncates every tool's result after the hook, so there it goes first in all of
-them. Counting from its own load, at the session's start, keeps it to one variable.
+its decisions) and report its result. The line goes first in the result's content, since OpenCode truncates every
+tool's result after the hook, keeping its head; so the tracker's, GitHub's, and the overseer's own tools (§27) carry
+it too. Counting from its own load, at the session's start, keeps it to one variable.
 
 What lets it run inside every agent process (TRUST_MODEL T4):
 
-- The clock reads `CANOPY_DEADLINE` and the clock, and the split the system prompt it is handed, nothing else.
-  Without the variable the clock adds nothing.
+- The clock reads `CANOPY_DEADLINE` and the clock, nothing else. Without the variable it adds nothing.
 - It writes no file, refuses no call, and grants no tool; the one call it changes, a shell command's leading `cd`,
   the runtime checks after it. It keeps nothing but whether it has warned in this session.
 - It catches every error, since a hook that throws fails a call that has already run.
@@ -53,20 +51,18 @@ An agent thinking without calling a tool hears nothing until its next call; its 
 
 ### MCP tools on the first call
 
-Under OpenCode 2 the plugin has one job more, of 2's alone. 2 registers an MCP server's tools only once the server has
-connected, as the session starts, and sends each model call the tools registered when it is made: without a wait, a
-session's first call gets none of them, and the overseer, which acts only through canopy's tools (§27), has nothing to
-call. So the plugin holds a session's first prompt while a server is still connecting, at most 30 seconds, then while
-a connected server has no tool registered, at most 2 seconds more, since one may have none; then the prompt goes on as
-it would have. It reads the servers' names and states and the tools' names, changes none of them, and catches every
-error, as the clock does.
+OpenCode registers an MCP server's tools only once the server has connected, as the session starts, and sends each
+model call the tools registered when it is made: without a wait, a session's first call gets none of them, and the
+overseer, which acts only through canopy's tools (§27), has nothing to call. So the plugin holds a session's first
+prompt while a server is still connecting, at most 30 seconds, then while a connected server has no tool registered,
+at most 2 seconds more, since one may have none; then the prompt goes on as it would have. It reads the servers' names
+and states and the tools' names, changes none of them, and catches every error, as the clock does.
 
-These rest on OpenCode's source at 1.19.3, read 2026-10-19 and read again on an upgrade: OpenCode loads plugins from
+These rest on OpenCode's source at 2.1.2, read 2026-10-22 and read again on an upgrade: OpenCode loads plugins from
 every config directory, the snapshot's last, so a repository's own plugins already run in the agent's process (T7);
-a hook that throws fails the call; and an MCP result is truncated after the hook. OpenCode 2's, at 2.1.2, read
-2026-10-22: it loads a plugin file only by a default export with an id and a `setup` that registers hooks, and
-logs any other and runs without it; and the same three hold, for every tool's result. In both, read 2026-11-02, a
-hook before a call changes the input the tool runs with.
+it loads a plugin file only by a default export with an id and a `setup` that registers hooks, and logs any other and
+runs without it; a hook that throws fails the call; and every tool's result is truncated after the hook. A hook before
+a call changes the input the tool runs with (read 2026-11-02).
 
 ### A shell command's leading `cd`
 
@@ -79,27 +75,14 @@ is refused as before. A directory the shell would expand is left in the command.
 
 ### A refusal, explained
 
-OpenCode 2 tells an agent a call its permission rules refuse as `Permission denied:` and the permission, nothing more,
+OpenCode tells an agent a call its permission rules refuse as `Permission denied:` and the permission, nothing more,
 so an agent tries the same another way and spends its run on it. After such a call (`execute.after`) the plugin sets
 the refusal's reason to the runtime's words, what the call asked for, and one `[canopy]` line: the rules refuse it on
-purpose, it is not to be tried another way, and the result line says what remains if the work needs it. It changes
+purpose, it is not to be tried another way, and the result says what remains if the work needs it. It changes
 nothing else of the error, so the call stays refused as it was, and it reads only the refusal's permission and
-resources. A rule the repository or the operator set is explained as canopy's are (T7). 2's `evaluate` permission hook
-cannot do it: a refusal by the rules returns before the hook (2.1.2, read 2026-11-03). OpenCode 1 already tells the
-agent the rules that refused it, and has no hook after a call that fails, so it gets none.
-
-### The split
-
-OpenCode 1 sends the agent's body and its environment, which names the working directory and the date, as one system
-block, and caches only at its end; so two runs of one agent in two slots, or any two reviews, share no cached prefix,
-not even the tools (MEASUREMENTS 2026-10-19, F48). The plugin's second job cuts that block where the environment
-starts (`experimental.chat.system.transform`), so the tools and the body get a breakpoint of their own and a run's
-first call can read them from the cache, if another run of the agent wrote them within the cache's lifetime. The two
-parts joined by a newline are the block as it was, and a prompt whose environment it cannot find is left as it is.
-A sandboxed run gains nothing from it: the shell tool's description names the run's own `TMPDIR` (§24), and the
-tools come before the body, so no two sandboxed runs share a prefix. OpenCode 2 needs no split, so the plugin gives it
-none: it caches the tools and the body apart from the environment, a sandboxed run's included (MEASUREMENTS
-2026-10-23).
+resources. A rule the repository or the operator set is explained as canopy's are (T7). OpenCode's `evaluate`
+permission hook cannot do it: a refusal by the rules returns before the hook (2.1.2, read 2026-11-03; 2.2.5's build,
+2026-11-11).
 
 ### The snapshot, unwritable
 
@@ -147,7 +130,5 @@ ask for it. The overseer is warned as every agent is, in its last 3 minutes by d
 ### Open
 
 - Whether the overseer's last 3 minutes are enough to record what it owes.
-- A stable temporary path in the shell tool's description, through the plugin's `tool.definition` hook, so sandboxed
-  runs share the split's prefix, if the agent and OpenCode's external-directory rule still work with it.
 - How long a run waits on a repository's `.opencode/` install when the registry is refused, as under the sandbox: the
   source does not say, and the live check times one.

@@ -49,13 +49,15 @@ import {
 } from '@/lib/outcomes'
 import type { Placed } from '@/lib/reviews'
 import { shortSha, threadAnchor } from '@/lib/reviews'
+import { missingDiffText } from '@/lib/run-changes'
 import { cn } from '@/lib/utils'
 
 /**
  * A PR's review threads on the diff its latest run kept, each draft under the thread it answers (DESIGN §29, On the
- * PR's diff): what canopy's reader last read of the PR, never a worker's copy. A thread sits at its line, under its
- * file when the diff does not show the line or it is outdated, or in a Not in the diff panel. Its comments and every
- * draft are plain text, every hidden character named, a comment's `<details>` blocks folded. A draft is edited,
+ * PR's diff): what canopy's reader last read of the PR, never a worker's copy. Every run keeps that diff, so the
+ * threads sit on it under every `trust.review_replies` setting, drafts or none (§45). A thread sits at its line, under
+ * its file when the diff does not show the line or it is outdated, or in a Not in the diff panel. Its comments and
+ * every draft are plain text, every hidden character named, a comment's `<details>` blocks folded. A draft is edited,
  * dropped, or sent where it sits; the head panel lists every draft with a link to its card, and sends every waiting one
  * together, as one comment review. The current feedback plan of the PR's ticket, when it has one, is where it is
  * approved: ahead of the head panel while it waits on the operator, what they came to answer, after it once approved
@@ -146,11 +148,11 @@ export function ReviewThreads({ url }: { url: string }) {
 }
 
 /**
- * The head of a PR's threads: how workers' comments reach GitHub now, when the reader last read the PR, a warning when
- * its head is past the diff the page shows, every draft with a link to its card, the drafts for the review's body, a
- * send of every waiting draft, and a stage of them in a pending review the operator submits on GitHub. While the PR
- * holds one, neither is offered: it says where to finish it. `onFollow` hears a link followed to a draft on a file,
- * by the file's index.
+ * The head of a PR's threads: how workers' comments reach GitHub now, when the reader last read the PR, the run whose
+ * diff the threads sit on, or why no run kept one, a warning when its head is past the diff the page shows, every draft
+ * with a link to its card, the drafts for the review's body, a send of every waiting draft, and a stage of them in a
+ * pending review the operator submits on GitHub. While the PR holds one, neither is offered: it says where to finish
+ * it. `onFollow` hears a link followed to a draft on a file, by the file's index.
  */
 function RepliesPanel({
     threads,
@@ -231,8 +233,25 @@ function RepliesPanel({
                         line that has changed since.
                     </p>
                 )}
-                {threads.diff === null && (
-                    <p className="text-muted-foreground">No run kept a diff of it, so its threads are listed whole.</p>
+                {threads.diff === null ? (
+                    <p className="text-muted-foreground" data-testid="diff-missing">
+                        No run kept a diff of it, so its threads are listed whole
+                        {threads.diff_missing === null ? (
+                            '.'
+                        ) : (
+                            <>
+                                . Its latest run, <RunLink id={threads.diff_missing.run} />:{' '}
+                                {missingDiffText(threads.diff_missing)}.
+                            </>
+                        )}
+                    </p>
+                ) : (
+                    moved === null &&
+                    threads.diff_run !== null && (
+                        <p className="text-muted-foreground" data-testid="diff-run">
+                            Its threads sit on the branch as <RunLink id={threads.diff_run} /> left it.
+                        </p>
+                    )
                 )}
             </div>
             <DraftList threads={threads} placed={placed} onFollow={onFollow} />
@@ -320,7 +339,7 @@ function DraftList({
     }
     return (
         <div className="border-t" data-testid="draft-list">
-            <span className="panel-label block px-3 pt-3">
+            <span className="block px-3 pt-3 panel-label">
                 Drafts <span className="readout text-muted-foreground">{listed.length}</span>
             </span>
             <RowList kind="thread-draft" as="ol" className="divide-y">

@@ -11,7 +11,7 @@ returned to a pool: only what you push survives.
 The operator started your ticket in canopy, which authorized this run; there is no label to check. Its conversation
 stays with the operator: never comment on the ticket, label it, edit it, or change its state in any way, through any
 tool or command. Your tracker tools only read, except to create the follow-up tickets below. Everything you would have
-said on the ticket goes in your result line: `summary` is your report to the operator, and `question` is how you ask
+said on the ticket goes in your result: `summary` is your report to the operator, and `question` is how you ask
 them something. The tracker is {{TRACKER_PROVIDER}}; if a skill named `tracker-{{TRACKER_PROVIDER}}` is available, load
 it before reading the ticket, and skip any of its steps that write to it.
 
@@ -95,12 +95,9 @@ Do not guess on decisions that would be expensive to reverse.
 
 ## Result
 
-The operator reads your `summary` and `question` in canopy as Markdown: paragraphs, `-` and `1.` lists, `code`,
-fenced code, **bold**, *italics*, `>` quotes, `---` rules, and tables. Nothing else is read, and a link shows its
-address, so write a URL as itself.
-
-Your last line of stdout must be exactly one JSON object, with nothing after it, in the shape of the result line at the
-end of your message from canopy. Its summary is your report to the operator: what you did, every PR link, and anything
+Report your result by calling `canopy_run_result`, as the last thing you do: its arguments say what each field holds. Nothing
+you print is read as your result. If the call is refused, fix what the refusal names and call it again; once it is
+taken, end your run. Its summary is your report to the operator: what you did, every PR link, and anything
 a reviewer should look at first.
 
 <!-- canopy: run -->
@@ -144,6 +141,14 @@ section the step's stage, so the operator follows the plan they approved being d
 
 {{/PLAN}}
 
+{{#EPIC}}
+
+## The epic
+
+{{EPIC}}
+
+{{/EPIC}}
+
 {{#ATTACHMENTS}}
 
 ## Attachments
@@ -183,6 +188,6 @@ they conflict.
 
 {{/NOTICE}}
 
-## Result line
+## What your result names
 
-{"status":"done|blocked|failed","branch":"{{BRANCH}}","prs":{{PRS}},"pr_titles":{{PR_TITLES}},"summary":"<your report, line breaks sparingly>","question":"<only when blocked>"}{{MEMORY_CONTRACT}}{{CHECKLIST}}
+Its `branch` is `{{BRANCH}}`, and its `prs` and `pr_titles` have a key for each repository listed above.{{CHECKLIST}}

@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 
 import { ApiError } from '@/api/client'
-import { taskQuery, taskRunQuery, taskRunTranscriptQuery } from '@/api/queries'
+import { taskQuery, taskRunChangeQuery, taskRunQuery, taskRunTranscriptQuery } from '@/api/queries'
 import type { TaskRunDetail, Transcript } from '@/api/types'
 import { Copyable, CopyablePath } from '@/components/copy-button'
 import { Cost } from '@/components/cost'
@@ -14,6 +14,7 @@ import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/component
 import { PromptPanel } from '@/components/prompt-panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { RichText } from '@/components/rich-text'
+import { RunChangesPanel } from '@/components/run-changes'
 import { ChecklistPanel } from '@/components/run-checklist'
 import { ProgressPanel } from '@/components/run-progress'
 import { TaskLink } from '@/components/task-link'
@@ -94,11 +95,14 @@ function Loaded({ task, run }: { task: number; run: number }) {
             >
                 {taskRunDescription(data.run)}
             </PageHeader>
-            <div className="stagger flex flex-col gap-6">
+            <div className="flex stagger flex-col gap-6">
                 {data.run.card !== null && <ProgressPanel card={data.run.card} running={data.run.ended_at === null} />}
                 <RunPanel detail={data} transcript={transcript} onShow={view.show} />
-                <ChecklistPanel
-                    answers={data.checklist}
+                <ChecklistPanel answers={data.checklist} />
+                <RunChangesPanel
+                    changes={data.changes}
+                    records={data.records_changes}
+                    diff={(repo) => taskRunChangeQuery(task, run, repo)}
                     stretches={data.checklist_stretches}
                     leftOut={data.checklist_stretches_left_out}
                     shownBy={taskRef(data.task_id)}

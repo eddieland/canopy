@@ -6,7 +6,7 @@ from pathlib import Path
 
 from canopy.runtime.entries import Error, Step, Text, ToolCall
 from canopy.runtime.opencode2 import events, transcript
-from canopy.runtime.report import Called, Touch
+from canopy.runtime.report import Called, Returned, Touch
 
 RECORDED = Path(__file__).parent / "recorded"
 SESSION = "ses_e9efac2adffehb60wAIBaOM6if"
@@ -130,7 +130,10 @@ def test_a_tool_call_as_the_agent_made_it_is_its_exact_name_how_it_ended_and_its
 
 
 def test_what_a_tool_call_did_to_files_is_its_act_and_the_files_it_named() -> None:
-    """2's tools name a file by `path`, a session moved from 1 by `filePath`; `patch` and `shell` are 2's names."""
+    """2's tools name a file by `path`, a session moved from 1 by `filePath`; `patch` and `shell` are 2's names.
+
+    A shell call is printed as the agent named it, so `bash`, 1's name, which 2 runs as its `shell`, is the shell too.
+    """
 
     def touched(tool: str, given: dict[str, object]) -> Touch:
         return transcript.touched(Called(tool, completed=True, input=given))
@@ -145,8 +148,41 @@ def test_what_a_tool_call_did_to_files_is_its_act_and_the_files_it_named() -> No
     assert touched("glob", {"pattern": "**/*.py"}) == Touch("search")
     assert touched("shell", {"command": "git grep parse"}) == Touch("search")
     assert touched("shell", {"command": "uv run pytest"}) == Touch("other")
-    assert touched("bash", {"command": "rg parse"}) == Touch("other")  # 1's name for the shell
+    assert touched("bash", {"command": "rg parse"}) == Touch("search")
+    assert touched("bash", {"command": "uv run pytest"}) == Touch("other")
     assert touched("edit", {}) == Touch("other")
+
+
+def test_what_a_call_returned_is_its_output_or_error_and_whether_its_tools_metadata_says_it_was_cut() -> None:
+    """2.1.4 nests the tool's metadata under the call's, as the recorded run shows; a session moved from 1 does not."""
+
+    def returned(line: str) -> Returned | None:
+        found = events.parse_event(line)
+        assert found is not None
+        return transcript.returned(found)
+
+    recorded = [
+        transcript.returned(found)
+        for line in (RECORDED / "run.jsonl").read_text().splitlines()
+        if (found := events.parse_event(line)) is not None and found["type"] == events.TOOL_USE
+    ]
+    # Its shell call and its skill's say they were not cut; its refused shell and its failed read say nothing.
+    assert [r.cut if r is not None else "?" for r in recorded] == [False, False, None, None]
+    shell: dict[str, object] = {"status": "completed", "input": {"command": "gh run view 7"}, "output": "x" * 50}
+    nested = {"metadata": {"status": "completed", "truncated": True, "exit": 0}, "rawInput": "{}"}
+    assert returned(tool("shell", {**shell, "metadata": nested})) == Returned(50, cut=True)
+    assert returned(tool("shell", {**shell, "metadata": {"truncated": False}})) == Returned(50, cut=False)
+    assert returned(tool("shell", {**shell, "metadata": {"rawInput": "{}"}})) == Returned(50, cut=None)
+    assert returned(tool("read", {"status": "error", "input": {}, "error": "no such file"})) == Returned(12)
+    assert returned(tool("shell", {"status": "running"})) is None
+    assert returned(event("text", {"type": "text", "text": "hi"})) is None
+
+
+def test_the_command_a_call_ran_is_its_shell_input() -> None:
+    assert transcript.command(Called("shell", completed=True, input={"command": "gh pr view 3"})) == "gh pr view 3"
+    assert transcript.command(Called("bash", completed=True, input={"command": "ls"})) == "ls"  # as the agent named it
+    assert transcript.command(Called("shell", completed=True, input={"command": 3})) is None
+    assert transcript.command(Called("read", completed=True, input={"path": "a.py"})) is None
 
 
 def test_a_line_is_of_a_session_when_it_is_an_event_that_names_it() -> None:

@@ -12,7 +12,9 @@ it, so it is in PR 88's history but not on its page; it times canopy's turnaroun
 Every other state is on a mobile PR of its own, each its ticket's one unit (`STATES`): a plan that waits and is not
 stale, one the operator approved with an item left out, one its planner approved since it changes no code, one a
 `resume` spent, whose push the `vcs` source saw as checks on a new head, so the Reviews page times canopy's turnaround
-on it, one that covers no review item, one whose file is gone, and one of ten items from four reviewers, a bot among
+on it (that `resume` worked under `trust.review_replies = "post"`, so it posted its reply to dana itself and drafted
+nothing, and the PR's page shows her thread on the diff it kept all the same, DESIGN §45), one that covers no review
+item, one whose file is gone, and one of ten items from four reviewers, a bot among
 them and one with a long name. They are eight days old, so the spend pages' default week, and the counts of
 what happened since a time, leave them out; the lists that show every ticket, PR, and run show them last.
 """
@@ -23,7 +25,7 @@ import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import plans, records
+from canopy.core import plans, records, review_diff, run_changes
 from canopy.core.vocab import (
     CheckConclusion,
     Phase,
@@ -36,7 +38,7 @@ from canopy.core.vocab import (
     RunStatus,
 )
 from canopy.runs import feedback_items, feedback_plans
-from canopy.serve.mock import drafts
+from canopy.serve.mock import drafts, run_diffs
 from canopy.serve.mock.reviews import PR_88, SHA_88
 
 if TYPE_CHECKING:
@@ -73,6 +75,18 @@ Run 45 moved `setLoading(false)` into a `finally`, skipped for an aborted reques
 
 bob asks why 250 ms when the other inputs debounce at 300. Keep 250, which the ticket asks for, and move it into
 `SEARCH_DEBOUNCE_MS` in `src/search/constants.ts`, so the inputs stop drifting apart.
+
+| File | Change |
+| --- | --- |
+| `src/search/constants.ts` | add `SEARCH_DEBOUNCE_MS = 250` |
+| `src/search/SearchInput.tsx` | read it in place of `250` |
+
+```mermaid
+flowchart LR
+    accTitle: The search inputs read one debounce
+    Constants[search: constants.ts] --> Search[search: SearchInput]
+    Constants --> Filter[search: FilterInput]
+```
 
 ## Checks
 
@@ -209,6 +223,9 @@ class _State:
     spent: str | None = None
     #: Whether its file was removed after it was written.
     gone: bool = False
+    #: The diff the `resume` that spent it pushed, kept as its own change and as the branch against its base, when
+    #: it worked under `trust.review_replies = "post"`, drafting nothing; None for one that did not run.
+    posted: str | None = None
 
     @property
     def url(self) -> str:
@@ -286,6 +303,49 @@ Every check passed at the head.
     summary="Planned the round on PR 61: change dana's thread, a backoff with three tries at most.",
     approval=_Approval(channel="cli", after=12),
     spent="Push sends back off now, three tries at most, and the reply to dana says so.",
+    posted="""\
+diff --git a/app/notify/push.ts b/app/notify/push.ts
+index 3c1e8a0..b75d2f4 100644
+--- a/app/notify/push.ts
++++ b/app/notify/push.ts
+@@ -1,13 +1,28 @@
+ import { sendPush } from './apns'
+ import type { Message, Token } from './types'
+
++const FIRST_WAIT_MS = 1000
++const MOST_TRIES = 3
++
++function wait(ms: number): Promise<void> {
++    return new Promise((resolve) => setTimeout(resolve, ms))
++}
++
+-/** Send `message` to `token`, trying once more if the first try fails. */
++/** Send `message` to `token`, backing off between tries and giving up after the third. */
+ export async function notify(token: Token, message: Message): Promise<boolean> {
+-    try {
+-        await sendPush(token, message)
+-        return true
+-    } catch {
+-        await sendPush(token, message)
+-        return true
+-    }
++    let delay = FIRST_WAIT_MS
++    for (let tried = 1; tried <= MOST_TRIES; tried++) {
++        try {
++            await sendPush(token, message)
++            return true
++        } catch (error) {
++            if (tried === MOST_TRIES) {
++                console.warn('push failed for good', { token: token.id, error })
++                return false
++            }
++        }
++        await wait(delay)
++        delay *= 2
++    }
++    return false
+ }
+""",
 )
 _BY_THE_PLANNER = _State(
     key="ABC-131",
@@ -1132,7 +1192,8 @@ def _spend(
     """The `resume` that went ahead on the state's approved plan, the run after its plan's, which spent it.
 
     Its push is the checks a `vcs` source observed passing on the PR's next head, soon after it ended: the push that
-    answered the round.
+    answered the round. One that worked under `post` keeps what it pushed, and the reader's read that saw the checks is
+    of that head, so the PR's page shows its threads on the diff the run kept (DESIGN §45).
     """
     run = state.run + 1
     _run(
@@ -1165,6 +1226,46 @@ def _spend(
             for i, name in enumerate(_PUSH_CHECKS)
         ],
     )
+    if state.posted is not None:
+        _posted(conn, state_dir, at, state, run=run, pushed=pushed, diff=state.posted)
+
+
+def _posted(
+    conn: sqlite3.Connection,
+    state_dir: Path,
+    at: Callable[[int], str],
+    state: _State,
+    *,
+    run: int,
+    pushed: str,
+    diff: str,
+) -> None:
+    """Record what `resume` `run`, under `post`, changed from the PR's head to `pushed`, and keep `diff` as both."""
+    records.insert(records.RunReplies, run_id=run, mode="post", ticket_drafts=0).run(conn)
+    log_path = state_dir / "runs" / f"{run}.log"
+    change = run_changes.change_path(log_path, "mobile")
+    change.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    review_diff.keep(change, diff)
+    branch = review_diff.run_path_for(log_path, "mobile")
+    review_diff.keep(branch, diff)
+    review_diff.keep_head(branch, pushed)
+    run_changes.record(
+        conn,
+        run,
+        [
+            run_changes.Change(
+                "mobile",
+                f"{state.number:02d}" * 20,
+                end=pushed,
+                change_kept=True,
+                branch_kept=True,
+                counted=run_diffs.counted(diff),
+            ),
+        ],
+    )
+    read_at = at(state.ended + _CHECKING)
+    records.update(records.ObservedPr).set(head_sha=pushed, observed_at=read_at).where("url = ?", state.url).run(conn)
+    records.update(records.ObservedReview).set(observed_at=read_at).where("pr_url = ?", state.url).run(conn)
 
 
 def _run(

@@ -124,7 +124,7 @@ def test_setup_installs_what_it_can_and_keeps_it_on_the_next_run(machine: Machin
     lock = canopy_sandbox.RUNTIME_SPEC / "package-lock.json"
     assert (runtime(canopy_env) / "package-lock.json").read_bytes() == lock.read_bytes()
     assert (runtime(canopy_env) / sandbox.INSTALLED_LOCK).read_bytes() == lock.read_bytes()
-    assert machine.calls("bwrap")[-1]["argv"] == ["bwrap", "--ro-bind", "/", "/", "true"]
+    assert machine.calls("bwrap")[-1]["argv"] == list(sandbox.USERNS_PROBE)
 
     again = sandbox.run_setup(SubprocessRunner(), "linux")
 
@@ -200,6 +200,47 @@ def test_a_template_kept_that_names_the_operators_opencode_data_is_to_be_changed
     auth = canopy_env.home / ".local" / "share" / "opencode" / "auth.json"
     assert todo.startswith(f"{templates / f'{role}.json'} lets a sandboxed run read ~/.local/share/opencode, {auth}:")
     assert "add @DATA@ to\nboth" in todo
+
+
+def test_a_template_kept_that_lets_a_run_read_a_directory_with_a_credential_is_to_be_changed(
+    machine: Machine,
+    canopy_env: CanopyEnv,
+) -> None:
+    """Templates before #2313 named `~/.cargo` and `~/.config/git` whole, and srt's allowRead outranks its denyRead."""
+    machine.install(*LINUX_COMMANDS)
+    templates = canopy_env.home / ".config" / "canopy" / "sandbox"
+    templates.mkdir(parents=True)
+    old = json.loads((canopy_sandbox.TEMPLATES / "worker.json").read_text())
+    old["filesystem"]["allowRead"] += [
+        "~/.cargo",
+        str(canopy_env.home / ".config" / "git"),
+        "~/.config/git/credentials",
+    ]
+    # What srt lets a run write it lets it read, and a path is the same however it is spelled.
+    old["filesystem"]["allowWrite"] += ["~/.local/../.cargo/"]
+    (templates / "worker.json").write_text(json.dumps(old))
+
+    report = sandbox.run_setup(SubprocessRunner(), "linux")
+
+    [todo] = report.todo
+    git_dir = canopy_env.home / ".config" / "git"
+    assert todo.startswith(
+        f"{templates / 'worker.json'} lets a sandboxed run read ~/.cargo, {git_dir}, ~/.local/../.cargo/, and "
+        "with them "
+        "~/.cargo/credentials.toml, ~/.config/git/credentials:",
+    )
+
+
+def test_the_shipped_templates_name_no_directory_with_a_credential(machine: Machine, canopy_env: CanopyEnv) -> None:
+    machine.install(*LINUX_COMMANDS)
+    assert sandbox.run_setup(SubprocessRunner(), "linux").todo == []
+
+    again = sandbox.run_setup(SubprocessRunner(), "linux")
+
+    assert again.kept == [
+        canopy_env.home / ".config" / "canopy" / "sandbox" / f"{r}.json" for r in canopy_sandbox.ROLES
+    ]
+    assert again.todo == []
 
 
 @pytest.mark.parametrize("key", ["allowRead", "allowWrite"])
@@ -278,25 +319,46 @@ def test_a_failed_npm_install_is_reported(machine: Machine) -> None:
     assert todo.endswith("npm error 404 Not Found")
 
 
-@pytest.mark.parametrize(("restricted", "says"), [("1", "AppArmor restricts unprivileged ones"), ("0", "no userns")])
+@pytest.mark.parametrize(
+    ("restricted", "profile", "says"),
+    [
+        ("1", None, "AppArmor restricts unprivileged ones"),
+        ("0", None, "no userns"),
+        ("1", "loaded", "bwrap-userns-restrict profile denies every"),
+        ("0", "loaded", "bwrap-userns-restrict profile denies every"),
+        ("1", "disabled", "AppArmor restricts unprivileged ones"),
+    ],
+)
 def test_bubblewrap_that_cannot_make_a_sandbox_says_why(
     machine: Machine,
     tmp_path: Path,
     restricted: str,
+    profile: str | None,
     says: str,
 ) -> None:
+    """Ubuntu 24.04 restricts user namespaces by a sysctl; 26.04 also by a profile for bwrap, which the fix disables."""
     machine.install(*LINUX_COMMANDS)
     setting = tmp_path / "apparmor_restrict_unprivileged_userns"
     setting.write_text(f"{restricted}\n")
+    apparmor = tmp_path / "apparmor.d"
+    (apparmor / "disable").mkdir(parents=True)
+    if profile is not None:
+        (apparmor / "bwrap-userns-restrict").touch()
+    if profile == "disabled":
+        (apparmor / "disable" / "bwrap-userns-restrict").symlink_to(apparmor / "bwrap-userns-restrict")
     with (
         mock.patch.object(sandbox, "APPARMOR_USERNS", setting),
+        mock.patch.object(sandbox, "BWRAP_PROFILE", apparmor / "bwrap-userns-restrict"),
+        mock.patch.object(sandbox, "BWRAP_PROFILE_DISABLED", apparmor / "disable" / "bwrap-userns-restrict"),
         mock.patch.dict(os.environ, {"FAKE_EXIT_BWRAP": "1", "FAKE_STDERR": "bwrap: no userns\n"}),
     ):
         report = sandbox.run_setup(SubprocessRunner(), "linux")
 
     [todo] = [t for t in report.todo if "bubblewrap" in t]
     assert says in todo
-    assert ("sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0" in todo) is (restricted == "1")
+    lifts = "sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0" in todo
+    assert lifts is (restricted == "1" or profile == "loaded")
+    assert ("sudo apparmor_parser -R" in todo) is (profile == "loaded")
 
 
 @pytest.mark.parametrize(

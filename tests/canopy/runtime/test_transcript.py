@@ -295,6 +295,13 @@ def test_a_sessions_tool_calls_read_in_order_with_what_was_spent_before_each(tmp
         ("read", ("/w/a.py",), True, 0.25),
         ("other", (), True, 0.75),
     ]
+    # What each sent and returned, and the command the shell ran; none of their metadata says whether it was cut.
+    assert [(u.tool, u.command, u.input_chars, u.result_chars, u.cut) for u in found.calls] == [
+        ("grep", None, len('{"pattern":"x"}'), 0, None),
+        ("read", None, len('{"filePath":"/w/b.py"}'), 2, None),
+        ("read", None, len('{"filePath":"/w/a.py"}'), 0, None),
+        ("bash", "uv run pytest -q", len('{"command":"uv run pytest -q","description":"Run the tests"}'), 9, None),
+    ]
     assert transcript.uses(tmp_path / "missing.log", SESSION, version=Version.ONE) is None
     (tmp_path / "link.log").symlink_to(path)
     assert transcript.uses(tmp_path / "link.log", SESSION, version=Version.ONE) is None

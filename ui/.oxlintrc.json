@@ -2,10 +2,6 @@
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["react", "typescript", "oxc", "unicorn", "import", "jsx-a11y", "promise", "vitest"],
   "jsPlugins": [
-    {
-      "name": "react-compiler",
-      "specifier": "eslint-plugin-react-hooks"
-    },
     // Every exported name, and each field of an exported interface, carries a JSDoc comment with no types in it:
     // TypeScript has the types. oxlint's own jsdoc plugin has no rule that requires a comment.
     {
@@ -15,8 +11,15 @@
     {
       "name": "playwright",
       "specifier": "eslint-plugin-playwright"
-    }
+    },
+    // Tailwind's classes, read against the design system src/index.css builds: an unknown class, two that set the
+    // same property, a class name built at run time (which Tailwind never sees), and a deprecated or non-canonical
+    // spelling.
+    "oxlint-tailwindcss"
   ],
+  "settings": {
+    "tailwindcss": { "entryPoint": "src/index.css" }
+  },
   // Strict and consistent: every rule in these categories is an error, and a rule from style or restriction is
   // listed by name below. Those two categories are not on whole, since their rules contradict each other
   // (import/no-named-export against import/prefer-default-export) and the code (unicorn/no-null, eslint/no-ternary).
@@ -76,21 +79,44 @@
     // A test narrows what noUncheckedIndexedAccess leaves possibly undefined (`if (!first) throw ...`, `?? ''`):
     // that is a guard, not a branch in what the test checks.
     "vitest/no-conditional-in-test": "off",
-    "react-compiler/static-components": "error",
-    "react-compiler/use-memo": "error",
-    "react-compiler/void-use-memo": "error",
-    "react-compiler/preserve-manual-memoization": "error",
-    "react-compiler/incompatible-library": "error",
-    "react-compiler/immutability": "error",
-    "react-compiler/globals": "error",
-    "react-compiler/refs": "error",
-    "react-compiler/set-state-in-effect": "error",
-    "react-compiler/error-boundaries": "error",
-    "react-compiler/purity": "error",
-    "react-compiler/set-state-in-render": "error",
-    "react-compiler/unsupported-syntax": "error",
-    "react-compiler/config": "error",
-    "react-compiler/gating": "error",
+    // Every rule oxlint-tailwindcss recommends, as an error. Not its sort order, which oxfmt writes
+    // (sortTailwindcss in .oxfmtrc.json), nor no-dark-without-light, since a component has no dark: at all.
+    // Allowed: panel-label's type in a color of its own (ui/DESIGN.md, "panel-label type"), and a skip link's
+    // sr-only, which focus:not-sr-only and its position undo, as Tailwind's docs teach.
+    "tailwindcss/no-conflicting-classes": ["error", { "allow": [["^panel-label$", "^text-"], "(^|:)(not-)?sr-only$"] }],
+    "tailwindcss/no-contradicting-variants": "error",
+    "tailwindcss/no-duplicate-classes": "error",
+    "tailwindcss/no-dynamic-classes": "error",
+    "tailwindcss/no-unknown-classes": "error",
+    "tailwindcss/enforce-canonical": "error",
+    "tailwindcss/enforce-negative-arbitrary-values": "error",
+    "tailwindcss/no-deprecated-classes": "error",
+    "tailwindcss/no-unnecessary-arbitrary-value": "error",
+    "tailwindcss/consistent-variant-order": "error",
+    "tailwindcss/enforce-consistent-important-position": "error",
+    "tailwindcss/enforce-consistent-variable-syntax": "error",
+    "tailwindcss/enforce-shorthand": "error",
+    "tailwindcss/no-unnecessary-whitespace": "error",
+    "tailwindcss/no-hardcoded-colors": "error",
+    // The React Compiler's rules, from oxlint's own port of the compiler, which is the one the build runs
+    // (`compiler: true` in vite.config.ts), so the lint and the build read a component the same way. todo and
+    // invariant refuse a component or hook the compiler would skip, which the build leaves unmemoized without a
+    // word: syntax it does not compile yet (`try`/`finally`, `??=`, a dynamic `import()`), or an error of its own.
+    "react/static-components": "error",
+    "react/use-memo": "error",
+    "react/void-use-memo": "error",
+    "react/preserve-manual-memoization": "error",
+    "react/incompatible-library": "error",
+    "react/immutability": "error",
+    "react/globals": "error",
+    "react/refs": "error",
+    "react/set-state-in-effect": "error",
+    "react/error-boundaries": "error",
+    "react/purity": "error",
+    "react/set-state-in-render": "error",
+    "react/unsupported-syntax": "error",
+    "react/todo": "error",
+    "react/invariant": "error",
     "no-restricted-imports": [
       "error",
       {
@@ -265,6 +291,8 @@
       "files": ["e2e/**"],
       "rules": {
         "eslint/no-await-in-loop": "off",
+        // The specs write no classes, and the plugin reads a list named `styles` (a menu's paragraph styles) as some.
+        "tailwindcss/no-unknown-classes": "off",
         "playwright/consistent-spacing-between-blocks": "error",
         // A screenshot is an assertion: the helpers that take one compare it with its baseline.
         "playwright/expect-expect": [

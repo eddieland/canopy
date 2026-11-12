@@ -68,7 +68,7 @@ function CommandGroup({ className, ...props }: ComponentProps<typeof CommandPrim
         <CommandPrimitive.Group
             data-slot="command-group"
             className={cn(
-                'overflow-hidden [&_[cmdk-group-heading]]:panel-label [&_[cmdk-group-heading]]:px-2',
+                'overflow-hidden [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:panel-label',
                 className,
             )}
             {...props}

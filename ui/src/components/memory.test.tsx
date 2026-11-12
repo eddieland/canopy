@@ -296,6 +296,7 @@ function proposal(left: number): MemoryProposal {
         private: false,
         ticket_done: false,
         expires_at: new Date(Date.now() + left).toISOString(),
+        seconds: [],
     }
 }
 
@@ -305,6 +306,19 @@ describe('ProposalFacts', () => {
         expect(screen.getByText(/ended/u).textContent).toBe('implement, ended done')
         expect(screen.getByText('ticket not done yet')).toBeDefined()
         expect(screen.getByText('private')).toBeDefined()
+        expect(screen.queryByText(/seconded/u)).toBeNull()
+    })
+
+    it('counts the tickets that seconded a proposal, naming each and its run on hover', async () => {
+        const seconds = [
+            { ticket_key: 'ABC-100', run_id: 40 },
+            { ticket_key: 'ABC-104', run_id: 43 },
+        ]
+        await renderRows(<ProposalFacts proposal={{ ...proposal(5 * 24 * HOUR), seconds }} />)
+        expect(screen.getByTitle('ABC-100 (run 40), ABC-104 (run 43)').textContent).toBe('seconded by 2 tickets')
+        cleanup()
+        await renderRows(<ProposalFacts proposal={{ ...proposal(5 * 24 * HOUR), seconds: seconds.slice(1) }} />)
+        expect(screen.getByText('seconded by 1 ticket')).toBeDefined()
     })
 })
 

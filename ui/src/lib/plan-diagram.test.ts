@@ -2,6 +2,7 @@ import { within } from '@testing-library/dom'
 import { Editor } from '@tiptap/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { blockSlots } from '@/lib/block-slots'
 import { drawDiagram } from '@/lib/diagram'
 import type { Drawn, NotDrawn } from '@/lib/diagram'
 import { planExtensions } from '@/lib/plan-schema'
@@ -12,7 +13,7 @@ vi.mock(import('@/lib/diagram'), () => ({
     drawDiagram: vi.fn<(source: string) => Promise<Drawn | NotDrawn>>((source) =>
         Promise.resolve(
             source.startsWith('pie')
-                ? { error: 'a pie diagram is not drawn here' }
+                ? { error: 'pie is not drawn here' }
                 : { svg: `<svg>${source}</svg>`, kind: 'sequence' },
         ),
     ),
@@ -70,6 +71,18 @@ describe('a Mermaid code block', () => {
         expect(drawDiagram).toHaveBeenCalledTimes(1)
     })
 
+    it('is labelled by its kind where it has no accTitle', async () => {
+        const { root } = open(PLAN)
+        await within(root).findByRole('img', { name: /^A sequence diagram/u })
+        expect(within(root).getByText('sequence diagram')).toBeTruthy()
+    })
+
+    it('is named and captioned by its accTitle, where it has one', async () => {
+        const { root } = open('```mermaid\nsequenceDiagram\n    accTitle: The export, row by row\n    A->>B: hi\n```')
+        expect(await within(root).findByRole('img', { name: 'The export, row by row' })).toBeTruthy()
+        expect(within(root).getByText('The export, row by row')).toBeTruthy()
+    })
+
     it('writes back as the Markdown it was, and another language stays a code block', async () => {
         const { editor, root } = open(PLAN)
         await within(root).findByRole('img')
@@ -81,8 +94,56 @@ describe('a Mermaid code block', () => {
 
     it('says why it was not drawn, with no image', async () => {
         const { root } = open('```mermaid\npie\n    "a": 1\n```')
-        expect(await within(root).findByText('Not drawn: a pie diagram is not drawn here.')).toBeTruthy()
+        expect(await within(root).findByText('Not drawn: pie is not drawn here.')).toBeTruthy()
         expect(within(root).queryByRole('img')).toBeNull()
+    })
+
+    it('shows its code, and why, when the browser cannot read the picture drawn', async () => {
+        const { root } = open(DIAGRAM)
+        const image = await within(root).findByRole('img')
+        image.dispatchEvent(new Event('error'))
+        expect(within(root).getByText('Not drawn: the browser cannot read its picture.')).toBeTruthy()
+        expect(within(root).queryByRole('img')).toBeNull()
+        expect(root.querySelector<HTMLElement>('.plan-diagram')?.dataset['diagram']).toBe('failed')
+    })
+
+    it('keeps room in its head for its actions, saying what they act on as its source is edited', async () => {
+        const { editor, root } = open(DIAGRAM)
+        await within(root).findByRole('img')
+        const slots = blockSlots(editor)
+        const [block] = slots.snapshot()
+        expect(block?.kind).toBe('diagram')
+        expect(block?.kind === 'diagram' && block.source).toBe('sequenceDiagram\n    A->>B: hi')
+        expect(block?.slot.parentElement).toBe(root.querySelector('.plan-diagram-head'))
+
+        editor.commands.insertContentAt(codeEnd(editor), '\n    B->>A: bye')
+        expect(
+            slots
+                .snapshot()
+                .map((each) =>
+                    each.kind === 'diagram' ? each.source : each.kind === 'code' ? each.text : each.markdown,
+                ),
+        ).toEqual(['sequenceDiagram\n    A->>B: hi\n    B->>A: bye'])
+        expect(slots.snapshot()[0]?.id).toBe(block?.id)
+
+        editor.commands.setContent('# No diagram here', { contentType: 'markdown' })
+        expect(slots.snapshot()).toEqual([])
+    })
+
+    it("keeps room beside another language's block for its actions, saying what they copy as it is edited", () => {
+        const { editor, root } = open('```python\nprint("hi")\n```')
+        const slots = blockSlots(editor)
+        const [block] = slots.snapshot()
+        expect(block?.kind === 'code' && block.text).toBe('print("hi")')
+        expect(block?.slot.parentElement).toBe(root.querySelector('.plan-code'))
+        expect(within(root).getByText('print("hi")').closest('pre')?.parentElement).toBe(block?.slot.parentElement)
+
+        editor.commands.insertContentAt(codeEnd(editor), '\nprint("bye")')
+        expect(slots.snapshot().map((each) => each.kind === 'code' && each.text)).toEqual(['print("hi")\nprint("bye")'])
+
+        // Made a diagram, it is a diagram's block, with a diagram's room.
+        editor.commands.setContent('```mermaid\nflowchart LR\n```', { contentType: 'markdown' })
+        expect(slots.snapshot().map((each) => each.kind)).toEqual(['diagram'])
     })
 
     it('is drawn again once its source rests after an edit, and when the theme changes', async () => {

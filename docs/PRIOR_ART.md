@@ -1,8 +1,11 @@
 # Prior art
 
 A survey of open-source projects that overlap with canopy, and what their issue trackers show they learned the hard
-way. Surveyed 2026-09-29, aide 2026-10-18, and shared plans across tickets 2026-11-02 ([Shared plans across
-tickets](#shared-plans-across-tickets)). Why canopy is built anyway is D050.
+way. Surveyed 2026-09-29, aide 2026-10-18, shared plans across tickets 2026-11-02 ([Shared plans across
+tickets](#shared-plans-across-tickets)), tools for token efficiency 2026-11-08 ([Tools for token
+efficiency](#tools-for-token-efficiency)), a session plugin's hooks 2026-11-10 ([Hooks inside a
+session](#hooks-inside-a-session)), and planners of multi-ticket work 2026-11-11 ([Planning an
+epic](#planning-an-epic)). Why canopy is built anyway is D050.
 
 The canopy statuses below are as of those dates and are not kept current. Check the code before acting on one.
 
@@ -105,6 +108,258 @@ source unless marked secondary; docs sites the session could not reach are so ma
 - A human approves at both levels; the defaults that approved alone (Hermes, Devin) are where the incidents are.
 - None pins the parent's version in the child. Staleness is ignored, frozen at dispatch, or a manual pause and rewrite.
   canopy's plan hashes and `plan_changed` guard (§25) would make that a guard in code; M67 says how.
+
+## Tools for token efficiency
+
+Surveyed 2026-11-08 for ROADMAP M71: what tools harnesses give coding agents to read less, and what anyone has measured
+of it. Read from the vendors' own posts and documentation, the papers' abstracts, and the tools' READMEs; a claim read
+only in a search excerpt or a secondary summary, where the site could not be reached, is marked secondary. The
+canopy comparisons are as of that date.
+
+### What is measured, by someone other than the vendor
+
+- **Symbol tools do not save a strong model tokens when grep is at hand.** A tokens-to-success ablation over Python and
+  TypeScript repositories ([arXiv 2608.13568](https://arxiv.org/abs/2608.13568), secondary): for finding a named
+  symbol a language server *adds* 6% to 118% tokens by model, since the agent still greps; only the weakest model
+  saved, by flailing less. canopy's M70 puts an outline in the prompt and measures a gate first, which this supports,
+  and offers lookups last, which it says not to expect much of.
+- **Compressing what a model reads costs accuracy.** A code-graph server ([arXiv 2603.27277](https://arxiv.org/abs/2603.27277))
+  read a tenth of the tokens and answered 83% against a plain file-reading agent's 92%; minified code in context cut
+  SWE-bench input tokens 42% and resolution 12 points ([arXiv 2606.01326](https://arxiv.org/abs/2606.01326)); compact
+  serializations of tool results (TOON, TRON) saved up to 27% tokens at 9 to 14 points of accuracy and parse failures
+  that compound over turns ([arXiv 2605.29676](https://arxiv.org/abs/2605.29676)). So a canopy tool answers in plain
+  text or JSON records, as `canopy_git_log` and `grep` do, and never a terser form.
+- **Compact records between agents halve what the next one reads.** PACT ([arXiv 2606.05304](https://arxiv.org/abs/2606.05304)),
+  one model on SWE-bench Verified: each turn kept in shared history as a fixed-field record (action, observed state,
+  planned effect) rather than its text halved SWE-agent's input tokens at the same resolve rate. canopy's result line,
+  card (§41), and state block are such records already; what a worker's prose `summary` carries into later runs'
+  prompts is the one place a fixed shape has not been tried.
+- **Every shipped harness retrieves code deterministically.** A source study of eleven coding harnesses
+  ([arXiv 2609.00006](https://arxiv.org/pdf/2609.00006), secondary): ripgrep and tree-sitter in all, vector search for
+  code in none; seven compact on a threshold, Codex instead writes a summary the harness restores on resume. M70's
+  rejection of embeddings stands.
+- **Code execution against MCP** ([arXiv 2602.15945](https://arxiv.org/abs/2602.15945), secondary) cuts tokens and
+  widens the attack surface, with worse fulfillment where several servers are orchestrated. D077 denies it.
+
+### What vendors measure of their own
+
+Upper bounds, each against a baseline the vendor chose.
+
+- Anthropic's [writing effective tools](https://www.anthropic.com/engineering/writing-tools-for-agents): a
+  `response_format` of `concise` or `detailed` answered in 72 against 206 tokens; names in place of ids cut
+  hallucinated follow-ups; a truncated result should say how to narrow the next call; errors should state the fix;
+  consolidate a workflow into one tool rather than overlapping getters; many redundant calls in an evaluation mean the
+  limits or the pagination are wrong, many invalid-parameter errors that the descriptions are. canopy's git tools
+  already page, bound, and refuse by field name; `show` and `diff` have no range, and no cut result says how to narrow.
+- Anthropic's [code execution with MCP](https://www.anthropic.com/engineering/code-execution-with-mcp): one example,
+  150k to 2k tokens, by filtering a result where it is made rather than in the model's context; the harness doing the
+  filtering, as canopy's connectors do (§30), is the same saving without the model writing the code.
+  [Advanced tool use](https://anthropic.com/engineering/advanced-tool-use): loading tool definitions on demand cut a
+  77k-token prefix to 8.7k and raised accuracy; OpenCode has no form of it, and a prefix the provider caches is cheap
+  on a warm run (MEASUREMENTS 2026-10-21).
+- Anthropic's [context engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)
+  and [multi-agent research](https://www.anthropic.com/engineering/multi-agent-research-system): a subagent spends
+  tens of thousands of tokens and returns one to two thousand; multi-agent work costs about fifteen times a chat; token
+  use explains most of the variance in task performance; the lead's plan goes to memory before the window fills.
+  canopy's runs are such subagents of a loop with no shared context, so each starts with the brief in its prompt and
+  returns a result line; the parallel is the brief's fields, an objective, an output shape, which tools, and bounds.
+- [Claude Code](https://code.claude.com/docs/en/tools-reference) caps a tool result at 25k tokens, saves a longer one to
+  a file and returns its path with a preview, pages `read` with an offset and a limit, defaults `grep` to file names,
+  and names the follow-up in each truncation notice ([costs](https://code.claude.com/docs/en/costs): a hook that keeps
+  only a test run's failures turns tens of thousands of tokens into hundreds, and a CLI such as `gh` is cheaper than
+  an MCP server because it lists no tools). OpenCode cuts a tool's output at 2,000 lines or 50 KiB to a file it names
+  ([PR #23770](https://github.com/anomalyco/opencode/pull/23770)), which canopy's overseer prompt already tells it to
+  page. Codex keeps a byte budget per exec with the head kept and a line count in the hint
+  ([exec.rs](https://github.com/openai/codex/blob/main/codex-rs/core/src/exec.rs)).
+- Tool vendors: [jcodemunch](https://github.com/jgravelle/jcodemunch-mcp) "94.5% fewer tokens per lookup" against a
+  scripted grep that opens three files, success unmeasured; [agent-lsp](https://github.com/blackwell-systems/agent-lsp)
+  2 to 34 times by bytes, single runs; [rtk](https://github.com/rtk-ai/rtk) "up to 90%" of shell output, its own
+  table; [Serena](https://github.com/oraios/serena) claims and does not count, and turns its own file and shell tools
+  off under Claude Code and Codex because the harness has them. [aider's repo map](https://aider.chat/2023/10/22/repomap.html)
+  is tree-sitter and PageRank to a token budget, the model's one view of the repository, with no tools beside it.
+
+### Tools the harnesses give their agents
+
+- Progress and plans: Claude Code's task list, Codex's `update_plan`, Copilot's coding agent's `report_progress` with a
+  checklist in the PR body (secondary), Manus's `todo.md` recited each turn (secondary). canopy's card (§41) is the
+  same, with proof per step and a question the operator answers by letter.
+- Asking the user: Cline's and Roo's `ask_followup_question` with options (secondary); MCP's elicitation
+  (2025-06-18). canopy's card asks with lettered options and works around meanwhile; a message arrives through a tool
+  of canopy's, never a line (§44).
+- Subagents: Claude Code's Explore and Plan agents, Amp's Oracle and Librarian, each in its own context, returning a
+  summary (secondary); Amp replaced compaction with a hand-off thread that packages the relevant context and a goal.
+  Every canopy definition denies `task` (T1, spend); a run's hand-off is its result line and the next run's prompt.
+- Code structure: Cline's `list_code_definition_names`, a tree-sitter outline of one directory (secondary); Claude
+  Code's code-intelligence plugins for go-to-definition. M70.
+- Output filtering: Claude Code's hooks on a tool's result; rtk as a shell wrapper. canopy's plugin adds a line to a
+  result and never changes one (T4), and OpenCode's cut to a file already keeps a long output out of the context.
+
+### What held up as design, and what did not
+
+- Return high-signal fields, cap every result, keep the full text in a file the agent can page, and say in the cut how
+  to narrow the next call. Every shipped harness converged here, and it is where the independent savings are.
+- Keep the tool set small, stable through a run, and not overlapping the runtime's own `read`, `grep`, and shell:
+  changing the tools mid-run invalidates the cache behind them (Claude Code, Manus's "mask, don't remove", secondary).
+- MCP's annotations (`readOnlyHint` and the rest) are hints a client must treat as untrusted, never a guard; canopy's
+  `Hints` sets them so a client can skip a prompt, and its guards stay in code (D020). `structuredContent` saves no
+  tokens, since the spec has the text carry the same JSON and OpenCode reads the text alone (§27); it saves re-parsing.
+- Block rebuilt a tracker server from thirty tools to two, by workflow (secondary,
+  [recap](https://www.plushcap.com/content/workos/blog/workos-mcp-night-20-demo-recap-blocks-goose-the-layered-tool-pattern)).
+  canopy's overseer has one verb per decision on purpose, for spend by tool (§27); a worker's one read of its
+  feedback (M71 stage 2) follows Block's shape, one tool for what three getters would return.
+- Not to copy: a terser result format than JSON; minified code in a result; a runner tool whose commands skip the
+  shell's rules; the log or the thread pasted into the prompt (What not to copy, below).
+
+## Hooks inside a session
+
+Surveyed 2026-11-10: [oh-my-opencode](https://github.com/opensoft/oh-my-opencode), read in source at
+[aead4ae](https://github.com/opensoft/oh-my-opencode/commit/aead4ae) (2026-01-25), a fork's snapshot that targets
+OpenCode 1. It is a plugin for the operator's own interactive session: some thirty hooks on the runtime's events, a
+planner and an orchestrator that delegates to subagents, web search servers, and loaders for Claude Code's files. It
+has no tracker, loop, PRs, or CI follow-up, so what it can teach is what a plugin does to a running agent, which
+canopy's own does in a line on a tool call's result (§33). The canopy comparisons are as of that date; none of the
+three things to measure was checked live.
+
+### Worth measuring
+
+- **Git that cannot wait on an editor or a pager.** Its hook puts `GIT_EDITOR=:`, `GIT_SEQUENCE_EDITOR=:`,
+  `GIT_MERGE_AUTOEDIT=no`, `GIT_PAGER=cat`, and `PAGER=cat` before every git command an agent runs outside a terminal
+  ([constants.ts](https://github.com/opensoft/oh-my-opencode/blob/aead4ae/src/hooks/non-interactive-env/constants.ts)). canopy sets `GIT_TERMINAL_PROMPT=0` for its own git
+  and none of these for an agent's, whose worker merges a moved base and may rebase (`trust.rebase`). Whether a merge
+  or a `rebase --continue` waits on an editor under the runtime's shell until the run's timeout is not known. canopy
+  starts the process, so the variables would go in its environment, not before each command.
+- **A line after an edit that failed.** When the `edit` tool reports its old text missing or found more than once, a
+  hook adds a line telling the agent to read the file again before another edit
+  ([edit-error-recovery](https://github.com/opensoft/oh-my-opencode/blob/aead4ae/src/hooks/edit-error-recovery/index.ts)). canopy counts each tool's errors by run, so the
+  journal says how often edits fail and how many more follow, before a line is written.
+- **What a compaction keeps.** It hands the runtime's summary a shape: the requests as written, the goal, the work
+  done, the work left, and what must not be done
+  ([compaction-context-injector](https://github.com/opensoft/oh-my-opencode/blob/aead4ae/src/hooks/compaction-context-injector/index.ts)). canopy records the context
+  overflow a run compacts after and says nothing to the agent then; its nudge already names the plan's file (§41).
+  How often a run compacts, and whether such a run still ends in a valid result line, is in the journal.
+
+### In prompts
+
+- **A critic bounded to what is missing.** Its plan reviewer simulates doing the work and rejects only where it
+  could not go on: a file reference that does not hold, a task with no acceptance criterion, an assumption about
+  business logic. Disagreeing with the approach, or preferring another architecture, is listed as no reason to reject
+  ([momus.ts](https://github.com/opensoft/oh-my-opencode/blob/aead4ae/src/agents/momus.ts)). canopy's planner checks its own plan for the first kind, and the operator
+  approves; the rule is one for a reviewer's or a persona's prompt, where a critic with no bound asks for another
+  round each time.
+
+### Already answered, or not to copy
+
+- A planner that writes only its plan, a plan file workers never edit, and a notepad of learnings per plan are
+  canopy's planner (§25) and proposals (§28). "Never trust an agent's report" is its orchestrator's prompt line;
+  canopy checks what was pushed (§8).
+- **Hooks that keep a session going.** One prompts the session again while its todo list has items open
+  ([todo-continuation-enforcer.ts](https://github.com/opensoft/oh-my-opencode/blob/aead4ae/src/hooks/todo-continuation-enforcer.ts)), and its `ralph-loop` again until the
+  agent prints a promise tag, up to 100 times. As aide's (What not to copy, below): a canopy run ends when it says so,
+  and another try is a new run D030 counts.
+- **Idle found by polling.** A background agent is done after three polls, two seconds apart, find its session
+  unchanged ([manager.ts](https://github.com/opensoft/oh-my-opencode/blob/aead4ae/src/features/background-agent/manager.ts)), and its own notes list the flaky tests around
+  it. canopy reads a process's exit and its result line.
+- **Repairing a session's stored messages** after a provider refuses them (a tool result missing, thinking blocks out
+  of order). canopy's run is `crashed` and the harness never restarts it (§15); each distinct error is kept, so the
+  journal can say whether these happen.
+- Subagents, web search and fetch, loaders for another tool's config files, and an update check when the plugin
+  loads: D077, TRUST_MODEL T4 and T7.
+
+## Planning an epic
+
+Surveyed 2026-11-11, asked by the operator: tools that plan work spanning several units, beyond those in [Shared plans
+across tickets](#shared-plans-across-tickets), for what would improve canopy's epic planner (§43). Read in the
+repositories' own files and issues where a link goes to one. The vendors' sites were outside the session's network, so
+Kiro, Traycer, Antigravity, Cursor, Factory, Devin, Jules, Zenflow, and Augment are read from search excerpts of their
+own pages: secondary, each to be read whole before anything is built on it. Anthropic's posts were read whole. The
+canopy comparisons are as of that date, and nothing here was checked live.
+
+### Worth building, in rough order
+
+- **Hold the outline's rules in code.** The planner's prompt says every requirement is covered, every contract has an
+  entry that provides it, and a provider comes before its users; `core/epic_outline.py` refuses only an id the plan
+  does not hold and an entry after itself, so an uncovered `R`, a contract no entry provides, and a cycle in `After`
+  are approved as written, and the page shows the first only on hover. beads lints an epic's graph before work starts
+  (`bd swarm validate`: cycles, orphans, disconnected parts, the ready fronts;
+  [CLI reference](https://github.com/gastownhall/beads/blob/main/docs/CLI_REFERENCE.md)), and Taskmaster has
+  `validate-dependencies`. Those who check with a model miss things: Spec Kit's `/analyze` sees only what the model
+  loaded, and its users ask for an inventory of ids kept by a script
+  ([#4164](https://github.com/github/spec-kit/issues/4164)); OpenSpec's `validate --strict` checks structure alone
+  ([#783](https://github.com/Fission-AI/OpenSpec/issues/783)). canopy's ids make it mechanical: refuse the plan as
+  `bad_outline` already does, so the planner fixes it before the operator reads it. Read-only, never a repair:
+  Taskmaster's `fix_dependencies` wiped data ([#1636](https://github.com/eyaltoledano/claude-task-master/issues/1636)).
+- **How each requirement is shown met.** An epic's `R` is "observable" and nothing more; a ticket's plan has
+  `Acceptance` and `Verification` (§25), so the check exists only per ticket and nothing says when the epic is done.
+  Factory's orchestrator writes a validation contract of behaviors before it defines features, and validators that
+  wrote none of the code check it at each milestone; in one mission their findings became 21 fix features, a third of
+  the work (secondary). Anthropic's long-running harness keeps a feature list whose entries carry test steps and a
+  `passes` flag that only verification may flip
+  ([post](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents)); superpowers' plans give
+  each check its command and the output that means success
+  ([writing-plans](https://github.com/obra/superpowers/blob/main/skills/writing-plans/SKILL.md)). For canopy: one
+  line under each `R` saying how someone who did not write it would see it met, which each member's `Acceptance` cites
+  and the close-out review reads. Against going further: Anthropic dropped per-sprint contracts as models improved,
+  keeping one pass at the end ([post](https://www.anthropic.com/engineering/harness-design-long-running-apps)), which
+  is what the close-out already is.
+- **Progress by requirement, derived.** The epic's page counts entries filed, not requirements met. ccpm keeps a
+  `progress:` on the epic and beads `bd epic status`. Where the count is a box an agent ticks it drifts: Kiro ticked a
+  task whose sub-agent had been killed at its iteration limit
+  ([#11786](https://github.com/kirodotdev/Kiro/issues/11786)), and Backlog.md's issues are checkboxes out of step with
+  status ([#914](https://github.com/MrLesk/Backlog.md/issues/914)). canopy already knows each member's PR and phase
+  (§7), so an `R` is met when every entry covering it has a merged member: derived, never written by an agent.
+- **A worker's departures, said by the worker.** `epic_drift` is raised from a member's plan, before any code. What a
+  worker finds while building, a contract that cannot hold as written, reaches the operator only as prose in a
+  summary. Cursor's workers hand back concerns and deviations as fields of one hand-off (secondary); superpowers'
+  implementers end `DONE_WITH_CONCERNS`; beads files a discovery with where it came from (`discovered-from`). A
+  member's result naming the `R` and `C` ids it departed from, checked against the plan's ids as a planner's are and
+  raised as the same attention item, extends drift to the build with no new channel. Not an agent-written section of
+  the plan: Codex's ExecPlans and Augment's "living spec" let the implementer edit the plan, which approval by hash
+  exists to prevent.
+- **Findings at close-out that lead somewhere.** The close-out review's findings stay on the epic. Factory turns a
+  validator's findings into fix features; Traycer grades each against the plan and re-verifies only the earlier ones
+  on a second pass (secondary). For canopy the operator chooses which findings to file, through the filing run that
+  already exists; nothing is filed alone.
+
+### Worth measuring first
+
+- **A critic before the operator reads.** Jules ran a second agent over plans nobody would approve by hand and
+  claimed 9.5% fewer failed tasks (secondary, the vendor's own figure; Jules is being shut down). canopy's plans are
+  all read by the operator, and Anthropic's evaluator "talked itself into approving". The journal says how often an
+  epic's first plan is approved without a reply; if that is most of them, a critic buys nothing. If one is tried,
+  bound it as oh-my-opencode's is ([In prompts](#in-prompts)), to what a member's planner could not go on from.
+- **More than one question, each with a default.** canopy's planner asks one blocking question or plans. Spec Kit's
+  `/clarify` asks at most five, one at a time, each with a recommended answer, and logs each answer in the spec
+  ([clarify.md](https://github.com/github/spec-kit/blob/main/templates/commands/clarify.md)); Kiro puts an ambiguity
+  as a choice of two (secondary). canopy's `Decisions` already are questions with a chosen default, answered after
+  the plan rather than before it, which costs a plan run when the answer changes the breakdown. Measure how many
+  epics' first reply picks another option before moving any of them ahead of the plan.
+- **Entries that touch the same files.** ccpm's tasks declare `conflicts_with`, and Kiro never runs two tasks on the
+  same files at once (secondary). canopy's siblings with no `After` between them may run together and conflict at
+  merge, which costs a `resume` each. No tool showed how accurate a planner's guess at files is, so count members'
+  conflict resumes first; the fix would be a planner told to order such entries with `After`, not a new field.
+
+### Already answered, or not to copy
+
+- **A dependent released when its blocker finishes rather than merges** is Gas Town's top open dependency bug
+  ([#1893](https://github.com/gastownhall/gastown/issues/1893)). canopy stacks a blocked ticket on its blocker's branch
+  only while that PR is open and green, and tells it when the blocker merges (§10).
+- **An integration branch per epic** (Gas Town), or one worktree the epic's agents share (ccpm, where a worker's
+  hours of work never reached main, [#530](https://github.com/automazeio/ccpm/issues/530)): one worker per ticket,
+  each with its PR, and stacking gives the dependent its provider's code.
+- **Requirements matched by their headings.** OpenSpec merges a change into its specs by header name, so a reworded
+  header breaks the merge and two changes to one requirement drop scenarios; its users ask for stable ids
+  ([#2033](https://github.com/Fission-AI/OpenSpec/issues/2033)). canopy's ids, never reused, are that.
+- **A size score per ticket.** Taskmaster's 1 to 10 is ignored by its own `expand`
+  ([#1728](https://github.com/eyaltoledano/claude-task-master/issues/1728)), and expanding every task up front misses
+  what the finished ones taught ([#866](https://github.com/eyaltoledano/claude-task-master/issues/866)), which is
+  the case for a member's plan written just in time. superpowers' rule is worth one line of the planner's prompt
+  instead: split only where a reviewer could reject one entry and approve its neighbor.
+- **Comments in the plan's margin** (Antigravity, Claude Code's cloud plan review; Cursor's users ask for it;
+  secondary). A ticket's plan has them; an epic's takes a reply on purpose, since its members read the plan itself.
+- **A deeper plan.** Spec Kit's users call it the "illusion of work"
+  ([#75](https://github.com/github/spec-kit/issues/75)), Anthropic's planner leaves implementation detail out because
+  an error in it cascades, and Cursor removed its judge and integrator roles as costing more than they caught
+  (secondary). The epic plan stays shallow.
 
 ## Lessons canopy's design already answers
 

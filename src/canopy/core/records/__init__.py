@@ -88,6 +88,7 @@ from canopy.core.records.epics import (
 from canopy.core.records.memory import (
     Memory,
     MemoryRead,
+    ProposalSecond,
     RunMemory,
 )
 from canopy.core.records.notify import (
@@ -146,6 +147,8 @@ from canopy.core.records.runs import (
     PoolSlot,
     Run,
     RunChange,
+    RunChangeFile,
+    RunCommit,
     RunRead,
     RunReason,
     RunSlot,
@@ -234,6 +237,7 @@ __all__ = [
     "PlanWaiver",
     "PoolSlot",
     "PrTitle",
+    "ProposalSecond",
     "Query",
     "Record",
     "RecordedRun",
@@ -254,6 +258,8 @@ __all__ = [
     "RowError",
     "Run",
     "RunChange",
+    "RunChangeFile",
+    "RunCommit",
     "RunMemory",
     "RunModel",
     "RunModelRead",

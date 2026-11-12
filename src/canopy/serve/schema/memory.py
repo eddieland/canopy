@@ -95,8 +95,17 @@ class MemoryEntry(Model):
     tracker."""
 
 
+class MemorySecond(Model):
+    """A ticket whose run made a pending proposal again, which counts once however many of its runs did (DESIGN §28)."""
+
+    ticket_key: str
+    """The ticket, never the proposal's own."""
+    run_id: int
+    """The first of its runs to make the proposal again."""
+
+
 class MemoryProposal(Model):
-    """A proposal waiting on the operator, with where it came from (DESIGN §28)."""
+    """A proposal waiting on the operator, with where it came from and who seconded it (DESIGN §28)."""
 
     entry: MemoryEntry
     """The proposal."""
@@ -111,6 +120,9 @@ class MemoryProposal(Model):
     expires_at: datetime
     """When it lapses unless the operator decides it, `PROPOSAL_DAYS` after it was written: the first tick after
     invalidates it."""
+    seconds: list[MemorySecond]
+    """The other tickets whose runs made it again, under its key and repository or in its words, in the order they
+    did: the proposals list the most seconded first."""
 
 
 class MemoryDigest(Model):

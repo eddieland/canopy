@@ -82,7 +82,7 @@ Check each, and show one table of what is there, with its version, and what is m
 | uv | installs canopy | `uv --version` |
 | Go | builds treehouse at its pinned commit | `go version` |
 | Node 22.12+ and npm | the install builds the web UI; the sandbox installs `srt` with npm | `node --version`, `npm --version` |
-| OpenCode | canopy's agent runtime: 1, or 2.1.4 or later for `runtime.version = 2` | `opencode --version` |
+| OpenCode | canopy's agent runtime: 2.1.4 or later; 1, deprecated, only with `runtime.version = 1` | `opencode --version` |
 | gh (optional) | an HTTPS credential helper for git, `gh auth setup-git` | `gh --version` |
 
 For each missing one, propose how to install it on this OS (the upstream installer, the system package manager, or
@@ -107,9 +107,10 @@ need a model provider OpenCode is signed in to.
   GitHub Issues, the GitHub server is both.
 - For a missing server, show the operator the entry for `~/.config/opencode/opencode.json`, from that server's own
   documentation, and ask before you write it. They complete any sign-in themselves.
-- With OpenCode 2, set `version = 2` under `[runtime]` in the user config, and set each server canopy's agents need
-  to `"codemode": false`: canopy denies its agents code mode, so a server left in it is out of their reach (D077).
-  `canopy agents` shows such a server as `none` for every agent.
+- Set each server canopy's agents need to `"codemode": false`: canopy denies its agents code mode, so a server left
+  in it is out of their reach (D077). `canopy agents` shows such a server as `none` for every agent.
+- If only OpenCode 1 is installed, propose upgrading to 2.1.4 or later. 1 is deprecated: only if the operator keeps it,
+  set `version = 1` under `[runtime]` in the user config.
 - Check that OpenCode is signed in to a model provider (OpenCode's `--help` names the command); if not, the operator
   signs in.
 - Explain the grants README step 3 describes: workers need the write tools to comment on a ticket, edit its labels,
@@ -191,9 +192,10 @@ closed" item. If they decline, note it in your summary and go to stage 8. If the
    `review_cmd`, and `setup_cmd` if one is set. Ask whether any chore sets a `cmd` of its own: each needs the
    `canopy-sandbox chore --` prefix there too, as step 5 shows, and the check below does not catch one that lacks it.
    Leave `overseer_cmd` as it is.
-4. Run SANDBOX.md's check (step 6) against one repository and show the result. Every line but the last two must say
-   `refused`, and the last two `allowed`. If one does not, find which template entry lets it through, fix it, and
-   check again. Do not move on with a failing check unless the operator decides to leave the sandbox off.
+4. Run `canopy sandbox check` (SANDBOX.md step 6) and show the result. The commit and the allowed host must say
+   `allowed`, and every other line `refused`; it exits 1 otherwise, and a `Note:` names what it left unchecked. If
+   one does not, find which template entry lets it through, fix it, and check again. Do not move on with a failing
+   check unless the operator decides to leave the sandbox off.
 5. Run `canopy status` again: the config must still load.
 
 ## 8. The operator's own agent sessions

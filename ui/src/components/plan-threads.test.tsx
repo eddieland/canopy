@@ -107,6 +107,24 @@ describe('PlanThreads', () => {
         ).toBeDefined()
     })
 
+    it('marks an open thread found on a reworded passage, and not a resolved one', () => {
+        renderList({
+            threads: [thread('a', 'the cache'), thread('done', 'the schema', { resolved: true })],
+            found: new Set(['a', 'done']),
+            reworded: new Map([
+                ['a', 'the caches'],
+                ['done', 'the schemas'],
+            ]),
+        })
+        expect(
+            within(screen.getByRole('article', { name: 'Comment on “the cache”' })).getByText('passage reworded'),
+        ).toBeDefined()
+        fireEvent.click(screen.getByRole('button', { name: 'Show 1 resolved' }))
+        expect(
+            within(screen.getByRole('article', { name: 'Comment on “the schema”' })).queryByText('passage reworded'),
+        ).toBeNull()
+    })
+
     it('says there are no open comments, and how to add one when the operator can', () => {
         renderList({ threads: [thread('done', 'the schema', { resolved: true })], found: new Set(['done']) })
         expect(screen.getByText('no open comments yet: select text in the plan, then Comment')).toBeDefined()

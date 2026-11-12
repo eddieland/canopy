@@ -76,3 +76,17 @@ class MemoryRead(Row):
     memory_id: int
     # What the run said of it; None when it cited it in neither list, and for every read from before runs were named.
     cited: MemoryCited | None
+
+
+@dataclass(frozen=True)
+class ProposalSecond(Row):
+    """A ticket whose run made a pending proposal again, which counts once however many of its runs did (DESIGN §28)."""
+
+    TABLE: ClassVar[LiteralString] = "proposal_seconds"
+
+    #: The proposal seconded.
+    memory_id: int
+    #: The ticket whose run seconded it, never the proposal's own.
+    ticket_key: str
+    #: The first of the ticket's runs to second it.
+    run_id: int

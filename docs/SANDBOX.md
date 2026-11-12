@@ -70,13 +70,22 @@ Setup also checks two things `srt` only warns about in its debug log, and runs a
   elsewhere a sandboxed command can reach your SSH agent, or Docker's socket. Do not rely on the sandbox there.
 
 On Ubuntu 24.04 and later, AppArmor restricts unprivileged user namespaces
-(`kernel.apparmor_restrict_unprivileged_userns`), and bubblewrap fails without them. Setup tries bubblewrap, and when
-it fails this way, says to lift the restriction, now and at boot, or give `bwrap` an AppArmor profile that allows
-`userns`:
+(`kernel.apparmor_restrict_unprivileged_userns`), and bubblewrap fails without them. Setup tries bubblewrap as `srt`
+uses it, with a user namespace inside the sandbox's own as `srt`'s seccomp helper makes, and when it fails this way,
+says to lift the restriction, now and at boot:
 
 ```sh
 sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 echo 'kernel.apparmor_restrict_unprivileged_userns = 0' | sudo tee /etc/sysctl.d/60-canopy-sandbox.conf
+```
+
+Ubuntu 26.04 also loads AppArmor's `bwrap-userns-restrict` profile, which lets bubblewrap make its namespace but
+denies every capability to what it starts, so `srt`'s seccomp helper cannot make its own. Where that profile is
+loaded, setup says to disable it as well, before the two commands above:
+
+```sh
+sudo ln -sf /etc/apparmor.d/bwrap-userns-restrict /etc/apparmor.d/disable/
+sudo apparmor_parser -R /etc/apparmor.d/bwrap-userns-restrict
 ```
 
 Run canopy as yourself, not as root.
@@ -148,10 +157,16 @@ unless an internal MCP service lives there. Behind a corporate proxy, which `srt
 own rules are the only ones.
 
 `filesystem.allowRead` re-allows what a run must read under `$HOME`, which `denyRead` hides. Trim the toolchains to
-the ones you build with, and add any that are missing: `~/.local/bin`, `~/.nvm`, `~/.cargo`, `~/.rustup`, `~/go`,
-and `~/.local/share/uv` are there. A toolchain is readable, not writable. Name each directory, never one that holds
-the role caches or the run directories, such as `~` or `/tmp`: `srt` would bind it back over them, so the wrapper
-refuses it.
+the ones you build with, and add any that are missing: `~/.local/bin`, `~/.nvm`, `~/.cargo/bin`, `~/.rustup`, `~/go`,
+and `~/.local/share/uv` are there. A toolchain is readable, not writable. `allowRead` outranks `denyRead`, so a
+directory you add is readable whole: where one holds a credential beside what a build reads, name the parts. The
+templates name `~/.cargo/bin`, `env`, `registry`, and `git`, not `~/.cargo`, whose `credentials.toml` is your
+crates.io token, and git's `config`, `ignore`, and `attributes` under `~/.config/git`, not the directory, where the
+store helper keeps `credentials`. `canopy sandbox setup` says when a template you kept names either whole. A file a
+template names is readable as it is: if your `~/.gitconfig` or `~/.config/git/config` holds a token, in a URL or an
+`http.extraHeader`, move it to a credential helper, or take the file out of `allowRead`. Name each directory, never
+one that holds the role caches or the run directories, such as `~` or `/tmp`: `srt` would bind it back over them, so
+the wrapper refuses it.
 
 Caches go in `@CACHE@`, the role's cache directory, which the templates allow reading and writing. Never put one of
 your own caches in `allowWrite`: your own tools run what is in them, outside the sandbox, so a run that can write one
@@ -164,8 +179,8 @@ wrapper's `--`, such as `env CARGO_HOME=/home/you/.cache/canopy/sandbox/worker/c
 words, and no shell expands `$HOME` in it. Two more you are likely to need:
 
 - **Push credentials.** A worker pushes from inside the sandbox, so its git credential helper does too. Add what the
-  helper reads: `~/.config/gh` for `gh auth setup-git`, `~/.git-credentials` for the store helper. That token is in
-  the worker's reach, as it is without a sandbox.
+  helper reads: `~/.config/gh` for `gh auth setup-git`, `~/.git-credentials` or `~/.config/git/credentials` for the
+  store helper. That token is in the worker's reach, as it is without a sandbox.
 - **A workspace outside `$HOME`.** Add the workspace to `denyRead` in each template, so its `.canopy/` stays hidden.
   The wrapper denies `.canopy/` itself when the run's directories name it, but a chore with a `cwd` of its own names
   none.
@@ -277,32 +292,40 @@ paths. A command `runtime.allow_bash` grants the overseer runs in the sandbox to
 
 ## 6. Check that it works
 
-With the loop stopped, run a plain script through the wrapper in a worktree made for the check, never in one of
-canopy's slots: a commit there leaves the slot naming objects that are deleted with the check, and canopy's own
-cleanup is not running to put it back. From the workspace root, with one of its repositories:
+From the workspace root:
 
 ```sh
-repo=$PWD/repos/api
-check=$(mktemp -d)
-git -C "$repo" worktree add --quiet --detach "$check/slot"
-mkdir "$check/objects"
-cd "$check/slot"
-CANOPY_GIT_OBJECTS="$check/objects" canopy-sandbox worker -- sh -c '
-  try() { if sh -c "$2" >/dev/null 2>&1; then echo "$1: allowed"; else echo "$1: refused"; fi; }
-  try "read ~/.ssh" "cat ~/.ssh/*"
-  try "read the user config" "cat ~/.config/canopy/config.toml"
-  try "write a hook" "echo x > $(git rev-parse --git-common-dir)/hooks/post-checkout"
-  try "move a branch" "git branch -f main HEAD"
-  try "reach example.com" "curl -sSf -m 10 https://example.com"
-  try "commit in the slot" "echo x >> sandbox-check && git add sandbox-check && git commit -qm check"
-  try "reach github.com" "curl -sSf -m 10 -o /dev/null https://github.com"
-'
-cd - && git -C "$repo" worktree remove --force "$check/slot" && rm -rf "$check"
+canopy sandbox check
 ```
 
-Every line but the last two should say `refused`, and the last two `allowed`. If your default branch is not `main`,
-use its name in the branch line. Then run `canopy loop --ticks 1` on a ticket and read the run's log,
-`.canopy/runs/<id>.log`: the worker should push and open its PR as before.
+It runs a plain script, no model, through `canopy-sandbox worker` and your `worker.json`, in a worktree of one of your
+repositories that it makes for the check, with no files checked out, and removes after, never one of canopy's slots.
+`--repo NAME` chooses the repository, and `--offline` leaves the network out. It prints what the sandbox did with each
+attempt:
+
+```text
+refused  read a file in your home directory
+refused  read canopy's config, config.toml
+refused  write a file in your home directory
+refused  write beside the repository's hooks and git config
+refused  make a branch, in the refs every slot shares
+refused  reach https://example.com, off the allowlist
+allowed  commit in the worktree, its objects in the run's own directory
+allowed  reach https://github.com, on the allowlist
+```
+
+The commit and the host on the allowlist should say `allowed`, and every other line `refused`; it marks a line that
+does not, and exits 1. What it left unchecked is a `Note:` below them, as the network is with `--offline` or no curl.
+
+- A write counts as allowed only when it reached your disk, and the commit only when its objects are where canopy
+  reads them to push.
+- The host off the allowlist counts as refused only when `srt`'s proxy refused it. One that could not be reached for
+  another reason is a `Note:`, not a pass.
+- The allowed host is `github.com` when your template lists it, or else the first it names without a `*`.
+- It checks the worker's template alone.
+
+Then run `canopy loop --ticks 1` on a ticket and read the run's log, `.canopy/runs/<id>.log`: the worker should push
+and open its PR as before.
 
 From a checkout of canopy, `make sandbox-canary` runs the whole canary against what `canopy sandbox setup` installed:
 every denial and positive control DESIGN §24 lists, with the shipped templates unchanged. It needs to reach
@@ -320,7 +343,7 @@ github.com.
 - **`... links to no worktree`:** the `review` role is on a command canopy does not run as a review, or a desk is
   empty. Use the role the command's key names.
 - **`... is not a linked worktree`:** a worker or setup ran outside one of treehouse's slots. canopy always runs them
-  in one; in the check above, run it in the worktree it makes.
+  in one; to try the sandbox by hand, use `canopy sandbox check`, which makes one.
 - **`... has too long a path for srt's sockets`**, or `srt`'s own **`Failed to create bridge sockets`**: on Linux,
   `srt` makes the sockets that carry the sandbox's network in the run's temp directory, under the system one, and a
   socket's path holds at most 107 bytes. Run canopy with `TMPDIR` set to a shorter directory, such as `/tmp`.

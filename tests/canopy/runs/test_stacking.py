@@ -111,7 +111,7 @@ def test_later_runs_on_a_stacked_ticket_take_the_base_they_are_given(scenario: S
         merged,
         worker=worker_does(
             ["git", "push", "--quiet", "origin", f"HEAD:refs/heads/{SECOND}"],
-            result=json.dumps(json.loads(WORKER_DONE) | {"branch": SECOND, "pr": SECOND_PR}),
+            result=json.dumps(json.loads(WORKER_DONE) | {"branch": SECOND, "prs": {"repo": SECOND_PR}}),
         ),
     )
     assert (retarget.status, slot_of(scenario.conn, retarget.id).base_branch) == ("done", "main")
@@ -222,7 +222,7 @@ def test_two_linked_tickets_are_worked_in_order(
     running = {"name": "build", "status": "in_progress", "run_id": 11}
     github_state.write_text(json.dumps({"prs": {READ_PR: {"checks": [running]}}}))
     # Both tickets' workers run this, so neither pushes: `_run`'s own push puts each branch on origin (DESIGN §8).
-    done = json.dumps(json.loads(WORKER_DONE) | {"pr": READ_PR})
+    done = json.dumps(json.loads(WORKER_DONE) | {"prs": {"repo": READ_PR}})
     commits = worker_does(["git", "commit", "--quiet", "--allow-empty", "-m", "the change"], result=done)
     first = scenario.tick(
         dispatches(slug="first"),

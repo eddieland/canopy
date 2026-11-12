@@ -474,7 +474,7 @@ function AnswerCount({ item, column }: { item: ChecklistItemCounts; column: Answ
                     }
                 }}
             >
-                <p className="panel-label pb-2">
+                <p className="pb-2 panel-label">
                     {column.label} · {item.item}
                     {count > runs.length && ` · the newest ${runs.length} of ${count}`}
                 </p>
@@ -501,7 +501,7 @@ function AnsweringRun({ run }: { run: ChecklistRun }) {
                 <Age at={run.started_at} variant="ago" />
             </span>
             {run.reason !== null && (
-                <span className="text-xs break-words text-muted-foreground">
+                <span className="text-xs wrap-break-word text-muted-foreground">
                     <LinkedText text={run.reason} />
                 </span>
             )}

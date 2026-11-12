@@ -107,7 +107,7 @@ def test_a_flaky_check_is_kicked_onto_the_base_until_the_head_has_had_its_kicks(
         )
         scenario.tick(*waits(KEY, rationale="its check failed"))
         scenario.time_passes(minutes=31)
-        leaves = json.loads(LEAVES_FLAKY) | {"pr": READ_PR}
+        leaves = json.loads(LEAVES_FLAKY) | {"prs": {"repo": READ_PR}}
         return scenario.run(resumes(ResumeReason.CI), worker=worker_does(result=json.dumps(leaves)))
 
     heads = [git_pool.remote_head(BRANCH)]
@@ -270,7 +270,7 @@ def test_the_cause_a_worker_names_reaches_the_overseer_as_a_word_and_its_line_on
             json.dumps({"prs": {READ_PR: {"pr": {"head_sha": f"abc{run_id:04d}"}, "checks": [failed]}}}),
         )
         scenario.tick(*waits(KEY, rationale="its check failed"))
-        ran = leaves_flaky(scenario, adds={"pr": READ_PR, **said})
+        ran = leaves_flaky(scenario, adds={"prs": {"repo": READ_PR}, **said})
         scenario.tick(*waits(KEY, rationale="the operator reruns it"))
         return ran, scenario.ticket_state()["last_run"]
 

@@ -70,7 +70,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         "--runtime",
         type=int,
         choices=[int(v) for v in Version],
-        default=int(Version.ONE),
+        default=int(Version.TWO),
         help="the runtime.version each test's workspace runs, but a test marked opencode1's",
     )
 
@@ -277,7 +277,7 @@ class CanopyEnv:
     shared_file: Path
     journals: Journals
     #: The runtime version its user file names (`--runtime`), which a test's expectations of the runtime follow.
-    runtime: Version = Version.ONE
+    runtime: Version = Version.TWO
 
     @property
     def state_dir(self) -> Path:
@@ -412,22 +412,28 @@ TRACKER_CMD = f"connector {TRACKER_SOURCE} --labeled agent-ready-tester"
 TRACKER_TOML = f'[connect.sources.{TRACKER_SOURCE}]\nkind = "tracker"\ncmd = "{TRACKER_CMD}"\n'
 
 
-def user_toml(runtime: Version = Version.ONE) -> str:
-    """The user file a test's workspace starts with: version 1 names no `runtime.version`, the default."""
-    version = "" if runtime == Version.ONE else f"version = {int(runtime)}\n"
+def user_toml(runtime: Version = Version.TWO) -> str:
+    """The user file a test's workspace starts with: version 2 names no `runtime.version`, the default."""
+    version = "" if runtime == Version.TWO else f"version = {int(runtime)}\n"
     return f"""\
 [tracker]
 labels = ["agent-ready-tester"]
 
 [runtime]
-{version}overseer_cmd = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} agent run --agent canopy-overseer {{prompt}}'
-worker_cmd = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} agent run --agent canopy-worker {{prompt}}'
-private_worker_cmd = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} agent run --agent canopy-worker-private {{prompt}}'
-plan_cmd = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} agent run --agent canopy-planner --format json {{prompt}}'
+{version}overseer_cmd = '{_agent_cmd("canopy-overseer", events=False)}'
+worker_cmd = '{_agent_cmd("canopy-worker")}'
+private_worker_cmd = '{_agent_cmd("canopy-worker-private")}'
+plan_cmd = '{_agent_cmd("canopy-planner")}'
 
 {TRACKER_TOML}
 [paths]
 """
+
+
+def _agent_cmd(agent: str, *, events: bool = True) -> str:
+    """The template that runs the fake `agent`, printing its events unless it is the overseer's."""
+    flag = " --format json" if events else ""
+    return f"env OPENCODE_CONFIG_DIR={{definitions_dir}} agent run --agent {agent}{flag} {{prompt}}"
 
 
 @pytest.fixture

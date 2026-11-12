@@ -1,4 +1,6 @@
-"""How the window's plans were approved, and what their PRs needed after (DESIGN §11, §25), for the Plans report.
+"""How the window's plans were approved, and what their PRs needed after (DESIGN §11, §25): the Plans report.
+
+The web UI's Plans page shows it, and `canopy plans` prints it.
 
 Reads only. Over the same window as `canopy spend` and `canopy health` (whole local days, today's so far included): the
 ticket plans written in it, each with how it went (approved by its planner, approved by the operator as written or
@@ -104,6 +106,35 @@ class PlanRow:
             return None
         return db.parse_time(self.approved_at) - db.parse_time(self.created_at)
 
+    def as_json(self) -> dict[str, object]:
+        """Return the plan's row as one JSON object.
+
+        Returns:
+            Its fields by name, `ticket_key` for its ticket, `level` null where its run kept none, `metrics` null where
+            it was not measured, and `hours_to_approve` for `to_approve`, in hours to a hundredth.
+        """
+        return {
+            "plan_id": self.plan_id,
+            "ticket_key": self.ticket,
+            "run_id": self.run_id,
+            "created_at": self.created_at,
+            "size": self.size,
+            "metrics": None if self.metrics is None else _metrics_json(self.metrics),
+            "effort": self.effort,
+            "level": self.level,
+            "outcome": self.outcome,
+            "approved_at": self.approved_at,
+            "hours_to_approve": _hours(self.to_approve),
+            "edited": self.edited,
+            "comments": self.comments,
+            "earlier": self.earlier,
+            "implemented": self.implemented,
+            "resumes": self.resumes,
+            "reasons": dict(self.reasons),
+            "done": self.done,
+            "cost_usd": self.cost_usd,
+        }
+
 
 @dataclass(frozen=True)
 class Group:
@@ -113,6 +144,11 @@ class Group:
     level: PlannerApproval | None
     outcome: Outcome
     plans: int
+    #: Of those, the ones whose file was edited before approval, the ones commented on while they waited, and the
+    #: ones that replaced a plan sent back: a revised plan may be any of the three.
+    edited: int
+    commented: int
+    replanned: int
     #: The median of their times to approval.
     median_to_approve: timedelta | None
     #: The medians of their lengths in the plan editor's lines and of their words, of those measured; None with none.
@@ -124,6 +160,29 @@ class Group:
     resumes: int
     #: Those whose ticket the loop marked done, so their count is final.
     done: int
+
+    def as_json(self) -> dict[str, object]:
+        """Return the group's counts and medians as one JSON object.
+
+        Returns:
+            Its fields by name, `level` null for the runs that kept none, and `median_hours_to_approve` in hours to a
+            hundredth.
+        """
+        return {
+            "level": self.level,
+            "outcome": self.outcome,
+            "plans": self.plans,
+            "edited": self.edited,
+            "commented": self.commented,
+            "replanned": self.replanned,
+            "median_hours_to_approve": _hours(self.median_to_approve),
+            "median_lines": self.median_lines,
+            "median_words": self.median_words,
+            "implemented": self.implemented,
+            "with_resume": self.with_resume,
+            "resumes": self.resumes,
+            "done": self.done,
+        }
 
 
 @dataclass(frozen=True)
@@ -137,6 +196,21 @@ class Length:
     median_to_approve: timedelta | None
     #: Of those, the ones approved as written.
     as_written: int
+
+    def as_json(self) -> dict[str, object]:
+        """Return the bucket's counts and median as one JSON object.
+
+        Returns:
+            `low`, `high` (null for the last), `plans`, `median_hours_to_approve` in hours to a hundredth, and
+            `as_written`.
+        """
+        return {
+            "low": self.low,
+            "high": self.high,
+            "plans": self.plans,
+            "median_hours_to_approve": _hours(self.median_to_approve),
+            "as_written": self.as_written,
+        }
 
 
 @dataclass(frozen=True)
@@ -160,6 +234,24 @@ class Plans:
             The count; 0 for none.
         """
         return sum(1 for p in self.plans if p.outcome is outcome)
+
+    def as_json(self) -> dict[str, object]:
+        """Return the report as one JSON object.
+
+        Returns:
+            `since`, `until`, `days`, `page_lines`, `outcomes`, each outcome's count, then `groups`, `lengths`, and
+            `plans`, each a list of its rows as their `as_json` gives them.
+        """
+        return {
+            "since": self.since,
+            "until": self.until,
+            "days": self.days,
+            "page_lines": PAGE_LINES,
+            "outcomes": {o: self.count(o) for o in Outcome},
+            "groups": [g.as_json() for g in self.groups],
+            "lengths": [n.as_json() for n in self.lengths],
+            "plans": [p.as_json() for p in self.plans],
+        }
 
 
 def report(conn: sqlite3.Connection, state_dir: Path, now: datetime, days: int) -> Plans:
@@ -341,6 +433,9 @@ def _groups(rows: Sequence[PlanRow]) -> list[Group]:
                     level=level,
                     outcome=outcome,
                     plans=len(theirs),
+                    edited=sum(1 for r in theirs if r.edited),
+                    commented=sum(1 for r in theirs if r.comments),
+                    replanned=sum(1 for r in theirs if r.earlier),
                     median_to_approve=_median([w for r in theirs if (w := r.to_approve) is not None]),
                     median_lines=_middle([m.lines for r in theirs if (m := r.metrics) is not None]),
                     median_words=_middle([m.words for r in theirs if (m := r.metrics) is not None]),
@@ -389,3 +484,18 @@ def _middle(values: Collection[int]) -> int | None:
 
 def _median(waits: Collection[timedelta]) -> timedelta | None:
     return timedelta(seconds=statistics.median(w.total_seconds() for w in waits)) if waits else None
+
+
+# A span in hours to a hundredth, as the JSON gives it; None for none.
+def _hours(span: timedelta | None) -> float | None:
+    return None if span is None else round(span.total_seconds() / 3600, 2)
+
+
+def _metrics_json(found: plan_metrics.Metrics) -> dict[str, int]:
+    return {
+        "words": found.words,
+        "lines": found.lines,
+        "code_blocks": found.code_blocks,
+        "tables": found.tables,
+        "diagrams": found.diagrams,
+    }

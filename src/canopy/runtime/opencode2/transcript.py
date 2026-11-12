@@ -14,7 +14,9 @@ session's record names its model by (`canopy.runtime.opencode2.session_models`).
 
 `touched` says what a call did to files, from 2.1.4's tools: `read`, `edit`, and `write` name one by `path`, or by
 `filePath` in a session moved from OpenCode 1, `patch` each file its patch adds, updates, deletes, or moves to, and
-`grep`, `glob`, and a `shell` command that searches (`report.shell_searches`) search.
+`grep`, `glob`, and a `shell` command that searches (`report.shell_searches`) search. `returned` says what a call put
+into the context, and whether OpenCode cut it, as the `truncated` its tool's metadata holds says; `command`, what a
+`shell` call ran.
 
 `canopy.runtime.transcript` reads the file and bounds the transcript as a whole.
 """
@@ -32,7 +34,7 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, StrictFloat, Stric
 from canopy.runtime import entries
 from canopy.runtime.entries import MAX_INPUT, MAX_TEXT, Entry, Error, Step, Text, Tokens, ToolCall
 from canopy.runtime.opencode2 import events
-from canopy.runtime.report import MAX_COST_USD, MESSAGE_ID_RE, Called, Count, Touch, shell_searches
+from canopy.runtime.report import MAX_COST_USD, MESSAGE_ID_RE, Called, Count, Returned, Touch, shell_searches
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping
@@ -43,12 +45,14 @@ _MAX_MS = 253_402_300_799_999
 # shell's command, a file tool's path, a search's pattern, a fetch's address, a search's query, a skill's id.
 _SAID_BY = ("command", "path", "pattern", "url", "query", "id")
 
-#: The tools that read one file, that edit one, that edit those a patch names, and that search, and the shell.
+#: The tools that read one file, that edit one, that edit those a patch names, and that search.
 _READS = frozenset({"read"})
 _EDITS = frozenset({"edit", "write"})
 _PATCHES = frozenset({"patch", "apply_patch"})
 _SEARCHES = frozenset({"grep", "glob"})
-_SHELL = "shell"
+# OpenCode 2 runs a call an agent names `bash` as its `shell`, and prints the call under the name the agent gave.
+#: The shell, by each name a call of it is printed under: OpenCode 2's own, and `bash`, OpenCode 1's.
+_SHELLS = frozenset({"shell", "bash"})
 #: The fields of a file tool's input that name its file: OpenCode 2's own, then OpenCode 1's.
 _PATH_BY = ("path", "filePath")
 #: A patch's line naming a file it changes: `*** Update File: src/a.py`, and the path it moves one to.
@@ -76,6 +80,8 @@ class _ToolState(_Part):
     input: dict[str, JsonValue] = {}
     output: StrictStr | None = None
     error: StrictStr | None = None
+    # What the runtime said of the call besides its output; read only for whether it cut the output.
+    metadata: JsonValue = None
     time: _Time | None = None
 
 
@@ -162,6 +168,23 @@ def called(event: Mapping[str, object]) -> Called | None:
     return Called(tool.tool, completed=tool.state.status == "completed", input=tool.state.input, started_at=started)
 
 
+def returned(event: Mapping[str, object]) -> Returned | None:
+    """What the call a `tool_use` event ended returned: its output's characters, or its error's, and whether it was cut.
+
+    Returns:
+        Them, cut as the call's metadata says (`_cut`), None when it says nothing; or None when `event` is not a
+        `tool_use` event that validates.
+    """
+    if event["type"] != events.TOOL_USE:
+        return None
+    try:
+        state = _Tool.model_validate(event.get("part")).state
+    except ValidationError:
+        return None
+    said = state.output if state.status == "completed" else state.error
+    return Returned(len(said or ""), _cut(state.metadata))
+
+
 def in_session(line: str, session_id: str) -> bool:
     """Whether `line` is an event of session `session_id`, as `read` keeps only those.
 
@@ -190,11 +213,21 @@ def touched(call: Called) -> Touch:
             return Touch("edit", paths)
     elif call.tool in _SEARCHES:
         return Touch("search")
-    elif call.tool == _SHELL:
+    elif call.tool in _SHELLS:
         command = given.get("command")
         if isinstance(command, str) and shell_searches(command):
             return Touch("search")
     return Touch("other")
+
+
+def command(call: Called) -> str | None:
+    """The command a call of the shell ran, as the agent gave it.
+
+    Returns:
+        It, or None for a call of any other tool, or one whose command is not a string.
+    """
+    given = call.input.get("command")
+    return given if call.tool in _SHELLS and isinstance(given, str) else None
 
 
 def _entry(event: Mapping[str, object]) -> Entry | None:
@@ -252,4 +285,15 @@ def _said(given: Mapping[str, JsonValue]) -> str:
 def _at(value: object) -> datetime | None:
     if isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= _MAX_MS:
         return datetime.fromtimestamp(value / 1000, UTC)
+    return None
+
+
+# Whether a call's `metadata` says its output was cut: its tool's `truncated`, nested under the call's, as 2.1.4 prints
+# it, or the call's own, as a session moved from OpenCode 1 does; None when it does not say.
+def _cut(metadata: JsonValue) -> bool | None:
+    if not isinstance(metadata, dict):
+        return None
+    for said in (metadata.get("metadata"), metadata):
+        if isinstance(said, dict) and isinstance(truncated := said.get("truncated"), bool):
+            return truncated
     return None

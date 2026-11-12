@@ -19,7 +19,7 @@ import { workingOn } from '@/lib/run-state'
 export function WorkingNow({ ticketKey }: { ticketKey: string }) {
     const runs = workingOn(useQuery(runsQuery).data ?? [], ticketKey)
     return (
-        <ul className="stagger flex flex-col gap-1 px-3 empty:hidden" data-testid="working-now" aria-live="polite">
+        <ul className="flex stagger flex-col gap-1 px-3 empty:hidden" data-testid="working-now" aria-live="polite">
             {runs.map((run) => (
                 <li
                     key={run.id}

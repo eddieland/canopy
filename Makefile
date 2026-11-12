@@ -24,7 +24,7 @@ fmt: ui-fmt ## Run autoformatters (ruff imports and trailing commas, ruff format
 
 # ruff owns Python and rumdl Markdown; editorconfig-checker holds every other file to .editorconfig.
 # zizmor runs offline, so the lint needs no GitHub token and gives the same answer on every machine.
-# tsc checks the JSDoc types of the plugin canopy ships for its agents against each pinned OpenCode's (tests/plugins).
+# tsc checks the JSDoc types of the plugin canopy ships for its agents against the pinned OpenCode's (tests/plugins).
 lint: tests/plugins/node_modules ## Lint and type check: ruff, pyrefly, rumdl, ec, shellcheck, actionlint, zizmor, tsc
 	uv run ruff format --check .
 	uv run ruff check .
@@ -44,7 +44,7 @@ lint: tests/plugins/node_modules ## Lint and type check: ruff, pyrefly, rumdl, e
 # SHARD=i/n runs the i-th of n slices of the Python tests (tests/conftest.py), as CI's test jobs do.
 PYTEST := uv run pytest -q -n auto -o faulthandler_timeout=60 -o faulthandler_exit_on_timeout=true
 
-test: test-plugin ## Run all tests, in parallel (COVERAGE=1: write coverage.xml; SHARD=i/n: one slice; RUNTIME=2)
+test: test-plugin ## Run all tests, in parallel (COVERAGE=1: write coverage.xml; SHARD=i/n: one slice; RUNTIME=1)
 	$(PYTEST) $(if $(COVERAGE),--cov --cov-report=xml) $(if $(SHARD),--shard=$(SHARD)) \
 		$(if $(RUNTIME),--runtime=$(RUNTIME))
 

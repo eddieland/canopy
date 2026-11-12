@@ -40,6 +40,7 @@ class Lines:
             started_call=event["type"] == events.STEP_START,
             step=self._tally.step,
             tool=self._tally.tool,
+            returned=transcript.returned(event),
         )
 
     @property

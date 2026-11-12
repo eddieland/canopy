@@ -15,7 +15,7 @@ import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import hostgit, plans
+from canopy.core import epics, hostgit, plans
 from canopy.infra import procs
 from canopy.runs import attachments
 
@@ -128,12 +128,16 @@ def tidy(
 
 
 def _drop_copy(slot: Path, log: logs.TickAdapter, fields: Mapping[str, object]) -> None:
-    """Remove the plan's copy at the slot's root, never following a link: a link is removed, not what it names."""
-    try:
-        (slot / plans.COPY).unlink(missing_ok=True)
-    except OSError as e:
-        # A directory a worker made in its place: it holds no plan canopy wrote, and the next copy refuses it.
-        log.warning("plan copy not removed", extra={**fields, "error": str(e)})
+    """Remove the plans' copies at the slot's root, its own and its epic's, never following a link.
+
+    A link is removed, not what it names.
+    """
+    for name in (plans.COPY, epics.EPIC_COPY):
+        try:
+            (slot / name).unlink(missing_ok=True)
+        except OSError as e:
+            # A directory a worker made in its place: it holds no plan canopy wrote, and the next copy refuses it.
+            log.warning("plan copy not removed", extra={**fields, "copy": name, "error": str(e)})
 
 
 def _drop_attachments(slot: Path, log: logs.TickAdapter, fields: Mapping[str, object]) -> None:

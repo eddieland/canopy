@@ -80,7 +80,7 @@ function EpicPlanPage() {
                 // Each epic its own plans, so an earlier plan opened on one is never open on another.
                 <EpicPlan key={data.epic_id} epic={data.epic_id} plans={data} stopped={stopped} />
             ) : (
-                <Panel className="max-w-[51rem]" data-testid="epic-plan">
+                <Panel className="max-w-plan" data-testid="epic-plan">
                     {detail === undefined ? <PanelSkeleton rows={1} /> : <NoPlan detail={detail} />}
                 </Panel>
             )}

@@ -23,6 +23,8 @@ from canopy.core.vocab import MemoryMode, MemoryScope, MemoryStatus
 from canopy.infra import logs
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from canopy.core.context import Context
 
 #: What each line of a memory's text is printed after, under the line that names it.
@@ -178,17 +180,18 @@ def cmd_purge(click_ctx: click.Context, key: str | None, run_id: int | None, *, 
 @click.option("--json", "as_json", is_flag=True, help="Print the modes and the proposals as one JSON object instead.")
 @click.pass_context
 def cmd_proposals(click_ctx: click.Context, *, as_json: bool) -> int:
-    """List the lessons workers proposed that wait on you, each with where it came from."""
+    """List the lessons workers proposed that wait on you, the most seconded first, each with where it came from."""
     ctx = open_context(click_ctx)
     if as_json:
         click.echo(reports.read_proposals(ctx, reports.MemoryProposals()))
         return 0
     waiting = memory.pending_proposals(ctx.conn)
+    seconded = memory.seconds(ctx.conn, [p.id for p in waiting])
     _print_modes(ctx)
     if not waiting:
         click.echo("\nNo proposals wait on you.")
     for p in waiting:
-        click.echo(f"\n{_provenance(ctx, p)}\n{quoted(p.body or '', _INDENT)}")
+        click.echo(f"\n{_provenance(ctx, p)}{_seconds(seconded.get(p.id, []))}\n{quoted(p.body or '', _INDENT)}")
         if memory_manage.from_private_run(ctx.conn, p):
             click.echo(
                 "      Warning: from a private ticket's run: its text may hold what you kept off the tracker. Promote "
@@ -444,6 +447,14 @@ def _provenance(ctx: Context, p: records.Memory) -> str:
     merged = "its ticket marked done" if ticket is not None and ticket.done else "its ticket not yet done"
     where = f" for {p.repo}" if p.repo else ""
     return f"  {p.id}  `{p.key}`{where}; from {p.ticket_key}{private}, {how}, {merged}; at {p.created_at}"
+
+
+def _seconds(found: Sequence[records.ProposalSecond]) -> str:
+    """The tickets whose runs made a proposal again, as its line of provenance ends: none says nothing."""
+    if not found:
+        return ""
+    tickets = ", ".join(f"{s.ticket_key} (run {s.run_id})" for s in found)
+    return f"; seconded by {len(found)} ticket{'s' if len(found) > 1 else ''}: {tickets}"
 
 
 def _made(ctx: Context, lesson: records.Memory) -> str:

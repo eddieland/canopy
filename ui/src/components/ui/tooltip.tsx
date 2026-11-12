@@ -40,8 +40,8 @@ function TooltipContent({ className, sideOffset = 4, ...props }: ComponentProps<
                 collisionPadding={8}
                 className={cn(
                     'z-50 max-w-sm rounded-md border border-edge bg-surface px-2 py-1 text-xs text-foreground',
-                    'origin-(--radix-tooltip-content-transform-origin) shadow-float animate-float',
-                    'break-words whitespace-pre-line',
+                    'origin-(--radix-tooltip-content-transform-origin) animate-float shadow-float',
+                    'wrap-break-word whitespace-pre-line',
                     className,
                 )}
                 {...props}

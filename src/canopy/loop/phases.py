@@ -22,7 +22,18 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Literal
 
-from canopy.core import conversation, db, item_numbers, observe, personas, plans, records, review_runs, sql
+from canopy.core import (
+    connector_runs,
+    conversation,
+    db,
+    item_numbers,
+    observe,
+    personas,
+    plans,
+    records,
+    review_runs,
+    sql,
+)
 from canopy.core import review_result as result
 from canopy.core.config import CANOPY_REVIEWER
 from canopy.core.vocab import (
@@ -37,6 +48,7 @@ from canopy.core.vocab import (
     RunStatus,
     SourceKind,
     TicketState,
+    TickStatus,
 )
 from canopy.core.workspace import CheckRole
 from canopy.loop import attention, harness
@@ -94,6 +106,9 @@ NONE_ALLOWS: AbstractSet[str] = frozenset({"skip", "wait"})
 type Label = dict[str, str | None]
 #: How a ticket compares with the overseer in one tick.
 type Verdict = Literal["agrees", "disagrees", "stale"]
+#: What a disagreement is about: `phase`, the overseer left a subject at a phase no row held for it, though its decision
+#: is one the rows that held allow; `action`, its decision is one no row allows, each phase one that held; or `both`.
+type Mismatch = Literal["phase", "action", "both"]
 
 
 @dataclass(frozen=True)
@@ -193,7 +208,7 @@ def let_go(conn: sqlite3.Connection, derived: Iterable[Derived]) -> frozenset[st
     Returns:
         Their keys.
     """
-    queried = set(_query_result(conn))
+    queried = set(connector_runs.query_result(conn))
     return frozenset(
         d.ticket_key
         for d in derived
@@ -234,6 +249,8 @@ class Compared:
     verdict: Verdict
     #: Why it disagrees, or what is stale; None when it agrees.
     why: str | None = None
+    #: What a disagreement is about; None when it agrees or is stale.
+    mismatch: Mismatch | None = None
 
 
 def compare(conn: sqlite3.Connection, tick_id: int) -> list[Compared]:
@@ -243,10 +260,14 @@ def compare(conn: sqlite3.Connection, tick_id: int) -> list[Compared]:
     did, and its decision is one those rows allow. Its decision is its dispatches, waits, skips, and done marks, or,
     with none, the attention items the overseer recorded for it; the harness's items, refusals, and mirrors are not
     the overseer's choice. Where the harness raised an item from its cause on the ticket (`attention.FROM_CAUSES`), a
-    `wait` is allowed too: that item is the action its row names. A phase the ticket's own decision moved it to this
-    tick (`MOVES_TO`), such as `running` after a dispatch, stands for the row that allowed the decision. A subject with
-    no rows held is compared on the decision only, not its phase. A ticket with a stale subject is `stale`, never a
-    disagreement. A ticket the harness decided (DESIGN §37) is not compared: the overseer decided nothing about it.
+    `wait` is allowed too: that item is the action its row names. So it is where an item the overseer keeps stands on
+    the ticket (`core.kept_items`): it records the item once and a `wait` beside it from then on. A phase the ticket's
+    own decision moved it to this tick (`MOVES_TO`), such as `running` after a dispatch, stands for the row that
+    allowed the decision. A subject left at a phase no row held for is a disagreement, and the decision is then held
+    to what the rows that did hold allow, so the comparison says whether it is about the phase alone (`Mismatch`). A
+    subject with no rows held is compared on the decision only, not its phase. A ticket with a stale subject is
+    `stale`, never a disagreement. A ticket the harness decided (DESIGN §37) is not compared: the overseer decided
+    nothing about it.
 
     Returns:
         One comparison per ticket the tick derived, by key.
@@ -272,10 +293,12 @@ def compare(conn: sqlite3.Connection, tick_id: int) -> list[Compared]:
             raised.add(d.ticket_key)
         elif _overseers(d):
             decided.setdefault(d.ticket_key, []).append(d.action)
+    compared = [key for key, subjects in by_ticket.items() if key in decided or not _unlisted(subjects)]
+    may_wait = raised | _kept(conn, tick_id, [key for key in compared if key not in by_harness])
     return [
-        _compared(key, subjects, decided.get(key, []), raised=key in raised)
-        for key, subjects in by_ticket.items()
-        if key not in by_harness and (key in decided or not _unlisted(subjects))
+        _compared(key, by_ticket[key], decided.get(key, []), may_wait=key in may_wait)
+        for key in compared
+        if key not in by_harness
     ]
 
 
@@ -392,6 +415,69 @@ def _overseers(decision: records.Decision) -> bool:
     return not (action.startswith(_ATTENTION) and action.removeprefix(_ATTENTION) in attention.ALWAYS_HARNESS)
 
 
+def _kept(conn: sqlite3.Connection, tick_id: int, keys: Collection[str]) -> set[str]:
+    """The tickets among `keys` on which an item the overseer keeps stood in tick `tick_id` (`core.kept_items`).
+
+    One it recorded in that tick, or in an earlier live `ok` tick with no decision of its own about the ticket since,
+    outside a dry run, but a `wait` or an attention item. What ended an item then is not in the journal as it stands
+    now, a cursor having moved on, so it is read from what the overseer did: whatever ends one gives it something to
+    decide, and a dispatch or a `done` after the record is taken as its end.
+
+    Returns:
+        Their keys.
+    """
+    if not keys:
+        return set()
+    recorded = (
+        records.select(records.Decision)
+        .where("kept = 1 AND tick_id <= ?", tick_id)
+        .where_in("ticket_key", keys)
+        .order_by("id")
+        .all(conn)
+    )
+    earlier = {r.tick_id for r in recorded if r.tick_id != tick_id}
+    live = (
+        {
+            t.id
+            for t in records.select(records.Tick)
+            .where("status = ? AND NOT dry_run", TickStatus.OK)
+            .where_in("id", earlier)
+            .all(conn)
+        }
+        if earlier
+        else set[int]()
+    )
+    # The newest record of each ticket, read last, is the one that stands or not.
+    latest = {str(r.ticket_key): r.tick_id for r in recorded if r.tick_id == tick_id or r.tick_id in live}
+    stood = {key for key, tick in latest.items() if tick == tick_id}
+    before = {key: tick for key, tick in latest.items() if tick != tick_id}
+    if not before:
+        return stood
+    since = (
+        records.select(records.Decision)
+        .where("tick_id > ? AND tick_id < ?", min(before.values()), tick_id)
+        .where_in("ticket_key", before)
+        .all(conn)
+    )
+    # A dry run starts nothing, so what it decided ends nothing (D036).
+    ticks = {d.tick_id for d in since}
+    dry = (
+        {t.id for t in records.select(records.Tick).where("dry_run").where_in("id", ticks).all(conn)}
+        if ticks
+        else set[int]()
+    )
+    acted = {
+        str(d.ticket_key)
+        for d in since
+        if d.tick_id > before[str(d.ticket_key)]
+        and d.tick_id not in dry
+        and _overseers(d)
+        and d.action != "wait"
+        and not d.action.startswith(_ATTENTION)
+    }
+    return stood | (before.keys() - acted)
+
+
 def _unlisted(subjects: Sequence[records.Derivation]) -> bool:
     """Whether a ticket's own row is one `let_go` may have left out of the block: open, no candidate, none running.
 
@@ -411,14 +497,33 @@ def _compared(
     subjects: Sequence[records.Derivation],
     actions: Sequence[str],
     *,
-    raised: bool,
+    may_wait: bool,
 ) -> Compared:
     stale = [f"{_subject(s)}: {s.stale}" for s in subjects if s.stale is not None]
     if stale:
         return Compared(key, "stale", "; ".join(stale))
     chosen = [a for a in actions if not a.startswith(_ATTENTION)] or list(actions)
+    allowed, phase_wrong = _allowed(subjects, chosen)
+    if may_wait:
+        allowed.add("wait")
+    action_wrong = not any(a in allowed for a in chosen)
+    if not phase_wrong and not action_wrong:
+        return Compared(key, "agrees")
+    wrong = list(phase_wrong)
+    if action_wrong:
+        wrong.append(f"decided {', '.join(chosen) or 'nothing'}, allowed {', '.join(sorted(allowed)) or 'nothing'}")
+    mismatch: Mismatch = "both" if phase_wrong and action_wrong else "phase" if phase_wrong else "action"
+    return Compared(key, "disagrees", "; ".join(wrong), mismatch)
+
+
+def _allowed(subjects: Sequence[records.Derivation], chosen: Sequence[str]) -> tuple[set[str], list[str]]:
+    """What a ticket's rows allow the overseer to decide, and each subject it left at a phase no row held for.
+
+    Returns:
+        The actions allowed, and a sentence per subject whose phase is wrong.
+    """
     allowed: set[str] = set()
-    wrong: list[str] = []
+    phase_wrong: list[str] = []
     for s in subjects:
         held = [Phase(p) for p in json.loads(s.phases)]
         if s.closed:
@@ -433,14 +538,13 @@ def _compared(
         elif led:
             allowed.update(*(ALLOWS[p] for p in led))
         else:
-            wrong.append(f"{_subject(s)} set {s.overseer_phase or 'no phase'}, held {', '.join(held)}")
-    if not allowed and not wrong:
+            # Left at a phase no row held for: the decision is held to what the rows that did hold allow, so a
+            # disagreement about the phase alone is told from one about what the overseer did.
+            allowed.update(*(ALLOWS[p] for p in held))
+            phase_wrong.append(f"{_subject(s)} set {s.overseer_phase or 'no phase'}, held {', '.join(held)}")
+    if not allowed and not phase_wrong:
         allowed |= NONE_ALLOWS
-    if raised:
-        allowed.add("wait")
-    if not any(a in allowed for a in chosen):
-        wrong.append(f"decided {', '.join(chosen) or 'nothing'}, allowed {', '.join(sorted(allowed)) or 'nothing'}")
-    return Compared(key, "disagrees", "; ".join(wrong)) if wrong else Compared(key, "agrees")
+    return allowed, phase_wrong
 
 
 def _subject(row: records.Derivation) -> str:
@@ -487,7 +591,7 @@ class _World:
         stopped = set(conversation.stopped(conn))
         tickets = {t.key: t for t in db.open_tickets(conn) if t.key not in stopped}
         done = _done(conn)
-        keys = sorted(set(tickets) | (set(_query_result(conn)) - stopped - done))
+        keys = sorted(set(tickets) | (set(connector_runs.query_result(conn)) - stopped - done))
         comments: dict[str, list[records.ObservedComment]] = {}
         query = sql.select("*").from_("observed_comments").where_in("ticket", keys).order_by("commented_at, id")
         for c in records.fetch_all(conn, records.ObservedComment, query):
@@ -870,23 +974,6 @@ class _World:
             return False
         withheld = review_runs.withheld(self.ctx.conn, run.id)
         return any(i not in withheld for i in range(1, len(stored.findings) + 1))
-
-
-def _query_result(conn: sqlite3.Connection) -> list[str]:
-    """The keys the tracker query returned on the newest run that read it to the end.
-
-    Returns:
-        The keys; none when no run has.
-    """
-    row = sql.execute(
-        conn,
-        sql.select("query_result")
-        .from_("connector_runs")
-        .where("query_result IS NOT NULL")
-        .order_by("id DESC")
-        .limit(1),
-    ).fetchone()
-    return [str(k) for k in json.loads(str(row[0]))] if row is not None else []
 
 
 def _done(conn: sqlite3.Connection) -> set[str]:

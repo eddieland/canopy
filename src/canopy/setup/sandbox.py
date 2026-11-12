@@ -2,7 +2,8 @@
 
 It copies `canopy-sandbox`'s policy templates to where the wrapper reads them, never over one already there, and says
 when one already there lets a run write the operator's own caches, as templates from before `@CACHE@` did, or read
-the operator's OpenCode data, or leaves out the run's own, as templates from before `@DATA@` did; installs
+the operator's OpenCode data, or leaves out the run's own, as templates from before `@DATA@` did, or lets a run read
+a directory that holds a credential, as templates that named `~/.cargo` and `~/.config/git` whole did; installs
 the `srt` that the wrapper's lockfile pins, with `npm ci`, into a directory of canopy's own, which no sandbox can
 write; and checks what it cannot install, because that needs root: bubblewrap, socat, and ripgrep on Linux, ripgrep
 on macOS, and unprivileged user namespaces. It also checks what srt itself only warns about, in a debug log nobody
@@ -53,10 +54,28 @@ APPARMOR_USERNS = Path("/proc/sys/kernel/apparmor_restrict_unprivileged_userns")
 NO_IPV6 = """\
 this kernel has no IPv6, so canopy-sandbox has srt's network bridge inside the sandbox listen on IPv4
 (SOCAT_DEFAULT_LISTEN_IP=4), unless you set that variable yourself."""
-USERNS_FIX = """\
-bubblewrap cannot make a user namespace: AppArmor restricts unprivileged ones. Lift the restriction, now and at boot:
+# Ubuntu 26.04 loads this profile at boot; 24.04 ships it unloaded. It lets bubblewrap make its user namespace, but
+# denies every capability to what bubblewrap starts, so srt's seccomp helper cannot make the nested one it needs.
+BWRAP_PROFILE = Path("/etc/apparmor.d/bwrap-userns-restrict")
+BWRAP_PROFILE_DISABLED = Path("/etc/apparmor.d/disable/bwrap-userns-restrict")
+# A sandbox with a user namespace of its own inside, as srt's seccomp helper makes one. Writing the inner namespace's
+# setgroups takes a capability in it, which AppArmor can deny even where bubblewrap's own namespace works.
+USERNS_PROBE = (
+    *("bwrap", "--ro-bind", "/", "/", "--dev", "/dev", "--unshare-pid", "--proc", "/proc"),
+    *("unshare", "--user", "--map-root-user", "true"),
+)
+LIFT_RESTRICTION = """\
     sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
     echo 'kernel.apparmor_restrict_unprivileged_userns = 0' | sudo tee /etc/sysctl.d/60-canopy-sandbox.conf"""
+USERNS_FIX = f"""\
+bubblewrap cannot make a user namespace: AppArmor restricts unprivileged ones. Lift the restriction, now and at boot:
+{LIFT_RESTRICTION}"""
+BWRAP_PROFILE_FIX = f"""\
+srt cannot make the user namespace it needs inside bubblewrap's: AppArmor's bwrap-userns-restrict profile denies every
+capability to what bubblewrap starts. Disable the profile, and lift the restriction it stood in for, now and at boot:
+    sudo ln -sf {BWRAP_PROFILE} {BWRAP_PROFILE_DISABLED.parent}/
+    sudo apparmor_parser -R {BWRAP_PROFILE}
+{LIFT_RESTRICTION}"""
 WRAPPER_MISSING = """\
 canopy-sandbox is not on PATH. It installs with canopy: run the install again, with --reinstall, and put uv's tool
 directory on PATH (`uv tool update-shell`)."""
@@ -79,6 +98,14 @@ both, as the shipped template does: a run's runtime keeps its data there, with a
 NO_DATA = """\
 {template} leaves @DATA@ out of its allowRead or allowWrite, so a sandboxed run's runtime finds none of your logins.
 Add it to both, as the shipped template does (docs/SANDBOX.md)."""
+#: Directories under HOME that hold a credential beside what a build reads, each with the file that holds it. A
+#: template that allows reading one whole lets a run read the credential: srt's allowRead outranks its denyRead.
+CREDENTIAL_DIRS = ((".cargo", "credentials.toml"), (".config/git", "credentials"))
+CREDENTIAL_READ = """\
+{template} lets a sandboxed run read {paths}, and with them {files}: tokens of yours, such as crates.io's, or what
+git's store helper saved. Name what a build reads instead, as the shipped template does: ~/.cargo/bin, ~/.cargo/env,
+~/.cargo/registry, and ~/.cargo/git, and ~/.config/git/config, ~/.config/git/ignore, and ~/.config/git/attributes
+(docs/SANDBOX.md)."""
 # The roles whose command is OpenCode, which keeps its data, logins included, in the run's own data directory.
 RUNTIME_ROLES = ("worker", "chore", "review")
 
@@ -140,6 +167,8 @@ def _copy_templates(report: Report) -> None:
                     report.todo.append(SHARED_CACHE.format(template=path, paths=", ".join(shared)))
                 if (data := _data_todo(path, role)) is not None:
                     report.todo.append(data)
+                if (secret := _secret_todo(path)) is not None:
+                    report.todo.append(secret)
                 continue
             path.write_text((canopy_sandbox.TEMPLATES / path.name).read_text(encoding="utf-8"), encoding="utf-8")
             report.written.append(path)
@@ -198,6 +227,43 @@ def _data_todo(template: Path, role: str) -> str | None:
     if role in RUNTIME_ROLES and not all("@DATA@" in es for es in entries):
         return NO_DATA.format(template=template)
     return None
+
+
+def _secret_todo(template: Path) -> str | None:
+    """Say which of `template`'s `allowRead` and `allowWrite` entries let a run read a credential under HOME, if any.
+
+    An entry does when it is one of `CREDENTIAL_DIRS`, or a directory that holds one, however it spells the path: srt
+    binds what it allows writing readable too. An entry that names the credential's own file is the operator's choice,
+    as for a push through git's store helper, and is left alone.
+
+    Returns:
+        The paragraph for the operator, or None for a template that needs nothing, or cannot be read: the wrapper
+        refuses to run with one it cannot read.
+    """
+    try:
+        policy = json.loads(template.read_text(encoding="utf-8"))
+        lists: list[object] = [policy["filesystem"].get(key, []) for key in ("allowRead", "allowWrite")]
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return None
+    entries: list[object] = [entry for entries in lists if isinstance(entries, list) for entry in entries]
+    named: list[str] = []
+    files: list[str] = []
+    for entry in entries:
+        if not isinstance(entry, str) or entry.startswith("@"):
+            continue
+        place = Path(os.path.realpath(Path(entry).expanduser()))
+        for directory, file in CREDENTIAL_DIRS:
+            secret = Path(os.path.realpath(Path.home() / directory))
+            if place == secret or place in secret.parents:
+                named.append(entry)
+                files.append(f"~/{directory}/{file}")
+    if not named:
+        return None
+    return CREDENTIAL_READ.format(
+        template=template,
+        paths=", ".join(dict.fromkeys(named)),
+        files=", ".join(dict.fromkeys(files)),
+    )
 
 
 def _under(entry: str, root: Path) -> bool:
@@ -300,17 +366,20 @@ def _check_bwrap_version(runner: procs.Runner, report: Report) -> None:
 
 
 def _check_userns(runner: procs.Runner, report: Report) -> None:
-    """Check that bubblewrap can make a sandbox, which needs an unprivileged user namespace with its capabilities."""
-    done = runner.run(["bwrap", "--ro-bind", "/", "/", "true"], timeout=30)
+    """Check that bubblewrap can make a sandbox as srt does: unprivileged user namespaces, one inside the other."""
+    done = runner.run(list(USERNS_PROBE), timeout=30)
     if done.ok:
         return
     try:
         restricted = APPARMOR_USERNS.read_text(encoding="utf-8").strip() == "1"
     except OSError:
         restricted = False
-    report.todo.append(
-        USERNS_FIX if restricted else f"bubblewrap cannot make a sandbox here:\n    {_tail(done.stderr)}",
-    )
+    if BWRAP_PROFILE.exists() and not BWRAP_PROFILE_DISABLED.exists():
+        report.todo.append(BWRAP_PROFILE_FIX)
+    elif restricted:
+        report.todo.append(USERNS_FIX)
+    else:
+        report.todo.append(f"bubblewrap cannot make a sandbox here:\n    {_tail(done.stderr)}")
 
 
 def _answers(runner: procs.Runner, args: Sequence[str]) -> bool:

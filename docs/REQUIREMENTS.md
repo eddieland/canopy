@@ -319,7 +319,7 @@ which persona it had, so personas can be compared.
 
 ### R25. One-off private tasks, about no ticket
 
-Built (M61, §36), live acceptance pending: a task runs, the operator's replies run it again, and it leaves a report
+Built (M61, §36): a task runs, the operator's replies run it again, and it leaves a report
 and, with a project, unlabeled tickets.
 Written down 2026-10-21. The operator wants to hand canopy one-off work in their own words that belongs to no ticket:
 exploring a question in the code, or planning the tickets that should follow. A task runs once in a worktree and may
@@ -328,7 +328,7 @@ operator gives it a pass of their own. Like a started ticket, its conversation s
 
 ### R26. Publish artifacts people comment on, and bring their comments back to the ticket
 
-Gap (M62, §38). Written down 2026-10-17. A worker should be able to publish what it made for people to read, such as a
+Built (M62, §38). Written down 2026-10-17. A worker should be able to publish what it made for people to read, such as a
 report, a design, or an HTML mock-up, to an artifact store, and anyone the operator shares it with should be able to
 comment on its passages. Those comments should come back to the ticket that produced the artifact, where they steer
 its next run as review feedback does, and the worker's revision should answer them in place. The store is Louvre, a

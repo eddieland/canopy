@@ -90,6 +90,9 @@ export const mockRuns: Run[] = [
         checklist: [],
         checklist_stretches: [],
         checklist_stretches_left_out: 0,
+        changes: [],
+        ranges: [],
+        records_changes: false,
     },
     {
         id: 42,
@@ -126,6 +129,9 @@ export const mockRuns: Run[] = [
         checklist: [],
         checklist_stretches: [],
         checklist_stretches_left_out: 0,
+        changes: [],
+        ranges: [],
+        records_changes: false,
     },
 ]
 
@@ -288,6 +294,7 @@ export const mockEpics: EpicSummary[] = [
         stopped_at: '2026-10-08T11:59:00Z',
         standing: 'stopped',
         members: 0,
+        planned: false,
         entries: null,
         entries_with_members: 0,
     },
@@ -302,6 +309,7 @@ export const mockEpics: EpicSummary[] = [
         stopped_at: null,
         standing: 'planning',
         members: 0,
+        planned: false,
         entries: null,
         entries_with_members: 0,
     },
@@ -318,6 +326,7 @@ export const mockEpics: EpicSummary[] = [
         stopped_at: null,
         standing: 'proposed',
         members: 0,
+        planned: true,
         entries: 3,
         entries_with_members: 0,
     },
@@ -335,6 +344,7 @@ export const mockEpics: EpicSummary[] = [
         stopped_at: null,
         standing: 'approved',
         members: 3,
+        planned: true,
         entries: 4,
         entries_with_members: 2,
     },
@@ -549,6 +559,9 @@ export const mockEpicDetails: EpicDetail[] = [
                 channel: 'web',
                 run_id: null,
                 task_run_id: null,
+                to_run: null,
+                delivered_at: null,
+                fetched_at: null,
                 answers: null,
                 body:
                     'Drop the web half: the account page already reads the same API, so the two cannot drift. Keep ' +
@@ -979,6 +992,7 @@ export function pullRequestThreads(fields: Partial<PullRequestThreads> = {}): Pu
         diff_run: null,
         diff_head: null,
         diff: null,
+        diff_missing: null,
         threads: [reviewThread()],
         pr_drafts: [],
         unplaced: [],
@@ -1028,6 +1042,7 @@ export function feedbackPlan(fields: Partial<FeedbackPlan> = {}): FeedbackPlan {
         approved_message: null,
         spent_run: null,
         path: '/home/op/acme/.canopy/plans/ABC-099/46.md',
+        archive_name: '46-PROPOSED-feedback-review-of-acme-web-88.md',
         text: '# Feedback plan: ABC-099\n\n### Item 2468013579: change\n\nMove it into a `finally`.\n',
         problem: null,
         items: [

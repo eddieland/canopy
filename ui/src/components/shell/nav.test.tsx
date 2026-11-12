@@ -66,7 +66,7 @@ interface NavSetup {
 }
 
 // The Reports section's links with its pages open: the section, then each report.
-const REPORTS = ['Reports', 'Spend', 'Checklist', 'Health', 'CI', 'Reviews', 'Plans'] as const
+const REPORTS = ['Reports', 'Spend', 'Checklist', 'Health', 'CI', 'Connectors', 'Reviews', 'Plans'] as const
 
 // The nav's sections, in its order, with no pages open under any.
 const SECTIONS = ['Attention', 'Tickets', 'Tasks', 'Epics', 'Pull requests', 'Workspace', 'Chores', 'Reports', 'Memory']
@@ -127,6 +127,7 @@ describe('Nav', () => {
         ['Checklist', '/reports/checklist?days=14', REPORTS],
         ['Health', '/reports/health?days=30', REPORTS],
         ['CI', '/reports/ci?days=30', REPORTS],
+        ['Connectors', '/reports/connectors?days=30', REPORTS],
         ['Reviews', '/reports/reviews?days=30', REPORTS],
         ['Plans', '/reports/plans?days=90', REPORTS],
     ] as const)('marks %s current on its own page, not the section over it', async (page, at, opened) => {

@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import conversation, db, epic_changes, epic_outline, plans, records, sql
 from canopy.core.conversation import Refused
-from canopy.core.vocab import PlanStatus, RunStatus
+from canopy.core.vocab import PlannerApproval, PlanSetting, PlanStatus, RunStatus
 from canopy.infra import lock
 
 if TYPE_CHECKING:
@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from collections.abc import Set as AbstractSet
     from pathlib import Path
 
+    from canopy.core.config import Policy
     from canopy.core.workspace import Workspace
 
 #: The most an epic's text holds, as an operator message does.
@@ -560,6 +561,55 @@ def drift(conn: sqlite3.Connection, ticket: records.Ticket) -> Drift | None:
     if any(m.at > plan.created_at for m in messages_of(conn, read.epic_id)):
         return None
     return Drift(epic_id=read.epic_id, plan=plan, ids=plan.epic_drift.split(plans.DRIFT_SEPARATOR))
+
+
+def plan_needed(
+    conn: sqlite3.Connection,
+    state_dir: Path,
+    policy: Policy,
+    key: str,
+    setting: PlanSetting | None,
+) -> bool:
+    """Whether ticket `key` waits on an approved plan of its own before its implement (DESIGN §25, §43).
+
+    `plans.needed`, with whether it is a trivial member read here: every reader of whether a ticket needs a plan
+    decides it so, the dispatch's guard, the state block, the harness, and what the operator is shown.
+
+    Returns:
+        True when its own setting, `setting`, asks for a plan, or it has none, `policy.plan` is `"approve"`, and it is
+        not a trivial member of its epic.
+    """
+    found = trivial(conn, state_dir, key, policy.planner_may_approve) if setting is None else None
+    return plans.needed(policy.plan, setting, trivial=found is not None)
+
+
+def trivial(conn: sqlite3.Connection, state_dir: Path, key: str, level: PlannerApproval) -> str | None:
+    """Return why ticket `key` is a trivial member of its epic, which skips its own plan (DESIGN §43, A trivial member).
+
+    Read from the epic's plan as approved, so an approval that no longer marks the member's entries trivial makes it
+    planned again, and one that still does approves it again. The marks are the epic planner's, at `level`,
+    `policy.planner_may_approve`, which its prompt named; with `level` off no member is trivial, whatever a plan says.
+
+    Returns:
+        Each entry it was registered against and why the plan marks it trivial, `B1: why`, joined by `; `; None when
+        it is a member of no epic, of no entry, or of one the approved plan does not hold or mark trivial, when its
+        epic has no approved plan or its copy cannot be read as approved, or when `level` is off.
+    """
+    if level is PlannerApproval.OFF:
+        return None
+    member = membership(conn, key)
+    plan = approved_plan(conn, member.epic_id) if member is not None else None
+    text = approved_text(state_dir, plan) if plan is not None else None
+    if member is None or text is None:
+        return None
+    try:
+        outline = epic_outline.read(text)
+    except epic_outline.OutlineError:
+        return None
+    registered = frozenset(entries_of(conn, member.id))
+    if not epic_outline.trivial(outline, registered):
+        return None
+    return "; ".join(f"{e}: {outline.entries[e].trivial}" for e in epic_outline.ordered(registered))
 
 
 def approved_text(state_dir: Path, plan: records.EpicPlan) -> str | None:

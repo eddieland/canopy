@@ -76,7 +76,7 @@ def sources(
 
 # The runtime `config` runs, or the default without one.
 def _version(config: Config | None) -> Version:
-    return Version.ONE if config is None else config.runtime.version
+    return Version.TWO if config is None else config.runtime.version
 
 
 def rules(
@@ -230,7 +230,8 @@ def _checked(snapshot: Path) -> Path:
 def prune(state_dir: Path, keep: Path) -> list[Path]:
     """Remove snapshots other than `keep`, and temporary directories a dead process left. Returns what was removed.
 
-    Call it only when no run is live: a run of an earlier canopy may still be loading its snapshot.
+    Call it only when no run of any kind is live: a run of an earlier canopy may still be loading its snapshot, and
+    OpenCode 2 reads a run's agent from it again while the run goes on.
 
     Returns:
         The directories removed, in name order; empty when there is no runtime directory.

@@ -77,7 +77,7 @@ REFUSED_DECIDED = "refused:decided"
 def run_reason(status: RunStatus) -> str | None:
     """The attention reason a run that ended in `status` raises.
 
-    `unknown` and `timeout` both mean the worker left no usable result line. `blocked` and `stopped` raise none: a
+    `unknown` and `timeout` both mean the worker reported no usable result. `blocked` and `stopped` raise none: a
     blocked worker asked a question, which reaches the operator on the ticket or as `awaiting_reply`, and the operator
     stopped a stopped one (DESIGN §22).
 

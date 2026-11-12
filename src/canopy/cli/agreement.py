@@ -15,10 +15,13 @@ from canopy.infra import text
 from canopy.loop import agreement
 
 if TYPE_CHECKING:
-    from canopy.loop.agreement import Agreement
+    from collections.abc import Sequence
 
-#: The rows table's count columns after the row.
-_ROW_COUNTS = ("decisions", "agree", "disagree", "situations", "disagreeing")
+    from canopy.loop.agreement import Agreement, RowCounts
+
+#: The rows tables' count columns after the row. `phase only` is of the count before it: the decisions that disagreed,
+#: then the situations that did, about the phase alone.
+_ROW_COUNTS = ("decisions", "agree", "disagree", "phase only", "situations", "disagreeing", "phase only")
 #: The sources table's columns after the source.
 _SOURCE_COLUMNS = ("kind", "tick runs", "poll runs", "failed", "median s", "s per tick")
 #: How many of the sources table's columns are words, the source's name and its kind, aligned left.
@@ -43,8 +46,11 @@ def cmd_agreement(click_ctx: click.Context, *, days: int, as_json: bool) -> int:
     read and attributed. This reads the live ticks of the window that closed ok and ran their overseer: per row, the
     tickets compared, how many agreed and disagreed, and the distinct tickets (situations), a floor, since one PR
     decided each tick is one. The operator's review requests are one more row, review_request, each counted by its
-    PR. Each disagreement is listed once per ticket or PR and reason, with the ticks it held across and the overseer's
-    rationale, for the operator to say which side was right. A ticket or request with a stale subject is counted
+    PR. A ticket under several rows counts against each, so a second table counts each row over the tickets it alone
+    held for, the only ones the harness would take. "phase only" counts the disagreements where the overseer's
+    decision was one the rows allow and only the phase it left differs. Each disagreement is listed once per ticket or
+    PR and reason, marked phase, action, or both, with the ticks it held across and the overseer's rationale, for the
+    operator to say which side was right. A ticket or request with a stale subject is counted
     apart. Then each connector source's runs and seconds.
     """
     ctx = open_context(click_ctx)
@@ -70,7 +76,9 @@ def render(found: Agreement) -> list[str]:
     if not found.rows and not found.stale:
         lines.append("No live tick of the window that ran its overseer derived a ticket.")
     else:
-        lines.extend(_rows(found))
+        lines.extend(_rows(found.rows))
+        if found.alone:
+            lines.extend(["", "Alone: each row over the tickets no other row held for.", *_rows(found.alone)])
         on = _counted(found.stale_tickets, "ticket")
         if found.stale_requests:
             on += f" and {_counted(found.stale_requests, 'review request')}"
@@ -86,28 +94,35 @@ def _counted(n: int, noun: str) -> str:
     return f"{n} {noun}{'' if n == 1 else 's'}"
 
 
-def _rows(found: Agreement) -> list[str]:
-    width = max([len("row"), *(len(r.row) for r in found.rows)])
+def _rows(rows: Sequence[RowCounts]) -> list[str]:
+    width = max([len("row"), *(len(r.row) for r in rows)])
     lines = [f"{'row':<{width}}" + "".join(f"  {h}" for h in _ROW_COUNTS)]
-    lines.extend(
-        f"{r.row:<{width}}"
-        + "".join(
-            f"  {n:>{len(h)}}"
-            for h, n in zip(_ROW_COUNTS, (r.decisions, r.agrees, r.disagrees, r.situations, r.disagreeing), strict=True)
+    for r in rows:
+        counts = (
+            r.decisions,
+            r.agrees,
+            r.disagrees,
+            r.phase_only,
+            r.situations,
+            r.disagreeing,
+            r.disagreeing_phase_only,
         )
-        for r in found.rows
-    )
+        lines.append(
+            f"{r.row:<{width}}" + "".join(f"  {n:>{len(h)}}" for h, n in zip(_ROW_COUNTS, counts, strict=True)),
+        )
     return lines
 
 
 def _disagreements(found: Agreement) -> list[str]:
     if not found.disagreements:
         return ["No disagreement."]
-    lines = ["Disagreements, newest first: the ticket, its rows, the ticks, and why; the overseer's rationale below."]
+    lines = ["Disagreements, newest first: the ticket, its rows, what it is about, its ticks, why; rationale below."]
     for d in found.disagreements:
         ticks = f"tick {d.last_tick}" if d.ticks == 1 else f"ticks {d.first_tick}-{d.last_tick} ({d.ticks})"
         rationale = " ".join(text.printable(d.rationale).split()) or "(no rationale)"
-        lines.extend([f"  {d.ticket_key}  {', '.join(d.rows)}  {ticks}: {d.why}", f"      {rationale}"])
+        lines.extend(
+            [f"  {d.ticket_key}  {', '.join(d.rows)}  [{d.mismatch}]  {ticks}: {d.why}", f"      {rationale}"],
+        )
     return lines
 
 

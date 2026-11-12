@@ -163,4 +163,12 @@ planned once; a joint run is its own repository row (`api+web`); and the spend b
 that ended before it, unknown once one could not be priced. Open, for the operator before
 stage 1: the gate's threshold, if not the draft's; the monorepo's languages, with each grammar's query coverage, which
 decides whether canopy vendors queries; and whether stage 1 renders the outline for every role at once or the workers
-first. Next: two weeks of `canopy orientation` on the operator's workspace, in `MEASUREMENTS.md`.
+first. The gate's threshold, set by the operator before the measurement, is the draft's: more than a quarter of the tool
+calls, or more than three searches, before the first read of the file the run edits. Measured 2026-11-10 (MEASUREMENTS
+"2026-11-10: M70 stage 0, what runs do before the file they work on"): the monorepo's worker runs meet the gate, their
+median share before the anchor 0.429 with a median of no searches, on the 65 of 561 runs anchored, the `implement` runs
+alone at 0.244, under a quarter, and the `resume` runs at 0.50. Open for the operator: stage 1's start, the gate being
+met; the monorepo's languages, with each grammar's query coverage; and whether stage 1 renders the outline for every
+role at once or the workers first. That measurement's searches leave out a shell search an agent made under the name
+`bash`, which OpenCode 2's reader took for no shell until 2026-11-11 (M71), so they are a floor; the gate was met on the
+share alone, and stands.

@@ -18,7 +18,7 @@ from canopy.runtime.implementation import Version
 from tests.conftest import HERMETIC_GIT, SHARED_TOML, TRACKER_SOURCE, TRACKER_TOML, CanopyEnv, git, user_toml
 
 #: A reviewer's command the operator set, without a private server.
-REVIEW_CMD = "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-reviewer"
+REVIEW_CMD = "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-reviewer --format json"
 
 EXAMPLES = Path(__file__).parents[3] / "examples"
 
@@ -115,6 +115,10 @@ def test_needs_human_label_is_set_by_the_workspace_and_overridden_by_the_user(ca
         # Traces would leave the operator's machine for a host whoever controls the workspace file chose.
         ("telemetry", "traces = 'otlp'"),
         ("telemetry", "endpoint = 'https://collector.example'"),
+        # Every session's title, the operator's own work in any directory among it, would be listed and served.
+        ("sessions", "search = 'titles'"),
+        # A shared file could bring an excluded directory's sessions back.
+        ("sessions", "exclude = []"),
     ],
 )
 def test_the_workspace_file_may_not_set_user_only_keys(canopy_env: CanopyEnv, section_key: tuple[str, str]) -> None:
@@ -615,7 +619,10 @@ CHORE_CMD = "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent cano
 @pytest.mark.parametrize(
     ("tables", "where"),
     [
-        ({"runtime": {"worker_cmd": "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --auto"}}, "worker_cmd"),
+        (
+            {"runtime": {"worker_cmd": "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --format json --auto"}},
+            "worker_cmd",
+        ),
         (
             {"runtime": {"overseer_cmd": "env OPENCODE_CONFIG_DIR={definitions_dir} opencode --yolo run"}},
             "overseer_cmd",
@@ -644,6 +651,46 @@ def test_a_command_that_approves_what_rules_would_ask_about_is_refused(
     assert "approve what an agent's rules would ask about" in str(e.value)
 
 
+@pytest.mark.parametrize(
+    ("key", "agent"),
+    [
+        ("worker_cmd", "canopy-worker"),
+        ("private_worker_cmd", "canopy-worker-private"),
+        ("plan_cmd", "canopy-planner"),
+        ("chore_cmd", "canopy-chore"),
+        ("review_cmd", "canopy-reviewer"),
+    ],
+)
+@pytest.mark.parametrize("options", ["", " --format text", " --format"])
+def test_an_agent_template_that_prints_no_events_is_refused(
+    canopy_env: CanopyEnv,
+    key: str,
+    agent: str,
+    options: str,
+) -> None:
+    """An agent reports its result by a tool call, which canopy reads from the events its run prints (DESIGN §13)."""
+    template = f"env OPENCODE_CONFIG_DIR={{definitions_dir}} opencode run --agent {agent}{options}"
+    canopy_env.configure(canopy_env.user_file, {"runtime": {key: template}})
+    with pytest.raises(ConfigError) as e:
+        load(canopy_env.root, canopy_env.user_file)
+    assert f"runtime.{key}: Value error, must have OpenCode print its events" in str(e.value)
+    assert "`--format json`" in str(e.value)
+
+
+@pytest.mark.parametrize("key", ["worker_cmd", "private_worker_cmd", "plan_cmd", "chore_cmd", "review_cmd"])
+def test_an_agent_template_may_ask_for_its_events_in_one_word(canopy_env: CanopyEnv, key: str) -> None:
+    template = "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --format=json {prompt}"
+    canopy_env.configure(canopy_env.user_file, {"runtime": {key: template}})
+    assert getattr(load(canopy_env.root, canopy_env.user_file).runtime, key) == template
+
+
+def test_the_overseers_template_need_print_no_events(canopy_env: CanopyEnv) -> None:
+    """Only the agents that report a result by a tool call must print their events; the overseer is not one."""
+    template = "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer {prompt}"
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"overseer_cmd": template}})
+    assert load(canopy_env.root, canopy_env.user_file).runtime.overseer_cmd == template
+
+
 def test_a_chore_of_an_agent_of_the_operators_own_may_approve_what_its_rules_ask_about(canopy_env: CanopyEnv) -> None:
     """Its rules are the operator's, as its model is: canopy wrote no definition it could reach past."""
     cmd = "opencode run --agent sentry-triage --auto {prompt}"
@@ -654,24 +701,32 @@ def test_a_chore_of_an_agent_of_the_operators_own_may_approve_what_its_rules_ask
     assert load(canopy_env.root, canopy_env.user_file).chores["triage"].cmd == cmd
 
 
-@pytest.mark.opencode1  # from OpenCode 1, the default, to 2
-def test_runtime_version_2_runs_opencode_2_and_its_default_templates(canopy_env: CanopyEnv) -> None:
+def test_runtime_version_2_is_the_default_and_1_runs_opencode_1s_default_templates(canopy_env: CanopyEnv) -> None:
+    """With no `runtime.version`, canopy runs OpenCode 2; the deprecated 1 runs OpenCode 1's own default templates."""
     canopy_env.write_user(
-        "\n".join(line for line in canopy_env.user_file.read_text().splitlines() if "_cmd" not in line),
-    )
-    assert load(canopy_env.root, canopy_env.user_file).runtime.version == Version.ONE
-    canopy_env.configure(
-        canopy_env.user_file,
-        {"runtime": {"version": 2, "review_cmd": REVIEW_CMD}},
+        "\n".join(
+            line
+            for line in canopy_env.user_file.read_text().splitlines()
+            if "_cmd" not in line and not line.startswith("version")
+        ),
     )
     runtime = load(canopy_env.root, canopy_env.user_file).runtime
     assert runtime.version == Version.TWO
-    # Each on a private server of its own, but the one the operator set, which stays as they wrote it.
+    # Each on a private server of its own.
     for template in (runtime.overseer_cmd, runtime.worker_cmd, runtime.private_worker_cmd, runtime.plan_cmd):
         assert template.startswith(
             "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --standalone --agent canopy-",
         )
     assert runtime.chore_cmd.startswith("env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --standalone ")
+    canopy_env.configure(
+        canopy_env.user_file,
+        {"runtime": {"version": 1, "review_cmd": REVIEW_CMD}},
+    )
+    runtime = load(canopy_env.root, canopy_env.user_file).runtime
+    assert runtime.version == Version.ONE
+    # The one the operator set stays as they wrote it.
+    for template in (runtime.overseer_cmd, runtime.worker_cmd, runtime.private_worker_cmd, runtime.plan_cmd):
+        assert template.startswith("env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-")
     assert runtime.review_cmd == REVIEW_CMD
 
 
@@ -1117,3 +1172,13 @@ def test_artifacts_are_checked(canopy_env: CanopyEnv, toml: str, message: str) -
 
 def test_a_publishing_worker_gets_every_tool_of_the_stores_contract_but_its_feed() -> None:
     assert sorted(config.ARTIFACT_TOOLS) == sorted({t.name for t in store_tools.TOOLS} - {"comment_feed"})
+
+
+def test_a_directory_sessions_exclude_names_is_expanded_from_home_without_a_trailing_slash(
+    canopy_env: CanopyEnv,
+) -> None:
+    canopy_env.append_user("\n[sessions]\nsearch = 'titles'\nexclude = ['~/clients/', '/srv/*/scratch', '/']\n")
+
+    listed = load(canopy_env.root, canopy_env.user_file).sessions
+
+    assert (listed.search, listed.exclude) == ("titles", (f"{Path.home()}/clients", "/srv/*/scratch", "/"))

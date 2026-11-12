@@ -33,6 +33,8 @@ from pathlib import Path
 
 from canopy.infra import procs
 
+#: The git executable, which no other module names (`argv` is how the harness runs it).
+PROGRAM = "git"
 # Flags before the subcommand: these override any repository, global, or system config.
 SAFE_FLAGS = (
     "-c",
@@ -63,7 +65,7 @@ _CONFIG_TIMEOUT_SECONDS = 30
 
 def argv(*args: str) -> list[str]:
     """Return the command line for `git <args>` with hooks, fsmonitor, submodule fetches, and maintenance off."""
-    return ["git", *SAFE_FLAGS, *_MAINTENANCE_FLAGS, *args]
+    return [PROGRAM, *SAFE_FLAGS, *_MAINTENANCE_FLAGS, *args]
 
 
 def tracked(runner: procs.Runner, root: Path, path: str) -> list[str] | None:

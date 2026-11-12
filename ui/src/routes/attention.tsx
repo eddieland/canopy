@@ -9,6 +9,7 @@ import type { AnswerTarget } from '@/api/mutations'
 import {
     attentionQuery,
     choreQuery,
+    epicPlansQuery,
     epicQuery,
     epicsQuery,
     pullRequestQuery,
@@ -38,6 +39,7 @@ import { Notice } from '@/components/notice'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, PanelSkeleton } from '@/components/panel'
 import type { PanelRead } from '@/components/panel'
 import { PlanCard } from '@/components/plan-card'
+import { DecisionsCount } from '@/components/plan-decisions'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { ReviewLink } from '@/components/review-link'
 import { InlineCode } from '@/components/rich-text'
@@ -77,6 +79,7 @@ import { counted } from '@/lib/descriptions'
 import { epicTitle } from '@/lib/epics'
 import { onGitHub } from '@/lib/links'
 import { reasonMeaning } from '@/lib/meanings'
+import { epicOpenDecisions, openDecisions } from '@/lib/plan-state'
 import { pullRequestLabel } from '@/lib/pull-request-label'
 import { epicRef, reviewRef, taskRef } from '@/lib/refs'
 import { taskTitle } from '@/lib/tasks'
@@ -161,6 +164,14 @@ function AttentionPage() {
         return answered(item, tickets, tasks)
     }
 
+    // What an item asks, its ticket as the tickets list has it telling a feedback plan's review from a ticket plan's.
+    function askOf(item: AttentionItem): Ask {
+        return ask(
+            item,
+            tickets?.find((t) => t.key === item.ticket_key),
+        )
+    }
+
     const oldest = items === undefined ? null : oldestWaiting(items, isDone)
 
     // A reply that answers its item moves on to the next that waits on the operator, its row chosen and focused, the
@@ -226,12 +237,13 @@ function AttentionPage() {
                                     <PanelLoading query={attention} className="min-h-40" />
                                 ) : (
                                     <PanelScroll ref={scroller} label="Attention items" className="max-h-none min-h-0">
-                                        <ul className="stagger flex flex-col gap-0.5 p-1.5">
+                                        <ul className="flex stagger flex-col gap-0.5 p-1.5">
                                             {rows.map(({ item, leaving }) =>
                                                 leaving ? (
                                                     <Leaving
                                                         key={item.id}
                                                         item={item}
+                                                        asks={askOf(item)}
                                                         done={answered(item, tickets, tasks)}
                                                         burst={item.id === burst}
                                                     />
@@ -239,6 +251,7 @@ function AttentionPage() {
                                                     <Row
                                                         key={item.id}
                                                         item={item}
+                                                        asks={askOf(item)}
                                                         selected={item.id === selected?.id}
                                                         done={answered(item, tickets, tasks)}
                                                         onChoose={choose}
@@ -389,14 +402,14 @@ function useFocusOnce(wanted: string | undefined): (item: string, id: string) =>
  * tab order, hidden from a screen reader, which hears the list's count change instead. Under reduced motion it is not
  * shown at all, and the item is simply gone.
  */
-function Leaving({ item, done, burst }: { item: AttentionItem; done: boolean; burst: boolean }) {
+function Leaving({ item, asks, done, burst }: { item: AttentionItem; asks: Ask; done: boolean; burst: boolean }) {
     return (
         // Not the list's arrival (`stagger`), which would hold a new element hidden through its delay: it is leaving.
         <li aria-hidden inert data-leaving className="relative animate-none! motion-reduce:hidden">
-            <div className="animate-leave grid">
+            <div className="grid animate-leave">
                 <div className="min-h-0 overflow-hidden">
                     <div className="flex flex-col gap-1 rounded-sm px-2.5 py-2">
-                        <RowContent item={item} done={done} />
+                        <RowContent item={item} asks={asks} done={done} />
                     </div>
                 </div>
             </div>
@@ -418,11 +431,13 @@ function Leaving({ item, done, burst }: { item: AttentionItem; done: boolean; bu
 
 function Row({
     item,
+    asks,
     selected,
     done,
     onChoose,
 }: {
     item: AttentionItem
+    asks: Ask
     selected: boolean
     done: boolean
     onChoose: (item: string) => void
@@ -445,7 +460,7 @@ function Row({
                     selected && 'translate-x-(--lift-x) translate-y-(--lift-y)',
                 )}
             >
-                <RowContent item={item} done={done} />
+                <RowContent item={item} asks={asks} done={done} />
             </Link>
         </li>
     )
@@ -453,9 +468,10 @@ function Row({
 
 /**
  * What a row of the list says: the item's reason, its subject and age, its ticket's or task's title or its epic's goal,
- * its detail.
+ * its detail. A plan that waits on the operator says beside its subject how many decisions it leaves open to them, so
+ * a plan that asks something is told from one that only wants its approval before either is opened.
  */
-function RowContent({ item, done }: { item: AttentionItem; done: boolean }) {
+function RowContent({ item, asks, done }: { item: AttentionItem; asks: Ask; done: boolean }) {
     return (
         <>
             <span className="flex items-center gap-2">
@@ -466,17 +482,34 @@ function RowContent({ item, done }: { item: AttentionItem; done: boolean }) {
                     {item.pr === null ? item.subject : pullRequestLabel(item.pr)}
                     {item.finding ? ` ${item.reason}` : ''}
                 </span>
+                {asks === 'plan' && item.ticket_key !== null && <TicketPlanDecisions ticketKey={item.ticket_key} />}
+                {asks === 'epic' && item.epic !== null && <EpicPlanDecisions epic={item.epic} />}
                 <Age at={item.since} className="ml-auto" />
             </span>
             {/* The title is the row's name and the detail its preview, as an inbox's subject over its first line. */}
             {item.ticket_key !== null && <TicketTitle title={item.ticket_title} className="font-semibold" />}
             {item.task !== null && <TaskTitle id={item.task} />}
             {item.epic !== null && <EpicGoal id={item.epic} />}
-            <span className="line-clamp-2 text-sm break-words text-muted-foreground">
+            <span className="line-clamp-2 text-sm wrap-break-word text-muted-foreground">
                 <InlineCode text={shownDetail(item)} links={false} />
             </span>
         </>
     )
+}
+
+/**
+ * How many decisions a ticket's plan waiting on the operator leaves open, from its plans as its card reads them.
+ * Nothing until they are read, or for a plan that asks none.
+ */
+function TicketPlanDecisions({ ticketKey }: { ticketKey: string }) {
+    const { data } = useQuery(ticketPlansQuery(ticketKey))
+    return <DecisionsCount count={data === undefined ? 0 : openDecisions(data).length} />
+}
+
+/** The same for an epic's plan, from its plans as its page reads them. */
+function EpicPlanDecisions({ epic }: { epic: number }) {
+    const { data } = useQuery(epicPlansQuery(epic))
+    return <DecisionsCount count={data === undefined ? 0 : epicOpenDecisions(data).length} />
 }
 
 /**
@@ -646,12 +679,16 @@ function Head({
             <div className="flex flex-wrap items-center gap-2">
                 <ReasonChip item={item} />
                 {done && <Answered />}
-                <Subject item={item} />
+                {/* Its own group, which shrinks and cuts a long title or goal rather than wrap the age onto a line of
+                its own: it wraps whole only once fewer than its basis's columns are left beside the chip. */}
+                <span className="flex min-w-0 flex-1 basis-40 items-center gap-2" data-testid="attention-subject">
+                    <Subject item={item} />
+                </span>
                 <Age at={item.since} className="ml-auto" />
                 {action}
             </div>
             {body ?? (
-                <p className="text-sm break-words whitespace-pre-wrap">
+                <p className="text-sm wrap-break-word whitespace-pre-wrap">
                     <InlineCode text={shownDetail(item)} links={links} />
                 </p>
             )}
@@ -1099,9 +1136,12 @@ function EpicGoal({ id }: { id: number }) {
 
 /**
  * An epic's plan waiting on the operator (DESIGN §43): its plan's page, where its text is read, commented on, and
- * approved or sent back. Only the operator approves an epic's plan, so it is one tab stop from here.
+ * approved or sent back. Only the operator approves an epic's plan, so it is one tab stop from here. A plan that leaves
+ * decisions open says so beside the link, since its page is where they are answered.
  */
 function EpicAction({ epic }: { epic: number }) {
+    const { data } = useQuery(epicPlansQuery(epic))
+    const decisions = data === undefined ? 0 : epicOpenDecisions(data).length
     return (
         <div className="flex flex-wrap items-center gap-2 border-b p-3" data-testid="attention-epic">
             <Button asChild variant="outline">
@@ -1110,6 +1150,12 @@ function EpicAction({ epic }: { epic: number }) {
                     Open {epicRef(epic)}&apos;s plan
                 </Link>
             </Button>
+            {decisions > 0 && (
+                <span className="text-xs text-muted-foreground">
+                    {decisions === 1 ? '1 open decision' : `${decisions} open decisions`}: its page asks{' '}
+                    {decisions === 1 ? 'it' : 'each'}, the planner&apos;s choice picked.
+                </span>
+            )}
         </div>
     )
 }

@@ -1,7 +1,8 @@
 """What agent memory adds to a worker's prompt, whole, rendered from journals written by hand, against snapshots.
 
-DESIGN §28. The contract at each pair of modes, the ticket digest, and the lessons digest. Other tests assert on the
-part their behavior needs; these hold the whole text, so a change to its wording or shape is a diff in review. The
+DESIGN §28. The fields memory adds to a run's `result` tool at each pair of modes, as the tool's schema describes them
+to the worker, the ticket digest, and the lessons digest. Other tests assert on the part their behavior needs; these
+hold the whole text, so a change to its wording or shape is a diff in review. The
 snapshots are syrupy's, in `__snapshots__/test_memory_rendered/`; `make snapshots` records the ones that differ.
 """
 
@@ -14,14 +15,19 @@ import pytest
 
 from canopy.core import db, memory
 from canopy.core.vocab import MemoryMode, RunKind, RunStatus
+from canopy.runs import worker
 from tests.canopy.helpers import KEY, in_tick
 
 if TYPE_CHECKING:
     import sqlite3
+    from collections.abc import Mapping
 
+    from pydantic import BaseModel
     from syrupy.assertion import SnapshotAssertion
 
-# Every pair of modes but both off, which renders no contract.
+    from canopy.core import run_result
+
+# Every pair of modes but both off, which asks for no field.
 MODES = [
     (notes, proposals)
     for notes in MemoryMode
@@ -31,8 +37,25 @@ MODES = [
 
 
 @pytest.mark.parametrize(("notes", "proposals"), MODES, ids=[f"notes-{n}-proposals-{p}" for n, p in MODES])
-def test_the_memory_contract(markdown_snapshot: SnapshotAssertion, notes: MemoryMode, proposals: MemoryMode) -> None:
-    assert memory.memory_contract(memory.Modes(ticket_notes=notes, proposals=proposals)) == markdown_snapshot
+def test_the_memory_fields(markdown_snapshot: SnapshotAssertion, notes: MemoryMode, proposals: MemoryMode) -> None:
+    """A worker's `result` tool lists each memory field only while the tier that owns it allows it."""
+    groups = memory.asked_groups(memory.Modes(ticket_notes=notes, proposals=proposals))
+    assert memory_fields(worker.WORKER.input(groups), worker.WORKER.input()) == markdown_snapshot
+
+
+def test_with_memory_off_a_run_is_asked_for_no_memory_field() -> None:
+    off = memory.Modes(ticket_notes=MemoryMode.OFF, proposals=MemoryMode.OFF)
+    assert memory.asked_groups(off) == []
+    assert memory.asked_groups(off, writes=False) == []
+
+
+@pytest.mark.parametrize("contract", [worker.PLAN, worker.FEEDBACK_PLAN], ids=lambda c: c.name)
+def test_the_memory_fields_of_a_plan(markdown_snapshot: SnapshotAssertion, contract: run_result.Contract) -> None:
+    """A planner, served lessons at `use`, is asked only which it relied on or found wrong."""
+    modes = memory.Modes(ticket_notes=MemoryMode.OFF, proposals=MemoryMode.USE)
+    groups = memory.asked_groups(modes, writes=False)
+    assert groups == ["cited"]
+    assert memory_fields(contract.input(groups), contract.input()) == markdown_snapshot
 
 
 def test_the_ticket_digest_of_a_ticket_with_notes(
@@ -77,7 +100,7 @@ def test_the_ticket_digest_of_a_ticket_without_notes(
 @pytest.mark.parametrize(
     ("repos", "cite"),
     [(("api",), True), (("web",), False)],
-    ids=["a-run-in-api-that-cites", "a-plan-in-web"],
+    ids=["a-run-in-api-that-cites", "the-operators-digest-of-web"],
 )
 def test_the_lessons_digest(
     conn: sqlite3.Connection,
@@ -95,6 +118,21 @@ def test_the_lessons_digest(
         (KEY, run(conn, RunKind.IMPLEMENT, RunStatus.DONE)),
     )
     assert memory.lessons_digest(conn, repos, cite=cite).text == markdown_snapshot
+
+
+def memory_fields(asked: type[BaseModel], bare: type[BaseModel]) -> str:
+    """The fields the tool's input `asked` holds beyond `bare`'s, each as its schema describes it to the agent."""
+    schema = asked.model_json_schema()
+    properties: Mapping[str, Mapping[str, object]] = schema["properties"]
+    lines: list[str] = []
+    for name in sorted(set(properties) - set(bare.model_json_schema()["properties"])):
+        lines.append(f"- `{name}`: {properties[name]['description']}")
+        items = properties[name].get("items")
+        ref = items.get("$ref") if isinstance(items, dict) else None
+        if isinstance(ref, str):
+            entry: Mapping[str, Mapping[str, object]] = schema["$defs"][ref.rpartition("/")[2]]["properties"]
+            lines += [f"  - `{field}`: {entry[field]['description']}" for field in entry]
+    return "\n".join(lines) + "\n"
 
 
 def run(conn: sqlite3.Connection, kind: RunKind, status: RunStatus) -> int:

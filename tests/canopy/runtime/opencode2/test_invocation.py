@@ -96,6 +96,26 @@ def test_approve_option_finds_an_option_that_approves_what_rules_would_ask_about
 
 
 @pytest.mark.parametrize(
+    ("command", "printed"),
+    [
+        ("env X=1 opencode run --agent canopy-worker --format json {prompt}", True),
+        ("env X=1 opencode run --format=json --agent canopy-worker", True),
+        # Wherever it is, as a wrapper may hand it on.
+        ("wrap --format json -- env X=1 opencode run --agent canopy-worker {prompt}", True),
+        ("opencode run --agent canopy-worker {prompt} --format=json", True),
+        ("opencode run --agent canopy-worker --format text {prompt}", False),
+        ("opencode run --agent canopy-worker --format=text {prompt}", False),
+        # The option with no value after it, and its value with no option before it.
+        ("opencode run --agent canopy-worker --format", False),
+        ("opencode run --agent canopy-worker json --format", False),
+        ("opencode run --agent canopy-worker {prompt}", False),
+    ],
+)
+def test_prints_events_finds_the_option_that_asks_for_json_events(command: str, *, printed: bool) -> None:
+    assert invocation.prints_events(shlex.split(command)) is printed
+
+
+@pytest.mark.parametrize(
     ("command", "replaced"),
     [
         (

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 import { readDiagram } from './diagram'
+import { diagramTitle } from './diagram-title'
 import {
     anchor,
     DIAGRAM_FENCE,
-    diagramTitle,
     EMBEDS,
     GUIDE,
     GUIDE_GROUPS,

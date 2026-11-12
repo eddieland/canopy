@@ -4,11 +4,12 @@
 their text, reasoning, tool output, title, and paths redacted. Each assistant message names the model that wrote it,
 `{providerID, id, variant}`, the variant only when not the model's default, and what it cost; only those, each
 message's `id`, and the session's `version` where it names the OpenCode that made it, are read. A model run at a variant
-is named as OpenCode 2 spells it, `anthropic/claude-opus#high`, so each variant counts on its own. A reply's `id` is
-the `messageID` its call's events name (`canopy.runtime.opencode2.transcript`), so a session more than one model served
-says which wrote each call. OpenCode looks a session up by its id alone, in the one database that holds every
-project's sessions, so any directory finds it. One it does not have it names on stderr, `Session not found: ID`, and
-exits 1.
+is named as canopy's config spells it, `anthropic/claude-opus@high`, not as OpenCode 2 does, `#high`, so each variant
+counts on its own and reads as the one asked for, under either runtime (`canopy.runtime.opencode2.sessions`). A
+reply's `id` is the `messageID` its call's events name (`canopy.runtime.opencode2.transcript`), so a session more than
+one model served says which wrote each call. OpenCode looks a session up by its id alone, in the one database that
+holds every project's sessions, so any directory finds it. One it does not have it names on stderr, `Session not
+found: ID`, and exits 1.
 
 A sandboxed run's session is not there but in its role's own database (DESIGN §24), which the export is never pointed
 at, so a session OpenCode does not have is looked for there, as OpenCode 1's reader looks
@@ -33,6 +34,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, Stric
 from canopy.infra import procs
 from canopy.runtime.opencode import sessions
 from canopy.runtime.opencode2.invocation import STANDALONE
+from canopy.runtime.opencode2.sessions import VARIANT_MARK
 from canopy.runtime.report import (
     MAX_COST_USD,
     MAX_MODEL_NAME,
@@ -226,7 +228,7 @@ def _models(messages: tuple[_Message, ...]) -> tuple[tuple[ModelUse, ...], dict[
         model = message.model
         if message.type != "assistant" or model is None:
             continue
-        variant = f"#{model.variant}" if model.variant else ""
+        variant = f"{VARIANT_MARK}{model.variant}" if model.variant else ""
         name = _name(f"{model.provider}/{model.id}{variant}")
         if name not in found and len(found) >= MAX_MODELS:
             name = OTHER_MODELS

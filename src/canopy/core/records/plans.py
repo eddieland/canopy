@@ -183,7 +183,7 @@ class FeedbackPlanItem(Row):
     TABLE: ClassVar[LiteralString] = "feedback_plan_items"
 
     plan_id: int
-    #: Its place in the planner's result line, from 1: what an approval names it by.
+    #: Its place in the planner's result, from 1: what an approval names it by.
     number: int
     pr_url: str
     item: PlanItem

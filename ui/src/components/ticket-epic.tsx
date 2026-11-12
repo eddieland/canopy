@@ -52,7 +52,7 @@ export function FollowedEpicPlanLine({ followed }: { followed: FollowedEpicPlan 
     }
     return (
         <p className="mt-1 text-xs text-balance text-muted-foreground" data-testid="plan-epic">
-            <span className="panel-label mr-2">follows</span>
+            <span className="mr-2 panel-label">follows</span>
             <EpicLink id={followed.epic_id} />
             &rsquo;s plan
             {followed.sha256 !== null && (

@@ -18,11 +18,23 @@ import pytest
 from canopy.chores import history
 from canopy.cli import mcp as mcp_cli
 from canopy.cli.main import main
-from canopy.core import cards, chore_runs, db, git_tools, recorded_runs, reports, run_inbox
+from canopy.core import (
+    cards,
+    chore_result,
+    chore_runs,
+    db,
+    git_tools,
+    recorded_runs,
+    reports,
+    review_answers,
+    review_result,
+    run_inbox,
+    run_result,
+)
 from canopy.core.vocab import ChoreRunStatus, RunKind, TickStatus
 from canopy.infra import procs
 from canopy.loop import mcp, observation_tools, tools
-from canopy.runs import policy
+from canopy.runs import epic_run, policy, task_run, worker
 from canopy.runtime import servers
 from canopy.runtime.implementation import Version
 from tests.canopy.helpers import (
@@ -91,7 +103,7 @@ def overseen(canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path) -> C
     prompt = canopy_env.home / "chores" / "build-health.md"
     prompt.parent.mkdir()
     prompt.write_text("# Build health\n\nLook at the build queue.\n")
-    reviewer = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-reviewer {prompt}"
+    reviewer = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-reviewer --format json {prompt}"
     user = canopy_env.user_file.read_text().replace("[runtime]\n", f"[runtime]\nreview_cmd = '{reviewer}'\n", 1)
     # A chore with a `when` is the overseer's to run (DESIGN §37).
     when = 'when = "Weekdays only."\n'
@@ -728,10 +740,11 @@ def undescribed(schema: object, at: str = "") -> list[str]:
         mcp.CHORE,
         mcp.REPORTS,
         mcp.STATUS,
+        mcp.reporting(mcp.STATUS, {run_result.ENV: "worker"}),
         mcp.REVIEW_STATUS,
         mcp.git_mode(procs.SubprocessRunner(), {"api": Path("/a")}),
     ],
-    ids=["overseer", "chore", "reports", "status", "review-status", "git"],
+    ids=["overseer", "chore", "reports", "status", "reporting", "review-status", "git"],
 )
 def test_each_mode_gives_its_instructions_at_initialize(mode: mcp.Mode) -> None:
     """Each mode says how its tools fit together, and that what they return is data, not instructions."""
@@ -1351,6 +1364,83 @@ def test_a_reviews_run_is_not_served_the_messages_tool(tmp_path: Path) -> None:
     with in_run("review-3"), mock.patch.dict(os.environ, {cards.ANSWERS_ENV: str(tmp_path)}):
         served = mcp_session(tool_call("messages"), status=True)
     assert served.responses[1]["error"] == {"code": -32602, "message": "no tool named 'messages'"}
+
+
+# A run told what it reports, in CANOPY_RESULT, is served `result`, whose input is that run's result (DESIGN §13).
+
+
+@pytest.mark.parametrize("name", sorted(mcp.CONTRACTS))
+def test_every_field_a_run_may_report_is_described_and_no_other_is_taken(name: str) -> None:
+    """The tool's schema, not the prompt, says what each field holds, at every depth, for every group of fields."""
+    found = mcp.CONTRACTS[name]
+    listed = mcp.result_tool(found.asked(found.groups)).listed()
+    schema = listed["inputSchema"]
+    assert isinstance(schema, dict)
+    assert undescribed(schema) == []
+    assert (schema["required"], schema["additionalProperties"]) == (["status"], False)
+    assert str(listed["description"]).endswith(run_result.REPORTING)
+
+
+def test_a_run_reports_its_result_with_the_result_tool(overseen: CanopyEnv) -> None:
+    """A result that validates is taken; one that does not, or that holds a field the run was not asked for, is not."""
+    conn = overseen.journal()
+    before = recorded(conn)
+    answers = [{"review": 1, "finding": 1, "answer": "declined", "reason": "a } in [text"}]
+    asked = worker.WORKER.asked([review_answers.GROUP]).env()
+    with in_run("7"), mock.patch.dict(os.environ, asked):
+        served = mcp_session(
+            LIST_TOOLS,
+            tool_call("result", status="blocked", question="Which API?", review_answers=answers),
+            tool_call("result", status="finished"),
+            tool_call("result", summary="no status"),
+            tool_call("result", status="done", notes=[{"key": "cause-x", "text": "a note"}]),
+            tool_call("result", status="done", review_answers=[{"review": "1", "finding": 1, "answer": "fixed"}]),
+            tool_call("result", status="done", pr="https://example.test/pr/1"),
+            status=True,
+        )
+    assert served.listed() == ["status", "messages", "result"]
+    properties = served.responses[1]["result"]["tools"][2]["inputSchema"]["properties"]
+    assert set(properties) == {"status", "branch", "prs", "pr_titles", "summary", "question", "review_answers"}
+    text, error = served.said(2)
+    assert (text.startswith("Taken as your result when your run ends"), error) == (True, False)
+    # Each refusal is a tool error naming the field, and the server goes on.
+    assert [served.said(n)[1] for n in (3, 4, 5, 6, 7)] == [True] * 5
+    for n, named in ((3, "status"), (4, "status"), (5, "notes"), (6, "review"), (7, "pr")):
+        assert named in served.said(n)[0]
+    # The server writes nothing: the harness reads the result from the call the agent prints.
+    assert recorded(conn) == before
+
+
+@pytest.mark.parametrize("told", [None, "", "overseer", "worker:Notes", "worker:" + ",".join(["notes"] * 21)])
+def test_a_run_told_of_no_result_to_report_is_served_no_result_tool(told: str | None) -> None:
+    env: dict[str, str] = {} if told is None else {run_result.ENV: told}
+    with in_run("7"), mock.patch.dict(os.environ, env):
+        served = mcp_session(LIST_TOOLS, tool_call("result", status="done"), status=True)
+    assert served.listed() == ["status", "messages"]
+    assert served.responses[2]["error"] == {"code": -32602, "message": "no tool named 'result'"}
+
+
+@pytest.mark.parametrize(
+    ("run", "reports", "listed"),
+    [
+        ("task-1", task_run.CONTRACT, ["status", "messages", "result"]),
+        ("review-3", review_result.REVIEW, ["status", "result"]),
+        # An epic's planner and an eval's review keep no progress, so theirs is the one tool.
+        ("epic-2", epic_run.CONTRACT, ["result"]),
+        ("review-eval-case", review_result.REVIEW, ["result"]),
+    ],
+)
+def test_each_kind_of_run_is_served_its_own_result(run: str, reports: run_result.Contract, listed: list[str]) -> None:
+    with in_run(run), mock.patch.dict(os.environ, reports.asked().env()):
+        served = mcp_session(LIST_TOOLS, tool_call("result", status="failed", summary="could not"), status=True)
+    assert served.listed() == listed
+    assert served.said(2)[1] is False
+
+
+def test_a_chores_agent_reports_beside_its_history() -> None:
+    told = chore_result.CHORE.asked().env()
+    assert [t.name for t in mcp.reporting(mcp.CHORE, told).tools] == [*(t.name for t in mcp.CHORE.tools), "result"]
+    assert mcp.reporting(mcp.CHORE, {}) is mcp.CHORE
 
 
 def test_the_status_server_serves_nothing_else() -> None:

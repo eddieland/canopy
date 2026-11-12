@@ -17,9 +17,9 @@ export function Rave() {
             data-testid="rave"
             className="pointer-events-none fixed inset-0 z-50 overflow-hidden print:hidden"
         >
-            <div className="rave-dark absolute inset-0" />
+            <div className="absolute inset-0 rave-dark" />
             {/* Wider than the window's diagonal every way, so its corners never show as it turns. */}
-            <div className="rave-beams absolute -inset-[50vmax]" />
+            <div className="absolute inset-[-50vmax] rave-beams" />
         </div>
     )
 }

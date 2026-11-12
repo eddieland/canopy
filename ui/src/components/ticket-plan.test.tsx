@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/api/client'
 import { keys } from '@/api/queries'
 import type { PlanFile, PlanSummary, PlanThreadView, TicketPlans } from '@/api/types'
+import { STORAGE_KEY as PICKS_KEY } from '@/lib/plan-picks'
 import { renderRouted } from '@/test-utils'
 
 import { PlanState, TicketPlan } from './ticket-plan'
@@ -28,6 +29,7 @@ const NEWEST: PlanFile = {
     plan: PLAN,
     text: TEXT,
     path: '/home/op/.canopy/plans/ABC-1/2.md',
+    archive_name: '41-PROPOSED-a-plan.md',
     problem: null,
     sha256: 'read-hash',
     edited: false,
@@ -39,6 +41,7 @@ const PLANS: TicketPlans = {
     needed: true,
     policy: 'approve',
     setting: null,
+    trivial: null,
     planning: null,
     changes_asked: null,
     threads: [],
@@ -238,9 +241,14 @@ describe('TicketPlan', () => {
     })
 
     describe('PlanState', () => {
+        // Where the plan's file is, the last sentence of each.
+        const FILE = `Its file: ${NEWEST.path}`
+        // The same, as a regular expression matches it.
+        const FILED = FILE.replaceAll('.', String.raw`\.`)
+
         it('says who wrote a waiting plan, and that it waits on you', async () => {
             expect(await state({})).toBe(
-                'Written by run:50. It waits on you: read it, comment, then approve it or ask for changes.',
+                `Written by run:50. It waits on you: read it, comment, then approve it or ask for changes.${FILE}`,
             )
         })
 
@@ -250,7 +258,7 @@ describe('TicketPlan', () => {
             expect(await state({ newest: { ...newest, changed_since_approval: true } })).toMatch(
                 new RegExp(
                     '^Written by run:50, approved \\S+ ago via web, edited since the planner wrote it, changed since ' +
-                        'it was approved\\. $',
+                        `it was approved\\. ${FILED}$`,
                     'u',
                 ),
             )
@@ -260,7 +268,11 @@ describe('TicketPlan', () => {
             const approved = { ...PLAN, status: 'approved' as const, approved_at: '2026-10-08T11:30:00Z' }
             const newest = { ...NEWEST, plan: { ...approved, approved_channel: 'web' } }
             expect(await state({ newest: { ...newest, ticket_changed: ['title', 'description'] } })).toMatch(
-                /^Written by run:50, approved \S+ ago via web, its ticket’s title and description changed since\. $/u,
+                new RegExp(
+                    '^Written by run:50, approved \\S+ ago via web, ' +
+                        `its ticket’s title and description changed since\\. ${FILED}$`,
+                    'u',
+                ),
             )
         })
 
@@ -276,22 +288,22 @@ describe('TicketPlan', () => {
             expect(await state({ newest: { ...NEWEST, plan: approved } })).toMatch(
                 new RegExp(
                     '^Written by run:50, approved \\S+ ago by the planner\\. Its planner judged it small work\\. ' +
-                        'It said the plan needs no review: A one-line typo fix in the README\\.$',
+                        `It said the plan needs no review: A one-line typo fix in the README\\.${FILED}$`,
                     'u',
                 ),
             )
         })
 
         it('says which run writes the next plan, and leaves changes you asked for to their band', async () => {
-            expect(await state({ planning: 51 })).toBe('Written by run:50. Run 51 is writing a new plan.')
+            expect(await state({ planning: 51 })).toBe(`Written by run:50. Run 51 is writing a new plan.${FILE}`)
             cleanup()
-            expect(await state({ changes_asked: '2026-10-08T11:40:00Z' })).toBe('Written by run:50. ')
+            expect(await state({ changes_asked: '2026-10-08T11:40:00Z' })).toBe(`Written by run:50. ${FILE}`)
         })
 
         it('says a ticket that needs no plan needs none, and no planner for changes asked before', async () => {
             const superseded = { ...NEWEST, plan: { ...PLAN, status: 'superseded' as const } }
             expect(await state({ newest: superseded, needed: false, changes_asked: '2026-10-08T11:40:00Z' })).toBe(
-                'Written by run:50. Its ticket needs no plan now.',
+                `Written by run:50. Its ticket needs no plan now.${FILE}`,
             )
         })
 
@@ -382,6 +394,9 @@ describe('TicketPlan', () => {
         ].join('\n')
         const ANSWER = 'Decision 1 (Which encoding the file is in): take B, not A.'
 
+        // The picks are this browser's, kept until they are sent: none carries from one test to the next.
+        beforeEach(() => localStorage.clear())
+
         function renderDeciding(plans: Partial<TicketPlans> = {}) {
             return renderPlan({ newest: { ...NEWEST, text: DECIDING }, ...plans })
         }
@@ -395,9 +410,22 @@ describe('TicketPlan', () => {
             const radios = within(group).getAllByRole<HTMLButtonElement>('radio')
             expect(radios.map((radio) => radio.getAttribute('aria-checked'))).toEqual(['true', 'false'])
             expect(within(group).getByRole('radio', { name: /^A: UTF-8.*, recommended$/u })).toBe(radios[0])
-            fireEvent.click(button('Approve'))
+            // Its own words say it takes the planner's choices, as the plan's card says it.
+            fireEvent.click(button('Approve as planned'))
             await screen.findByTestId('plan-approved')
             expect(sent).toEqual([{ method: 'POST', path: '/api/tickets/ABC-1/plan', body: { action: 'approve' } }])
+        })
+
+        it("shows the picks made on the plan's card, and drops them once an approval sent them", async () => {
+            const { unmount } = renderDeciding()
+            fireEvent.click(screen.getByRole('radio', { name: /^B: Latin-1/u }))
+            unmount()
+            // Opened again, as from the card: the answer is still picked.
+            renderDeciding()
+            expect(screen.getByRole('radio', { name: /^B: Latin-1/u }).getAttribute('aria-checked')).toBe('true')
+            fireEvent.click(button('Approve with notes'))
+            await screen.findByTestId('plan-approved')
+            await waitFor(() => expect(localStorage.getItem(PICKS_KEY)).toBe('{}'))
         })
 
         it('approves with another option picked as a note for the implement', async () => {
@@ -638,6 +666,20 @@ describe('TicketPlan', () => {
         fireEvent.click(button('Approve'))
         await screen.findByTestId('plan-approved')
         expect(sent).toEqual([{ method: 'POST', path: '/api/tickets/ABC-1/plan', body: { action: 'approve' } }])
+    })
+
+    it('marks a comment whose passage the plan has only reworded, and not one on its exact words', async () => {
+        renderPlan({
+            threads: [
+                { ...THREAD, quote: 'CSV writers' },
+                { ...THREAD, id: 10, quote: 'Add' },
+            ],
+        })
+        const card = screen.getByRole('article', { name: 'Comment on “CSV writers”' })
+        expect(await within(card).findByText('passage reworded')).toBeDefined()
+        expect(within(card).queryByText('passage gone')).toBeNull()
+        const exact = screen.getByRole('article', { name: 'Comment on “Add”' })
+        expect(within(exact).queryByText('passage reworded')).toBeNull()
     })
 
     it('saves a change to a comment as it is made', async () => {

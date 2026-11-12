@@ -131,7 +131,8 @@ export function ReviewDiffPanels({
  * those the operator unticks, every type ticked at first; and each file's panel folds away whole on its header's
  * disclosure. A `wanted` file, one the operator followed a link to a card on, comes back into view: its type ticked
  * and its panel open. Each new object shows it again, so following the same link twice works twice. With `onAdd`, each
- * line on the new side has a + beside its number, which `onAdd` hears with the file's index and the line.
+ * line on the new side has a + beside its number, which `onAdd` hears with the file's index and the line. Each file's
+ * title is a heading that names its path, at `level`: 3 where the diff sits under a panel of its own, as a run's Diff.
  */
 export function DiffPanels<T>({
     diff,
@@ -140,6 +141,7 @@ export function DiffPanels<T>({
     renderCard,
     wanted = null,
     onAdd,
+    level = 2,
 }: {
     diff: ReviewDiff
     placed: Placed<T>
@@ -147,6 +149,7 @@ export function DiffPanels<T>({
     renderCard: (item: T) => ReactNode
     wanted?: Wanted | null
     onAdd?: (file: number, line: number) => void
+    level?: 2 | 3
 }) {
     const first = shownAtFirst(diff.files, placed.lines)
     const total = diff.files.reduce((sum, file) => sum + lineCount(file), 0)
@@ -203,6 +206,7 @@ export function DiffPanels<T>({
                             open={!folded.has(i)}
                             onOpenChange={(open) => setFolded((was) => (open ? without(was, i) : new Set([...was, i])))}
                             onAdd={onAdd === undefined ? undefined : (line) => onAdd(i, line)}
+                            level={level}
                         />
                     ),
             )}
@@ -285,6 +289,7 @@ function FilePanel<T>({
     open,
     onOpenChange,
     onAdd,
+    level,
 }: {
     file: DiffFile
     first: Span[]
@@ -297,6 +302,7 @@ function FilePanel<T>({
     open: boolean
     onOpenChange: (open: boolean) => void
     onAdd: ((line: number) => void) | undefined
+    level: 2 | 3
 }) {
     // The lines the operator opened, drawn with those the page draws at first, which follow the review as it changes:
     // a running review's findings arrive when it ends, and each brings its lines into view, folded or not, as a thread
@@ -308,16 +314,18 @@ function FilePanel<T>({
     )
     const count = onFile.length + [...(onLine?.values() ?? [])].reduce((sum, items) => sum + items.length, 0)
     const body = onFile.length > 0 || rows.length > 0
+    const named = file.old_path === null ? file.path : `${file.old_path} → ${file.path}`
     return (
         <Collapsible asChild open={open || !body} onOpenChange={onOpenChange}>
             <Panel data-testid="diff-file">
-                <PanelHeader label="File">
-                    <span className="min-w-0 flex-1 truncate font-mono text-xs" title={file.path}>
+                <PanelHeader label="File" level={level} spoken={named}>
+                    {/* Its heading names it to a screen reader, which this line would say again. */}
+                    <span aria-hidden className="min-w-0 flex-1 truncate font-mono text-xs" title={file.path}>
                         {file.old_path !== null && <span className="text-muted-foreground">{file.old_path} → </span>}
                         {file.path}
                     </span>
                     {file.binary && <Chip>binary</Chip>}
-                    {body && <Disclosure open={open} what="diff" />}
+                    {body && <Disclosure open={open} what="diff" of={file.path} />}
                 </PanelHeader>
                 <CollapsibleContent>
                     {onFile.length > 0 && (

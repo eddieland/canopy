@@ -7,6 +7,7 @@ that does not validate is no result: each caller decides what that run's status 
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping
 from typing import cast
 
@@ -14,6 +15,13 @@ from pydantic import AfterValidator, BaseModel, ValidationError
 
 # A PR's title, as a worker or a reviewer reports it: GitHub's own limit.
 MAX_PR_TITLE = 256
+#: How many closing brackets `last_line` adds to or drops from a result line that is not JSON: a slip's worth, so a
+#: line wrong in more than its closing is still no result.
+MAX_REPAIRS = 3
+
+_CLOSERS = {"{": "}", "[": "]"}
+# A JSON string, captured so that splitting a line on it keeps it.
+_STRING = re.compile(r'("(?:[^"\\]|\\.)*")')
 
 
 def bounded(limit: int) -> AfterValidator:
@@ -62,15 +70,16 @@ def last_line[M: BaseModel](model: type[M], text: str) -> M | None:
     """Parse the last line of `text` that starts with `{` as `model`. None if there is none or it is invalid.
 
     Lines after it that are not JSON objects, such as a runtime plugin's notices, are passed over (DESIGN §13). An
-    invalid object is not: a result the agent got wrong is no result, never an earlier line's.
+    invalid object is not: a result the agent got wrong is no result, never an earlier line's. One slip is repaired: a
+    line that is not JSON only for its closing brackets is read with them put right.
 
     Returns:
         The validated result, or None when no line starts with `{` or the last one does not validate as `model`.
     """
-    lines = [line.strip() for line in text.splitlines() if line.strip().startswith("{")]
-    if not lines:
+    line = _result_line(text)
+    if line is None:
         return None
-    return stored(model, lines[-1])
+    return stored(model, line if _is_json(line) else _rebalanced(line))
 
 
 def stored[M: BaseModel](model: type[M], result_json: object) -> M | None:
@@ -122,3 +131,63 @@ def stored_prs(result: Mapping[str, object]) -> list[str]:
     prs = result.get("prs")
     urls = list(cast("dict[str, object]", prs).values()) if isinstance(prs, dict) else [result.get("pr")]
     return [u for u in urls if isinstance(u, str) and u.startswith("https://") and u.isprintable() and " " not in u]
+
+
+def _result_line(text: str) -> str | None:
+    lines = [line.strip() for line in text.splitlines() if line.strip().startswith("{")]
+    return lines[-1] if lines else None
+
+
+def _is_json(line: str) -> bool:
+    try:
+        json.loads(line)
+    except ValueError:
+        return False
+    return True
+
+
+def _rebalanced(line: str) -> str | None:
+    """Return `line` with its closing brackets matched to the ones it opens, or None when that is not its only fault.
+
+    A bracket left open is closed before the closer that skips it or at the line's end, and a closer nothing opened is
+    dropped. Only brackets outside strings change, at most `MAX_REPAIRS` of them, and only in a line that ends with
+    one, so no value is made up and a line cut short stays no result.
+    """
+    if not line.endswith(("}", "]")):
+        return None
+    out: list[str] = []
+    opened: list[str] = []
+    changed = 0
+    # Every second piece is a string, kept as it is.
+    for i, piece in enumerate(_STRING.split(line)):
+        if i % 2:
+            out.append(piece)
+        elif '"' in piece:
+            # A string never closed.
+            return None
+        else:
+            changed += sum(_place(char, opened, out) for char in piece)
+    changed += len(opened)
+    out.extend(reversed(opened))
+    return "".join(out) if 0 < changed <= MAX_REPAIRS else None
+
+
+def _place(char: str, opened: list[str], out: list[str]) -> int:
+    """Add `char`, from outside a string, to `out`, with `opened` the closers still owed, the innermost last.
+
+    Returns:
+        How many closing brackets it added or dropped to keep them matched.
+    """
+    if char in _CLOSERS:
+        opened.append(_CLOSERS[char])
+    elif char in "}]":
+        if char not in opened:
+            return 1
+        skipped = len(opened) - 1 - opened[::-1].index(char)
+        added = opened[skipped + 1 :][::-1]
+        del opened[skipped:]
+        out.extend(added)
+        out.append(char)
+        return len(added)
+    out.append(char)
+    return 0

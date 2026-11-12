@@ -105,7 +105,7 @@ then it may hold someone else's work; check before you go digging there for this
 
 A run that ended `failed`, `crashed`, or `unknown` also has **ended on**, right under its summary: the transcript's
 last runtime error, or failing that its last failed or refused tool call, with when it happened. The summary is the
-harness's side of it (`the worker exited 1 without a result line`), which is true and not much help; this is the
+harness's side of it (`the worker reported no result`), which is true and not much help; this is the
 agent's side, often something as mundane as a rate limit. Click it to jump to that row in the transcript instead of
 scrolling past a few hundred rows to find it. A chore run's page has the same field.
 
@@ -119,16 +119,45 @@ run across several repositories lists each one's under its name, and counts the 
 arrive with the run's result, so a running run shows none yet, and a run given no list, or in a repository you keep
 none for, has no panel at all. It's what `canopy show run:ID` prints under `Checklist:`.
 
-When the list held the worker's push, what it pushed after reading the list sits right under the answers. A **Pushed
-after the list** panel names the repository and the two commits, `web · 5b1e0c4..c9d24f8`: the one the branch was at
-when canopy showed the list, and the next push. Then comes the diff between them, a panel per file, drawn as [a
-review's](pull-requests#a-reviews-page) is. This is where a `fixed` answer shows its work: the answer says the worker
-fixed it, the diff shows what it called a fix. It's everything the run changed in that stretch, not only the fix, so a
-worker that also tidied three files on the way gets the credit, or the blame, for those too. A run held more than once,
-or in several repositories, has a panel for each stretch, each naming its repository. A diff canopy couldn't keep as
-the run ended, or that [garbage collection](running-the-loop#garbage-collection) has since removed, says so in its
-panel rather than quietly leaving the stretch out. Past five stretches, which takes some doing, the page shows the
-first five and `canopy show run:ID` names the rest.
+Then the **Diff**: what the run changed, read by canopy from the run's own worktree as it ended, after its push and
+before a flaky kick, canopy's rebase to rerun a flaky check, could rewrite the branch. It's a summary, a few lines
+tall, so the transcript below stays where you can see it. The header names the repository, the two commits, and the
+size, `web · 5b1e0c4..c9d24f8 · 2 files · +21 −3`: from where origin's branch was when the run started (or the base's
+commit, for a first `implement` with no branch yet) to where the run left it; hover the commits for that in words.
+Under it, each file the run touched with its lines added and removed. **Show diff** opens the diff itself under the
+panel, a panel per file, drawn as a review's is. So a `resume` that answered one review comment shows the three lines
+it touched, not the four hundred the branch has piled up since `implement`. When you do want the whole branch, **branch
+vs base** takes you to the PR's page, which has it as the latest run that pushed left it, with its threads on it. A
+run across several repositories has a Diff panel for each.
+
+Under the files, the panel lists the run's commits, oldest first: each short id opens the commit on GitHub, through the
+PR, and the subject is the worker's, so read it as a claim. Chips say what canopy's marks found: **no trailer** or **no
+prefix** for a commit made around canopy's hooks, **co-author** for a co-author trailer canopy didn't add (usually the
+agent runtime signing its work), and **pushed by canopy** for one the worker committed and never pushed, which canopy's
+push after the run put on origin. A run that made a hundred commits has the newest hundred, and says how many older ones
+it left out; if your worker made a hundred commits, the list is the least of your worries.
+
+When the list held the worker's push, that repository's Diff opens on what the worker pushed after reading the list,
+right under the answers. A switch beside **branch vs base** picks **after the list** or **whole run**, and starts on the
+first. After the list, a dot marks each file the stretch touched, and a line under the files names its two commits,
+`5b1e0c4..c9d24f8`: where the branch was when canopy showed the list, and the next push. Its diff is open under the
+panel. This is where a `fixed` answer shows its work: the answer says the worker fixed it, the diff shows what it called
+a fix. It's everything the run changed in that stretch, not only the fix, so a worker that also tidied three files on
+the way gets the credit, or the blame, for those too. **whole run** puts the rest back, read once you show it. A run
+held more than once has a stretch for each hold, `after list 1`, `after list 2`, and one held in several repositories
+has each stretch in its own repository's Diff. A stretch whose diff canopy couldn't keep as the run ended, or that
+[garbage collection](running-the-loop#garbage-collection) has since removed, says so on that line rather than quietly
+leaving it out. Past five stretches, which takes some doing, the page shows the first five and `canopy show run:ID`
+names the rest.
+
+A run that ended `unpushed` still shows what it did: the change up to the last commit it made in its worktree, with a
+**not on origin** chip, since the commits themselves went with the slot. It's the closest you'll get to the work the
+push check caught, so read it before deciding whether to send the ticket round again. A diff canopy couldn't keep says
+why, a `crashed` run's included (no git runs in a slot canopy can't trust), and one [garbage
+collection](running-the-loop#garbage-collection) has removed says when; an ended run that recorded nothing at all, such
+as one reconcile closed, says that too. None of them shows a blank panel and lets you assume the run did nothing. A plan
+run pushes nothing and has no Diff panel; nor does a run still working. `canopy show run:ID --diff` prints the same diff
+for your pager.
 
 The **Transcript** is the run's session, from its log, oldest first:
 
@@ -172,10 +201,10 @@ lines** still searches every entry, drawn or not, so a search beats scrolling fo
 flip the order to newest first. All open opens only the rows drawn, and following an addition in the chart, or the
 error a run ended on, draws down to its row first.
 
-The session id in the transcript's header opens the same session in the runtime's own tools: `opencode export ID`,
-or OpenCode 2's `opencode session export ID`. A
-transcript with nothing to show is its header alone, saying why in a word or two (`log gone`, `no session`,
-`no events yet`); hover it for the whole reason.
+The session id in the transcript's header opens the same session in the runtime's own tools:
+`opencode session export ID`, or the deprecated OpenCode 1's `opencode export ID`. A transcript with nothing to show
+is its header alone, saying why in a word or two (`log gone`, `no session`, `no events yet`); hover it for the whole
+reason.
 
 Under the transcript, **Prompt** is what canopy handed the worker, exactly as rendered: the instructions for its kind
 of run, then the ticket and whatever else canopy chose to tell it. It arrives folded, with its length; **Show prompt**
@@ -299,12 +328,7 @@ still ends the run as `blocked`, as before. A task's run asks none here: its que
 starts the next. While a question waits, it's an item on [the attention list](attention#the-list) too, answerable
 right there, the rail's row for the run reads `asks you` in amber, and the tab's title and icon count it.
 
-Words, not a letter, are a message: `canopy reply run:ID 'only the parser, please'` tells a running worker or planner
-that its scope moved without ending its run, and a reply to a task while its run works reaches that run too. On its
-next tool call the agent hears that you wrote, never what; it reads your words through canopy's own tool, so a line
-dressed up as canopy's can at worst send it to check an empty inbox. One it reads and then reports on is handled. One
-it never reads, or reads just before falling over, waits for the next run's prompt like any reply, so nothing you said
-goes missing. A run that already ended takes none: reply to its ticket instead.
+Words, not a letter, are a message, sent from the ticket's reply box: [Tickets](tickets#a-message-to-a-running-run).
 
 A run's page, a review's, and a task run's lead with the whole of it; the runs list shows what it's doing now, `asks
 you` while a question waits, and when it was last updated, after a small meter when it has steps; a ticket's page shows

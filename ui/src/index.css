@@ -260,6 +260,164 @@
 }
 
 /*
+ * A document's table, a plan's, a guide page's, or a message's (DESIGN.md, A document): the measure's full width at
+ * least, so a narrow one never sits stranded at the text's left, and wider where what it holds needs it, a
+ * hairline under its head and each row but the last, no grid and no fill, its first column flush with the text's edge
+ * and its last with the measure's. A step under the text around it, in `em`, so it moves with a plan's text size; its
+ * head in the app's label type, as its own tables' are; its figures tabular, so a column of numbers lines up. What
+ * holds it scrolls sideways (`edge-fade`) when it is still too wide.
+ */
+@utility document-table {
+    @apply w-full border-collapse text-left tabular-nums;
+    font-size: 0.875em;
+    line-height: 1.6;
+    & :is(th, td) {
+        @apply border-b px-3 py-1 align-top first:pl-0 last:pr-0;
+    }
+    & tr:last-child > td {
+        @apply border-b-0;
+    }
+    /* Its head in the app's label type, as every table and field list in the app has it. */
+    & th {
+        @apply panel-label font-normal;
+    }
+    /* Code in a cell breaks where it must, so a path or a signature never holds its column wider than the rest and
+     * pushes columns out of sight; and it drops its chip, which a code span broken over lines turns into a stack of
+     * pills. Its face still sets it apart. */
+    & :is(th, td) code {
+        @apply bg-transparent px-0 wrap-anywhere;
+    }
+    /* But not to a sliver: a cell keeps room for a dozen characters of code before the table scrolls instead. */
+    & :is(th, td):has(code) {
+        min-width: 7em;
+    }
+}
+
+/*
+ * A box that scrolls sideways, each edge faded while there is more past it (src/lib/overflow-edges.ts marks which), so
+ * the operator sees there is more where the scrollbar stays hidden until a scroll.
+ */
+@utility edge-fade {
+    overflow-x: auto;
+    --fade-start: 0px;
+    --fade-end: 0px;
+    &[data-more-start] {
+        --fade-start: 2.5rem;
+    }
+    &[data-more-end] {
+        --fade-end: 2.5rem;
+    }
+    &:is([data-more-start], [data-more-end]) {
+        mask-image: linear-gradient(
+            to right,
+            transparent,
+            black var(--fade-start),
+            black calc(100% - var(--fade-end)),
+            transparent
+        );
+    }
+}
+
+/*
+ * A block's actions (src/components/block-actions.tsx): a diagram's, a code block's, in a row at the block's top right
+ * corner, over it, on its surface. Shown while the block, an ancestor marked `group/block`, is hovered, a plan's
+ * diagram holds the caret (`plan-diagram-editing`), an action holds the focus, or its menu is open, and always on a
+ * touch screen, which has no hover; kept in place out of sight, so nothing moves as they show. Never printed. The
+ * caret's rule is here, in the utility, since one in the components layer would lose to it.
+ */
+@utility block-actions {
+    @apply absolute top-1.5 right-1.5 z-10 flex items-center gap-0.5 rounded-md bg-surface p-0.5 opacity-0;
+    transition: opacity 150ms;
+    &:focus-within,
+    &:has([aria-expanded='true']),
+    :where(.group\/block:hover, .plan-diagram-editing) & {
+        opacity: 1;
+    }
+    @media (pointer: coarse) {
+        opacity: 1;
+    }
+    @media print {
+        display: none;
+    }
+    /* A plan's diagram has a head, as a panel's section does: there they sit in it, before Source. */
+    :where(.plan-diagram-head) > & {
+        position: static;
+        margin-left: auto;
+    }
+}
+
+/*
+ * A diagram's picture, in a plan or the guide: as wide as it is drawn, narrower to fit what holds it, but never under
+ * three quarters of that, past which its labels are too small to read; there, what holds it scrolls (`edge-fade`).
+ * At the text's edge, as a table is. Its width is the diagram's, `--diagram-width`, set with `data-width` where the
+ * SVG says it.
+ */
+@utility diagram-image {
+    display: block;
+    height: auto;
+    max-width: 100%;
+    &[data-width] {
+        max-width: none;
+        width: clamp(calc(var(--diagram-width) * 0.75), 100%, var(--diagram-width));
+    }
+}
+
+/*
+ * A plan printed, or saved as a PDF (src/lib/plan-print.ts): the plan alone, as a document, under the line naming it.
+ * The shell goes, and of the page everything but the plan and what holds it: its header, toolbar, foot, decisions,
+ * comments, and earlier plans, and a drawn diagram's code, which its picture stands for. A diagram, a table, and a
+ * code block each keep to one page where they fit; a table and a code block wrap rather than scroll; and a diagram's
+ * picture drawn dark is turned round, its light and dark swapped and its hues kept, since the print does not wait for
+ * it to be drawn again in the light theme the page takes.
+ */
+@media print {
+    @page {
+        margin: 16mm;
+    }
+    :root[data-printing='plan'] {
+        & [data-testid='app-header'],
+        & aside,
+        & main :not(:has([data-print-plan]), [data-print-plan], [data-print-plan] *),
+        & [data-print-plan] > :not([data-print-line], [data-print-body]),
+        & .plan-diagram-toggle,
+        & .plan-diagram[data-diagram='drawn'] > pre {
+            display: none;
+        }
+        & .page-scroll {
+            display: block;
+        }
+        & [data-print-plan] {
+            border: none;
+            box-shadow: none;
+            background: none;
+        }
+        & [data-print-body] {
+            padding: 0;
+        }
+        & :is(.plan-diagram-figure, .plan-table, .plan-code) {
+            break-inside: avoid;
+        }
+        & .plan-diagram-figure {
+            border: none;
+        }
+        & .plan-diagram-figure img[data-drawn-dark] {
+            filter: invert(1) hue-rotate(180deg);
+        }
+        & :is(.tableWrapper, .plan-diagram-scroll) {
+            overflow: visible;
+            mask-image: none;
+        }
+        & .plan-doc :is(th, td) {
+            overflow-wrap: anywhere;
+        }
+        & .plan-code pre {
+            overflow: visible;
+            white-space: pre-wrap;
+        }
+    }
+}
+
+/*
  * What the page scrolls in, everything under the header (AppShell), so a scrollbar never sits beside the header. Its
  * gutter is kept whether or not the page is long enough to need it: no layout shift when a page grows a scrollbar.
  * Positioned, so it is the containing block of what is absolute inside it, such as an `sr-only` file input, and clips
@@ -1789,7 +1947,7 @@
     }
 
     .plan-doc {
-        @apply flex min-h-72 max-w-3xl flex-col gap-3 document-text break-words text-foreground outline-none;
+        @apply flex min-h-72 max-w-3xl flex-col gap-3 document-text wrap-break-word text-foreground outline-none;
 
         /* Styled by the level its Markdown says (`data-level`), not its tag, which sits two under it (PlanHeading). */
         & :is([data-level='1'], [data-level='2']) {
@@ -1855,19 +2013,13 @@
             @apply my-1 border-t;
         }
         & table {
-            @apply w-full border-collapse text-left text-sm;
-        }
-        & :is(th, td) {
-            @apply border px-2 py-1 align-top;
-        }
-        & th {
-            @apply bg-surface-raised/50 font-medium;
+            @apply document-table;
         }
         & :is(th, td) > p {
             @apply m-0;
         }
         & .tableWrapper {
-            @apply overflow-x-auto;
+            @apply edge-fade;
         }
         & strong {
             @apply font-semibold;
@@ -1898,32 +2050,65 @@
              * reader reads the code that draws the picture. */
             @apply sr-only;
         }
+        /* A code block and a table, positioned for their actions in their corner. */
+        & :is(.plan-code, .plan-table) {
+            @apply relative;
+        }
+        /* Shown, the code sits under its picture, so Source never moves the picture away from the pointer; one not
+         * drawn shows its code first and why under it. */
+        & .plan-diagram[data-diagram='drawn'] > pre {
+            @apply order-1;
+        }
+        /* A section of the plan's panel, as the app's panels have: a hairline, a head in the label type naming what
+         * it shows, and the picture under it, on the panel's own surface rather than a card of its own. */
         & .plan-diagram-figure {
-            @apply m-0 flex flex-col items-center gap-2 rounded-md border bg-surface p-3;
+            @apply relative m-0 flex flex-col gap-3 border-t pt-2;
         }
         & .plan-diagram[data-diagram='pending'] .plan-diagram-figure {
             @apply hidden;
         }
+        /* One not drawn is its code, then why in a line, its actions at the line's right. */
+        & .plan-diagram[data-diagram='failed'] .plan-diagram-figure {
+            @apply flex-row items-baseline border-t-0 pt-0;
+        }
+        & .plan-diagram-head {
+            @apply flex items-center gap-3;
+        }
+        & .plan-diagram[data-diagram='failed'] .plan-diagram-head {
+            @apply order-1 ml-auto;
+        }
+        & .plan-diagram[data-diagram='failed'] :is(.plan-diagram-head figcaption, .plan-diagram-toggle) {
+            @apply hidden;
+        }
+        & .plan-diagram[data-diagram='failed'] .plan-diagram-scroll {
+            @apply hidden;
+        }
+        & .plan-diagram-head figcaption {
+            @apply min-w-0 panel-label;
+        }
+        & .plan-diagram-scroll {
+            @apply edge-fade;
+        }
         & .plan-diagram-figure img {
-            @apply h-auto max-w-full;
+            @apply diagram-image;
         }
-        & .plan-diagram-figure figcaption {
-            @apply self-start text-sm text-muted-foreground empty:hidden;
+        /* In `em`, as a table is, so it keeps its step under the plan's text at every size (Settings). */
+        & .plan-diagram-reason {
+            @apply text-muted-foreground empty:hidden;
+            font-size: 0.875em;
         }
+        /* A control in a section's head, as a panel's are: quiet mono words, never a button's chip. */
         & .plan-diagram-toggle {
-            @apply self-end rounded-sm border bg-surface px-2 py-0.5 text-xs text-muted-foreground;
+            @apply rounded-xs font-mono text-xs text-muted-foreground;
             &:hover {
-                @apply bg-surface-raised text-foreground;
+                @apply text-foreground;
             }
             &[aria-pressed='true'] {
-                @apply bg-surface-raised text-foreground;
+                @apply text-foreground;
             }
             &:focus-visible {
                 @apply ring-2 ring-ring outline-none;
             }
-        }
-        & .plan-diagram[data-diagram='failed'] .plan-diagram-toggle {
-            @apply hidden;
         }
         & .ProseMirror-selectednode {
             @apply ring-2 ring-ring;

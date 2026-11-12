@@ -22,6 +22,9 @@ export const keys = {
     // A run's and a tick's transcripts: read again only when the stream says the run's status or the tick changed.
     runTranscript: (id: number) => ['transcript', 'run', id] as const,
     runOutput: (id: number) => ['transcript', 'run', id, 'output'] as const,
+    // Not under the run's transcript or its task, whose invalidations would read a kept file again that never changes.
+    runChange: (id: number, repo: string) => ['run-change', id, repo] as const,
+    taskRunChange: (id: number, run: number, repo: string) => ['task-run-change', id, run, repo] as const,
     tickTranscript: (id: number) => ['transcript', 'tick', id] as const,
     // Under its transcript's key, so the invalidation that marks the transcript stale marks the output too.
     tickOutput: (id: number) => ['transcript', 'tick', id, 'output'] as const,
@@ -73,6 +76,8 @@ export const keys = {
     healthReport: (days: number) => ['spend', 'breakdown', 'health', days] as const,
     // Under the breakdowns' key too: a fix's start or end, or a kick, changes the report.
     ciReport: (days: number) => ['spend', 'breakdown', 'ci', days] as const,
+    // Under the breakdowns' key too: a tick runs the sources, and its cost marks them stale.
+    connectorsReport: (days: number) => ['spend', 'breakdown', 'connectors', days] as const,
     // Under the breakdowns' key too: a plan, a resume, or a review run changes the report.
     reviewsReport: (days: number) => ['spend', 'breakdown', 'reviews', days] as const,
     // Under the breakdowns' key too: a plan, its approval, or a resume changes the report.
@@ -218,6 +223,38 @@ export function runOutputQuery(id: number) {
     })
 }
 
+/**
+ * The diff of what a run changed in one repository (DESIGN §45), read when its Diff panel is opened. The kept file
+ * never changes, so it is read once.
+ */
+export function runChangeQuery(id: number, repo: string) {
+    return queryOptions({
+        queryKey: keys.runChange(id, repo),
+        queryFn: async ({ signal }) =>
+            unwrap(
+                await api.GET('/api/runs/{run_id}/changes/{repo}', { params: { path: { run_id: id, repo } }, signal }),
+            ),
+        placeholderData: undefined,
+        staleTime: Number.POSITIVE_INFINITY,
+    })
+}
+
+/** The diff of what a task's run changed in its repository, read when its Diff panel is opened, once, as a run's. */
+export function taskRunChangeQuery(id: number, run: number, repo: string) {
+    return queryOptions({
+        queryKey: keys.taskRunChange(id, run, repo),
+        queryFn: async ({ signal }) =>
+            unwrap(
+                await api.GET('/api/tasks/{task_id}/runs/{run_id}/changes/{repo}', {
+                    params: { path: { task_id: id, run_id: run, repo } },
+                    signal,
+                }),
+            ),
+        placeholderData: undefined,
+        staleTime: Number.POSITIVE_INFINITY,
+    })
+}
+
 /** What the last 24 hours and the last 30 days cost. The stream sends them again whenever a cost changes. */
 export const spendQuery = queryOptions({
     queryKey: keys.spend,
@@ -282,6 +319,19 @@ export function ciReportQuery(days: number) {
         queryKey: keys.ciReport(days),
         queryFn: async ({ signal }) =>
             unwrap(await api.GET('/api/reports/ci', { params: { query: { days } }, signal })),
+    })
+}
+
+/**
+ * How each source's runs of the last `days` local days ended, how long they took, each day's that read less than
+ * asked, the newest of those, the lines refused, and each source now. Marked stale with the spend breakdowns, as a
+ * tick's cost marks them: a poll between ticks spends nothing, so the page reads its runs with the next tick's.
+ */
+export function connectorsReportQuery(days: number) {
+    return queryOptions({
+        queryKey: keys.connectorsReport(days),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/reports/connectors', { params: { query: { days } }, signal })),
     })
 }
 

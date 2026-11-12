@@ -269,7 +269,7 @@ function CommentList({
     const out = hasDiff ? leftOut(draft, findings) : []
     return (
         <div className="border-t" data-testid="draft-comments">
-            <span className="panel-label block px-3 pt-3">
+            <span className="block px-3 pt-3 panel-label">
                 Comments{' '}
                 <span className="readout text-muted-foreground">
                     {count} of at most {draft.max_comments}
@@ -407,7 +407,7 @@ function RevisionSection({ run, draft }: { run: number; draft: ReviewDraft }) {
                 <ol className="flex flex-col gap-1.5" aria-label="Your notes">
                     {draft.notes.map((n) => (
                         <li key={n.id} className="rounded-md border bg-surface px-2.5 py-1.5">
-                            <span className="readout block text-2xs text-muted-foreground">
+                            <span className="block readout text-2xs text-muted-foreground">
                                 note {n.id}, at version {n.after_version}, through {n.channel}
                             </span>
                             <MemoryText text={n.body} lines className="block" />

@@ -75,6 +75,106 @@ describe('RunsTable', () => {
         expect(screen.getByRole('link', { name: 'acme/api#12' })).toBeDefined()
     })
 
+    it('names each repository’s range and size on a ticket’s page, each opening the run at its diff', async () => {
+        const counted = {
+            files_changed: 2,
+            lines_added: 21,
+            lines_removed: 3,
+            commit_count: null,
+            commits: [],
+            kick: null,
+        }
+        const ranges = [
+            {
+                repo: 'api',
+                start_sha: 'a'.repeat(40),
+                start_on_base: true,
+                end_sha: 'b'.repeat(40),
+                unpushed_sha: null,
+                ...counted,
+            },
+            // Left unpushed: its range runs to the commit it left in its slot. Counted by no canopy, it names no size.
+            {
+                repo: 'web',
+                start_sha: 'c'.repeat(40),
+                start_on_base: false,
+                end_sha: 'c'.repeat(40),
+                unpushed_sha: 'd'.repeat(40),
+                files_changed: null,
+                lines_added: null,
+                lines_removed: null,
+                commit_count: null,
+                commits: [],
+                kick: null,
+            },
+            // A run that crashed read nothing of its slot: no range to name.
+            {
+                repo: 'mobile',
+                start_sha: null,
+                start_on_base: false,
+                end_sha: null,
+                unpushed_sha: null,
+                files_changed: null,
+                lines_added: null,
+                lines_removed: null,
+                commit_count: null,
+                commits: [],
+                kick: null,
+            },
+        ]
+        await renderRuns([run({ ranges })], { ticket: false })
+        const named = screen.getAllByTestId('run-range')
+        expect(named.map((r) => r.textContent)).toEqual(['api aaaaaaa..bbbbbbb +21 −3', 'web ccccccc..ddddddd'])
+        expect(named.map((r) => r.getAttribute('href'))).toEqual([
+            '/workspace/runs/42#diff-api',
+            '/workspace/runs/42#diff-web',
+        ])
+    })
+
+    it('names a run’s range on its PR’s page, where the PR it pushed to is the page’s own', async () => {
+        const range = {
+            repo: 'web',
+            start_sha: 'a'.repeat(40),
+            start_on_base: false,
+            end_sha: 'b'.repeat(40),
+            unpushed_sha: null,
+            files_changed: 1,
+            lines_added: 4,
+            lines_removed: 1,
+            commit_count: null,
+            commits: [],
+            kick: null,
+        }
+        await renderRuns([run({ prs: [PR_A], ranges: [range] })], { ticket: false, ownPr: PR_A })
+        expect(screen.queryByRole('link', { name: 'acme/web#88' })).toBeNull()
+        const [named] = screen.getAllByTestId('run-range')
+        expect(named?.textContent).toBe('web aaaaaaa..bbbbbbb +4 −1')
+        expect(named?.getAttribute('href')).toBe('/workspace/runs/42#diff-web')
+    })
+
+    it('lists a run’s commits and the kick after it on its PR’s page alone, as the branch’s history', async () => {
+        const made = { canopy_trailer: true, prefixed: null, runtime_trailer: false, harness_pushed: true }
+        const range = {
+            repo: 'web',
+            start_sha: 'a'.repeat(40),
+            start_on_base: false,
+            end_sha: 'b'.repeat(40),
+            unpushed_sha: null,
+            files_changed: 1,
+            lines_added: 4,
+            lines_removed: 1,
+            commit_count: 1,
+            commits: [{ sha: 'b'.repeat(40), subject: 'ABC-099: the change', ...made }],
+            kick: { from_head: 'b'.repeat(40), to_head: 'c'.repeat(40), kicked_at: '2026-10-08T11:00:00Z' },
+        }
+        const { unmount } = await renderRuns([run({ prs: [PR_A], ranges: [range] })], { ticket: false, ownPr: PR_A })
+        expect(screen.getByTestId('run-commit').textContent).toBe('bbbbbbbABC-099: the changepushed by canopy')
+        expect(screen.getByTestId('run-kick').textContent).toMatch(/^kicked bbbbbbb → ccccccc/u)
+        unmount()
+        await renderRuns([run({ prs: [PR_A], ranges: [range] })], { ticket: false })
+        expect(screen.queryByTestId('run-commits')).toBeNull()
+    })
+
     it('names up to four worktrees, and counts the rest past three, every one in a tip', async () => {
         const four = ['w/1', 'w/2', 'w/3', 'w/4']
         const { unmount } = await renderRuns([run({ worktrees: four.map((path) => slot(path)) })])

@@ -63,7 +63,7 @@ export function ContextChart({
                 <span className="flex min-w-0 items-baseline gap-2" data-testid="context-largest">
                     <span className="shrink-0">largest addition</span>
                     <ShowButton addition={largest.addition} onShow={onShow} />
-                    <span className="readout shrink-0">
+                    <span className="shrink-0 readout">
                         ≈{tokenCount(largest.addition.tokens)} into call {largest.call.n}
                     </span>
                 </span>
@@ -134,7 +134,7 @@ export function ContextChart({
                             {calls.map((call, i) => (
                                 <span
                                     key={call.n}
-                                    className="readout max-w-8 min-w-px flex-1 text-center text-2xs"
+                                    className="max-w-8 min-w-px flex-1 text-center readout text-2xs"
                                     data-testid={`context-axis-${call.n}`}
                                 >
                                     {axisNames(i, calls.length, axisStep(calls.length, AXIS_ALL)) ? call.n : ''}
@@ -183,20 +183,20 @@ function Bar({ call, top, peak }: { call: CallContext; top: number; peak: boolea
             <span className="flex w-full shrink-0 flex-col-reverse gap-0.5" style={{ height: `${height}%` }}>
                 {call.carried > 0 && (
                     <span
-                        className="w-full last:rounded-t-xs bg-context-carried"
+                        className="w-full bg-context-carried last:rounded-t-xs"
                         style={{ flexGrow: call.carried, flexBasis: 0 }}
                     />
                 )}
                 {call.added > 0 && (
                     <span
-                        className="min-h-px w-full last:rounded-t-xs bg-context-added"
+                        className="min-h-px w-full bg-context-added last:rounded-t-xs"
                         style={{ flexGrow: call.added, flexBasis: 0 }}
                     />
                 )}
             </span>
             {peak && (
                 <span
-                    className="readout absolute inset-x-0 flex justify-center pb-0.5 text-2xs whitespace-nowrap"
+                    className="absolute inset-x-0 flex justify-center pb-0.5 readout text-2xs whitespace-nowrap"
                     style={{ bottom: `${height}%` }}
                 >
                     {tokenCount(call.sent)}
@@ -269,7 +269,7 @@ function Grew({
                 {listed.map((addition) => (
                     <li key={addition.i} className="flex min-w-0 items-baseline gap-3">
                         <span
-                            className="readout w-14 shrink-0 text-right"
+                            className="w-14 shrink-0 text-right readout"
                             title={`${addition.chars} characters: its share of the step by them`}
                         >
                             ≈{tokenCount(addition.tokens)}
@@ -279,7 +279,7 @@ function Grew({
                 ))}
                 {rest.length > 0 && (
                     <li className="flex items-baseline gap-3">
-                        <span className="readout w-14 shrink-0 text-right">
+                        <span className="w-14 shrink-0 text-right readout">
                             ≈{tokenCount(rest.reduce((sum, a) => sum + a.tokens, 0))}
                         </span>
                         <span>

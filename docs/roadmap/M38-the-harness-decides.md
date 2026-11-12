@@ -188,8 +188,32 @@ tool's refusal ends it. `canopy agreement` counts it as one more row, `review_re
 its refusal, `review-wait`, `review-end`, or nothing, so SCENARIOS S75 is one command. The row stays the overseer's, and
 the state block does not show the derivation's reading of it. Chosen conservatively, for the operator to change: a
 review the overseer asked for that a guard refused, for capacity say, agrees with a start; a wait agrees with no
-decision at all. Left: every other row, each on its measurement; the prompt cut to the judgment; and the design
-folded into the sections it names.
+decision at all. Built (2026-11-10): the `closed` row, on MEASUREMENTS "2026-11-10: M38, the derivation against the
+overseer over two weeks", its five situations with no disagreement. The harness records `done` for a ticket the
+`tracker` source read closed, and in a live tick marks it done and ends its notes, as the overseer's `ticket set` does.
+Chosen conservatively, for the operator to change: one with a worker running, which the derivation of a closed ticket
+does not show, or with a unit holding a row or stale, stays the overseer's, none having been measured. Built
+(2026-11-11): the `none` row, on the same measurement, its six situations with no disagreement. The harness records
+`skip` (`not_labeled`) for an open ticket with no queue label, not one the operator started, that the tracker query last
+returned, with no row holding for it or a unit and none stale; one the query did not return is let go unlisted, as
+before. Chosen conservatively, for the operator to change: a candidate no row holds for stays the overseer's. Built
+(2026-11-12), so the disagreements can be judged: `canopy agreement` counts each row again over the tickets it alone
+held for, the only ones the harness takes; says of each disagreement whether it is about the phase the overseer left,
+its decision, or both, the decision of a subject left at a phase no row held for now held to what the rows that did
+hold allow; and takes a `wait` beside an item the overseer keeps as agreeing, which closes the gap above. It reads the
+ticks already recorded, so the two weeks are read again by running it. Chosen conservatively, for the operator to
+change: an item the overseer keeps stands, for a past tick, from its record until the overseer's next decision about
+the ticket, outside a dry run, that is not a `wait` or an attention item, what ended it then not being in the journal
+now. Left:
+every other row, each on its measurement, `review_request` next, having cleared the bar; the prompt cut to the
+judgment; and the design folded into the sections it names.
 Open for the operator: the bar a row clears in the measurement (recommended: at least three distinct situations, each
 disagreement the overseer's mistake), and whether `ci_red`'s `resume` needs a shared list of PR labels that hold a PR
 (recommended: yes).
+Settled by the operator (2026-11-10), before the numbers were seen: a row clears the bar with at least three distinct
+situations and every disagreement on it the overseer's mistake; and `ci_red`'s `resume` needs a shared list of PR labels
+that hold a PR. Measured 2026-11-10 (MEASUREMENTS "2026-11-10: M38, the derivation against the overseer over two
+weeks"): of 19 rows, `review_request`, `closed`, and `none` clear the bar, with five, five, and six situations and no
+disagreement; every other row has disagreements, 1,090 records in all, and stays undecided. No row is enabled by it;
+each is a PR of its own. Open for the operator: which side was right in each disagreement, not yet judged, there being
+too many to review.

@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react'
 
 import type { Drawn, NotDrawn } from '@/lib/diagram'
 
+// Loads mermaid's module when the first diagram is drawn. Outside the hook: the React Compiler does not compile a
+// dynamic `import()`, and would leave a hook that held one unmemoized (`react/todo` in the lint).
+const loadDiagram = () => import('@/lib/diagram')
+
 /**
  * `source`, a Mermaid diagram, drawn (`src/lib/diagram.ts`, which loads mermaid only now): undefined while it is drawn
  * the first time, then its SVG or why it was not drawn. `look` names the theme and palettes the page shows, so a change
@@ -16,7 +20,7 @@ export function useDiagram(source: string, look: string): Drawn | NotDrawn | und
         void (async () => {
             let result: Drawn | NotDrawn
             try {
-                const { drawDiagram } = await import('@/lib/diagram')
+                const { drawDiagram } = await loadDiagram()
                 result = await drawDiagram(source)
             } catch (error) {
                 result = { error: `it could not be drawn: ${String(error)}` }

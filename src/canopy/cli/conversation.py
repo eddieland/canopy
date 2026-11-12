@@ -359,7 +359,7 @@ def cmd_stop(click_ctx: click.Context, ref: str, *, now: bool, wrap_up: bool) ->
     A ticket is not dispatched again until `canopy start`, and a task is not started again; one still queued is
     dropped. An epic gets no plan run again, and its members are left as they are. A running run finishes, unless
     --now ends it: its processes are killed, its slots returned, and it ends `stopped`. With --wrap-up, a ticket's
-    running run is told on its next tool call to keep its work (commit and push it), print its result line, and start
+    running run is told on its next tool call to keep its work (commit and push it), report its result, and start
     nothing new; it ends on its own, or at its timeout if it goes on. A PR's review request ends; a review of it
     already running finishes.
     """
@@ -1018,10 +1018,16 @@ def _show_plans(ctx: Context, ticket: records.Ticket, *, every: bool) -> None:
     key = ticket.key
     found = plans.history(ctx.conn, key)
     policy_plan = ctx.config.policy.plan
-    needed = plans.needed(policy_plan, ticket.plan_setting)
-    if not found and not needed:
+    trivial = epics.trivial(ctx.conn, ctx.state_dir, key, ctx.config.policy.planner_may_approve)
+    needed = plans.needed(policy_plan, ticket.plan_setting, trivial=trivial is not None)
+    if not found and not needed and trivial is None:
         return
-    why = f"your word, `{ticket.plan_setting}`" if ticket.plan_setting is not None else f"policy.plan {policy_plan}"
+    if ticket.plan_setting is not None:
+        why = f"your word, `{ticket.plan_setting}`"
+    elif trivial is not None and policy_plan == "approve":
+        why = f"its epic's approved plan, which marks it trivial ({conversation.printable(one_line(trivial))})"
+    else:
+        why = f"policy.plan {policy_plan}"
     click.echo(f"\nPlan: {'needed' if needed else 'not needed'}, by {why}")
     if not found:
         click.echo("  none yet: the next tick dispatches a planner")
@@ -1171,7 +1177,7 @@ def _echo_message(m: records.Message) -> None:
 def _show_run(ctx: Context, run_id: int) -> None:
     try:
         # A run's progress is the operator's alone (DESIGN §41): not printed inside one of canopy's ticks or runs.
-        click.echo(readback.read_run(ctx, readback.ShowRun(run=run_id), card=conversation.is_operator()))
+        click.echo(readback.read_run(ctx, readback.ShowRun(run=run_id), operator=conversation.is_operator()))
     except reports.Refused as e:
         raise CliError(str(e)) from None
 

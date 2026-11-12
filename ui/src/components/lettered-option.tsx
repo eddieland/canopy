@@ -44,7 +44,7 @@ export function LetteredOption({
                 {chosen ? <Check aria-hidden className="size-3" /> : letter}
             </span>
             {/* Its words' first line is level with the well, both 20px tall; a long option wraps under. */}
-            <span className="min-w-0 flex-1 leading-5 break-words">{children}</span>
+            <span className="min-w-0 flex-1 leading-5 wrap-break-word">{children}</span>
             {recommended && <span className="shrink-0 text-xs leading-5 text-muted-foreground">{recommendedNote}</span>}
             {answered && <span className="shrink-0 text-xs leading-5 text-status-done">your answer</span>}
         </>

@@ -303,11 +303,24 @@ describe('applyStreamEvent', () => {
         const stretches = [
             { repo: 'web', shown_sha: 'a1b2c3d', pushed_sha: 'e4f5a6b', diff: null, diff_removed_after_days: null },
         ]
+        const range = {
+            repo: 'web',
+            start_sha: 'a1b2c3d',
+            start_on_base: false,
+            end_sha: 'e4f5a6b',
+            unpushed_sha: null,
+            files_changed: 1,
+            lines_added: 2,
+            lines_removed: 0,
+        }
+        const files = [{ path: 'a.ts', old_path: null, added: 2, removed: 0 }]
+        const changes = [{ range, files, diff_kept: false, missing: 'gone', removed_after_days: null, pr_url: null }]
         client.setQueryData(keys.run(first.id), {
             ...first,
             checklist: answers,
             checklist_stretches: stretches,
             checklist_stretches_left_out: 2,
+            changes,
             feedback_plan: plan,
         })
 
@@ -319,8 +332,9 @@ describe('applyStreamEvent', () => {
             shown?.checklist,
             shown?.checklist_stretches,
             shown?.checklist_stretches_left_out,
+            shown?.changes,
             shown?.feedback_plan,
-        ]).toEqual([9, answers, stretches, 2, plan])
+        ]).toEqual([9, answers, stretches, 2, changes, plan])
         expect(client.getQueryState(keys.run(first.id))?.isInvalidated).toBe(false)
 
         // Ended, the list names no worktrees for it: the page keeps the ones it worked in.

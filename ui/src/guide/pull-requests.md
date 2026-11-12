@@ -37,11 +37,17 @@ as `review:4 3 findings, 1 major` (or `not reviewed`), `at its review limit` onc
 A PR canopy only reviews says so there too. Below that, it gathers what canopy knows of the PR: its ticket and branch,
 or, on a PR the loop doesn't own, **your review**, where your draft stands with a link to the review that holds it,
 what it has cost, its coworkers' review threads when canopy has read them (below), canopy's reviews of it, the runs
-that pushed to it, and the decisions that named it. A list with nothing in it shows its header and a `0`, and nothing
-else: an empty list doesn't need a paragraph. A PR with no ticket has no Runs at all, since runs belong to a ticket.
-When a PR has used every review it's allowed, its page shows **At its limit**, with **Allow one more**, and under
-it the same as a command, `canopy grant URL review`. The limit is `policy.max_reviews_per_pr`, three by default; a
-grant works as a ticket's does ([Allowing one more run](tickets#allowing-one-more-run)).
+that pushed to it, and the decisions that named it. Each run names what it took the branch from and to in this PR's
+repository, in short commits, with its lines added and removed, `web 9b2f4c6..e3a7d91 +26 −1`; click it for the run's
+page with that diff open. Under it are the run's commits there, each opening on GitHub, with the same chips its page
+gives them (**pushed by canopy** for one canopy's own push put on origin), and, when canopy kicked the branch to rerun
+checks the worker called flaky, a **kicked** line from the run's head to the rebased copy. It's the branch's history a
+run at a time, no squinting at force-push timestamps required: who put what there survives every kick. A list with
+nothing in it shows its header and a `0`, and nothing else: an empty list doesn't need a paragraph. A PR
+with no ticket has no Runs at all, since runs belong to a ticket. When a PR has used every review it's allowed, its
+page shows **At its limit**, with **Allow one more**, and under it the same as a command, `canopy grant URL review`.
+The limit is `policy.max_reviews_per_pr`, three by default; a grant works as a ticket's does ([Allowing one more
+run](tickets#allowing-one-more-run)).
 
 ## Replying to your coworkers' reviews
 
@@ -51,17 +57,20 @@ to `"post"` in your own config and workers post their replies themselves, each s
 mistakes them for you.
 
 The PR's page shows its review threads on the diff the latest run pushed, each at its line, with the run's draft under
-the thread it answers. canopy reads the threads itself, so what you see is what GitHub holds, not the worker's
-recollection of it. The line over them says which mode `trust.review_replies` is in, and when canopy last read the
-threads and at which commit, or that it hasn't yet. A thread on a line that's since changed sits under its file, marked
-`outdated`. If the PR has moved on past the diff the page shows, a warning above the diff says so. Its files fold and
-filter by type as a review's do ([below](#a-reviews-page)).
+the thread it answers. That holds under either setting: every run keeps the diff it pushed, drafts or not, so under
+`"post"` the threads still sit on their lines, just with no drafts under them. canopy reads the threads itself, so what
+you see is what GitHub holds, not the worker's recollection of it. The line over them says which mode
+`trust.review_replies` is in, when canopy last read the threads and at which commit, or that it hasn't yet, and which
+run's diff they sit on. A thread on a line that's since changed sits under its file, marked `outdated`. If the PR has
+moved on past the diff the page shows, a warning above the diff says so. Its files fold and filter by type as a
+review's do ([below](#a-reviews-page)).
 
 Not everything has a line to sit on. A thread on a file the diff doesn't show waits in **Not in the diff**, after the
-files; when no run kept a diff at all, every thread is listed whole under **Threads**. A draft for the review's own
-text, rather than a reply, sits in **The review's body**, and one no read of the PR has placed on a thread yet, or
-that named a thread the PR doesn't have, in **Not on a thread**, so a draft never goes missing for want of a place to
-put it.
+files; when no run kept a diff at all, every thread is listed whole under **Threads**, and the line at the top says
+why, in the words the latest run's own [Diff panel](runs#a-runs-page) uses: it crashed, say, or garbage collection got
+there first. A draft for the review's own text, rather than a reply, sits in **The review's body**, and one no read of
+the PR has placed on a thread yet, or that named a thread the PR doesn't have, in **Not on a thread**, so a draft never
+goes missing for want of a place to put it.
 
 Comments show as plain text, never Markdown, with any character that hides text named by its code point. The one
 exception is a `<details>` block, which folds under its summary line as it does on GitHub, so a review bot's prompt for
@@ -144,8 +153,8 @@ rule down its left edge, with the reply the planner would draft. Where it propos
 already waits on the same thread, it says so: the plan's resume writes a new reply there, and sending the draft first
 answers ahead of it. Both may go, or one; the page won't pick for you. A review, or an item with no thread on this page,
 shows its proposed reply in its row instead. **Show the plan**, at the panel's foot, unfolds the plan's file as it
-stands, as plain text, so an enthusiastic `<img>` in a coworker's comment stays a string of characters, in the rows as
-in the file.
+stands, laid out as a ticket's plan is, its tables and diagrams drawn. An enthusiastic `<img>` in a coworker's comment
+still stays a string of characters, in the rows as in the file.
 
 A plan goes `stale` when the PR moves after it was written: a new comment or reply, an edit, a resolved thread, a new
 head, a check that changed its mind, a conflict that came or went, or a blocker that merged. The panel lists each

@@ -53,7 +53,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `spend-overseer`, `-idle`, `-workers`, `-plans`, `-chores`, `-reviews`, `-tasks`, `-dry-run` | Spend series fills. |
 | `spend-outside` | The spend series of the sessions outside canopy: no run of canopy's. |
 | `context-carried`, `context-added` | The context chart's fills: what a model call carried, and what it added. |
-| `check-1` to `check-4`, `check-other` | The CI page's red checks, by rank, and the rest. |
+| `check-1` to `check-4`, `check-other` | The CI page's checks by rank, and the rest; the Connectors page's sources. |
 | `wait-1` to `wait-4` | How long something took, the quickest first: Reviews' first reviews, Health's run lengths. |
 | `answer-pass`, `-fixed`, `-held`, `-na`, `-unanswered` | The checklist page's answers: an item's bar, and by week. |
 | `proposal-change`, `-decline`, `-ask` | A feedback plan's proposal chip: what it does with an item, never a state. |
@@ -184,7 +184,7 @@ Rules:
 - Radius: `rounded-md` for panels, buttons, and fields, `rounded-sm` for chips and nav items, `rounded-xs` for a mark
   smaller than a line of text, a checkbox or a slot's square, from the palette's `--radius`. The scale is in
   `tokens.css`; no arbitrary radius, which `npm run lint` refuses.
-- **The shell**: a 3rem header, a 13rem side nav, content capped at `max-w-[112rem]` with `p-6` and `gap-6` between
+- **The shell**: a 3rem header, a 13rem side nav, content capped at `max-w-shell` with `p-6` and `gap-6` between
   blocks. The header stays put and only what is under it scrolls (`page-scroll`), so a scrollbar, or the gutter kept
   for one, sits beside the rail and the page, never beside the header. The side rail runs the full height of the page,
   and what it holds sticks: a column as tall as the window under the header. Printed, the shell is not held to the
@@ -269,7 +269,9 @@ Rules:
   page's title), on the same tint, since only the operator can settle it, saying by how much and the two ways out, with
   no button, since both ways out are the operator's words; and changes asked of a plan that no planner has started on
   (`ChangesAsked`), on the `status-running` tint, since the loop acts on them next, never a muted line a request can
-  hide in.
+  hide in; and on the system resources page, what is under pressure, on the worst pressure's tint, each concern in its
+  own pressure's color with what it costs and the way out under it, since the operator arrives from the header's
+  readout to ask exactly that.
 - **Agent memory** (docs/design §28) shows only while a tier is on, and always says each tier's mode in words, never by
   color alone, so recorded memory is never taken for memory in use: the header's readout, `memory: recording` or
   `memory: in use`, opening the memory page, which is in no section; and a tier's band heading its panel, a chip naming
@@ -331,22 +333,31 @@ Rules:
   ends keeps one order there, the page's answer first: `summary`; then what came of it; `when` (`WhenField`), started,
   ended, and how long it took in one field; `spent`; then the paths. A run given a checklist has its answers in a panel
   of their own under that one, a row an item, too many for a field, `held` in `status-blocked`, since a reviewer reads
-  its reason under it; each stretch it pushed after a list follows them, a panel naming its repository and commits as
-  a readout, then its diff's file panels (`DiffPanels`), so the answers and the fix are read together. Then the thread
-  the operator came to answer, with its form, then the ticket's actions; a page with no thread has its main content
-  there instead: a transcript, a chore's open findings and runs, a tick's decisions, a review's findings and diff, a
-  PR's reviews. A chore's notes are a thread nothing waits on, so they follow
+  its reason under it. A worker's or a task's run that ended has its Diff next, a panel per repository that sums up
+  rather than shows: the range, files, and lines in its header's readout, the files with theirs under it, then its
+  commits (`RunCommits`), each a short id linked out through the PR, its subject as text, and canopy's marks as chips,
+  and the diff's file panels, each an h3 naming its file, only once `Show diff` opens them, read then, so the
+  transcript stays on the first screen; a sentence where a diff is missing, never an empty panel. What a run pushed
+  after a list is part of that change, so it is a scope of its repository's Diff, not a panel beside it: a segmented
+  control, `after the list` and `whole run`, opens on the stretch, a dot in `answer-fixed` marks each file it touched,
+  and a line under the files names its commits, so the answers and the fix are read together and the stretch reads as
+  inside the run. Then
+  the thread the operator came to answer, with its form, then the ticket's actions; a page with no thread has its main
+  content there instead: a transcript, a chore's open findings and runs, a tick's decisions, a review's findings and
+  diff, a PR's reviews. A chore's notes are a thread nothing waits on, so they follow
   its main content. Then the supporting lists: runs, decisions, spend, and a ticket's memory last, the least read. So
   in a narrow window a ticket's reply is reached before its runs, and the attention detail reads in the same order. An
   action over a whole list sits in that list's panel header. A ticket's plan is on a page of its own,
   `/tickets/$key/plan`; the ticket's page has its card (`PlanCard`): the plan's reference and status chip (`PlanChip`:
   `waiting on you` in `status-blocked` while the plan waits on the operator, `changes asked` in `status-running` while
   they wait on the next planner, else its status), the run that wrote it and its open comments as fields, and in its
-  foot `Approve`, the primary, while the plan can be approved, then `Open plan`, outlined. A ticket whose plan waits on
-  the operator leads with the card, above its Work panel, since the plan is what they came to answer; otherwise the
-  card follows the lists. Where it sits is settled as the page opens, so a plan approved meanwhile leaves its card
-  where it was read. A review's run is on a page of its own too, with a run's skeleton; the review's page is its
-  results, and links there from a `run` field.
+  foot `Approve`, the primary, while the plan can be approved, then `Open plan`, outlined. No `Approve` is offered
+  without the choices it takes in view: a plan's open decisions are asked on the card as on its page (A plan, below),
+  between the fields and the foot, and the line beside the button says what approving does with them. A ticket whose
+  plan waits on the operator leads with the card, above its Work panel, since the plan is what they came to answer;
+  otherwise the card follows the lists. Where it sits is settled as the page opens, so a plan approved meanwhile leaves
+  its card where it was read. A review's run is on a page of its own too, with a run's skeleton; the review's page is
+  its results, and links there from a `run` field.
 - **Every page header opens with its trail**, a breadcrumb in `panel-label` type: the section's name in its color, then
   the pages between it and this one, each a link ending in a small chevron, pointing at the title. A page in no section
   names itself there in the accent. A parent is a journal name, so it keeps its case and stays muted until hovered. The
@@ -499,7 +510,12 @@ whole either side.
   `####`, the body's size in semibold. Two steps of heading, so a section stands a quarter above the body and a
   subsection apart from it by weight alone. A plan's size is the operator's (Settings): Normal is these, and the other
   sizes move the body and both headings together, the one place a size outside the steps appears. The guide stays at
-  Normal. Code is set as everywhere else (`Code`, Rich text). Its measure is fixed, `max-w-3xl`. What lays a document
+  Normal. Code is set as everywhere else (`Code`, Rich text). A table is `document-table`, in a plan, the guide, and
+  rich text alike: the measure's full width at least, wider where what it holds needs it, a hairline under its head
+  and each row, no grid and no fill, its first column flush with the text, its head in `panel-label` as the app's own
+  tables' are, its figures tabular, and a step under the text around it in `em`, so a plan's size moves it too. Code
+  in a cell breaks where it must, keeping room for a dozen characters, and drops its chip; a table still too wide
+  scrolls, its edges faded while there is more (`edge-fade`). Its measure is fixed, `max-w-3xl`. What lays a document
   out, the guide's rules between sections or a plan's margin, is its surface's own; its type is not.
 - **`ReviewsTable`** and **`RunsTable`**: review runs and runs, one row each, on every page that lists them. On the
   page of what they belong to, the columns that would repeat it go, as a `ListRow` kind of their own. The reviews one
@@ -619,8 +635,14 @@ A measure over time (`TrendChart`, `src/lib/trend.ts`, the system resources page
 accent, the area under it the accent's tint, from zero, broken where no reading was taken rather than bridged. Its top
 is a capacity where the measure has one and the peak with `HEADROOM` where it has none. A threshold it is read against
 is a muted line with its name at its right end, drawn only while it is under the top. The pointer snaps a crosshair to
-the nearest reading, whose value and time stand in the latest's place. The plot is `aria-hidden`, and a screen reader
-hears its latest value, peak, and low in words in place of a table.
+the nearest reading, whose value and time stand in the latest's place. Beside the latest value it names the peak, or
+the low for what runs out, such as free space; where the page says the latest beside the chart, it names only that
+extreme. A threshold's line and name are drawn over the area, never under its tint. A measure under pressure draws its
+line and area in its pressure's color, `status-blocked` or `status-failed`, the accent otherwise. Charts over the same
+hour in one panel share one pointer, so pointing at any draws the crosshair on each, and the panel says the hour once,
+with how long ago it was read, in `status-blocked` once a read again failed, rather than an axis under each. A measure
+of the second rank, flat nearly always, is half as tall, in a row under the first. The plot is `aria-hidden`, and a
+screen reader hears its latest value, peak, and low in words in place of a table.
 
 The context chart differs where it must: its bars are its controls, each named for its call on hover and to a screen
 reader, so no table repeats them.
@@ -772,6 +794,14 @@ reader, so no table repeats them.
   with no line of its own shows none. A counter counts what its line lists, and a line that splits the count names only
   the parts there are, never a `0 broken` among them. The attention page has none: the nav's badge, the rail, the tab's
   title, and its icon carry the glance, and tiles there only said their numbers again.
+- **The process tree** (the system resources page, `ProcessTree`) answers "is it canopy?" first: the loop's tree,
+  its parents named in one muted line over it, each run's process carrying its run as a link in the accent, its
+  reference and what it works on (`run:41 ABC-101`), and what the run and everything under it add up to, open or
+  folded; then what else is busy under an `elsewhere` heading, a run of idle parents on the way to one child drawn as
+  one muted line of their names. A figure sits over a thin bar of the accent's tint, the processors against one core
+  and the memory against all there is, for the eye alone. The **cpu** and **memory** heads are its order: a head is a
+  button, the column it orders in the foreground with a down arrow, `aria-sort` on its cell. **All**, the order, and
+  the folds are kept in this browser, so the page is as the operator left it.
 - **The spend chart** (the spend page) follows Charts: a bar per UTC day, the series stacked bottom up in `SERIES`
   order. Idle overseer spend sits on the baseline under the rest of the overseer's, a lighter shade of its hue, so the
   two read as one. A day with no cost is a 1px `border` stub on the baseline, so it reads as nothing spent, not a column
@@ -831,8 +861,11 @@ reader, so no table repeats them.
   item open longest first. Settings can hide the findings, in this browser alone: the list, its count, and the nav's
   badge leave them out, and a muted line above the list counts what it hid, so a hidden finding never reads as none.
   A row reads as an inbox's: its reason, subject, and age, then its ticket's title or its task's first line as the
-  subject, then its detail, muted, as the preview. A reason chip takes `status-failed` or `status-blocked` for the
-  first two severities, plain otherwise. An item's detail is the harness's line, with its `code` spans set as code and
+  subject, then its detail, muted, as the preview. A plan waiting on the operator says after its subject how many
+  decisions it leaves open (`DecisionsCount`), in `status-blocked` as a counter of what waits on them, so a plan that
+  asks something is told from one that only wants approving before either is opened. A reason chip takes `status-failed`
+  or `status-blocked` for the first two severities, plain otherwise. An item's detail is the harness's line, with its
+  `code` spans set as code and
   nothing else read (`InlineCode`), but for a PR's address, which is a `PullRequestLink`, and a run named as
   `canopy show` reads one, which is a `RunLink`; the CLI's `answer with canopy reply KEY` is left off a question's
   detail, since the page's reply form is the answer. The list's panel header holds its count, after the longest wait
@@ -854,13 +887,15 @@ reader, so no table repeats them.
   limit, so why it failed is read and another try allowed without leaving the page. A PR that waits on someone else:
   the PR's `LinkOutButton`, so the PR is one tab stop. A wait on the operator's answer: the reply form is the action,
   and a question's head names it, `Waits on your answer to message 5, asked 3m ago`, rather than saying it, since the
-  conversation holds it. A plan: its card, with `Approve` and `Open plan`; a feedback plan's, a line naming it and an
-  outline link to the PR's page, where it is approved. A running run's question: the question as the run's page draws
-  it, each option a button that answers by letter; a toast says what the answer did, since the item leaves with it.
+  conversation holds it. A plan: its card, with its open decisions, `Approve`, and `Open plan`; a feedback plan's, a
+  line naming it and an outline link to the PR's page, where it is approved. A running run's question: the question as
+  the run's page draws it, each option a button that answers by letter; a toast says what the answer did, since the item
+  leaves with it.
   Memory's items: the proposals or lessons they name, with their verbs. Drafts a run left: an outline link to where
   they sit. A task's: `task:N` and its text's first line, then an outline link to the task's page, which holds its
   question and its answer, never the `canopy` commands its detail names. An epic's plan: `epic:N` and its goal's first
-  line, then an outline link to its plan's page, where it is read and approved. A ticket's run refused its model: the
+  line, then an outline link to its plan's page, where it is read and approved, and how many decisions it leaves open,
+  since that page is where they are answered. A ticket's run refused its model: the
   ticket's models, the runtime's list read fresh as the item opens, so the model it no longer lists is marked already.
   An item about nothing the page shows whose detail names a `canopy` command: the command, `Copyable`, and nothing to
   answer. A ticket's item then shows its answer (below), with the ticket's own verbs and any other limit as a quiet
@@ -881,8 +916,11 @@ reader, so no table repeats them.
   operator writes. Its label names the message it answers while a question waits, and the form then wears the open
   question's tint and hairline, so the question and the box answering it read as a pair. Focused, the box takes the
   accent's tint, the operator's side. Its count of characters shows only past 80% of the bound. On a public ticket it
-  says what a reply is for and where it goes: for its next worker, as an instruction, never on the ticket. A ticket's
-  page description is its state, not what public or private means (`ticketDescription`).
+  says what a reply is for and where it goes: for its next worker, as an instruction, never on the ticket. While a
+  worker or planner runs on the ticket, and no question waits, a checkbox beside the button, `Tell run:41 now`, sends
+  the reply to that run instead (DESIGN §44): unchecked by default and after each send, never kept, since steering an
+  agent mid-edit is a choice, and the placeholder says what checked does. A ticket's page description is its state,
+  not what public or private means (`ticketDescription`).
 - **A conversation** is a column of messages, each a head line over a bubble. The head leads with who, in sans
   `font-medium` `foreground`, then what (kind, run, what it answers, how) and its chips in muted mono; its id and age
   are a readout at the end away from the bubble's square corner. A message that carries on the one before it (the same
@@ -896,7 +934,10 @@ reader, so no table repeats them.
   after the latest forget; each forget heads the attempt it ended, its messages folded under a `Disclosure` and dimmed,
   since the loop no longer reads them. Bodies are rich text (below): always text, but for their URLs. An operator
   message no `ok` tick has read carries a `waiting for the next tick` chip in `status-running`, and a `seen` chip with
-  a check, in the accent, once one has, so a reply never goes unacknowledged; an item it answered carries an `answered`
+  a check, in the accent, once one has, so a reply never goes unacknowledged. One sent to a running run says `to run:41`
+  in its head and wears that run's chips in their place, in `canopy show`'s words: `not fetched yet` in
+  `status-running`, `heard` with a check, in the accent, `never fetched` muted once the run ended, and `next run reads
+  it` muted when canopy could not write it where the agent reads it; an item it answered carries an `answered`
   chip, with a line saying it leaves at the next tick. While a run works the ticket, the conversation ends on it, on
   the worker's side, as a chat shows someone typing (`WorkingNow`): a pulsing `RunDot`, `working now`, its run, its
   kind, its latest tool call, its cost so far, and for how long, from the runs on the stream, so it rises in when the
@@ -985,7 +1026,8 @@ reader, so no table repeats them.
 - **Rich text** (`RichText`, `src/lib/rich-text.ts`) lays out what an agent wrote, a summary, a rationale, and a
   conversation's message: line breaks kept, `-` and `1.` lists, headings as a `font-semibold` line, `#` and `##` a step
   over `###` (`text-base`, a small step, as the page's heading ladder does not apply inside a bubble), `>` quotes as
-  their own blocks, a `---` rule as a hairline, a pipe table with its columns aligned by their colons, fenced code as a
+  their own blocks, a `---` rule as a hairline, a pipe table as a document's (`document-table`, A document) with its
+  columns aligned by their colons, fenced code as a
   `surface-raised` block, colored as the guide's is in the language its fence names (`CodeBlock`), and `code`,
   **strong**, *emphasis*, and ~~struck~~ inline. Code, inline or fenced, is `text-code`: a step under its line on a sans
   palette, where the change of face sets it apart, and the line's own size on a mono one, where a smaller copy of the
@@ -1009,11 +1051,11 @@ reader, so no table repeats them.
   (`waiting on you`, not `blocked`), and leaves how the code does it to the code and why to the design, in the voice
   `AGENTS.md` sets. An empty fence that names one of the repository's example files after its language (`EMBEDS`)
   shows that file whole, as it is when the guide is built, so a page never keeps a copy of one. A code block is colored
-  as a diff's code is (A review), in the language its fence names, plain until its grammar has loaded. A
-  ```` ```mermaid ```` fence is drawn as its diagram, as a plan's is (D131), named by its `accTitle`, and
-  `guide.test.ts` fails on one mermaid cannot read or with no `accTitle`. A diagram is for a shape the prose would take
-  paragraphs to hold, beside the prose, never instead of it. A new page is a file there and a line in its group in
-  `SOURCES`.
+  as a diff's code is (A review), in the language its fence names, plain until its grammar has loaded, and copied from
+  its corner. A ```` ```mermaid ```` fence is drawn as its diagram, as a plan's is (D131), in a panel of its own whose
+  head is its `accTitle`, which names it, with its actions in its corner, and `guide.test.ts` fails on one mermaid
+  cannot read or with no `accTitle`. A diagram is for a shape the prose would take paragraphs to hold, beside the
+  prose, never instead of it. A new page is a file there and a line in its group in `SOURCES`.
 - **A question before losing work** (`AlertDialog`): a page that holds the operator's work not yet saved or sent asks
   before it is left, in a dialog centred over the canvas: its question as the title (`Leave this page?`), what leaving
   loses under it, then an outline `Stay`, which takes the focus and which Escape gives, and `Leave` in `destructive`. A
@@ -1030,9 +1072,17 @@ reader, so no table repeats them.
   so opening one never scrolls the page away from what it is on. The plan is laid out as a document (`.plan-doc`), in a
   document's type (A document, under Primitives). What the plan holds as characters (HTML, an image) is muted monospace;
   a link is underlined in `muted-foreground` with its address on hover, never a link. A Mermaid code block is drawn as
-  its diagram (`src/lib/plan-diagram.ts`), an image in a hairline box, drawn again when the theme or palette changes,
-  with a `Source` toggle under it; its code shows while toggled on, while the cursor is in it, or while a comment or a
-  change is marked in it, and out of sight it is clipped, not removed, so a screen reader still reads it; one that
+  its diagram (`src/lib/plan-diagram.ts`), a section of the plan's panel rather than a card in it: a hairline, a head
+  in `panel-label` naming it, by its `accTitle` or else its kind, with `Source` at its right as a panel head's control
+  is, and the picture at the text's edge. It is drawn in the app's data dialect, Plex Mono at 13px and spaced densely,
+  the face carried inside the image since an image can use no other, and drawn again when the theme or palette changes,
+  as wide as it is drawn or narrower to fit, but never under three quarters of that, past which its labels go unread:
+  a wider one scrolls, each edge faded while there is more past it (`diagram-image`, `edge-fade`), as the guide's do.
+  Every kind is drawn in one hand (`themeCss` in `src/lib/diagram.ts`): one label size, one corner, one line weight, a
+  subgraph dashed, a sequence's actors once, at its top, and its captions lifted off the lifelines they cross. Its
+  actions sit in its head before `Source` (A block's actions, below). Its code shows, under the picture, while `Source`
+  is on, while the cursor is in it, or while a comment or a change is marked in it, and out of sight it is clipped, not
+  removed, so a screen reader still reads it; one that
   cannot be drawn shows its code and why. The toolbar (`Toolbar`, below) is `icon-xs` toggles in groups split by
   hairlines, then `Comment`, enabled while text is selected; each control's tooltip names it and the shortcut the editor
   binds to it, on this keyboard, and declares the same keys as `aria-keyshortcuts`. The paragraph's style and the
@@ -1047,9 +1097,16 @@ reader, so no table repeats them.
   editable where the plan is, the changes, the outline, and the toolbar stepping aside; and `Outline ▾`
   (`src/lib/plan-outline.ts`), the plan's headings, the section scrolled to in the accent, each `##` section's row on a
   ticket's newest plan ending in `read` and `a concern` marks, this browser's alone (`src/lib/plan-marks.ts`), never
-  the journal, which hold while the section's words are as marked, so a rewritten section is unread again. While the
-  changes are marked, a commented passage drops its tint, so no word wears a comment's and a change's at once, but keeps
-  an underline in the accent. The header is `sticky`, and what the editor scrolls into view stops below it. A commented
+  the journal, which hold while the section's words are as marked, so a rewritten section is unread again; then a menu
+  that copies or saves the plan's Markdown whole, as the page shows it (`PlanFileMenu`), named as `canopy archive`
+  names the plan, the same menu a task's report and a feedback plan's file carry. Its file's path closes the page's
+  description, on a line of its own, with a copy button. A page's plan prints alone, as a document, under a line naming
+  its ticket, plan, status, and date, in the light theme whatever the screen shows (`src/lib/plan-print.ts`): no
+  shell, header, toolbar, foot, decisions, or comments, a diagram and a table each kept to a page where they fit, a
+  table and a code block wrapped, and a diagram's picture still drawn dark turned round (`invert` with its hues
+  kept). While the changes are marked, a commented passage drops its
+  tint, so no word wears a comment's and a change's at once, but keeps an underline in the accent. The header is
+  `sticky`, and what the editor scrolls into view stops below it. A commented
   passage sits on the accent's tint; the open one, or the one being commented on, darker and underlined; the cursor in
   a passage opens its thread, and so does a click on its card, or Tab into it, which leaves the plan where it is;
   the cursor leaving it, or Escape, closes it. A thread is its passage quoted, the comment and its replies as text with
@@ -1069,9 +1126,15 @@ reader, so no table repeats them.
   again under it, in its panel above its foot, each in a run's question's box (above), its options the radios of a
   `RadioGroup`, the planner's choice `recommended`: under the plan, not in the foot, so the decisions are read after the
   plan and answered just above the actions that send them; another pick is an answer, a line of the notes `Approve`
-  carries and of what `Ask for changes` sends. Since the panel is out of sight under a long plan, the line under the
-  foot's actions leads with a jump to it (`DecisionsJump`), which informs rather than gates: no status tone, nothing on
-  `Approve`. The plan's actions are its panel's sticky foot (`PanelFooter`), so a long plan is approved or sent back
+  carries and of what `Ask for changes` sends. The plan's card asks them the same way, so the picks are kept where both
+  read them, in this browser until they are sent (`src/lib/plan-picks.ts`), never the journal, each holding while its
+  decision reads as it did. An epic's plan asks them too, but its approval carries no note, so there an answer goes
+  with `Ask for changes` alone and `Approve` waits while one stands. Since the panel is out of sight under a long plan,
+  the line under the foot's actions leads with a jump to it (`DecisionsJump`), which informs rather than gates: no
+  status tone, and `Approve` is never held back. It is named, though: while a plan has open decisions and its approval
+  would carry no notes, the primary reads `Approve as planned` wherever it is offered, so its own words say whose
+  choices it takes. The plan's actions are its panel's sticky foot (`PanelFooter`), so a long plan is approved or sent
+  back
   from where it is read: the caller's own actions (a ticket's `Approve`, the foot's one primary, then `Save`, outlined,
   and `Skip the plan`, ghost), then a note on the whole plan and `Ask for changes`, outlined. The line under them says
   what goes with each; with open comments or a note, the primary reads `Approve with notes`. `Skip the plan` asks first
@@ -1115,14 +1178,29 @@ reader, so no table repeats them.
   with more than one link is one button saying how many (`3 PRs`) that opens them as a menu, so the links stay one line
   however many repositories. The Work panel keeps each repository's PR beside its phase; those lines scroll inside the
   panel past a few, so its total cost, its actions, and the reply stay in reach.
+- **A block's actions** (`BlockActions`, `src/components/block-actions.tsx`): what takes a block of a document
+  elsewhere, a diagram's Mermaid source among them, sits in a row at the block's top right corner, over it, on
+  `surface`, or in a plan's diagram's head, before `Source`: ghost `icon-xs` buttons, each named on hover, as a copy
+  button is (below). The block's text, the form most wanted, is a copy button; its other forms are a menu after it, in
+  words, as a drawn diagram's picture is (`Copy as image`, `Save as PNG`, `Save as SVG`: on `surface`, the PNG twice its
+  size, the SVG cut down to what canopy keeps (D131), named for the plan, its kind, and its place,
+  `ABC-102-plan-2-sequence-1.png`, or on a guide page for its title), and as a plan's table's rows are (`Copy for a
+  spreadsheet`, tab-separated text and an HTML table together; `Save as CSV`, `ABC-102-plan-2-table-1.csv`), after its
+  copy as Markdown. A cell a spreadsheet would run as a formula goes as text (`src/lib/table-export.ts`). They show
+  while the block is hovered, holds the caret, one of them holds the focus, or their menu is open, and always on a touch
+  screen, kept in place out of sight so nothing moves; a block marks itself `group/block` and is positioned. A plan's
+  blocks are drawn by ProseMirror, so each keeps an element for its actions (`src/lib/block-slots.ts`) which the page
+  fills through a portal, in its own tree. They are never printed.
 - **Text to paste elsewhere** has a copy button after it (`Copyable`, `CopyButton`): a branch, a path, a session id, a
-  review's commit, whole though the page shows its first 7 characters. A path copies whole though the page shows it
-  from the workspace root (`CopyablePath`); until the root is read there is no button, so a copy is never the short
-  path. The button is a ghost `icon-xs` with the `Copy` icon, muted until hovered; a click shows `Check` in the accent,
-  or `X` in `status-failed` when the browser refuses, and names what happened, and a toast says the same with the text
-  it copied. In a dense list it shows only while its row is hovered or it has the focus, keeping its space so nothing
-  moves, and always on a touch screen. The clipboard needs a secure context, so elsewhere there is no button and the
-  text stays selectable.
+  review's commit, whole though the page shows its first 7 characters. A code block, in a plan, the guide, or rich text,
+  has one in its corner (A block's actions), which copies its code as the fence holds it, no newline after its last
+  line, so a command pasted in a shell waits for Enter; a diff's code has none. A path copies whole though the page
+  shows it from the workspace root (`CopyablePath`); until the root is read there is no button, so a copy is never the
+  short path. The button is a ghost `icon-xs` with the `Copy` icon, muted until hovered; a click shows `Check` in the
+  accent, or `X` in `status-failed` when the browser refuses, and names what happened, and a toast says the same with
+  the text it copied. In a dense list it shows only while its row is hovered or it has the focus, keeping its space so
+  nothing moves, and always on a touch screen. The clipboard needs a secure context, so elsewhere there is no button
+  and the text stays selectable.
 - **A toast** (`Toaster`, `useToast` in `src/hooks/use-toast.ts`) says what an action did when the place it was done
   shows too little of it: a copy names what it copied, a draft's send what it sent. It sits at the bottom center of the
   window on `surface` with a hairline, a `Check` in the accent or an `X` in `status-failed`, its title, and a line under
@@ -1341,17 +1419,21 @@ reader, so no table repeats them.
   with it, and for a PR canopy only reviews, `canopy only reviews it`, said there alone. A link out follows, saying
   where it goes rather than repeating the title. Then panels: its fields, with a grant of another review in its foot
   when it is at its review limit; its review threads when canopy has read them or holds a draft for it, led by its
-  feedback plan while that waits on the operator; then its reviews, the runs that pushed to it, and its decisions, each
-  a `ListPanel`, and no Runs at all on a PR with no ticket, since runs are a ticket's.
+  feedback plan while that waits on the operator; then its reviews, the runs that pushed to it, each with its range in
+  the PR's repository as a ticket's runs list names it and its commits there under it, with the kick canopy pushed
+  after it, so the list reads as the branch's history, and its decisions, each a `ListPanel`, and no Runs at all on a
+  PR with no ticket, since runs are a ticket's.
 - **A PR's threads** (`ReviewThreads`, DESIGN §29) are its coworkers' review threads, as canopy's reader last read
-  them, on the diff the latest run kept, with the replies runs drafted under them. The PR's detail says up front whether
-  there are any, so their place is held before they arrive. A `Review threads` panel leads: what `trust.review_replies`
-  means for them in a line, when the PR was read and at which head, a `status-blocked` line when the PR's head is past
-  the kept diff's commit, a `Drafts` list of every draft in the order their cards show, whose links open the card's
-  file as a review's findings list does, and in its foot `Send N waiting`, which sends every waiting draft as one
-  comment review, and an outline `Start a review on GitHub` beside it, which stages them in a pending review instead,
-  with a muted line saying what each does; while the PR holds a staged review, neither shows, and a line links to the
-  PR's files on GitHub to finish it. While its ticket has a current feedback plan (docs/design §32), a `Feedback plan`
+  them, on the diff the latest run kept, under every `trust.review_replies` setting, with the replies runs drafted under
+  them. The PR's detail says up front whether there are any, so their place is held before they arrive. A `Review
+  threads` panel leads: what `trust.review_replies` means for them in a line, when the PR was read and at which head,
+  the run whose diff they sit on, or, with none kept, why its latest run kept none in its Diff panel's words, a
+  `status-blocked` line when the PR's head is past the kept diff's commit, a `Drafts` list of every draft in the order
+  their cards show, whose links open the card's file as a review's findings list does, and in its foot `Send N waiting`,
+  which sends every waiting draft as one comment review, and an outline `Start a review on GitHub` beside it, which
+  stages them in a pending review instead, with a muted line saying what each does; while the PR holds a staged review,
+  neither shows, and a line links to the PR's files on GitHub to finish it. While its ticket has a current feedback plan
+  (docs/design §32), a `Feedback plan`
   panel (`FeedbackPlanPanel`) comes before the `Review threads` panel while the plan waits on the operator, so its
   Approve is in the first screen, and after it once approved or spent; where it sits is settled as each plan is first
   read, so one approved meanwhile stays put. The panel: `feedback-plan:N` and its status as a chip in its header
@@ -1360,7 +1442,8 @@ reader, so no table repeats them.
   said as `MemoryText`, and where it is, a router `Link` to the thread's card or a link out; under that, muted, its
   proposal as a chip in its tone, its author, and the plan's words), and in its foot the operator's words and `Approve
   whole` or `Approve N of M`, its command on hover, an approval done as the `ApprovedBand` a ticket's plan gets, then a
-  `Disclosure` of the plan's file. An item an approval did not tick is `for the next plan` wherever the page says so,
+  `Disclosure` of the plan's file, laid out read only as a document (`PlanDocument`, as a task's report is), loaded
+  once opened. An item an approval did not tick is `for the next plan` wherever the page says so,
   and its box is named `approve item N`, never `left out` or `leave`: `leave` is a proposal, to leave the item be, which
   ticking it approves; the CLI's flag stays `--leave`, on the button's hover. Each proposal's chip has a quiet tone of
   its own (`proposal-*`), so `change`, the one that edits code, stands out, `decline` and `ask` sit apart from it and

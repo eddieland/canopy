@@ -60,6 +60,7 @@ def test_a_tickets_plans_are_read_as_their_files_stand(ctx: Context) -> None:
     plan_id = proposed(ctx)
     listed = c.get(f"/api/tickets/{KEY}/plans").json()
     assert (listed["needed"], listed["setting"], listed["policy"], listed["planning"]) == (False, None, "off", None)
+    assert listed["trivial"] is None
     newest = listed["newest"]
     assert (newest["text"], newest["problem"], newest["sha256"]) == (TEXT, None, sha(TEXT))
     assert (newest["edited"], newest["changed_since_approval"]) == (False, False)
@@ -67,6 +68,10 @@ def test_a_tickets_plans_are_read_as_their_files_stand(ctx: Context) -> None:
     assert newest["plan"]["status"] == "proposed"
     assert [p["id"] for p in listed["plans"]] == [plan_id]
     assert listed["threads"] == []
+
+    # A copy saved from the page is named as `canopy archive` names the plan: its run, its status, its title.
+    run_id = newest["plan"]["run_id"]
+    assert newest["archive_name"] == f"{run_id}-PROPOSED-plan-for-proj-1.md"
 
     # The operator's own edit shows, and a file that is gone is said to be, never an empty plan.
     path = Path(newest["path"])

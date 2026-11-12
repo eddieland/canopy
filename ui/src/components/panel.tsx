@@ -133,7 +133,7 @@ export function PageHeader({
                         is, so it never wraps differently (DESIGN.md, Type). */}
                     <h1
                         className={cn(
-                            'min-w-0 text-xl font-semibold break-words title-drop',
+                            'min-w-0 text-xl font-semibold wrap-break-word title-drop',
                             atSection ? 'section-title' : 'tracking-tight',
                         )}
                         title={help}
@@ -210,16 +210,23 @@ export function Panel({ className, ...props }: ComponentProps<'section'>) {
  */
 export function PanelHeader({
     label,
+    level = 2,
+    spoken = '',
     sticky = false,
     children,
     ref,
 }: {
     label: string
+    /** The title's heading level: 3 for a panel that sits under another panel's, as a Diff's files do. */
+    level?: 2 | 3
+    /** What a screen reader hears after the label, which the header shows in its own way: a file panel's path. */
+    spoken?: string
     sticky?: boolean
     children?: ReactNode
     /** The header, for one that measures it, as what is scrolled to stays clear of a sticky one. */
     ref?: Ref<HTMLDivElement>
 }) {
+    const Heading = level === 3 ? 'h3' : 'h2'
     return (
         <div
             ref={ref}
@@ -235,8 +242,12 @@ export function PanelHeader({
                 sticky && 'sticky top-0 z-10 bg-surface bg-linear-to-b from-surface-raised/50 to-surface-raised/50',
             )}
         >
-            {/* Every panel's title is an h2 under the page's h1, so the outline skips no level (DESIGN.md). */}
-            <h2 className="panel-label font-medium whitespace-nowrap text-foreground">{label}</h2>
+            {/* Every panel's title is an h2 under the page's h1, or an h3 under its panel's, so the outline skips no
+                level (DESIGN.md). */}
+            <Heading className="panel-label font-medium whitespace-nowrap text-foreground">
+                {label}
+                {spoken !== '' && <span className="sr-only"> {spoken}</span>}
+            </Heading>
             {children}
         </div>
     )

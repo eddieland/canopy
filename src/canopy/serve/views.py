@@ -36,7 +36,8 @@ from canopy.core import spend as spending
 from canopy.core.items import fingerprint
 from canopy.core.vocab import ModelsRead, ReviewRunStatus, RunKind, RunStatus
 from canopy.runs import attachments, drafts, worker
-from canopy.serve import checklist_views, desk_views, draft_views, feedback_plan_views, memory_views
+from canopy.runs import changes as changes_kept
+from canopy.serve import change_views, checklist_views, desk_views, draft_views, feedback_plan_views, memory_views
 from canopy.serve.schema import (
     Attachment,
     Attachments,
@@ -59,11 +60,14 @@ from canopy.serve.schema import (
     NoticeChannel,
     Pause,
     PauseChannel,
+    ReviewDiff,
     Run,
     RunActivity,
     RunCard,
     RunCardQuestion,
     RunCardStep,
+    RunChange,
+    RunRange,
     RunsSince,
     RunState,
     RunWorktree,
@@ -238,6 +242,19 @@ def run_raw_output(ctx: Context, run_id: int) -> RawOutput | None:
     return raw_output(log, removed_after(ctx.conn, log, row["ended_at"], "run_files_days"))
 
 
+def run_change_diff(ctx: Context, run_id: int, repo: str) -> ReviewDiff | None:
+    """The diff of what run `run_id` changed in `repo`, kept beside its log as it ended (DESIGN §45).
+
+    Returns:
+        The diff, within a review's diff's bounds; None if there is no such run, or it kept no diff of `repo` that is
+        still there to read.
+    """
+    row = db.get_run(ctx.conn, run_id)
+    if row is None:
+        return None
+    return change_views.run_diff(ctx.conn, run_id, repo, log_path=str(row["log_path"]))
+
+
 def run_detail(ctx: Context, run_id: int) -> Run | None:
     """One run, with the worktrees it leased whatever its status, or None if there is no such run.
 
@@ -262,6 +279,13 @@ def run_detail(ctx: Context, run_id: int) -> Run | None:
         log_path=str(row["log_path"]),
         ended_at=row["ended_at"],
     )
+    changed = change_views.run_changes_of(
+        ctx.conn,
+        run_id,
+        log_path=str(row["log_path"]),
+        ended_at=row["ended_at"],
+        prs={u.repo: u.pr_url for u in db.units(ctx.conn, str(row["ticket_key"])) if u.repo and u.pr_url},
+    )
     return run(
         row,
         root,
@@ -271,6 +295,7 @@ def run_detail(ctx: Context, run_id: int) -> Run | None:
         checklist=answers,
         stretches=stretches,
         stretches_left_out=left_out,
+        changes=changed,
         timeout_minutes=limit,
     )
 
@@ -438,14 +463,17 @@ def run(
     checklist: Sequence[ChecklistAnswer] = (),
     stretches: Sequence[ChecklistStretch] = (),
     stretches_left_out: int = 0,
+    changes: Sequence[RunChange] = (),
+    ranges: Sequence[RunRange] = (),
     timeout_minutes: int | None = None,
 ) -> Run:
     """One run's row, with the `worktrees` it leased, its paths from the workspace `root`.
 
     On the run's own page it carries `models`, the models that served it, for a `feedback-plan` run `feedback_plan`,
     the plan it wrote, `checklist`, what it answered of its repositories' lists, and `stretches`, what it pushed after
-    being shown them, with how many more it pushed, `stretches_left_out`. `timeout_minutes`, a worker's time limit,
-    says when a step in its progress is stuck; with None, none is.
+    being shown them, with how many more it pushed, `stretches_left_out`, and `changes`, what it changed in each
+    repository with the files it touched; in its ticket's runs list, `ranges`, the commits and their size alone.
+    `timeout_minutes`, a worker's time limit, says when a step in its progress is stuck; with None, none is.
 
     Returns:
         The run as the API sends it. A status it does not know reads as `failed`.
@@ -483,6 +511,9 @@ def run(
         checklist=list(checklist),
         checklist_stretches=list(stretches),
         checklist_stretches_left_out=stretches_left_out,
+        changes=list(changes),
+        ranges=list(ranges),
+        records_changes=row["ended_at"] is not None and changes_kept.recorded(str(row["kind"])),
     )
 
 
@@ -732,6 +763,7 @@ def ticket(backend: Backend, ctx: Context, key: str) -> TicketDetail | None:
         return None
     [row] = rows
     ran = db.runs_of(ctx.conn, key, TICKET_RUNS)
+    ranges = change_views.ranges_of(ctx.conn, [int(r["id"]) for r in ran])
     served = ticket_models.last_served(ctx.conn, key)
     units = [
         Unit(
@@ -752,7 +784,13 @@ def ticket(backend: Backend, ctx: Context, key: str) -> TicketDetail | None:
         limits=[limit(found) for found in backend.limits(ctx, key)]
         + [limit(found, repo=repo) for repo, found in reviews],
         runs=[
-            run(r, ctx.workspace.root, models=m, timeout_minutes=ctx.config.runtime.worker_timeout_minutes)
+            run(
+                r,
+                ctx.workspace.root,
+                models=m,
+                ranges=ranges.get(int(r["id"]), ()),
+                timeout_minutes=ctx.config.runtime.worker_timeout_minutes,
+            )
             for r, m in zip(ran, runs_served(ctx.conn, ran), strict=True)
         ],
         messages=[message(m) for m in db.messages_of(ctx.conn, conversation.TICKET, key, TICKET_MESSAGES)],
@@ -985,8 +1023,9 @@ def message(row: records.Message) -> Message:
     """One message, its body without control characters.
 
     Returns:
-        The message as the API sends it, with the tracker comment it came from, if any. A source or kind the schema
-        does not know reads as a tracker comment.
+        The message as the API sends it, with the tracker comment it came from, if any, and for one sent to a running
+        run, that run, when canopy wrote it where the run's agent reads it, and when the agent fetched it (DESIGN §44).
+        A source or kind the schema does not know reads as a tracker comment.
     """
     comment = None
     if row.comment_id is not None:
@@ -1008,4 +1047,7 @@ def message(row: records.Message) -> Message:
         answers=row.answers,
         body=conversation.printable(row.body),
         comment=comment,
+        to_run=row.to_run_id,
+        delivered_at=db.parse_time(row.delivered_at) if row.delivered_at else None,
+        fetched_at=db.parse_time(row.fetched_at) if row.fetched_at else None,
     )

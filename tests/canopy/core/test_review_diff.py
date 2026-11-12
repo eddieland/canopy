@@ -91,6 +91,16 @@ def test_control_characters_become_spaces_and_tabs_stay() -> None:
     assert [ln.text for ln in diff.files[0].hunks[0].lines] == ["a [2J", "\tb "]
 
 
+def test_numstat_counts_each_files_lines_a_renames_old_path_and_none_for_a_binary_file() -> None:
+    printed = "3\t1\tsrc/a.py\x00-\t-\tlogo.png\x00" + "0\t2\t\x00old\x1b.py\x00new.py\x00" + "7\t0\tcut/sho"
+    assert review_diff.counts(printed) == [
+        review_diff.Count("src/a.py", None, 3, 1),
+        review_diff.Count("logo.png", None, None, None),
+        review_diff.Count("new.py", "old .py", 0, 2),
+    ]
+    assert review_diff.counts("") == []
+
+
 def test_bounds_cut_a_diff_and_say_so() -> None:
     with mock.patch.object(review_diff, "MAX_LINES", 3):
         diff = review_diff.parse(DIFF)

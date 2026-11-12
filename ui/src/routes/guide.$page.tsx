@@ -75,7 +75,7 @@ function GuideSidebar({ page }: { page: GuidePage }) {
                         className="size-4 transition-transform group-data-[state=open]:rotate-180"
                     />
                 </CollapsibleTrigger>
-                <CollapsibleContent className="border-t px-3 py-3">
+                <CollapsibleContent className="border-t p-3">
                     <GuideTree page={page} />
                 </CollapsibleContent>
             </Collapsible>

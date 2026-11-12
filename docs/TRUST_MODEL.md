@@ -68,6 +68,10 @@ Controls:
   for. A worker's prompt names its copy and gives its outline, never its text, and says the prompt's obligations come
   before it, as before the standing instructions; a plan cannot widen what a worker may do. The worker reads the
   approved text alone: `_run` checks the file against the hash the operator approved before it writes the copy.
+- A session's title, which `sessions.search` keeps (DESIGN §13), is whatever the runtime made of the session's first
+  words or a run named it, ticket and PR text among them: data, kept on one line, bounded, with every control and
+  hidden character dropped, rendered as text, and put in no prompt. A search of titles is words found as text, never
+  a pattern, and no agent canopy runs can list or search them.
 - Workers can push only to `trust.branch_prefix` branches, with one exception: the head branch of an open PR the
   operator authored and labeled with one of `tracker.labels` (PR-scoped work, ROADMAP M14, D056). Enforced by the
   worker prompt and by repository branch protection, which the operator must configure. canopy `init` prints the
@@ -129,16 +133,19 @@ Controls:
   local store's database or starts a server of its own, leaves the ticket the worker's word, so a steered worker could
   name another ticket the journal holds: a listed author's comment on its artifact would then steer that ticket's next
   worker, and anyone else's would raise an item about it.
-- The harness records the decisions that need no judgment itself, before the overseer runs (DESIGN §37): today only
-  `wait`, for a ticket whose worker is running and for a private ticket's question the operator has not answered,
-  each read from the journal, and only when every row the derivation finds for the ticket and its units is one of
-  these, none stale. Such a ticket's text reaches no overseer that tick, and whatever the overseer records about it, a
-  decision, dispatch, attention item, or `ticket-set`, is refused `decided`, so a steered overseer cannot overrule the
-  harness; an item the overseer raised on it stands until the overseer is given the ticket again, or it is done or
-  stopped. Residual: the harness reads the absence of every other row from the
-  derivation, so a row it misses waits until the overseer is given the ticket again. Its dispatches carry no
-  model-written context: today it starts only a due chore with no `when`, whose `chore-run` and `chore-wait` the
-  overseer is refused `decided`, and no ticket's run, since each rests on an observation.
+- The harness records the decisions that need no judgment itself, before the overseer runs (DESIGN §37): today `wait`,
+  for a ticket whose worker is running and for a private ticket's question the operator has not answered, each read from
+  the journal, and `done` for a ticket the `tracker` source read closed and `skip` for one it read open with no queue
+  label that the query returned, each with no worker of it running and none of its units holding a row; and only when
+  every row the derivation finds for the ticket and its units is one of these, none stale. Such a ticket's text reaches
+  no overseer that tick, and whatever the overseer records about it, a decision, dispatch, attention item, or
+  `ticket-set`, is refused `decided`, so a steered overseer cannot overrule the harness; an item the overseer raised on
+  it stands until the overseer is given the ticket again, or it is done or stopped. Residual: the harness reads the
+  absence of every other row from the derivation, so a row it misses waits until the overseer is given the ticket again;
+  and a tracker that reports a ticket closed ends canopy's work on it, as the overseer reading the same observation
+  would, until the operator forgets the ticket. Its dispatches carry no model-written context: today it starts only a
+  due chore with no `when`, whose `chore-run` and `chore-wait` the overseer is refused `decided`, and no ticket's run,
+  since each rests on an observation.
 - The attention items that need no judgment (`needs_reviewer`, `ready_to_merge`, `untrusted_review`, `attempt_limit`,
   `review_failed`, `review_limit`, `plan_review`, `plan_changed`) are the harness's, raised from the journal and the
   observations in its own words, and kept while an observation they rest on is stale (DESIGN §14). The overseer is
@@ -161,7 +168,9 @@ Controls:
   shown to the operator as text, bounded and with every control character dropped, at the terminal (`canopy show
   --diff`) as on a page, and put in no agent's prompt or state block. Its range is the harness's own reads of commits,
   never the agent's word; `canopy show run:ID`, which an agent may read through `show-run`, names the commits and the
-  files' paths, never a diff's text.
+  files' paths, never a diff's text. Its commits' subjects are a worker's text too, kept cut with every hidden
+  character named and shown to the operator alone: `canopy show` run inside a tick or a run, and `show-run`, print
+  how many commits there were and no subject.
 - Review feedback from anyone not in `trust.trusted_reviewers` (private, empty by default) starts no run on its own
   (D089). The overseer records `untrusted_review` and keeps its `review` cursor before it until the operator answers in
   canopy, with `canopy reply` or the web UI; the `resume` worker addresses such a comment only as an operator message
@@ -290,12 +299,16 @@ Controls:
   it `proposed`: no agent approves an epic's plan. Only the operator approves one, by `canopy plan epic:N
   --approve`, replies to ask for the next, registers members against its entries, and stops the epic, by `canopy stop
   epic:N`, so no tick plans it again, each refused as `inside_run`. Stopping one leaves its members as they are.
-  A member's planner reads its epic's approved plan from a copy checked against the hash the operator approved, and
-  is not run when it no longer matches; the epic's plan describes the work, as the ticket does, and widens nothing a
-  planner or a worker may do. Where its plan departs from the epic's, the ids its result names are its word, data:
-  canopy keeps only those the epic plan holds and raises `epic_drift` naming them, and such a plan is never approved
-  on its planner's word. A re-approval's ids are compared, as data, with the plan approved before it; a member the
-  change reaches is told the changed ids as data, never an instruction, and no run in flight is paused.
+  A member's planner, and its `implement` and `resume` after it, read its epic's approved plan from a copy checked
+  against the hash the operator approved, ignored by git where the run starts and removed before its slot goes back,
+  and none is run when it no longer matches; the epic's plan describes the work, as the ticket does, and widens nothing
+  a planner or a worker may do. An entry's `trivial` mark is its planner's word, which counts only in a plan the
+  operator approved and while `policy.planner_may_approve` is on: a member whose every entry it marks skips a plan of
+  its own, the operator's approval of the epic's plan standing for it, never one the operator asked to plan. Where a
+  member's plan departs from the epic's, the ids its result names are its word, data: canopy keeps only those the epic
+  plan holds and raises `epic_drift` naming them, and such a plan is never approved on its planner's word. A
+  re-approval's ids are compared, as data, with the plan approved before it; a member the change reaches is told the
+  changed ids as data, never an instruction, and no run in flight is paused.
 - Attachments (DESIGN §22, ROADMAP M63) are written and removed only through `runs/attachments.py` by a channel that
   authenticated the operator: `canopy attach` and `canopy detach` in the operator's shell, or the web UI behind the
   listener secret (T8), each refused as `inside_run`, on a ticket canopy knows or a task not stopped. An attachment's
@@ -616,31 +629,28 @@ Controls now:
   a repository's definition of the same agent, allowing a command canopy's
   denies, does not make it run.
 - canopy's own code runs inside every agent process that loads its definitions: canopy's plugin, whose jobs are the
-  clock, the split, the nudge for a stale update and the answer to its question (DESIGN §41), asking a run the
-  operator stopped to wrap up (§22), telling a run that a message from the operator waits (§44), moving a shell
-  command's
-  leading `cd` into its working directory, and, under OpenCode 2, holding a session's first prompt until its MCP tools
-  are registered and explaining a call its permission rules refuse (DESIGN §33), from the snapshot. canopy takes the
-  snapshot's write permission away once it is written, the operator's included, so no run changes it through its
-  permissions or its sandbox, and the runtime installs nothing into it. The plugin reads four variables,
-  `CANOPY_DEADLINE`, `CANOPY_RUN_ID`, `CANOPY_ANSWERS`, and `CANOPY_PLAN`, the clock, the system prompt the runtime hands
-  it, which it cuts in two without changing its text, each tool call's tool and session, which the nudge counts in its
-  session, the step titles of a `status` call in a run that follows a plan, which the nudge restates with the plan's
-  path, so its line carries only canopy's words and the worker's own,
-  three files, the answer, the ask to wrap up, and the mark of the newest message, an id and nothing of its text,
-  canopy writes in the run's answers directory, through the runtime's own
-  `node:fs`, and under OpenCode 2 the runtime's MCP servers' states and its tools' names, and a refused call's
-  permission and resources, whose reason, what the agent is told of the refusal, it sets; it writes no file, refuses no
-  call, grants no tool, and catches its own errors. The one call it changes is a shell command that opens with
-  `cd <dir> &&`, whose directory becomes the call's working directory, which the runtime's `external_directory` rule
-  then checks, with the rest of the command from it, as it checks any call's: so the plugin reaches nothing the `cd`
-  could not. A repository's own plugins already load in the same process (T7). The answers directory is the run's
-  own, in the state directory beside its other files, made before the agent starts and removed once it ends; a
-  sandboxed run may read it and nothing else of the state directory, and write none of it (§24); a one-off task's
-  run has one too, for the operator's messages to it. An unsandboxed run could write the ask to wrap up, as it could
-  any of the operator's files; it could only tell itself to end early, keeping its work. canopy's `messages` tool,
-  beside `status` on the run's own server, reads the messages' file in the same directory and writes nothing; it
-  opens no journal, so a sandboxed run, and the servers it starts, reach no more than before.
+  clock, the nudge for a stale update and the answer to its question (DESIGN §41), asking a run the operator stopped to
+  wrap up (§22), telling a run that a message from the operator waits (§44), moving a shell command's leading `cd` into
+  its working directory, holding a session's first prompt until its MCP tools are registered, and explaining a call its
+  permission rules refuse (DESIGN §33), from the snapshot. canopy takes the snapshot's write permission away once it is
+  written, the operator's included, so no run changes it through its permissions or its sandbox, and the runtime
+  installs nothing into it. The plugin reads four variables, `CANOPY_DEADLINE`, `CANOPY_RUN_ID`, `CANOPY_ANSWERS`, and
+  `CANOPY_PLAN`, the clock, each tool call's tool and session, which the nudge counts in its session, the step titles of
+  a `status` call in a run that follows a plan, which the nudge restates with the plan's path, so its line carries only
+  canopy's words and the worker's own, three files, the answer, the ask to wrap up, and the mark of the newest message,
+  an id and nothing of its text, canopy writes in the run's answers directory, through the runtime's own `node:fs`, the
+  runtime's MCP servers' states and its tools' names, and a refused call's permission and resources, whose reason, what
+  the agent is told of the refusal, it sets; it writes no file, refuses no call, grants no tool, and catches its own
+  errors. The one call it changes is a shell command that opens with `cd <dir> &&`, whose directory becomes the call's
+  working directory, which the runtime's `external_directory` rule then checks, with the rest of the command from it, as
+  it checks any call's: so the plugin reaches nothing the `cd` could not. A repository's own plugins already load in the
+  same process (T7). The answers directory is the run's own, in the state directory beside its other files, made before
+  the agent starts and removed once it ends; a sandboxed run may read it and nothing else of the state directory, and
+  write none of it (§24); a one-off task's run has one too, for the operator's messages to it. An unsandboxed run could
+  write the ask to wrap up, as it could any of the operator's files; it could only tell itself to end early, keeping its
+  work. canopy's `messages` tool, beside `status` on the run's own server, reads the messages' file in the same
+  directory and writes nothing; it opens no journal, so a sandboxed run, and the servers it starts, reach no more than
+  before.
 - canopy's git hooks, from the same snapshot, run in every worker's git (T5). Their `pre-push` holds a worker's first
   push of a stretch for its repository's checklist (DESIGN §42): it reads one more file, the slot's list in the run's
   answers directory, which the run cannot write, and writes one marker, the run's id and the time, in the slot's own
@@ -712,8 +722,9 @@ Controls now:
   object directory is deleted and the slot returned, by `_run` or, for a `_run` that was killed, by reconcile (DESIGN
   §8, §15). What a run changed (DESIGN §45) is read in those steps, of every worker's and task's run: `ls-remote`,
   `rev-parse`, `merge-base`, and `diff` of commits the slot already holds, the reads a run under `approve` made before,
-  with no driver or textconv, and the push check's own reads for an unpushed slot. Nothing new is read from a slot,
-  and nothing there is fetched, pushed, or moved.
+  with no driver or textconv, the push check's own reads for an unpushed slot, and `log` and `rev-list` of the same
+  commits for their ids, subjects, and trailers, bounded, as the marks' check already read them. Nothing new is read
+  from a slot, and nothing there is fetched, pushed, or moved.
 - The sandbox canary (`tests/canopy_sandbox/test_sandbox_canary.py`, HOST_ISOLATION §6) runs a plain script, no model,
   through the real prefix and the shipped templates, and checks every sandbox denial above on the host, with positive controls
   so that a sandbox that refuses everything fails. CI runs it on Linux.
@@ -754,7 +765,9 @@ but must be distinguishable:
   checklist and no mark to add, since their `pre-push` holds the push for the list (T4, DESIGN §42); what they add to a
   commit is the marks alone, none in such a run. Each run's range of commits is a row (DESIGN §45), the harness's
   read of origin as the run ended and before any kick, kept for good, so who put which commits on a branch can be told
-  after a kick rewrites it.
+  after a kick rewrites it; so is each commit in it, with whether it carries canopy's marks and another co-author's,
+  and whether the harness's own push, not the worker, put it on origin. The report's note on a commit that lacks a
+  mark stays.
 - PRs labeled `agent` where the runtime gives the worker a GitHub tool that sets labels (D084); every PR title carries
   the ticket key, and its branch the prefix.
 - `decisions` and `runs` tables are a complete local audit log of what the
@@ -890,16 +903,17 @@ Controls:
   chore findings) off the machine to wherever a sink sends it. The harness sends only the fields DESIGN §20 lists,
   cut to their limits, and the Slack sink escapes Slack's markup so the text cannot mention anyone or disguise a link.
   The desktop sink passes text to its tool as arguments, never as a shell command or a script.
-- The reviewer writes nothing outside its result line (D114), and a revision of a review's draft, which runs as the
+- The reviewer writes nothing outside its result (D114), and a revision of a review's draft, which runs as the
   reviewer under the same definition, nothing outside the version it reports. Its definition denies commenting or
   replying anywhere, submitting a PR review, pushing, writing files, labels, and edits by name, as defense in depth;
   the operator's runtime need not grant it a write tool at all. Off a GitHub tracker, the tracker's server is denied
   whole but its read tools, allowed by name, as for the planner, so a write there no pattern names fails closed.
   Outside its directory it reads only the skill directories in the operator's home (`~/.claude/skills`,
   `~/.agents/skills`, OpenCode's own), so a skill's references and scripts load with it; it changes nothing there, and
-  what it reads can reach its result line as the skills' own text does. Every agent that writes is denied them.
-- A chore's only output is its result line. The shipped `canopy-chore` definition has no edit, subagent, or shell tools,
-  one tool of canopy's, `canopy_chore_history`, which reads its own chore's earlier runs and writes nothing, and denies
+  what it reads can reach its result as the skills' own text does. Every agent that writes is denied them.
+- A chore's only output is its result. The shipped `canopy-chore` definition has no edit, subagent, or shell tools,
+  two tools of canopy's, `canopy_chore_history`, which reads its own chore's earlier runs, and `canopy_chore_result`,
+  which validates its result (D133), neither of which writes anything, and denies
   MCP write tools by name. Outside its directory it reads only the operator's skill directories, as the reviewer does.
   That tool's server is named in the chore run's environment alone (DESIGN §27), lists nothing
   outside a chore's run, refuses another chore's history as the command does, and every other definition denies it.
@@ -920,6 +934,14 @@ Controls:
   the reports their prompts read allowed: health, spend, decisions, a run's and a chore's page, the config's settings,
   and what each agent is offered for `canopy-introspect`, and memory's listings for `canopy-memory-tickets`. Neither
   has a shell.
+- Every session's title (DESIGN §13): while the private `sessions.search` is `titles`, the journal keeps the title of
+  every session the runtime keeps, as it keeps their spend: private tickets' runs' and the operator's own, in any
+  directory, among them. Only the operator reads them: `canopy sessions` refuses inside a tick or a run, and no tool,
+  report, or prompt section serves them, so no run reads another ticket's work or the operator's own through canopy.
+  A directory `sessions.exclude` names is listed nowhere, and `off`, the default, keeps no title. A title kept before
+  either change stays in the journal until the loop's next read drops it, which it does before it reads anything;
+  until then nothing lists it, since the command lists by the config in force and refuses at `off`. An unsandboxed
+  run could already read the runtime's record itself, the standing residual.
 - Opt-in: a sandboxed run (T4) reads none of the operator's secrets under `$HOME` but what its template re-allows, and
   reaches the network only through `srt`'s proxy, which connects to the hosts on the operator's allowlist and to no
   other, and to no loopback, link-local, or cloud metadata address, nor the host's own, whatever name resolves there.
@@ -985,7 +1007,8 @@ carries their version. Unlike build scripts a worker runs (T4), this file is rea
 worktree and before any agent starts. If it could set the runtime commands, the overseer's bash allows,
 `notify.cmd`, chores, the review query, the connectors and how old an observation may be before a dispatch on it is
 refused, prompt paths, capacity, queue labels, authorized repliers, agent memory's tiers, the agents' personas or
-models, the checklists, or which agents publish artifacts and whose comments on them count, one commit would be enough
+models, the checklists, which agents publish artifacts and whose comments on them count, or which of the runtime's
+sessions canopy lists by title, one commit would be enough
 to run commands on operators' machines, raise their spend, send what workers read off the machine, or pick who steers their
 workers.
 

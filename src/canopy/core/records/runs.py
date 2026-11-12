@@ -238,3 +238,59 @@ class RunChange(Row):
     branch_kept: bool
     #: Why a diff was not kept; None when both were.
     missing: str | None
+    #: How many files the run's own change touched, by git's count; None when canopy counted nothing.
+    files_changed: int | None
+    #: The lines it added, a binary file's counting none; None as `files_changed` is.
+    lines_added: int | None
+    #: The lines it removed; None as `files_changed` is.
+    lines_removed: int | None
+    #: How many commits its range held, those past `run_changes.MAX_COMMITS` included; None when canopy read none.
+    commit_count: int | None
+
+
+@dataclass(frozen=True)
+class RunChangeFile(Row):
+    """One file a worker's or a task's run changed in one repository (DESIGN §45), as git counted its lines.
+
+    It names one run, as its `RunChange` does. The path is the branch's text, untrusted. Never removed (§26).
+    """
+
+    TABLE: ClassVar[LiteralString] = "run_change_files"
+
+    run_id: int | None
+    task_run_id: int | None
+    repo: str
+    path: str
+    #: The path it had before, when git found it renamed.
+    old_path: str | None
+    #: The lines added; None for a binary file.
+    added: int | None
+    #: The lines removed; None for a binary file.
+    removed: int | None
+
+
+@dataclass(frozen=True)
+class RunCommit(Row):
+    """One commit in what a worker's or a task's run changed in one repository (DESIGN §45), as git logged it.
+
+    It names one run, as its `RunChange` does. The subject is the branch's text, untrusted, kept cut with every hidden
+    character named. Never removed (§26).
+    """
+
+    TABLE: ClassVar[LiteralString] = "run_commits"
+
+    run_id: int | None
+    task_run_id: int | None
+    repo: str
+    #: Its place in the run's range, the oldest kept at 0.
+    position: int
+    sha: str
+    subject: str
+    #: Whether it carries every trailer canopy's hooks add; None when the run's marks named none (TRUST_MODEL T5).
+    canopy_trailer: bool | None
+    #: Whether its subject starts with canopy's prefix, or is a fixup's; None when the run's marks named none.
+    prefixed: bool | None
+    #: Whether it carries a `Co-authored-by` trailer not canopy's, as the runtime's own attribution is.
+    runtime_trailer: bool
+    #: Whether the harness's own push after the worker, not the worker, put it on origin.
+    harness_pushed: bool

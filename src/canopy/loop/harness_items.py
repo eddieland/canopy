@@ -474,7 +474,8 @@ def _ready(ctx: Context, key: str, units: Sequence[Derived], limits: _Limits) ->
     """
     ticket = db.get_ticket(ctx.conn, key)
     setting = None if ticket is None else ticket.plan_setting
-    if plans.needed(ctx.config.policy.plan, setting) and plans.approved_of(ctx.conn, key) is None:
+    needed = epics.plan_needed(ctx.conn, ctx.state_dir, ctx.config.policy, key, setting)
+    if needed and plans.approved_of(ctx.conn, key) is None:
         detail = limits.plan(key)
         if detail is not None:
             yield Raised(key, ATTEMPT_LIMIT, detail)

@@ -1,11 +1,11 @@
 """`canopy _task <run_id>`: one run of a one-off task, in the slot the tick leased for it (DESIGN §36).
 
 Checks out the task's branch at a detached HEAD, or the base before one is pushed, runs `runtime.private_worker_cmd`
-with the task's prompt, parses the result line, verifies the push of the task's branch as a worker's run does, never
-with force whatever `trust.rebase` says (`unpushed` when it cannot), records the head the branch is at on origin and
-what the run changed (`changes`, DESIGN §45), and tidies and returns the slot. The slot is returned on every exit path
-this process can see; a run whose `_task` died is closed by reconcile, and one the operator stops with `--now` by
-`canopy stop` (`end`), each keeping nothing of what it changed.
+with the task's prompt, reads the result its worker reported, verifies the push of the task's branch as a worker's run
+does, never with force whatever `trust.rebase` says (`unpushed` when it cannot), records the head the branch is at on
+origin and what the run changed (`changes`, DESIGN §45), and tidies and returns the slot. The slot is returned on every
+exit path this process can see; a run whose `_task` died is closed by reconcile, and one the operator stops with `--now`
+by `canopy stop` (`end`), each keeping nothing of what it changed.
 
 What the run leaves besides its branch: its report, `.canopy-task-report.md` at the slot's root, which git there
 ignores, is kept in the state directory before the slot is returned, and the next run starts with a copy of the
@@ -44,6 +44,7 @@ from canopy.core import (
     run_changes,
     run_inbox,
     run_models,
+    run_result,
     sandboxing,
 )
 from canopy.core.config import render_command
@@ -99,6 +100,47 @@ class TaskResult(BaseModel):
     #: The PR it opened, at most one by its prompt; shown when it is a plain URL.
     prs: Annotated[list[Text], Field(max_length=MAX_PRS)] = []
     # `created` is read apart, by `follow_ups.parse`, so a list of any shape refuses its entries, never the result.
+
+
+class Report(BaseModel):
+    """What a task's worker reports with its `result` call (DESIGN §36): the task's result, described.
+
+    The call's input, and so stricter than `TaskResult`, which reads what it reported.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
+
+    status: Literal["done", "blocked", "failed"] = Field(
+        description=f"How the task ended: `done` when you did what it asked; {run_result.ENDED}",
+    )
+    summary: StrictStr = Field(
+        default="",
+        description="A short account for the operator: what you found or did, the PR's link if you opened one, the "
+        "tickets you filed, and what they should look at first; the detail goes in your report. "
+        f"{run_result.markdown(MAX_TEXT)}",
+    )
+    question: StrictStr | None = Field(
+        default=None,
+        description="Only when `blocked`: what you need the operator to answer, which their reply to the task "
+        f"answers. {run_result.markdown(MAX_TEXT)}",
+    )
+    branch: StrictStr | None = Field(
+        default=None,
+        description="The branch your message names, only when you pushed it.",
+    )
+    prs: list[StrictStr] = Field(
+        default_factory=list,
+        description=f"The URL of the PR you opened, when you opened one: at most {MAX_PRS}.",
+    )
+
+
+#: What a task's worker reports.
+CONTRACT = run_result.Contract(
+    "task",
+    f"Report how the task ended, and what your message from canopy asked you to report with it. {run_result.REPORTING}",
+    Report,
+    {follow_ups.GROUP: follow_ups.TaskGroup, checklist_answers.GROUP: checklist_answers.Group},
+)
 
 
 @dataclass(frozen=True)
@@ -319,7 +361,7 @@ def _work(ctx: Context, run: records.TaskRun, link: bytes | None, out: TextIO, l
     """Check the branch out, run the task's worker, and check what it pushed.
 
     Returns:
-        The worker's status; `timeout`, `unknown` for a missing or invalid result line, `unpushed` for work not on
+        The worker's status; `timeout`, `unknown` for a missing or invalid result, `unpushed` for work not on
         origin, `crashed` for a worker that rewrote its slot's git, or `stopped` for a task stopped before it started.
 
     Raises:
@@ -341,13 +383,13 @@ def _work(ctx: Context, run: records.TaskRun, link: bytes | None, out: TextIO, l
     done, text = _run_agent(ctx, run, task, out, log, marks=marks)
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
     parsed = contract.last_line(TaskResult, text)
-    # Read only from a valid result line, and recorded however the run ends: an item it was given and did not answer is
+    # Read only from a valid result, and recorded however the run ends: an item it was given and did not answer is
     # counted unanswered (DESIGN §42).
     listed = _check_checklist(run, text if parsed is not None else "")
     if done.timed_out:
         status, note = RunStatus.TIMEOUT, f"the worker timed out after {timeout_minutes} minutes"
     elif parsed is None:
-        status, note = RunStatus.UNKNOWN, "the worker's last line was not a valid result"
+        status, note = RunStatus.UNKNOWN, f"the worker {run_result.MISSING}"
     else:
         status, note = RunStatus(parsed.status), ""
     # Each entry checked alone, on its text (D003), whatever the rest of the result says.
@@ -381,6 +423,7 @@ def _work(ctx: Context, run: records.TaskRun, link: bytes | None, out: TextIO, l
         branch=run.branch,
         start=start,
         pushed=pushed,
+        marks=marks,
         log_path=run.log_path,
         log=log,
     )
@@ -439,7 +482,7 @@ def _keep_checklist_pushes(
 def _check_checklist(run: records.TaskRun, text: str) -> checklist_answers.Checked | None:
     """Check what the worker answered of the list it was given, read back from the run's answers directory (§42).
 
-    `text` is its output, or "" when its last line was no valid result, whose fields are not read.
+    `text` is its output, or "" when it reported no valid result, whose fields are not read.
 
     Returns:
         An answer for every item of the list; None for a run given none.
@@ -530,7 +573,7 @@ def _run_agent(
     its repository's checklist, when the run has one (DESIGN §42).
 
     Returns:
-        The agent's process and the text its result line is read from.
+        The agent's process and the result it reported, as one line of JSON; "" when it reported none.
 
     Raises:
         SetupError: the runtime's config in the slot shadows canopy's definitions or names a tracker tool.
@@ -567,6 +610,11 @@ def _run_agent(
     answers = starts.answers_dir(Path(run.log_path))
     listed = checklists.file_of(answers, run.repo)
     held = {slot: listed} if listed.is_file() else {}
+    # What it reports with canopy's `result` tool: the tickets it may file, and its answers to a list it was given.
+    files = task.project is not None and ctx.config.policy.max_follow_ups > 0
+    groups = [*([follow_ups.GROUP] if files else []), *([checklist_answers.GROUP] if held else [])]
+    reports = CONTRACT.asked(groups)
+    env |= reports.env()
     # Where canopy's `pre-push` reads the list, and canopy's plugin and `messages` tool the operator's messages, which
     # a sandboxed run may read and not write (DESIGN §24, §42, §44).
     env[cards.ANSWERS_ENV] = str(answers)
@@ -604,7 +652,8 @@ def _run_agent(
             digest=snapshot.name,
             tools=output.tools,
         )
-    return done, output.text
+    version = ctx.config.runtime.version
+    return done, run_result.reported(done.stdout, reports, server=cards.SERVER, version=version)
 
 
 def _rewritten(slot: Path, link: bytes | None) -> Path | None:

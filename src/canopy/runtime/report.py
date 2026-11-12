@@ -203,6 +203,9 @@ type SessionsRead = Literal["found", "missing", "failed"]
 MAX_SESSIONS = 500
 #: How long a session's directory may be, as the record keeps it; a longer one is cut.
 MAX_DIRECTORY = 4096
+#: How long a session's title may be, as the journal keeps it (`session_title`); a longer one is cut. The runtime makes
+#: a title of a session's first words, and canopy names its runs' in a line, so a longer one is one written to fill.
+MAX_TITLE = 200
 
 
 @dataclass(frozen=True)
@@ -226,6 +229,11 @@ class SessionSpend:
     cache_write: int
     #: Each model's replies and their cost, the most costly first, at most `MAX_MODELS`.
     models: Sequence[ModelUse] = ()
+    #: Its title, as `session_title` keeps it, when the read was asked for titles; None when not, or it has none.
+    title: str | None = None
+    #: When the runtime archived it, so its own list leaves it out, in milliseconds since the epoch; None when it did
+    #: not, or the read was not asked for titles.
+    archived_ms: int | None = None
 
 
 @dataclass(frozen=True)
@@ -241,6 +249,59 @@ class SessionPage:
     skipped: int = 0
     #: Why it `failed`, in canopy's words, never what the runtime wrote.
     error: str | None = None
+
+
+#: The parts of the text the runtime keeps of a session (ROADMAP M72): its title; what it was sent, a prompt, or a
+#: message the runtime or a skill put in; what its agent wrote, and its reasoning; what its tool calls and shell
+#: commands were given, and what they returned; and the summaries that took the place of what it said before.
+type TextPart = Literal["title", "sent", "wrote", "reasoning", "given", "returned", "summary"]
+#: Every part, in the order `canopy sessions --sizes` lists them.
+TEXT_PARTS: tuple[TextPart, ...] = ("title", "sent", "wrote", "reasoning", "given", "returned", "summary")
+#: How measuring the runtime's record ended: read; the runtime has kept no session yet; its record could not be read;
+#: or the runtime canopy runs keeps its sessions where this measurement does not read.
+type RecordRead = Literal["found", "missing", "failed", "unsupported"]
+
+
+@dataclass(frozen=True)
+class KeptSession:
+    """A session the runtime keeps, as `canopy sessions --sizes` counts it: whose it is, and where it ran."""
+
+    session_id: str
+    #: The session it ran for, as a subagent; None for a session of its own.
+    parent_id: str | None
+    #: Where it ran, printable, at most `MAX_DIRECTORY` characters.
+    directory: str
+    #: Whether the runtime archived it, so its own list leaves it out.
+    archived: bool
+
+
+@dataclass(frozen=True)
+class SessionRecord:
+    """Every session the runtime keeps, read whole, and what its record is: how large, and what it could not read."""
+
+    outcome: RecordRead
+    #: Every session canopy could read, in its databases' order; empty unless `found`.
+    sessions: Sequence[KeptSession] = ()
+    #: How many databases the record is, the operator's and each sandbox role's that could be read, and their size.
+    databases: int = 0
+    size_bytes: int = 0
+    #: How many sessions only the runtime's earlier version's tables hold, which no reader of the text reads.
+    earlier_only: int = 0
+    #: How many sessions canopy passed over as ones it cannot read.
+    skipped: int = 0
+    #: How many sandbox roles' databases canopy could not read, and passed over whole.
+    passed_over: int = 0
+    #: Why it `failed` or is `unsupported`, in canopy's words, never what the runtime wrote.
+    error: str | None = None
+
+
+@dataclass(frozen=True)
+class TextRow:
+    """One part of one session's text, as the runtime's record keeps it: a title, or one message's part."""
+
+    session_id: str
+    part: TextPart
+    text: str
 
 
 @dataclass(frozen=True)
@@ -275,6 +336,8 @@ class Printed:
     step: Call | None = None
     #: The tool call the line ended, as its span records it; None for any other line.
     tool: ToolEnded | None = None
+    #: What the tool call the line ended returned; None where `call` is.
+    returned: Returned | None = None
 
 
 @dataclass(frozen=True)
@@ -301,6 +364,17 @@ class Called:
     input: Mapping[str, object]
     #: When the runtime started it, as it printed it; None when it did not (DESIGN §44).
     started_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class Returned:
+    """What a tool call a running agent's line ended returned into its context, as the runtime printed it."""
+
+    #: The characters of its output, or of its error for one that failed.
+    chars: int
+    #: Whether the runtime said it cut the result, so the agent saw less than the whole; None when the call did not say
+    #: (ROADMAP M71).
+    cut: bool | None = None
 
 
 #: What a tool call did to the repository's files, as the outline's measurement counts it (ROADMAP M70): read a file,
@@ -339,18 +413,45 @@ def shell_searches(command: str) -> bool:
     return any(_line_searches(line) for line in command.splitlines())
 
 
+def shell_stages(command: str) -> list[list[str]]:
+    """The stages of a shell `command`, each the words it runs, past any `VAR=value` before its program.
+
+    Words are split as the shell splits them, line by line, so a separator inside quotes starts no stage; a line whose
+    quotes do not close has none, and nor does a stage of assignments alone. The program is the first word, as given,
+    path and all. Only a measurement reads this, never a guard.
+
+    Returns:
+        Each stage's words, in order.
+    """
+    return [stage for line in command.splitlines() for stage in _line_stages(line)]
+
+
 def _line_searches(line: str) -> bool:
     """Whether a stage of one line of a shell command starts a search, as `shell_searches` reads it.
 
     Returns:
         True when one does; False also when the line's quotes do not close.
     """
+    for words in _line_stages(line):
+        program = words[0].rsplit("/", 1)[-1]
+        if program in _SEARCH_PROGRAMS or " ".join([program, *words[1:2]]) in _TWO_WORD_SEARCHES:
+            return True
+    return False
+
+
+def _line_stages(line: str) -> list[list[str]]:
+    """The stages of one line of a shell command, as `shell_stages` reads them.
+
+    Returns:
+        Each stage's words past its assignments, none empty; none at all when the line's quotes do not close.
+    """
     lexer = shlex.shlex(line, posix=True, punctuation_chars=True)
     lexer.whitespace_split = True
     try:
         tokens = list(lexer)
     except ValueError:
-        return False
+        return []
+    found: list[list[str]] = []
     stage: list[str] = []
     for token in [*tokens, ";"]:
         if token not in _SEPARATORS:
@@ -358,17 +459,30 @@ def _line_searches(line: str) -> bool:
             continue
         words = list(itertools.dropwhile(_ASSIGNMENT_RE.fullmatch, stage))
         stage = []
-        if not words:
-            continue
-        program = words[0].rsplit("/", 1)[-1]
-        if program in _SEARCH_PROGRAMS or " ".join([program, *words[1:2]]) in _TWO_WORD_SEARCHES:
-            return True
-    return False
+        if words:
+            found.append(words)
+    return found
 
 
 def session_id(value: object) -> str | None:
     """Return `value` if it is a session id canopy prints (`SESSION_ID_RE`), else None."""
     return value if isinstance(value, str) and SESSION_ID_RE.fullmatch(value) else None
+
+
+def session_title(value: object) -> str | None:
+    """Return a session's title as canopy keeps it: one line, nothing hidden, at most `MAX_TITLE` characters.
+
+    A title is whatever the runtime made of a session's first words, or what a run named it, so it is data (TRUST_MODEL
+    T1): every run of whitespace, a line break's among them, is one space, and every character that is not printable, a
+    control, a zero-width or bidi mark, or a tag, is dropped, so what is shown is what is kept.
+
+    Returns:
+        The title; None when `value` is not text, or nothing is left of it.
+    """
+    if not isinstance(value, str):
+        return None
+    flat = "".join(c for c in " ".join(value.split()) if c.isprintable()).strip()
+    return flat[:MAX_TITLE].rstrip() or None
 
 
 def model_uses(replies: Iterable[tuple[str, int, float]]) -> tuple[ModelUse, ...]:
@@ -412,6 +526,15 @@ def total(calls: Sequence[Call]) -> Usage:
     )
 
 
+def kept_name(tool: str) -> str:
+    """A tool's name as canopy keeps it: without control characters, on one line, and at most `MAX_TOOL_NAME` long.
+
+    Returns:
+        The name, or `?` when nothing is left of it.
+    """
+    return " ".join("".join(c for c in tool if c.isprintable()).split())[:MAX_TOOL_NAME] or "?"
+
+
 class Tools:
     """A run's tool calls rolled up by tool as they end, within `MAX_TOOLS` tools whose names are `MAX_TOOL_NAME`."""
 
@@ -425,7 +548,7 @@ class Tools:
         The tool's name is kept as the runtime gave it but for control characters, on one line and cut to
         `MAX_TOOL_NAME`, or `?` when nothing is left; past `MAX_TOOLS` tools, a new one counts under `OTHER_TOOLS`.
         """
-        name = " ".join("".join(c for c in tool if c.isprintable()).split())[:MAX_TOOL_NAME] or "?"
+        name = kept_name(tool)
         if name not in self._tools and len(self._tools) >= MAX_TOOLS:
             name = OTHER_TOOLS
         was = self._tools.get(name, ToolUse(name, 0, 0, 0))

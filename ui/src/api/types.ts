@@ -25,6 +25,8 @@ export type RunCard = Schemas['RunCard']
 export type RunCardQuestion = Schemas['RunCardQuestion']
 /** The operator's answer to a running run's question, as recorded: what `canopy reply run:ID LETTER` says. */
 export type Answered = Schemas['Answered']
+/** The operator's message to a running run, as recorded: what `canopy reply run:ID "..."` says (DESIGN §44). */
+export type RunMessaged = Schemas['RunMessaged']
 /** Which models served an agent run, read from its session after it ended (DESIGN §13), or why none are shown. */
 export type ModelsServed = Schemas['ModelsServed']
 /** One model that wrote an agent run's replies, with how many and what they cost. */
@@ -149,6 +151,8 @@ export type HostProcesses = Schemas['HostProcesses']
 export type HostProcess = Schemas['HostProcess']
 /** What a process was doing when read; the load average counts the `running` and `disk` ones. */
 export type ProcessState = Schemas['ProcessState']
+/** The running run a process is the process of, by the pid the journal recorded: what the run works on. */
+export type ProcessWork = Schemas['ProcessWork']
 /** What the last day and the last 30 days cost, read together, so a month never shows less than its day. */
 export type Spend = Schemas['Spend']
 /** What the agent runtime reported spending in the last `hours` hours (DESIGN §13). */
@@ -211,6 +215,16 @@ export type ChecklistWeek = Schemas['ChecklistWeek']
 export type ChecklistAnswer = Schemas['ChecklistAnswer']
 /** What a run pushed after being shown a repository's checklist: the two commits, and the diff kept between them. */
 export type ChecklistStretch = Schemas['ChecklistStretch']
+/** The commits a worker's or a task's run went from and to in one repository, and how much changed between them. */
+export type RunRange = Schemas['RunRange']
+/** One commit in a run's range, as the run's end logged it, with canopy's marks on it (TRUST_MODEL T5). */
+export type RunCommit = Schemas['RunCommit']
+/** A push canopy made after a run to rerun its PR's checks the worker judged flaky (DESIGN §23). */
+export type RunKick = Schemas['RunKick']
+/** What a run changed in one repository: its range and size, and the files it touched, with no diff. */
+export type RunChange = Schemas['RunChange']
+/** One file a run changed, with its lines added and removed as git counted them. */
+export type ChangedFile = Schemas['ChangedFile']
 /** A worker's answer to a checklist item: pass, fixed, held, n/a, or unanswered. */
 export type ItemAnswer = Schemas['ItemAnswer']
 /** How the last days' runs ended, the newest failures, what the guards refused, and each day's counts. */
@@ -257,6 +271,20 @@ export type CiPullRequest = Schemas['CiPullRequest']
 export type CiVerdict = Schemas['CiVerdict']
 /** The window before a CI report's: its heads, green first, red runs, and fixes. */
 export type CiPrevious = Schemas['CiPrevious']
+/** How each source's runs ended over a window, how long they took, and how fresh each source reads now. */
+export type ConnectorsReport = Schemas['ConnectorsReport']
+/** A source that reads, as `canopy status` names it: its latest run, and how old its observations are. */
+export type ConnectorsSource = Schemas['ConnectorsSource']
+/** One source's runs in a window: how they ended, how long they took, and the lines they read. */
+export type ConnectorsSourceRuns = Schemas['ConnectorsSourceRuns']
+/** One local day's runs that read less than asked, by source. */
+export type ConnectorsDay = Schemas['ConnectorsDay']
+/** A run that read less than it was asked. */
+export type ConnectorsRun = Schemas['ConnectorsRun']
+/** One kind of line canopy refused of a source's runs in a window. */
+export type ConnectorsRefusal = Schemas['ConnectorsRefusal']
+/** The window before a Connectors report's: its runs, the short ones, and the lines refused. */
+export type ConnectorsPrevious = Schemas['ConnectorsPrevious']
 /** Where a window's review feedback came from, how long it took, and what answering it cost. */
 export type ReviewsReport = Schemas['ReviewsReport']
 /** A PR in a window: its feedback, how soon its first review came, and what answering cost. */
@@ -463,6 +491,8 @@ export type DiffHunk = Schemas['DiffHunk']
 export type DiffLine = Schemas['DiffLine']
 /** A PR's review threads on the diff a run kept, and every draft for it (DESIGN §29). */
 export type PullRequestThreads = Schemas['PullRequestThreads']
+/** Why a PR's page has no diff to put its threads on: the latest run that left its work on origin kept none. */
+export type MissingDiff = Schemas['MissingDiff']
 /** One review thread as canopy's reader last read it, where it sits on the diff, and the drafts answering it. */
 export type ReviewThread = Schemas['Thread']
 /** One comment on a review thread: someone else's text, shown as text. */

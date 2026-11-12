@@ -136,7 +136,8 @@ def run_env(ctx: Context, run_id: str) -> dict[str, str]:
 
     The operator's commands refuse inside it (DESIGN §22). It names the workspace, whose journal holds the chore's
     history wherever the agent's `cwd` is, and gives the agent the server of its history tool and the server of
-    canopy's read-only reports (`core.reports`), each run from that workspace.
+    canopy's read-only reports (`core.reports`), each run from that workspace, and says what it reports with the
+    history server's `result` tool.
 
     Returns:
         The variables to set on the agent's process.
@@ -150,6 +151,9 @@ def run_env(ctx: Context, run_id: str) -> dict[str, str]:
             version=ctx.config.runtime.version,
             cwd=root,
         ),
+        # What its agent reports with the history server's `result` tool (DESIGN §13); a chore that runs the operator's
+        # own command reads none of it, and prints its result.
+        **result.CHORE.asked().env(),
     }
 
 

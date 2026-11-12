@@ -1,8 +1,9 @@
 """A PR's review threads and the drafts that answer them, as the API sends them (DESIGN §29, On the PR's diff).
 
 The threads are what canopy's own reader last read of the PR, never a worker's copy of them, and the diff is the one
-the latest run that pushed kept at its head. A coworker's comment and a worker's draft are both untrusted text, sent as
-the journal holds them for the UI to show as plain text.
+the latest run that pushed kept at its head, which every run keeps whatever `trust.review_replies` says (§45); without
+one, the latest run that left its work on origin says why. A coworker's comment and a worker's draft are both untrusted
+text, sent as the journal holds them for the UI to show as plain text.
 """
 
 from __future__ import annotations
@@ -19,7 +20,16 @@ from canopy.runs import drafts, drafts_manage
 from canopy.serve.diff_views import diff_view
 from canopy.serve.draft_views import draft
 from canopy.serve.feedback_plan_views import for_pr
-from canopy.serve.schema.draft import Draft, DraftFailure, DraftsSent, PullRequestThreads, Thread, ThreadComment
+from canopy.serve.schema.draft import (
+    Draft,
+    DraftFailure,
+    DraftsSent,
+    MissingDiff,
+    PullRequestThreads,
+    Thread,
+    ThreadComment,
+)
+from canopy.serve.transcript_views import removed_after
 
 if TYPE_CHECKING:
     import sqlite3
@@ -75,6 +85,7 @@ def threads(ctx: Context, url: str) -> PullRequestThreads | None:
         diff_run=kept[0] if kept is not None and diff is not None else None,
         diff_head=review_diff.read_head(kept[1]) if kept is not None and diff is not None else None,
         diff=diff_view(diff) if diff is not None else None,
+        diff_missing=_missing_diff(conn, url) if diff is None else None,
         threads=listed,
         pr_drafts=[views[d.id] for d in found if d.kind is DraftKind.PR],
         unplaced=unplaced,
@@ -154,6 +165,47 @@ class _KeptBy(records.View):
 
     id: int
     log_path: str
+
+
+def _missing_diff(conn: sqlite3.Connection, url: str) -> MissingDiff | None:
+    """Why the PR has no kept diff: what the latest run of its unit that left its work on origin kept (DESIGN §45).
+
+    Returns:
+        That run, and why its end kept no diff of the branch, or that retention removed it; None when no run of the
+        PR's unit recorded what it left on origin.
+    """
+    unit = sql.execute(conn, sql.select("ticket_key, repo").from_("ticket_units").where("pr_url = ?", url)).fetchone()
+    if unit is None:
+        return None
+    query = (
+        sql.select("r.id, r.log_path, r.ended_at, c.branch_kept, c.missing")
+        .from_("runs r")
+        .join("run_changes c ON c.run_id = r.id")
+        .where("r.ticket_key = ?", unit["ticket_key"])
+        .where("c.repo = ?", unit["repo"])
+        .where("c.unpushed_sha IS NULL")
+        .order_by("r.id DESC")
+        .limit(1)
+    )
+    found = records.fetch_one(conn, _Recorded, query)
+    if found is None:
+        return None
+    if not found.branch_kept:
+        # Its end recorded why, as a crashed run's does.
+        return MissingDiff(run=found.id, missing=found.missing)
+    path = review_diff.run_path_for(found.log_path, str(unit["repo"]))
+    return MissingDiff(run=found.id, removed_after_days=removed_after(conn, path, found.ended_at, "run_files_days"))
+
+
+@dataclass(frozen=True)
+class _Recorded(records.View):
+    """A run that recorded what it left on origin, and whether its end kept the branch's diff, or why not."""
+
+    id: int
+    log_path: str
+    ended_at: str | None
+    branch_kept: bool
+    missing: str | None
 
 
 def _side(value: str | None) -> Literal["left", "right"] | None:

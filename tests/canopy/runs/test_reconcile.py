@@ -5,26 +5,29 @@ import os
 import signal
 import sqlite3
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from unittest import mock
 
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import config, db, definitions
+from canopy.core import chore_runs, config, db, dead_runs, definitions, review_runs
 from canopy.core.vocab import RunStatus, StartStatus, TickStatus
-from canopy.infra import lock, procs
+from canopy.infra import lock, logs, procs
 from canopy.loop import attention
-from canopy.runs import reconcile
+from canopy.runs import reconcile, task_starts
 from tests.canopy.helpers import (
     DEAD_PID,
     READ_PR,
     WORKER_DONE,
     agent_runs,
     commit_and_push,
+    epic_planning,
     in_tick,
+    inline_context,
     last_tick,
+    operator,
     overseer_calls,
     overseer_does,
     pool,
@@ -201,6 +204,70 @@ def test_old_definitions_snapshots_are_removed_only_when_no_run_is_live(
         assert [p.name for p in (canopy_env.state_dir / "runtime").iterdir()] == [current.name]
 
 
+def live_review(env: CanopyEnv) -> int:
+    """Record a review run claimed by this process, so it reads as live: return its id."""
+    conn = env.journal()
+    with in_tick(conn) as tick_id:
+        run_id = review_runs.insert_review_run(
+            conn,
+            tick_id=tick_id,
+            pr_url="https://github.com/acme/repo/pull/1",
+            sha="0123456789abcdef0123456789abcdef01234567",
+            ticket=None,
+            repo="repo",
+            purpose="request",
+            logs_dir=env.state_dir / "reviews",
+        )
+    assert db.claim_run(conn, "review_runs", run_id, os.getpid())
+    return run_id
+
+
+def live_task(env: CanopyEnv) -> int:
+    """Submit a task and start its run, claimed by this process, as a live tick starts one: return the run's id."""
+    assert operator("task", "submit", "Tidy the README.") == 0
+    ctx = inline_context(env)
+    with in_tick(ctx.conn) as tick_id:
+        [started] = task_starts.start_queued(ctx, tick_id, logs.for_tick(tick_id))
+    return started.run_id
+
+
+def live_chore(env: CanopyEnv) -> int:
+    """Record a chore run claimed by this process, so it reads as live: return its id."""
+    conn = env.journal()
+    run_id = chore_runs.insert_chore_run(conn, tick_id=None, chore="tidy", logs_dir=env.state_dir / "chores")
+    assert db.claim_run(conn, "chore_runs", run_id, os.getpid())
+    return run_id
+
+
+@pytest.mark.parametrize(
+    ("table", "start"),
+    [
+        ("review_runs", live_review),
+        ("task_runs", live_task),
+        ("epic_runs", epic_planning),
+        ("chore_runs", live_chore),
+    ],
+)
+@pytest.mark.usefixtures("git_pool", "agent_log")
+def test_a_live_run_of_any_kind_keeps_old_definitions_snapshots(
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    table: db.RunTable,
+    start: Callable[[CanopyEnv], int],
+) -> None:
+    """Issue #2202: a review alone was live, and a tick removed the snapshot OpenCode 2 still read its agent from."""
+    old = canopy_env.state_dir / "runtime" / "0123456789abcdef"
+    old.mkdir(parents=True)
+    run_id = start(canopy_env)
+    with overseer_does():
+        assert main(["tick", "--dry-run"]) == 0
+        assert old.is_dir()
+
+        db.finish_run(conn, table, run_id, dead_runs.CRASHED[table], "{}")
+        assert main(["tick", "--dry-run"]) == 0
+        assert not old.exists()
+
+
 def test_stale_canopy_lease_is_returned_and_others_are_not(
     canopy_env: CanopyEnv,
     treehouse_state: Path,
@@ -313,7 +380,7 @@ def test_live_tick_takes_a_ticket_to_a_pushed_branch(
         # A PR the `vcs` source reads, so the next tick lists the ticket to the overseer (DESIGN §39).
         worker_does(
             *commit_and_push("agent/PROJ-1-add-login"),
-            result=json.dumps(json.loads(WORKER_DONE) | {"pr": READ_PR}),
+            result=json.dumps(json.loads(WORKER_DONE) | {"prs": {"repo": READ_PR}}),
         ),
     ):
         assert main(["tick"]) == 0
@@ -325,7 +392,7 @@ def test_live_tick_takes_a_ticket_to_a_pushed_branch(
     assert run["branch"] == "agent/PROJ-1-add-login"
     assert run["pid"] is not None
     assert run["ended_at"] is not None
-    assert json.loads(run["result_json"])["pr"] == READ_PR
+    assert json.loads(run["result_json"])["prs"] == {"repo": READ_PR}
     assert git_pool.remote_head("agent/PROJ-1-add-login") is not None
     assert all(s["status"] == "available" for s in pool(treehouse_state))
 

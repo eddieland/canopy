@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { mockHost } from '@/api/mocks'
 import type { Disk } from '@/api/types'
+import type { Trend } from '@/lib/trend'
 
 import {
     bytesText,
@@ -9,6 +10,8 @@ import {
     coreShare,
     diskHolds,
     diskPressure,
+    fillsIn,
+    fillsInText,
     hostPressure,
     hostReadout,
     loadTrend,
@@ -17,6 +20,7 @@ import {
 
 const GIB = 1024 ** 3
 const MIB = 1024 ** 2
+const MINUTE = 60_000
 
 function disk(fields: Partial<Disk>): Disk {
     return { holds: ['workspace'], path: '/w', total: 500 * GIB, free: 200 * GIB, floor: 2 * GIB, ...fields }
@@ -110,5 +114,51 @@ describe('diskHolds', () => {
             'the workspace, the journal and the temporary directory',
         )
         expect(diskHolds(disk({ holds: ['temp'] }))).toBe('the temporary directory')
+    })
+})
+
+// A disk's free space read once a minute for an hour, `at(minute)` at each.
+function freeOver(at: (minute: number) => number): Trend {
+    const points = Array.from({ length: 61 }, (_, minute) => ({ at: minute * MINUTE, value: at(minute) }))
+    const values = points.map((p) => p.value)
+    return { points, runs: [points], start: 0, end: 60 * MINUTE, peak: Math.max(...values), low: Math.min(...values) }
+}
+
+describe('fillsIn', () => {
+    it('says how long until full at the rate of the last hour', () => {
+        // 30 GiB gone in the hour, 90 GiB left: three hours more.
+        const left = fillsIn(freeOver((m) => (120 - m / 2) * GIB))
+        expect(left).not.toBeNull()
+        expect(fillsInText(left ?? 0)).toBe('full in about 3 h at this rate')
+        expect(fillsInText(25 * MINUTE)).toBe('full in about 25 min at this rate')
+    })
+
+    it('says nothing while the disk is not filling, or would last past a day', () => {
+        expect(fillsIn(freeOver(() => 100 * GIB))).toBeNull()
+        expect(fillsIn(freeOver((m) => (100 + m) * GIB))).toBeNull()
+        // The mock's workspace disk: 1.6 GiB written over the hour, 412 GiB left, weeks away.
+        expect(fillsIn(freeOver((m) => (413.6 - (1.6 * m) / 60) * GIB))).toBeNull()
+    })
+
+    it('reads a dip a build cleared after as no trend', () => {
+        expect(fillsIn(freeOver((m) => (27 - (m > 40 && m < 55 ? 11 : 0)) * GIB))).toBeNull()
+    })
+})
+
+describe('concerns', () => {
+    it('says the way out of each, naming the key that sets it', () => {
+        const pressed = mockHost({
+            disks: [disk({ free: 1.5 * GIB, floor: 2 * GIB })],
+            memory: { total: 64 * GIB, available: 2 * GIB, swap_total: 0, swap_free: 0 },
+            cpu: { cores: 4, load: [5, 5, 5], time: null },
+        })
+        const found = concerns(pressed)
+        expect(found.map((c) => c.what)).toEqual(['disk', 'memory', 'load'])
+        expect(found[0]?.text).toBe(
+            "1.5 GiB free where the workspace is, under the tick's floor of 2.0 GiB: no tick runs the overseer",
+        )
+        expect(found[0]?.way).toContain('`loop.min_free_disk_mib`')
+        expect(found[1]?.text).toContain('a new agent or build may swap')
+        expect(found[2]?.way).toContain('`capacity.max_workers`')
     })
 })

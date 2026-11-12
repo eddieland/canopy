@@ -7,6 +7,7 @@
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 
 import { storedSetting, useStoredSetting } from '@/lib/stored-setting'
+import { digestOf } from '@/lib/text-digest'
 
 /** How a section is marked: read and fine, or read with a concern to come back to. */
 export type SectionMark = 'read' | 'concern'
@@ -146,17 +147,6 @@ export function markSection(ticket: string, section: PlanSection, mark: SectionM
 }
 
 const setting = storedSetting({ key: STORAGE_KEY, parse: parseMarks, serialize: (value) => JSON.stringify(value) })
-
-// A short digest of a section's words (FNV-1a, 32 bits): enough to tell a section rewritten from one left as it was,
-// and small enough that a ticket's marks take a few bytes each, however long its Steps.
-function digestOf(text: string): string {
-    // FNV-1a's offset basis and prime, in decimal, which the formatter and the lint agree on.
-    let hash = 2_166_136_261
-    for (let i = 0; i < text.length; i += 1) {
-        hash = Math.imul(hash ^ (text.codePointAt(i) ?? 0), 16_777_619)
-    }
-    return (hash >>> 0).toString(36)
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value)

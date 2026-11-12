@@ -85,3 +85,15 @@ def approve_option(words: Sequence[str]) -> str | None:
         The word, or None when none passes one.
     """
     return _shared.approve_option(words)
+
+
+def prints_events(words: Sequence[str]) -> bool:
+    """Whether `words`, a command's, ask the runtime for the events canopy reads an agent's run from (DESIGN §13).
+
+    An agent reports its result by a tool call, which canopy sees only in those events, so config refuses a template
+    of such an agent that asks for none.
+
+    Returns:
+        True when they do.
+    """
+    return _shared.prints_events(words)

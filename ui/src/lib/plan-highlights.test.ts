@@ -121,6 +121,31 @@ describe('PlanHighlights', () => {
         expect(quoteOf(editor, 'open')).toBeUndefined()
     })
 
+    it('keeps the words a thread on a reworded passage was written on, through edits, until they are back', () => {
+        const editor = open(PLAN)
+        const from = posOf(editor, 'Test')
+        const anchor = anchorFor(editor.state, from, from + 'Test with a large report'.length)
+        if (!anchor) {
+            throw new Error('no anchor')
+        }
+        const reworded = () => highlightsKey.getState(editor.state)?.reworded
+        sync(editor, [{ id: 'a', anchor, resolved: false }, placed('b', 'the rows')])
+        expect(reworded()?.size).toBe(0)
+        editor.commands.setContent(PLAN.replace('Test with', 'Test it with'), { contentType: 'markdown' })
+        expect(reworded()).toEqual(new Map([['a', 'Test with a large report']]))
+        // The editor saves the passage's new words as its anchor after an edit: the words it was written on stay.
+        const now = anchorsOf(editor.state).anchors.get('a')
+        if (!now) {
+            throw new Error('no anchor')
+        }
+        sync(editor, [{ id: 'a', anchor: now, resolved: false }, placed('b', 'the rows')])
+        editor.commands.insertContentAt(1, 'New ')
+        expect(reworded()?.get('a')).toBe('Test with a large report')
+        editor.commands.setContent(PLAN, { contentType: 'markdown' })
+        expect(quoteOf(editor, 'a')).toBe('Test with a large report')
+        expect(reworded()?.size).toBe(0)
+    })
+
     it('finds a reworded passage nearest where it was, of copies alike', () => {
         const filler = 'x'.repeat(40)
         const copies = `${filler}\n\nRetry the upload twice.\n\n`.repeat(3) + filler

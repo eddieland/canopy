@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises'
+
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
@@ -8,8 +10,10 @@ import {
     LIGHT_ROUTES,
     NOW,
     OTHER_PALETTES,
+    plan as planDocument,
     ROUTES,
     screenshotMain,
+    screenshotPart,
     screenshotWhole,
     serveReview,
     settled,
@@ -18,6 +22,7 @@ import {
     storeTheme,
     THEMES,
     WHOLE_ROUTES,
+    writePlan,
 } from './helpers.ts'
 import type { DiffFinding } from './helpers.ts'
 
@@ -43,6 +48,8 @@ for (const theme of THEMES) {
                 await expect(page.getByRole('heading', { level: 1 })).toHaveText('Lorem ipsum')
                 // Its code block is taken colored, once the grammar has loaded.
                 await expect(page.locator('pre[data-highlighted]')).toBeVisible()
+                // And its diagram drawn, in place of the skeleton that holds its place while mermaid loads.
+                await expect(page.getByRole('img', { name: 'Lorem ipsum dolor' })).toBeVisible()
             }
             await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /\bdark\b/u : /^(?!.*\bdark\b)/u)
             const screenshot = WHOLE_ROUTES.includes(route) ? screenshotWhole : screenshotMain
@@ -86,6 +93,22 @@ for (const theme of THEMES) {
         await output.getByRole('button', { name: 'Pretty' }).click()
         await expect(output.getByRole('button', { name: 'Pretty' })).toHaveAttribute('aria-pressed', 'true')
         await expect(output).toHaveScreenshot(`ticks-2-output-pretty-${theme}.png`)
+    })
+
+    // A plan holding every block a planner writes besides prose, each diagram kind, and each shape of table:
+    // `e2e/plan-specimen.md`, written into the sample editor, so no mock plan has to carry it. The plan alone, not
+    // its margin, whose threads lose their passages to it.
+    test(`the plan specimen in ${theme}`, async ({ page }) => {
+        await page.clock.setFixedTime(NOW)
+        await storeTheme(page, theme)
+        await signIn(page)
+        await page.goto('plan-editor')
+        await settled(page)
+        await writePlan(page, await readFile(new URL('plan-specimen.md', import.meta.url), 'utf8'))
+        const doc = planDocument(page)
+        await expect(doc.getByRole('heading', { name: 'Retry exports that fail mid-read' })).toBeVisible()
+        await expect(doc.getByRole('img')).toHaveCount(5)
+        await screenshotPart(page, doc, `plan-specimen-${theme}.png`)
     })
 
     // The jump palette over a ticket's page, two others viewed a while before: the box alone, so the page under it
@@ -235,6 +258,24 @@ for (const theme of THEMES) {
             await expect(plan).toHaveScreenshot(`feedback-plan-${name}-${theme}.png`)
         })
     }
+}
+
+// A feedback plan's file opened, laid out as a document with its table and diagram drawn, in each theme: the stale
+// plan's, which holds both.
+for (const theme of THEMES) {
+    test(`a feedback plan's file opened in ${theme}`, async ({ page }) => {
+        await page.clock.setFixedTime(NOW)
+        await storeTheme(page, theme)
+        await signIn(page)
+        await page.goto(`pull-requests/pr?url=${encodeURIComponent('https://github.com/acme/web/pull/88')}`)
+        await settled(page)
+        const panel = page.getByTestId('feedback-plan')
+        await panel.getByRole('button', { name: 'Show the plan' }).click()
+        await expect(panel.getByRole('img', { name: /^A flowchart|^The search inputs/u })).toBeVisible()
+        // The document alone, grown to its height: the panel above it is in the images before these.
+        const doc = panel.getByRole('document', { name: /^feedback-plan:\d+$/u })
+        await screenshotPart(page, doc, `feedback-plan-opened-${theme}.png`)
+    })
 }
 
 // A tick's output as plain text: no color of its own, so dark alone.

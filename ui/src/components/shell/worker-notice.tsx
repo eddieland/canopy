@@ -53,7 +53,7 @@ export function NoticeBanner() {
             aria-label="Notice to workers"
             data-testid="worker-notice"
             className={cn(
-                'mx-auto mb-6 flex max-w-[112rem] items-start gap-3 rounded-md border px-3 py-2',
+                'mx-auto mb-6 flex max-w-shell items-start gap-3 rounded-md border px-3 py-2',
                 'border-status-blocked/40 bg-status-blocked/8',
             )}
         >
@@ -73,7 +73,7 @@ export function NoticeBanner() {
                     </NoticeForm>
                 ) : (
                     <>
-                        <p className="text-sm break-words">
+                        <p className="text-sm wrap-break-word">
                             <span className="font-medium text-status-blocked">Notice to workers: </span>
                             <LinkedText text={told.text} />
                         </p>

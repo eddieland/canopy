@@ -99,7 +99,7 @@ function Task({ detail }: { detail: TaskDetail }) {
                 main content, takes the second column beside the story and what the task left. */}
             <div
                 className={cn(
-                    'stagger flex flex-col gap-6',
+                    'flex stagger flex-col gap-6',
                     '2xl:grid 2xl:grid-cols-[minmax(0,36rem)_minmax(0,1fr)] 2xl:items-start',
                     '2xl:grid-rows-[auto_auto_1fr]',
                 )}

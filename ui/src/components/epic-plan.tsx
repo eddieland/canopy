@@ -17,17 +17,29 @@ import { Chip } from '@/components/status'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { epicApprovedText, epicRepliedText } from '@/lib/outcomes'
-import { epicRunRef } from '@/lib/refs'
+import { decisionAnswers, decisionsTold, planDecisions } from '@/lib/plan-decisions'
+import type { PlanDecision } from '@/lib/plan-decisions'
+import { clearPicks, pickOption, usePlanPicks } from '@/lib/plan-picks'
+import { printLine } from '@/lib/plan-print'
+import { approveLabel } from '@/lib/plan-state'
+import { epicRef, epicRunRef } from '@/lib/refs'
 
 // What Approve does, on its hover.
 const APPROVE_TITLE =
     "Approving takes the plan as its file stands, by the hash under the title; its members' planners plan " +
     'against it.'
+// The same, while the plan's open decisions all stand as its planner chose them.
+const APPROVE_PLANNED_TITLE = `${APPROVE_TITLE} It takes the planner's choice on each open decision.`
+// Why Approve waits while the foot holds a note or an answer: an epic's approval carries neither.
+const APPROVE_WAITS_TITLE = 'An approval sends no note and no answer: ask for changes with them.'
+// A plan that waits on no answer.
+const NO_DECISIONS: readonly PlanDecision[] = []
 
 /**
  * An epic's plans (DESIGN §43), on their page: the newest in the plan editor, read only and with no margin, since an
  * epic's plan takes no comments, what changed since the plan it replaces marked on it while it waits on the operator,
- * with Approve and Ask for changes then; then its earlier plans, newest first, each folded until opened, read only too.
+ * with its open decisions under it, Approve, and Ask for changes then; then its earlier plans, newest first, each
+ * folded until opened, read only too.
  * Every plan is the planner's text, which the editor's schema keeps as text. `epic` is the epic's id; `plans` hold at
  * least one plan.
  */
@@ -40,7 +52,7 @@ export function EpicPlan({ epic, plans, stopped = false }: { epic: number; plans
     return (
         <section aria-label="Plan" className="flex flex-col gap-3" data-testid="epic-plan">
             {newest.text === null ? (
-                <Panel className="max-w-[51rem]">
+                <Panel className="max-w-plan">
                     <Empty size="panel">
                         plan {newest.plan.id}&apos;s file is {newest.problem ?? 'unreadable'}: {newest.path}
                     </Empty>
@@ -64,8 +76,11 @@ export function EpicPlan({ epic, plans, stopped = false }: { epic: number; plans
 /**
  * The newest plan in the editor, with the operator's word on it while it waits on them: Approve, by the file's hash as
  * the page read it, which canopy refuses (`stale`) once the file changed since; and Ask for changes, a reply its next
- * plan run reads, unless the epic is `stopped`, which takes no reply. Each says what it did in the CLI's words, or
- * names the guard that refused it, at the plan's foot.
+ * plan run reads, unless the epic is `stopped`, which takes no reply. Its open decisions are asked under it as a
+ * ticket's plan's are, but an answer goes with Ask for changes alone: an epic's approval carries no note, since its
+ * members' planners read the approved plan itself, so the plan must change to follow another choice, and Approve waits
+ * while an answer stands. Each says what it did in the CLI's words, or names the guard that refused it, at the plan's
+ * foot.
  */
 function NewestPlan({
     epic,
@@ -89,6 +104,12 @@ function NewestPlan({
     const [approved, setApproved] = useState(false)
     const before = plans.plans.at(-2)
     const waits = planWaits(plans, newest)
+    // Asked while the plan waits on the operator and a reply can still ask for changes, which is all an answer goes
+    // with: a stopped epic's plan is approved as its planner chose, or not at all.
+    const decisions = waits && !stopped ? planDecisions(text) : NO_DECISIONS
+    const subject = epicRef(epic)
+    const picks = usePlanPicks(subject, newest.plan.id, decisions)
+    const answered = decisionAnswers(decisions, picks).length
 
     // `work` says what it did; the epic and its plans are read again once it ends, done or refused.
     async function act(work: () => Promise<string>, approving: boolean): Promise<void> {
@@ -105,21 +126,30 @@ function NewestPlan({
             }
         } catch (error: unknown) {
             setFailure(error)
-        } finally {
-            setBusy(false)
-            // No stream event carries an epic: its page and the list read it again.
-            void client.invalidateQueries({ queryKey: keys.epic(epic) })
-            void client.invalidateQueries({ queryKey: keys.epics })
         }
+        setBusy(false)
+        // No stream event carries an epic: its page and the list read it again.
+        void client.invalidateQueries({ queryKey: keys.epic(epic) })
+        void client.invalidateQueries({ queryKey: keys.epics })
     }
 
     function approve() {
         const read = newest.sha256 ?? ''
-        void act(async () => epicApprovedText(epic, await approveEpicPlan(epic, read)), true)
+        void act(async () => {
+            const done = await approveEpicPlan(epic, read)
+            // Taken as the planner chose: the plan is decided.
+            clearPicks(subject)
+            return epicApprovedText(epic, done)
+        }, true)
     }
 
     function askForChanges(message: string) {
-        void act(async () => epicRepliedText(epic, await replyEpic(epic, message, newSubmission())), false)
+        void act(async () => {
+            const replied = await replyEpic(epic, message, newSubmission())
+            // Sent: the planner has the answers, and the next plan follows them.
+            clearPicks(subject)
+            return epicRepliedText(epic, replied)
+        }, false)
     }
 
     return (
@@ -133,6 +163,8 @@ function NewestPlan({
             editable={false}
             comments={false}
             decides={waits}
+            name={`epic-${epic}-plan-${newest.plan.id}`}
+            printLine={printLine(`epic:${epic}`, newest.plan.id, newest.plan.status, newest.plan.created_at)}
             previous={
                 before?.text === null || before?.text === undefined
                     ? undefined
@@ -146,17 +178,23 @@ function NewestPlan({
             }
             onAskForChanges={waits && !stopped ? askForChanges : undefined}
             asked={plans.changes_asked !== null}
+            decisions={decisions}
+            picks={picks}
+            onPick={(decision, letter) => pickOption(subject, newest.plan.id, decision, letter)}
+            decisionsTold={decisionsTold(answered, 'ask')}
             renderActions={(notes) => (
                 // `contents`, so its items are the foot's line's, with Ask for changes after them.
                 <div className="contents" data-testid="plan-actions">
                     <Button
                         onClick={approve}
-                        // A note on the whole plan goes only with Ask for changes: approving would leave it unsent.
+                        // A note on the whole plan, and an answer to a decision, go only with Ask for changes:
+                        // approving would leave them unsent.
                         disabled={busy || notes !== ''}
-                        title={notes === '' ? APPROVE_TITLE : 'An approval sends no note: ask for changes with it.'}
+                        title={approveTitle(notes !== '', decisions.length > 0)}
                     >
                         <Check />
-                        Approve
+                        {/* While it waits on what it cannot send, it takes nothing as planned: its plain name. */}
+                        {approveLabel({ planned: decisions.length > 0 && notes === '' })}
                     </Button>
                 </div>
             )}
@@ -207,6 +245,14 @@ export function EpicPlanState({ epic, plans, stopped = false }: { epic: number; 
                     : ' It waits on you: approve it, or ask for changes.')}
         </>
     )
+}
+
+// What Approve says on its hover: why it waits while the foot holds what it cannot send, else what it takes.
+function approveTitle(holds: boolean, planned: boolean): string {
+    if (holds) {
+        return APPROVE_WAITS_TITLE
+    }
+    return planned ? APPROVE_PLANNED_TITLE : APPROVE_TITLE
 }
 
 // Whether the newest plan waits on the operator: proposed, and no plan run at work on the next.
@@ -262,7 +308,7 @@ export function EpicPlanHash({ plans }: { plans: EpicPlans }) {
 function EarlierPlans({ epic, plans }: { epic: number; plans: EpicPlanFile[] }) {
     return (
         // As wide as the plan above it: its plans read in the plan's measure.
-        <Panel data-testid="earlier-plans" className="max-w-[51rem]">
+        <Panel data-testid="earlier-plans" className="max-w-plan">
             <PanelHeader label="Earlier plans">
                 <span className="readout text-xs text-muted-foreground">{plans.length}</span>
             </PanelHeader>
@@ -300,6 +346,7 @@ function EarlierPlan({ epic, file }: { epic: number; file: EpicPlanFile }) {
                                 onThreadsChange={ignore}
                                 editable={false}
                                 comments={false}
+                                name={`epic-${epic}-plan-${file.plan.id}`}
                             />
                         </div>
                     )}

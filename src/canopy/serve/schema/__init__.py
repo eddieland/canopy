@@ -304,6 +304,104 @@ class ChecklistStretch(Model):
     """Retention removed the diff, this many days after the run ended (DESIGN §26); None when it did not."""
 
 
+class RunCommit(Model):
+    """One commit in a run's range (DESIGN §45), as the run's end logged it, with canopy's marks on it (TRUST_MODEL T5).
+
+    The subject is the branch's text, untrusted, kept cut with every hidden character named.
+    """
+
+    sha: str
+    """The commit's full id."""
+    subject: str
+    """Its subject: a worker's text, shown as text."""
+    canopy_trailer: bool | None = None
+    """Whether it carries every trailer canopy's hooks add; None when the run's marks named none."""
+    prefixed: bool | None = None
+    """Whether its subject starts with canopy's prefix, or is a fixup's; None when the run's marks named none."""
+    runtime_trailer: bool = False
+    """Whether it carries a `Co-authored-by` trailer not canopy's, as the runtime's own attribution is."""
+    harness_pushed: bool = False
+    """Whether canopy's own push after the worker, not the worker, put it on origin."""
+
+
+class RunKick(Model):
+    """A push canopy made after a run to rerun its PR's checks the worker judged flaky (DESIGN §23)."""
+
+    from_head: str
+    """The commit origin's branch held before the kick: the run's end."""
+    to_head: str
+    """The rebased copy the kick pushed in its place."""
+    kicked_at: datetime
+    """When."""
+
+
+class RunRange(Model):
+    """The commits a worker's or a task's run went from and to in one repository (DESIGN §45), and how much it changed.
+
+    The harness's own reads of origin and of the run's slot as the run ended, after its push and before a flaky kick,
+    never the agent's word; the counts are git's of the run's own change then.
+    """
+
+    repo: str
+    """The repository."""
+    start_sha: str | None = None
+    """The commit the run started from: origin's branch then, or the base's commit when origin had no branch; None for
+    a run that crashed before any git ran in its slot."""
+    start_on_base: bool = False
+    """Whether `start_sha` is the base's commit, origin having had no branch when the run started."""
+    end_sha: str | None = None
+    """The commit the run left on origin's branch, before any flaky kick; None when origin has no branch."""
+    unpushed_sha: str | None = None
+    """For a slot the run left unpushed, the last commit it made there, whose diffs are of work not on origin; None
+    for a slot that pushed."""
+    files_changed: int | None = None
+    """How many files the run's own change touched; None when canopy counted nothing."""
+    lines_added: int | None = None
+    """The lines it added, a binary file's counting none; None as `files_changed` is."""
+    lines_removed: int | None = None
+    """The lines it removed; None as `files_changed` is."""
+    commit_count: int | None = None
+    """How many commits the range held; None when canopy read none."""
+    commits: list[RunCommit] = []
+    """The commits, oldest first, the newest the run recorded: on the run's page and its PR's, none in a ticket's runs
+    list."""
+    kick: RunKick | None = None
+    """The kick canopy pushed after the run, on its PR's page, where the runs list is the branch's history."""
+
+
+class ChangedFile(Model):
+    """One file a run's own change touched, as git counted its lines. The path is the branch's text, untrusted."""
+
+    path: str
+    """The file's path."""
+    old_path: str | None = None
+    """The path it had before, when git found it renamed."""
+    added: int | None = None
+    """The lines added; None for a binary file."""
+    removed: int | None = None
+    """The lines removed; None for a binary file."""
+
+
+class RunChange(Model):
+    """What a worker's or a task's run changed in one repository (DESIGN §45): its range and its files, no diff.
+
+    The run's own diff is sent on its own, `GET /api/runs/{id}/changes/{repo}`, when the page opens it.
+    """
+
+    range: RunRange
+    """The commits it went from and to, and how much changed between them."""
+    files: list[ChangedFile] = []
+    """The files it touched, in git's order, at most a review diff's many: `range.files_changed` counts them all."""
+    diff_kept: bool = False
+    """Whether the run's own diff was kept and is still there to send."""
+    missing: str | None = None
+    """Why canopy kept no diff, or only one, as the run's end recorded it; None when it kept both."""
+    removed_after_days: int | None = None
+    """Retention removed the run's own diff, this many days after the run ended (DESIGN §26); None when it did not."""
+    pr_url: str | None = None
+    """The PR of the run's ticket in this repository, whose page shows the branch against its base; None for none."""
+
+
 class CardStep(Model):
     """A finished step in a running agent's progress, with what shows it is done."""
 
@@ -364,6 +462,18 @@ class Answered(Model):
     """Whether the question already had this answer, so nothing new was recorded."""
     heard: bool
     """Whether it was written where the agent hears it on its next tool call: false once the agent has ended."""
+
+
+class RunMessaged(Model):
+    """The operator's message to a running run, as recorded: what `canopy reply run:ID "..."` says (DESIGN §44)."""
+
+    message_id: int
+    """The message, on the run's ticket."""
+    new: bool
+    """Whether it was recorded now, rather than by an earlier submission with the same id."""
+    told: bool
+    """Whether it was written where the run's agent hears that it waits, on its next tool call: false when the run is
+    ending or its answers directory could not be written, so the ticket's next run reads it."""
 
 
 class RunCard(Model):
@@ -488,6 +598,15 @@ class Run(Model):
     checklist_stretches_left_out: int = 0
     """How many stretches after the first five the page is not sent, each up to a review's diff: `canopy show run:ID`
     names them all."""
+    changes: list[RunChange] = []
+    """What it changed in each repository (DESIGN §45), on its page alone, by repository: its range and its files.
+    Empty for a run still running, one that recorded none, and in the lists."""
+    ranges: list[RunRange] = []
+    """The commits it went from and to in each repository (DESIGN §45), and how much changed, by repository, in its
+    ticket's runs list, and in its PR's, the PR's repository's alone: its page has them in `changes`. Empty
+    elsewhere."""
+    records_changes: bool = False
+    """Whether it ended as a kind of run that records what it changed, so its page says so when it recorded nothing."""
 
 
 class WaitingFeedbackPlan(Model):
@@ -572,6 +691,13 @@ class Message(Model):
     """Its text, control characters dropped and line breaks kept: untrusted."""
     comment: Comment | None = None
     """The tracker comment it mirrors, for one that came from the tracker."""
+    to_run: int | None = None
+    """The running worker's or planner's run the operator sent it to, as `canopy reply run:ID` does (DESIGN §44)."""
+    delivered_at: datetime | None = None
+    """When canopy first wrote it where that run's agent reads it, for one sent to a run; None when it never could, so
+    the subject's next run reads it."""
+    fetched_at: datetime | None = None
+    """When that run's agent first fetched it through canopy's tool; None while it has not, or never did."""
 
 
 class Attachment(Model):
