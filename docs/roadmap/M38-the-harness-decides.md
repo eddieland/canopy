@@ -196,8 +196,18 @@ does not show, or with a unit holding a row or stale, stays the overseer's, none
 (2026-11-11): the `none` row, on the same measurement, its six situations with no disagreement. The harness records
 `skip` (`not_labeled`) for an open ticket with no queue label, not one the operator started, that the tracker query last
 returned, with no row holding for it or a unit and none stale; one the query did not return is let go unlisted, as
-before. Chosen conservatively, for the operator to change: a candidate no row holds for stays the overseer's. Left:
-every other row, each on its measurement, `review_request` next, having cleared the bar; the prompt cut to the
+before. Chosen conservatively, for the operator to change: a candidate no row holds for stays the overseer's. Built
+(2026-11-12): the `review_request` row, on the same measurement, its five situations with no disagreement. For the
+operator's request on a PR that is no ticket's, the harness records its `wait` and ends it before the overseer, as
+the derivation reads it, and after the overseer starts its review at an unreviewed head, first in §7's order, in each
+persona still owed one, under every guard and with no context, each recorded as its own about the PR
+(`loop/harness_reviews.py`); the overseer is not shown the request or its PR, the block names the review in
+`dispatches_to_come.reviews`, its review verbs about that PR are refused `decided`, and a poll wakes the loop for a
+review to start or a request to end. TRUST_MODEL T1 and the overseer's prompt say so. Chosen conservatively, for the
+operator to change: a request whose PR a ticket's unit has opened since it was made stays the overseer's, which
+names its ticket, a request on one of the loop's own PRs being refused as it is made; and no `reserved` holds the
+overseer's other reviews, the tick starting the harness's first. Left:
+every other row, each on its measurement; the prompt cut to the
 judgment; and the design folded into the sections it names.
 Open for the operator: the bar a row clears in the measurement (recommended: at least three distinct situations, each
 disagreement the overseer's mistake), and whether `ci_red`'s `resume` needs a shared list of PR labels that hold a PR

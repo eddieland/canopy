@@ -32,7 +32,7 @@ from canopy.core import conversation, db, item_numbers, observe, records, sql
 from canopy.core.items import ACTION_PREFIX
 from canopy.core.vocab import CheckStatus, Phase, ReviewItem, ReviewState, SourceKind, TicketState
 from canopy.core.workspace import CheckRole
-from canopy.loop import attention, harness_items, phases
+from canopy.loop import attention, harness_items, harness_reviews, phases
 from canopy.reviews import review_requests
 
 if TYPE_CHECKING:
@@ -285,7 +285,10 @@ def section(
     if review_requests.reviews_on(ctx.conn, ctx.config):
         query = found.get("review_query")
         fresh = query.get("result", []) if query is not None and query["observed"] == "fresh" else []
-        urls = dict.fromkeys([*(r.pr_url for r in review_requests.open_requests(ctx.conn)), *fresh])
+        # A request the harness answers is not the overseer's to read (DESIGN §37).
+        taken = harness_reviews.taken(ctx.conn, tick_id)
+        asked = [r.pr_url for r in review_requests.open_requests(ctx.conn) if r.pr_url not in taken]
+        urls = dict.fromkeys([*asked, *fresh])
         found["review_prs"] = [reader.review_pr(url) for url in urls]
     return found
 

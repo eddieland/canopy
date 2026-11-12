@@ -3,11 +3,12 @@
 A request is a journal fact, like a start record (§22): the PR's URL, and when and through which channel it was made and
 ended. It authorizes one review of its PR at its head, as `review.query` would, or one in each persona the operator
 chose for it, so only the operator makes or stops one: every channel (`canopy start URL --review`, `canopy stop URL`,
-and the web UI) calls the functions here, and each refuses inside canopy's own ticks and runs. The overseer names the
-PR's repository when it runs the review, as it does for `review.query`'s matches. The harness ends a request when a
-review of its PR ends `done`, in each of its personas if it has any (`db.finish_run`), or when the `review-run` tool
-refuses `reviewed` for it (`answered`); the overseer ends one whose PR merged or closed first, or is in none of the
-workspace's repositories (`end`). At most one request per PR is open. A request may carry the operator's notes, which
+and the web UI) calls the functions here, and each refuses inside canopy's own ticks and runs. The harness starts its
+review, in the repository whose clone URL the PR's names (`repo_of`), and waits on or ends it (`loop.harness_reviews`,
+DESIGN §37); one whose PR a ticket's unit has opened since is the overseer's. A request ends when a review of its PR
+ends `done`, in each of its personas if it has any (`db.finish_run`), when a review of its head is refused `reviewed`
+(`answered`), or when its PR merged or closed first, or is in none of the workspace's repositories (`end`). At most
+one request per PR is open. A request may carry the operator's notes, which
 the reviewer's prompt carries (`reviews.start`), the personas it is reviewed in, in place of `[personas] reviewer`'s
 (DESIGN §31), which only the operator chooses (`request`, `choose_persona`), and the model its reviews run on, in place
 of the reviewer's (DESIGN §13), which `reviews.start` checks again as each review starts.
@@ -15,6 +16,7 @@ of the reviewer's (DESIGN §13), which `reviews.start` checks again as each revi
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -27,6 +29,7 @@ if TYPE_CHECKING:
 
     from canopy.core.config import Config
     from canopy.core.review_result import ReviewResult
+    from canopy.core.workspace import Repo, Workspace
     from canopy.runtime.report import ModelList
 
 #: `review_runs.purpose` of a review that answers the operator's request, rather than one the loop started on its own.
@@ -43,6 +46,16 @@ STOPPED = "stopped"
 OVERSEER_REASONS = (MERGED, CLOSED, UNKNOWN_REPO)
 #: The most characters a request's notes may hold, after stripping: the operator's bound on what they write (§22).
 MAX_NOTES = conversation.MAX_OPERATOR
+#: The decision that records a request ended before a review of its PR: the overseer's `review-end`, or the harness's.
+END_ACTION = "review:end"
+#: A PR's URL, `https://HOST/OWNER/REPO/pull/N`, as `conversation.PR_URL_RE` takes it: its host and repository.
+_PR_URL_RE = re.compile(r"https://(?P<host>[^\s/]+)/(?P<path>[^\s/]+/[^\s/]+)/pull/[0-9]+/?")
+#: A clone URL as `git clone` takes it: https (credentials allowed), ssh://, or scp-style SSH, with an optional `.git`
+#: and trailing slash. An SSH URL's port is the SSH server's, so it is not part of the host.
+_CLONE_RE = re.compile(
+    r"(?:https://(?:[^@/\s]+@)?(?P<https>[^/\s]+)/|ssh://(?:[^@/\s]+@)?(?P<ssh>[^/\s:]+)(?::[0-9]+)?/|"
+    r"[^@/\s:]+@(?P<scp>[^/\s:]+):)(?P<path>[^\s/]+/[^\s/]+?)(?:\.git)?/?",
+)
 
 
 def reviews_on(conn: sqlite3.Connection, config: Config) -> bool:
@@ -57,6 +70,26 @@ def reviews_on(conn: sqlite3.Connection, config: Config) -> bool:
 def open_requests(conn: sqlite3.Connection) -> list[records.ReviewRequest]:
     """Return the open requests, oldest first."""
     return records.select(records.ReviewRequest).where("ended_at IS NULL").order_by("id").all(conn)
+
+
+def repo_of(ws: Workspace, url: str) -> Repo | None:
+    """The workspace's repository whose clone URL names the same host, owner, and repository as the PR's URL `url`.
+
+    Returns:
+        The repository, or None when none does, or `url` is not a PR's.
+    """
+    pr = _PR_URL_RE.fullmatch(url)
+    if pr is None or conversation.PR_URL_RE.fullmatch(url) is None:
+        return None
+    wanted = (pr["host"].lower(), pr["path"].lower())
+    for repo in ws.repos:
+        clone = _CLONE_RE.fullmatch(repo.url or "")
+        if clone is None:
+            continue
+        host = clone["https"] or clone["ssh"] or clone["scp"]
+        if (host.lower(), clone["path"].lower()) == wanted:
+            return repo
+    return None
 
 
 def waiting_requests(conn: sqlite3.Connection) -> list[records.ReviewRequest]:

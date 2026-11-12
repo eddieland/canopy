@@ -144,8 +144,13 @@ Controls:
   absence of every other row from the derivation, so a row it misses waits until the overseer is given the ticket again;
   and a tracker that reports a ticket closed ends canopy's work on it, as the overseer reading the same observation
   would, until the operator forgets the ticket. Its dispatches carry no model-written context: today it starts only a
-  due chore with no `when`, whose `chore-run` and `chore-wait` the overseer is refused `decided`, and no ticket's run,
-  since each rests on an observation.
+  due chore with no `when`, whose `chore-run` and `chore-wait` the overseer is refused `decided`, and the review the
+  operator requested of a PR that is no ticket's, at the head the `vcs` source read, under every guard of a review
+  (§21), whose `review-run`, `review-wait`, and `review-end` the overseer is refused `decided`; and no ticket's run,
+  since each rests on an observation. It ends such a request when the source read its PR merged or closed, or in no
+  repository of the workspace. Residual: a `vcs` source that reports a PR merged or closed that is not ends the
+  request with no review, as an overseer reading the same observation would, and the PR's page shows why; it costs a
+  review and adds none.
 - The attention items that need no judgment (`needs_reviewer`, `ready_to_merge`, `untrusted_review`, `attempt_limit`,
   `review_failed`, `review_limit`, `plan_review`, `plan_changed`) are the harness's, raised from the journal and the
   observations in its own words, and kept while an observation they rest on is stale (DESIGN §14). The overseer is

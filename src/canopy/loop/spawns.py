@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, assert_never
 
 from canopy.core import db, recorded_runs
 from canopy.core.vocab import RecordedKind, RecordedStatus, ResumeReason, RunKind
-from canopy.loop import chore_tools, harness_dispatches, review_tools, tools
+from canopy.loop import chore_tools, harness_dispatches, harness_reviews, review_tools, tools
 from canopy.loop.harness_dispatches import Rank
 from canopy.reviews import review_requests
 
@@ -47,6 +47,13 @@ def make(ctx: Context, tick_id: int, log: logs.TickAdapter) -> None:
         *(
             _Step((r.rank, 0, i), lambda r=r: harness_dispatches.make_resume(ctx, tick_id, r, dry_run=dry_run, log=log))
             for i, r in enumerate(planned.runs)
+        ),
+        *(
+            _Step(
+                (Rank.REQUESTED, 0, i),
+                lambda r=r: harness_reviews.make_review(ctx, tick_id, r, dry_run=dry_run, log=log),
+            )
+            for i, r in enumerate(harness_reviews.starts(ctx.conn, tick_id))
         ),
         *(_recorded(ctx, a, log) for a in recorded_runs.of_tick(ctx.conn, tick_id)),
         *(

@@ -317,7 +317,8 @@ already read each round, reach a person instead of the per-PR limit.
 The operator asks for one review of a coworker's PR at its head, and again after a push for the new head. A request is
 a journal fact, at most one open per PR, ended by a `done` review in each persona it names (§31), the PR closing, or
 the operator. Its notes and model reach its reviewer, and an override that drops the notes fails to render; it starts
-first in a tick and never waits to settle, since the operator asked by hand. Work on a coworker's PR is refused, so a
+first in a tick and never waits to settle, since the operator asked by hand. The harness answers one on a PR that is
+no ticket's in code (§37); one on the loop's own PR is the overseer's. Work on a coworker's PR is refused, so a
 review never turns into work on someone else's branch, and so is a request inside a run: it authorizes a review as
 `review.query` does, so an agent steered by a PR's text could otherwise aim the operator's spend at any PR (T1).
 

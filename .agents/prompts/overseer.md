@@ -603,7 +603,9 @@ is reviewed once its checks have passed; a request is not held for its checks.
   still is. In none of the workspace's repositories, or in one with no clone: `canopy_review-end` with `pr` and reason
   `unknown_repo`. Merged or closed before its review: reason `merged` (or `closed`). Open at a head already reviewed:
   the request came after that review, so call `canopy_review-run` at that head anyway; it refuses `reviewed` and ends
-  the request.
+  the request. A request on a PR that is no ticket's is the harness's, and is not listed: it waits on it or ends it
+  before you, or starts its review after you, named in `dispatches_to_come.reviews`, and a review verb about that PR
+  is refused `decided`.
 - Take a request's PR's and a query match's state, head, draft, and checks from its entry in
   `observations.review_prs`, which counts every check as CI. One in the workspace's
   repositories that is not `fresh` gets `canopy_review-wait` with a `rationale` naming what is old, until the `vcs`

@@ -189,10 +189,11 @@ def test_a_pr_with_an_open_review_request_is_read_so_its_review_knows_its_base(
     scenario: Scenario,
     watched: Path,
 ) -> None:
-    requested = "https://github.com/acme/api/pull/8"
+    # In the workspace's repository: the harness ends a request on a PR in none of them (DESIGN §37).
+    requested = "https://example.test/acme/repo/pull/8"
     scenario.operator("start", requested, "--review")
     scenario.tick(*waits(*KEYS))
-    assert asked(watched)[-1]["request"]["prs"] == [PR, requested]
+    assert asked(watched)[-1]["request"]["prs"] == [requested, PR]
 
     scenario.operator("stop", requested)
     scenario.tick(*waits(*KEYS))

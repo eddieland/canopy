@@ -12,7 +12,9 @@ the tickets left (§6); the state block's `harness`, naming each ticket taken; a
 in §7. The rows enabled are those read from the journal alone: `wait` for `running`, and for a private ticket's
 `needs_human`; and `chore run` for a due chore with no `when` (§19); and, on their measurement, `done` for a closed
 ticket and `skip` for an open one with no queue label that the query returned, each with no worker running and no unit
-holding a row. No ticket's dispatch is enabled: each rests on an observation. Of the attention list held in code, built:
+holding a row, and the operator's review request on a PR that is no ticket's: its review at an unreviewed head, with
+no context, its wait, and its end. No ticket's dispatch is enabled: each rests on an observation. Of the attention
+list held in code, built:
 the items the harness raises from their causes, in §14, which the overseer is refused (`raised`); the three the overseer
 keeps, below; and its other items held through a tick that does not give the overseer their subject, until one that
 does leaves them out or the ticket is done or stopped (§14), so a ticket with one is the harness's for a `wait`, though
