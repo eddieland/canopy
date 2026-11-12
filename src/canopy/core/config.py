@@ -1334,6 +1334,11 @@ class Serve(Section):
     dictation_cmd: Annotated[StrictStr, Scope.PRIVATE, AfterValidator(_dictation_command)] = ""
 
 
+#: An agent with a standing instructions file of its own (DESIGN §12): `worker` reaches implement, resume, plan, and
+#: task runs too.
+type StandingAgent = Literal["worker", "overseer", "reviewer", "chore"]
+
+
 class Paths(Section):
     """The `[paths]` table."""
 
@@ -1342,6 +1347,10 @@ class Paths(Section):
     #: A personal `.worktreeinclude`, passed on every `treehouse get` as `--include-file`. treehouse then seeds the
     #: ignored files it selects from the primary clone in place of the committed manifest's (DESIGN §9).
     worktree_include: Annotated[UserPath | None, Scope.PRIVATE] = None
+    #: Where an agent with no `<agent>_instructions` of its own finds them: `<agent>.md` here, read when it exists, so
+    #: the web UI's instructions page can make and delete one without writing a key (DESIGN §12). No static default:
+    #: `load` supplies `instructions/` in the user config directory, as it does `prompt_overrides`.
+    instructions: Annotated[UserPath, Scope.PRIVATE]
     #: The operator's standing instructions, rendered into every worker prompt (DESIGN §12).
     worker_instructions: Annotated[UserPath | None, Scope.PRIVATE] = None
     #: The operator's standing instructions to the overseer, rendered into its prompt (DESIGN §12).
@@ -1377,6 +1386,45 @@ class Paths(Section):
     #: sooner than that leaves the plans for a later one, unless the archive is not all pushed. 0 archives every tick.
     #: Private, as `plan_archive` is: it sets how often the operator's remote is pushed to.
     plan_archive_every_minutes: Annotated[Count, Scope.PRIVATE] = 360
+
+    def configured_instructions(self, agent: StandingAgent) -> Path | None:
+        """Return the file `paths.<agent>_instructions` names, or None when the key is unset.
+
+        Returns:
+            The path the key names.
+        """
+        match agent:
+            case "worker":
+                return self.worker_instructions
+            case "overseer":
+                return self.overseer_instructions
+            case "reviewer":
+                return self.reviewer_instructions
+            case "chore":
+                return self.chore_instructions
+
+    def instructions_file(self, agent: StandingAgent) -> Path:
+        """Return the file `agent`'s standing instructions live in: the one its key names, else its default.
+
+        Returns:
+            `paths.<agent>_instructions`, or `<paths.instructions>/<agent>.md` when that key is unset.
+        """
+        return self.configured_instructions(agent) or self.instructions / f"{agent}.md"
+
+    def instructions_read(self, agent: StandingAgent) -> Path | None:
+        """Return the file a run of `agent` reads its standing instructions from, or None when it reads none.
+
+        A file the key names is read whether or not it is there, so a missing one refuses the run; the default only
+        while something is there, so an agent with neither reads none.
+
+        Returns:
+            The path to read, or None.
+        """
+        configured = self.configured_instructions(agent)
+        if configured is not None:
+            return configured
+        default = self.instructions_file(agent)
+        return default if os.path.lexists(default) else None
 
 
 class Personas(Section):
@@ -1922,6 +1970,9 @@ def load(
     # Unset or empty: `prompts/` in the user config directory.
     if merged["paths"].get("prompt_overrides", "") == "":
         merged["paths"]["prompt_overrides"] = str(user_file.parent / "prompts")
+    # And `instructions/` there, the agents' standing instructions files when no key names one.
+    if merged["paths"].get("instructions", "") == "":
+        merged["paths"]["instructions"] = str(user_file.parent / "instructions")
 
     try:
         return Config.model_validate(merged)
@@ -2092,7 +2143,8 @@ def _in_state_dir(value: object, state_dir: Path) -> object:
     """Resolve a private file's relative `paths.*` value against the state directory.
 
     Not the workspace root, which may be a shared checkout (TRUST_MODEL T7). Empty stays empty: for
-    `paths.prompt_overrides` it means the default, and for any other key it is refused as it is in the user file.
+    `paths.prompt_overrides` and `paths.instructions` it means the default, and for any other key it is refused as it
+    is in the user file.
 
     Returns:
         A relative path's string under `state_dir`; any other value as it is, for validation to judge.

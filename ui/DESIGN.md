@@ -1297,6 +1297,14 @@ reader, so no table repeats them.
   as `key: old → new`, folding the rest past a few, and warns when a change is one only the file undoes, before Discard
   and Save. A save reads the file again, and the bar stays while its `Notice` keeps what the save did over the fresh
   form.
+- **A page of the operator's files** (`InstructionsForm`, `/settings/instructions`, linked from Settings as a config
+  page is): a panel per file, all shown at once, each saved from its own foot, since each save is a write of its own,
+  never one save bar for the page. The index beside them is a config page's: each entry its panel's anchor, marking a
+  file runs refuse in `status-failed` and an edit not saved in the accent, which its panel also wears as a changed row
+  does. Leaving with an edit not saved asks first, as the plan editor does (`ConfirmLeave`). A file that is not there
+  offers Create, which opens its editor, rather than an empty one waiting; a delete asks once more inline, from the
+  quietest button at the foot's end. Its kept versions open under the panel, and a restore is an edit in the editor,
+  saved as any other, never a write of its own.
 - **An action** is a button in the foot of its subject's identity panel (the detail skeleton, above), under a
   ticket's reply (The answer, above), or under its form, with one line under it (`Notice`): what the action did, in the
   CLI's words, or its refusal in `status-failed`, naming the guard. An action that kills something asks once more

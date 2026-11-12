@@ -1,7 +1,7 @@
 import { keepPreviousData, queryOptions } from '@tanstack/react-query'
 
 import { api, unwrap } from './client'
-import type { SessionsWhose } from './types'
+import type { InstructionsAgent, SessionsWhose } from './types'
 
 /** The window a spend breakdown reads: local days, by the day, or clock hours, by the hour. */
 export type SpendBreakdownRange = { days: number; hours?: undefined } | { hours: number; days?: undefined }
@@ -123,6 +123,10 @@ export const keys = {
     config: ['config'] as const,
     // Under the config's key, so what marks the config stale, a save that reloads the loop, marks it stale too.
     configModels: ['config', 'models'] as const,
+    // Under the config's key too, so a reload, which may name other files, reads them again.
+    instructions: ['config', 'instructions'] as const,
+    // Under the instructions', so a change to an agent's file, which keeps a version, marks them stale with it.
+    instructionsVersions: (agent: InstructionsAgent) => ['config', 'instructions', agent, 'versions'] as const,
     models: ['models'] as const,
     skills: ['skills'] as const,
     checklists: ['checklists'] as const,
@@ -739,6 +743,24 @@ export const freshModelsQuery = queryOptions({
         unwrap(await api.GET('/api/models', { params: { query: { refresh: true } }, signal })),
     staleTime: 0,
 })
+
+/**
+ * Each agent's standing instructions file, as the loop's config names it. Not on the stream, since they are files the
+ * operator edits: read whenever the settings page opens, again after a reload, and set by each save.
+ */
+export const instructionsQuery = queryOptions({
+    queryKey: keys.instructions,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/instructions', { signal })),
+})
+
+/** The kept versions of an agent's standing instructions file, read when its panel's Show versions opens. */
+export function instructionsVersionsQuery(agent: InstructionsAgent) {
+    return queryOptions({
+        queryKey: keys.instructionsVersions(agent),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/instructions/{agent}/versions', { params: { path: { agent } }, signal })),
+    })
+}
 
 /**
  * Every skill the runtime finds for canopy's agents, with each one's file and text. Not on the stream, since a read

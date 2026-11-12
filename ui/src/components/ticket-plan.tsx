@@ -18,6 +18,7 @@ import { keys, ticketPlanQuery } from '@/api/queries'
 import type { PlanChanged, PlanFile, PlanSummary, TicketPlans } from '@/api/types'
 import { Age } from '@/components/age'
 import { ApprovedBand } from '@/components/approved-band'
+import { ConfirmLeave } from '@/components/confirm-leave'
 import { CopyablePath } from '@/components/copy-button'
 import { Disclosure } from '@/components/disclosure'
 import { LinkedText } from '@/components/linked-text'
@@ -28,15 +29,6 @@ import { PlanChip } from '@/components/plan-card'
 import { PlanEditor } from '@/components/plan-editor'
 import { RunLink } from '@/components/run-link'
 import { Chip } from '@/components/status'
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { PendingWork, usePending, usePendingWork } from '@/hooks/use-pending'
@@ -113,8 +105,10 @@ export function TicketPlan({ ticketKey, plans }: { ticketKey: string; plans: Tic
             {earlier.length > 0 && <EarlierPlans ticketKey={ticketKey} plans={earlier} />}
             <ConfirmLeave
                 open={leaving.status === 'blocked'}
-                edits={held.has('edit')}
-                words={held.has('words')}
+                lost={[
+                    ...(held.has('edit') ? ['your edits to the plan are not saved'] : []),
+                    ...(held.has('words') ? ['what you wrote in a comment is not sent'] : []),
+                ]}
                 onStay={() => leaving.reset?.()}
                 onLeave={() => leaving.proceed?.()}
             />
@@ -610,47 +604,4 @@ function EarlierPlan({ ticketKey, plan }: { ticketKey: string; plan: PlanSummary
 // An earlier plan is read only: nothing changes its threads.
 function ignore(): void {
     // Nothing to do.
-}
-
-// Leaving the page with an edit not yet saved, or words in a comment not yet sent, asks first, as a document does:
-// Stay, which takes the focus and which Escape gives too, or Leave, which loses them.
-function ConfirmLeave({
-    open,
-    edits,
-    words,
-    onStay,
-    onLeave,
-}: {
-    open: boolean
-    edits: boolean
-    words: boolean
-    onStay: () => void
-    onLeave: () => void
-}) {
-    const lost = [edits && 'your edits to the plan are not saved', words && 'what you wrote in a comment is not sent']
-    return (
-        <AlertDialog
-            open={open}
-            onOpenChange={(next) => {
-                if (!next) {
-                    onStay()
-                }
-            }}
-        >
-            <AlertDialogContent>
-                <AlertDialogTitle>Leave this page?</AlertDialogTitle>
-                <AlertDialogDescription>{leaveText(lost.filter((part) => part !== false))}</AlertDialogDescription>
-                <AlertDialogFooter>
-                    <AlertDialogCancel>Stay</AlertDialogCancel>
-                    <AlertDialogAction onClick={onLeave}>Leave</AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
-    )
-}
-
-// What leaving loses, as a sentence: `Your edits to the plan are not saved, and what you wrote ... is not sent.`
-function leaveText(parts: string[]): string {
-    const said = parts.join(', and ')
-    return `${said.charAt(0).toUpperCase()}${said.slice(1)}.`
 }

@@ -275,6 +275,13 @@ export const GHOST_TIPS = {
         'Scanning... the comments in your config are love letters. This page keeps every one.',
         "Dear Traveler, they dropped a trusted reviewer. I checked. I'm still trusted. Phew.",
     ],
+    '/settings_/instructions': [
+        'Eyes up, Guardian. Standing orders. Every run hears them. Most of them even listen.',
+        'Field report: 4,096 bytes per agent. A Ghost could fit a whole Grimoire card in that. Barely.',
+        "Grimoire: the prompt's own rules outrank yours. Even the Vanguard has a chain of command.",
+        'Scanning... a save keeps the old file as .bak. I keep every Guardian I revive. Same principle.',
+        "Dear Traveler, the overseer reads these every tick. I'd read them too, if anyone asked.",
+    ],
     '/settings_/skills': [
         'Eyes up, Guardian. Skills. I have one: I float. The Traveler did not ship a SKILL.md for it.',
         'Field report: every skill an agent is offered rides along on every call. Light travels light.',

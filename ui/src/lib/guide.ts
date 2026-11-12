@@ -179,6 +179,7 @@ export const PAGE_GUIDES = {
     '/settings': 'settings',
     '/settings_/limits': 'settings#loop-settings',
     '/settings_/skills': 'settings#skills',
+    '/settings_/instructions': 'settings#standing-instructions',
 } as const satisfies Record<
     Exclude<
         keyof FileRoutesById,

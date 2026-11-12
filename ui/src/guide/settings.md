@@ -1,10 +1,10 @@
 # Settings
 
-A handful of things you set from the browser: how the UI looks and sends, a notice for every worker, your loop
-settings, reloading your config, and the fun. It also shows, read only, which model each agent runs on and the
-skills the runtime finds. It opens from the rail's foot, beside the guide. The theme, the clock, a plan's text size,
-the send key, whether attention lists chore findings, your review personas, and the fun are kept in this browser;
-everything else canopy reads from its config files, as it always did.
+A handful of things you set from the browser: how the UI looks and sends, a notice for every worker, each agent's
+standing instructions, your loop settings, reloading your config, and the fun. It also shows, read only, which model
+each agent runs on and the skills the runtime finds. It opens from the rail's foot, beside the guide. The theme, the
+clock, a plan's text size, the send key, whether attention lists chore findings, your review personas, and the fun are
+kept in this browser; everything else canopy reads from its config files, as it always did.
 
 ## Theme
 
@@ -112,6 +112,51 @@ setting another replaces it. While it's in force, a banner above every page show
 **Clear**: see [the banner](overview#the-header) for what each does.
 A run already going keeps the prompt it started with, so a notice reaches only the runs after it. The CLI can set one
 for up to a week, for outages with ambitions.
+
+## Standing instructions
+
+What each agent hears from you on every run. **Open** takes you to a page of its own with all four, one panel each, so
+you can read what every agent is told without clicking through. The worker's file reaches every implement, resume,
+plan, and task run, the overseer's every tick, and the other two every review and every chore run, after the chore's
+own prompt. Each comes after its prompt's own rules, which win where the two disagree. The line under the title says
+how many agents hear anything and whether a file is missing or refused; hover the title for the page's rules.
+
+Each agent's file is the one its key names, `paths.worker_instructions` and friends (see
+[config files](config-files)), or, with no key, `<agent>.md` in your instructions folder, `instructions/` beside your
+`config.toml`: `worker.md`, `overseer.md`, `reviewer.md`, `chore.md`. A run reads that default only while it's there,
+so an agent with neither hears nothing. Its panel says so and offers **Create**, which opens an empty editor; **Save**
+makes the file, readable by you alone, and **Cancel** thinks better of it. A default can be deleted from its panel's
+foot: **Delete** asks once more, then the file goes and the agent's runs hear nothing from then on. A file a key names
+is yours to edit here but not to delete, since a run whose named file is gone is refused outright; empty it, or unset
+the key. If that key's file doesn't exist yet, the panel says every run of that agent is refused until it does, and
+**Save** makes it.
+
+The agents are listed beside the page, or over it in a narrow window, and each is a link to its panel:
+`/settings/instructions#reviewer` opens the page there. An agent with no file says `none` in the list, and one whose
+runs are refused because of its file says `missing` or `refused`, in red, since a worker that won't start is worth a
+glance. A file you've edited and not saved says `unsaved`, and its panel gets a line down its edge.
+
+Each file opens in the same editor you write replies in, toolbar and **Preview** included. The count in the panel's
+foot is in bytes, as a run counts them: past 4,096 a run refuses the file outright rather than read half of it, so
+**Save** waits until you trim. **Revert** puts back what the file holds.
+
+Every save and delete keeps the file as it was first: the last 10 versions of each agent's, in this workspace's
+`.canopy/`. **Show versions** under a panel lists them, newest first, each with when and before what. **Show** reads
+one, and **Restore** puts its text in the editor as an ordinary unsaved edit, so you can look before you **Save**. The
+eleventh change drops the oldest, so if a version matters, keep it somewhere a little more permanent than a list of
+ten.
+
+A save writes the file in place, and every run started from then on reads the new text; a run already going keeps the
+prompt it started with. If the file changed since the page read it, say you edited it in your own editor meanwhile,
+the change is refused rather than quietly flattening your other edit. **Read again**, under the title, fetches the file
+as it is now and keeps whatever you haven't saved, but an edit you began before the file changed stays refused, and its
+panel says so: **Revert** shows the file as it is now, and then you redo yours. Choosing which of you was right is a
+job for a person, not a hash. Leave the page with an edit unsaved and it asks first, as
+a plan does.
+
+The page never chooses which file: it won't write a key or aim an agent at some other file of yours. That's on purpose.
+Anyone holding a session here can put words in every later run's mouth, or delete a default to quiet one, and a new
+secret doesn't take either back. If a change shows up that you didn't make, the versions have what was there before.
 
 ## Loop settings
 
