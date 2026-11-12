@@ -80,6 +80,5 @@ A subject is the operator's alone: an agent reading the run is told how many com
 ### Open
 
 - Whether the kept range should serve a review's late findings (§21), which diff two commits of their own today.
-- The files a run touched against its plan's steps (§25), in code, once the diff is kept.
 - Whether reconcile keeps the range and the diff of a run it closes after `_run` was killed (§6 step 3), which today
   returns the slot and keeps nothing.

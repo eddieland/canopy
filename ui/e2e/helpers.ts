@@ -24,6 +24,7 @@ export const ROUTES = [
     'workspace/runs/41',
     'workspace/worktrees',
     'workspace/checklists',
+    'workspace/sessions',
     'tickets',
     'tickets?view=board',
     'tickets/ABC-101',

@@ -233,6 +233,13 @@ export const GHOST_TIPS = {
         'Field report: the push was held, not rejected. It was asked a question first. Fair.',
         'Dear Traveler, the review comment you keep writing is an item you have not written yet.',
     ],
+    '/workspace/sessions': [
+        'Eyes up, Guardian. Every session the runtime remembers. More than you do, I suspect.',
+        'Scanning... a title is all I read. What was said stays where it was said.',
+        'Grimoire: a subagent is a session sent ahead to scout. It always comes back. Eventually.',
+        'Field report: found a session titled "quick question". It ran for four hours.',
+        'Dear Traveler, the command under each one is a door back in. Mind the directory.',
+    ],
     '/components': [
         'Eyes up, Guardian. Every button in the armory, and not one of them is Tick now.',
         'Scanning... six kinds of button. The destructive one is red. Some lore writes itself.',

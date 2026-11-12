@@ -18,8 +18,8 @@ and the runtime's version the history's last week used, so the spend page's week
 Each feature's fixtures are in a module of their own in this package, named for the feature, which `seed` calls: plans,
 memory, chore runs, review runs, review replies, feedback plans in each state, personas, one-off tasks, the worker
 runs' answers to the checklists, the PRs' check runs, the connectors' runs, GitHub's times on the PRs, the runs'
-transcripts, epics, the months before T0, whose landed tickets the reports page shows, and the machine (a fixed
-reading).
+transcripts, epics, the months before T0, whose landed tickets the reports page shows, the machine (a fixed reading),
+and the runtime's sessions, canopy's and the operator's, as the loop last read them by their titles.
 Times are fixed around 2026-10-08 12:00 UTC, so a test that freezes the browser's clock gets the same page every time.
 `changes` moves the running run's cost now and then, which the event stream then shows.
 """
@@ -70,6 +70,7 @@ from canopy.serve.mock import (
     review_waits,
     reviews,
     run_diffs,
+    sessions,
     skills,
     tasks,
     transcripts,
@@ -170,6 +171,11 @@ when = "Skip it when nothing has merged to main since the last run."
 [chores.build-health]
 prompt = "{chores}/build-health.md"
 every_minutes = 120
+
+[sessions]
+# The Sessions page lists every session the runtime keeps, by its title, but a client's (sessions.py).
+search = "titles"
+exclude = ["{excluded}"]
 """
 # The chore whose finding the attention list shows.
 CHORE = "deps"
@@ -333,7 +339,9 @@ def seed(directory: Path) -> Backend:
         (prompts / f"{name}.md").write_text(f"# {title}\n\nCheck {name} for the mock workspace.\n")
     checklists.write(user_file.parent / "checklists")
     user_file.write_text(
-        _USER_TOML.replace("{chores}", str(prompts)).replace("{checklists}", str(user_file.parent / "checklists")),
+        _USER_TOML.replace("{chores}", str(prompts))
+        .replace("{checklists}", str(user_file.parent / "checklists"))
+        .replace("{excluded}", sessions.EXCLUDED),
     )
     ws = workspace.load(root)
     cfg = config.load(root, user_file)
@@ -410,6 +418,8 @@ def seed(directory: Path) -> Backend:
             # After every other fixture, so the reply it writes takes a message id after theirs.
             epics.seed(ctx.conn, ws.state_dir, root, at)
         reviews.drafts(ctx.conn, at)
+        # After every run, whose sessions it records as the loop's read of the runtime's record would.
+        sessions.seed(ctx.conn, T0, root)
     transcripts.write(ws.state_dir, T0, lambda repo, n: slot_path(root, repo, n))
     return backend
 

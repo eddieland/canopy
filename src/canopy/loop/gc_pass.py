@@ -1,8 +1,9 @@
 """What a live tick removes of canopy's own history (DESIGN §26): `canopy.log` rotated, and once a day, the pass.
 
-The pass removes the files `gc.file_kinds` finds removable and the journal's rows `gc.row_kinds` does, the ones
-`canopy gc --dry-run` counts, records itself in `gc_passes`, and checkpoints the journal's WAL. Any step that fails is
-logged, and the tick goes on: a full disk is the pass's reason to run, and must not stop the loop that would free it.
+The pass removes the files `gc.file_kinds` finds removable, the journal's rows `gc.row_kinds` does, and the memory
+text `gc.memory_text` does, the ones `canopy gc --dry-run` counts, records itself in `gc_passes`, and checkpoints the
+journal's WAL. Any step that fails is logged, and the tick goes on: a full disk is the pass's reason to run, and must
+not stop the loop that would free it.
 """
 
 from __future__ import annotations
@@ -11,7 +12,7 @@ import stat
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from canopy.core import db, gc_passes, sql
+from canopy.core import db, gc_passes, memory_manage, sql
 from canopy.infra import logs, metrics, tracing
 from canopy.loop import gc
 
@@ -100,6 +101,7 @@ def _pass(ctx: Context, tick_id: int, now: datetime, log: logs.TickAdapter) -> i
         failures = _files(ctx, now, removed, log)
         # After the files: on a full disk, deleting rows needs the room removing them makes.
         removed.update(_rows(ctx.conn, now, retention))
+        removed.update(_memory_text(ctx.conn, now, retention))
     except Exception as e:
         log.exception("gc pass failed", extra={"error": str(e)})
         error = f"{type(e).__name__}: {e}"
@@ -187,3 +189,16 @@ def _rows(conn: sqlite3.Connection, now: datetime, retention: Retention) -> dict
             deleted = row_kind.delete().run(conn).rowcount
             removed[row_kind.name] = gc_passes.Removed(deleted, found.removable_size, unit="rows")
     return removed
+
+
+def _memory_text(conn: sqlite3.Connection, now: datetime, retention: Retention) -> dict[str, gc_passes.Removed]:
+    """Delete the text of every note and proposal that left force before `memory_days`, leaving no copy behind.
+
+    Returns:
+        What it deleted, or nothing when the dry run would count none removable.
+    """
+    found = gc.memory_text(conn, now, retention)
+    if not found.removable:
+        return {}
+    scrubbed = memory_manage.expire(conn, gc.retention_cutoff(now, retention.memory_days))
+    return {found.name: gc_passes.Removed(scrubbed.count, found.removable_size, unit="rows")}

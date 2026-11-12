@@ -176,7 +176,9 @@ def test_the_spend_breakdown_carries_the_month_against_its_budget_whatever_the_w
 def test_the_spend_counters_add_the_sessions_outside_canopy_and_say_when_they_were_read(backend: Backend) -> None:
     c = client(None, backend)
     before = c.get("/api/spend").json()
-    assert before["sessions_read_at"] is None
+    # The mock's loop read the runtime's sessions after T0 (mock/sessions.py).
+    assert before["sessions_read_at"] == "2026-10-08T12:08:00Z"
+    was = c.get("/api/spend/breakdown", params={"days": 1}).json()
     ms = int(T0.timestamp() * 1000)
     mine = SessionSpend("ses_mine", None, "/home/me/notes", ms, ms, 1.5, 1, 1, 0, 0, 0)
     with backend.open() as ctx:
@@ -190,13 +192,16 @@ def test_the_spend_counters_add_the_sessions_outside_canopy_and_say_when_they_we
     assert after["total_usd"] - before["total_usd"] == pytest.approx(1.5)
     assert after["sessions_read_at"] == "2026-10-08T12:00:00Z"
     found = c.get("/api/spend/breakdown", params={"days": 1}).json()
-    assert found["totals"]["outside"] == 1.5
-    assert found["sessions"]["outside"] == {"sessions": 1, "cost_usd": 1.5}
-    assert found["sessions"]["directories"] == [{"directory": "/home/me/notes", "sessions": 1, "cost_usd": 1.5}]
+    assert found["totals"]["outside"] == pytest.approx(was["totals"]["outside"] + 1.5)
+    outside = found["sessions"]["outside"]
+    assert outside["sessions"] == was["sessions"]["outside"]["sessions"] + 1
+    assert outside["cost_usd"] == pytest.approx(was["sessions"]["outside"]["cost_usd"] + 1.5)
+    assert {"directory": "/home/me/notes", "sessions": 1, "cost_usd": 1.5} in found["sessions"]["directories"]
     assert (found["sessions"]["read_at"], found["sessions"]["status"]) == ("2026-10-08T12:00:00Z", "found")
     month = found["month"]
-    assert (month["outside_usd"], month["sessions_read_at"]) == (1.5, "2026-10-08T12:00:00Z")
-    assert month["spent_usd"] == pytest.approx(month["runs_usd"] + 1.5)
+    assert month["outside_usd"] == pytest.approx(was["month"]["outside_usd"] + 1.5)
+    assert month["sessions_read_at"] == "2026-10-08T12:00:00Z"
+    assert month["spent_usd"] == pytest.approx(month["runs_usd"] + month["outside_usd"])
 
 
 def test_the_spend_breakdown_is_what_canopy_spend_prints_over_the_mock_journal(backend: Backend) -> None:
@@ -211,9 +216,9 @@ def test_the_spend_breakdown_is_what_canopy_spend_prints_over_the_mock_journal(b
     assert (today["overseer"], today["idle"], today["dry_run"]) == (pytest.approx(0.59), 0.31, None)
     assert today == found["totals"]
     with backend.open() as ctx:
-        # Everything the mock journal holds but its months before T0.
+        # Everything the mock journal holds but its months before T0, beside the sessions outside canopy.
         before = sum(r.cost_usd for t in history.TICKETS for r in t.runs)
-        assert today["total"] + before == pytest.approx(db.spent_ever(ctx.conn))
+        assert today["total"] - today["outside"] + before == pytest.approx(db.spent_ever(ctx.conn))
     groups = {g["group"]: (g["ticks"], g["cost_usd"]) for g in found["ticks"]}
     assert (groups["idle"], groups["busy"], groups["hand_run"]) == ((1, 0.31), (1, 0.28), (0, None))
     assert found["idle_share"] == pytest.approx(0.31 / 0.59)

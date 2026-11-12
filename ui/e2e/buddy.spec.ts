@@ -506,11 +506,11 @@ test.describe('turned on', () => {
     test('the mock has spent enough for a party hat and nothing dearer', async ({ page }) => {
         await page.goto('settings')
         await settled(page)
-        await expect(page.getByTestId('hats-wallet')).toContainText('$80.81')
+        await expect(page.getByTestId('hats-wallet')).toContainText('$85.58')
         await page.getByTestId('hats-toggle').click()
         await expect(page.getByTestId('hat-party-buy')).toBeEnabled()
         await expect(page.getByTestId('hat-beanie-buy')).toBeDisabled()
-        await expect(page.getByTestId('hat-beanie-buy')).toHaveAttribute('title', '$169.19 short')
+        await expect(page.getByTestId('hat-beanie-buy')).toHaveAttribute('title', '$164.42 short')
     })
 
     for (const theme of THEMES) {

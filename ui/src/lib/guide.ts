@@ -22,6 +22,7 @@ import pullRequests from '@/guide/pull-requests.md?raw'
 import reports from '@/guide/reports.md?raw'
 import runningTheLoop from '@/guide/running-the-loop.md?raw'
 import runs from '@/guide/runs.md?raw'
+import sessions from '@/guide/sessions.md?raw'
 import settings from '@/guide/settings.md?raw'
 import signingIn from '@/guide/signing-in.md?raw'
 import slack from '@/guide/slack.md?raw'
@@ -111,6 +112,7 @@ const SOURCES: readonly { title: string; pages: readonly (readonly [string, stri
         pages: [
             ['runs', runs],
             ['ticks', ticks],
+            ['sessions', sessions],
             ['reports', reports],
             ['chores', chores],
             ['memory', memory],
@@ -157,6 +159,7 @@ export const PAGE_GUIDES = {
     '/workspace/runs/$id': 'runs#a-runs-page',
     '/workspace/worktrees': 'runs#worktrees',
     '/workspace/checklists': 'checklists#the-checklists-page',
+    '/workspace/sessions': 'sessions',
     '/chores/': 'chores',
     '/chores/$name': 'chores#a-chores-page',
     '/chores/$name_/runs/$id': 'chores#a-chores-page',

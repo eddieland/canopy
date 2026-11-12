@@ -1,14 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 
-import { searchQuery } from '@/api/queries'
-import type { SearchHit, SearchSource } from '@/api/types'
+import { searchQuery, sessionsQuery } from '@/api/queries'
+import type { SearchHit, SearchSource, SessionsWhose } from '@/api/types'
 import { Age } from '@/components/age'
 import { ChoreLink, ChoreRunLink } from '@/components/chore-link'
 import { MarkedText } from '@/components/marked-text'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { ListRow, RowList } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
+import { SessionRows } from '@/components/session-rows'
 import { Chip, RunDot, Word } from '@/components/status'
 import { TaskLink, TaskRunLink } from '@/components/task-link'
 import { TickLink } from '@/components/tick-link'
@@ -16,6 +17,7 @@ import { TicketLink } from '@/components/ticket-link'
 import { choreRunState } from '@/lib/chores'
 import { RUN_TEXT } from '@/lib/run-state'
 import { bySource, SEARCH_MIN, searchQueryOf, SOURCE_LABEL } from '@/lib/search'
+import { SESSIONS_PER_SEARCH, SESSIONS_WHOSE, WHOSE_LABEL } from '@/lib/sessions'
 import { cn } from '@/lib/utils'
 
 interface SearchParams {
@@ -38,8 +40,9 @@ function SearchPage() {
                 title={q === undefined ? 'Search' : `“${q}”`}
                 tab={q === undefined ? 'Search' : `Search “${q}”`}
             >
-                Tickets by key, title, and branch, tasks by their text, every conversation, chore runs, decisions, and
-                ticks that hold every word, newest first. Not searched: transcripts, reviews, and task reports.
+                Tickets by key, title, and branch, tasks by their text, every conversation, chore runs, decisions,
+                ticks, and the agent runtime&apos;s sessions by their titles, that hold every word, newest first. Not
+                searched: transcripts, reviews, and task reports.
             </PageHeader>
             {q === undefined ? (
                 <Panel>
@@ -65,19 +68,17 @@ function Results({ q }: { q: string }) {
         )
     }
     const groups = bySource(data.hits)
-    if (groups.length === 0) {
-        return (
-            <Panel>
-                <Empty size="panel">nothing in the journal holds every word</Empty>
-            </Panel>
-        )
-    }
     return (
         // The previous query's hits stay while the next one's load, dimmed so they do not read as its answer.
         <div
             className={cn('flex flex-col gap-6 transition-opacity', isPlaceholderData && 'opacity-60')}
             data-testid="search-results"
         >
+            {groups.length === 0 && (
+                <Panel>
+                    <Empty size="panel">nothing in the journal holds every word</Empty>
+                </Panel>
+            )}
             {groups.map(([source, hits]) => (
                 <Panel key={source} data-testid={`search-${source}`}>
                     <PanelHeader label={SOURCE_LABEL[source]}>
@@ -92,7 +93,34 @@ function Results({ q }: { q: string }) {
                     </RowList>
                 </Panel>
             ))}
+            {SESSIONS_WHOSE.map((whose) => (
+                <SessionsFound key={whose} q={q} whose={whose} />
+            ))}
         </div>
+    )
+}
+
+/**
+ * One of the two panels of the runtime's sessions (DESIGN §13), after the journal's: those outside canopy, or
+ * canopy's, the newest whose title holds every word, each opening its run's page or giving the command that reopens
+ * it. None while `sessions.search` is `off`, or none matches, as a journal source with no hits has no panel.
+ */
+function SessionsFound({ q, whose }: { q: string; whose: SessionsWhose }) {
+    const { data } = useQuery(sessionsQuery({ whose, q, limit: SESSIONS_PER_SEARCH }))
+    if (data === undefined || data.search === 'off' || data.sessions.length === 0) {
+        return null
+    }
+    return (
+        <Panel data-testid={`search-sessions-${whose}`}>
+            <PanelHeader label={WHOSE_LABEL[whose]}>
+                <span className="readout text-xs text-muted-foreground">
+                    {data.more ? `newest ${data.sessions.length}` : data.sessions.length}
+                </span>
+            </PanelHeader>
+            <RowList kind="session" className="divide-y">
+                <SessionRows sessions={data.sessions} words={data.words} />
+            </RowList>
+        </Panel>
     )
 }
 

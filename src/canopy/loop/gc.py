@@ -4,8 +4,8 @@
 the configured `[retention]` would remove of them, then the remote branches canopy made that nothing names any more
 (`gc_branches.py`), which no pass removes. It removes nothing, and runs nothing but `git count-objects` and
 `git for-each-ref`.
-`file_kinds` finds the files a pass removes, and `row_kinds` the journal's rows, for the pass (`gc_pass.py`) and the
-dry run alike, so the two agree.
+`file_kinds` finds the files a pass removes, `row_kinds` the journal's rows, and `memory_text` the memory's text, for
+the pass (`gc_pass.py`) and the dry run alike, so the two agree.
 """
 
 from __future__ import annotations
@@ -21,9 +21,9 @@ from typing import TYPE_CHECKING, Literal
 import canopy_sandbox
 
 from canopy.chores import start as chore_start
-from canopy.core import checklist_answers, db, hostgit, records, run_changes, sql
+from canopy.core import checklist_answers, db, hostgit, memory_manage, records, run_changes, sql
 from canopy.core.context import db_path
-from canopy.core.vocab import Decider, MemoryScope, MemoryStatus, PrState, TickStatus
+from canopy.core.vocab import Decider, PrState, TickStatus
 from canopy.infra import lock, logs, procs
 from canopy.loop import attention, gc_branches
 from canopy.reviews import start as review_start
@@ -202,7 +202,7 @@ def measure(ctx: Context, now: datetime) -> Report:
         *_journal_space(ctx.conn, journal),
         *_git_objects(ctx, notes),
         _sandbox_caches(),
-        _memory_text(ctx.conn, now, retention),
+        memory_text(ctx.conn, now, retention),
     ]
     branches = gc_branches.unnamed(ctx, notes)
     size = _regular_size(journal) or 0
@@ -333,6 +333,39 @@ def row_kinds(conn: sqlite3.Connection, now: datetime, retention: Retention) -> 
             f"journal_days = {retention.journal_days}, not at its PR's head",
         ),
     ]
+
+
+def memory_text(conn: sqlite3.Connection, now: datetime, retention: Retention) -> Kind:
+    """The text of notes and proposals no longer in force (DESIGN §28), removable `memory_days` after they left it.
+
+    A memory leaves force when it is invalidated, or when a newer one supersedes it. A lesson's text is never removed.
+    The pass removes what this counts as removable, by the same condition (`memory_manage.expire`).
+
+    Returns:
+        The kind, counting rows that still hold text.
+    """
+    expired = memory_manage.retired_before(retention_cutoff(now, retention.memory_days))
+    found = sql.execute(
+        conn,
+        sql.select(
+            "count(*), sum(length(CAST(body AS BLOB))), sum({}), sum(CASE WHEN {} THEN length(CAST(body AS BLOB)) END)",
+            expired,
+            expired,
+        )
+        .from_("memories")
+        .where("{}", memory_manage.RETIRED)
+        .where("body IS NOT NULL"),
+    ).fetchone()
+    count, size, removable, removable_bytes = (int(v or 0) for v in found)
+    return Kind(
+        "memory text",
+        "rows",
+        count,
+        size,
+        removable,
+        removable_bytes,
+        f"memory_days = {retention.memory_days}",
+    )
 
 
 @dataclass(frozen=True)
@@ -705,44 +738,6 @@ def _sandbox_caches() -> Kind:
         if _is_dir(role):
             tally.add(tree_size(role), removable=False)
     return tally.kind("sandbox caches", "directories", "--caches")
-
-
-def _memory_text(conn: sqlite3.Connection, now: datetime, retention: Retention) -> Kind:
-    """The text of notes and proposals no longer in force (DESIGN §28), removable `memory_days` after they left it.
-
-    A memory leaves force when it is invalidated, or when a newer one supersedes it. A lesson's text is never removed.
-
-    Returns:
-        The kind, counting rows that still hold text.
-    """
-    cutoff = retention_cutoff(now, retention.memory_days)
-    superseded = sql.select("min(n.created_at)").from_("memories n").where("n.supersedes = m.id")
-    gone = (
-        sql.select("m.body, coalesce(m.invalidated_at, ({})) AS gone", superseded)
-        .from_("memories m")
-        .where("m.scope != ?", MemoryScope.LESSON)
-        .where_in("m.status", (MemoryStatus.SUPERSEDED, MemoryStatus.INVALID))
-        .where("m.body IS NOT NULL")
-    )
-    found = sql.execute(
-        conn,
-        sql.select(
-            "count(*), sum(length(CAST(body AS BLOB))), sum(gone < ?), "
-            "sum(CASE WHEN gone < ? THEN length(CAST(body AS BLOB)) END)",
-            cutoff,
-            cutoff,
-        ).from_("({})", gone),
-    ).fetchone()
-    count, size, removable, removable_bytes = (int(v or 0) for v in found)
-    return Kind(
-        "memory text",
-        "rows",
-        count,
-        size,
-        removable,
-        removable_bytes,
-        f"memory_days = {retention.memory_days}",
-    )
 
 
 def _regular_stat(path: Path) -> os.stat_result | None:

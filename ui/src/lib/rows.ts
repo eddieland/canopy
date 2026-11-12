@@ -270,6 +270,19 @@ export const ROW_COLUMNS = {
         ['age', AGE, 1],
     ],
     /**
+     * One of the runtime's sessions (the Sessions page, and the search's panels of them): where it opens, the run of
+     * canopy's that made it or the directory it ran in, its chips, its title, its cost, and when it started. The
+     * command that reopens one outside canopy goes under its title.
+     */
+    session: [
+        // A directory is long: the list widens to the longest it holds, and cuts one past that, whole on hover.
+        ['where', fit(18, 8)],
+        ['kind', fit(9), 2],
+        ['title', FREE],
+        ['cost', COST, 1],
+        ['age', AGE, 3],
+    ],
+    /**
      * A note, proposal, or lesson (DESIGN §28): where it stands, its id, its repository, its key, how many runs relied
      * on it, and when it was written. What it says goes under its key.
      */

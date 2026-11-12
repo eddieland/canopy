@@ -107,10 +107,11 @@ has the keys.
 
 canopy cleans up after itself on live ticks. At most once a day a tick runs the pass, which removes a run's log,
 prompt, and diff after `retention.run_files_days`, 30; a tick's after `retention.tick_files_days`, 7, or as long as a
-run's for one that didn't close `ok`; and the journal's routine rows, such as connector runs, after
-`retention.journal_days`, 90. Set `[retention]` in your own config, not the workspace file, and `0` keeps that kind
-forever. A dry tick never runs the pass, and a pass that fails leaves the tick to carry on: a full disk is when you
-need it most.
+run's for one that didn't close `ok`; the journal's routine rows, such as connector runs, after
+`retention.journal_days`, 90; and the text of a [memory](memory) no longer in force, a replaced note or a rejected
+proposal, after `retention.memory_days`, 30, keeping its row as Forget does. Set `[retention]` in your own config,
+not the workspace file, and `0` keeps that kind forever. A dry tick never runs the pass, and a pass that fails leaves
+the tick to carry on: a full disk is when you need it most.
 
 The pass never removes the record of what happened: ticks, decisions, runs, messages, and anything a guard counts stay
 for good. Nor does it delete a branch.

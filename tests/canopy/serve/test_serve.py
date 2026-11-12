@@ -1240,6 +1240,7 @@ def test_openapi_names_the_stream_event_and_every_route() -> None:
         "/api/host/samples",
         "/api/host/processes",
         "/api/search",
+        "/api/sessions",
         "/api/events",
         "/api/loop",
         "/api/reviews",

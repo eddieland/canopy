@@ -18,7 +18,17 @@ import pytest
 from canopy.core import chore_result, db
 from canopy.core.context import Context
 from canopy.loop import attention, web
-from canopy.serve import chore_views, live, pr_list, pull_requests, reviews, spend_views, tick_views, views
+from canopy.serve import (
+    chore_views,
+    live,
+    pr_list,
+    pull_requests,
+    reviews,
+    session_views,
+    spend_views,
+    tick_views,
+    views,
+)
 from canopy.serve import mock as serve_mock
 from canopy.serve.backend import Backend
 from canopy.serve.mock import history as serve_history
@@ -50,6 +60,8 @@ READS: dict[str, Callable[[Backend, Context], object]] = {
     "reviews": lambda _b, ctx: reviews.reviews(ctx),
     "pull requests": lambda _b, ctx: pull_requests.pull_requests(ctx),
     "a pull request": lambda b, ctx: pull_requests.pull_request(b, ctx, PR),
+    "sessions outside canopy": lambda _b, ctx: session_views.listed(ctx, whose="outside"),
+    "canopy's sessions": lambda _b, ctx: session_views.listed(ctx, whose="canopy"),
 }
 
 
