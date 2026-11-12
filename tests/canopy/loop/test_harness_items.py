@@ -19,12 +19,15 @@ from canopy.core import db, plans, records
 from canopy.core.vocab import Decider, PassReason, RunStatus, TickStatus
 from canopy.loop import attention, harness_items, phases
 from tests.canopy.helpers import (
+    EPIC_PLAN,
     KEY,
     PLAN,
     UNOBSERVED_ITEM,
     WORKER_PR,
     context,
     decisions,
+    epic_approved,
+    epic_proposed,
     in_tick,
     messages,
     operator,
@@ -41,6 +44,7 @@ from tests.canopy.observation_helpers import (
     PR,
     TRACKER,
     check,
+    clock,
     held,
     observe_pr,
     observe_ticket,
@@ -219,6 +223,25 @@ def ticket_edited(env: CanopyEnv, conn: sqlite3.Connection) -> None:
     records.update(records.ObservedTicket).set(body="Retry twice, not three times.").where("key = ?", KEY).run(conn)
 
 
+def drifted(env: CanopyEnv, conn: sqlite3.Connection) -> None:
+    """KEY is a member of epic:1, whose plan is approved, and its plan, which departs from the epic's C1, waits."""
+    conn.commit()
+    epic_plan_id = epic_approved(env)
+    assert operator("epic", "add", "epic:1", KEY, "--entry", "B1") == 0
+    member_plan_waits(env, epic_plan_id)
+
+
+def member_plan_waits(env: CanopyEnv, epic_plan_id: int, *, drift: tuple[str, ...] = ("C1",)) -> None:
+    """A planner proposed KEY's plan against epic plan `epic_plan_id`, departing from `drift`, recorded at FRESH."""
+    ctx = context(env)
+    run_id = running_run(ctx, KEY, private=False)
+    db.finish_run(ctx.conn, "runs", run_id, RunStatus.DONE, None)
+    written = plans.write(ctx.state_dir, KEY, run_id, PLAN)
+    with clock(FRESH):
+        plans.record(ctx.conn, KEY, run_id, written, epic_plan_id=epic_plan_id, epic_drift=drift)
+    ctx.conn.commit()
+
+
 def queue_stuck(env: CanopyEnv, conn: sqlite3.Connection) -> None:
     """The PR's build passed two hours ago, and its merge queue's status still waits, as CI."""
     green(env, conn)
@@ -258,6 +281,7 @@ CAUSES: dict[str, tuple[Callable[[CanopyEnv, sqlite3.Connection], None], Found, 
     "plan_review": (plan_waits, (KEY, "plan_review", None), plan_approved),
     "plan_changed": (plan_changed, (KEY, "plan_changed", None), plan_approved),
     "ticket_changed": (ticket_edited, (KEY, "ticket_changed", None), plan_approved),
+    "epic_drift": (drifted, (KEY, "epic_drift", None), plan_approved),
     "check_stuck": (queue_stuck, (KEY, "check_stuck", "repo"), queue_given_a_role),
     "unobserved_pr": (names_no_pr, (KEY, "unobserved_pr", "repo"), forgotten),
 }
@@ -405,6 +429,71 @@ def test_a_running_worker_wants_no_run_so_raises_no_attempt_limit(
     observed.commit()
     running_run(context(canopy_env), KEY, private=False)
     assert "attempt_limit" not in reasons(canopy_env)
+
+
+def test_epic_drift_names_the_member_the_epic_and_the_ids(canopy_env: CanopyEnv, observed: sqlite3.Connection) -> None:
+    """Never the plan's text: the ids, held to the epic's plan when the plan was recorded, and how to settle it."""
+    drifted(canopy_env, observed)
+    ctx = context(canopy_env)
+    [found] = [i for i in harness_items.raised(ctx, None, NOW) if i.reason == harness_items.EPIC_DRIFT]
+    plan = plans.history(ctx.conn, KEY)[-1]
+    assert found.detail == (
+        f"plan {plan.id} of {KEY} departs from epic:1's C1: approve it as written (canopy plan {KEY} --approve), or "
+        f"ask for a new plan of either (canopy reply {KEY}, canopy reply epic:1)"
+    )
+
+
+def test_epic_drift_goes_when_the_operator_asks_for_a_new_plan_of_the_member(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+) -> None:
+    drifted(canopy_env, observed)
+    assert operator("reply", KEY, "Keep to C1.") == 0
+    assert "epic_drift" not in reasons(canopy_env)
+
+
+def test_epic_drift_goes_when_the_operator_asks_for_a_new_plan_of_the_epic(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+) -> None:
+    drifted(canopy_env, observed)
+    assert operator("reply", "epic:1", "Let PROJ-1 read the store its own way.") == 0
+    assert "epic_drift" not in reasons(canopy_env)
+
+
+def test_epic_drift_goes_when_the_operator_approves_the_epics_plan_again(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+) -> None:
+    """A member planned while the epic was planned again: its item holds until the new plan is approved."""
+    observed.commit()
+    epic_plan_id = epic_approved(canopy_env)
+    assert operator("epic", "add", "epic:1", KEY, "--entry", "B1") == 0
+    with clock(OLD):
+        assert operator("reply", "epic:1", "Let PROJ-1 read the store its own way.") == 0
+    member_plan_waits(canopy_env, epic_plan_id)
+    assert "epic_drift" in reasons(canopy_env)
+    epic_proposed(canopy_env, EPIC_PLAN.replace("read interface.", "read interface, as PROJ-1 reads it."))
+    assert operator("plan", "epic:1", "--approve") == 0
+    assert "epic_drift" not in reasons(canopy_env)
+
+
+def test_epic_drift_goes_when_the_ticket_leaves_the_epic(canopy_env: CanopyEnv, observed: sqlite3.Connection) -> None:
+    drifted(canopy_env, observed)
+    assert operator("epic", "remove", "epic:1", KEY) == 0
+    assert "epic_drift" not in reasons(canopy_env)
+
+
+def test_a_member_plan_that_keeps_to_its_epic_raises_no_drift(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+) -> None:
+    observed.commit()
+    epic_plan_id = epic_approved(canopy_env)
+    assert operator("epic", "add", "epic:1", KEY, "--entry", "B1") == 0
+    member_plan_waits(canopy_env, epic_plan_id, drift=())
+    assert "plan_review" in reasons(canopy_env)
+    assert "epic_drift" not in reasons(canopy_env)
 
 
 def test_a_ticket_seen_closed_or_unlabeled_holds_no_item(canopy_env: CanopyEnv, observed: sqlite3.Connection) -> None:

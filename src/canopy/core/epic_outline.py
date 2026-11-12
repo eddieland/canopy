@@ -203,6 +203,19 @@ def trivial(outline: Outline, entries: AbstractSet[str]) -> bool:
     return bool(entries) and all(e in outline.entries and outline.entries[e].trivial is not None for e in entries)
 
 
+def drift(outline: Outline, named: Iterable[object]) -> list[str]:
+    """Return the ids of `named` that `outline` holds as a requirement or a contract: a member's drift (DESIGN §43).
+
+    `named` is what a member's planner said its plan departs from, model text: anything else it names, an entry, an
+    id the plan does not hold, or no id at all, is dropped, never a reason to refuse the plan.
+
+    Returns:
+        Those ids, each once, sorted.
+    """
+    held = frozenset(outline.requirements) | frozenset(outline.contracts)
+    return sorted({i for i in named if isinstance(i, str) and i in held}, key=_order)
+
+
 # The outline's shapes. A fence opens and closes a code block, whose lines are never read as structure.
 _FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 # What marks a line of a code block: a character no plan's structure starts with, dropped from the text compared.

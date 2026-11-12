@@ -13,9 +13,11 @@ the derivation's rows and the journal, and records it marked as its own, so no i
 - `plan_review`, while a plan waits on the operator, and `plan_changed`, while an approved plan's file is no longer the
   text they approved (§25, §32).
 
-Beside them it raises three the overseer never recorded (`attention.ONLY_FROM_CAUSES`): `ticket_changed`, a warning
+Beside them it raises four the overseer never recorded (`attention.ONLY_FROM_CAUSES`): `ticket_changed`, a warning
 that refuses nothing, while a ticket's title or description as observed is not what it was when its current plan was
-approved, until the plan is approved again, superseded, or skipped (§25); `check_stuck`, for a unit
+approved, until the plan is approved again, superseded, or skipped (§25); `epic_drift`, while a member's plan whose
+planner said it departs from its epic's approved plan waits on the operator, until they approve it, approve the epic's
+plan again, or reply to either (`epics.drift`, §43); `check_stuck`, for a unit
 `ci_running` on one check alone, still pending `STUCK_AFTER` past every other check at its head finishing, which may not
 be CI, until it completes, the head moves, or its repository's map gives it a role (§30); and `unobserved_pr`, for a
 unit whose PR URL names no PR, which no source reads, so the harness waits on its ticket (§39), until the unit names a
@@ -69,6 +71,7 @@ PLAN_CHANGED = "plan_changed"
 CHECK_STUCK = attention.CHECK_STUCK
 UNOBSERVED_PR = attention.UNOBSERVED_PR
 TICKET_CHANGED = attention.TICKET_CHANGED
+EPIC_DRIFT = attention.EPIC_DRIFT
 #: Every reason this module raises: those of `attention.FROM_CAUSES`, and those only the harness has ever recorded.
 REASONS: frozenset[str] = attention.FROM_CAUSES | attention.ONLY_FROM_CAUSES
 #: The reasons whose cause rests on what a connector observed, so a stale observation keeps their item.
@@ -510,7 +513,7 @@ def _from_journal(ctx: Context, subjects: _Subjects, now: datetime) -> Iterator[
 
 
 def _plans(ctx: Context, ticket: records.Ticket) -> Iterator[Raised]:
-    """A ticket's `plan_review`, `plan_changed`, and `ticket_changed`: its plans waiting or changed, or it (§25, §32).
+    """A ticket's `plan_review`, `plan_changed`, `ticket_changed`, and `epic_drift` (§25, §32, §43).
 
     Yields:
         Each.
@@ -532,6 +535,14 @@ def _plans(ctx: Context, ticket: records.Ticket) -> Iterator[Raised]:
             "or skip it (--skip)"
         )
         yield Raised(key, TICKET_CHANGED, detail)
+    drift = epics.drift(conn, ticket)
+    if drift is not None:
+        epic = f"epic:{drift.epic_id}"
+        detail = (
+            f"plan {drift.plan.id} of {key} departs from {epic}'s {', '.join(drift.ids)}: approve it as written "
+            f"(canopy plan {key} --approve), or ask for a new plan of either (canopy reply {key}, canopy reply {epic})"
+        )
+        yield Raised(key, EPIC_DRIFT, detail)
     if ctx.config.policy.feedback_plan != "approve":
         return
     found = feedback_plans.current(conn, key)

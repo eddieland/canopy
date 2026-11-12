@@ -50,6 +50,7 @@ from canopy.core import (
     conversation,
     db,
     definitions,
+    epic_outline,
     epics,
     git_tools,
     hostgit,
@@ -106,6 +107,10 @@ MAX_PR_URL = 500
 MAX_FLAKY_DETAIL = 300
 #: A cause a worker named outside `FlakyCause`: a word or two, as a sink's line carries it.
 MAX_OTHER_CAUSE = 60
+#: The most ids a member's planner's `drift` is read for: as many as an epic's plan holds of requirements and contracts.
+MAX_DRIFT = 2 * epic_outline.MAX_IDS
+#: The longest string `drift` keeps: an id is a letter and at most four digits, so anything longer is none.
+MAX_DRIFT_ID = 8
 # The repository whose slot `setup_cmd` runs in, by its name in the map, and the run's branch, which the slot has
 # checked out detached (DESIGN §8).
 SETUP_REPO_ENV = "CANOPY_REPO"
@@ -131,6 +136,19 @@ def _known_effort(value: object) -> object:
 
 #: A planner's estimate of how much work its plan is (DESIGN §25).
 Effort = Annotated[PlanEffort | None, BeforeValidator(_known_effort)]
+
+
+def _named_ids(value: object) -> object:
+    """Return the short strings of `value`, a list, or none: a wrong type drops the field, never the plan with it."""
+    if not isinstance(value, list):
+        return ()
+    named = cast("list[object]", value)[:MAX_DRIFT]
+    return tuple(v for v in named if isinstance(v, str) and len(v) <= MAX_DRIFT_ID)
+
+
+#: The ids of its epic's plan a member's planner said its plan departs from (DESIGN §43): model text, held to that
+#: plan's requirements and contracts before it is recorded (`epic_outline.drift`).
+Drift = Annotated[tuple[str, ...], BeforeValidator(_named_ids)]
 #: Whether a worker said a failed check was not its change's (DESIGN §23): only `true` says so, and anything else is
 #: false, never a reason to drop the result with it.
 Flaky = Annotated[bool, BeforeValidator(lambda value: value is True)]
@@ -240,6 +258,9 @@ class PlanResult(BaseModel):
     #: How much work the plan is for the worker that follows it, as the planner judged: recorded with the plan, for
     #: the operator to read beside it (DESIGN §25). Nothing reads it to decide.
     effort: Effort = None
+    #: The requirements and contracts of its epic's plan a member's plan departs from, as its planner said; kept only
+    #: as that plan holds them, and only for a member (DESIGN §43).
+    drift: Drift = ()
 
     def no_review(self) -> str | None:
         """Return the planner's reason for saying its plan needs no review, or None when it did not say so with one."""
@@ -445,6 +466,18 @@ class PlanReviewGroup(BaseModel):
     )
 
 
+class PlanDriftGroup(BaseModel):
+    """Where a member's plan departs from its epic's, a group of a planner's result's fields asked of a member alone."""
+
+    model_config = ConfigDict(frozen=True, defer_build=True)
+
+    drift: list[StrictStr] = Field(
+        default_factory=list,
+        description="Each requirement or contract of the epic's plan, by its id, that your plan departs from, as your "
+        "plan's `## Epic` says: none when it keeps to them all.",
+    )
+
+
 class ItemReport(BaseModel):
     """One item a feedback plan covers, as its `result` call names it."""
 
@@ -471,12 +504,14 @@ class FeedbackPlanReport(PlanReport):
 
 #: The group's name.
 PLAN_REVIEW_GROUP = "review"
+#: The drift group's name, asked of a member of an epic (DESIGN §43).
+PLAN_DRIFT_GROUP = "drift"
 #: What a `plan` reports, and a `feedback_plan`.
 PLAN = run_result.Contract(
     "plan",
     f"Report how planning ended, once your plan is written to its file. {run_result.REPORTING}",
     PlanReport,
-    {PLAN_REVIEW_GROUP: PlanReviewGroup, "cited": memory.CitedGroup},
+    {PLAN_REVIEW_GROUP: PlanReviewGroup, PLAN_DRIFT_GROUP: PlanDriftGroup, "cited": memory.CitedGroup},
 )
 FEEDBACK_PLAN = run_result.Contract(
     "feedback_plan",
@@ -957,11 +992,13 @@ def _plan(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     # The plan's file starts as the plan it replaces, which the planner edits: a first plan's starts with none.
     desk_files = {plans.REPLACED: copy, plans.WRITTEN: copy} if copy is not None else {}
     member = epics.member_epic(ctx.conn, ctx.state_dir, key)
-    if member is not None:
-        desk_files[epics.EPIC_COPY] = _epic_copy(ctx, member)
+    epic_text = _epic_copy(ctx, member) if member is not None else None
+    if epic_text is not None:
+        desk_files[epics.EPIC_COPY] = epic_text
     desk_files |= _place_attachments(run, slots, _attachment_copies(ctx, run))
     template = ctx.config.runtime.plan_cmd
-    reports = PLAN.asked(_plan_groups(ctx, run))
+    drift = [PLAN_DRIFT_GROUP] if epic_text is not None else []
+    reports = PLAN.asked([*_plan_groups(ctx, run), *drift])
     result, text = _run_agent(ctx, run, slots, out, log, template=template, desk_files=desk_files, reports=reports)
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
     parsed = contract.last_line(PlanResult, text)
@@ -972,6 +1009,7 @@ def _plan(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
         return Outcome(RunStatus.TIMEOUT, parsed, note, memory=cited)
     if parsed is None:
         return Outcome(RunStatus.UNKNOWN, None, f"the planner {run_result.MISSING}")
+    parsed = parsed.model_copy(update={"drift": tuple(_drift(parsed, epic_text, log, run_id=int(run["id"])))})
     if parsed.status != "done":
         return Outcome(RunStatus(parsed.status), parsed, memory=cited)
     written = _written_plan(ctx, run, parsed, replaced, copy)
@@ -979,6 +1017,30 @@ def _plan(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
         return replace(written, memory=cited)
     epic_plan_id = member.plan.id if member is not None else None
     return replace(_record_plan(ctx, run, parsed, written, log, epic_plan_id=epic_plan_id), memory=cited)
+
+
+def _drift(parsed: PlanResult, epic_text: str | None, log: logs.TickAdapter, *, run_id: int) -> list[str]:
+    """Hold the ids a planner's `drift` names to the epic plan it read, `epic_text`, None for a ticket of no epic (§43).
+
+    An id that plan does not hold as a requirement or a contract is dropped, as a result's other fields drop what does
+    not read, and logged; a ticket of no epic keeps none.
+
+    Returns:
+        The ids kept, sorted.
+    """
+    kept: list[str] = []
+    if not parsed.drift:
+        return kept
+    try:
+        if epic_text is not None:
+            kept = epic_outline.drift(epic_outline.read(epic_text), parsed.drift)
+    except epic_outline.OutlineError as e:
+        # The operator's approval read it whole, so only a copy that no longer reads gets here: no id is held to it.
+        log.warning("drift not read", extra={"run_id": run_id, "error": e.reason})
+    dropped = sorted(set(parsed.drift) - set(kept))
+    if dropped:
+        log.info("drift ids dropped", extra={"run_id": run_id, "dropped": dropped})
+    return kept
 
 
 def _written_plan(
@@ -1050,9 +1112,11 @@ def _record_plan(
         run_id,
         written,
         event=outbox.plan_recorded(ctx.config, key=key, run_id=run_id),
-        no_review=parsed.no_review() if ctx.config.policy.planner_approves() else None,
+        # A plan that departs from its epic's plan waits on the operator, who settles the departure (DESIGN §43).
+        no_review=parsed.no_review() if ctx.config.policy.planner_approves() and not parsed.drift else None,
         effort=parsed.effort,
         epic_plan_id=epic_plan_id,
+        epic_drift=parsed.drift,
     )
     # Measured once, here, from the text as its planner wrote it, for the Plans report (`plan_lengths`).
     plan_lengths.keep(ctx.conn, plan.id, text)

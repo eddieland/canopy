@@ -56,6 +56,8 @@ class Plan(Row):
     #: The ids, space-separated, whose change an approval of its epic's plan superseded it for, stale, while it still
     #: waited on the operator; None for a plan superseded otherwise, or not superseded (DESIGN §43).
     epic_changed_ids: str | None
+    #: The ids of that epic plan, comma-separated, its planner said this plan departs from; None for none (§43).
+    epic_drift: str | None
 
 
 @dataclass(frozen=True)
