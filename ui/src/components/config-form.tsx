@@ -233,14 +233,14 @@ function Form({
         )
     return (
         <div className="@container">
-            {/* Two columns once the pane has room for the index beside the form at full size, about 72rem. Written
-                out, so Tailwind finds them. */}
-            <div className="grid grid-cols-1 gap-x-8 gap-y-6 @min-[72rem]:grid-cols-[12rem_minmax(0,56rem)]">
+            {/* Two columns once the pane has room for the index beside the form at full size: 72rem, Tailwind's `6xl`.
+                Written out, so Tailwind finds them. */}
+            <div className="grid grid-cols-1 gap-x-8 gap-y-6 @6xl:grid-cols-[12rem_minmax(0,56rem)]">
                 <nav
                     aria-label="Bands"
                     className={cn(
                         'flex flex-wrap gap-x-4 gap-y-1',
-                        '@min-[72rem]:sticky @min-[72rem]:top-0 @min-[72rem]:flex-col @min-[72rem]:self-start',
+                        '@6xl:sticky @6xl:top-0 @6xl:flex-col @6xl:self-start',
                     )}
                     data-testid="config-index"
                 >
