@@ -18,7 +18,7 @@ import pytest
 
 from canopy.core import conversation, db, item_numbers, records, sql
 from canopy.core.config import CANOPY_REVIEWER
-from canopy.core.vocab import Decider, NumberedItem, Phase
+from canopy.core.vocab import Decider, NumberedItem, Phase, TickStatus
 from canopy.loop import phases
 from tests.canopy.helpers import KEY, context, decides, in_tick, seen
 from tests.canopy.observation_helpers import artifact_comment, held, sent_draft
@@ -664,6 +664,97 @@ def test_a_ready_ticket_the_overseer_dispatched_agrees_though_it_left_it_running
         phases.record_overseer(conn, tick_id)
     [compared] = phases.compare(conn, tick_id)
     assert compared.verdict == verdict, compared.why
+
+
+@pytest.mark.parametrize(
+    ("left", "action", "mismatch"),
+    [
+        (phases.Phase.CI_RED, "dispatch:resume", None),
+        (phases.Phase.CI_RUNNING, "wait", "phase"),
+        (phases.Phase.CI_RED, "done", "action"),
+        (phases.Phase.CI_RUNNING, "done", "both"),
+    ],
+    ids=["agrees", "the-phase-alone", "the-decision", "both"],
+)
+def test_a_disagreement_says_whether_it_is_about_the_phase_the_decision_or_both(
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    left: phases.Phase,
+    action: str,
+    mismatch: str | None,
+) -> None:
+    """A subject left at a phase no row held for has its decision held to what the rows that did hold allow."""
+    unit(canopy_env, conn)
+    with in_tick(conn) as tick_id:
+        recorded(
+            conn,
+            tick_id,
+            phases.Derived(KEY, None, (), candidate=True, closed=False),
+            phases.Derived(KEY, "repo", (phases.Phase.CI_RED,)),
+        )
+        db.set_unit(conn, KEY, str(canopy_env.root), "repo", phase=left)
+        db.record_decision(conn, tick_id, KEY, action, "because")
+        phases.record_overseer(conn, tick_id)
+    [compared] = phases.compare(conn, tick_id)
+    assert compared.mismatch == mismatch, compared.why
+    assert (compared.verdict == "agrees") == (mismatch is None)
+
+
+def changes_requested(
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    *decided: tuple[str, bool],
+    dry_run: bool = False,
+) -> int:
+    """A tick that closed `ok` with KEY's unit at `changes_requested`, the overseer recording `decided`.
+
+    Each of `decided` is an action and whether it is an item the overseer keeps.
+
+    Returns:
+        The tick's id.
+    """
+    with in_tick(conn, dry_run=dry_run) as tick_id:
+        recorded(
+            conn,
+            tick_id,
+            phases.Derived(KEY, None, (), candidate=True, closed=False),
+            phases.Derived(KEY, "repo", (phases.Phase.CHANGES_REQUESTED,)),
+        )
+        db.set_unit(conn, KEY, str(canopy_env.root), "repo", phase=phases.Phase.CHANGES_REQUESTED)
+        for action, kept in decided:
+            db.record_decision(conn, tick_id, KEY, action, "because", kept=kept)
+        phases.record_overseer(conn, tick_id)
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
+    return tick_id
+
+
+def verdict_of(conn: sqlite3.Connection, tick_id: int) -> str:
+    """How KEY, the one ticket tick `tick_id` derived, compared."""
+    [compared] = phases.compare(conn, tick_id)
+    return compared.verdict
+
+
+def test_a_wait_agrees_while_an_item_the_overseer_keeps_stands(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
+    """It records the item once, a `wait` beside it, and only a `wait` in the ticks after, until it acts."""
+    unit(canopy_env, conn)
+    kept = changes_requested(canopy_env, conn, ("attention:needs_author", True), ("wait", False))
+    waited = changes_requested(canopy_env, conn, ("wait", False))
+    resumed = changes_requested(canopy_env, conn, ("dispatch:resume", False))
+    after = changes_requested(canopy_env, conn, ("wait", False))
+    assert [verdict_of(conn, t) for t in (kept, waited, resumed)] == ["agrees", "agrees", "agrees"]
+    # The `resume` took the item as ended, so a `wait` after it is held to the row again.
+    assert verdict_of(conn, after) == "disagrees"
+
+
+def test_a_wait_disagrees_with_no_item_kept_or_one_only_a_dry_run_recorded(
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+) -> None:
+    """A dry run's record holds nothing in the live ticks after it (D036)."""
+    unit(canopy_env, conn)
+    assert verdict_of(conn, changes_requested(canopy_env, conn, ("wait", False))) == "disagrees"
+    changes_requested(canopy_env, conn, ("attention:needs_author", True), dry_run=True)
+    assert verdict_of(conn, changes_requested(canopy_env, conn, ("wait", False))) == "disagrees"
 
 
 def test_a_closed_ticket_agrees_when_marked_done_and_a_stale_one_is_counted_apart(
