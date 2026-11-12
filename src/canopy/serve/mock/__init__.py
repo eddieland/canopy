@@ -520,10 +520,11 @@ def _every_kind(conn: sqlite3.Connection) -> None:
 
 
 def _attachments(conn: sqlite3.Connection) -> None:
-    """Attach a design doc to ABC-102 and to task 1, so their pages show one (DESIGN §22): rows alone, unread."""
+    """Attach a design doc to ABC-102, task 1, and epic 1, so their pages show one (DESIGN §22): rows alone, unread."""
     for kind, subject, name, size, added in (
         ("ticket", "ABC-102", "sso-design.md", 18_432, -300),
         ("task", "1", "importer-design-v2.md", 9_216, -420),
+        ("epic", "1", "billing-spec.md", 24_576, -610),
     ):
         insert = records.insert(
             records.Attachment,

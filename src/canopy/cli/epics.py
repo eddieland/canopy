@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, assert_never
 
 import click
 
+from canopy.cli import attachments as attachments_cli
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import REPO
 from canopy.core import conversation, epic_outline, epics, outbox, plans
@@ -189,7 +190,7 @@ def cmd_epic_remove(click_ctx: click.Context, ref: str, keys: tuple[str, ...]) -
 
 
 def show(ctx: Context, epic_id: int) -> None:
-    """Print epic `epic_id`: its text, repositories, project, tracker epic, and members.
+    """Print epic `epic_id`: its text, repositories, project, tracker epic, members, attachments, and plan.
 
     Raises:
         CliError: canopy has no such epic.
@@ -219,6 +220,8 @@ def show(ctx: Context, epic_id: int) -> None:
         )
     if not members:
         click.echo(f"  none yet: `canopy epic add epic:{found.id} KEY` adds one")
+    # Read by its plan runs and every run of its members (DESIGN §22, §43).
+    attachments_cli.listed(ctx, conversation.Ref(conversation.EPIC, str(found.id)))
     _show_plan(ctx, found)
 
 

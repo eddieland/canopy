@@ -41,12 +41,12 @@ class Forget(Row):
 
 @dataclass(frozen=True)
 class Attachment(Row):
-    """A text file the operator attached to a ticket or a task, for its runs to read as data (DESIGN §22)."""
+    """A text file the operator attached to a ticket, a task, or an epic, for its runs to read as data (DESIGN §22)."""
 
     TABLE: ClassVar[LiteralString] = "attachments"
 
     id: int
-    #: `ticket` and the ticket's key, or `task` and its id.
+    #: `ticket` and the ticket's key, or `task` or `epic` and its id.
     subject_kind: str
     subject_id: str
     #: What runs see it as: a plain file name, unique among the subject's attachments not removed.

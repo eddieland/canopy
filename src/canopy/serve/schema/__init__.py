@@ -714,7 +714,7 @@ class Attachment(Model):
 
 
 class Attachments(Model):
-    """A ticket's or a task's attachments, and the limits `policy` holds them to (DESIGN §22)."""
+    """A ticket's, a task's, or an epic's attachments, and the limits `policy` holds them to (DESIGN §22)."""
 
     items: list[Attachment]
     """Each attachment it holds, the first attached first."""

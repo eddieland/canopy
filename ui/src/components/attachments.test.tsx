@@ -114,6 +114,18 @@ describe('Attachments', () => {
         expect(sent.map((s) => [s.method, s.path])).toEqual([['DELETE', '/api/tickets/ABC-1/attachments/design.md']])
     })
 
+    it('attaches to and removes from an epic by its id, for its plan runs and its members to read', async () => {
+        renderSection(HELD, false, { kind: 'epic', id: 3 })
+        choose(new File([DOC], 'spec.md'))
+        expect(await screen.findByText('Attached spec.md (39 bytes) to epic:3; its next run reads it.')).toBeTruthy()
+        fireEvent.click(screen.getByRole('button', { name: 'Remove design.md' }))
+        expect(await screen.findByText('Removed design.md from epic:3.')).toBeTruthy()
+        expect(sent.map((s) => [s.method, s.path])).toEqual([
+            ['PUT', '/api/epics/3/attachments/spec.md'],
+            ['DELETE', '/api/epics/3/attachments/design.md'],
+        ])
+    })
+
     it('keeps no attach button on a stopped task, or when it holds as many as it may, or attaching is off', () => {
         renderSection(HELD, true)
         expect(screen.queryByRole('button', { name: 'Attach a file' })).toBeNull()

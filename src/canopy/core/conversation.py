@@ -134,11 +134,13 @@ VERBS: Mapping[str, tuple[str, ...]] = {
     # change, or grant its draft more revisions (§34).
     REVIEW: ("dismiss", "send", "seen", "reply", "grant"),
     # Submitted with `canopy task submit`; a reply queues its next run, and stopping one ends it, and drops it while it
-    # waits (DESIGN §36). A ticket's or a task's attachments are text its runs read (§22, `runs/attachments.py`).
+    # waits (DESIGN §36). A ticket's, a task's, or an epic's attachments are text its runs read (§22,
+    # `runs/attachments.py`).
     TASK: ("stop", "reply", "show", "attach", "detach"),
     # Submitted with `canopy epic submit`, its members added and removed there; a reply asks for its next plan,
-    # `plan --approve` approves its plan, and stopping it ends its planning (DESIGN §43).
-    EPIC: ("stop", "show", "reply", "plan"),
+    # `plan --approve` approves its plan, and stopping it ends its planning (DESIGN §43). Its attachments are text its
+    # plan runs and every run of its members read (§22).
+    EPIC: ("stop", "show", "reply", "plan", "attach", "detach"),
 }
 # What a PR refuses beyond reviews: canopy works only tickets until PR-scoped work exists.
 _PR_WORK = (

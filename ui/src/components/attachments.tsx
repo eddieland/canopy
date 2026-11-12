@@ -9,15 +9,16 @@ import { Notice } from '@/components/notice'
 import { Button } from '@/components/ui/button'
 import { readAttachment, sizeText } from '@/lib/attachments'
 import { attachedText, detachedText } from '@/lib/outcomes'
-import { taskRef } from '@/lib/refs'
+import { epicRef, taskRef } from '@/lib/refs'
 import { cn } from '@/lib/utils'
 
 /**
- * The files the operator attached to a ticket or a task (DESIGN §22), which each of its later runs reads as data: each
- * by name and size, with a button that removes it, as `canopy detach` does, and Attach a file, which uploads one text
- * file, as `canopy attach` does, named from its own name. The page refuses what the server would, a file over the bound
- * or not UTF-8, before sending it, in the CLI's words; the server's guards decide the rest. Under the list, how much of
- * `policy`'s limits it holds. `closed`, for a stopped task, keeps the list and drops the button: it takes no more.
+ * The files the operator attached to a ticket, a task, or an epic (DESIGN §22), which each of its later runs reads as
+ * data, an epic's its plan runs and every run of its members: each by name and size, with a button that removes it, as
+ * `canopy detach` does, and Attach a file, which uploads one text file, as `canopy attach` does, named from its own
+ * name. The page refuses what the server would, a file over the bound or not UTF-8, before sending it, in the CLI's
+ * words; the server's guards decide the rest. Under the list, how much of `policy`'s limits it holds. `closed`, for a
+ * stopped task or epic, keeps the list and drops the button: it takes no more.
  */
 export function Attachments({
     subject,
@@ -25,11 +26,11 @@ export function Attachments({
     closed = false,
     className,
 }: {
-    /** The ticket or task they are on. */
+    /** The ticket, task, or epic they are on. */
     subject: AttachmentSubject
     /** Its attachments, and the limits they are held to. */
     attachments: AttachmentsData
-    /** Whether it takes no more, as a stopped task does. */
+    /** Whether it takes no more, as a stopped task or epic does. */
     closed?: boolean
     /** Classes for the section, such as its border. */
     className?: string
@@ -37,7 +38,7 @@ export function Attachments({
     const client = useQueryClient()
     const input = useRef<HTMLInputElement>(null)
     const [said, setSaid] = useState<string | null>(null)
-    const ref = subject.kind === 'ticket' ? subject.key : taskRef(subject.id)
+    const ref = subject.kind === 'ticket' ? subject.key : (subject.kind === 'task' ? taskRef : epicRef)(subject.id)
     const attach = useMutation({
         mutationFn: async (file: File) => {
             const { name, text } = await readAttachment(file, attachments)
