@@ -30,7 +30,7 @@ on the loop's next read, and the page lists nothing meanwhile.
 ## The list
 
 Each row is a session: where it opens, its title, what it cost, and when it started. A subagent's session sits under
-the one it ran for, its title a step in, marked `subagent`. The runtime's own list leaves archived sessions out, and so
+the one it ran for, marked `subagent`. The runtime's own list leaves archived sessions out, and so
 does this page until you press `archived`. It shows the newest 50 sessions with their subagents under them, so the
 count in the header, which counts every row, can read higher: `newest 53`. When more match, the line at its foot links
 to the newest 500, and back; the same line says how far the loop's read has come.

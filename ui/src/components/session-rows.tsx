@@ -19,8 +19,8 @@ import { directoryTail, sessionName } from '@/lib/sessions'
 const NO_WORDS: readonly string[] = []
 
 /**
- * The runtime's sessions as rows of a `RowList` of kind `session`, each subagent's under the session it ran for and
- * its title indented a step deeper. A title is untrusted text, shown as text with `words` marked.
+ * The runtime's sessions as rows of a `RowList` of kind `session`, each subagent's right under the session it ran for,
+ * marked `subagent`. A title is untrusted text, shown as text with `words` marked.
  */
 export function SessionRows({
     sessions,
@@ -29,7 +29,7 @@ export function SessionRows({
     sessions: readonly RuntimeSession[]
     words?: readonly string[]
 }) {
-    return sessions.map((s) => <SessionRow key={s.session_id} session={s} words={words} depth={0} parent={null} />)
+    return sessions.map((s) => <SessionRow key={s.session_id} session={s} words={words} parent={null} />)
 }
 
 /**
@@ -61,18 +61,16 @@ export function SessionsProgressLine({ progress }: { progress: SessionsProgress 
 }
 
 /**
- * A session's row, then its subagents' under it, a step deeper. `parent` names the session it ran for, which a screen
- * reader hears with its `subagent` chip, since the indent shows it only to the eye.
+ * A session's row, then its subagents' rows right under it. Every title starts at the same place, so the column reads
+ * straight; the `subagent` chip says a row ran for the one above, and names that session to a screen reader.
  */
 function SessionRow({
     session,
     words,
-    depth,
     parent,
 }: {
     session: RuntimeSession
     words: readonly string[]
-    depth: number
     parent: string | null
 }) {
     const name = sessionName(session)
@@ -91,9 +89,8 @@ function SessionRow({
                     )}
                     {session.archived && <Chip>archived</Chip>}
                 </span>
-                {/* Indented a step for each session it ran for, so a subagent's reads as under its parent's. In
-                    medium weight, as a run's title is, so it reads as the row's name. */}
-                <span className="min-w-0 truncate text-sm font-medium" style={{ paddingInlineStart: `${depth}rem` }}>
+                {/* In medium weight, as a run's title is, so it reads as the row's name. */}
+                <span className="min-w-0 truncate text-sm font-medium">
                     {session.title === null ? (
                         <span className="font-normal text-muted-foreground">no title</span>
                     ) : (
@@ -103,7 +100,7 @@ function SessionRow({
                 <Cost usd={session.cost_usd} className="text-right text-xs text-muted-foreground" />
                 <Age at={session.started_at} variant="ago" className="text-right" />
                 {session.reopen !== null && (
-                    <RowLine from="title" style={{ paddingInlineStart: `${depth}rem` }}>
+                    <RowLine from="title">
                         <Copyable
                             text={session.reopen}
                             label={`reopen command of ${name}`}
@@ -115,7 +112,7 @@ function SessionRow({
                 )}
             </ListRow>
             {session.subagents.map((s) => (
-                <SessionRow key={s.session_id} session={s} words={words} depth={depth + 1} parent={name} />
+                <SessionRow key={s.session_id} session={s} words={words} parent={name} />
             ))}
         </>
     )

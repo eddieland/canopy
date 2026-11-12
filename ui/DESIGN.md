@@ -1487,10 +1487,10 @@ reader, so no table repeats them.
   is, its cost, and its age: one of canopy's leads with its run's reference, linking its page, and one outside with
   its directory's last two parts in mono (`…/acme/infra`), the whole in its tip, so the title keeps the width, and the
   command that reopens it under its title, a `Copyable` that wraps at spaces first and shows its button while the row
-  is hovered or focused, named for the session. A subagent's row follows its parent's, its title and command a step in
-  per level, so a tree reads without lines drawn; its chip names the parent to a screen reader. A line under the list,
-  in muted text, says how far the loop's read has come, and holds the one link to the longest list and back. At
-  `sessions.search = "off"` the panel is one `Empty` saying how to turn it on, and the header holds no count.
+  is hovered or focused, named for the session. A subagent's row follows its parent's, marked by its `subagent` chip,
+  which names the parent to a screen reader; titles are not indented, so every title starts at the same place. A line
+  under the list, in muted text, says how far the loop's read has come, and holds the one link to the longest list and
+  back. At `sessions.search = "off"` the panel is one `Empty` saying how to turn it on, and the header holds no count.
 - **The jump palette** (`JumpPalette`, `src/components/shell/jump-palette.tsx`) jumps to a ticket from anywhere: `⌘K`
   opens and closes it, from a text field too, as a `Dialog` in the window's top sixth over the canvas. Its field is over
   the tickets viewed last, newest first, without the one on screen, so `⌘K` Enter goes back to the ticket before it;
