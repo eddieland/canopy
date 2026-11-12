@@ -417,6 +417,23 @@ def test_the_overseers_review_verbs_about_a_request_the_harness_takes_are_refuse
     assert review_requests.open_request(conn, PR) is not None
 
 
+def test_a_request_the_harness_ended_this_tick_is_still_refused_decided(ctx: Context) -> None:
+    """It is open no longer, but the harness's end stands: the overseer may not review or wait on its PR."""
+    conn = ctx.conn
+    requested(conn)
+    observed(conn, state=PrState.MERGED)
+    with in_tick(conn) as tick_id:
+        requested_reviews.record(conn, tick_id, requested_reviews.derive(ctx, datetime.now(UTC)))
+        harness_reviews.decide(ctx, tick_id, dry_run=False, log=logs.for_tick(tick_id))
+        assert review_requests.open_request(conn, PR) is None
+        with pytest.raises(tools.Refused, match=r"refused \(decided\)"):
+            review_tools.review_run(ctx, review_tools.ReviewRun(pr=PR, sha=HEAD, repo="repo"))
+        with pytest.raises(tools.Refused, match=r"refused \(decided\)"):
+            review_tools.review_wait(ctx, review_tools.ReviewWait(pr=PR, rationale="checks still running"))
+    made = [(d.action, d.decider) for d in db.decisions_for_tick(conn, tick_id)]
+    assert made == [("review:end", Decider.HARNESS), *[("refused:decided", Decider.OVERSEER)] * 2]
+
+
 def starts(ctx: Context) -> tuple[int, records.RequestDerivation]:
     """A tick that derived a start for the open request on PR, still open for the harness to make it.
 

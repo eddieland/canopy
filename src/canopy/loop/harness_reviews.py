@@ -134,10 +134,12 @@ def reviews_to_come(rows: Sequence[records.RequestDerivation]) -> list[str]:
 def refuse_decided(ctx: Context, tick_id: int, pr_url: str, verb: str) -> str | None:
     """Record the refusal of the overseer's `verb` about `pr_url` if the harness answers its request this tick.
 
+    A request it ended before the overseer ran is open no longer, so what it recorded about the PR counts too.
+
     Returns:
         The refusal's reason, or None when the PR is the overseer's to decide.
     """
-    if pr_url not in taken(ctx.conn, tick_id):
+    if pr_url not in taken(ctx.conn, tick_id) and not _answered(ctx.conn, tick_id, pr_url):
         return None
     reason = f"the harness answers the review request on {pr_url} this tick; record nothing about it"
     db.record_decision(ctx.conn, tick_id, None, attention.REFUSED_DECIDED, f"{verb}: {reason}", pr=pr_url)
@@ -153,6 +155,21 @@ def _derived(conn: sqlite3.Connection, tick_id: int) -> list[records.RequestDeri
     rows = records.select(records.RequestDerivation).where("tick_id = ?", tick_id).order_by("request_id").all(conn)
     opened = {r.id for r in review_requests.open_requests(conn)}
     return [r for r in rows if r.request_id in opened and takes(conn, r.pr_url)]
+
+
+def _answered(conn: sqlite3.Connection, tick_id: int, pr_url: str) -> bool:
+    """Whether the harness recorded an answer to the request on `pr_url` in tick `tick_id`: a wait, an end, a review.
+
+    Returns:
+        False when all it recorded about the PR, if anything, is an attention item.
+    """
+    made = (
+        records.select(records.Decision)
+        .where("tick_id = ? AND pr = ? AND decider = ? AND ticket_key IS NULL", tick_id, pr_url, Decider.HARNESS)
+        .where("action NOT LIKE ?", f"{ACTION_PREFIX}%")
+        .all(conn)
+    )
+    return bool(made)
 
 
 def _end(ctx: Context, tick_id: int, pr: str, reason: str, *, dry_run: bool) -> None:

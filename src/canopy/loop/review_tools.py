@@ -278,9 +278,10 @@ def review_wait(ctx: Context, request: ReviewWait) -> Outcome[ReviewWaitRecorded
         Refused: Outside a running tick, or reviews are off.
     """
     current = running_tick(ctx)
+    # Before whether reviews are on: the harness may have ended the only open request in this tick.
+    _check_decided(ctx, current.id, request.pr, "review-wait")
     if not review_requests.reviews_on(ctx.conn, ctx.config):
         raise Refused("reviews are off: no [review] agent_prs or query, and no open review request")
-    _check_decided(ctx, current.id, request.pr, "review-wait")
     db.record_decision(ctx.conn, current.id, request.ticket, "wait", request.rationale, pr=request.pr)
     return Outcome(f"recorded wait for {request.pr}", ReviewWaitRecorded(pr=request.pr, ticket=request.ticket))
 
