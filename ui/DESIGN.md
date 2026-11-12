@@ -341,7 +341,8 @@ Rules:
   after a list is part of that change, so it is a scope of its repository's Diff, not a panel beside it: a segmented
   control, `after the list` and `whole run`, opens on the stretch, a dot in `answer-fixed` marks each file it touched,
   and a line under the files names its commits, so the answers and the fix are read together and the stretch reads as
-  inside the run. Then
+  inside the run. A scope with no diff to draw keeps the disclosure, disabled with why on hover, so the control never
+  shifts. Then
   the thread the operator came to answer, with its form, then the ticket's actions; a page with no thread has its main
   content there instead: a transcript, a chore's open findings and runs, a tick's decisions, a review's findings and
   diff, a PR's reviews. A chore's notes are a thread nothing waits on, so they follow

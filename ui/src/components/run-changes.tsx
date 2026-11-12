@@ -144,6 +144,9 @@ function RepoDiffSection<K extends QueryKey>({
     const stretch = scope === WHOLE_RUN ? null : (stretches[Number(scope)] ?? null)
     const stretchDiff = stretch?.diff ?? null
     const drawable = stretch === null ? kept : (stretchDiff?.files.length ?? 0) > 0
+    // The disclosure stays while another scope has a diff to draw, disabled on one without, so the scopes never shift.
+    const disclosed = kept || stretches.some((shown) => (shown.diff?.files.length ?? 0) > 0)
+    const undrawn = stretch === null || drawable ? '' : stretchUndrawnText(stretch)
     // The files the stretch in view touched; none in view, but some to choose, keeps the dots' room, so no path moves.
     const marked = stretches.length === 0 ? null : new Set(stretchDiff?.files.map((file) => file.path))
     // With no change of its own to list, the panel lists the stretch's files.
@@ -151,7 +154,7 @@ function RepoDiffSection<K extends QueryKey>({
     const listed = ownFiles.length > 0
     // The diff's file filter sits closer under the panel than the panels part, so it reads as this one's.
     return (
-        <Collapsible asChild open={open} onOpenChange={setOpen}>
+        <Collapsible asChild open={open && drawable} onOpenChange={setOpen} disabled={!drawable}>
             <section id={anchor} aria-label={`${repo}'s diff`} className="flex scroll-mt-4 flex-col gap-3">
                 <Panel data-testid="run-change">
                     <PanelHeader label="Diff">
@@ -203,7 +206,12 @@ function RepoDiffSection<K extends QueryKey>({
                                     })}
                                 </ToggleGroup>
                             )}
-                            {drawable && <Disclosure open={open} what="diff" of={repo} />}
+                            {disclosed && (
+                                // A disabled button takes no pointer, so its wrapper says why on hover.
+                                <span title={undrawn === '' ? undefined : undrawn}>
+                                    <Disclosure open={open && drawable} what="diff" of={repo} />
+                                </span>
+                            )}
                         </span>
                     </PanelHeader>
                     {change === null ? (
@@ -373,6 +381,7 @@ function StretchDot({ hidden = false }: { hidden?: boolean }) {
  */
 function StretchLine({ stretch, under }: { stretch: ChecklistStretch; under: boolean }) {
     const files = stretch.diff?.files.length ?? 0
+    const undrawn = stretchUndrawnText(stretch)
     return (
         <p
             className={cn(
@@ -382,20 +391,26 @@ function StretchLine({ stretch, under }: { stretch: ChecklistStretch; under: boo
             title={STRETCH}
             data-testid="run-change-stretch"
         >
-            {stretch.diff === null ? (
-                goneText(stretch.diff_removed_after_days, NO_STRETCH)
-            ) : files === 0 ? (
-                NO_STRETCH_CHANGE
-            ) : (
+            {undrawn === '' ? (
                 <>
                     <StretchDot />
                     <span>
                         {changedAfterText(files)} · <span className="readout">{stretchSpan(stretch)}</span>
                     </span>
                 </>
+            ) : (
+                undrawn
             )}
         </p>
     )
+}
+
+/** Why a stretch has no diff to draw: canopy kept none, retention removed it, or it changed nothing; else ''. */
+function stretchUndrawnText(stretch: ChecklistStretch): string {
+    if (stretch.diff === null) {
+        return goneText(stretch.diff_removed_after_days, NO_STRETCH)
+    }
+    return stretch.diff.files.length === 0 ? NO_STRETCH_CHANGE : ''
 }
 
 /** The run's own diff, read when opened: the file panels a review's diff has, or why it could not be read. */
