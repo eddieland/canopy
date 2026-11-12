@@ -6,8 +6,6 @@ keeps. Sections are numbered across the whole design; the [README](README.md) ha
 
 ## 26. Garbage collection
 
-All of it is built but one row: the pass removes no memory text yet, though `canopy gc --dry-run` counts it (§28).
-
 ### What grows
 
 | What | Grows by | Removed |
@@ -32,7 +30,7 @@ All of it is built but one row: the pass removes no memory text yet, though `can
 | `runtime/<digest>/` | one per definitions change | by reconcile when no run is live (§13) |
 | `plan-exports/<digest>.json`, what an export last found as it stands (§25) | a line per plan, per destination | never |
 | Notification events | each event | after 7 days once every sink has passed them (§20) |
-| Agent memory's notes and proposals no longer in force (§28) | each one replaced, dropped, or retired | text after `memory_days`, the row kept (not yet built); `canopy memory forget` and `purge` delete it |
+| Agent memory's notes and proposals no longer in force (§28) | each one replaced, dropped, or retired | text after `memory_days`, the row kept; `canopy memory forget` and `purge` delete it |
 
 ### What it never removes
 

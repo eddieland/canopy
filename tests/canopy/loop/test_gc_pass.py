@@ -14,13 +14,13 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db, records, sql
+from canopy.core import db, memory_manage, memory_search, records, sql
 from canopy.core.context import Context
-from canopy.core.vocab import GcPassStatus
+from canopy.core.vocab import GcPassStatus, MemoryStatus
 from canopy.infra import lock, logs
 from canopy.loop import attention, gc, gc_pass
 from canopy.notify import journal
-from tests.canopy.helpers import KEY, context, earlier, ended_tick, run_with_files, write_file
+from tests.canopy.helpers import KEY, context, earlier, ended_tick, memories, run_with_files, write_file
 from tests.canopy.scenario_helpers import Scenario
 from tests.conftest import CanopyEnv
 
@@ -402,3 +402,110 @@ def test_a_pass_deletes_the_kept_check_runs_its_dry_run_counts(
 def test_a_pass_empties_the_journals_wal(canopy_env: CanopyEnv, ctx: Context) -> None:
     run_pass(ctx)
     assert (canopy_env.state_dir / f"{db.DB_FILE_NAME}-wal").stat().st_size == 0
+
+
+def ended_run(conn: sqlite3.Connection, ended: str) -> int:
+    """A worker run of KEY that ended at `ended`, its files never written, for the memories it wrote."""
+    db.touch_ticket(conn, KEY, "repo")
+    cursor = conn.execute(
+        "INSERT INTO runs (tick_id, ticket_key, kind, branch, started_at, ended_at, status, log_path) "
+        "VALUES (?, ?, 'implement', 'agent/x', ?, ?, 'done', '/runs/1.log')",
+        (ended_tick(conn, ended), KEY, ended, ended),
+    )
+    assert cursor.lastrowid is not None
+    return cursor.lastrowid
+
+
+def remembered(
+    conn: sqlite3.Connection,
+    run_id: int | None,
+    body: str,
+    created: str,
+    *,
+    scope: Literal["ticket", "proposal", "lesson"] = "ticket",
+    status: Literal["active", "pending", "superseded", "invalid"],
+    invalidated: str | None = None,
+    supersedes: int | None = None,
+    why: str | None = None,
+) -> int:
+    """A memory run `run_id` wrote at `created`, or with no run the operator's lesson, as the journal holds one."""
+    lesson = run_id is None
+    cursor = conn.execute(
+        "INSERT INTO memories (scope, ticket_key, key, body, status, why, author, run_id, supersedes, created_at, "
+        "invalidated_at) VALUES (?, ?, 'cache', ?, ?, ?, ?, ?, ?, ?, ?)",
+        (scope, None if lesson else KEY, body, status, why, "operator" if lesson else "worker", run_id, supersedes,
+         created, invalidated),
+    )  # fmt: skip
+    assert cursor.lastrowid is not None
+    return cursor.lastrowid
+
+
+def memory_predicted(capsys: pytest.CaptureFixture[str]) -> tuple[int, int, int]:
+    """What `canopy gc --dry-run --json` says of memory's text: the rows holding it, and those a pass would remove."""
+    assert main(["gc", "--dry-run", "--json"]) == 0
+    [kind] = [k for k in json.loads(capsys.readouterr().out)["kinds"] if k["name"] == "memory text"]
+    return kind["count"], kind["removable"], kind["removable_size"]
+
+
+def test_a_pass_removes_the_text_of_memory_out_of_force_past_memory_days_as_the_dry_run_predicted(
+    canopy_env: CanopyEnv,
+    ctx: Context,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A pass empties what the dry run counts, keeping each row and the reason it left force, and no copy of it."""
+    now = datetime.now(UTC)
+    conn = canopy_env.journal()
+    run_id = ended_run(conn, earlier(now, 60))
+    replaced_text = "Warm the zebrafish cache before the tests."
+    # Out of force before `memory_days`, 30: a note a newer one replaced 40 days ago, and a proposal rejected 31 ago.
+    replaced = remembered(conn, run_id, replaced_text, earlier(now, 60), status="superseded")
+    newer = remembered(conn, run_id, "Warm it with make warm.", earlier(now, 40), status="active", supersedes=replaced)
+    conn.execute("UPDATE memories SET why = ? WHERE id = ?", (f"superseded by note {newer}", replaced))
+    rejected_text = "Every zebrafish cache wants warming."
+    rejected = remembered(conn, run_id, rejected_text, earlier(now, 60), scope="proposal", status="invalid",
+                          invalidated=earlier(now, 31), why="rejected")  # fmt: skip
+    # Kept: a note out of force for 5 days, a pending proposal, and a lesson the operator replaced, however old.
+    recent = remembered(conn, run_id, "The zebrafish cache is cold.", earlier(now, 60), status="invalid",
+                        invalidated=earlier(now, 5), why="dropped by run 1")  # fmt: skip
+    pending = remembered(conn, run_id, "Cache zebrafish.", earlier(now, 60), scope="proposal", status="pending")
+    lesson = remembered(conn, None, "Never commit the zebrafish cache.", earlier(now, 90), scope="lesson",
+                        status="superseded", invalidated=earlier(now, 80))  # fmt: skip
+    removed_bytes = len(replaced_text.encode()) + len(rejected_text.encode())
+
+    assert memory_predicted(capsys) == (3, 2, removed_bytes)
+    row = run_pass(ctx)
+
+    assert json.loads(row.removed)["memory text"] == {"rows": 2, "bytes": removed_bytes}
+    by_id = {m.id: m for m in memories(conn)}
+    assert len(by_id) == 6, "every row stays"
+    assert (by_id[replaced].body, by_id[replaced].status) == (None, MemoryStatus.INVALID)
+    assert by_id[replaced].why == f"superseded by note {newer}; {memory_manage.EXPIRED_WHY}"
+    assert by_id[replaced].invalidated_at is not None
+    assert (by_id[rejected].body, by_id[rejected].why) == (None, f"rejected; {memory_manage.EXPIRED_WHY}")
+    assert by_id[rejected].invalidated_at == earlier(now, 31)
+    for kept in (newer, recent, pending, lesson):
+        assert by_id[kept].body is not None, kept
+    # Nothing the pass removed is found by a search, nor left in the journal's file.
+    found = {m.id for m in memory_search.search(conn, "zebrafish", scope=None)}
+    assert found == {recent, pending, lesson}
+    for name in ("canopy.db", "canopy.db-wal"):
+        path = canopy_env.state_dir / name
+        if path.exists():
+            assert replaced_text.encode() not in path.read_bytes(), path
+    # A dry run after it counts nothing more to remove.
+    assert memory_predicted(capsys) == (1, 0, 0)
+
+
+def test_memory_days_of_zero_keeps_memorys_text_forever(canopy_env: CanopyEnv) -> None:
+    """With `memory_days` 0, a pass removes no memory's text, however long ago it left force."""
+    canopy_env.append_user("\n[retention]\nmemory_days = 0\n")
+    ctx = context(canopy_env)
+    conn = canopy_env.journal()
+    now = datetime.now(UTC)
+    old = remembered(conn, ended_run(conn, earlier(now, 400)), "An old note.", earlier(now, 400), status="invalid",
+                     invalidated=earlier(now, 400))  # fmt: skip
+
+    row = run_pass(ctx)
+
+    assert "memory text" not in json.loads(row.removed)
+    assert [m.body for m in memories(conn) if m.id == old] == ["An old note."]
