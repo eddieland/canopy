@@ -2,7 +2,8 @@
 
 It copies `canopy-sandbox`'s policy templates to where the wrapper reads them, never over one already there, and says
 when one already there lets a run write the operator's own caches, as templates from before `@CACHE@` did, or read
-the operator's OpenCode data, or leaves out the run's own, as templates from before `@DATA@` did; installs
+the operator's OpenCode data, or leaves out the run's own, as templates from before `@DATA@` did, or lets a run read
+a directory that holds a credential, as templates that named `~/.cargo` and `~/.config/git` whole did; installs
 the `srt` that the wrapper's lockfile pins, with `npm ci`, into a directory of canopy's own, which no sandbox can
 write; and checks what it cannot install, because that needs root: bubblewrap, socat, and ripgrep on Linux, ripgrep
 on macOS, and unprivileged user namespaces. It also checks what srt itself only warns about, in a debug log nobody
@@ -97,6 +98,14 @@ both, as the shipped template does: a run's runtime keeps its data there, with a
 NO_DATA = """\
 {template} leaves @DATA@ out of its allowRead or allowWrite, so a sandboxed run's runtime finds none of your logins.
 Add it to both, as the shipped template does (docs/SANDBOX.md)."""
+#: Directories under HOME that hold a credential beside what a build reads, each with the file that holds it. A
+#: template that allows reading one whole lets a run read the credential: srt's allowRead outranks its denyRead.
+CREDENTIAL_DIRS = ((".cargo", "credentials.toml"), (".config/git", "credentials"))
+CREDENTIAL_READ = """\
+{template} lets a sandboxed run read {paths}, and with them {files}: tokens of yours, such as crates.io's, or what
+git's store helper saved. Name what a build reads instead, as the shipped template does: ~/.cargo/bin,
+~/.cargo/registry, and ~/.cargo/git, and ~/.config/git/config, ~/.config/git/ignore, and ~/.config/git/attributes
+(docs/SANDBOX.md)."""
 # The roles whose command is OpenCode, which keeps its data, logins included, in the run's own data directory.
 RUNTIME_ROLES = ("worker", "chore", "review")
 
@@ -158,6 +167,8 @@ def _copy_templates(report: Report) -> None:
                     report.todo.append(SHARED_CACHE.format(template=path, paths=", ".join(shared)))
                 if (data := _data_todo(path, role)) is not None:
                     report.todo.append(data)
+                if (secret := _secret_todo(path)) is not None:
+                    report.todo.append(secret)
                 continue
             path.write_text((canopy_sandbox.TEMPLATES / path.name).read_text(encoding="utf-8"), encoding="utf-8")
             report.written.append(path)
@@ -216,6 +227,43 @@ def _data_todo(template: Path, role: str) -> str | None:
     if role in RUNTIME_ROLES and not all("@DATA@" in es for es in entries):
         return NO_DATA.format(template=template)
     return None
+
+
+def _secret_todo(template: Path) -> str | None:
+    """Say which of `template`'s `allowRead` entries let a run read a credential under HOME, if any.
+
+    An entry does when it is one of `CREDENTIAL_DIRS`, or a directory that holds one. An entry that names the
+    credential's own file is the operator's choice, as for a push through git's store helper, and is left alone.
+
+    Returns:
+        The paragraph for the operator, or None for a template that needs nothing, or cannot be read.
+    """
+    try:
+        policy = json.loads(template.read_text(encoding="utf-8"))
+        readable: object = policy["filesystem"].get("allowRead", [])
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return None
+    if not isinstance(readable, list):
+        return None
+    entries: list[object] = readable
+    named: list[str] = []
+    files: list[str] = []
+    for entry in entries:
+        if not isinstance(entry, str) or entry.startswith("@"):
+            continue
+        place = Path(entry).expanduser()
+        for directory, file in CREDENTIAL_DIRS:
+            secret = Path.home() / directory
+            if place == secret or place in secret.parents:
+                named.append(entry)
+                files.append(f"~/{directory}/{file}")
+    if not named:
+        return None
+    return CREDENTIAL_READ.format(
+        template=template,
+        paths=", ".join(dict.fromkeys(named)),
+        files=", ".join(dict.fromkeys(files)),
+    )
 
 
 def _under(entry: str, root: Path) -> bool:
