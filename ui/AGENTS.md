@@ -165,7 +165,9 @@ change to the rest; a write goes through `canopy.core.conversation`, never SQL o
 - Unit tests (Vitest, happy-dom) sit next to the code as `*.test.ts(x)`. Test behavior, and what a component renders
   when that is the behavior: what shows in each state, its accessible names and roles, and words the CLI shares (a
   refusal's guard). Find elements by role, name, and text, as a person or a screen reader does, never by class, tag, or
-  DOM shape; how it looks is the screenshots' job.
+  DOM shape; how it looks is the screenshots' job. Each file runs with a page, globals, and modules of its own, in
+  worker processes the run keeps (`pool` in `vitest.config.ts`), so a test restores what it changes in `process` or in
+  Node's own modules, which the next file in that worker would otherwise see.
 - Playwright (`e2e/`) runs against the production build served by FastAPI, never the Vite dev server. The root server
   needs the listener secret (`e2e/secret.ts`; `signIn` in `e2e/helpers.ts`) and never changes its journal; tests that
   write run against the prefixed one. Every route gets a screenshot in dark in `e2e/screenshots.spec.ts`, of its main
