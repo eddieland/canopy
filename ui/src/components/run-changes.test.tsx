@@ -348,6 +348,33 @@ describe('RunChangesPanel', () => {
         )
     })
 
+    it('keeps its disclosure in place on a scope with no diff, disabled, saying why', async () => {
+        await render([change('web')], {
+            stretches: [stretch('web', { truncated: false, files: [] })],
+            diffs: { web: diffOf('own.txt') },
+        })
+        const web = screen.getByRole('region', { name: "web's diff" })
+        const scopes = within(web).getByRole('radiogroup', { name: "Which of web's diffs" })
+        const disclosure = (): HTMLButtonElement => within(web).getByRole('button', { name: /diff of web$/u })
+        expect(disclosure().textContent).toBe('Show diff')
+        expect(disclosure().disabled).toBe(true)
+        expect(disclosure().parentElement?.title).toBe('no change: the run pushed the commit it was shown the list at')
+
+        // The panel opened on the stretch, so the run's diff is open once chosen.
+        fireEvent.click(within(scopes).getByRole('radio', { name: 'whole run' }))
+        await within(web).findByText('own.txt <img src=x onerror=alert(1)>')
+        expect(disclosure().disabled).toBe(false)
+        expect(disclosure().textContent).toBe('Hide diff')
+        expect(disclosure().parentElement?.title).toBe('')
+        // Back on the stretch the diff folds, and the run's stays open for when it is chosen again.
+        fireEvent.click(within(scopes).getByRole('radio', { name: 'after the list' }))
+        expect(screen.queryAllByTestId('diff-file')).toHaveLength(0)
+        expect(disclosure().disabled).toBe(true)
+        fireEvent.click(within(scopes).getByRole('radio', { name: 'whole run' }))
+        expect(shownFiles()).toEqual(['own.txt'])
+        expect(disclosure().textContent).toBe('Hide diff')
+    })
+
     it('opens the run’s own diff, not the stretch, when a link names it', async () => {
         await render([change('web')], {
             at: '/#diff-web',

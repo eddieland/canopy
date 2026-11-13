@@ -495,6 +495,25 @@ def _server_name(value: str) -> str:
 
 ToolPart = Annotated[str, AfterValidator(_tool_part)]
 
+
+#: The longest name of an operator's MCP server canopy takes: OpenCode takes any, and this one bounds a config file.
+MAX_SERVER_NAME = 100
+
+
+def _operator_server(value: str) -> str:
+    if not value.isprintable() or not value.strip() or len(value) > MAX_SERVER_NAME:
+        raise ValueError(f"{value!r} must be a printable name of at most {MAX_SERVER_NAME} characters")
+    # canopy gives each run its own servers, `canopy` and `canopy_*`, in the same inline config (DESIGN §27), and
+    # OpenCode names a server's tools by its name with each character outside `[A-Za-z0-9_-]` made `_`.
+    tools = "".join(c if c.isascii() and (c.isalnum() or c in "_-") else "_" for c in value)
+    if tools == "canopy" or tools.startswith("canopy_"):
+        raise ValueError(f"{value!r} is one of canopy's own MCP servers, or names their tools, which its runs need")
+    return value
+
+
+#: An MCP server of the operator's own runtime config, by its name there, which may be any: never one of canopy's.
+OperatorServer = Annotated[StrictStr, AfterValidator(_operator_server)]
+
 TICKET_KEY = "{key}"
 MAX_LINK_URL = 500
 
@@ -811,6 +830,65 @@ _AGENT_CMDS = {
 }
 
 
+class RoleMcpServers(Section):
+    """One role's `[runtime.mcp_servers.<role>]` table, which takes the place of the global list for that role."""
+
+    #: The operator's servers that no run of the role starts; empty starts every one, those turned off for every
+    #: other role included.
+    disabled: tuple[OperatorServer, ...] = ()
+
+
+class McpServers(Section):
+    """The `[runtime.mcp_servers]` table: MCP servers of the operator's runtime config that canopy's runs never start.
+
+    Each run is one agent in a runtime of its own, so each role may keep its own servers out (DESIGN §13). The roles
+    are `runtime.models`'s: a task's runs are the worker's, and an epic's the planner's.
+    """
+
+    #: The servers no run of any role starts, but a role with its own table.
+    disabled: tuple[OperatorServer, ...] = ()
+    overseer: RoleMcpServers | None = None
+    worker: RoleMcpServers | None = None
+    planner: RoleMcpServers | None = None
+    reviewer: RoleMcpServers | None = None
+    chore: RoleMcpServers | None = None
+
+    def disabled_for(self, role: agent_models.Role) -> tuple[str, ...]:
+        """The servers no run of `role` starts.
+
+        Returns:
+            The role's own list when it has a table, else the global one.
+        """
+        own: RoleMcpServers | None = getattr(self, role)
+        return own.disabled if own is not None else self.disabled
+
+    def by_role(self) -> dict[agent_models.Role, tuple[str, ...]]:
+        """Each role's servers, as `disabled_for` says.
+
+        Returns:
+            Every role by name, in `runtime.models`'s order.
+        """
+        return {role: self.disabled_for(role) for role in agent_models.AGENTS}
+
+    def everywhere(self) -> tuple[str, ...]:
+        """The servers no run of any role starts: off for every agent.
+
+        Returns:
+            Those every role's list names, in the order the first role's gives them.
+        """
+        lists = list(self.by_role().values())
+        return tuple(s for s in lists[0] if all(s in other for other in lists[1:]))
+
+    def named(self) -> tuple[str, ...]:
+        """Every server some role keeps out of its runs.
+
+        Returns:
+            Each once, in the order the global list, then each role's, first names it.
+        """
+        own = (t.disabled for t in (self.overseer, self.worker, self.planner, self.reviewer, self.chore) if t)
+        return tuple(dict.fromkeys(s for names in (self.disabled, *own) for s in names))
+
+
 class Runtime(Section):
     """The `[runtime]` table: agent command templates and timeouts."""
 
@@ -870,6 +948,10 @@ class Runtime(Section):
     #: `setup_cmd`, and a review's, with the role each takes (DESIGN §24). Names need not be in this workspace's map,
     #: as the user file serves every workspace. Private: it decides what a run may reach (TRUST_MODEL T4, T7).
     sandbox_repos: Annotated[tuple[RepoName, ...], Scope.PRIVATE] = ()
+    #: MCP servers of the operator's own runtime config that canopy's runs never start, for every role or each its own
+    #: (DESIGN §13). Private: the servers are the operator's, as their runtime config is.
+    # A factory, so importing config builds no model (`tests/canopy/test_models.py`).
+    mcp_servers: Annotated[McpServers, Scope.PRIVATE] = Field(default_factory=McpServers)
 
     @model_validator(mode="before")
     @classmethod
@@ -1334,6 +1416,11 @@ class Serve(Section):
     dictation_cmd: Annotated[StrictStr, Scope.PRIVATE, AfterValidator(_dictation_command)] = ""
 
 
+#: An agent with a standing instructions file of its own (DESIGN §12): `worker` reaches implement, resume, plan, and
+#: task runs too.
+type StandingAgent = Literal["worker", "overseer", "reviewer", "chore"]
+
+
 class Paths(Section):
     """The `[paths]` table."""
 
@@ -1342,6 +1429,10 @@ class Paths(Section):
     #: A personal `.worktreeinclude`, passed on every `treehouse get` as `--include-file`. treehouse then seeds the
     #: ignored files it selects from the primary clone in place of the committed manifest's (DESIGN §9).
     worktree_include: Annotated[UserPath | None, Scope.PRIVATE] = None
+    #: Where an agent with no `<agent>_instructions` of its own finds them: `<agent>.md` here, read when it exists, so
+    #: the web UI's instructions page can make and delete one without writing a key (DESIGN §12). No static default:
+    #: `load` supplies `instructions/` in the user config directory, as it does `prompt_overrides`.
+    instructions: Annotated[UserPath, Scope.PRIVATE]
     #: The operator's standing instructions, rendered into every worker prompt (DESIGN §12).
     worker_instructions: Annotated[UserPath | None, Scope.PRIVATE] = None
     #: The operator's standing instructions to the overseer, rendered into its prompt (DESIGN §12).
@@ -1377,6 +1468,45 @@ class Paths(Section):
     #: sooner than that leaves the plans for a later one, unless the archive is not all pushed. 0 archives every tick.
     #: Private, as `plan_archive` is: it sets how often the operator's remote is pushed to.
     plan_archive_every_minutes: Annotated[Count, Scope.PRIVATE] = 360
+
+    def configured_instructions(self, agent: StandingAgent) -> Path | None:
+        """Return the file `paths.<agent>_instructions` names, or None when the key is unset.
+
+        Returns:
+            The path the key names.
+        """
+        match agent:
+            case "worker":
+                return self.worker_instructions
+            case "overseer":
+                return self.overseer_instructions
+            case "reviewer":
+                return self.reviewer_instructions
+            case "chore":
+                return self.chore_instructions
+
+    def instructions_file(self, agent: StandingAgent) -> Path:
+        """Return the file `agent`'s standing instructions live in: the one its key names, else its default.
+
+        Returns:
+            `paths.<agent>_instructions`, or `<paths.instructions>/<agent>.md` when that key is unset.
+        """
+        return self.configured_instructions(agent) or self.instructions / f"{agent}.md"
+
+    def instructions_read(self, agent: StandingAgent) -> Path | None:
+        """Return the file a run of `agent` reads its standing instructions from, or None when it reads none.
+
+        A file the key names is read whether or not it is there, so a missing one refuses the run; the default only
+        while something is there, so an agent with neither reads none.
+
+        Returns:
+            The path to read, or None.
+        """
+        configured = self.configured_instructions(agent)
+        if configured is not None:
+            return configured
+        default = self.instructions_file(agent)
+        return default if os.path.lexists(default) else None
 
 
 class Personas(Section):
@@ -1813,6 +1943,28 @@ class Config(Section):
                 )
         return self
 
+    @model_validator(mode="after")
+    def _needed_servers_stay_on(self) -> Config:
+        # Every agent but the overseer reads or writes the tracker through its server, and the roles that publish
+        # write to the store through its own (DESIGN §22, §30, §38).
+        tracker = self.tracker.tools()
+        publishers = tuple(r for r in agent_models.AGENTS if r in self.artifacts.publish_roles)
+        needed: dict[str, tuple[str, Sequence[agent_models.Role]]] = {
+            "the tracker's": (
+                tracker.server if tracker is not None else "",
+                ("worker", "planner", "reviewer", "chore"),
+            ),
+            "the artifact store's": (self.artifacts.mcp_server, publishers),
+        }
+        servers = self.runtime.mcp_servers
+        for whose, (server, roles) in needed.items():
+            for role in roles:
+                if server and server in servers.disabled_for(role):
+                    raise ValueError(
+                        f"runtime.mcp_servers turns off {server} for the {role}, {whose} MCP server, which it needs",
+                    )
+        return self
+
     @property
     def reviews_on(self) -> bool:
         """Whether reviews run at all: `max_reviews` above 0 and something to review (DESIGN §21)."""
@@ -1922,6 +2074,9 @@ def load(
     # Unset or empty: `prompts/` in the user config directory.
     if merged["paths"].get("prompt_overrides", "") == "":
         merged["paths"]["prompt_overrides"] = str(user_file.parent / "prompts")
+    # And `instructions/` there, the agents' standing instructions files when no key names one.
+    if merged["paths"].get("instructions", "") == "":
+        merged["paths"]["instructions"] = str(user_file.parent / "instructions")
 
     try:
         return Config.model_validate(merged)
@@ -2092,7 +2247,8 @@ def _in_state_dir(value: object, state_dir: Path) -> object:
     """Resolve a private file's relative `paths.*` value against the state directory.
 
     Not the workspace root, which may be a shared checkout (TRUST_MODEL T7). Empty stays empty: for
-    `paths.prompt_overrides` it means the default, and for any other key it is refused as it is in the user file.
+    `paths.prompt_overrides` and `paths.instructions` it means the default, and for any other key it is refused as it
+    is in the user file.
 
     Returns:
         A relative path's string under `state_dir`; any other value as it is, for validation to judge.

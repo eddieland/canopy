@@ -28,7 +28,7 @@ from canopy.serve.schema.epic import (
     EpicRunLatest,
     EpicSummary,
 )
-from canopy.serve.views import lines, message, run_state, said, ticket_title
+from canopy.serve.views import attachments_of, lines, message, run_state, said, ticket_title
 
 if TYPE_CHECKING:
     import sqlite3
@@ -74,6 +74,7 @@ def epic_detail(ctx: Context, epic_id: int) -> EpicDetail | None:
         max_plan_attempts=ctx.config.policy.max_plan_attempts,
         runs=[_plan_run(r, recorded.get(r.id)) for r in epic_runs.runs_of(ctx.conn, epic_id)],
         messages=[message(m) for m in epics.messages_of(ctx.conn, epic_id)],
+        attachments=attachments_of(ctx, conversation.Ref(conversation.EPIC, str(epic_id))),
         plan=plan_summary(current) if current is not None else None,
         outline=outlined.view(_fulfilling(members, registered)),
     )

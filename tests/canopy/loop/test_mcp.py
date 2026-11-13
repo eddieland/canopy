@@ -1054,6 +1054,7 @@ def test_the_agents_report_asks_the_runtime_without_the_servers_its_run_was_give
         {history.SERVER: history.SERVER_COMMAND, reports.SERVER: reports.SERVER_COMMAND},
         cwd=overseen.root,
         version=Version.ONE,
+        disabled=(),
     )
     with in_run("chore-2"), mock.patch.dict(os.environ, given):
         served = mcp_session(tool_call(reports.AGENTS), reports=True)
@@ -1496,7 +1497,10 @@ def test_a_worker_starts_without_the_overseers_server(scenario: Scenario) -> Non
     ticked = scenario.tick(dispatches("PROJ-1"), worker=pushes())
     assert [run.status for run in ticked.runs] == ["done"]
     overseer, worker = agent_runs(scenario.agent_log)
-    assert overseer["env"].keys() >= servers.env({}, version=scenario.env.runtime, cwd=scenario.env.root).keys()
+    assert (
+        overseer["env"].keys()
+        >= servers.env({}, version=scenario.env.runtime, cwd=scenario.env.root, disabled=()).keys()
+    )
     # The worker's own inline config gives it canopy's `status` server alone (DESIGN §41).
     assert inline_servers(worker).keys() == {cards.SERVER}
     assert "CANOPY_TICK_ID" not in worker["env"]

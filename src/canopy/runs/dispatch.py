@@ -1186,11 +1186,17 @@ def _spawn(
     if followed is not None:
         values["PLAN"] = followed.note
         required = (*required, *prompts.REQUIRED_PLAN_COPY)
-    # `_run` copies them where the worker starts, as it does the plan (DESIGN §22).
+    # `_run` copies them where the worker starts, as it does the plan, its epic's beside its own (DESIGN §22, §43).
     attached = attachments.of(ctx.conn, conversation.Ref(conversation.TICKET, key))
-    where = (desk or first.slot_path) / attachments.RUN_DIR
-    values["ATTACHMENTS"] = prompts.attachments_note(where, attachments.sizes(attached))
-    if attached:
+    epic = attachments.epic_of(ctx.conn, key)
+    epic_attached = attachments.of(ctx.conn, epic) if epic is not None else []
+    values["ATTACHMENTS"] = prompts.attachments_note(
+        (desk or first.slot_path) / attachments.RUN_DIR,
+        attachments.sizes(attached),
+        epic=str(epic),
+        epic_files=attachments.sizes(epic_attached, under=attachments.EPIC_DIR),
+    )
+    if attached or epic_attached:
         required = (*required, *prompts.REQUIRED_ATTACHMENTS)
     if kind == RunKind.RESUME:
         _check_retired_overrides(ctx, plan.repos)

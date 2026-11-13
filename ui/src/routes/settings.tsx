@@ -59,8 +59,8 @@ import { useTheme } from '@/theme/use-theme'
 
 /**
  * What this browser keeps (the theme, the clock, a plan's text size, the send key, chores' findings on the attention
- * list, the review personas, the fun, the session), the loop settings of the workspace's config, and
- * reloading the loop's config.
+ * list, the review personas, the fun, the session), the loop settings of the workspace's config, the standing
+ * instructions files it names, and reloading the loop's config.
  */
 export const Route = createFileRoute('/settings')({
     component: SettingsPage,
@@ -111,7 +111,7 @@ function SettingsPage() {
             <PageHeader title="Settings">
                 The theme, the clock, a plan&apos;s text size, the send key, chores&apos; findings on the attention
                 list, your review personas, and the fun are kept in this browser. Everything else canopy reads from its
-                config files, whose loop settings can be changed here.
+                config files, whose loop settings, and the standing instructions files they name, can be changed here.
             </PageHeader>
             <ThemePanel />
             <ClockPanel />
@@ -120,6 +120,7 @@ function SettingsPage() {
             <AttentionPanel />
             <ReviewsPanel />
             <NoticePanel />
+            <InstructionsLinkPanel />
             <LimitsPanel />
             <ModelsPanel />
             <SkillsPanel />
@@ -790,6 +791,27 @@ function AttentionPanel() {
                     />
                     Hide chore findings
                 </label>
+            </div>
+        </Panel>
+    )
+}
+
+/** Where each agent's standing instructions are read and edited: a page of their own, an editor each. */
+function InstructionsLinkPanel() {
+    return (
+        <Panel>
+            <PanelHeader label="Standing instructions" />
+            <div className="flex items-center justify-between gap-4 p-3">
+                <p className="text-sm text-muted-foreground">
+                    What the worker, overseer, reviewer, and chores hear from you on every run: the files your config
+                    names, read and edited here.
+                </p>
+                <Button asChild variant="outline" data-testid="instructions-open">
+                    <Link to="/settings/instructions">
+                        Open
+                        <ChevronRight />
+                    </Link>
+                </Button>
             </div>
         </Panel>
     )

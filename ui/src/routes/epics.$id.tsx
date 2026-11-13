@@ -6,6 +6,7 @@ import { ApiError } from '@/api/client'
 import { epicQuery } from '@/api/queries'
 import type { EpicDetail } from '@/api/types'
 import { Age } from '@/components/age'
+import { Attachments } from '@/components/attachments'
 import { EpicActions } from '@/components/epic-actions'
 import { EpicBoard } from '@/components/epic-board'
 import { EntriesFiled } from '@/components/epic-filed'
@@ -128,6 +129,14 @@ function Epic({ detail }: { detail: EpicDetail }) {
                     >
                         <Panel className="2xl:col-start-1 2xl:row-start-1" data-testid="epic-conversation">
                             <EpicStory detail={detail} />
+                            {/* What you attached for its plan runs and every run of its tickets to read; your goal and
+                                replies say what to do with it (§22, §43). */}
+                            <Attachments
+                                subject={{ kind: 'epic', id: epic.id }}
+                                attachments={detail.attachments}
+                                closed={epic.stopped_at !== null}
+                                className="border-t"
+                            />
                         </Panel>
                         <OutlinePanel
                             outline={detail.outline}

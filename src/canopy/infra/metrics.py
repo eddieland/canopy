@@ -40,7 +40,15 @@ type CounterName = Literal["canopy.ticks", "canopy.runs", "canopy.cost", "canopy
 #: Each histogram canopy records, which `record` alone takes.
 type HistogramName = Literal["canopy.tick.duration", "canopy.run.duration"]
 #: Each gauge canopy sets, which `gauge` alone takes.
-type GaugeName = Literal["canopy.runs.active"]
+type GaugeName = Literal[
+    "canopy.runs.active",
+    "canopy.tick.last",
+    "canopy.tickets",
+    "canopy.capacity.used",
+    "canopy.capacity.limit",
+    "canopy.attention.open",
+    "canopy.disk.free",
+]
 #: Each metric canopy records, as `INSTRUMENTS` describes it. A name is one kind of instrument only: the type checker
 #: refuses a histogram's name to `count`, so no name is exported as two kinds.
 type MetricName = CounterName | HistogramName | GaugeName
@@ -78,6 +86,14 @@ INSTRUMENTS: Mapping[MetricName, Instrument] = {
     "canopy.cost": Instrument("What agent runs cost, as the runtime reported, by role and model."),
     "canopy.tokens": Instrument("The tokens agent runs spent, by role, model, and type."),
     "canopy.runs.active": Instrument("The agent runs at work as a tick closes, by role."),
+    "canopy.tick.last": Instrument("When the last tick of each status closed, in Unix seconds."),
+    "canopy.tickets": Instrument("The open tickets the loop works, neither done nor stopped, by phase."),
+    "canopy.capacity.used": Instrument(
+        "The runs at work that fill each role's capacity: a worker's holds every run in a slot.",
+    ),
+    "canopy.capacity.limit": Instrument("Each role's capacity, the runs at once its config allows."),
+    "canopy.attention.open": Instrument("The items on the attention list, waiting on the operator."),
+    "canopy.disk.free": Instrument("Bytes free on the state directory's disk, beside loop.min_free_disk_mib."),
 }
 
 

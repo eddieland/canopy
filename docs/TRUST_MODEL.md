@@ -316,10 +316,12 @@ Controls:
   changed ids as data, never an instruction, and no run in flight is paused.
 - Attachments (DESIGN §22, ROADMAP M63) are written and removed only through `runs/attachments.py` by a channel that
   authenticated the operator: `canopy attach` and `canopy detach` in the operator's shell, or the web UI behind the
-  listener secret (T8), each refused as `inside_run`, on a ticket canopy knows or a task not stopped. An attachment's
-  text is what someone sent the operator, so it is data, never an instruction: what to do with it is the operator's
-  reply or the task's text. It is kept as a plan is (T2), in the operator-only state directory, and only a run's copy
-  of it, which the run's prompt names as data, reaches an agent.
+  listener secret (T8), each refused as `inside_run`, on a ticket canopy knows or a task or an epic not stopped. An
+  attachment's text is what someone sent the operator, so it is data, never an instruction: what to do with it is the
+  operator's reply, or the task's or the epic's text. It is kept as a plan is (T2), in the operator-only state
+  directory, and only a run's copy of it, which the run's prompt names as data, reaches an agent. An epic's reaches its
+  plan runs and every run of its members, so a member's worker, public or private, can quote it as it can its own
+  ticket's; membership stays the operator's word alone (DESIGN §43).
 - Ticket notes (DESIGN §28, ROADMAP M50), with `memory.ticket_notes` at `use`: a worker may write notes its own
   ticket's later `implement` and `resume` runs read as data, the same exposure as its reports in
   `{{PREVIOUS_RUNS}}`, with one new property: a note outlives the tracker comment that steered it, bounded by the
@@ -593,10 +595,11 @@ Controls in code, not prompts:
   each with the worker's timeout. A member's `implement` on a ticket with no branch, whose approved plan a change of
   its epic's plan reached, is refused (`epic_changed`), whatever the overseer asks for, until the operator approves
   the plan again or asks for a new one.
-- Attachments (DESIGN §22): only UTF-8 text with no NUL, at most `policy.max_attachments` files on one ticket or task
-  (5 by default), each at most `policy.max_attachment_kib` (512) and all together at most
+- Attachments (DESIGN §22): only UTF-8 text with no NUL, at most `policy.max_attachments` files on one ticket, task,
+  or epic (5 by default), each at most `policy.max_attachment_kib` (512) and all together at most
   `policy.max_attachments_total_kib` (1024), each under a ceiling in code (20 files, 1024 and 4096 KiB), and the
-  workspace file may only lower them. A file over its bound is refused without being read whole.
+  workspace file may only lower them. A file over its bound is refused without being read whole. A member's run
+  carries its ticket's and its epic's, each within its own limits.
 - Plans: a plan run holds a slot within `capacity.max_workers`, has the worker's timeout, and counts toward
   `policy.max_plan_attempts` per ticket, never reset, raised only by the operator, in config or per ticket with
   `canopy grant KEY plan` (DESIGN §25). A plan waiting on the operator holds no slot. The plan gate is a guard in code:
@@ -1212,8 +1215,8 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   drop, send, and stage them as `canopy draft edit`, `drop`, `send`, and `stage` do (DESIGN §29), choose or clear the
   persona of one of a ticket's agents as `canopy persona` does, among the personas a run could already get (DESIGN §31),
   choose or clear the model of one of a ticket's agents as `canopy model` does, among the models the runtime lists
-  (DESIGN §13), attach a text file to a ticket or a task, one a request within the body bound, and remove one, as
-  `canopy attach` and `canopy detach` do (DESIGN §22),
+  (DESIGN §13), attach a text file to a ticket, a task, or an epic, one a request within the body bound, and remove
+  one, as `canopy attach` and `canopy detach` do (DESIGN §22),
   edit a review's draft's body and comments, drop one, add one on a line of its kept diff, note what a revision of it
   should change as `canopy reply review:ID` does, publish or stage the version the page showed, named by its hash,
   as `canopy review edit` and `publish` do, and discard a draft as `canopy review discard` does (DESIGN §34), answer the
@@ -1225,7 +1228,18 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   are the operator's own words on a plan (DESIGN §25): an edit of a
   plan's file, saved as the operator's own editor would, operator-only and never through a link, only over the
   ticket's current plan, never while a plan run for it is running, and never over a file that changed since the
-  editor read it; and the operator's comments on a plan's passages, in the journal. It also writes the limits and
+  editor read it; and the operator's comments on a plan's passages, in the journal. It also writes the operator's
+  standing instructions files (DESIGN §12, D134), each agent's own: the file its `paths.<agent>_instructions` names,
+  else its default, `<paths.instructions>/<agent>.md`, never any other file, and no `paths.*` key. It edits either's
+  text, makes either when it is not there, readable by the operator alone, and deletes a default, never a file a key
+  names, which would refuse every run of its agent. Each change is refused inside a tick or run (`inside_run`), on
+  anything but the operator's own regular file, through a link, in a directory another account may write in, over a
+  file that changed since the page read it, and past the bound a run takes. Before it, the file as it was is kept in
+  the operator-only state directory, the newest ten of each agent's, which the page lists and restores from; each
+  change is logged with both hashes, never the text. Residual: as a config write does, a change outlives the secret,
+  and its text is read as the operator's words by every later run of its agent, so a stolen session could steer them,
+  or silence the operator's instructions by deleting a default, until the operator reads the page or the file and puts
+  them back from a version; a new secret does not undo it. It also writes the limits and
   trust settings below, in the workspace's private file. Nothing else, but the record of its writes above. A reload
   reads only the operator's own files, and a `serve.*` change waits for a restart, so the listener's bind and port
   never change under it. A forget must carry the ticket's key

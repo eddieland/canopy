@@ -12,6 +12,7 @@ from tests.canopy.web_helpers import refused, signed_in_client
 
 DOC = "# Importer\n\nShard the queue by tenant.\n"
 TASK = conversation.Ref(conversation.TASK, "1")
+EPIC = conversation.Ref(conversation.EPIC, "1")
 
 
 def test_a_file_uploaded_to_a_task_is_kept_and_shown_on_its_page(ctx: Context) -> None:
@@ -41,6 +42,22 @@ def test_a_ticket_s_page_lists_its_attachments_and_a_removal_deletes_one(ctx: Co
     assert c.get("/api/tickets/PROJ-1").json()["attachments"]["items"] == []
     gone = refused(c.delete("/api/tickets/PROJ-1/attachments/design.md", headers=headers))
     assert gone == "unknown: PROJ-1 has no attachment named 'design.md'"
+
+
+def test_a_file_uploaded_to_an_epic_is_shown_on_its_page_and_removed(ctx: Context) -> None:
+    c, headers = signed_in_client(ctx)
+    assert refused(c.put("/api/epics/1/attachments/spec.md", content=b"x", headers=headers)) == (
+        "unknown: canopy has no epic:1"
+    )
+    body = {"text": "Move sessions to the new store.", "repos": ["repo"]}
+    assert c.post("/api/epics", json=body, headers=headers).status_code == 200
+    put = c.put("/api/epics/1/attachments/spec.md", content=DOC.encode(), headers=headers)
+    assert put.status_code == 200, put.text
+    [kept] = attachments.of(ctx.conn, EPIC)
+    assert (kept.channel, attachments.path(ctx.state_dir, kept).read_text()) == ("web", DOC)
+    assert [a["name"] for a in c.get("/api/epics/1").json()["attachments"]["items"]] == ["spec.md"]
+    assert c.delete("/api/epics/1/attachments/spec.md", headers=headers).json() == {"name": "spec.md"}
+    assert c.get("/api/epics/1").json()["attachments"]["items"] == []
 
 
 def test_an_upload_canopy_cannot_use_is_refused_as_the_cli_refuses_it(ctx: Context) -> None:

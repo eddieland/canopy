@@ -1539,7 +1539,12 @@ def answered_lines(stdout: str) -> list[Said]:
 
 def inline_servers(run: Mapping[str, Any]) -> dict[str, list[str]]:
     """The servers of canopy's that a fake agent run's inline config (FAKE_AGENT_LOG's `env`) gave it, with commands."""
-    return {name: entry["command"] for name, entry in _inline_entries(run).items()}
+    return {name: entry["command"] for name, entry in _inline_entries(run).items() if "command" in entry}
+
+
+def turned_off_servers(run: Mapping[str, Any]) -> set[str]:
+    """The operator's servers a fake agent run's inline config turned off, each by an entry of `enabled` false alone."""
+    return {name for name, entry in _inline_entries(run).items() if entry == {"enabled": False}}
 
 
 def given_server(run: Mapping[str, Any], server: str, runtime: Version) -> dict[str, Any]:

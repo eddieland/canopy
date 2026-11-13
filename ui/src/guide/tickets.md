@@ -319,7 +319,9 @@ Someone sends you a design doc and asks whether the code agrees with it. Attach 
 in a reply: **Attach a file**, under Stop at the foot of the conversation, uploads one file, the same as `canopy attach
 KEY FILE`. Every run of the ticket from then on, its planner's included, gets a copy beside its worktree, outside git,
 and its prompt names each copy. The ✕ beside a file removes it, as `canopy detach KEY NAME` does, and later runs no
-longer get it; a run already working keeps the copy it started with.
+longer get it; a run already working keeps the copy it started with. A ticket that is a member of an epic also gets
+the epic's files, in a folder of their own beside its own ([Epics](epics#an-epics-page)); this list shows only the
+ticket's.
 
 An attachment is text, and canopy is strict about it. It takes UTF-8 text only, so export a PDF or a Word document as
 Markdown first: canopy would rather not grow a PDF parser that reads whatever strangers mail you. It holds each ticket

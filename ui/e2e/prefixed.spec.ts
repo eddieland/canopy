@@ -175,6 +175,62 @@ test('the settings page asks the loop to read its config again and says what it 
     )
 })
 
+test("an agent's standing instructions are saved from their page under Settings, and read back from the file", async ({
+    page,
+}) => {
+    await page.goto('settings')
+    await page.getByTestId('instructions-open').click()
+    await expect(page).toHaveURL(/\/canopy\/settings\/instructions$/u)
+    const reviewer = page.getByRole('region', { name: 'Reviewer instructions' })
+    const field = reviewer.getByRole('textbox', { name: 'Reviewer standing instructions' })
+    await expect(field).toHaveValue(/^Flag a behavior change/u)
+    // A line of its own, so a retry of this test saves the same file again rather than one it grew.
+    const line = 'Ask for a test of every bug fix.'
+    const kept = (await field.inputValue()).split('\n').filter((l) => l !== line && l !== '')
+    await field.fill([...kept, line].join('\n'))
+    const index = page.getByRole('navigation', { name: 'Agents' })
+    await expect(index.getByRole('link', { name: 'Reviewer unsaved' })).toBeVisible()
+
+    // Leaving with it unsaved asks first; Stay keeps it.
+    await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Settings' }).click()
+    const ask = page.getByRole('alertdialog', { name: 'Leave this page?' })
+    await expect(ask).toContainText('Your edits to the reviewer instructions are not saved.')
+    await ask.getByRole('button', { name: 'Stay' }).click()
+    await expect(page).toHaveURL(/\/settings\/instructions$/u)
+
+    await reviewer.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(reviewer.getByRole('status')).toContainText('Saved reviewer.md')
+    await expect(index.getByRole('link', { name: 'Reviewer', exact: true })).toBeVisible()
+    // Read again from the file, as a fresh page would; the text it replaced is a version now, which restores.
+    await page.reload()
+    await expect(field).toHaveValue(`${[...kept, line].join('\n')}\n`)
+    await reviewer.getByTestId('instructions-versions').click()
+    await reviewer.getByTestId('instructions-version').first().getByRole('button', { name: 'Restore' }).click()
+    await expect(index.getByRole('link', { name: 'Reviewer unsaved' })).toBeVisible()
+    await reviewer.getByRole('button', { name: 'Revert' }).click()
+})
+
+test('an agent with no instructions gets a file created on its page, and loses it to a delete', async ({ page }) => {
+    await page.goto('settings/instructions#overseer')
+    const overseer = page.getByRole('region', { name: 'Overseer instructions' })
+    await expect(overseer).toContainText('None yet, so they hear nothing.')
+    await overseer.getByRole('button', { name: 'Create' }).click()
+    await overseer
+        .getByRole('textbox', { name: 'Overseer standing instructions' })
+        .fill('Dispatch urgent tickets first.')
+    await overseer.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(overseer.getByRole('status')).toContainText('Saved overseer.md')
+
+    await overseer.getByRole('button', { name: 'Delete' }).click()
+    await overseer.getByRole('group', { name: 'Delete overseer.md?' }).getByRole('button', { name: 'Delete' }).click()
+    await expect(overseer.getByRole('status')).toContainText('Deleted overseer.md')
+    await expect(overseer.getByRole('button', { name: 'Create' })).toBeVisible()
+    // The worker's file is named by its key: edited, never deleted.
+    await expect(
+        page.getByRole('region', { name: 'Worker instructions' }).getByRole('button', { name: 'Delete' }),
+    ).toHaveCount(0)
+})
+
 test('the settings page saves a limit and drops a trusted reviewer, but offers nothing past its ceiling', async ({
     page,
 }) => {

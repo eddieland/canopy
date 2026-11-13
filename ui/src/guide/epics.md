@@ -146,6 +146,15 @@ board, who covers it under **Requirements and contracts**, so a requirement no e
 order. A plan run is named `epic:N#M`, the epic's plan run number M, counted across every epic's plan runs. A question
 a plan run asked wears `waiting on you` until you reply.
 
+Under it, **Attach a file** uploads a text file for the whole epic, such as the spec everyone keeps forwarding you,
+the same as `canopy attach epic:N FILE`. Every plan run of the epic gets a copy, and so does every run of every member
+ticket, its plan, its implement, and its resumes, in `.canopy-attachments/_epic/` beside the ticket's own files: one
+spec, attached once, rather than pasted into each ticket and drifting in four directions. A file reaches a ticket only
+while it is a member, and only runs that start after you attach it. The limits are a ticket's, counted for the epic on
+its own: [Attaching files](tickets#attaching-files) has them. Your goal or a reply says what to do with the file, and
+attaching one plans nothing by itself: reply to ask for a new plan that reads it. The ✕ beside a file removes it, and a
+stopped epic keeps its list and takes no more files.
+
 **Requirements and contracts** lists each `R` and `C` with what the plan says of it. **Plan runs** lists every run of
 the planner, the first first: how it ended, `epic:N#M`, cost, how long it took, and what it said.
 

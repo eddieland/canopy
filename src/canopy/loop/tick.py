@@ -145,7 +145,8 @@ def run(ctx: Context, *, dry_run: bool, woken_by: WokenBy | None = None, ui: str
         with lock.hold(ctx.lock_path):
             outcome = _locked(ctx, dry_run=dry_run, woken_by=woken_by)
             # After the tick is closed: the list is the latest `ok` tick's, and this tick may be it.
-            attention.publish(ctx, logs.for_tick(outcome.tick_id), ui=ui)
+            published = attention.publish(ctx, logs.for_tick(outcome.tick_id), ui=ui)
+            run_metrics.attention(len(published))
     except lock.LockBusyError:
         logs.for_tick(None).info("tick skipped: another tick holds the lock", extra={"lock": str(ctx.lock_path)})
         return Outcome(None, "lock_busy", "another tick holds the lock")
@@ -460,11 +461,18 @@ def _locked(ctx: Context, *, dry_run: bool, woken_by: WokenBy | None) -> Outcome
 
 
 def _meter(ctx: Context, tick_id: int, status: TickStatus, *, dry_run: bool, seconds: float) -> None:
-    """Record tick `tick_id`'s metrics as it closes: it, its overseer's runs, and the runs at work (D132)."""
+    """Record tick `tick_id`'s metrics as it closes: it, its overseer's runs, and what the loop holds now (D132).
+
+    What it holds is the runs at work against their capacity, the open tickets by phase, and the disk; the attention
+    list's length is set once the tick publishes it.
+    """
     metrics.count("canopy.ticks", status=status, dry_run=dry_run)
     metrics.record("canopy.tick.duration", seconds, unit="s", status=status)
     run_metrics.overseer_ended(ctx.conn, tick_id)
-    run_metrics.active(ctx.conn)
+    run_metrics.tick_closed(ctx.conn, tick_id)
+    run_metrics.active(ctx.conn, ctx.config.capacity)
+    run_metrics.tickets(ctx.conn)
+    run_metrics.disk(ctx.state_dir)
 
 
 class _Finish(Protocol):
@@ -1106,6 +1114,7 @@ def _run_overseer(
         {mcp.SERVER: mcp.COMMAND},
         version=ctx.config.runtime.version,
         cwd=ctx.repo_root,
+        disabled=ctx.config.runtime.mcp_servers.disabled_for("overseer"),
         timeout_seconds=timeout_minutes * 60,
     )
     log.info("running overseer", extra={"cmd": argv[0], "timeout_minutes": timeout_minutes})

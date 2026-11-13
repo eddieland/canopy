@@ -1,10 +1,11 @@
-"""Attachments (DESIGN §22): text files the operator attaches to a ticket or a task, for its runs to read as data.
+"""Attachments (DESIGN §22): text files the operator attaches to a ticket, a task, or an epic, for its runs to read.
 
 What a person sent the operator, such as a design doc, reaches a run only this way: through the operator's channels,
 the CLI and the web UI behind the listener secret, refused inside a tick or any agent's run (TRUST_MODEL T1), on a
-ticket canopy knows or a task not stopped. Its text is data, never an instruction: the operator's words about it are a
-reply or the task's text. Attachments are held to `policy`'s limits in code, each file's size and how many and how much
-a subject holds at once, and to plain text: UTF-8, with no NUL, never blank.
+ticket canopy knows or a task or an epic not stopped. Its text is data, never an instruction: the operator's words
+about it are a reply, or the task's or the epic's text. An epic's are read by its plan runs, and by every run of each
+ticket that is its member, beside the ticket's own (§43). Attachments are held to `policy`'s limits in code, each
+file's size and how many and how much a subject holds at once, and to plain text: UTF-8, with no NUL, never blank.
 
 The text is kept beside the journal, as a plan is (§25): `<state_dir>/attachments/<kind>.<id>/<attachment>.txt`, written
 once, readable only by the operator, its path built from ids and never read from a row. Its row holds the name runs see
@@ -25,7 +26,7 @@ from dataclasses import dataclass
 from pathlib import PurePath
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, plans, records
+from canopy.core import conversation, db, epics, plans, records
 from canopy.core.conversation import KEY_RE, MAX_KEY, Refused
 from canopy.infra import logs
 
@@ -41,11 +42,14 @@ if TYPE_CHECKING:
 NAME_RE = re.compile(r"(?=[A-Za-z0-9._-]{1,100}\Z)[A-Za-z0-9][A-Za-z0-9._-]*")
 #: Where attachments are kept, under the state directory, each subject's in a directory of its own.
 DIR_NAME = "attachments"
-#: The subjects that take attachments: a ticket, by its key, and a task, by its id.
-KINDS = (conversation.TICKET, conversation.TASK)
+#: The subjects that take attachments: a ticket, by its key, and a task and an epic, by their ids.
+KINDS = (conversation.TICKET, conversation.TASK, conversation.EPIC)
 #: Where a run's copies of its subject's attachments go, at the root of its worktree, which git there ignores, or in its
 #: desk: written for that run alone, and removed before its slot is returned (DESIGN §22).
 RUN_DIR = ".canopy-attachments"
+#: Where, inside `RUN_DIR`, a member's run finds the copies of its epic's attachments, beside its ticket's own: not a
+#: name an attachment can take (`NAME_RE`), so the two never meet.
+EPIC_DIR = "_epic"
 KIB = 1024
 # What runs of any other character become in a name made from a file's, and the `-` such a run leaves before a `.` or at
 # the end, which is dropped.
@@ -59,15 +63,17 @@ class AttachmentFileError(Exception):
 
 @dataclass(frozen=True)
 class Copy:
-    """An attachment's text, read again for a run, under the name the run sees it as."""
+    """An attachment's text, read again for a run, where the run sees it."""
 
+    #: Its path under the run's `RUN_DIR`: its name, or for its epic's, the name inside `EPIC_DIR`.
     name: str
+    #: Its text, as attached.
     text: str
 
 
 @dataclass(frozen=True)
 class Limits:
-    """What one ticket's or task's attachments may hold, from `policy` (DESIGN §22)."""
+    """What one ticket's, task's, or epic's attachments may hold, from `policy` (DESIGN §22)."""
 
     #: How many it may have at once; 0 refuses every attachment.
     files: int
@@ -100,7 +106,7 @@ def attach(
     limits: Limits,
     channel: str,
 ) -> records.Attachment:
-    """Attach the text `data` to the ticket or task `ref`, as `name`, for its later runs to read (DESIGN §22).
+    """Attach the text `data` to the ticket, task, or epic `ref`, as `name`, for its later runs to read (DESIGN §22).
 
     A channel reads at most one byte past `limits.file_bytes` of a file, so a file over the bound is refused without
     being read whole.
@@ -109,12 +115,13 @@ def attach(
         The attachment, as recorded.
 
     Raises:
-        Refused: `inside_run` inside a tick or a run; `unsupported` for a subject that is not a ticket or a task;
-            `unknown` for a ticket that was neither started nor seen by a tick, or a task canopy has no record of;
-            `stopped` for a task the operator stopped; `bad_name` for a name that is not `NAME_RE`; `not_text` for data
-            that is not UTF-8, or holds a NUL; `empty` for blank text; `too_large` for a file over the bound, or one
-            that would take its subject's attachments over theirs; `too_many` for a subject at its count, or with
-            attaching turned off; `taken` for a name one of the subject's attachments has.
+        Refused: `inside_run` inside a tick or a run; `unsupported` for a subject that is not a ticket, a task, or an
+            epic; `unknown` for a ticket that was neither started nor seen by a tick, or a task or an epic canopy has
+            no record of; `stopped` for a task or an epic the operator stopped; `bad_name` for a name that is not
+            `NAME_RE`; `not_text` for data that is not UTF-8, or holds a NUL; `empty` for blank text; `too_large` for a
+            file over the bound, or one that would take its subject's attachments over theirs; `too_many` for a
+            subject at its count, or with attaching turned off; `taken` for a name one of the subject's attachments
+            has.
         PlanFileError: the attachments' directory, or the subject's, is not the operator's alone; nothing is recorded.
         DatabaseError: the row was not recorded, which nothing but a broken journal does.
     """
@@ -157,8 +164,8 @@ def remove(conn: sqlite3.Connection, state_dir: Path, ref: Ref, name: str, *, ch
         The attachment, as removed.
 
     Raises:
-        Refused: `inside_run` inside a tick or a run; `unsupported` for a subject that is not a ticket or a task;
-            `unknown` for a subject with no attachment of that name.
+        Refused: `inside_run` inside a tick or a run; `unsupported` for a subject that is not a ticket, a task, or an
+            epic; `unknown` for a subject with no attachment of that name.
         DatabaseError: the row went missing, which nothing but a broken journal does.
     """
     conversation.check_operator()
@@ -211,7 +218,7 @@ def path(state_dir: Path, attachment: records.Attachment) -> Path:
         `<state_dir>/attachments/<kind>.<id>/<attachment id>.txt`. The file may not exist.
 
     Raises:
-        ValueError: the attachment's subject is not a ticket's key or a task's id.
+        ValueError: the attachment's subject is not a ticket's key, or a task's or an epic's id.
     """
     subject = conversation.Ref(attachment.subject_kind, attachment.subject_id)
     return state_dir / DIR_NAME / _dir_name(subject) / _file_name(attachment.id)
@@ -239,10 +246,41 @@ def held_at(conn: sqlite3.Connection, ref: Ref, at: str) -> list[records.Attachm
     return [a for a in of(conn, ref) if a.added_at <= at]
 
 
-def copies(conn: sqlite3.Connection, state_dir: Path, ref: Ref, at: str) -> list[Copy]:
+def epic_of(conn: sqlite3.Connection, key: str) -> Ref | None:
+    """Return the epic ticket `key` is a member of, whose attachments its runs read beside its own (DESIGN §43).
+
+    Returns:
+        The epic, or None while the ticket is a member of none.
+    """
+    member = epics.membership(conn, key)
+    return conversation.Ref(conversation.EPIC, str(member.epic_id)) if member is not None else None
+
+
+def ticket_copies(conn: sqlite3.Connection, state_dir: Path, key: str, at: str) -> list[Copy]:
+    """Read again what a run of ticket `key` dispatched at `at` gets: its own attachments, then its epic's (§22, §43).
+
+    Its epic's are under `EPIC_DIR`, read from the epic it is a member of as the run starts, as its epic's plan is: a
+    ticket that left its epic since the dispatch gets none of them, though its prompt named them.
+
+    Returns:
+        The copies, the ticket's first, each subject's in the order they were attached.
+
+    Raises:
+        AttachmentFileError: an attachment's file is gone or changed since it was attached; the run gets none.
+    """
+    found = copies(conn, state_dir, conversation.Ref(conversation.TICKET, key), at)
+    epic = epic_of(conn, key)
+    if epic is not None:
+        found += copies(conn, state_dir, epic, at, under=EPIC_DIR)
+    return found
+
+
+def copies(conn: sqlite3.Connection, state_dir: Path, ref: Ref, at: str, *, under: str | None = None) -> list[Copy]:
     """Read again the text of each attachment a run of `ref` dispatched at `at` was told of, and `ref` still holds.
 
-    One the operator removed since is left out: the run's prompt names it, but nothing is copied for it.
+    One the operator removed since is left out: the run's prompt names it, but nothing is copied for it. `under` names
+    the directory, inside the run's, that the copies go in, for an epic's in a member's run; None puts them in the
+    run's own.
 
     Returns:
         The copies, in the order they were attached.
@@ -256,7 +294,7 @@ def copies(conn: sqlite3.Connection, state_dir: Path, ref: Ref, at: str) -> list
         if text is None:
             where = path(state_dir, attachment)
             raise AttachmentFileError(f"attachment {attachment.name}'s file {where} is not the text attached")
-        found.append(Copy(attachment.name, text))
+        found.append(Copy(attachment.name if under is None else f"{under}/{attachment.name}", text))
     return found
 
 
@@ -283,7 +321,8 @@ def read(state_dir: Path, attachment: records.Attachment) -> str | None:
 def place(directory: Path, found: Sequence[Copy]) -> None:
     """Write `found` into `directory`, made afresh and readable only by the operator, for one run (DESIGN §22).
 
-    Whatever was at `directory` is removed first (`clear`), so a run never reads an earlier run's copies.
+    Whatever was at `directory` is removed first (`clear`), so a run never reads an earlier run's copies. A copy under
+    `EPIC_DIR` gets that directory, made the same way.
 
     Raises:
         OSError: the directory or a copy could not be written.
@@ -291,7 +330,20 @@ def place(directory: Path, found: Sequence[Copy]) -> None:
     clear(directory)
     directory.mkdir(mode=0o700)
     for copy in found:
+        make_parents(directory, copy.name)
         logs.write_private(directory / copy.name, copy.text)
+
+
+def make_parents(root: Path, name: str) -> None:
+    """Make each directory between `root` and the file `name` under it, readable only by the operator.
+
+    For a copy under `EPIC_DIR`, and the desk files a run writes, which put the copies inside `RUN_DIR`.
+
+    Raises:
+        OSError: a directory could not be made, or something other than one is in its place.
+    """
+    for parent in reversed(PurePath(name).parents[:-1]):
+        (root / parent).mkdir(mode=0o700, exist_ok=True)
 
 
 def clear(directory: Path) -> None:
@@ -307,13 +359,15 @@ def clear(directory: Path) -> None:
         directory.unlink()
 
 
-def sizes(found: Sequence[records.Attachment]) -> list[tuple[str, str]]:
+def sizes(found: Sequence[records.Attachment], *, under: str | None = None) -> list[tuple[str, str]]:
     """Name each attachment with its size, as a prompt lists them (`prompts.attachments_note`).
 
+    `under` is the directory its copies go in inside the run's, as `copies` takes it.
+
     Returns:
-        Each one's name and `size_text`.
+        Each one's path under the run's directory and `size_text`.
     """
-    return [(a.name, size_text(a.size)) for a in found]
+    return [(a.name if under is None else f"{under}/{a.name}", size_text(a.size)) for a in found]
 
 
 def size_text(size: int) -> str:
@@ -374,7 +428,7 @@ def _check_room(held: Sequence[records.Attachment], ref: Ref, name: str, size: i
 
 
 def _dir_name(ref: Ref) -> str:
-    """The directory a subject's attachments are kept in, under `attachments/`: `ticket.<key>` or `task.<id>`.
+    """Name the directory under `attachments/` a subject's are kept in: `ticket.<key>`, `task.<id>`, or `epic.<id>`.
 
     A ticket's key holds no `.`, so no two subjects share one.
 
@@ -382,13 +436,13 @@ def _dir_name(ref: Ref) -> str:
         The directory's name.
 
     Raises:
-        ValueError: `ref` is not a ticket's key or a task's id, so it might hold a path separator or `..`.
+        ValueError: `ref` is not a ticket's key, or a task's or an epic's id, so it might hold a path separator or `..`.
     """
     if ref.kind == conversation.TICKET and len(ref.id) <= MAX_KEY and KEY_RE.fullmatch(ref.id):
         return f"{ref.kind}.{ref.id}"
-    if ref.kind == conversation.TASK and ref.id.isascii() and ref.id.isdigit():
+    if ref.kind in {conversation.TASK, conversation.EPIC} and ref.id.isascii() and ref.id.isdigit():
         return f"{ref.kind}.{int(ref.id)}"
-    raise ValueError(f"{str(ref)[:MAX_KEY]!r} is not a ticket or a task")
+    raise ValueError(f"{str(ref)[:MAX_KEY]!r} is not a ticket, a task, or an epic")
 
 
 def _file_name(attachment_id: int) -> str:

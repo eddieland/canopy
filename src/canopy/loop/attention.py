@@ -662,10 +662,13 @@ def render(items: Sequence[Item], now: datetime, more: Mapping[str, int] | None 
     return "\n".join(lines)
 
 
-def publish(ctx: Context, log: logs.TickAdapter, *, ui: str | None = None) -> None:
+def publish(ctx: Context, log: logs.TickAdapter, *, ui: str | None = None) -> list[Item]:
     """Rewrite `attention.md` and deliver to the notification sinks (DESIGN §6 step 7, §20), linking to `ui` if set.
 
     Failures are logged, never raised: the tick is already closed. A delivery that fails is tried again next tick.
+
+    Returns:
+        The list as published.
     """
     items = write(ctx, log)
     dismissed = {
@@ -677,6 +680,7 @@ def publish(ctx: Context, log: logs.TickAdapter, *, ui: str | None = None) -> No
         deliver.publish(ctx, items, ctx.state_dir / FILE_NAME, log, dismissed=dismissed, ui=ui)
     except Exception as e:
         log.exception("notification failed", extra={"error": str(e)})
+    return items
 
 
 def write(ctx: Context, log: logs.TickAdapter) -> list[Item]:

@@ -108,6 +108,16 @@ worker_timeout_minutes = 45
 # overseer = "provider/model"
 # chore = "provider/model"      # every chore without a model of its own
 
+# Optional: MCP servers of your runtime config that canopy's runs never start, such as ones an agent never uses that
+# are slow to start; your own sessions still start them. `disabled` holds for every role; a role's own table, with the
+# roles of [runtime.models], takes its place for that role. Not the tracker's server but for the overseer, nor the
+# artifact store's for a role that publishes. `canopy agents` lists what each agent's runs keep out
+# (docs/GETTING_STARTED.md).
+# [runtime.mcp_servers]
+# disabled = ["figma", "bigquery"]
+# [runtime.mcp_servers.worker]
+# disabled = ["figma"]
+
 [loop]
 # `canopy loop` waits this long after each tick ends. Every tick runs the overseer, so this sets its spend.
 interval_minutes = 15
@@ -181,6 +191,10 @@ prompt_overrides = "~/.config/canopy/prompts"
 # run, after the chore's own prompt, such as "name a CI job by its workflow file". Each at most 4 KiB (DESIGN §12).
 # reviewer_instructions = "~/.config/canopy/reviewer-instructions.md"
 # chore_instructions = "~/.config/canopy/chore-instructions.md"
+# Where an agent with none of those keys finds its instructions: <agent>.md here (worker.md, overseer.md, reviewer.md,
+# chore.md), read only while it is there. The web UI's instructions page makes and deletes these files, and edits any
+# agent's, keeping its last 10 versions in .canopy/ (DESIGN §12). The default is instructions/ beside this file.
+# instructions = "~/.config/canopy/instructions"
 # Optional: your own personas, each `<name>.md`, at most 4 KiB. One named as canopy's shadows it; `canopy personas`
 # lists them all (DESIGN §31).
 # personas = "~/.config/canopy/personas"

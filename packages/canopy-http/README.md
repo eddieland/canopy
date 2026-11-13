@@ -29,12 +29,14 @@ What it promises:
   | `RateLimitedError` | a 429, or a 403 naming `Retry-After`                     | yes       |
   | `NotSentError`     | no connection could be made                              | yes       |
   | `UntrustedError`   | the service's certificate is not one the system trusts   | yes       |
-  | `FailedError`      | a server error, or a reply that broke off or is not JSON | no        |
+  | `FailedError`      | a server error; a reply cut off, not JSON, or `failed`   | no        |
   | `TimedOutError`    | no answer in time                                        | no        |
 
 - **Retries only where safe.** A request is sent again, after each of `Retry.pauses`, when that cannot do it twice:
   it never left, or the service refused it and said how long to wait, for no longer than `Retry.longest_wait`. One
   sent with `again=True`, as a read is, is also sent again after a failure that may have been carried out. A timed-out
-  request is never sent again.
+  request is never sent again. The error given up on says in `tries` how many times the request was tried.
 
-`send` returns the 2xx `Reply`; `json` asks for JSON and returns it parsed. httpx2 is the transport.
+`send` returns the 2xx `Reply`; `json` asks for JSON and returns it parsed. Its `failed`, if given, reads the parsed
+reply and names a failure the service reports in a 2xx, as GitHub's GraphQL API does for a query it could not run:
+that try raises `FailedError`, so `again=True` sends it again. httpx2 is the transport.

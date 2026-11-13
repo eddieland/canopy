@@ -29,6 +29,11 @@ from tests.conftest import CanopyEnv, executable, invoke
 PR = "https://github.com/acme/api/pull/7"
 HEAD = "9b2f4c6e1a7d"
 PAGE = 2
+#: What GitHub's GraphQL API answers, with a 200, for a query it failed to run.
+WENT_WRONG = (
+    "Something went wrong while executing your query on 2026-11-12T18:00:00Z. "
+    "Please include `C0DE:1234:ABCD` when reporting this issue."
+)
 #: Set when the stand-in may answer a `slow` operation: it holds the answer while a test is `holding` it.
 RELEASED = threading.Event()
 RELEASED.set()
@@ -136,6 +141,9 @@ class Fake:
     unicorns: int = 0
     #: How many requests next, of any operation, are carried out and their replies cut off.
     cuts: int = 0
+    #: How many requests next, of any operation, are answered with the error GitHub sends, with a 200, for a query it
+    #: failed to run, as one past its time limit.
+    went_wrong: int = 0
     # PRs' numbers a batch that names one is answered with a 502 for, as a query too heavy to answer in time is.
     heavy: set[int] = field(default_factory=set)
     seen: list[tuple[str, str, dict[str, Any]]] = field(default_factory=list)
@@ -422,6 +430,12 @@ class _Api(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "text/html")
             self.end_headers()
             self.wfile.write(b"<html><body><img alt='unicorn' src='data:image/png;base64,iVBORw0'></body></html>")
+            return
+        if _Api.fake.went_wrong:
+            _Api.fake.went_wrong -= 1
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(json.dumps({"data": None, "errors": [{"message": WENT_WRONG}]}).encode())
             return
         failure = _Api.fake.fail.get(op.group(1))
         if failure == "drop":
@@ -852,6 +866,45 @@ def test_a_unicorn_is_named_rather_than_quoted(github: tuple[Fake, str]) -> None
     assert code == 1
     assert f"cannot read {PR}: HTTP 502: GitHub's error page" in err
     assert "<html>" not in err
+
+
+def test_a_query_github_failed_to_run_is_sent_again(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    fake.went_wrong = 2
+    code, lines, _ = read(url, {"prs": [PR]})
+    assert code == 0
+    assert lines[-1] == {"kind": "end", "prs": [PR]}
+    assert fake.ops().count("PullRequests") == 3
+
+
+def test_a_query_github_fails_to_run_each_time_says_so_and_keeps_its_request_id(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    fake.went_wrong = 3
+    code, lines, err = read(url, {"prs": [PR]})
+    assert (code, lines) == (1, [{"kind": "end", "prs": []}])
+    assert f"cannot read {PR}: GitHub failed to run the query, likely a timeout or a brief outage on its side" in err
+    assert f"{WENT_WRONG} (tried 3 times)" in err
+    assert "refused" not in err
+
+
+def test_a_batch_github_failed_to_run_is_read_in_halves(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    for n in (8, 9):
+        fake.pulls["acme", "api", n] = Pull(node=f"PR_{n}")
+    prs = [PR, *(f"https://github.com/acme/api/pull/{n}" for n in (8, 9))]
+    fake.went_wrong = 1
+    code, lines, _ = read(url, {"prs": prs})
+    assert code == 0
+    assert lines[-1]["prs"] == prs
+    assert [len(variables) // 3 for op, _, variables in fake.seen if op == "PullRequests"] == [3, 1, 2]
+
+
+def test_a_mutation_github_failed_to_run_is_sent_once_and_may_have_been_carried_out() -> None:
+    _Api.fake = Fake(went_wrong=3)
+    with serving(_Api) as url, pytest.raises(canopy_github.ServerError, match="GitHub failed to run") as failed:
+        canopy_github.Client(url, "t").query("mutation Viewer { viewer { login } }", {})
+    assert not failed.value.certain
+    assert _Api.fake.ops() == ["Viewer"]
 
 
 def test_an_error_page_answered_as_a_success_is_named_and_sent_again(github: tuple[Fake, str]) -> None:

@@ -188,7 +188,7 @@ def _level(level: PlannerApproval | None) -> str:
 
 
 def _bounds(n: Length) -> str:
-    """A length bucket's lines, `50-99`, or `300+` for the last.
+    """A length bucket's lines, `50-99`, or `500+` for the last.
 
     Returns:
         The text.
