@@ -6,6 +6,8 @@ import json
 from typing import TYPE_CHECKING, Any
 from unittest import mock
 
+import pytest
+
 from canopy.core import observe, records, sql
 from canopy.core.config import Source
 from canopy.core.vocab import ConnectorRunStatus
@@ -96,6 +98,38 @@ def test_output_past_its_bound_is_cut_off_and_records_nothing(ctx: Context, conn
 def test_a_review_comment_without_its_thread_is_refused(ctx: Context, connector_state: Path) -> None:
     review = {"kind": "review", "pr": PR, "item": "comment", "id": 5, "body": "no thread"}
     prints(connector_state, review)
+    found = run(ctx)
+    assert (found.refused, found.whole.prs) == ({"review": 1}, frozenset())
+
+
+def test_a_comment_on_the_prs_conversation_is_numbered_as_its_own_kind_and_on_no_thread(
+    ctx: Context,
+    connector_state: Path,
+) -> None:
+    """GitHub numbers a PR's conversation comments apart from its review comments, so the same id is two items."""
+    pr = {"kind": "pr", "url": PR, "repository": "acme/api", "number": 7}
+    said = {"kind": "review", "pr": PR, "item": "pr_comment", "id": 5, "author": "carol", "body": "Why a retry?"}
+    thread = {"id": "PRRT_1", "path": "a.py", "line": 1}
+    on_a_line = {"kind": "review", "pr": PR, "item": "comment", "id": 5, "body": "Rename this.", "thread": thread}
+    prints(connector_state, pr, said, on_a_line)
+    assert run(ctx).status is ConnectorRunStatus.OK
+    found = records.fetch_all(ctx.conn, records.ObservedReview, sql.frag(REVIEWS + " ORDER BY item"))
+    assert [(r.item, r.id, r.thread_id) for r in found] == [("comment", 5, "PRRT_1"), ("pr_comment", 5, None)]
+    numbered = records.select(records.ItemNumber).order_by("number").all(ctx.conn)
+    assert [(n.kind, n.id) for n in numbered] == [("pr_comment", "5"), ("review_comment", "5")]
+
+
+@pytest.mark.parametrize(
+    "where",
+    [{"thread": {"id": "PRRT_1", "path": "a.py", "line": 1}}, {"review": 101}],
+    ids=["thread", "review"],
+)
+def test_a_comment_on_the_prs_conversation_on_a_thread_or_in_a_review_is_refused(
+    ctx: Context,
+    connector_state: Path,
+    where: dict[str, Any],
+) -> None:
+    prints(connector_state, {"kind": "review", "pr": PR, "item": "pr_comment", "id": 5, "body": "x", **where})
     found = run(ctx)
     assert (found.refused, found.whole.prs) == ({"review": 1}, frozenset())
 

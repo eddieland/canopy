@@ -73,6 +73,8 @@ class Pull:
     node: str
     reviews: list[Review] = field(default_factory=list)
     threads: list[Thread] = field(default_factory=list)
+    # The comments on its conversation, on no line of its diff.
+    comments: list[Comment] = field(default_factory=list)
     labels: list[str] = field(default_factory=list)
     # Each context at the head as GitHub's rollup lists it, a CheckRun's or a StatusContext's fields; None for a head
     # nothing has written a check or a status on.
@@ -173,6 +175,9 @@ class Fake:
                 return {"data": {"repository": {"pullRequest": {"id": pull.node}}}}
             threads = page([self.thread_node(t) for t in pull.threads], variables["after"])
             return {"data": {"repository": {"pullRequest": {"reviewThreads": threads}}}}
+        if op == "PrComments":
+            pull = self.pull_by_node(variables["id"])
+            return {"data": {"node": {"comments": page(self.pr_comment_nodes(pull), variables["after"])}}}
         if op == "Reviews":
             pull = self.pull_by_node(variables["id"])
             return {"data": {"node": {"reviews": page(self.review_nodes(pull), variables["after"])}}}
@@ -329,6 +334,7 @@ class Fake:
             "labels": {"nodes": labels[:100], "pageInfo": {"hasNextPage": len(labels) > 100, "endCursor": "100"}},
             "reviews": page(self.review_nodes(pull), None),
             "reviewThreads": page([self.thread_node(t) for t in pull.threads], None),
+            "comments": page(self.pr_comment_nodes(pull), None),
             "commits": {"nodes": [{"commit": {"id": f"C_{pull.node}", "oid": HEAD, "statusCheckRollup": rollup}}]},
             "timelineItems": last_page(self.event_nodes(pull), None),
         }
@@ -350,6 +356,19 @@ class Fake:
                 "author": {"__typename": "Bot" if r.bot else "User", "login": r.author},
             }
             for r in pull.reviews
+        ]
+
+    def pr_comment_nodes(self, pull: Pull) -> list[dict[str, Any]]:
+        return [
+            {
+                "id": f"IC_{c.id}",
+                "fullDatabaseId": str(c.id),
+                "body": c.body,
+                "createdAt": c.at,
+                "url": f"{PR}#issuecomment-{c.id}",
+                "author": {"__typename": "Bot" if c.bot else "User", "login": c.author},
+            }
+            for c in pull.comments
         ]
 
     def thread_node(self, thread: Thread) -> dict[str, Any]:
@@ -606,6 +625,37 @@ def test_the_reader_reads_every_page(github: tuple[Fake, str]) -> None:
     assert ids == [101, 102, 103, 501, 502, 503, 601, 602, 603]
     assert [line["name"] for line in lines if line["kind"] == "check"] == [f"job-{n}" for n in range(1, 6)]
     assert {"Reviews", "Threads", "ThreadComments", "Contexts"} <= set(fake.ops())
+
+
+def test_the_reader_prints_each_comment_on_a_prs_conversation_on_every_page(github: tuple[Fake, str]) -> None:
+    """A comment on the PR's conversation is a `pr_comment` review line, after its threads, with no thread or review."""
+    fake, url = github
+    pull = fake.pulls["acme", "api", 7]
+    pull.comments = [
+        Comment(id=701, body="Does this cover the retry path?", author="carol", at="2026-10-18T12:00:00Z"),
+        Comment(id=702, body="Coverage 91%.", author="codecov", bot=True),
+        Comment(id=703, body="Also the timeout.", author="carol"),
+    ]
+    _, lines, _ = read(url, {"prs": [PR]})
+    said = [line for line in lines if line.get("item") == "pr_comment"]
+    assert said[0] == {
+        "kind": "review",
+        "item": "pr_comment",
+        "pr": PR,
+        "id": 701,
+        "node": "IC_701",
+        "author": "carol",
+        "bot": False,
+        "time": "2026-10-18T12:00:00Z",
+        "body": "Does this cover the retry path?",
+        "url": f"{PR}#issuecomment-701",
+    }
+    assert [(line["id"], line["author"], line["bot"]) for line in said[1:]] == [
+        (702, "codecov[bot]", True),
+        (703, "carol", False),
+    ]
+    assert [line.get("item") for line in lines[-4:-1]] == ["pr_comment"] * 3
+    assert "PrComments" in fake.ops()
 
 
 def test_a_bots_login_ends_bot_as_githubs_rest_api_names_it(github: tuple[Fake, str]) -> None:

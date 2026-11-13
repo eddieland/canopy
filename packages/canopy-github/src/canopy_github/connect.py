@@ -9,7 +9,8 @@ JSON line per observation, in DESIGN §30's shapes:
 
 - for each PR read whole, its `pr` line (with its labels and mergeable state), a `check` line for each context at its
   head, check run or commit status, then a `review` line for each review (`"item": "review"`) and for each review
-  comment (`"item": "comment"`, with its thread's id, path, line, side, and whether it is outdated or resolved);
+  comment (`"item": "comment"`, with its thread's id, path, line, side, and whether it is outdated or resolved), and
+  for each comment on its conversation, on no line of its diff (`"item": "pr_comment"`);
 - for each repository read whole, a `branch` line for each branch under the prefix.
 
 Last, an `end` line naming the PRs and the repositories read whole and, when the review query was read to its end,

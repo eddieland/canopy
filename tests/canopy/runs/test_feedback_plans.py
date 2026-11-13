@@ -1142,6 +1142,39 @@ def test_a_failed_check_and_a_conflict_are_items_planned_approved_and_left_by_nu
 
 
 @pytest.mark.usefixtures("git_pool")
+def test_a_persons_comment_on_the_prs_conversation_is_an_item_and_a_bots_is_not(
+    scenario: Scenario,
+    github_state: Path,
+) -> None:
+    conn = scenario.conn
+    with_a_pr(scenario)
+    at = "2026-10-18T12:00:00Z"
+    asked = {"item": "pr_comment", "id": 701, "author": "carol", "time": at, "body": "Does this cover the retry path?"}
+    summary = {"item": "pr_comment", "id": 702, "author": "codecov[bot]", "bot": True, "time": at, "body": "Cov 91%."}
+    github_shows(github_state, ALICE, asked, summary, checks=())
+    items = [
+        {"id": 501, "proposal": "change", "reply": "Renamed."},
+        {"id": 701, "proposal": "change", "reply": "Added."},
+    ]
+    planner = planner_does(["cat", feedback_items.ITEMS], plan=TEXT, result={**PLANNED, "items": items})
+    assert scenario.run(FEEDBACK_PLAN, worker=planner).status == RunStatus.DONE
+    [*_, [_, cat]] = commands_run(scenario.agent_log)
+    given = json.loads(cat["stdout"])
+    assert [(i["id"], i["item"], i["author"]) for i in given] == [
+        (501, "comment", "alice"),
+        (701, "pr_comment", "carol"),
+    ]
+    assert "replies" not in given[1], "a comment on the conversation is on no thread"
+    [plan] = feedback_plans.history(conn, KEY)
+    # It may keep a reply, as a review's item does: the plan's words for the PR's comment.
+    assert [(i.item, i.item_id, i.reply) for i in feedback_plans.items(conn, plan.id)] == [
+        (PlanItem.COMMENT, 501, "Renamed."),
+        (PlanItem.PR_COMMENT, 701, "Added."),
+    ]
+    assert "  2. id 701, carol, change\n" in scenario.operator("show", KEY).out
+
+
+@pytest.mark.usefixtures("git_pool")
 def test_a_failed_check_its_repository_says_is_not_ci_is_no_item(scenario: Scenario, github_state: Path) -> None:
     with_a_pr(scenario)
     roles = {"owners": "human", "merge-queue": "merge", "lint-legacy": "ignore", "all-green": "rollup"}

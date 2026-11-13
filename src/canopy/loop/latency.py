@@ -40,6 +40,7 @@ KINDS: Sequence[NumberedItem] = (
     NumberedItem.COMMENT,
     NumberedItem.REVIEW,
     NumberedItem.REVIEW_COMMENT,
+    NumberedItem.PR_COMMENT,
     NumberedItem.CHECK_RUN,
 )
 #: What `ticks.woken_by` says of a tick a poll of the connectors woke (DESIGN §39).
@@ -184,12 +185,14 @@ def _items(since: str, until: str) -> sql.Select:
     )
     reviews = (
         sql.select(
-            "CASE WHEN r.item = ? THEN ? ELSE ? END AS kind, "
+            "CASE r.item WHEN ? THEN ? WHEN ? THEN ? ELSE ? END AS kind, "
             "(SELECT min(u.ticket_key) FROM ticket_units u WHERE u.pr_url = r.pr_url) AS ticket, "
             "r.created_at AS source_at, coalesce(n.numbered_at, r.observed_at) AS observed_at",
             ReviewItem.REVIEW,
             NumberedItem.REVIEW,
+            ReviewItem.COMMENT,
             NumberedItem.REVIEW_COMMENT,
+            NumberedItem.PR_COMMENT,
         )
         .from_("observed_reviews r")
         .left_join("item_numbers n ON n.number = r.number")

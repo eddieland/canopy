@@ -79,13 +79,15 @@ def said(
     state: str | None,
     bot: bool = False,
     pr: str = PR,
+    conversation: bool = False,
 ) -> None:
-    """A comment, or a review when `state` is given, on `pr`."""
-    item = "comment" if state is None else "review"
+    """A review comment, or a review when `state` is given, on `pr`; with `conversation`, a comment on the PR's."""
+    item = "review" if state is not None else "pr_comment" if conversation else "comment"
+    thread = f"t{number}" if item == "comment" else None
     conn.execute(
         "INSERT INTO observed_reviews (pr_url, item, id, author, bot, state, created_at, body, thread_id, "
         "observed_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'b', ?, ?)",
-        (pr, item, number, author, int(bot), state, created, None if state else f"t{number}", at(10, 8)),
+        (pr, item, number, author, int(bot), state, created, thread, at(10, 8)),
     )
 
 
@@ -201,6 +203,9 @@ def test_a_landed_ticket_counts_its_iterations_reviews_and_waits(tmp_path: Path,
     said(conn, 4, "gina", at(10, 3), state="approved")
     said(conn, 5, "operator", at(9, 30), state=None)  # the author's, canopy's replies among them
     said(conn, 6, "ci-bot", at(9, 30), state=None, bot=True)
+    said(conn, 3, "gina", at(9, 30), state=None, conversation=True)  # GitHub numbers these apart from review comments
+    said(conn, 7, "codecov", at(9, 30), state=None, conversation=True, bot=True)
+    said(conn, 8, "operator", at(9, 30), state=None, conversation=True)
     decide(conn, t, "PROJ-1", at(10, 4, 11))
     decide(conn, t, "PROJ-2", at(10, 5), rationale=db.CLOSED_RATIONALE)
     decide(conn, t, "PROJ-3", at(9, 30))
@@ -211,7 +216,7 @@ def test_a_landed_ticket_counts_its_iterations_reviews_and_waits(tmp_path: Path,
     assert landed.iterations == 3
     assert landed.started_at == at(9, 28, 10)
     assert landed.to_land == timedelta(days=6, hours=1)
-    assert landed.pr_comments == 1
+    assert landed.pr_comments == 2, "a person's comment on a line and one on the conversation"
     assert (landed.reviews, landed.changes_requested) == (3, 1)
     assert landed.review_wait == timedelta(hours=4)
     assert (landed.merged_at, landed.awaiting_review_at) == (None, None), "no time of GitHub's read: the proxies"

@@ -264,6 +264,8 @@ class PlanItem(StrEnum):
     REVIEW = "review"
     #: A thread of review comments, by its item comment's observed id.
     COMMENT = "comment"
+    #: A comment on the PR's conversation, on no line of its diff, by its observed id.
+    PR_COMMENT = "pr_comment"
     #: A failed check at the PR's head, by an id canopy gives it (`feedback_items.check_id`).
     CHECK = "check"
     #: The PR's conflict with its base, by an id canopy gives it (`feedback_items.conflict_id`).
@@ -535,8 +537,12 @@ class PrState(StrEnum):
 class ReviewItem(StrEnum):
     """What an observed review row is, `observed_reviews.item` (DESIGN §29)."""
 
+    #: A review of the PR, with its state.
     REVIEW = "review"
+    #: A comment on a review thread, on a line of the PR's diff.
     COMMENT = "comment"
+    #: A comment on the PR's conversation, on no line of its diff and in no thread.
+    PR_COMMENT = "pr_comment"
 
 
 class PassReason(StrEnum):
@@ -564,6 +570,7 @@ class NumberedItem(StrEnum):
     COMMENT = "comment"
     REVIEW = "review"
     REVIEW_COMMENT = "review_comment"
+    PR_COMMENT = "pr_comment"
     CHECK_RUN = "check_run"
     REVIEW_RUN = "review_run"
 

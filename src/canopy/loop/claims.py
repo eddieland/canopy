@@ -645,7 +645,8 @@ def _feedback(
     Nor is one the operator sent through canopy, known by its id among `sent` whoever opened the PR (DESIGN §29).
 
     Returns:
-        True for a review comment, a change request, or a review that says something, by anyone else.
+        True for a review comment, a person's PR comment, a change request, or a review that says something, by
+        anyone else.
     """
     author = (pr["author"] or "").lower()
     marked = conversation.worker_marked(r.body, trust.comment_prefix, trust.comment_suffix)
@@ -817,9 +818,10 @@ class _Review:
     def check_authority(self, ctx: Context, record: records.Ticket, message: str | None) -> None:
         """Refuse a `resume` for `review` that covers no feedback it may address, or someone else's without a go-ahead.
 
-        Feedback is a review comment, a change request, or a review that says something, not the PR author's, under
-        whom workers post, nor a worker's (D069). A trusted reviewer's authorizes the run, as does the canopy review it
-        names with `canopy:review` trusted; anyone else's needs an operator message after it, carried by `message`.
+        Feedback is a review comment, a person's PR comment, a change request, or a review that says something, not
+        the PR author's, under whom workers post, nor a worker's (D069). A trusted reviewer's authorizes the run, as
+        does the canopy review it names with `canopy:review` trusted; anyone else's needs an operator message after
+        it, carried by `message`.
 
         Raises:
             Refusal: `unauthorized`.
@@ -834,8 +836,8 @@ class _Review:
             if not _go_ahead(r, trusted, said):
                 raise Refusal(
                     "unauthorized",
-                    f"review {r.item.value} {r.id} on {self.subject} is not a trusted reviewer's: a resume addresses "
-                    "it only with an operator message after it, carried by message=",
+                    f"{item_numbers.called(r.item)} {r.id} on {self.subject} is not a trusted reviewer's: a resume "
+                    "addresses it only with an operator message after it, carried by message=",
                 )
         if feedback:
             return

@@ -1,13 +1,14 @@
 """What a feedback plan is offered of its PRs, what it saw of them, and what changed since (DESIGN §32).
 
-An item is a review, or a thread of review comments, on one of a ticket's PRs, as the `vcs` source last read the PR
-whole (DESIGN §29, §30). A thread is one item: the comment a feedback plan of the ticket covered, or else its first
-comment, with each other comment on it a reply given beside it, so a reviewer's "never mind" or the PR author's "won't
-do" reaches the planner as an answer to the item, never as work of its own. The operator's replies sent through canopy,
-a worker's comments (D069), pending reviews, resolved threads, and reviews that say nothing are neither. A failed check
-at a PR's head, but one its repository says is not CI, the PR's conflict with its base, and a merged blocker, another
-ticket's PR that the PR is stacked on and that merged (DESIGN §10), are items too (`raised`), by ids canopy gives them
-(`check_id`, `conflict_id`, `blocker_id`), since the source observes none.
+An item is a review, a thread of review comments, or a comment on a PR's conversation, on one of a ticket's PRs, as the
+`vcs` source last read the PR whole (DESIGN §29, §30). A thread is one item: the comment a feedback plan of the ticket
+covered, or else its first comment, with each other comment on it a reply given beside it, so a reviewer's "never mind"
+or the PR author's "won't do" reaches the planner as an answer to the item, never as work of its own. The operator's
+replies sent through canopy, a worker's comments (D069), pending reviews, resolved threads, reviews that say nothing,
+and bots' comments on a PR's conversation are neither. A failed check at a PR's head, but one its repository says is not
+CI, the PR's conflict with its base, and a merged blocker, another ticket's PR that the PR is stacked on and that merged
+(DESIGN §10), are items too (`raised`), by ids canopy gives them (`check_id`, `conflict_id`, `blocker_id`), since the
+source observes none.
 
 When a feedback plan is recorded, what its run's read saw is recorded with it (`take`, `record`): each PR's head, each
 CI check's conclusion at that head, and each item and reply the planner was given, by id with a SHA-256 of its body,
@@ -87,7 +88,7 @@ class Changed(StrEnum):
 
 @dataclass(frozen=True)
 class Offered:
-    """A review or review comment on one of a plan's PRs as the `vcs` source observed it: an item, or a reply to one."""
+    """A review item on one of a plan's PRs as the `vcs` source observed it: an item, or a reply to one."""
 
     pr_url: str
     item: ReviewItem
@@ -603,7 +604,7 @@ def _threads(
         heads[thread_id] = min(mine, key=lambda c: c.id) if mine else comments[0]
     found: list[_Thread] = []
     for r in kept:
-        if r.item is ReviewItem.REVIEW:
+        if r.item is not ReviewItem.COMMENT:
             found.append(_Thread(r))
             continue
         thread_id = r.thread_id or ""
@@ -617,13 +618,20 @@ def _skipped(row: records.ObservedReview, trust: Trust, sent: Mapping[str, Seque
 
     Returns:
         True for the operator's own reply sent through canopy, a worker's comment, a pending review, a comment on a
-        resolved thread, or a review that says nothing of its own.
+        resolved thread, a review that says nothing of its own, or a bot's comment on the PR's conversation, which is
+        no feedback (`phases.is_feedback`).
     """
-    if row.item is ReviewItem.COMMENT:
-        return row.id in sent.get("comments", ()) or bool(row.resolved) or _marked(row.body, trust)
-    if row.id in sent.get("reviews", ()) or row.state is ReviewState.PENDING:
-        return True
-    return (not row.body.strip() and row.state is not ReviewState.CHANGES_REQUESTED) or _marked(row.body, trust)
+    match row.item:
+        case ReviewItem.COMMENT:
+            return row.id in sent.get("comments", ()) or bool(row.resolved) or _marked(row.body, trust)
+        case ReviewItem.PR_COMMENT:
+            return row.bot or not row.body.strip() or _marked(row.body, trust)
+        case ReviewItem.REVIEW:
+            if row.id in sent.get("reviews", ()) or row.state is ReviewState.PENDING:
+                return True
+            return (not row.body.strip() and row.state is not ReviewState.CHANGES_REQUESTED) or _marked(row.body, trust)
+        case _:
+            assert_never(row.item)
 
 
 def _marked(body: str, trust: Trust) -> bool:
@@ -841,7 +849,7 @@ def _raised_json(r: Raised) -> dict[str, object]:
             found["base_ref"] = r.base_ref
         case PlanItem.BLOCKER:
             found |= {"base_ref": r.base_ref, "blocker": r.blocker, "blocker_pr": r.blocker_pr}
-        case PlanItem.REVIEW | PlanItem.COMMENT:
+        case PlanItem.REVIEW | PlanItem.COMMENT | PlanItem.PR_COMMENT:
             pass
         case _:
             assert_never(r.item)
@@ -1021,7 +1029,7 @@ def _covered(conn: sqlite3.Connection, plan_id: int, seen: Mapping[Key, records.
     covered = (
         records.select(records.FeedbackPlanItem)
         .where("plan_id = ?", plan_id)
-        .where_in("item", (PlanItem.REVIEW, PlanItem.COMMENT))
+        .where_in("item", (PlanItem.REVIEW, PlanItem.COMMENT, PlanItem.PR_COMMENT))
         .order_by("number")
         .all(conn)
     )

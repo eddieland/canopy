@@ -20,7 +20,7 @@ from collections import Counter
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, assert_never
 
 from canopy.core import (
     connector_runs,
@@ -389,17 +389,26 @@ def branch_of(branches: Iterable[records.ObservedBranch], prefix: str, key: str,
 
 
 def is_feedback(review: records.ObservedReview) -> bool:
-    """Whether an observed review or review comment is feedback (DESIGN §7).
+    """Whether an observed review item is feedback (DESIGN §7).
+
+    A bot's comment on the PR's conversation is not: bots write and rewrite their summaries there (MEASUREMENTS
+    2026-10-15), while a bot's comment on a line of the diff says something of that line.
 
     Returns:
-        True for a review comment, a change request, and a review with something to say; False for an approval, a
-        dismissal, and an empty review.
+        True for a review comment, a person's comment on the PR's conversation, a change request, and a review with
+        something to say; False for an approval, a dismissal, an empty review, and a bot's comment on the conversation.
     """
-    if review.item is ReviewItem.COMMENT:
-        return True
-    return review.state is ReviewState.CHANGES_REQUESTED or (
-        review.state is ReviewState.COMMENTED and bool(review.body.strip())
-    )
+    match review.item:
+        case ReviewItem.COMMENT:
+            return True
+        case ReviewItem.PR_COMMENT:
+            return not review.bot
+        case ReviewItem.REVIEW:
+            return review.state is ReviewState.CHANGES_REQUESTED or (
+                review.state is ReviewState.COMMENTED and bool(review.body.strip())
+            )
+        case _:
+            assert_never(review.item)
 
 
 def _overseers(decision: records.Decision) -> bool:
@@ -886,9 +895,10 @@ class _World:
     ) -> tuple[list[Phase], list[int]]:
         """Derive the review rows (DESIGN §7, D089): feedback past the unit's `review` cursor, by whom it is from.
 
-        Feedback is a review that says something, or a review comment; an approval is not feedback. What the PR's own
-        author writes is not either: canopy's workers post as the operator, who opens the PR. Nor is what the operator
-        sent through canopy, known by its id whoever opened the PR.
+        Feedback is a review that says something, a review comment, or a person's comment on the PR's conversation
+        (`is_feedback`); an approval is not feedback. What the PR's own author writes is not either: canopy's workers
+        post as the operator, who opens the PR. Nor is what the operator sent through canopy, known by its id whoever
+        opened the PR.
 
         Returns:
             The rows that hold of `review_findings`, `changes_requested`, and `untrusted_review`, and the journal
