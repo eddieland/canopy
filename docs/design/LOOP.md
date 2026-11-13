@@ -184,8 +184,8 @@ as the queue lasts. Past that the unit is not `ci_running`, and the poll that fi
 waiting (`human_replied`, `changes_requested`, `review_findings`); `conflicted` and `ci_red`; `pushed_no_pr`; the
 loop's own and the query's reviews; then `ready`, a blocker before what it blocks. Work in flight comes before new work,
 and a person waiting before a machine. Tasks start first, within their share (§36). The harness makes its dispatches
-after the overseer, and an overseer's dispatch that would leave fewer workers free than the harness's ranked above it
-hold is refused `reserved`.
+after the overseer, and an overseer's dispatch or review that would leave fewer workers, or review runs, free than the
+harness's ranked above it hold is refused `reserved`.
 
 "Authorized reply" means a comment by an account in `trust.authorized_repliers`, matched on the tracker's stable account
 identifier, never a display name, that is not a worker's (§8: one carrying the configured comment marks). A worker's

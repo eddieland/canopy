@@ -280,6 +280,7 @@ def _render(
         dispatches_to_come=harness_dispatches.section(
             to_come,
             harness_reviews.reviews_to_come(harness_reviews.starts(ctx.conn, tick_id)),
+            review_workers=harness_reviews.holds(ctx, tick_id),
         ),
         units=units,
         last_runs=last_runs,

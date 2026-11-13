@@ -15,7 +15,7 @@ from pydantic import ConfigDict, Field, StrictInt, WithJsonSchema
 from canopy.core import conversation, db, recorded_runs, review_revisions, review_runs
 from canopy.core.vocab import RecordedStatus
 from canopy.infra import logs
-from canopy.loop import attention, harness_reviews
+from canopy.loop import attention, harness_dispatches, harness_reviews
 from canopy.loop.tools import (
     DECIDED,
     RECORDED_DESCRIPTION,
@@ -176,8 +176,10 @@ def _review_one(
     tick_id = current.id
     in_persona = f" in {one.persona}" if one.persona is not None else ""
     on_context = f"; context={context}" if context else ""
+    # What the harness's runs and reviews to come hold ahead of this one, in §7's order (DESIGN §37).
+    reserved = harness_dispatches.reserved_for_review(ctx, tick_id, one.pr, one.ticket)
     if current.dry_run:
-        review_start.check(ctx, tick_id=tick_id, request=one)
+        review_start.check(ctx, tick_id=tick_id, request=one, reserved=reserved)
         rationale = truncate(f"dry run: not dispatched; would review {one.sha}{in_persona}{on_context}")
         db.record_decision(ctx.conn, tick_id, one.ticket, review_start.DISPATCH_ACTION, rationale, pr=one.pr)
         return Outcome(
@@ -185,7 +187,7 @@ def _review_one(
             StartedReview(persona=one.persona, recorded=None),
         )
     # The decision is recorded as the review starts, or with its refusal then (`spawn_review`).
-    recorded = review_start.record(ctx, tick_id=tick_id, request=one, context=context)
+    recorded = review_start.record(ctx, tick_id=tick_id, request=one, context=context, reserved=reserved)
     logs.for_tick(tick_id).info(
         "review recorded",
         extra={"pr": one.pr, "recorded_run_id": recorded, "persona": one.persona},

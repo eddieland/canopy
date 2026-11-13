@@ -19,7 +19,7 @@ from canopy.reviews import review_requests
 from canopy.reviews import start as review_start
 from canopy.reviews import view as review_view
 from tests.canopy.helpers import KEY, context, in_tick, sources, waits
-from tests.canopy.scenario_helpers import Scenario, review_ends, review_waits, reviews
+from tests.canopy.scenario_helpers import Scenario, dispatches, review_ends, review_waits, reviews
 from tests.conftest import SHARED_TOML
 
 if TYPE_CHECKING:
@@ -35,6 +35,10 @@ ELSEWHERE = "https://example.test/acme/other/pull/3"
 HEAD = "a" * 40
 #: The tests' `vcs` source: the fake connector, playing GitHub.
 GITHUB = {"kind": "vcs", "cmd": "connector github", "timeout_minutes": 1}
+#: What a start of a run or a review, or a guard's refusal of one, records as its action.
+STARTS = ("dispatch:", "refused:")
+#: One of the loop's own PRs, KEY's unit's, which the overseer reviews below the operator's requests in §7's order.
+OWN = "https://example.test/acme/repo/pull/13"
 REVIEWER = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-reviewer --format json {prompt}"
 
 
@@ -260,6 +264,21 @@ def own_pr(scenario: Scenario) -> None:
     """PR is one of the loop's own, KEY's unit's: its request stays the overseer's."""
     scenario.seen(KEY)
     db.set_unit(scenario.conn, KEY, str(scenario.env.root), "repo", pr_url=PR)
+
+
+@pytest.mark.usefixtures("watching")
+def test_the_harnesss_review_holds_its_worker_from_the_overseers_dispatch(scenario: Scenario) -> None:
+    """One worker, which the requested review ranks first for: new work waits, and the review is checked to start."""
+    scenario.configures(capacity={"max_workers": 1})
+    scenario.seen("PROJ-2")
+    ticked = scenario.tick(dispatches("PROJ-2"), dry_run=True)
+    assert ticked.tick.overseer_ran
+    made = [(d.ticket_key, d.pr, d.action, d.decider) for d in ticked.decisions if d.action.startswith(STARTS)]
+    assert made == [
+        ("PROJ-2", None, "refused:reserved", Decider.OVERSEER),
+        (None, PR, "dispatch:review", Decider.HARNESS),
+    ]
+    assert scenario.state()["dispatches_to_come"] == {"reviews": [PR], "holds_workers": 1, "runs": [], "chores": []}
 
 
 @pytest.mark.usefixtures("watching")
@@ -495,8 +514,12 @@ def test_the_state_block_names_the_harnesss_reviews_to_come_and_lists_no_request
     taken = harness_reviews.taken(ctx.conn, tick_id)
     section = review_view.state_section(ctx.conn, ctx.config, datetime.now(UTC), taken=taken)
     assert (taken, section is not None and section["requests"]) == (frozenset({PR}), [])
-    to_come = harness_dispatches.section(harness_dispatches.Plan([], []), harness_reviews.reviews_to_come([row]))
-    assert to_come == {"reviews": [PR], "holds_workers": 0, "runs": [], "chores": []}
+    to_come = harness_dispatches.section(
+        harness_dispatches.Plan([], []),
+        harness_reviews.reviews_to_come([row]),
+        review_workers=harness_reviews.holds(ctx, tick_id),
+    )
+    assert to_come == {"reviews": [PR], "holds_workers": 1, "runs": [], "chores": []}
     assert harness_dispatches.section(harness_dispatches.Plan([], [])) is None
 
 
@@ -509,3 +532,43 @@ def test_a_poll_finds_a_review_the_harness_would_start_and_no_news_in_its_wait(c
     assert ("request", PR, "wait", "a draft") in waiting
     records.update(records.ObservedPr).set(draft=False).where("url = ?", PR).run(ctx.conn)
     assert outlook.news(waiting, outlook.read(ctx, now)) == [("request", PR, "start", HEAD)]
+
+
+@pytest.mark.parametrize(
+    ("capacity", "free"),
+    [
+        ({"max_workers": 1, "max_reviews": 2}, "1 of 1 workers"),
+        ({"max_workers": 3, "max_reviews": 1}, "1 of 1 review runs"),
+    ],
+)
+def test_the_overseers_own_review_leaves_the_harnesss_requested_review_its_worker_and_review_run(
+    scenario: Scenario,
+    capacity: dict[str, int],
+    free: str,
+) -> None:
+    """Refused `reserved` as it is asked for, so the request, ranked first, is not refused `capacity` at its start."""
+    conn = scenario.conn
+    scenario.configures(capacity=capacity)
+    requested(conn)
+    observed(conn)
+    scenario.seen(KEY)
+    db.set_unit(conn, KEY, str(scenario.env.root), "repo", pr_url=OWN)
+    with scenario.ticking(dry_run=True) as tick_id:
+        requested_reviews.record(conn, tick_id, requested_reviews.derive(context(scenario.env), datetime.now(UTC)))
+        said = scenario.overseer(reviews(HEAD, OWN, ticket=KEY), error=True)
+    assert "review refused (reserved)" in said.text
+    [(action, why)] = [(d.action, d.rationale) for d in db.decisions_for_tick(conn, tick_id) if d.pr == OWN]
+    assert action == "refused:reserved"
+    assert why.startswith(f"{free} are free, and the harness's dispatches to come this tick that rank above this one")
+
+
+def test_a_review_the_operator_requested_of_a_tickets_pr_is_not_held_behind_the_harnesss(ctx: Context) -> None:
+    """Both rank first in §7's order; and with no request to start the harness holds nothing ahead of any review."""
+    requested(ctx.conn)
+    observed(ctx.conn)
+    tick_id, _ = starts(ctx)
+    assert harness_dispatches.reserved_for_review(ctx, tick_id, OWN, KEY) == review_start.Reserved(1, 1)
+    assert harness_dispatches.reserved_for_review(ctx, tick_id, PR, None) == review_start.UNRESERVED
+    with in_tick(ctx.conn) as later:
+        pass
+    assert harness_dispatches.reserved_for_review(ctx, later, OWN, KEY) == review_start.UNRESERVED

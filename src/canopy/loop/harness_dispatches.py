@@ -6,10 +6,11 @@ context. The state block names them and the workers they hold, and the overseer 
 verbs and a chore's are refused `decided`. After the overseer's run, whatever it ended as, the tick makes them with the
 runs the overseer recorded, in §7's order (`loop.spawns`, §40), each under every guard an overseer's dispatch passes
 (§8, §19) and recorded as the harness's own; a dry run checks the guards and starts none (D036). A dispatch of the
-overseer's that would leave fewer workers free than the harness's runs ranked above it hold is refused `reserved`
-(`reserved`). Its `resume` is checked against the claims (§35) and moves the cursors of its reasons as the overseer's
-does, to the newest item of each kind the block showed, short of the first it may not cover (`claims.default_cursors`),
-once its worker starts; each move is recorded as its own (`harness_cursors.handled`).
+overseer's, or a review of its, that would leave fewer workers or review runs free than the harness's runs and reviews
+ranked above it hold is refused `reserved` (`reserved`, `reserved_for_review`). Its `resume` is checked against the
+claims (§35) and moves the cursors of its reasons as the overseer's does, to the newest item of each kind the block
+showed, short of the first it may not cover (`claims.default_cursors`), once its worker starts; each move is recorded
+as its own (`harness_cursors.handled`).
 
 The plan is read from the journal each time, never kept: the tick's derivation (`phases.recorded`), the attention list,
 and the chores' runs, so the state block, the overseer's tools, and the dispatches after it read the same plan. A chore
@@ -30,7 +31,9 @@ from typing import TYPE_CHECKING, NotRequired, TypedDict, assert_never
 from canopy.chores import start as chore_start
 from canopy.core import chore_view, conversation, db, records
 from canopy.core.vocab import Decider, Phase, ResumeReason, RunKind
-from canopy.loop import attention, claims, harness_cursors, phases
+from canopy.loop import attention, claims, harness_cursors, harness_reviews, phases
+from canopy.reviews import review_requests
+from canopy.reviews import start as review_start
 from canopy.runs import dispatch, feedback_plans
 
 if TYPE_CHECKING:
@@ -139,7 +142,7 @@ class Plan:
 class ToCome(TypedDict):
     """The state block's `dispatches_to_come`: the harness's, after the overseer, and the workers they hold."""
 
-    #: The workers its runs hold, of `capacity.available`.
+    #: The workers its runs and reviews hold, of `capacity.available`.
     holds_workers: int
     runs: list[RunToCome]
     chores: list[str]
@@ -225,15 +228,37 @@ def tickets(ctx: Context, tick_id: int) -> frozenset[str]:
 
 
 def reserved(ctx: Context, tick_id: int, kind: RunKind, reasons: Iterable[ResumeReason]) -> int:
-    """The workers the harness's runs to come in tick `tick_id` hold ahead of an overseer's `kind` dispatch.
+    """The workers the harness's runs and reviews to come in tick `tick_id` hold ahead of an overseer's `kind` dispatch.
 
-    Each run ranked above it holds one: a human waiting goes ahead of a conflict, and `ready` gets what is left.
+    Each ranked above it holds one: a requested review goes ahead of every dispatch, a human waiting ahead of a
+    conflict, and `ready` gets what is left.
 
     Returns:
         How many, to leave free.
     """
-    rank = rank_of(kind, reasons)
-    return sum(r.rank < rank for r in runs(ctx, tick_id))
+    return _holding(ctx, tick_id, rank_of(kind, reasons)).workers
+
+
+def reserved_for_review(ctx: Context, tick_id: int, pr_url: str, ticket: str | None) -> review_start.Reserved:
+    """What the harness's runs and reviews to come in tick `tick_id` hold ahead of an overseer's review of `pr_url`.
+
+    Its requested reviews hold a review run and a worker each ahead of the loop's own reviews and the query's, and its
+    runs that answer a human, a repair, or a branch with no PR a worker each; nothing ranks above a requested review.
+
+    Returns:
+        The workers, and of them the review runs, to leave free.
+    """
+    return _holding(ctx, tick_id, review_rank(ctx.conn, pr_url, ticket))
+
+
+def review_rank(conn: sqlite3.Connection, pr_url: str, ticket: str | None) -> Rank:
+    """Where an overseer's review of `pr_url` stands in §7's order: first when the operator requested it.
+
+    Returns:
+        `REQUESTED` for a review naming no ticket of a PR with an open request, else `REVIEW`.
+    """
+    requested = ticket is None and review_requests.open_request(conn, pr_url) is not None
+    return Rank.REQUESTED if requested else Rank.REVIEW
 
 
 def rank_of(kind: RunKind, reasons: Iterable[ResumeReason]) -> Rank:
@@ -256,10 +281,11 @@ def rank_of(kind: RunKind, reasons: Iterable[ResumeReason]) -> Rank:
             assert_never(kind)
 
 
-def section(planned: Plan, reviews: Sequence[str] = ()) -> ToCome | None:
-    """The state block's `dispatches_to_come`, naming each and the workers its runs hold.
+def section(planned: Plan, reviews: Sequence[str] = (), *, review_workers: int = 0) -> ToCome | None:
+    """The state block's `dispatches_to_come`, naming each and the workers its runs and reviews hold.
 
-    `reviews` are the PRs whose requested reviews the harness starts, which hold a review each, no worker.
+    `reviews` are the PRs whose requested reviews the harness starts, which hold `review_workers` workers, one in each
+    persona still owed a review (`harness_reviews.holds`).
 
     Returns:
         It, or None when the harness makes none this tick.
@@ -268,7 +294,7 @@ def section(planned: Plan, reviews: Sequence[str] = ()) -> ToCome | None:
         return None
     return {
         **({"reviews": list(reviews)} if reviews else {}),
-        "holds_workers": len(planned.runs),
+        "holds_workers": len(planned.runs) + review_workers,
         "runs": [
             {"ticket": r.key, "repo": r.repo, "kind": RunKind.RESUME, "rows": [str(p) for p in r.phases]}
             for r in planned.runs
@@ -398,6 +424,16 @@ def _cursors(ctx: Context, tick_id: int, run: TicketRun) -> dict[str, str]:
         base=None,
     )
     return found
+
+
+def _holding(ctx: Context, tick_id: int, rank: Rank) -> review_start.Reserved:
+    """What the harness's runs and reviews to come in tick `tick_id` ranked above `rank` hold.
+
+    Returns:
+        The workers, and of them the review runs.
+    """
+    reviews = harness_reviews.holds(ctx, tick_id) if rank > Rank.REQUESTED else 0
+    return review_start.Reserved(workers=sum(r.rank < rank for r in runs(ctx, tick_id)) + reviews, reviews=reviews)
 
 
 def _held(conn: sqlite3.Connection) -> set[str]:

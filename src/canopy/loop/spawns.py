@@ -20,7 +20,6 @@ from canopy.core import db, recorded_runs
 from canopy.core.vocab import RecordedKind, RecordedStatus, ResumeReason, RunKind
 from canopy.loop import chore_tools, harness_dispatches, harness_reviews, review_tools, tools
 from canopy.loop.harness_dispatches import Rank
-from canopy.reviews import review_requests
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -134,10 +133,9 @@ def _order(ctx: Context, recorded: records.RecordedRun) -> tuple[int, int, int]:
             named = [ResumeReason(str(r)) for r in reasons] if isinstance(reasons, list) else []
             return harness_dispatches.rank_of(RunKind(str(asked["kind"])), named), 1, recorded.id
         case RecordedKind.REVIEW:
-            requested = recorded.ticket_key is None and recorded.pr_url is not None
-            if requested and review_requests.open_request(ctx.conn, str(recorded.pr_url)) is not None:
-                return Rank.REQUESTED, 1, recorded.id
-            return Rank.REVIEW, 1, recorded.id
+            if recorded.pr_url is None:
+                return Rank.REVIEW, 1, recorded.id
+            return harness_dispatches.review_rank(ctx.conn, recorded.pr_url, recorded.ticket_key), 1, recorded.id
         case RecordedKind.REVISION:
             return Rank.REQUESTED, 1, recorded.id
         case RecordedKind.CHORE:

@@ -76,10 +76,10 @@ The harness records its decisions before the overseer runs and makes its dispatc
 overseer's run ended as; a tick that closes before running it (§6 step 5) starts none, and a dry run none (D036). The
 state block names them and the capacity they hold, and leaves their tickets out, as it does those decided. The plan is
 read from the journal (the tick's derivation, the attention list, the chores' runs) wherever it is needed, never kept,
-so the block, the overseer's tools, and the dispatches after it read the same. A dispatch of the overseer's that would
-leave too little for the harness's that rank above it is refused `reserved`: a human waiting goes ahead of a conflict,
-and `ready` gets what is left. Rejected: the harness dispatching first and reserving for the overseer, whose
-dispatches it cannot foresee.
+so the block, the overseer's tools, and the dispatches after it read the same. A dispatch or review of the overseer's
+that would leave too little for the harness's that rank above it is refused `reserved`: a requested review goes ahead
+of every other start, a human waiting ahead of a conflict, and `ready` gets what is left. Rejected: the harness
+dispatching first and reserving for the overseer, whose dispatches it cannot foresee.
 
 ### The attention list, held in code
 

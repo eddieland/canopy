@@ -10,7 +10,8 @@ as the harness's own, about the PR. A dry run records the same, ends nothing, an
 (D036).
 
 The overseer is not shown a request the harness takes, and what it records about one, a review, a wait, or an end,
-is refused `decided` (`refuse_decided`).
+is refused `decided` (`refuse_decided`). Each review it starts holds a worker and a review run ahead of the overseer's
+dispatches and its other reviews, which are refused `reserved` should they take them (`holds`).
 
 The row is enabled on MEASUREMENTS "2026-11-10: M38, the derivation against the overseer over two weeks": five
 situations, no disagreement. A request on one of the loop's own PRs is refused as it is made (`review_requests`).
@@ -20,6 +21,7 @@ overseer's, which names its ticket and weighs its review beside the ticket's row
 
 from __future__ import annotations
 
+import contextlib
 from typing import TYPE_CHECKING, assert_never
 
 from canopy.core import db, records, sql
@@ -83,6 +85,23 @@ def starts(conn: sqlite3.Connection, tick_id: int) -> list[records.RequestDeriva
         Each request the tick derived a start for that the harness takes, with the head it starts at.
     """
     return [r for r in _derived(conn, tick_id) if r.action is RequestAction.START and r.head_sha is not None]
+
+
+def holds(ctx: Context, tick_id: int) -> int:
+    """The reviews the harness starts after the overseer in tick `tick_id`: one in each persona still owed one.
+
+    Each holds a review run and a worker, first in §7's order, which the overseer's dispatches and reviews ranked below
+    it leave free (`harness_dispatches.reserved`). A request a guard would refuse before any persona holds none.
+
+    Returns:
+        How many.
+    """
+    held = 0
+    for row in starts(ctx.conn, tick_id):
+        asked = review_start.Request(pr=row.pr_url, sha=str(row.head_sha), ticket=None, repo=None)
+        with contextlib.suppress(review_start.Refusal):
+            held += len(review_start.due(ctx, asked))
+    return held
 
 
 def make_review(
