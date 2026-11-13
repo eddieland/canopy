@@ -284,14 +284,21 @@ def stop_now(ctx: Context, run: records.EpicRun, log: logs.TickAdapter) -> endin
     current = get_run(ctx.conn, run.id)
     if current is None or current.status is not RunStatus.RUNNING or not db.ask_stop(ctx.conn, "epic_runs", run.id):
         return ending.Ending.GONE
-    for pid in (current.pid, current.agent_pid):
-        # Never this process's own group: an `_epic` claimed in-process, as tests run it, has this pid.
-        if pid is not None and pid not in (os.getpid(), os.getpgid(0)):
-            procs.kill_group(pid)
+    _kill(current.pid)
+    # Its `_epic` first, so it starts no agent after this; then the agent the row names now, which may be one `_epic`
+    # started since the read above, such as a run asked again for its result (DESIGN §13).
+    now = get_run(ctx.conn, run.id)
+    _kill((now if now is not None else current).agent_pid)
     released = _close(ctx, current, RunStatus.STOPPED, STOP_NOTE, log)
     if released is None:
         return ending.Ending.GONE
     return ending.Ending.ENDED if released.returned else ending.Ending.KEPT
+
+
+def _kill(pid: int | None) -> None:
+    """Kill process group `pid`, if any, but never this process's own, as an `_epic` run in-process by tests has."""
+    if pid is not None and pid not in (os.getpid(), os.getpgid(0)):
+        procs.kill_group(pid)
 
 
 def release(ctx: Context, run: records.EpicRun, log: logs.TickAdapter) -> Released:

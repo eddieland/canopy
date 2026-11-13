@@ -88,8 +88,15 @@ def run(
     if again is None:
         return done, found
     more = start(again)
-    # The first start's exit stands: the second only says what the first left unsaid.
-    joined = replace(done, stdout=done.stdout + more.stdout, stderr=done.stderr + more.stderr)
+    # The first start's exit stands, as the second only says what the first left unsaid, but a second that ran out
+    # the run's time is the run's timeout. Each output is read whole, so the second starts on a line of its own.
+    joined = replace(
+        done,
+        stdout=_lines(done.stdout) + more.stdout,
+        stderr=_lines(done.stderr) + more.stderr,
+        timed_out=more.timed_out,
+        returncode=more.returncode if more.timed_out else done.returncode,
+    )
     return joined, run_result.reported(joined.stdout, asked, server=server, version=version)
 
 
@@ -120,3 +127,8 @@ def _again(done: procs.Result, *, server: str, version: Version, seconds: float)
     if output.session_id is None or output.errors:
         return None
     return Again(message(server), invocation.continuing(output.session_id, version=version), seconds)
+
+
+def _lines(text: str) -> str:
+    """Return `text` ending a line, so what is added to it starts a line of its own; "" stays ""."""
+    return text if not text or text.endswith("\n") else f"{text}\n"
