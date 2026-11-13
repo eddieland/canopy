@@ -47,6 +47,15 @@ Hover the row, or tab to it, and its copy button shows beside the command. **can
 sessions instead, each opening the page of what made it: a tick, a run, a review, a chore run, a task's run, or an
 epic. That page has its transcript while the run's log is kept.
 
+## Narrowing to a directory
+
+A title is whatever the runtime made of your first words; where you were is usually the better memory. So a row's
+directory is a link: click it and the list narrows to the sessions that ran in that directory, exactly, not the ones
+below it. The header says `in …/acme/infra` while it's narrowed, and its `×` clears it. The count and the link to the
+newest 500 follow the narrowed list, since canopy narrows it before it picks the newest. The directory sits in the
+address with the other filters, so you can link to a narrowed list, and Back undoes it. Typing a directory `exclude`
+names into the address gets you an empty list: the URL is not a side door.
+
 ## Finding one
 
 Search, the box at the top of every page, finds sessions by their titles: see [Search](overview#search). The command

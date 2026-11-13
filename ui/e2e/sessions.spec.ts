@@ -35,6 +35,36 @@ test("the sessions page opens on yours, with the archived and canopy's each a fi
     await expect(page).toHaveURL(/\/workspace\/runs\/41$/u)
 })
 
+test("a row's directory narrows the list to the sessions that ran there, and Back undoes it", async ({ page }) => {
+    await page.goto('workspace/sessions')
+    const rows = page.getByTestId('sessions').getByTestId('session')
+    await expect(rows).toHaveCount(5)
+    await page.getByRole('link', { name: '…/acme/infra' }).first().click()
+    await expect(page).toHaveURL(/\/workspace\/sessions\?directory=%2Fhome%2Fop%2Facme%2Finfra$/u)
+    // The deploy question and its subagent, which ran there too; the count follows them.
+    await expect(rows).toHaveCount(2)
+    await expect(page.getByTestId('sessions-count')).toHaveText('2')
+    await expect(page.getByTestId('sessions-directory')).toContainText('…/acme/infra')
+
+    await page.goBack()
+    await expect(page).toHaveURL(/\/workspace\/sessions$/u)
+    await expect(rows).toHaveCount(5)
+    await expect(page.getByTestId('sessions-directory')).toHaveCount(0)
+
+    await page.goForward()
+    await expect(rows).toHaveCount(2)
+    await page.getByRole('link', { name: 'Clear the directory' }).click()
+    await expect(page).toHaveURL(/\/workspace\/sessions$/u)
+    await expect(rows).toHaveCount(5)
+})
+
+test("a directory sessions.exclude names lists nothing, though asked for by its link's flag", async ({ page }) => {
+    await page.goto('workspace/sessions?archived=true&directory=%2Fhome%2Fop%2Fclients%2Fglobex')
+    await expect(page.getByTestId('sessions-directory')).toContainText('…/clients/globex')
+    await expect(page.getByText('no session outside canopy in /home/op/clients/globex yet')).toBeVisible()
+    await expect(page.getByText('Globex invoice export totals')).toHaveCount(0)
+})
+
 for (const { path, list } of [
     { path: 'workspace/sessions', list: 'sessions' },
     { path: 'search?q=deploy', list: 'search-sessions-outside' },

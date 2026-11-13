@@ -51,6 +51,27 @@ def test_the_list_opens_on_the_sessions_outside_canopy_each_with_the_command_tha
     assert not any(s["directory"] == mock_sessions.EXCLUDED for s in archived)
 
 
+def test_a_list_narrowed_to_a_directory_holds_its_sessions_alone_and_never_an_excluded_ones(
+    backend: Backend,
+) -> None:
+    c = client(None, backend)
+    infra = c.get("/api/sessions", params={"directory": "/home/op/acme/infra"}).json()
+    assert (titles(infra["sessions"]), infra["more"]) == (
+        [("Why does the deploy script hang on staging?", ["Find where deploy.sh waits on the health check"])],
+        False,
+    )
+    # Exactly that directory, not the one above it; found by words within it too.
+    assert c.get("/api/sessions", params={"directory": "/home/op/acme"}).json()["sessions"] == []
+    found = c.get("/api/sessions", params={"directory": "/home/op/src/web-experiments", "q": "flaky"}).json()
+    assert titles(found["sessions"]) == ["Bisect the flaky checkout test"]
+    # The client's directory, which sessions.exclude names, lists nothing, however asked.
+    asked: list[dict[str, str | bool]] = [{}, {"archived": True}, {"q": "globex"}, {"whose": "canopy"}]
+    for params in asked:
+        excluded = c.get("/api/sessions", params={"directory": mock_sessions.EXCLUDED, **params}).json()
+        assert excluded["sessions"] == []
+    assert c.get("/api/sessions", params={"directory": ""}).status_code == 422
+
+
 def test_canopys_sessions_each_name_the_run_that_made_them_and_the_page_it_opens(backend: Backend) -> None:
     c = client(None, backend)
     found = c.get("/api/sessions", params={"whose": "canopy", "limit": session_list.MAX_LISTED}).json()

@@ -45,11 +45,13 @@ def listed(
     whose: Whose,
     query: str | None = None,
     archived: bool = False,
+    directory: str | None = None,
     limit: int = session_list.LISTED,
 ) -> SessionList:
     """The sessions `whose` names, newest first, or the newest whose title holds every word of `query`.
 
-    `archived` lists the sessions the runtime archived too. Nothing is read while `sessions.search` is `off`.
+    `archived` lists the sessions the runtime archived too, and `directory` only those that ran in it exactly; one
+    `sessions.exclude` names lists none. Nothing is read while `sessions.search` is `off`.
 
     Returns:
         At most `limit` sessions, each of canopy's with its run, each outside canopy with its command, and how far the
@@ -71,6 +73,7 @@ def listed(
             exclude=setting.exclude,
             words=words,
             archived=archived,
+            directory=directory,
             limit=limit,
         )
         runs = _runs(ctx.conn, [s.made_by for s in _every(found.sessions) if s.made_by is not None])

@@ -70,6 +70,7 @@ def listed(
     words: Sequence[str] = (),
     exclude: Sequence[str] = (),
     archived: bool = False,
+    directory: str | None = None,
     limit: int = session_list.LISTED,
 ) -> list[Listed]:
     """The sessions a list holds."""
@@ -81,6 +82,7 @@ def listed(
             exclude=exclude,
             words=words,
             archived=archived,
+            directory=directory,
             limit=limit,
         ).sessions,
     )
@@ -158,6 +160,28 @@ def test_a_session_in_an_excluded_directory_is_never_listed(conn: sqlite3.Connec
     client = runtime_sessions.of_session(conn, "ses_client")
     assert client is not None
     assert client.title is None
+
+
+def test_a_list_narrowed_to_a_directory_holds_the_sessions_that_ran_in_that_one_alone(conn: sqlite3.Connection) -> None:
+    exclude = ["/home/me/clients/*"]
+    read(
+        conn,
+        kept("ses_infra", "Infra", minute=1, directory="/home/me/acme/infra"),
+        kept("ses_sub", "Its subagent", minute=2, parent="ses_infra", directory="/home/me/acme/infra"),
+        kept("ses_away", "Its subagent elsewhere", minute=3, parent="ses_infra", directory="/srv/scratch"),
+        kept("ses_acme", "Above it", minute=4, directory="/home/me/acme"),
+        kept("ses_below", "Below it", minute=5, directory="/home/me/acme/infra/modules"),
+        kept("ses_client", "A client's", minute=6, directory="/home/me/clients/globex"),
+        exclude=exclude,
+    )
+
+    assert tree(listed(conn, directory="/home/me/acme/infra", exclude=exclude)) == [("ses_infra", ["ses_sub"])]
+    assert [s.session_id for s in listed(conn, words=["it"], directory="/home/me/acme", exclude=exclude)] == [
+        "ses_acme",
+    ]
+    # Exactly the directory, never one below it nor a pattern; an excluded one lists nothing.
+    assert listed(conn, directory="/home/me/acme/*", exclude=exclude) == []
+    assert listed(conn, directory="/home/me/clients/globex", exclude=exclude, archived=True) == []
 
 
 def test_an_archived_session_is_listed_only_when_asked_for(conn: sqlite3.Connection) -> None:

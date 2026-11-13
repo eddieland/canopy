@@ -86,14 +86,22 @@ const CANOPYS: SessionList = {
     ],
 }
 
-/** The sessions page at `at`, each list it asks for already read as `lists` gives it, by whose. */
-async function renderPage(at: string, lists: Partial<Record<SessionList['whose'], SessionList>>) {
+/**
+ * The sessions page at `at`, each list it asks for already read as `lists` gives it, by whose, narrowed to `directory`
+ * when one is given.
+ */
+async function renderPage(at: string, lists: Partial<Record<SessionList['whose'], SessionList>>, directory?: string) {
     // Nothing reads the server: the lists are the ones set here, and every other query stays off.
     const client = new QueryClient({ defaultOptions: { queries: { enabled: false } } })
     for (const [whose, list] of Object.entries(lists)) {
         for (const archived of [false, true]) {
             for (const limit of [50, 500]) {
-                const find: SessionsFind = { whose: whose === 'canopy' ? 'canopy' : 'outside', archived, limit }
+                const find: SessionsFind = {
+                    whose: whose === 'canopy' ? 'canopy' : 'outside',
+                    archived,
+                    limit,
+                    directory,
+                }
                 client.setQueryData(keys.sessions(find), list)
             }
         }
@@ -207,6 +215,60 @@ describe('the sessions page', () => {
         await renderPage('/workspace/sessions?all=true', { outside: OUTSIDE })
         const back = await screen.findByRole('link', { name: 'list the newest 50' })
         expect(back.getAttribute('href')).toBe('/workspace/sessions')
+    })
+
+    it("links a row's directory to the list narrowed to it, keeping the page's other flags", async () => {
+        await renderPage('/workspace/sessions?archived=true', { outside: OUTSIDE })
+        const infra = await screen.findAllByRole('link', { name: '…/acme/infra' })
+        // The session and its subagent both ran there.
+        expect(infra.map((link) => link.getAttribute('href'))).toEqual([
+            '/workspace/sessions?archived=true&directory=%2Fhome%2Fop%2Facme%2Finfra',
+            '/workspace/sessions?archived=true&directory=%2Fhome%2Fop%2Facme%2Finfra',
+        ])
+        expect(screen.getByRole('link', { name: '…/op/notes' }).getAttribute('href')).toBe(
+            '/workspace/sessions?archived=true&directory=%2Fhome%2Fop%2Fnotes',
+        )
+        expect(screen.queryByTestId('sessions-directory')).toBeNull()
+    })
+
+    it('says in its header which directory the list is narrowed to, with a way back to every one', async () => {
+        const narrowed: SessionList = { ...OUTSIDE, more: true, sessions: OUTSIDE.sessions.slice(0, 1) }
+        await renderPage(
+            '/workspace/sessions?directory=%2Fhome%2Fop%2Facme%2Finfra',
+            { outside: narrowed },
+            '/home/op/acme/infra',
+        )
+        const header = await screen.findByTestId('sessions-directory')
+        expect(header.textContent).toBe('in…/acme/infra')
+        const clear = within(header).getByRole('link', { name: 'Clear the directory' })
+        expect(clear.getAttribute('href')).toBe('/workspace/sessions')
+        expect(clear.getAttribute('aria-current')).toBeNull()
+        // The count and the line under the list are the narrowed list's, which the server read.
+        expect(screen.getByTestId('sessions-count').textContent).toBe('newest 2')
+        expect(screen.getByRole('link', { name: 'list up to 500' }).getAttribute('href')).toBe(
+            '/workspace/sessions?directory=%2Fhome%2Fop%2Facme%2Finfra&all=true',
+        )
+        // Every row ran there, so none links the page it is on.
+        expect(within(screen.getByTestId('sessions')).queryAllByRole('link', { name: '…/acme/infra' })).toEqual([])
+        // The filters keep the directory.
+        expect(screen.getByRole('link', { name: 'archived' }).getAttribute('href')).toBe(
+            '/workspace/sessions?archived=true&directory=%2Fhome%2Fop%2Facme%2Finfra',
+        )
+        const whose = screen.getByRole('navigation', { name: 'Whose sessions' })
+        expect(within(whose).getByRole('link', { name: "canopy's" }).getAttribute('href')).toBe(
+            '/workspace/sessions?canopy=true&directory=%2Fhome%2Fop%2Facme%2Finfra',
+        )
+    })
+
+    it('says no session ran in the directory it is narrowed to', async () => {
+        await renderPage(
+            '/workspace/sessions?directory=%2Fhome%2Fop%2Fgone',
+            { outside: { ...OUTSIDE, sessions: [] } },
+            '/home/op/gone',
+        )
+        expect(
+            await screen.findByText('no session outside canopy in /home/op/gone the runtime has not archived'),
+        ).toBeTruthy()
     })
 
     it('says the loop has read nothing yet, before its first read', async () => {

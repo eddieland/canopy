@@ -14,6 +14,8 @@ export interface SessionsFind {
     q?: string | undefined
     /** Whether the sessions the runtime archived are listed too. */
     archived?: boolean | undefined
+    /** The directory the sessions ran in, exactly; none lists every directory's. */
+    directory?: string | undefined
     /** How many at most, newest first. */
     limit?: number | undefined
 }

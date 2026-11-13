@@ -3,8 +3,9 @@
 While `sessions.search` is `titles`, the read the loop makes between ticks keeps each session's title
 (`canopy.core.runtime_sessions`). This lists them, newest first: the sessions outside canopy, the operator's own and
 another workspace's runs, or canopy's, each named by the run that made it. A subagent's session is listed under the
-one it ran for, and an archived one is left out unless asked for, as the runtime's own list leaves it out. None in a
-directory `sessions.exclude` names is ever listed. With words, it finds the newest whose title holds every one, a
+one it ran for, and an archived one is left out unless asked for, as the runtime's own list leaves it out. A list
+narrowed to a directory holds only the sessions that ran in that one, not below it. None in a directory
+`sessions.exclude` names is ever listed. With words, it finds the newest whose title holds every one, a
 subagent's among them. It reads the journal alone, never the runtime's record, so it serves only what the read kept.
 """
 
@@ -103,6 +104,7 @@ def listing(
     exclude: Sequence[str],
     words: Sequence[str] = (),
     archived: bool = False,
+    directory: str | None = None,
     limit: int = LISTED,
 ) -> Listing:
     """List the runtime's sessions `whose` names, newest first, or find the newest whose title holds every word.
@@ -110,14 +112,15 @@ def listing(
     `state_dir` is the workspace's, below which every session is canopy's, and `exclude` is `sessions.exclude`, whose
     directories' sessions are never listed. Without `words`, each session a subagent's ran for is listed with its
     subagents' under it. A word is found anywhere in a title, its case aside for ASCII letters, as `LIKE` finds it.
-    `archived` lists the sessions the runtime archived too.
+    `archived` lists the sessions the runtime archived too, and `directory` narrows the list to the sessions that ran in
+    that directory exactly, their subagents' among them, none in one `exclude` names all the same.
 
     Returns:
         At most `limit` sessions, within `MAX_LISTED`, and how far the read has come.
     """
     limit = max(1, min(limit, MAX_LISTED))
     with db.read_snapshot(conn):
-        query = _matching(whose, state_dir, exclude, archived=archived)
+        query = _matching(whose, state_dir, exclude, archived=archived, directory=directory)
         for word in words:
             query = query.where("title LIKE ? ESCAPE '\\'", f"%{_escaped(word)}%")
         if not words:
@@ -127,7 +130,15 @@ def listing(
         ids = [s.session_id for s in shown]
         below: list[_Session] = []
         if not words:
-            below = _subagents(conn, ids, whose=whose, state_dir=state_dir, exclude=exclude, archived=archived)
+            below = _subagents(
+                conn,
+                ids,
+                whose=whose,
+                state_dir=state_dir,
+                exclude=exclude,
+                archived=archived,
+                directory=directory,
+            )
         made = _made_by(conn, [s.session_id for s in [*shown, *below]]) if whose == "canopy" else {}
         listed = _tree(shown, below, made)
         return Listing(listed, more=len(found) > limit, progress=progress(conn, exclude))
@@ -169,14 +180,24 @@ class _Session(records.View):
     archived_at: str | None
 
 
-# The sessions `whose` names, never one `exclude` names, and an archived one only when `archived`.
-def _matching(whose: Whose, state_dir: Path, exclude: Collection[str], *, archived: bool) -> sql.Select:
+# The sessions `whose` names, never one `exclude` names, an archived one only when `archived`, and, given a `directory`,
+# only those that ran in it.
+def _matching(
+    whose: Whose,
+    state_dir: Path,
+    exclude: Collection[str],
+    *,
+    archived: bool,
+    directory: str | None,
+) -> sql.Select:
     query = (
         sql.select("session_id, parent_id, title, directory, started_at, updated_at, cost_usd, archived_at")
         .from_("({}) AS c", runtime_sessions.sessions_in("", None, state_dir))
         .where("ours = ?", whose == "canopy")
         .where("NOT ({})", runtime_sessions.excluded(exclude))
     )
+    if directory is not None:
+        query = query.where("directory = ?", directory)
     return query if archived else query.where("archived_at IS NULL")
 
 
@@ -190,11 +211,12 @@ def _subagents(
     state_dir: Path,
     exclude: Collection[str],
     archived: bool,
+    directory: str | None,
 ) -> list[_Session]:
     if not ids:
         return []
     query = (
-        _matching(whose, state_dir, exclude, archived=archived)
+        _matching(whose, state_dir, exclude, archived=archived, directory=directory)
         .with_(
             "below(session_id, depth) AS ("
             "SELECT session_id, 1 FROM runtime_sessions WHERE parent_id IN (SELECT value FROM json_each(?))"
