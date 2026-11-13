@@ -10,6 +10,7 @@ import pytest
 from canopy.core.run_metrics import Role
 from canopy.core.vocab import RunStatus, TickStatus
 from canopy.infra import metrics
+from canopy.loop.tick import Step
 
 
 @pytest.fixture
@@ -84,9 +85,11 @@ def test_every_metric_name_is_described_and_of_one_kind() -> None:
 
 def test_each_histogram_is_exported_with_its_description_and_bounds_in_seconds(metered: Path, tmp_path: Path) -> None:
     histograms = {name: i for name, i in metrics.INSTRUMENTS.items() if i.bounds}
-    assert set(histograms) == {"canopy.tick.duration", "canopy.run.duration"}
-    # A tick of a fraction of a second, and a run of some hours: each past what the SDK's default bounds tell apart.
+    assert set(histograms) == {"canopy.tick.duration", "canopy.tick.step.duration", "canopy.run.duration"}
+    # A tick of a fraction of a second, a step of some milliseconds, and a run of some hours: each past what the SDK's
+    # default bounds tell apart.
     metrics.record("canopy.tick.duration", 0.3, unit="s", status=TickStatus.OK)
+    metrics.record("canopy.tick.step.duration", 0.03, unit="s", step=Step.STATE)
     metrics.record("canopy.run.duration", 20_000, unit="s", role=Role.WORKER, status=RunStatus.DONE)
     metrics.configure(tmp_path, "off")
     found = exported(metered)

@@ -36,9 +36,17 @@ type Metrics = Literal["off", "file", "otlp"]
 #: A metric's label: a word of one of canopy's closed vocabularies, or a flag (D132).
 type Label = StrEnum | bool
 #: Each counter canopy records, which `count` alone takes.
-type CounterName = Literal["canopy.ticks", "canopy.runs", "canopy.cost", "canopy.tokens"]
+type CounterName = Literal[
+    "canopy.ticks",
+    "canopy.runs",
+    "canopy.cost",
+    "canopy.tokens",
+    "canopy.decisions",
+    "canopy.notifications",
+    "canopy.connector.runs",
+]
 #: Each histogram canopy records, which `record` alone takes.
-type HistogramName = Literal["canopy.tick.duration", "canopy.run.duration"]
+type HistogramName = Literal["canopy.tick.duration", "canopy.tick.step.duration", "canopy.run.duration"]
 #: Each gauge canopy sets, which `gauge` alone takes.
 type GaugeName = Literal[
     "canopy.runs.active",
@@ -74,6 +82,8 @@ class Instrument:
 
 #: How long a tick takes, in seconds: a quiet one well under a second, one whose overseer works some minutes.
 _TICK_SECONDS = (0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 120, 300, 600)
+#: How long a step of a tick takes, in seconds: most some milliseconds, its overseer's some minutes.
+_STEP_SECONDS = (0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 120, 300, 600)
 #: How long an agent run takes, in seconds: a short chore some seconds, a worker's longest some hours.
 _RUN_SECONDS = (10, 30, 60, 120, 300, 600, 1200, 1800, 3600, 7200, 14400, 28800)
 
@@ -81,6 +91,12 @@ _RUN_SECONDS = (10, 30, 60, 120, 300, 600, 1200, 1800, 3600, 7200, 14400, 28800)
 INSTRUMENTS: Mapping[MetricName, Instrument] = {
     "canopy.ticks": Instrument("Ticks that closed, by status, and whether each was a dry run."),
     "canopy.tick.duration": Instrument("How long a tick took, from its start to its close, by status.", _TICK_SECONDS),
+    "canopy.tick.step.duration": Instrument("How long each step of a tick took, by step.", _STEP_SECONDS),
+    "canopy.decisions": Instrument(
+        "Decisions ticks recorded, by kind, outcome (made or refused), decider, and whether the tick was a dry run.",
+    ),
+    "canopy.notifications": Instrument("Deliveries to notification sinks, by status: delivered or failed."),
+    "canopy.connector.runs": Instrument("Runs of the connectors, by the source's kind and how each ended."),
     "canopy.runs": Instrument("Agent runs that ended, by role and status, and a worker's by kind."),
     "canopy.run.duration": Instrument("How long an agent run ran, by role and status.", _RUN_SECONDS),
     "canopy.cost": Instrument("What agent runs cost, as the runtime reported, by role and model."),
