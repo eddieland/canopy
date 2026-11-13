@@ -241,6 +241,28 @@ def test_a_pause_moved_at_random_never_cuts_short_the_wait_a_rate_limit_asks_for
     assert [c.args for c in slept.call_args_list] == [(2.0,)]
 
 
+def test_the_wait_a_rate_limit_asks_for_is_moved_later_at_random() -> None:
+    """Clients a rate limit refused together do not all try again the moment it lifts."""
+
+    def highest(low: float, high: float) -> float:
+        del low
+        return high
+
+    with (
+        serving(Answer(status=429, headers={"Retry-After": "2"}), Answer()) as origin,
+        mock.patch.object(canopy_http.random, "uniform", autospec=True, side_effect=highest),
+        mock.patch.object(canopy_http.time, "sleep", autospec=True) as slept,
+    ):
+        Client(origin, name="Svc", retry=Retry(pauses=(0.0,))).send("GET", "/")
+    assert [c.args for c in slept.call_args_list] == [(3.0,)]
+
+
+@pytest.mark.parametrize("jitter", [-0.1, 1.5])
+def test_a_jitter_outside_0_to_1_is_refused(jitter: float) -> None:
+    with pytest.raises(ValueError, match="jitter must be from 0 to 1"):
+        Retry(jitter=jitter)
+
+
 @pytest.mark.parametrize(
     "limit",
     [Answer(status=429, headers={"Retry-After": "2"}), Answer(status=403, headers={"Retry-After": "2"})],
@@ -250,7 +272,7 @@ def test_a_rate_limit_is_waited_out_even_for_a_write(limit: Answer) -> None:
         serving(limit, Answer()) as origin,
         mock.patch.object(canopy_http.time, "sleep", autospec=True) as slept,
     ):
-        Client(origin, name="Svc").send("POST", "/", body={"text": "hi"})
+        Client(origin, name="Svc", retry=Retry(jitter=0.0)).send("POST", "/", body={"text": "hi"})
     assert [c.args for c in slept.call_args_list] == [(2.0,)]
     assert tries() == 2
 
@@ -261,7 +283,7 @@ def test_a_rate_limit_that_names_a_date_waits_until_it() -> None:
         serving(Answer(status=429, headers={"Retry-After": when}), Answer()) as origin,
         mock.patch.object(canopy_http.time, "sleep", autospec=True) as slept,
     ):
-        Client(origin, name="Svc", retry=Retry(longest_wait=60.0)).send("GET", "/")
+        Client(origin, name="Svc", retry=Retry(longest_wait=60.0, jitter=0.0)).send("GET", "/")
     assert 25.0 < slept.call_args.args[0] <= 30.0
 
 
