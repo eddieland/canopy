@@ -26,7 +26,7 @@ from canopy.notify import message
 from canopy.runs import feedback_items
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Mapping
 
     from canopy.core.context import Context
     from canopy.core.items import Item
@@ -39,6 +39,10 @@ MAX_SINCE = timedelta(days=366)
 EXCERPT = 300
 #: The most feedback items a PR lists, the newest; the rest it counts.
 MAX_FEEDBACK = 20
+#: The most replies a thread lists, the newest; the rest it counts.
+MAX_REPLIES = 10
+#: A review's states that say where its reviewer stands; any other leaves them where they were, but `dismissed`.
+_STANDINGS = frozenset({ReviewState.APPROVED, ReviewState.CHANGES_REQUESTED})
 
 
 def _moment(value: str) -> str:
@@ -48,7 +52,10 @@ def _moment(value: str) -> str:
         raise ValueError(f"invalid time {value!r}: must be ISO 8601, such as 2026-11-13T09:00:00Z") from None
     if moment.tzinfo is None:
         raise ValueError(f"invalid time {value!r}: must name its time zone, such as Z for UTC")
-    if datetime.now(UTC) - moment > MAX_SINCE:
+    now = datetime.now(UTC)
+    if moment > now:
+        raise ValueError(f"invalid time {value!r}: must not be in the future")
+    if now - moment > MAX_SINCE:
         raise ValueError(f"invalid time {value!r}: must be within {MAX_SINCE.days} days")
     return db.format_time(moment)
 
@@ -152,7 +159,11 @@ def _observed(ctx: Context, url: str) -> records.ObservedPr | None:
 
 
 def _latest_reviews(ctx: Context, pr: records.ObservedPr) -> list[dict[str, object]]:
-    """Each reviewer's latest review of `pr` that says where they stand, oldest first: not the PR's author, nor a bot.
+    """Where each reviewer of `pr` stands, oldest first: not the PR's author, nor a bot.
+
+    A reviewer stands where their latest approval or request for changes put them. A review that only comments leaves
+    them there, and one dismissed takes it back, so a reviewer who has only commented, or whose last stand was
+    dismissed, stands nowhere and is left out.
 
     Returns:
         Each one's author, state, and time.
@@ -168,12 +179,12 @@ def _latest_reviews(ctx: Context, pr: records.ObservedPr) -> list[dict[str, obje
     )
     latest: dict[str, records.ObservedReview] = {}
     for row in rows:
-        if row.author is None or row.author == pr.author or row.state in (None, ReviewState.PENDING):
+        if row.author is None or row.author == pr.author:
             continue
-        # A review that only comments leaves the reviewer where their last approval or request for changes put them.
-        if row.state is ReviewState.COMMENTED and row.author in latest:
-            continue
-        latest[row.author] = row
+        if row.state is ReviewState.DISMISSED:
+            latest.pop(row.author, None)
+        elif row.state in _STANDINGS:
+            latest[row.author] = row
     return [
         {"author": r.author, "state": None if r.state is None else str(r.state), "at": r.created_at}
         for r in sorted(latest.values(), key=lambda r: (r.created_at or "", r.id))
@@ -189,24 +200,28 @@ def _feedback_json(item: feedback_items.Offered, since: str) -> dict[str, object
         "item": str(item.item),
         "state": None if item.state is None else str(item.state),
         "created_at": item.created_at,
-        "new": item.created_at is not None and _at_or_after(item.created_at, since),
+        "new": _new(item.created_at, since),
         "url": item.url,
         "path": item.path,
         "excerpt": outbox.cut(printable(item.body), EXCERPT),
-        "replies": _replies(item.replies),
+        "replies": [_reply_json(r, since) for r in item.replies[-MAX_REPLIES:]],
+        "more_replies": max(0, len(item.replies) - MAX_REPLIES),
+        "new_replies": sum(_new(r.created_at, since) for r in item.replies),
     }
 
 
-def _replies(replies: Iterable[feedback_items.Offered]) -> list[dict[str, object]]:
-    return [
-        {
-            "author": r.author,
-            "pr_author": r.pr_author,
-            "created_at": r.created_at,
-            "excerpt": outbox.cut(printable(r.body), EXCERPT),
-        }
-        for r in replies
-    ]
+def _reply_json(reply: feedback_items.Offered, since: str) -> dict[str, object]:
+    return {
+        "author": reply.author,
+        "pr_author": reply.pr_author,
+        "created_at": reply.created_at,
+        "new": _new(reply.created_at, since),
+        "excerpt": outbox.cut(printable(reply.body), EXCERPT),
+    }
+
+
+def _new(stamp: str | None, since: str) -> bool:
+    return stamp is not None and _at_or_after(stamp, since)
 
 
 def _at_or_after(stamp: str, since: str) -> bool:

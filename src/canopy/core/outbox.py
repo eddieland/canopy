@@ -290,8 +290,8 @@ def cut_lines(text: object, limit: int) -> list[str]:
     """The lines of `text`, at most `limit` characters in all, for a field that keeps its line breaks.
 
     Returns:
-        Each line that is not blank, its whitespace collapsed to single spaces, until `limit` characters are used; the
-        last one cut ends in `...`.
+        Each line that is not blank, its whitespace collapsed to single spaces, until `limit` characters are used: the
+        line that passes it is cut to what is left, ending in `...`, or left out when no more than `...` would fit.
     """
     found: list[str] = []
     left = limit

@@ -746,11 +746,15 @@ def test_a_chores_summary_reaches_the_sinks_whole_when_its_table_says_so(
     [message] = messages(text)
     lines = message.splitlines()
     at = lines.index("< chore:briefing run 1 ended ok (0 findings):")
-    assert lines[at + 1 : at + 3] == ["  Two things wait on you.", "  - ana asked for changes on PROJ-1."]
-    assert lines[at + 3].startswith("  - PROJ-2's plan waits xxx")
+    # The summary as the run reported it, up to the contract's bound, each line whole, its blank line and doubled
+    # spaces left out.
+    sent = summary[: chore_result.MAX_SUMMARY]
+    first, second = "Two things wait on you.", "- ana asked for changes on PROJ-1."
+    last = "- PROJ-2's plan waits " + "x" * sent.count("x")
+    assert lines[at + 1 : at + 4] == [f"  {first}", f"  {second}", f"  {last}"]
+    assert lines[at + 4] == f"Full list: {scenario.env.state_dir / 'attention.md'}"
     [event] = json.loads(messages(as_json)[0])["events"]
-    assert event["summary_lines"][:2] == ["Two things wait on you.", "- ana asked for changes on PROJ-1."]
-    assert sum(len(line) for line in event["summary_lines"]) <= chore_result.MAX_SUMMARY
+    assert event["summary_lines"] == [first, second, last]
     # The one-line summary stays as every sink had it.
     assert len(event["summary"]) == outbox.SUMMARY_LIMIT
 

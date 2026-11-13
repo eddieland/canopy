@@ -506,8 +506,10 @@ def feedback_left(
     state: ReviewState | None = None,
     *,
     bot: bool = False,
+    body: str = "b",
+    thread: str | None = None,
 ) -> None:
-    """A review of `url` in `state` by `author` at `at`, or a comment without a state."""
+    """A review of `url` in `state` by `author` at `at`, or a comment without a state, on `thread` or one of its own."""
     [(count,)] = sql.execute(conn, sql.select("count(*)").from_("observed_reviews")).fetchall()
     records.insert(
         records.ObservedReview,
@@ -518,8 +520,8 @@ def feedback_left(
         bot=bot,
         state=state,
         created_at=at,
-        body="b",
-        thread_id=None if state is not None else f"t{count}",
+        body=body,
+        thread_id=None if state is not None else thread or f"t{count}",
         observed_at=at,
     ).run(conn)
 

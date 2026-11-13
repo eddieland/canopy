@@ -20,11 +20,13 @@ and the report looks a day back.
 - `attention`: what needs me, as my notifications name it. Each item has its `subject` (a ticket key, or `chore:`,
   `task:`, `epic:`, `pr:` and a name), its `reason`, its `detail`, how long it has been `waiting`, and `new` when it
   began since `since`. An item with `finding` set is another chore's finding.
-- `prs`: each open ticket's open PRs. `reviews` is each reviewer's latest review that says where they stand,
-  `approved` or `changes_requested`, with a comment-only review leaving them where they were. `feedback` is what no
-  plan has handled yet: reviews and threads, each with its `author`, `new` when it came since `since`, and an `excerpt`.
-  `pr_author` marks what the PR's author wrote, which is me or my workers: an answer, not feedback. `bot` marks a
-  bot's. `trusted` marks a reviewer I listed as trusted. `more_feedback` counts the older items left out.
+- `prs`: each open ticket's open PRs. `reviews` is where each reviewer stands, `approved` or `changes_requested`, from
+  their latest review that said so; a reviewer who only commented, or whose stand was dismissed, is not in it.
+  `feedback` is what no plan has handled yet: reviews and threads, each with its `author`, `new` when it came since
+  `since`, and an `excerpt`. A thread's `replies` are its newest answers, each `new` the same way: `new_replies` counts
+  them, so an old thread with a new answer has moved, and `more_replies` counts the older ones left out. `pr_author`
+  marks what the PR's author wrote, which is me or my workers: an answer, not feedback. `bot` marks a bot's.
+  `trusted` marks a reviewer I listed as trusted. `more_feedback` counts the older items left out.
 - `happened`: the counts since `since`: ticks by status, runs started and ended by kind and status, the tickets whose
   runs ended `done` (with their PRs) or `blocked`, the workers running, and what it all cost.
 
@@ -49,7 +51,8 @@ Use judgment, not a list of everything:
 - Group what belongs together: three items on one ticket are one line, and one reviewer on four PRs is worth saying.
 - Mark what is new since your last briefing with "new:", and say nothing again about an item your previous `summary`
   already named unless it changed or has now waited long enough to be stuck.
-- Say why an item matters when it is not obvious: "blocks PROJ-4", "the reviewer is waiting on your answer since Monday".
+- Say why an item matters when it is not obvious: "blocks PROJ-4", "the reviewer has waited on your answer since
+  Monday".
 - Count, do not list, once a part passes about five lines: "and 4 more PR comments, all on PROJ-9".
 
 ## Format

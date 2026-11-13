@@ -5,12 +5,14 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
+from unittest import mock
 
 import pytest
 
 from canopy.cli.main import main
 from canopy.core import db
 from canopy.core.vocab import ReviewState
+from canopy.loop import waiting as waiting_report
 from tests.canopy.helpers import feedback_left, in_tick, observed_pr
 
 if TYPE_CHECKING:
@@ -45,10 +47,10 @@ def test_it_lists_what_waits_and_marks_what_is_new(
     observed_pr(conn, PR, review_requested_at=ago(30))
     observed_pr(conn, MERGED, merged_at=ago(2))
     # Ana asked for changes before the last briefing; Bo approved after it, then Ana commented on a line.
-    feedback_left(conn, PR, "ana", ago(26), ReviewState.CHANGES_REQUESTED)
-    feedback_left(conn, PR, "bo", ago(3), ReviewState.APPROVED)
-    feedback_left(conn, PR, "ana", ago(2))
-    feedback_left(conn, PR, "ana", ago(1), ReviewState.COMMENTED)
+    feedback_left(conn, PR, "ana", ago(26), ReviewState.CHANGES_REQUESTED, body="Rename the flag.")
+    feedback_left(conn, PR, "bo", ago(3), ReviewState.APPROVED, body="Ship it.")
+    feedback_left(conn, PR, "ana", ago(2), body="Needs a test.\n\n  Here.")
+    feedback_left(conn, PR, "ana", ago(1), ReviewState.COMMENTED, body="One more \x1b[31mthing.")
     # The PR's author, a bot, and a merged PR's reviewer are no reviewer the operator waits on.
     feedback_left(conn, PR, "op", ago(1), ReviewState.COMMENTED)
     feedback_left(conn, PR, "ci-bot", ago(1), ReviewState.CHANGES_REQUESTED, bot=True)
@@ -75,7 +77,11 @@ def test_it_lists_what_waits_and_marks_what_is_new(
         ("ana", "comment", True),
         ("ana", "review", True),
     ]
-    assert all(f["excerpt"] == "b" for f in pr["feedback"])
+    assert [f["excerpt"] for f in pr["feedback"] if f["author"] == "ana"] == [
+        "Rename the flag.",
+        "Needs a test. Here.",
+        "One more [31mthing.",
+    ]
     assert pr["more_feedback"] == 0
     assert set(found["happened"]) >= {"ticks", "runs_started", "runs_ended", "done", "blocked", "spend"}
     assert "until" not in found["happened"]
@@ -99,12 +105,57 @@ def test_it_counts_from_a_day_back_by_default(canopy_env: CanopyEnv, capsys: pyt
     assert abs(datetime.now(UTC) - timedelta(days=1) - since) < timedelta(minutes=1)
 
 
+def test_a_reviewer_stands_where_their_last_approval_or_request_put_them(
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    db.set_unit(conn, "PROJ-1", str(canopy_env.root), "repo", pr_url=PR)
+    observed_pr(conn, PR)
+    # Cy only commented, Di's approval was dismissed, and Ed's was dismissed and then given again.
+    feedback_left(conn, PR, "cy", ago(5), ReviewState.COMMENTED)
+    feedback_left(conn, PR, "di", ago(5), ReviewState.APPROVED)
+    feedback_left(conn, PR, "di", ago(4), ReviewState.DISMISSED)
+    feedback_left(conn, PR, "ed", ago(5), ReviewState.APPROVED)
+    feedback_left(conn, PR, "ed", ago(4), ReviewState.DISMISSED)
+    feedback_left(conn, PR, "ed", ago(3), ReviewState.APPROVED)
+    [pr] = waiting(capsys)["prs"]
+    assert [(r["author"], r["state"]) for r in pr["reviews"]] == [("ed", "approved")]
+
+
+def test_a_new_answer_on_an_old_thread_is_marked_and_the_oldest_are_counted(
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    db.set_unit(conn, "PROJ-1", str(canopy_env.root), "repo", pr_url=PR)
+    observed_pr(conn, PR)
+    feedback_left(conn, PR, "ana", ago(30), thread="t", body="Why a flag?")
+    for n, hours in enumerate((29, 28, 27, 2)):
+        feedback_left(conn, PR, "op" if n % 2 == 0 else "ana", ago(hours), thread="t", body=f"answer {n}")
+    with mock.patch.object(waiting_report, "MAX_REPLIES", 3):
+        [pr] = waiting(capsys, "--since", ago(24))["prs"]
+    [thread] = pr["feedback"]
+    assert (thread["excerpt"], thread["new"], thread["new_replies"], thread["more_replies"]) == (
+        "Why a flag?",
+        False,
+        1,
+        1,
+    )
+    assert [(r["excerpt"], r["new"]) for r in thread["replies"]] == [
+        ("answer 1", False),
+        ("answer 2", False),
+        ("answer 3", True),
+    ]
+
+
 @pytest.mark.parametrize(
     ("since", "refusal"),
     [
         ("yesterday", "must be ISO 8601"),
         ("2026-11-13T09:00:00", "must name its time zone"),
         ("2020-01-01T00:00:00Z", "must be within 366 days"),
+        ("2999-01-01T00:00:00Z", "must not be in the future"),
     ],
 )
 def test_a_time_it_cannot_read_is_refused(
