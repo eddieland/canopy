@@ -573,9 +573,9 @@ Controls in code, not prompts:
 - Chores: a chore runs no more often than its `every_minutes`, never twice at once, and never more than
   `capacity.max_chores` chore runs at once, each with its own timeout (DESIGN §19).
 - The harness's dispatches (DESIGN §37): made after the overseer, by the same guards as the overseer's and counted in
-  every limit, cooldown, and capacity, and none in a dry run. An overseer's dispatch that would leave fewer workers
-  free than the harness's runs ranked above it in §7's order hold is refused `reserved`, so new work cannot take the
-  capacity of work in flight.
+  every limit, cooldown, and capacity, and none in a dry run. An overseer's dispatch or review that would leave fewer
+  workers, or review runs, free than the harness's runs and reviews ranked above it in §7's order hold is refused
+  `reserved`, so new work cannot take the capacity of work in flight or of a review the operator requested.
 - A tick whose block leaves the overseer nothing to judge runs none and spends nothing (DESIGN §6): it makes only the
   harness's dispatches, under the guards above, and the disk check still holds them. It is paced as any tick is, by
   `loop.min_gap_minutes` and every wake, and leaves idle pacing's count as it was.

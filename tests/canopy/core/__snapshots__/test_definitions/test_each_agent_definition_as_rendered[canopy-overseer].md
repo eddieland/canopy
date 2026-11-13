@@ -182,9 +182,9 @@ You can do nothing else. If you want to, record a `skip` for the ticket with a `
    `human_replied`), then `conflicted` and `ci_red`, then `pushed_no_pr`, then `ready`. Among `ready` tickets,
    dispatch a blocker before the tickets it blocks, and a ticket with an unresolved blocker only when it can be
    stacked (see "Blockers and stacking").
-   The harness starts the runs in `dispatches_to_come` after you, in the same order, and `holds_workers` says how many
-   workers they take. A dispatch of yours that would leave fewer workers free than its runs ranked above yours hold is
-   refused `reserved`: that work waits for a later tick.
+   The harness starts the runs and reviews in `dispatches_to_come` after you, in the same order, and `holds_workers`
+   says how many workers they take, its reviews first. A dispatch or review of yours that would leave fewer workers, or
+   review runs, free than those ranked above yours hold is refused `reserved`: that work waits for a later tick.
 7. **Advance the cursors** of every ticket you inspected, so the next tick is incremental (see "Cursors").
 8. **Finish.** Check "Every tick, without exception" and do what is missing. Then end your final message with a line
    holding only `CANOPY_TICK_DONE`, and exit; you may summarize before it. The harness reads only your final message:

@@ -214,7 +214,19 @@ persona still owed one, under every guard and with no context, each recorded as 
 review to start or a request to end. TRUST_MODEL T1 and the overseer's prompt say so. Chosen conservatively, for the
 operator to change: a request whose PR a ticket's unit has opened since it was made stays the overseer's, which
 names its ticket, a request on one of the loop's own PRs being refused as it is made; and no `reserved` holds the
-overseer's other reviews, the tick starting the harness's first. Left:
+overseer's other reviews, the tick starting the harness's first. Built (2026-11-13), closing #1990, so that choice is
+gone: `reserved` brought to bear on reviews, since the runs the overseer records hold their capacity until the tick
+starts them, so the harness's review, started first, could be refused `capacity` by the overseer's later-ranked runs.
+Each review the
+harness starts after the overseer, one in each persona still owed one, holds a worker and a review run ahead of every
+overseer's dispatch and of its reviews ranked below a requested one (the loop's own and the query's), and the
+harness's runs ranked above those reviews hold a worker each; an overseer's dispatch or review that would leave fewer
+of either free is refused `reserved`, at the ask and in a dry run (`harness_dispatches.reserved_for_review`,
+`reviews.start.Reserved`). `holds_workers` counts the harness's reviews too. TRUST_MODEL T3 and the overseer's prompt
+say so. Chosen conservatively, for the operator to change: a review the overseer asks for of a PR with an open request
+ranks with the harness's, so nothing is held for it; a revision, which the operator's note asks for, is held for
+nothing; and a request whose guard would refuse every persona before it starts, such as `reviewed`, holds nothing.
+Left:
 every other row, each on its measurement; the prompt cut to the
 judgment; and the design folded into the sections it names.
 Open for the operator: the bar a row clears in the measurement (recommended: at least three distinct situations, each

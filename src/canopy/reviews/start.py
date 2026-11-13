@@ -3,7 +3,7 @@
 A review is keyed by its PR and commit, and by its persona when the operator chose several for the PR (`due`, §31).
 The guards hold one `done` review per commit, a per-PR limit (the policy's plus the operator's grants, `grants.py`),
 which each review counts against, a commit's settle time (`settle.py`), a daily limit, and `max_reviews` within
-`max_workers`, whatever the overseer asks for.
+`max_workers`, whatever the overseer asks for, less what the harness's dispatches to come hold ahead of it (`Reserved`).
 A refusal is raised as `Refusal`; the CLI records it as `refused:<guard>`.
 """
 
@@ -88,6 +88,20 @@ class Request:
     persona: str | None = None
     #: Every persona the operator chose for the PR, each reviewed on its own: reviews in them run side by side.
     among: AbstractSet[str] = frozenset()
+
+
+@dataclass(frozen=True)
+class Reserved:
+    """What the harness's dispatches to come this tick hold ahead of an overseer's review (DESIGN §37)."""
+
+    #: The workers its runs and reviews ranked above the review hold.
+    workers: int = 0
+    #: The review runs its reviews ranked above the review hold, of those workers.
+    reviews: int = 0
+
+
+#: Nothing held ahead: a review the harness starts, a revision, or one started outside a tick.
+UNRESERVED = Reserved()
 
 
 @dataclass(frozen=True)
@@ -200,8 +214,10 @@ def owed_by(
     ]
 
 
-def check(ctx: Context, *, tick_id: int, request: Request) -> str:
+def check(ctx: Context, *, tick_id: int, request: Request, reserved: Reserved = UNRESERVED) -> str:
     """Check the guards for a dry run, counting what this dry run already started as running (D036).
+
+    `reserved` is what the harness's dispatches to come hold ahead of the review, which it must leave free.
 
     Returns:
         The repository the review would lease in.
@@ -211,7 +227,7 @@ def check(ctx: Context, *, tick_id: int, request: Request) -> str:
     """
     planned = db.decisions_for_tick(ctx.conn, tick_id)
     with lock.hold(ctx.dispatch_lock_path, wait=True):
-        repo = _guard(ctx, request, planned=planned, dry_run=True)
+        repo = _guard(ctx, request, planned=planned, dry_run=True, reserved=reserved)
         _persona(ctx, request)
         _check_model(ctx, request)
         return repo
@@ -262,11 +278,19 @@ def start(
             return spawn(ctx, run_id, lease, prompt)
 
 
-def record(ctx: Context, *, tick_id: int, request: Request, context: str | None) -> int:
+def record(
+    ctx: Context,
+    *,
+    tick_id: int,
+    request: Request,
+    context: str | None,
+    reserved: Reserved = UNRESERVED,
+) -> int:
     """Check the guards `start` does before it leases, and record the review the overseer asked for (DESIGN §40).
 
     Nothing is leased or spawned: the recorded review counts as running, a review of its PR and a worker of capacity,
-    until the tick spawns it once the overseer's run has ended, under the guards again.
+    until the tick spawns it once the overseer's run has ended, under the guards again. It must leave free what
+    `reserved` says the harness's dispatches to come hold ahead of it, which start before it (DESIGN §37).
 
     Returns:
         The recorded review's id.
@@ -275,7 +299,7 @@ def record(ctx: Context, *, tick_id: int, request: Request, context: str | None)
         Refusal: a guard refused.
     """
     with lock.hold(ctx.dispatch_lock_path, wait=True):
-        repo = _guard(ctx, request)
+        repo = _guard(ctx, request, reserved=reserved)
         persona = _persona(ctx, request)
         _check_model(ctx, request)
         asked = {
@@ -631,12 +655,13 @@ def _guard(
     planned: Collection[records.Decision] | None = None,
     dry_run: bool = False,
     spawning: int | None = None,
+    reserved: Reserved = UNRESERVED,
 ) -> str:
     """Refuse unless a review of `request` may start now. Returns the repository it leases in.
 
     `planned` is a dry run's decisions this tick: its reviews and worker dispatches count as running, as the runs
     recorded for the tick to spawn do, but `spawning`, the one being spawned (DESIGN §40). A dry run records no head
-    as seen (D036).
+    as seen (D036). `reserved` is what the harness's dispatches to come hold ahead of it (DESIGN §37).
 
     Returns:
         The name of the repository the review leases in.
@@ -656,7 +681,7 @@ def _guard(
     planned_reviews, planned_runs = split_planned(planned or [])
     held = recorded_runs.holding(ctx.conn, but=spawning)
     _check_running(ctx, request, planned_reviews, planned_runs, held)
-    _check_limits(ctx, request, planned_reviews, planned_runs, held, record=not dry_run)
+    _check_limits(ctx, request, planned_reviews, planned_runs, held, record=not dry_run, reserved=reserved)
     return repo
 
 
@@ -745,6 +770,7 @@ def _check_limits(
     held: Collection[records.RecordedRun],
     *,
     record: bool,
+    reserved: Reserved,
 ) -> None:
     """`reviewed`, `review_limit`, and `settling`, then `check_room`'s, in that order.
 
@@ -752,8 +778,8 @@ def _check_limits(
 
     Raises:
         Refusal: the commit already has a `done` review, the PR has used its reviews, the commit has not been seen for
-            its settle time, the day's reviews are used, or the review runs or the workers and reviews together fill
-            their capacity.
+            its settle time, the day's reviews are used, the review runs or the workers and reviews together fill
+            their capacity, or the review would take what `reserved` holds.
     """
     cfg = ctx.config
     runs = review_runs.review_runs_of(ctx.conn, request.pr)
@@ -782,7 +808,7 @@ def _check_limits(
     if reviewed >= limit:
         raise Refusal("review_limit", f"this PR has had {reviewed} review runs and the limit is {limit}")
     _check_settled(ctx, request, record=record, now=datetime.now(UTC))
-    check_room(ctx, planned_reviews, planned_runs, held)
+    check_room(ctx, planned_reviews, planned_runs, held, reserved=reserved)
 
 
 def _check_settled(ctx: Context, request: Request, *, record: bool, now: datetime) -> None:
@@ -812,14 +838,17 @@ def check_room(
     planned_reviews: Collection[records.Decision],
     planned_runs: Collection[records.Decision],
     held: Collection[records.RecordedRun] = (),
+    *,
+    reserved: Reserved = UNRESERVED,
 ) -> None:
-    """`daily_limit`, `review_capacity`, and `capacity`, in that order: what holds a review and a revision alike.
+    """`daily_limit`, `review_capacity`, `capacity`, and `reserved`, in that order: what holds a review and a revision.
 
-    `held` are the runs recorded for the tick to spawn, each counted as one that started (DESIGN §40).
+    `held` are the runs recorded for the tick to spawn, each counted as one that started (DESIGN §40). `reserved` is
+    what the harness's dispatches to come hold ahead of this one, which start before it after the overseer (§37).
 
     Raises:
-        Refusal: the day's review runs, revisions among them, are used, or the review runs or the workers and reviews
-            together fill their capacity.
+        Refusal: the day's review runs, revisions among them, are used, the review runs or the workers and reviews
+            together fill their capacity, or this one would leave fewer of either free than `reserved` holds.
     """
     cfg = ctx.config
     since = db.format_time(datetime.now(UTC) - _DAY)
@@ -837,6 +866,22 @@ def check_room(
     busy = len(db.running_runs(ctx.conn, "runs")) + busy_reviews + slot_runs + len(planned_runs) + held_runs
     if busy >= cfg.capacity.max_workers:
         raise Refusal("capacity", f"{busy} of {cfg.capacity.max_workers} workers, reviews, and tasks are running")
+    _check_reserved(busy_reviews, cfg.capacity.max_reviews, reserved.reviews, "review runs")
+    _check_reserved(busy, cfg.capacity.max_workers, reserved.workers, "workers")
+
+
+def _check_reserved(busy: int, most: int, reserved: int, what: str) -> None:
+    """`reserved`: a review must leave free what the harness's dispatches to come ranked above it hold (DESIGN §37).
+
+    Raises:
+        Refusal: (`reserved`) `busy` and `reserved` together take `most` or more of `what`.
+    """
+    if reserved and busy + reserved >= most:
+        raise Refusal(
+            "reserved",
+            f"{most - busy} of {most} {what} are free, and the harness's dispatches to come this tick that rank above "
+            f"this one hold {reserved} (the state block's `dispatches_to_come`)",
+        )
 
 
 def _check_shape(request: Request) -> None:
