@@ -21,9 +21,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Literal, NamedTuple, cast
 
-from canopy.core import db, records, spend, sql
+from canopy.core import db, records, run_metrics, spend, sql
 from canopy.core.vocab import ConnectorRunStatus, SourceKind
-from canopy.infra import metrics
 
 if TYPE_CHECKING:
     import sqlite3
@@ -82,7 +81,7 @@ def record(
                 None if observed.review_query_result is None else json.dumps(list(observed.review_query_result))
             ),
         ).run(conn)
-    metrics.count("canopy.connector.runs", kind=kind, status=observed.status)
+    run_metrics.counted("canopy.connector.runs", kind=kind, status=observed.status)
     return int(cur.lastrowid or 0)
 
 

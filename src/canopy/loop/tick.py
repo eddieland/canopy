@@ -598,7 +598,7 @@ def _step(step: Step) -> Iterator[tracing.Span]:
         with tracing.span(step) as traced:
             yield traced
     finally:
-        metrics.record("canopy.tick.step.duration", time.monotonic() - began, unit="s", step=step)
+        run_metrics.timed("canopy.tick.step.duration", time.monotonic() - began, step=step)
 
 
 # The plans the journal has no current measurements of, a few a tick (`plan_lengths`). A failure is logged, and the

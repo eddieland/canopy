@@ -305,10 +305,10 @@ each tick closes, what the loop holds, so a collector can tell it still ticks an
 last closed, the open tickets by phase, the runs at work against each role's capacity, the attention list's length, and
 the state directory's free disk. A run is counted where its row is closed, in whatever process closes it, a tick's
 reconcile for one whose process died, and a tick whose process died is counted as the next closes it, so what is
-counted is what the journal holds. A metric that cannot be recorded is logged and lost, never failing what closed the
-row. A label is a word of one of canopy's
-closed vocabularies or a configured model, never a key or text, so series stay few. Counts and times go as deltas, which
-a collector adds up across canopy's many short processes, to `<state_dir>/metrics.jsonl` or the same endpoint (D132).
+counted is what the journal holds. A metric that cannot be recorded is logged and lost, never failing what it counts.
+A label is a word of one of canopy's closed vocabularies or a configured model, never a key or text, so series stay
+few. Counts and times go as deltas, which a collector adds up across canopy's many short processes, to
+`<state_dir>/metrics.jsonl` or the same endpoint (D132).
 Every span and metric names canopy, its version, and its workspace, by a random id rather than its path, so one
 collector tells workspaces and machines apart, with attributes the operator adds themselves, and no others.
 

@@ -155,6 +155,18 @@ def overseer_ended(conn: sqlite3.Connection, tick_id: int) -> None:
 
 
 @_never_raises
+def counted(name: metrics.CounterName, **labels: metrics.Label) -> None:
+    """Add one to the counter `name` under `labels`, as what it counts happens: a metric lost never fails that thing."""
+    metrics.count(name, 1, unit="1", model=None, **labels)
+
+
+@_never_raises
+def timed(name: metrics.HistogramName, seconds: float, **labels: metrics.Label) -> None:
+    """Record `seconds` in the histogram `name` under `labels`; a metric lost never fails what it timed."""
+    metrics.record(name, seconds, unit="s", model=None, **labels)
+
+
+@_never_raises
 def decisions(conn: sqlite3.Connection, tick_id: int, *, dry_run: bool) -> None:
     """Count tick `tick_id`'s decisions as it closes, each by its kind, its outcome, and who made it.
 

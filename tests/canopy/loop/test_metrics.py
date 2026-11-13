@@ -14,6 +14,7 @@ from canopy.core.run_metrics import Role
 from canopy.core.vocab import Decider, Phase, RunKind, TickStatus
 from canopy.infra import metrics
 from canopy.loop.tick import Step
+from canopy.notify.deliver import Delivered
 from tests.canopy.helpers import KEY, in_tick, raises, waits
 from tests.canopy.scenario_helpers import dispatches
 
@@ -181,8 +182,22 @@ def test_a_refused_dispatch_a_failed_sink_and_each_step_are_counted(
     assert counted["canopy.notifications"] == [({"status": "failed"}, 1)]
     # The tests' tracker, beside the source that reads the PRs.
     assert ({"kind": "tracker", "status": "ok"}, 1) in counted["canopy.connector.runs"]
-    steps = {str(labels["step"]) for name, labels, _ in found if name == "canopy.tick.step.duration"}
-    assert steps == {step.value for step in Step}
+    steps = {str(labels["step"]): point for name, labels, point in found if name == "canopy.tick.step.duration"}
+    assert set(steps) == {step.value for step in Step}
+    # Each is a time taken: the overseer's step at least ran its agent's process.
+    assert all(point["sum"] >= 0 for point in steps.values())
+    assert steps[Step.OVERSEER]["sum"] > 0
+
+
+def test_a_metric_that_raises_never_fails_what_it_counts() -> None:
+    """A sink's delivery, a connector's run, and a tick's step each go on when the SDK raises as they are counted."""
+    with (
+        mock.patch.object(metrics, "count", autospec=True, side_effect=RuntimeError("exporter down")) as count,
+        mock.patch.object(metrics, "record", autospec=True, side_effect=RuntimeError("exporter down")) as record,
+    ):
+        run_metrics.counted("canopy.notifications", status=Delivered.FAILED)
+        run_metrics.timed("canopy.tick.step.duration", 0.5, step=Step.GC)
+    assert count.call_count == record.call_count == 1
 
 
 def test_a_decision_is_counted_by_its_actions_first_word_and_a_refusal_by_what_it_names(scenario: Scenario) -> None:

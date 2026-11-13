@@ -17,9 +17,9 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import contract, db, outbox, records, spend, sql
+from canopy.core import contract, db, outbox, records, run_metrics, spend, sql
 from canopy.core.config import Sink, notify_words
-from canopy.infra import metrics, procs
+from canopy.infra import procs
 from canopy.notify import journal, message
 
 if TYPE_CHECKING:
@@ -302,7 +302,7 @@ def _deliver(
         return Delivery(name, Delivered.HELD)
     failure = send(ctx, sink, msg.render(sink.format))
     # The sink's name is config text, so not a label (D132).
-    metrics.count("canopy.notifications", status=Delivered.DELIVERED if failure is None else Delivered.FAILED)
+    run_metrics.counted("canopy.notifications", status=Delivered.DELIVERED if failure is None else Delivered.FAILED)
     if failure is None:
         journal.mark_delivered(ctx.conn, name, change, cursor=cursor, digest=digest is not None)
         log.info("notified", extra=fields)
