@@ -646,11 +646,13 @@ def _task_ended(e: Mapping[str, object]) -> _Shown:
 
 
 def _chore_ended(e: Mapping[str, object]) -> _Shown:
+    # A chore whose table sends its summary whole, such as a briefing, gives it as lines, each shown as one.
+    whole = _lines(e.get("summary_lines"))
     return _Shown(
         [
             _ended(e, f"*chore:{escape(e.get('chore'))}* · run {escape(e.get('run'))}")
             + f" · {_findings(e.get('findings'))}",
-            _linked(e.get("summary")) if e.get("summary") else "",
+            *([_linked(line) for line in whole] if whole else [_linked(e.get("summary")) if e.get("summary") else ""]),
         ],
     )
 

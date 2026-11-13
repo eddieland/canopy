@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Callable, Mapping, Sequence
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, NotRequired, TypedDict
 
-from canopy.core import contract, epic_outline, review_result
+from canopy.core import chore_result, contract, epic_outline, review_result
 from canopy.core.db import Event
 
 if TYPE_CHECKING:
@@ -35,6 +35,8 @@ DETAIL_LIMIT = 500
 MAX_FOLLOW_UPS = 20
 #: How many ids an `epic.changed` event names; the rest are counted.
 MAX_EPIC_IDS = 40
+#: What ends text `cut` shortened.
+_ELLIPSIS = "..."
 
 
 class RunStarted(TypedDict):
@@ -166,6 +168,8 @@ class ChoreEnded(TypedDict):
     status: str
     summary: str | None
     findings: int
+    #: The summary whole, a line of it each, for a chore whose table sets `whole_summary`; left out for any other.
+    summary_lines: NotRequired[list[str]]
 
 
 class ReviewEnded(TypedDict):
@@ -279,7 +283,29 @@ def cut(text: object, limit: int) -> str:
         `text` with its whitespace collapsed to single spaces, cut to `limit` characters ending in `...` if longer.
     """
     line = " ".join(str(text).split())
-    return line if len(line) <= limit else line[: limit - 3] + "..."
+    return line if len(line) <= limit else line[: limit - len(_ELLIPSIS)] + _ELLIPSIS
+
+
+def cut_lines(text: object, limit: int) -> list[str]:
+    """The lines of `text`, at most `limit` characters in all, for a field that keeps its line breaks.
+
+    Returns:
+        Each line that is not blank, its whitespace collapsed to single spaces, until `limit` characters are used; the
+        last one cut ends in `...`.
+    """
+    found: list[str] = []
+    left = limit
+    for line in str(text).splitlines():
+        flat = " ".join(line.split())
+        if not flat:
+            continue
+        if len(flat) > left:
+            if left > len(_ELLIPSIS):
+                found.append(cut(flat, left))
+            break
+        found.append(flat)
+        left -= len(flat)
+    return found
 
 
 def run_started(
@@ -525,6 +551,9 @@ def chore_ended(
         "summary": cut(summary, SUMMARY_LIMIT) if summary else None,
         "findings": len(findings) if isinstance(findings, list) else 0,
     }
+    table = config.chores.get(chore)
+    if summary and table is not None and table.whole_summary:
+        fields["summary_lines"] = cut_lines(summary, chore_result.MAX_SUMMARY)
     return Event(CHORES, "chore.ended", fields)
 
 

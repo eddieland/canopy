@@ -48,6 +48,16 @@ def _line(text: object) -> str:
     return " ".join(str(text).split())
 
 
+def _summary_lines(fields: Mapping[str, object]) -> list[str]:
+    """A `chore.ended` event's summary sent whole (DESIGN §20), or none.
+
+    Returns:
+        Its lines as text, or an empty list for an event without them.
+    """
+    found = fields.get("summary_lines")
+    return [str(line) for line in cast("list[object]", found)] if isinstance(found, list) else []
+
+
 def event_line(kind: str, fields: Mapping[str, object]) -> str:  # noqa: C901, PLR0911, PLR0912  (one shape per kind)
     """One line of text for an event, for a person.
 
@@ -109,6 +119,9 @@ def event_line(kind: str, fields: Mapping[str, object]) -> str:  # noqa: C901, P
     if kind == "chore.ended":
         findings = f.get("findings") or 0
         text = f"< chore:{f.get('chore')} run {f.get('run')} ended {f.get('status')} ({findings} findings)"
+        # A summary sent whole is listed under the line (`Event.lines`), not cut onto it.
+        if _summary_lines(f):
+            return _line(f"{text}:")
         return _line(f"{text}: {f.get('summary')}" if f.get("summary") else text)
     if kind == "review.ended":
         ticket = f" ({f.get('ticket')})" if f.get("ticket") else ""
@@ -277,6 +290,11 @@ class Event:
     def line(self) -> str:
         """The event as one line for a person."""
         return event_line(self.kind, self.fields)
+
+    @property
+    def lines(self) -> list[str]:
+        """The event for a person: its line, then a chore's summary sent whole, a line of it each, indented."""
+        return [self.line, *(f"  {_line(line)}" for line in _summary_lines(self.fields))]
 
     def as_json(self, titles: Mapping[str, str] | None = None, ui: str | None = None) -> dict[str, object]:
         """The event as the `json` format lists it: an event about a ticket also carries its title from `titles`.
@@ -649,7 +667,7 @@ class Message:
             f"- {name} {reason}{' (dismissed)' if i < len(dismissed) and dismissed[i] else ''}"
             for i, (name, reason) in enumerate(resolved)
         ]
-        lines += [e.line for e in events]
+        lines += [line for e in events for line in e.lines]
         if omitted:
             lines.append(f"... and {omitted} more: see {self.path} and `canopy status`")
         if self.digest is not None:

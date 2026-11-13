@@ -278,6 +278,23 @@ def test_slack_keeps_the_punctuation_around_a_url_out_of_its_link(summary: str, 
     assert _texts(slack.blocks({"repo": "/r/api", "events": events}))[1].splitlines()[1] == linked
 
 
+def test_a_chores_summary_sent_whole_is_a_line_of_the_block_each() -> None:
+    event = {
+        "kind": "chore.ended",
+        "chore": "briefing",
+        "run": 4,
+        "status": "ok",
+        "findings": 0,
+        "summary": "3 PRs wait on you. ana asked for changes on PROJ-1...",
+        "summary_lines": ["3 PRs wait on you.", "ana asked for changes on PROJ-1 <@U1>: https://x.test/pull/7"],
+    }
+    [shown] = [t for t in _texts(slack.blocks({"repo": "/r/api", "events": [event]})) if "chore:briefing" in t]
+    assert shown.splitlines()[1:] == [
+        "3 PRs wait on you.",
+        "ana asked for changes on PROJ-1 &lt;@U1&gt;: <https://x.test/pull/7>",
+    ]
+
+
 def test_slack_blocks_for_each_event_kind() -> None:
     events: list[dict[str, Any]] = [
         {

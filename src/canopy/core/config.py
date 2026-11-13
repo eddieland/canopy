@@ -1870,6 +1870,9 @@ class Chore(Section):
     timezone: Annotated[StrictStr, AfterValidator(_time_zone)] | None = None
     # The most findings a run lists, the most important first; the rest it only counts (DESIGN §19).
     max_findings: Annotated[StrictInt, Field(ge=1, le=chore_result.MAX_FINDINGS)] = chore_result.DEFAULT_MAX_FINDINGS
+    #: Whether the sinks get its summary whole, its line breaks kept, rather than cut to one line: for a chore whose
+    #: summary is what it is for, such as a briefing (DESIGN §20).
+    whole_summary: StrictBool = False
     timeout_minutes: Minutes = 15
     cwd: UserPath | None = None
     # The workspaces it runs in, by name; empty means every workspace whose loop reads this file.

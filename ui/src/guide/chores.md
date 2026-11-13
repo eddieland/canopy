@@ -26,8 +26,9 @@ a ticket's. That's deliberate: a chore reads text from people outside your queue
 words shouldn't hold a pen. When you already know what to change, that's a ticket, not a chore.
 
 Some chores canopy ships: `build-health` (red and flaky checks on main), `sentry-triage` (the errors nobody has
-acted on), `canopy-health` (what keeps failing in canopy itself, and the setting to tune), and `memory-tickets` (what
-workers learned that should become a ticket).
+acted on), `canopy-health` (what keeps failing in canopy itself, and the setting to tune), `memory-tickets` (what
+workers learned that should become a ticket), and `briefing`, which reports no findings at all: its summary is a few
+lines on what waits on you and who you're keeping waiting, sent to your sinks whole.
 [examples/chores](https://github.com/eddieland/canopy/tree/main/examples/chores) has those and a few dozen more ideas,
 from review queues to end-of-life runtimes.
 
@@ -135,8 +136,9 @@ reads its own chore's history and no other's, and the overseer reads none. You c
 
 A chore with an agent definition of your own needs `"canopy_chore_history": allow` among its permissions to look back.
 A chore's run also gets a second server, of canopy's own reports, for a chore that looks at canopy itself:
-`canopy_reports_health`, `-spend`, `-decisions`, `-show-run`, `-show-chore`, `-config-show`, and `-agents`, and agent
-memory's `canopy_reports_memory-lessons`, `-proposals`, and `-list`. Each says what its command prints, the JSON where
-the command has `--json`; there's no page of a ticket, which holds its conversation. The agent canopy ships reads none
-of them; yours allows the ones it needs, each by name, and needs no shell for them.
+`canopy_reports_health`, `-spend`, `-decisions`, `-show-run`, `-show-chore`, `-config-show`, and `-agents`, agent
+memory's `canopy_reports_memory-lessons`, `-proposals`, and `-list`, and `canopy_reports_waiting`, what waits on you.
+Each says what its command prints, the JSON where the command has `--json`; there's no page of a ticket, which holds
+its conversation. The agent canopy ships reads none of them; yours allows the ones it needs, each by name, and needs no
+shell for them.
 A sandboxed chore can't: the journal sits in the part of `.canopy/` its sandbox hides, so it makes do with its prompt.

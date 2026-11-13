@@ -42,8 +42,8 @@ A chore trials it first (ROADMAP M48, stage 1b). `canopy _mcp --chore`, a server
 inline config, serves that run one tool, `history`, which the chore sees as `canopy_chore_history`: its own chore's
 history (§19), the request and text `canopy chore history` has, refused for any other chore. Beside it, `canopy _mcp
 --reports`, named `canopy_reports`, serves canopy's read-only reports, `health`, `spend`, `memory-lessons`,
-`memory-proposals`, `memory-list`, `config-show`, `agents`, `decisions`, `show-run`, and `show-chore`, each the request
-and text its command prints, with `--json` where it has one; there is no page of a ticket, which holds its conversation.
+`memory-proposals`, `memory-list`, `config-show`, `agents`, `decisions`, `show-run`, `show-chore`, and `waiting`, each
+the request and text its command prints, with `--json` where it has one; there is no page of a ticket, which holds its conversation.
 It is named for what it serves, not for whom: a chore's run is the one given it today, and its tools refuse in any
 other. Neither lists anything where `CANOPY_RUN_ID` names no chore's run, or serves the overseer's tools. `canopy-chore`
 denies bash and `canopy_*`, then allows `history` by exact name; an agent of the operator's allows each report it reads

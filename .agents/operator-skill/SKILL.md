@@ -74,6 +74,7 @@ canopy runs only in a workspace, even for one repository. Run these anywhere in 
 | `canopy draft send run:ID N@HASH...` | Posts drafts as your words, one comment review a PR; also `edit` (text, `--react`), `drop`, `settle`. |
 | `canopy notice 'TEXT' [--for 4h]` | Every run dispatched until it lapses hears TEXT, such as a CI outage (`-` reads stdin); `--clear` lifts it. |
 | `canopy decisions [TICK]` | A tick's decisions and rationales (default: latest) and its overseer output file; `--ticket KEY`. |
+| `canopy waiting [--since TIME]` | JSON of what waits on the operator: the attention list, open PRs' reviews and unhandled feedback by author, and counts since TIME (default a day). The `briefing` chore reads it. |
 | `canopy config show` | Each number, switch, and choice in the config, its default, and the file that set it; `--json`. |
 | `canopy config commands` | Each agent's command as a run starts it, and the keys it is made of; `--json`. |
 | `canopy agents` | The MCP servers and skills each canopy agent is offered, after OpenCode merges the operator's config; `--json`. |
