@@ -6,7 +6,8 @@ OpenCode at canopy's definitions rather than the repository's (D040). Without it
 the repository and, not finding it, runs its default agent, which allows everything. It also knows the option that
 would choose a run's model on the command line, beating the model canopy writes into the agent's definition (DESIGN
 §13), and those that would approve every permission an agent's rules leave at `ask` (D021), so config can refuse a
-template that passes one.
+template that passes one. And it knows the option that continues a session rather than start one, which canopy
+adds to a run's own command to ask it once more for the result it ended without (DESIGN §13).
 """
 
 from __future__ import annotations
@@ -33,6 +34,8 @@ VARIANT_OPTION = "--variant"
 APPROVE_OPTIONS = frozenset(
     {"--auto", "--yolo", "--dangerously-skip-permissions", "--dangerouslySkipPermissions"},
 )
+#: The option of `opencode run` that continues a session, by its id, rather than start one.
+SESSION_OPTION = "--session"
 #: The option of `opencode run` that chooses what it prints, and its value for one JSON event a line.
 FORMAT_OPTION = "--format"
 EVENTS_FORMAT = "json"
@@ -63,6 +66,15 @@ def with_config_dir(directory: str, command: str) -> str:
         `command`, run by `env` with the config directory set.
     """
     return f"env {CONFIG_DIR_ENV}={directory} {command}"
+
+
+def continuing(session_id: str) -> list[str]:
+    """The words that, after a command that runs `opencode run`, continue session `session_id` rather than start one.
+
+    Returns:
+        One word, the option with its value after `=`, so an id that starts with `-` is never read as an option.
+    """
+    return [f"{SESSION_OPTION}={session_id}"]
 
 
 def agent_of(command: str) -> str | None:

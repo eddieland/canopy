@@ -5,7 +5,7 @@ agent, and how a template points the runtime at canopy's definitions rather than
 that, the runtime looks for canopy's agent in the repository and, not finding it, runs an agent that allows everything.
 It also says whether a template chooses a model of its own, or has the runtime approve what an agent's rules would ask
 about, both of which config refuses, and runs a template on another of canopy's agents, as a chore with a model of its
-own is run (DESIGN §13).
+own is run (DESIGN §13), and continues a run's session, to ask it once more for the result it ended without.
 """
 
 from __future__ import annotations
@@ -40,6 +40,18 @@ def default_template(agent: str, *, version: Version, definitions_dir: str, titl
         definitions_dir=definitions_dir,
         title=title,
     )
+
+
+def continuing(session_id: str, *, version: Version) -> list[str]:
+    """The words that, after a command that runs an agent on the runtime `version` runs, continue its session.
+
+    So the command sends its message to session `session_id`, with what that session has done so far, rather than start
+    a new one.
+
+    Returns:
+        The words, for the end of the command, as a suffix's are.
+    """
+    return pick(version, one.invocation, two.invocation).continuing(session_id)
 
 
 def with_config_dir(directory: str, command: str) -> str:

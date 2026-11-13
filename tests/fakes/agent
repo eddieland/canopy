@@ -10,6 +10,9 @@ Prints a few lines of chatter, then a final line, then exits. Configured through
                         else, and for anything that is no JSON object, it is the final stdout line, verbatim, which
                         canopy reads as no agent's result: set it to "not json", or to the empty string for no final
                         line, for a run that reports nothing.
+    FAKE_AGENT_RESENT   the result a run that continues a session (`--session=ID`, as canopy asks a run once more for
+                        the result it did not report) reports, as RESULT says. Default RESULT. Such a run says one line,
+                        calls no tool but `result`, runs no command, and does not sleep.
     FAKE_AGENT_SAYS     a line said before the commands run, so in a message of its own before the final line's.
                         Default none.
     FAKE_AGENT_EXIT     exit code. Default 0.
@@ -42,9 +45,9 @@ name, with when the call started and ended, and two model calls as `step_finish`
 `msg_2`.
 Otherwise it prints its text as plain lines.
 
-A run started with `--agent canopy-worker` reads FAKE_WORKER_RESULT, FAKE_WORKER_SAYS, FAKE_WORKER_EXIT,
-FAKE_WORKER_SLEEP, FAKE_WORKER_COMMANDS, FAKE_WORKER_THEN_TOOLS, FAKE_WORKER_SESSION, FAKE_WORKER_STEP_COST, and
-FAKE_WORKER_ERRORS first,
+A run started with `--agent canopy-worker` reads FAKE_WORKER_RESULT, FAKE_WORKER_RESENT, FAKE_WORKER_SAYS,
+FAKE_WORKER_EXIT, FAKE_WORKER_SLEEP, FAKE_WORKER_COMMANDS, FAKE_WORKER_THEN_TOOLS, FAKE_WORKER_SESSION,
+FAKE_WORKER_STEP_COST, and FAKE_WORKER_ERRORS first,
 falling back to the FAKE_AGENT_* ones, so one test can script an overseer and the workers it dispatches.
 `--agent canopy-overseer` reads FAKE_OVERSEER_* the same way, `--agent canopy-planner` FAKE_PLANNER_*, and
 `--agent canopy-worker-private` FAKE_WORKER_PRIVATE_*.
@@ -255,16 +258,27 @@ def step(argv: list[str], n: int) -> None:
         emit(argv, "step_finish", part)
 
 
+def continues(argv: list[str]) -> bool:
+    """Whether the run continues a session, as `opencode run --session=ID` does, rather than start one."""
+    return any(arg.startswith("--session=") for arg in argv)
+
+
 def main(argv: list[str]) -> int:
-    say(argv, "fake agent: starting")
-    say(argv, f"fake agent: {len(argv)} argument(s)")
-    says = setting(argv, "SAYS", "")
-    if says:
-        say(argv, says)
-    step(argv, 1)
-    tools = call_tools(argv)
-    commands = run_commands(argv)
-    tools += call_tools(argv, "THEN_TOOLS")
+    tools: list[dict[str, object]] = []
+    commands: list[dict[str, object]] = []
+    if continues(argv):
+        say(argv, "fake agent: continuing")
+        step(argv, 1)
+    else:
+        say(argv, "fake agent: starting")
+        say(argv, f"fake agent: {len(argv)} argument(s)")
+        says = setting(argv, "SAYS", "")
+        if says:
+            say(argv, says)
+        step(argv, 1)
+        tools = call_tools(argv)
+        commands = run_commands(argv)
+        tools += call_tools(argv, "THEN_TOOLS")
 
     log = os.environ.get("FAKE_AGENT_LOG")
     if log:
@@ -274,9 +288,11 @@ def main(argv: list[str]) -> int:
             ran["commands"] = commands
             f.write(json.dumps(ran) + "\n")
 
-    time.sleep(float(setting(argv, "SLEEP", "0")))
-
     result = setting(argv, "RESULT", json.dumps(DEFAULT_RESULT))
+    if continues(argv):
+        result = setting(argv, "RESENT", result)
+    else:
+        time.sleep(float(setting(argv, "SLEEP", "0")))
     tool = result_tool(argv)
     reported = as_object(result) if tool else None
     if reported is not None:
