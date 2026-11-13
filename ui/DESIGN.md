@@ -1489,17 +1489,20 @@ reader, so no table repeats them.
   dimmed to 60%. While empty, the field's end also holds the jump palette's keys in a keycap that opens it. After the
   journal's panels come the runtime's sessions' two, outside canopy then canopy's, each only with hits, their rows the
   Sessions page's with the words marked in the title; a subagent's, found apart from its parent, carries its chip.
-- **The Sessions page** (`/workspace/sessions`, `SessionRows`) lists the runtime's sessions under Workspace, beside
-  the runs: one panel, its header naming whose they are, with the group word `whose` and two filter chips, `outside
-  canopy` (the default) and `canopy's`, then, each after a hairline, an `archived` toggle chip (`aria-pressed`) and the
-  count. A row reads where it opens, then its chips (`subagent`, `archived`), its title in medium weight, as a run's
-  is, its cost, and its age: one of canopy's leads with its run's reference, linking its page, and one outside with
-  its directory's last two parts in mono (`…/acme/infra`), the whole in its tip, so the title keeps the width, and the
-  command that reopens it under its title, a `Copyable` that wraps at spaces first and shows its button while the row
-  is hovered or focused, named for the session. A subagent's row follows its parent's, marked by its `subagent` chip,
-  which names the parent to a screen reader; titles are not indented, so every title starts at the same place. A line
-  under the list, in muted text, says how far the loop's read has come, and holds the one link to the longest list and
-  back. At `sessions.search = "off"` the panel is one `Empty` saying how to turn it on, and the header holds no count.
+- **The Sessions page** (`/workspace/sessions`, `SessionRows`) lists the runtime's sessions under Workspace, beside the
+  runs: one panel, its header naming whose they are, with the group word `whose` and two filter chips, `outside canopy`
+  (the default) and `canopy's`, then, each after a hairline, an `archived` toggle chip (`aria-pressed`), while the list
+  is narrowed to a directory the group word `in`, the directory's end in mono, the whole in its tip, and a ghost icon
+  button that clears it (`Clear the directory`), and the count. A row reads where it opens, then its chips (`subagent`,
+  `archived`), its title in medium weight, as a run's is, its cost, and its age: one of canopy's leads with its run's
+  reference, linking its page, and one outside with its directory's last two parts in mono (`…/acme/infra`), the whole
+  in its tip, so the title keeps the width, a muted link that narrows the list to that directory (`?directory=`) until
+  it is narrowed, and the command that reopens it under its title, a `Copyable` that wraps at spaces first and shows its
+  button while the row is hovered or focused, named for the session. A subagent's row follows its parent's, marked by
+  its `subagent` chip, which names the parent to a screen reader; titles are not indented, so every title starts at the
+  same place. A line under the list, in muted text, says how far the loop's read has come, and holds the one link to the
+  longest list and back. At `sessions.search = "off"` the panel is one `Empty` saying how to turn it on, and the header
+  holds no count.
 - **The jump palette** (`JumpPalette`, `src/components/shell/jump-palette.tsx`) jumps to a ticket from anywhere: `⌘K`
   opens and closes it, from a text field too, as a `Dialog` in the window's top sixth over the canvas. Its field is over
   the tickets viewed last, newest first, without the one on screen, so `⌘K` Enter goes back to the ticket before it;

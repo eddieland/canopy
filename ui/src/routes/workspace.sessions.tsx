@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { X } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import { sessionsQuery } from '@/api/queries'
@@ -8,28 +9,43 @@ import { Code } from '@/components/code'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { RowList } from '@/components/rows'
 import { SessionRows, SessionsProgressLine } from '@/components/session-rows'
-import { SESSIONS_LISTED, SESSIONS_MAX, SESSIONS_WHOSE, sessionsShown, WHOSE_CHIP, WHOSE_LABEL } from '@/lib/sessions'
+import { Tip } from '@/components/tip'
+import { Button } from '@/components/ui/button'
+import {
+    directoryTail,
+    SESSIONS_LISTED,
+    SESSIONS_MAX,
+    SESSIONS_WHOSE,
+    sessionsShown,
+    WHOSE_CHIP,
+    WHOSE_LABEL,
+} from '@/lib/sessions'
 import { cn } from '@/lib/utils'
 
 interface SessionsSearch {
     canopy?: boolean | undefined
     archived?: boolean | undefined
     all?: boolean | undefined
+    directory?: string | undefined
 }
 
 /**
  * Every session the agent runtime keeps (DESIGN §13), newest first, as `canopy sessions` lists them: the ones outside
  * canopy, the operator's own, which no other page lists, or with `?canopy=true` canopy's runs', each opening the page
  * of the run that made it. A subagent's is under the session it ran for; an archived one only with `?archived=true`;
- * `?all=true` lists up to the server's most. Nothing at all while `sessions.search` is `off`. One of Workspace's pages,
- * beside the runs and the ticks.
+ * `?all=true` lists up to the server's most. `?directory=`, which a row's directory links to, narrows the list to the
+ * sessions that ran in that directory exactly, the server narrowing it, so the count and the longest list follow.
+ * Nothing at all while `sessions.search` is `off`. One of Workspace's pages, beside the runs and the ticks.
  */
 export const Route = createFileRoute('/workspace/sessions')({
-    // Typed search params: each a flag, true or left out; anything else is dropped. Return every key (runs.index.tsx).
+    // Typed search params: each a flag, true or left out, and the directory a string or left out; anything else is
+    // dropped. Return every key (runs.index.tsx).
     validateSearch: (search: Record<string, unknown>): SessionsSearch => ({
         canopy: flag(search['canopy']),
         archived: flag(search['archived']),
         all: flag(search['all']),
+        directory:
+            typeof search['directory'] === 'string' && search['directory'] !== '' ? search['directory'] : undefined,
     }),
     component: SessionsPage,
 })
@@ -39,10 +55,15 @@ function flag(raw: unknown): true | undefined {
 }
 
 function SessionsPage() {
-    const { canopy, archived, all } = Route.useSearch()
+    const { canopy, archived, all, directory } = Route.useSearch()
     const whose: SessionsWhose = canopy === true ? 'canopy' : 'outside'
     const query = useQuery(
-        sessionsQuery({ whose, archived: archived === true, limit: all === true ? SESSIONS_MAX : SESSIONS_LISTED }),
+        sessionsQuery({
+            whose,
+            archived: archived === true,
+            directory,
+            limit: all === true ? SESSIONS_MAX : SESSIONS_LISTED,
+        }),
     )
     const { data, isPlaceholderData } = query
     return (
@@ -60,7 +81,7 @@ function SessionsPage() {
                             {SESSIONS_WHOSE.map((w) => (
                                 <FilterLink
                                     key={w}
-                                    search={{ canopy: w === 'canopy' ? true : undefined, archived, all }}
+                                    search={{ canopy: w === 'canopy' ? true : undefined, archived, all, directory }}
                                     selected={w === whose}
                                 >
                                     {WHOSE_CHIP[w]}
@@ -69,8 +90,11 @@ function SessionsPage() {
                         </nav>
                         {/* A toggle, not a third choice of whose: set apart by a rule, and pressed or not. */}
                         <span className="flex items-center border-l pl-3">
-                            <ArchivedToggle search={{ canopy, archived, all }} />
+                            <ArchivedToggle search={{ canopy, archived, all, directory }} />
                         </span>
+                        {directory !== undefined && (
+                            <Narrowed directory={directory} search={{ canopy, archived, all }} />
+                        )}
                         {data !== undefined && data.search !== 'off' && (
                             <span
                                 className="border-l pl-3 readout text-xs text-muted-foreground"
@@ -84,7 +108,7 @@ function SessionsPage() {
                 {data === undefined ? (
                     <PanelLoading query={query} className="min-h-72" />
                 ) : (
-                    <Listed list={data} archived={archived === true} all={all === true} />
+                    <Listed list={data} archived={archived === true} all={all === true} directory={directory} />
                 )}
             </Panel>
         </>
@@ -92,7 +116,17 @@ function SessionsPage() {
 }
 
 /** The list, or why it is empty, then how far the read has come and whether more sessions match. */
-function Listed({ list, archived, all }: { list: SessionList; archived: boolean; all: boolean }) {
+function Listed({
+    list,
+    archived,
+    all,
+    directory,
+}: {
+    list: SessionList
+    archived: boolean
+    all: boolean
+    directory: string | undefined
+}) {
     if (list.search === 'off' || list.progress === null) {
         return (
             <Empty size="panel">
@@ -105,10 +139,11 @@ function Listed({ list, archived, all }: { list: SessionList; archived: boolean;
     return (
         <>
             {list.sessions.length === 0 ? (
-                <Empty size="panel">{emptyWords(list.whose, list.progress.read_at, archived)}</Empty>
+                <Empty size="panel">{emptyWords(list.whose, list.progress.read_at, archived, directory)}</Empty>
             ) : (
                 <RowList kind="session" className="divide-y" data-testid="sessions">
-                    <SessionRows sessions={list.sessions} />
+                    {/* Narrowed, every row's directory is the list's own: no link to the page it is on. */}
+                    <SessionRows sessions={list.sessions} narrow={directory === undefined} />
                 </RowList>
             )}
             <p className="border-t px-3 py-2 text-xs text-muted-foreground" data-testid="sessions-progress">
@@ -133,14 +168,20 @@ function Listed({ list, archived, all }: { list: SessionList; archived: boolean;
     )
 }
 
-// What an empty list says: that the loop has read nothing yet, or that the runtime keeps no such session, or none it
-// has not archived.
-function emptyWords(whose: SessionsWhose, readAt: string | null, archived: boolean): string {
+// What an empty list says: that the loop has read nothing yet, or that the runtime keeps no such session, in the
+// directory the list is narrowed to, or none it has not archived.
+function emptyWords(
+    whose: SessionsWhose,
+    readAt: string | null,
+    archived: boolean,
+    directory: string | undefined,
+): string {
     if (readAt === null) {
         return "no sessions yet: canopy loop reads the runtime's sessions while it waits between ticks"
     }
     const noun = whose === 'canopy' ? "no session of canopy's" : 'no session outside canopy'
-    return archived ? `${noun} yet` : `${noun} the runtime has not archived`
+    const where = directory === undefined ? noun : `${noun} in ${directory}`
+    return archived ? `${where} yet` : `${where} the runtime has not archived`
 }
 
 // A filter chip's look, the runs page's: muted, and on the accent's tint while chosen.
@@ -173,6 +214,32 @@ function FilterLink({
         >
             {children}
         </Link>
+    )
+}
+
+/**
+ * The directory the list is narrowed to, its end, the whole in its tip, after the group word `in`, and a button that
+ * clears it, back to every directory's sessions with the page's other flags as they are (`search`).
+ */
+function Narrowed({ directory, search }: { directory: string; search: SessionsSearch }) {
+    return (
+        <span className="flex min-w-0 items-center gap-1 border-l pl-3" data-testid="sessions-directory">
+            <span className="mr-1 font-mono text-xs text-muted-foreground">in</span>
+            <Tip fact={directory} mono>
+                <span className="truncate font-mono text-xs text-foreground">{directoryTail(directory)}</span>
+            </Tip>
+            <Button asChild variant="ghost" size="icon-xs" className="hover:bg-muted">
+                <Link
+                    to="/workspace/sessions"
+                    search={{ ...search, directory: undefined }}
+                    // Never the current page: the page's search holds the directory this one leaves out.
+                    activeOptions={{ explicitUndefined: true }}
+                    aria-label="Clear the directory"
+                >
+                    <X aria-hidden />
+                </Link>
+            </Button>
+        </span>
     )
 }
 

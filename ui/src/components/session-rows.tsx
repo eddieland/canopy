@@ -1,3 +1,5 @@
+import { Link } from '@tanstack/react-router'
+
 import type { SessionsProgress, RuntimeSession, SessionRun } from '@/api/types'
 import { Age } from '@/components/age'
 import { ChoreRunLink } from '@/components/chore-link'
@@ -20,16 +22,21 @@ const NO_WORDS: readonly string[] = []
 
 /**
  * The runtime's sessions as rows of a `RowList` of kind `session`, each subagent's right under the session it ran for,
- * marked `subagent`. A title is untrusted text, shown as text with `words` marked.
+ * marked `subagent`. A title is untrusted text, shown as text with `words` marked. With `narrow`, a row's directory
+ * links the Sessions page narrowed to the sessions that ran there, keeping the page's other flags.
  */
 export function SessionRows({
     sessions,
     words = NO_WORDS,
+    narrow = false,
 }: {
     sessions: readonly RuntimeSession[]
     words?: readonly string[]
+    narrow?: boolean
 }) {
-    return sessions.map((s) => <SessionRow key={s.session_id} session={s} words={words} parent={null} />)
+    return sessions.map((s) => (
+        <SessionRow key={s.session_id} session={s} words={words} parent={null} narrow={narrow} />
+    ))
 }
 
 /**
@@ -68,10 +75,12 @@ function SessionRow({
     session,
     words,
     parent,
+    narrow,
 }: {
     session: RuntimeSession
     words: readonly string[]
     parent: string | null
+    narrow: boolean
 }) {
     const name = sessionName(session)
     return (
@@ -79,7 +88,7 @@ function SessionRow({
             {/* `group/copy`: the command's copy button shows while the pointer is anywhere over the row. */}
             <ListRow kind="session" className="group/copy items-baseline" data-testid="session">
                 <span className="flex min-w-0">
-                    <Where session={session} />
+                    <Where session={session} narrow={narrow} />
                 </span>
                 <span className="flex min-w-0 gap-1">
                     {session.parent_id !== null && (
@@ -112,7 +121,7 @@ function SessionRow({
                 )}
             </ListRow>
             {session.subagents.map((s) => (
-                <SessionRow key={s.session_id} session={s} words={words} parent={name} />
+                <SessionRow key={s.session_id} session={s} words={words} parent={name} narrow={narrow} />
             ))}
         </>
     )
@@ -120,15 +129,30 @@ function SessionRow({
 
 /**
  * Where a session opens: the page of the run of canopy's that made it, or, for one outside canopy or one no run
- * names, the end of the directory it ran in, the whole on hover, so the title beside it keeps the width.
+ * names, the end of the directory it ran in, the whole on hover, so the title beside it keeps the width. With
+ * `narrow`, the directory links the Sessions page narrowed to it.
  */
-function Where({ session }: { session: RuntimeSession }) {
+function Where({ session, narrow }: { session: RuntimeSession; narrow: boolean }) {
     if (session.made_by !== null) {
         return <RunOf run={session.made_by} />
     }
+    const tail = directoryTail(session.directory)
+    if (!narrow) {
+        return (
+            <Tip fact={session.directory} mono>
+                <span className="truncate font-mono text-xs text-muted-foreground">{tail}</span>
+            </Tip>
+        )
+    }
     return (
-        <Tip fact={session.directory} mono>
-            <span className="truncate font-mono text-xs text-muted-foreground">{directoryTail(session.directory)}</span>
+        <Tip fact={session.directory} mono detail="narrows the list to it">
+            <Link
+                to="/workspace/sessions"
+                search={(prev) => ({ ...prev, directory: session.directory })}
+                className="truncate font-mono text-xs text-muted-foreground underline-offset-4 hover:underline"
+            >
+                {tail}
+            </Link>
         </Tip>
     )
 }

@@ -70,6 +70,7 @@ def listed(
     words: Sequence[str] = (),
     exclude: Sequence[str] = (),
     archived: bool = False,
+    directory: str | None = None,
     limit: int = session_list.LISTED,
 ) -> list[Listed]:
     """The sessions a list holds."""
@@ -81,6 +82,7 @@ def listed(
             exclude=exclude,
             words=words,
             archived=archived,
+            directory=directory,
             limit=limit,
         ).sessions,
     )
@@ -158,6 +160,52 @@ def test_a_session_in_an_excluded_directory_is_never_listed(conn: sqlite3.Connec
     client = runtime_sessions.of_session(conn, "ses_client")
     assert client is not None
     assert client.title is None
+
+
+def test_a_list_narrowed_to_a_directory_holds_the_sessions_that_ran_in_that_one_alone(conn: sqlite3.Connection) -> None:
+    exclude = ["/home/me/clients/*"]
+    read(
+        conn,
+        kept("ses_infra", "Infra", minute=1, directory="/home/me/acme/infra"),
+        kept("ses_sub", "Its subagent", minute=2, parent="ses_infra", directory="/home/me/acme/infra"),
+        kept("ses_away", "Its subagent elsewhere", minute=3, parent="ses_infra", directory="/srv/scratch"),
+        kept("ses_acme", "Above it", minute=4, directory="/home/me/acme"),
+        kept("ses_below", "Below it", minute=5, directory="/home/me/acme/infra/modules"),
+        kept("ses_client", "A client's", minute=6, directory="/home/me/clients/globex"),
+        exclude=exclude,
+    )
+
+    assert tree(listed(conn, directory="/home/me/acme/infra", exclude=exclude)) == [("ses_infra", ["ses_sub"])]
+    assert [s.session_id for s in listed(conn, words=["it"], directory="/home/me/acme", exclude=exclude)] == [
+        "ses_acme",
+    ]
+    # Exactly the directory, never one below it nor a pattern.
+    assert listed(conn, directory="/home/me/acme/*", exclude=exclude) == []
+
+
+def test_a_list_narrowed_to_a_directory_holds_every_session_that_ran_there_however_deep(
+    conn: sqlite3.Connection,
+) -> None:
+    """A subagent whose parent ran elsewhere heads a tree of its own, and one below it that ran here stays under it."""
+    read(
+        conn,
+        kept("ses_root", "Elsewhere", minute=1, directory="/srv/scratch"),
+        kept("ses_here", "Here, its parent elsewhere", minute=2, parent="ses_root", directory="/home/me/acme"),
+        kept("ses_under", "Under it, here too", minute=3, parent="ses_here", directory="/home/me/acme"),
+        kept("ses_away", "Under it, elsewhere", minute=4, parent="ses_here", directory="/srv/scratch"),
+        kept("ses_deep", "Under that, here", minute=5, parent="ses_away", directory="/home/me/acme"),
+    )
+
+    assert tree(listed(conn, directory="/home/me/acme")) == ["ses_deep", ("ses_here", ["ses_under"])]
+    assert tree(listed(conn, directory="/srv/scratch")) == ["ses_away", "ses_root"]
+
+
+def test_a_list_narrowed_to_an_excluded_directory_holds_none_of_its_sessions(conn: sqlite3.Connection) -> None:
+    """Read before the directory was excluded, its session is in the journal, and listed only until it is."""
+    read(conn, kept("ses_client", "A client's", directory="/home/me/clients/globex"))
+
+    assert [s.session_id for s in listed(conn, directory="/home/me/clients/globex")] == ["ses_client"]
+    assert listed(conn, directory="/home/me/clients/globex", exclude=["/home/me/clients/*"]) == []
 
 
 def test_an_archived_session_is_listed_only_when_asked_for(conn: sqlite3.Connection) -> None:
