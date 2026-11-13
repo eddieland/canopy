@@ -592,7 +592,8 @@ def _threads(
         The items, oldest first.
     """
     rows = records.select(records.ObservedReview).where("pr_url = ?", pr).order_by("created_at, item, id").all(conn)
-    kept = [r for r in rows if not _skipped(r, trust, sent)]
+    author = _pr_author(conn, pr)
+    kept = [r for r in rows if not _skipped(r, trust, sent, author)]
     covered = _covered_comments(conn, key, pr) if key is not None else frozenset[int]()
     by_thread: dict[str, list[records.ObservedReview]] = {}
     for r in kept:
@@ -613,19 +614,25 @@ def _threads(
     return found
 
 
-def _skipped(row: records.ObservedReview, trust: Trust, sent: Mapping[str, Sequence[int]]) -> bool:
+def _skipped(
+    row: records.ObservedReview,
+    trust: Trust,
+    sent: Mapping[str, Sequence[int]],
+    pr_author: str | None,
+) -> bool:
     """Whether an observed row is neither an item for a plan nor a reply to one.
 
     Returns:
         True for the operator's own reply sent through canopy, a worker's comment, a pending review, a comment on a
-        resolved thread, a review that says nothing of its own, or a bot's comment on the PR's conversation, which is
-        no feedback (`phases.is_feedback`).
+        resolved thread, a review that says nothing of its own, or a comment on the PR's conversation by a bot or by
+        the PR's author, which is no feedback (`phases.is_feedback`), as the derivation reads it.
     """
     match row.item:
         case ReviewItem.COMMENT:
             return row.id in sent.get("comments", ()) or bool(row.resolved) or _marked(row.body, trust)
         case ReviewItem.PR_COMMENT:
-            return row.bot or not row.body.strip() or _marked(row.body, trust)
+            by_author = pr_author is not None and (row.author or "").lower() == pr_author.lower()
+            return row.bot or by_author or not row.body.strip() or _marked(row.body, trust)
         case ReviewItem.REVIEW:
             if row.id in sent.get("reviews", ()) or row.state is ReviewState.PENDING:
                 return True

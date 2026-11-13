@@ -1142,7 +1142,7 @@ def test_a_failed_check_and_a_conflict_are_items_planned_approved_and_left_by_nu
 
 
 @pytest.mark.usefixtures("git_pool")
-def test_a_persons_comment_on_the_prs_conversation_is_an_item_and_a_bots_is_not(
+def test_a_persons_comment_on_the_prs_conversation_is_an_item_and_a_bots_or_the_authors_is_not(
     scenario: Scenario,
     github_state: Path,
 ) -> None:
@@ -1151,7 +1151,9 @@ def test_a_persons_comment_on_the_prs_conversation_is_an_item_and_a_bots_is_not(
     at = "2026-10-18T12:00:00Z"
     asked = {"item": "pr_comment", "id": 701, "author": "carol", "time": at, "body": "Does this cover the retry path?"}
     summary = {"item": "pr_comment", "id": 702, "author": "codecov[bot]", "bot": True, "time": at, "body": "Cov 91%."}
-    github_shows(github_state, ALICE, asked, summary, checks=())
+    # The PR's author is `me` in the fake GitHub: the loop reads no feedback in their own words.
+    own = {"item": "pr_comment", "id": 703, "author": "me", "time": at, "body": "@carol PTAL"}
+    github_shows(github_state, ALICE, asked, summary, own, checks=())
     items = [
         {"id": 501, "proposal": "change", "reply": "Renamed."},
         {"id": 701, "proposal": "change", "reply": "Added."},
