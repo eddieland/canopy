@@ -27,9 +27,9 @@ MERGE_INFO_PREVIEW = "application/vnd.github.merge-info-preview+json"
 # How much of a comment's or review's body is printed. canopy bounds what it records again.
 MAX_BODY = 8000
 #: How long a query GitHub answered with a server error, such as its unicorn page, or whose reply was cut off, or that
-#: GitHub failed to run, waits before each new try: one try, then one more for each pause. A mutation is sent again
-#: only when it never left or GitHub refused it for its rate limit, as one GitHub failed to answer may have been
-#: carried out (canopy-http).
+#: GitHub failed to run, waits before each new try, give or take half at random: one try, then one more for each
+#: pause. A mutation is sent again only when it never left or GitHub refused it for its rate limit, as one GitHub failed
+#: to answer may have been carried out (canopy-http).
 RETRY_PAUSES: Sequence[float] = (1.0, 3.0)
 # How much of GitHub's reply an error quotes.
 _MAX_REPLY = 500

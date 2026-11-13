@@ -10,7 +10,8 @@ service refused it and said how long to wait (a 429, or a refusal naming `Retry-
 `Retry.longest_wait`. A request its caller marks `again`, as a read is, is also sent again when it may have been
 carried out: a server error, or a reply that broke off or is not JSON when JSON was asked for, or that reports a failure
 of the service's own though its status is a success. A request that timed out is never sent again: it has spent its
-timeout once already, which a connector's run cannot spend many times over.
+timeout once already, which a connector's run cannot spend many times over. Each pause is moved at random by up to
+`Retry.jitter` of it, so that programs that failed together do not all try again at once.
 
 It honors the environment's proxy (`HTTPS_PROXY`) and certificates (`SSL_CERT_FILE`), as urllib did: an operator
 behind a proxy reaches the service through it, which sees the request as it would any other of theirs.
@@ -22,6 +23,7 @@ from __future__ import annotations
 
 import email.utils
 import json
+import random
 import ssl
 import time
 import urllib.parse
@@ -107,6 +109,9 @@ class Retry:
 
     #: The pause before each new try: one try, then one more for each pause.
     pauses: Sequence[float] = (1.0, 3.0)
+    #: How far each pause is moved at random, as a share of it either way, from 0 to 1: half by default, so a pause of
+    #: 1 second is one of 0.5 to 1.5. Programs that failed together, as at an outage, then do not all try again at once.
+    jitter: float = 0.5
     #: The longest `Retry-After` a refusal may ask for and be waited out; one asking longer is the refusal it is.
     longest_wait: float = 10.0
 
@@ -332,7 +337,10 @@ class Client:
         harmless = isinstance(error, NotSentError | RateLimitedError)
         if not harmless and not (again and isinstance(error, FailedError)):
             return None
-        return max(pauses.pop(0), error.wait or 0.0)
+        spread = self._retry.jitter
+        # Not a secret: a pause moved at random so that tries spread out.
+        pause = pauses.pop(0) * random.uniform(1.0 - spread, 1.0 + spread)  # noqa: S311
+        return max(pause, error.wait or 0.0)
 
 
 def _untrusted(error: BaseException) -> bool:

@@ -35,7 +35,9 @@ What it promises:
 - **Retries only where safe.** A request is sent again, after each of `Retry.pauses`, when that cannot do it twice:
   it never left, or the service refused it and said how long to wait, for no longer than `Retry.longest_wait`. One
   sent with `again=True`, as a read is, is also sent again after a failure that may have been carried out. A timed-out
-  request is never sent again. The error given up on says in `tries` how many times the request was tried.
+  request is never sent again. Each pause is moved at random by up to `Retry.jitter` of it, half by default, so
+  programs that failed together do not all try again at once; a wait the service asked for is never cut short. The
+  error given up on says in `tries` how many times the request was tried.
 
 `send` returns the 2xx `Reply`; `json` asks for JSON and returns it parsed. Its `failed`, if given, reads the parsed
 reply and names a failure the service reports in a 2xx, as GitHub's GraphQL API does for a query it could not run:
