@@ -136,7 +136,7 @@ export function LeftFeedbackList({
  * is, linking out to it, the tick that left it, and its button. The comment is the reviewer's text, never markup.
  */
 function LeftRow({ item, pending, onSend }: { item: LeftFeedback; pending: boolean; onSend: () => void }) {
-    const where = item.path !== null && item.line !== null ? `${item.path}:${item.line}` : item.item
+    const where = item.path !== null && item.line !== null ? `${item.path}:${item.line}` : kindOf(item)
     const author = item.author ?? 'unknown'
     return (
         <ListRow kind="left-feedback" className="text-sm">
@@ -173,10 +173,11 @@ function LeftRow({ item, pending, onSend }: { item: LeftFeedback; pending: boole
 
 /**
  * Where an item is, in a column too narrow for a whole path: its file's name and line (`client.ts:42`), or `review`
- * for a review's own text, linking out to it on GitHub, the whole path on hover and to a screen reader.
+ * for a review's own text and `comment` for a comment on the PR's conversation, linking out to it on GitHub, the whole
+ * path on hover and to a screen reader.
  */
 function Where({ item, where }: { item: LeftFeedback; where: string }) {
-    const shown = item.path !== null && item.line !== null ? `${baseName(item.path)}:${item.line}` : item.item
+    const shown = item.path !== null && item.line !== null ? `${baseName(item.path)}:${item.line}` : kindOf(item)
     if (item.url === null) {
         return <Clipped text={where} mono className="font-mono text-xs text-muted-foreground" />
     }
@@ -193,6 +194,11 @@ function Where({ item, where }: { item: LeftFeedback; where: string }) {
             <LinkOutIcon href={item.url} className="shrink-0" />
         </a>
     )
+}
+
+/** What an item on no line is, in a row's words: a `review`, or a `comment` on the PR's conversation. */
+function kindOf(item: LeftFeedback): string {
+    return item.item === 'pr_comment' ? 'comment' : item.item
 }
 
 /** A comment's first line with any text, as its row shows it. */

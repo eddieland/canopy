@@ -1,7 +1,8 @@
 """The harness moves cursors past what needs no handling, and past what its own decisions handle (DESIGN §37, M38).
 
-A worker's comment, one carrying the workers' marks (D069), and a reply the operator sent through canopy (DESIGN §29)
-are never feedback, a reply, or a reason to dispatch, so nobody handles them. Each live tick, after the connectors and
+A worker's comment, one carrying the workers' marks (D069), a reply the operator sent through canopy (DESIGN §29), and
+a bot's comment on a PR's conversation (`phases.is_feedback`) are never feedback, a reply, or a reason to dispatch, so
+nobody handles them. Each live tick, after the connectors and
 before the derivation, the harness moves a ticket's `comment` cursor and each unit's `review` cursor across the run of
 such items directly after it, in journal-number order (§35), and stops at the first item that is anything else: a
 person's comment, a review or review comment, a canopy review run. So a cursor never passes an item that needs
@@ -235,17 +236,19 @@ def _needs_none(
     comments: AbstractSet[int],
     reviewed: AbstractSet[int],
 ) -> str | None:
-    """Name a review item that needs no handling: one the operator sent through canopy, or a worker's.
+    """Name a review item that needs no handling: the operator's through canopy, a worker's, or a bot's PR comment.
 
     Returns:
         What it is, or None when it is anything else.
     """
-    what = "review comment" if review.item is ReviewItem.COMMENT else "review"
-    sent = comments if review.item is ReviewItem.COMMENT else reviewed
+    what = item_numbers.called(review.item)
+    sent = comments if review.item is ReviewItem.COMMENT else reviewed if review.item is ReviewItem.REVIEW else ()
     if review.id in sent:
         return f"{what} {review.id} the operator sent"
     if conversation.worker_marked(review.body, trust.comment_prefix, trust.comment_suffix):
         return f"worker {what} {review.id}"
+    if review.item is ReviewItem.PR_COMMENT and review.bot:
+        return f"bot {what} {review.id}"
     return None
 
 

@@ -26,7 +26,8 @@ a plan is written again (Planning again) is `policy.feedback_quiet_minutes`.
 ### What a plan covers
 
 Under `approve`, every `resume` but one whose only reason is `no_pr` (§8) waits on an approved feedback plan. An
-**item** is each new thing on the unit's PR that a `resume` would handle: a review or review comment from anyone,
+**item** is each new thing on the unit's PR that a `resume` would handle: a review, review comment, or person's comment
+on its conversation from anyone,
 canopy's review findings (§21), a failed check, a conflict with the base, a blocker that merged (§10), and an
 authorized reply on the ticket. Fixing CI is part of `resume` (§8), so one plan, and one run, covers a round's
 comments and its red CI together, and a round of red CI alone waits on its plan too. A worker's comments and the

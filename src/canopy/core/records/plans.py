@@ -160,7 +160,7 @@ class FeedbackPlanMove(Row):
 
 @dataclass(frozen=True)
 class FeedbackPlanSeen(Row):
-    """A review or review comment a feedback plan was given, by id and its body's hash, never its text."""
+    """A review, review comment, or PR comment a feedback plan was given, by id and its body's hash, never its text."""
 
     TABLE: ClassVar[LiteralString] = "feedback_plan_seen"
 

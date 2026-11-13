@@ -191,10 +191,12 @@ hold is refused `reserved`.
 identifier, never a display name, that is not a worker's (§8: one carrying the configured comment marks). A worker's
 comment is never review feedback either. Anything else on the ticket is data, not instruction. See TRUST_MODEL.
 
-**Trusted reviewers** (D089). Review feedback is a PR's reviews, review comments, and requested changes, and canopy's
-own review findings (§21). `trust.trusted_reviewers`, private, lists whose feedback a worker may address without the
-operator's go-ahead: VCS host logins, matched in full and case-insensitively, and `canopy:review` for canopy's own
-reviews. It is empty by default, so a review bot's comment never starts a fixup on its own.
+**Trusted reviewers** (D089). Review feedback is a PR's reviews, review comments, comments on its conversation, and
+requested changes, and canopy's own review findings (§21). A bot's comment on the conversation is not: bots write and
+rewrite summaries there (MEASUREMENTS 2026-10-15), and the harness passes it as it passes a worker's.
+`trust.trusted_reviewers`, private, lists whose feedback a worker may address without the operator's go-ahead: VCS host
+logins, matched in full and case-insensitively, and `canopy:review` for canopy's own reviews. It is empty by default, so
+a review bot's comment never starts a fixup on its own.
 
 - Anyone else's feedback is `untrusted_review`: the harness raises its attention item (§14), and the overseer does not
   move the `review` cursor past it and never dispatches for it on its own judgment. An untrusted approval is not
@@ -235,11 +237,10 @@ observations alone; the overseer passes one to stop shorter (§37). A review com
 past. A `review` cursor `ticket-set` moves past feedback no worker was sent names each item, with why it is left, and is
 refused for one it leaves out or names wrongly; one on a resolved thread is the harness's to name. So "seen and left"
 stays in the journal beside the cursor, for the operator to read and overrule, not only in a rationale.
-A cursor but `message` is a journal number: each comment, review, review comment, and completed check run takes
-the next one when a source first
-observes it, and keeps it across reads, and a canopy review run takes one when it ends. So "newer" is one order for
-every kind, and a re-run at the same head is new. Rejected: the source's ids, which no tracker orders, and times, which
-a late submission backdates.
+A cursor but `message` is a journal number: each comment, review, review comment, PR comment, and completed check run
+takes the next one when a source first observes it, and keeps it across reads, and a canopy review run takes one when
+it ends. So "newer" is one order for every kind, and a re-run at the same head is new. Rejected: the source's ids,
+which no tracker orders, and times, which a late submission backdates.
 
 The configured query runs every tick it is due, before any ticket is read: the block holds only tickets the loop has
 seen, so the query is the only way a newly labeled ticket becomes a candidate. The `tracker` source reads it, and when

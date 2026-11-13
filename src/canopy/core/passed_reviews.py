@@ -204,7 +204,7 @@ def _named(item: Left) -> str:
         Such as `review comment 4443461025 by mgilson on https://github.com/o/r/pull/7 at s3_backfill.py:378 (left
         as optional)`.
     """
-    what = "review comment" if item.item is ReviewItem.COMMENT else "review"
+    what = item_numbers.called(item.item)
     where = f" at {item.path}:{item.line}" if item.path is not None and item.line is not None else ""
     return f"{what} {item.id} by {item.author or 'unknown'} on {item.pr_url}{where} (left as {item.reason.value})"
 

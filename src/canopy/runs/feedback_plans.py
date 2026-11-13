@@ -129,7 +129,7 @@ def match(offered: Sequence[Item], named: Sequence[Named]) -> Matched:
             refused.append(f"{item.id}, named again")
         else:
             seen.add(item.id)
-            answers = found[0].item in (PlanItem.REVIEW, PlanItem.COMMENT)
+            answers = found[0].item in (PlanItem.REVIEW, PlanItem.COMMENT, PlanItem.PR_COMMENT)
             reply = item.reply if answers and item.proposal in (Proposal.CHANGE, Proposal.DECLINE) else None
             kept.append((found[0], Named(item.id, item.proposal, reply)))
     return Matched(kept=kept, refused=refused)

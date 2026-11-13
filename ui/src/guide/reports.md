@@ -51,8 +51,10 @@ a point for its month:
 
 - **iterations**: the worker runs, implement and resume, a ticket took before it landed. One means the first attempt
   shipped; five means somebody had opinions.
-- **PR comments**: comments on its PRs from people other than the PR's author. canopy posts as you, the author, so its
-  own replies and reviews never count as feedback it received. Bots are left out too.
+- **PR comments**: comments on its PRs from people other than the PR's author, on a line of the diff or in the PR's
+  conversation. canopy posts as you, the author, so its own replies and reviews never count as feedback it received.
+  Bots are left out too. canopy doesn't read a merged PR again, so one that merged before canopy read conversation
+  comments counts only its comments on lines.
 - **to land**: from its first worker run to its PR's merge, on GitHub's clock. A PR canopy read before it kept
   GitHub's times has no merge time, so the tick that marked the ticket done stands in, which can add up to one tick's
   wait.

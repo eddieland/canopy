@@ -59,12 +59,15 @@ class ReviewItems(Request):
 
 
 class ReviewItemText(Result):
-    """One review or review comment, with its text."""
+    """One review item, a review, a review comment, or a comment on the PR's conversation, with its text."""
 
     #: Its journal number.
     number: Annotated[int, Field(description="Its journal number, as the state block shows it.")]
-    #: A review, or a comment.
-    item: Annotated[str, Field(description="review or comment.")]
+    #: A review, a review comment, or a comment on the PR's conversation.
+    item: Annotated[
+        str,
+        Field(description="review, comment (on a line of the diff), or pr_comment (on the PR's conversation)."),
+    ]
     #: The host's id for it.
     id: Annotated[int, Field(description="The host's id for it.")]
     #: Who wrote it.

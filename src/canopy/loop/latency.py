@@ -1,10 +1,10 @@
 """How long an external event waits for the tick that acts on it (DESIGN §6, §39; ROADMAP M39's re-measurement).
 
 An external event is an item a source observed on a ticket, carrying the source's own time: a tracker comment on the
-ticket, not one of the workers' own (D069), and a review or a review comment of one of its units' PRs. A check run of
-such a PR, observed completed, is counted too, but the contract gives it no time of its own, so only canopy's part of
-its wait is known. An item a source first observed is known to canopy from its journal number (§35); a review or a
-review comment with no time, and an item on a PR no ticket's unit names, are not counted.
+ticket, not one of the workers' own (D069), and a review, review comment, or PR comment of one of its units' PRs. A
+check run of such a PR, observed completed, is counted too, but the contract gives it no time of its own, so only
+canopy's part of its wait is known. An item a source first observed is known to canopy from its journal number (§35); a
+review or a review comment with no time, and an item on a PR no ticket's unit names, are not counted.
 
 The tick that acted on an item is the first live tick, by when it started, that recorded a decision about the item's
 ticket at or after canopy first observed the item: the harness's or the overseer's, but not a cursor the harness moved
@@ -40,6 +40,7 @@ KINDS: Sequence[NumberedItem] = (
     NumberedItem.COMMENT,
     NumberedItem.REVIEW,
     NumberedItem.REVIEW_COMMENT,
+    NumberedItem.PR_COMMENT,
     NumberedItem.CHECK_RUN,
 )
 #: What `ticks.woken_by` says of a tick a poll of the connectors woke (DESIGN §39).
@@ -184,12 +185,14 @@ def _items(since: str, until: str) -> sql.Select:
     )
     reviews = (
         sql.select(
-            "CASE WHEN r.item = ? THEN ? ELSE ? END AS kind, "
+            "CASE r.item WHEN ? THEN ? WHEN ? THEN ? ELSE ? END AS kind, "
             "(SELECT min(u.ticket_key) FROM ticket_units u WHERE u.pr_url = r.pr_url) AS ticket, "
             "r.created_at AS source_at, coalesce(n.numbered_at, r.observed_at) AS observed_at",
             ReviewItem.REVIEW,
             NumberedItem.REVIEW,
+            ReviewItem.COMMENT,
             NumberedItem.REVIEW_COMMENT,
+            NumberedItem.PR_COMMENT,
         )
         .from_("observed_reviews r")
         .left_join("item_numbers n ON n.number = r.number")

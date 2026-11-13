@@ -99,6 +99,22 @@ def test_a_cursor_with_an_item_that_needs_handling_after_it_stays(
     assert moves(canopy_env) == []
 
 
+def test_a_bots_comment_on_the_conversation_is_passed_and_a_persons_stops_the_move(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+) -> None:
+    """A bot's summary on the PR's conversation is no feedback; a person's comment there is, as a review comment is."""
+    bot = review(observed, 1, "codecov[bot]", None, FRESH, "Coverage 91%.", item="pr_comment", bot=True)
+    worker = review(observed, 2, "operator", None, FRESH, MARKED, item="pr_comment")
+    review(observed, 3, "carol", None, FRESH, "Does this cover the retry path?", item="pr_comment")
+    review(observed, 4, "codecov[bot]", None, FRESH, "Coverage 92%.", item="pr_comment", bot=True)
+    observed.commit()
+    assert moves(canopy_env) == [
+        harness_cursors.Move(KEY, "repo", "review", None, worker, ("bot PR comment 1", "worker PR comment 2")),
+    ]
+    assert bot < worker
+
+
 def test_a_review_runs_number_stops_the_review_cursor(canopy_env: CanopyEnv, observed: sqlite3.Connection) -> None:
     passed = review(observed, 1, "operator", None, FRESH, MARKED, item="comment")
     # A canopy review run takes its number when it ends, between the two replies.

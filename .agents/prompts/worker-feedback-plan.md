@@ -27,12 +27,13 @@ Name the repository with `repo`, as your message lists it.
 
 `{{ITEMS_FILE}}` in your directory holds each item of feedback on these pull requests that no earlier plan covered, or
 that changed since one did, as canopy read them from GitHub just before you started: a JSON list, each item with its
-`id`, `pr`, whether it is a `review` or a review `comment`, `author`, whether that author is the PR's (`pr_author`) or
-`trusted`, whether it is a `bot`, a review's `state`, a comment's `path`, `line`, and whether it is `outdated`, and its
-`body`. A comment's thread is one item, its other comments its `replies`, each with its author and body. A reply
-answers its item and asks for no work of its own: the PR author's "won't do" or the reviewer's "never mind" can make
-the item `leave` or `decline`. The operator trusts {{TRUSTED_REVIEWERS}}, and weighs who wrote each item when they read
-your plan; you plan every item the same way, trusted or not.
+`id`, `pr`, whether it is a `review`, a review `comment` on a line, or a `pr_comment` on the pull request's
+conversation, `author`, whether that author is the PR's (`pr_author`) or `trusted`, whether it is a `bot`, a review's
+`state`, a comment's `path`, `line`, and whether it is `outdated`, and its `body`. A comment's thread is one item, its
+other comments its `replies`, each with its author and body. A reply answers its item and asks for no work of its own:
+the PR author's "won't do" or the reviewer's "never mind" can make the item `leave` or `decline`. The operator trusts
+{{TRUSTED_REVIEWERS}}, and weighs who wrote each item when they read your plan; you plan every item the same way,
+trusted or not.
 
 If `{{CHANGES_FILE}}` exists in your directory, it lists what changed on the pull requests since the plan this one
 replaces: a moved head, a check's new conclusion, a conflict with the base or a merged blocker that came or went, a new

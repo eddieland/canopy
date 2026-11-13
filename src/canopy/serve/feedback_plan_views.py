@@ -180,7 +180,7 @@ def _stands(plan: records.FeedbackPlan) -> Literal["waiting", "approved", "spent
 
 
 def _said(conn: sqlite3.Connection, item: records.FeedbackPlanItem) -> records.ObservedReview | None:
-    """The review or comment an item is, as the `vcs` source last read it.
+    """The review, review comment, or PR comment an item is, as the `vcs` source last read it.
 
     Returns:
         Its row; None once a read no longer holds it.

@@ -44,7 +44,13 @@ KEPT: frozenset[str] = frozenset({NEEDS_AUTHOR, MULTI_REPO, NOTICE_RERUN})
 NAMING: frozenset[str] = frozenset({NEEDS_AUTHOR, NOTICE_RERUN})
 #: What a `needs_author` may wait on: a comment on its ticket, or a review item or review run on one of its PRs.
 _AUTHOR_ITEMS: frozenset[NumberedItem] = frozenset(
-    {NumberedItem.COMMENT, NumberedItem.REVIEW, NumberedItem.REVIEW_COMMENT, NumberedItem.REVIEW_RUN},
+    {
+        NumberedItem.COMMENT,
+        NumberedItem.REVIEW,
+        NumberedItem.REVIEW_COMMENT,
+        NumberedItem.PR_COMMENT,
+        NumberedItem.REVIEW_RUN,
+    },
 )
 
 
@@ -220,7 +226,7 @@ def _passed(conn: sqlite3.Connection, key: str, item: records.ItemNumber) -> boo
     match item.kind:
         case NumberedItem.COMMENT:
             query = sql.select("comment_cursor").from_("tickets").where("key = ?", key)
-        case NumberedItem.REVIEW | NumberedItem.REVIEW_COMMENT | NumberedItem.REVIEW_RUN:
+        case NumberedItem.REVIEW | NumberedItem.REVIEW_COMMENT | NumberedItem.PR_COMMENT | NumberedItem.REVIEW_RUN:
             units = sql.select("review_cursor").from_("ticket_units")
             query = units.where("ticket_key = ? AND pr_url = ?", key, item.subject)
         case NumberedItem.CHECK_RUN:

@@ -64,7 +64,10 @@ class ObservedPr(Row):
 
 @dataclass(frozen=True)
 class ObservedReview(Row):
-    """A review or a review comment of a PR, as the reader last read it whole (DESIGN §29). Text, never authority."""
+    """A review, review comment, or conversation comment of a PR, as the reader last read it whole (DESIGN §29).
+
+    Text, never authority.
+    """
 
     TABLE: ClassVar[LiteralString] = "observed_reviews"
 

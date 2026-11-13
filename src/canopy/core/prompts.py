@@ -827,7 +827,7 @@ def _item_on(kind: PlanItem, pr: str) -> str:
         is stacked on`.
     """
     match kind:
-        case PlanItem.REVIEW | PlanItem.COMMENT:
+        case PlanItem.REVIEW | PlanItem.COMMENT | PlanItem.PR_COMMENT:
             return f"on {pr}"
         case PlanItem.CHECK:
             return f"a failed check on {pr}"
