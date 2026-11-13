@@ -16,7 +16,8 @@ not `opencode api --standalone`, whose server answers once and is gone: `plugin.
 at most `WANTED_SECONDS`. A run waits the same way before its first prompt (the plugin's `listedModel`, DESIGN §33).
 
 Only `providerID`, `id`, and the variants' `id` are read: a model's `settings` and `headers` may hold a provider's key,
-so no failure quotes what was printed. An entry that does not name a model canopy renders is passed over.
+so no failure quotes what was printed on stdout; one that exits non-zero or times out keeps the end of its stderr, for
+the operator to see why. An entry that does not name a model canopy renders is passed over.
 
 OpenCode 2.1.2 ran a primary agent on the default model, whatever its definition named; 2.1.4 runs it on the
 definition's model and variant, so a model chosen in config needs 2.1.4 or later.
@@ -83,12 +84,13 @@ def listed(runner: procs.Runner, *, cwd: Path, variants: bool = False, wanted: s
 
     Returns:
         The models it listed, with their variants when asked for; or none, with why, when OpenCode could not be run,
-        failed, or printed what canopy cannot read.
+        failed, or printed what canopy cannot read, and the end of its stderr when it failed.
     """
     try:
         found = Serve(runner, OPENCODE, cwd, {}).ask(lambda client: _whole(client, wanted))
     except FailedError as e:
-        return ModelList(error=str(e))
+        # No stderr: an error about the config may quote a value of it, a provider's key among them.
+        return ModelList(error=str(e), transient=e.transient)
     return ModelList(frozenset(found), found if variants else {})
 
 
