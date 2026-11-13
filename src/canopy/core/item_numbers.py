@@ -1,10 +1,10 @@
 """Journal numbers (DESIGN §35): what a cursor names, one order for every kind of item it passes.
 
-Each comment, review, review comment, and completed check run takes the next number when a source first observes it,
-and keeps it across later reads of its subject, which replace the observation's row but never its number; a canopy
-review run takes one when it ends. An item is newer than a cursor when its number is larger: it was first observed
-after the item the cursor names. Neither the source's ids, which no tracker orders, nor its times, which a late
-submission backdates, give that order.
+Each comment, review, review comment, comment on a PR's conversation, and completed check run takes the next number
+when a source first observes it, and keeps it across later reads of its subject, which replace the observation's row
+but never its number; a canopy review run takes one when it ends. An item is newer than a cursor when its number is
+larger: it was first observed after the item the cursor names. Neither the source's ids, which no tracker orders, nor
+its times, which a late submission backdates, give that order.
 
 A review item's number also records the live tick, closed `ok`, whose overseer was first shown its text and decided
 its ticket, so the state block shows a body once (DESIGN §30): as it closes, a tick marks what it showed of each ticket
@@ -13,10 +13,10 @@ the overseer decided, and a dry run marks nothing.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, assert_never
 
 from canopy.core import records, sql
-from canopy.core.vocab import NumberedItem
+from canopy.core.vocab import NumberedItem, ReviewItem
 
 if TYPE_CHECKING:
     import sqlite3
@@ -39,6 +39,40 @@ def take(conn: sqlite3.Connection, kind: NumberedItem, subject: str, ident: str 
         sql.select("number").from_("item_numbers").where("subject = ? AND kind = ? AND id = ?", subject, kind, found),
     ).fetchone()
     return int(row[0])
+
+
+def of_review(item: ReviewItem) -> NumberedItem:
+    """The kind a review item of `item`'s kind is numbered as.
+
+    Returns:
+        It.
+    """
+    match item:
+        case ReviewItem.REVIEW:
+            return NumberedItem.REVIEW
+        case ReviewItem.COMMENT:
+            return NumberedItem.REVIEW_COMMENT
+        case ReviewItem.PR_COMMENT:
+            return NumberedItem.PR_COMMENT
+        case _:
+            assert_never(item)
+
+
+def called(item: ReviewItem) -> str:
+    """What a review item of `item`'s kind is called where canopy names one for a person or an agent.
+
+    Returns:
+        `review`, `review comment`, or `PR comment`.
+    """
+    match item:
+        case ReviewItem.REVIEW:
+            return "review"
+        case ReviewItem.COMMENT:
+            return "review comment"
+        case ReviewItem.PR_COMMENT:
+            return "PR comment"
+        case _:
+            assert_never(item)
 
 
 def newer(number: int | None, cursor: int | None) -> bool:

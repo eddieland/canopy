@@ -470,6 +470,37 @@ def test_a_bot_approval_is_no_approval_and_feedback_at_the_cursor_is_handled(
     assert derived(canopy_env)[1].phases == (phases.Phase.GREEN_UNREVIEWED,)
 
 
+@pytest.mark.parametrize(
+    ("author", "bot", "found"),
+    [
+        ("octocat", False, {Phase.CHANGES_REQUESTED}),
+        ("stranger", False, {Phase.UNTRUSTED_REVIEW}),
+        ("codecov[bot]", True, set()),
+        ("operator", False, set()),
+    ],
+    ids=["trusted", "untrusted", "bot", "pr-author"],
+)
+def test_a_comment_on_the_prs_conversation_is_feedback_unless_a_bot_or_the_author_wrote_it(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+    author: str,
+    *,
+    bot: bool,
+    found: set[Phase],
+) -> None:
+    canopy_env.configure(canopy_env.user_file, {"trust": {"trusted_reviewers": ["octocat"]}})
+    green(canopy_env, observed)
+    number = item_numbers.take(observed, NumberedItem.PR_COMMENT, PR, 9, at=FRESH)
+    observed.execute(
+        "INSERT INTO observed_reviews (pr_url, item, id, author, bot, created_at, body, observed_at, number) "
+        "VALUES (?, 'pr_comment', 9, ?, ?, ?, 'Does this cover the retry path?', ?, ?)",
+        (PR, author, bot, OLD, FRESH, number),
+    )
+    observed.commit()
+    feedback = {Phase.CHANGES_REQUESTED, Phase.UNTRUSTED_REVIEW}
+    assert feedback & set(derived(canopy_env)[1].phases) == found
+
+
 def test_a_comment_on_an_artifact_that_is_authority_is_a_reply(
     canopy_env: CanopyEnv,
     observed: sqlite3.Connection,

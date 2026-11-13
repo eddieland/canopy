@@ -1115,7 +1115,7 @@ def _item_what(
         The words, the author's and the check's name each on one line.
     """
     match item.item:
-        case PlanItem.REVIEW | PlanItem.COMMENT:
+        case PlanItem.REVIEW | PlanItem.COMMENT | PlanItem.PR_COMMENT:
             author = who.get((item.pr_url, item.item, item.item_id))
             return one_line(author) if author else "no author recorded"
         case PlanItem.CHECK:

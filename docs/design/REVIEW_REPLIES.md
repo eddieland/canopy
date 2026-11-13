@@ -97,9 +97,9 @@ A draft and a thread are untrusted text and are shown as text, never Markdown, e
 
 ### canopy's GitHub program
 
-`packages/canopy-github` is a program of its own, which the harness may not import (§5). Its reader reads a PR's reviews
-and threads (§30); its poster posts or stages one PR's drafts as one review, or one ticket's comment, and
-reports whether it submitted.
+`packages/canopy-github` is a program of its own, which the harness may not import (§5). Its reader reads a PR's
+reviews, threads, and conversation comments (§30); its poster posts or stages one PR's drafts as one review, or one
+ticket's comment, and reports whether it submitted.
 
 The program, never the harness, reads the host from the PR's URL and uses the token `gh` holds for it, so GitHub
 Enterprise works as github.com does and the harness never holds a token (TRUST_MODEL T2). A URL is a worker's word, so

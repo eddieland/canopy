@@ -490,7 +490,8 @@ function nothingSaid(item: FeedbackPlanItem): string {
         case 'review': {
             return 'a review with no words'
         }
-        case 'comment': {
+        case 'comment':
+        case 'pr_comment': {
             return 'no longer on the PR as read'
         }
         case 'check': {
@@ -507,7 +508,8 @@ function nothingSaid(item: FeedbackPlanItem): string {
 
 /**
  * Where an item is: `on its thread`, a router link to the thread's card on this page (a bare `#` href would go to the
- * root under the page's <base>); `the review`, opening it on its host; or the PR it is on, for one of another PR.
+ * root under the page's <base>); `the review` or `the comment` on the PR's conversation, opening it on its host; or
+ * the PR it is on, for one of another PR.
  */
 function Where({ item }: { item: FeedbackPlanItem }) {
     const look = 'ml-auto max-w-72 shrink-0 truncate text-xs'
@@ -523,9 +525,12 @@ function Where({ item }: { item: FeedbackPlanItem }) {
             </Link>
         )
     }
-    if (item.item === 'review') {
+    if (item.item === 'review' || item.item === 'pr_comment') {
+        const what = item.item === 'review' ? 'the review' : 'the comment'
         return item.url === null ? (
-            <span className={cn(look, 'font-mono text-muted-foreground')}>the review {item.item_id}</span>
+            <span className={cn(look, 'font-mono text-muted-foreground')}>
+                {what} {item.item_id}
+            </span>
         ) : (
             <a
                 href={item.url}
@@ -533,7 +538,7 @@ function Where({ item }: { item: FeedbackPlanItem }) {
                 rel="noreferrer noopener"
                 className={cn(look, 'inline-flex items-center gap-1 text-accent underline-offset-4 hover:underline')}
             >
-                the review
+                {what}
                 <LinkOutIcon href={item.url} />
             </a>
         )

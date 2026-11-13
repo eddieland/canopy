@@ -21,7 +21,7 @@ _COLUMNS = ("items", "acted", "by poll", "not acted", "median", "p90", "from obs
 #: The seconds in a minute and in an hour.
 _MINUTE, _HOUR = 60, 3600
 #: How the table names each kind of item.
-_KIND_NAMES = {"review_comment": "review comment", "check_run": "check run"}
+_KIND_NAMES = {"review_comment": "review comment", "pr_comment": "PR comment", "check_run": "check run"}
 
 
 @click.command("latency")
@@ -38,12 +38,13 @@ _KIND_NAMES = {"review_comment": "review comment", "check_run": "check run"}
 def cmd_latency(click_ctx: click.Context, *, days: int, as_json: bool) -> int:
     """Measure how long an external event waited for the tick that acted on it, per kind, over the last days.
 
-    An external event is a tracker comment on a ticket, not a worker's, or a review or review comment of one of its
-    PRs, with its time at the source. A check run of such a PR counts too, but has no source time: only its wait from
-    when canopy first observed it is known. The tick that acted on it is the first live tick that recorded a decision
-    about its ticket, the harness's or the overseer's, after canopy first observed it; a cursor the harness moved and a
-    refusal are no such decision. The latency runs to that tick's start, or to when its own read observed the item, if
-    later. By poll counts the items whose tick a poll of the connectors woke; not acted on, the items no tick has.
+    An external event is a tracker comment on a ticket, not a worker's, or a review, review comment, or PR comment of
+    one of its PRs, with its time at the source. A check run of such a PR counts too, but has no source time: only its
+    wait from when canopy first observed it is known. The tick that acted on it is the first live tick that recorded a
+    decision about its ticket, the harness's or the overseer's, after canopy first observed it; a cursor the harness
+    moved and a refusal are no such decision. The latency runs to that tick's start, or to when its own read observed
+    the item, if later. By poll counts the items whose tick a poll of the connectors woke; not acted on, the items no
+    tick has.
     """
     ctx = open_context(click_ctx)
     found = latency.measure(ctx.conn, datetime.now(UTC), days)

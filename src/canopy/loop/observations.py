@@ -234,7 +234,7 @@ class VerdictState(TypedDict):
 
 
 class ReviewItemState(TypedDict):
-    """A review or review comment past the unit's `review` cursor. `state` only on a review.
+    """A review, review comment, or PR comment past the unit's `review` cursor. `state` only on a review.
 
     `number` is its journal number, what the `review` cursor names (DESIGN §35). `trusted`: its author is in
     `trust.trusted_reviewers`. `worker`: it carries the workers' marks (D069). Both are decided in code. Exactly one of

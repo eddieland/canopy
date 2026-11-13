@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Literal, NamedTuple, cast
 
-from canopy.core import db, records, spend, sql
+from canopy.core import db, records, run_metrics, spend, sql
 from canopy.core.vocab import ConnectorRunStatus, SourceKind
 
 if TYPE_CHECKING:
@@ -56,15 +56,18 @@ def record(
 ) -> int:
     """Record one run of source `name` that tick `tick_id` made, or the loop's poll when `tick_id` is None.
 
+    It is counted in `canopy.connector.runs` once recorded, by its source's kind and how it ended (D132).
+
     Returns:
         The run's id.
     """
+    kind = SourceKind(source.kind)
     with db.transaction(conn):
         cur = records.insert(
             records.ConnectorRun,
             tick_id=tick_id,
             source=name,
-            kind=SourceKind(source.kind),
+            kind=kind,
             started_at=observed.started_at,
             ended_at=observed.ended_at,
             status=observed.status,
@@ -78,6 +81,7 @@ def record(
                 None if observed.review_query_result is None else json.dumps(list(observed.review_query_result))
             ),
         ).run(conn)
+    run_metrics.counted("canopy.connector.runs", kind=kind, status=observed.status)
     return int(cur.lastrowid or 0)
 
 

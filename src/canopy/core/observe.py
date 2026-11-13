@@ -8,8 +8,8 @@ skipped; one that does not validate is refused and counted, and its subject is n
 A subject read whole has its rows replaced in one transaction; one not read whole keeps its old rows and their age, so
 a cut-off read never looks like a check, review, or branch gone. Each completed check run is also kept by its run id
 across reads, so a re-run at the same head is told from the run it repeats (§35). Each comment, review, review
-comment, and completed check run takes its journal number when first observed, and keeps it across reads
-(`item_numbers`): what a cursor passes. A run with no `end` line records nothing.
+comment, comment on a PR's conversation, and completed check run takes its journal number when first observed, and
+keeps it across reads (`item_numbers`): what a cursor passes. A run with no `end` line records nothing.
 
 An observation is a dated copy of what a connector saw, never authority (DESIGN §22): in M36 it decides which thread a
 draft answers and what the PR's page shows, and nothing the overseer or a worker is told to do. Each comment is also
@@ -525,6 +525,8 @@ class _Review(_Line):
     def _a_comment_has_its_thread(self) -> _Review:
         if self.item is ReviewItem.COMMENT and self.thread is None:
             raise ValueError("a review comment names its thread")
+        if self.item is ReviewItem.PR_COMMENT and (self.thread is not None or self.review is not None):
+            raise ValueError("a comment on the PR's conversation is on no thread and in no review")
         return self
 
     @property
@@ -841,7 +843,7 @@ def _record_comment(
 
 def _insert_review(conn: sqlite3.Connection, line: _Review, now: str) -> None:
     thread = line.thread if line.item is ReviewItem.COMMENT else None
-    kind = NumberedItem.REVIEW if line.item is ReviewItem.REVIEW else NumberedItem.REVIEW_COMMENT
+    kind = item_numbers.of_review(line.item)
     records.insert(
         records.ObservedReview,
         pr_url=line.pr,

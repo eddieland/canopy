@@ -1,6 +1,7 @@
 """Reading PRs whole, many to a query, each page of each.
 
-Each PR's state, labels, and times, the checks at its head, its reviews, and its review threads with every comment.
+Each PR's state, labels, and times, the checks at its head, its reviews, its review threads with every comment, and
+the comments on its conversation.
 `canopy-connect-github` prints what this reads; `canopy-post-github` reads the threads to find the one each reply
 answers.
 """
@@ -32,7 +33,8 @@ from canopy_github import (
 )
 
 #: PRs one query reads: GitHub refuses a query that could return more than 500,000 nodes, and each PR asks for some
-#: 5,400 (50 threads of 100 comments, and a page each of reviews, labels, checks, and timeline events).
+#: 5,500 (50 threads of 100 comments, and a page each of reviews, conversation comments, labels, checks, and timeline
+#: events).
 BATCH = 20
 #: The most labels a PR's line carries: canopy refuses a line with more, so a PR with more is not read whole.
 MAX_LABELS = 100
@@ -48,6 +50,12 @@ fragment Review on PullRequestReview {
 _COMMENT = """
 fragment ThreadComment on PullRequestReviewComment {
   id fullDatabaseId body createdAt url author { __typename login } pullRequestReview { fullDatabaseId }
+}
+"""
+
+_PR_COMMENT = """
+fragment PrComment on IssueComment {
+  id fullDatabaseId body createdAt url author { __typename login }
 }
 """
 
@@ -91,12 +99,14 @@ fragment Pull on PullRequest {{
   labels(first: 100) {{ pageInfo {{ hasNextPage endCursor }} nodes {{ name }} }}
   reviews(first: 100) {{ pageInfo {{ hasNextPage endCursor }} nodes {{ ...Review }} }}
   reviewThreads(first: 50) {{ pageInfo {{ hasNextPage endCursor }} nodes {{ ...Thread }} }}
+  comments(first: 100) {{ pageInfo {{ hasNextPage endCursor }} nodes {{ ...PrComment }} }}
   commits(last: 1) {{ nodes {{ commit {{ id oid statusCheckRollup {{ contexts(first: 100) {{ ...Contexts }} }} }} }} }}
   timelineItems({_EVENTS}) {{ ...Timeline }}
 }}
 """
     + _REVIEW
     + _THREAD
+    + _PR_COMMENT
     + _CONTEXTS
     + _TIMELINE
 )
@@ -110,6 +120,19 @@ query Reviews($id: ID!, $after: String) {
 }
 """
     + _REVIEW
+)
+
+_PR_COMMENTS = (
+    """
+query PrComments($id: ID!, $after: String) {
+  node(id: $id) {
+    ... on PullRequest {
+      comments(first: 100, after: $after) { pageInfo { hasNextPage endCursor } nodes { ...PrComment } }
+    }
+  }
+}
+"""
+    + _PR_COMMENT
 )
 
 _THREADS = (
@@ -307,7 +330,7 @@ def _about(error: Mapping[str, object], alias: str) -> bool:
 
 
 def _pull(client: Client, ref: Ref, pr: Mapping[str, object]) -> list[Mapping[str, object]]:
-    """Read the rest of one PR from its first page: its `pr` line, its checks, its reviews, and its review comments.
+    """Read the rest of one PR from its first page: its `pr` line, checks, reviews, review comments, and PR comments.
 
     Returns:
         The lines, the `pr` line first.
@@ -324,11 +347,16 @@ def _pull(client: Client, ref: Ref, pr: Mapping[str, object]) -> list[Mapping[st
         found = obj(client.query(_REVIEWS, {"id": node, "after": after}).get("node"), "pull request")
         return obj(found.get("reviews"), "reviews")
 
+    def comments_after(after: str) -> Mapping[str, object]:
+        found = obj(client.query(_PR_COMMENTS, {"id": node, "after": after}).get("node"), "pull request")
+        return obj(found.get("comments"), "comments")
+
     lines: list[Mapping[str, object]] = [_pr_line(ref, pr, items(labels.get("nodes")), _ready(client, pr))]
     lines.extend(_checks(client, ref, pr))
     lines.extend(_review(ref, review) for review in more(obj(pr.get("reviews"), "reviews"), reviews_after))
     first = obj(pr.get("reviewThreads"), "reviewThreads")
     lines.extend(comment for thread in _threads(client, ref, first) for comment in thread.comments)
+    lines.extend(_pr_comment(ref, c) for c in more(obj(pr.get("comments"), "comments"), comments_after))
     return lines
 
 
@@ -550,6 +578,22 @@ def _comment(ref: Ref, where: Mapping[str, object], node: Mapping[str, object]) 
         "url": text(node.get("url")),
         "review": number(obj(review, "review").get("fullDatabaseId")) if isinstance(review, dict) else None,
         "thread": dict(where),
+    }
+
+
+def _pr_comment(ref: Ref, node: Mapping[str, object]) -> Mapping[str, object]:
+    # A comment on the PR's conversation, on no line of its diff: GitHub keeps it as the PR's issue's comment.
+    return {
+        "kind": "review",
+        "item": "pr_comment",
+        "pr": ref.url,
+        "id": number(node.get("fullDatabaseId")),
+        "node": text(node.get("id")),
+        "author": login(node.get("author")),
+        "bot": _bot(node.get("author")),
+        "time": text(node.get("createdAt")),
+        "body": cut(node.get("body")),
+        "url": text(node.get("url")),
     }
 
 

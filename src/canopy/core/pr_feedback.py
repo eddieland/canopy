@@ -1,10 +1,10 @@
 """The feedback people left on PRs canopy observed (DESIGN §11, §29): what the reports count as review feedback.
 
-Reads only. A comment, or a review that judged the PR, from someone other than the PR's author and not a bot. canopy
-writes, replies, and reviews as the operator, who authors its PRs, so this is what other people said of the work. A PR
-waits on a review from when one was first asked for once it was ready, or from when it was ready, on GitHub's clock as
-the `vcs` source read it. The monthly report and the Reviews page both count feedback and its wait through here, so
-they measure the same thing the same way.
+Reads only. A comment, on a line of the diff or on the PR's conversation, or a review that judged the PR, from someone
+other than the PR's author and not a bot. canopy writes, replies, and reviews as the operator, who authors its PRs, so
+this is what other people said of the work. A PR waits on a review from when one was first asked for once it was ready,
+or from when it was ready, on GitHub's clock as the `vcs` source read it. The monthly report and the Reviews page both
+count feedback and its wait through here, so they measure the same thing the same way.
 """
 
 from __future__ import annotations
@@ -21,6 +21,8 @@ if TYPE_CHECKING:
     from collections.abc import Collection, Iterable
     from datetime import datetime
 
+#: What counts as a comment: one on a review thread, on a line of the diff, and one on the PR's conversation.
+COMMENTS = (ReviewItem.COMMENT, ReviewItem.PR_COMMENT)
 #: A review that judged the PR, as against one GitHub keeps while its author is still writing it, or one dismissed.
 JUDGED = (ReviewState.APPROVED, ReviewState.CHANGES_REQUESTED, ReviewState.COMMENTED)
 
@@ -55,7 +57,11 @@ def feedback(conn: sqlite3.Connection, urls: Collection[str]) -> dict[str, list[
         .join("observed_prs p ON p.url = r.pr_url")
         .where("r.pr_url IN (SELECT value FROM json_each(?))", json.dumps(sorted(urls)))
         .where("r.bot = 0 AND (p.author IS NULL OR r.author IS NOT p.author)")
-        .where("(r.item = ? OR r.state IN (SELECT value FROM json_each(?)))", ReviewItem.COMMENT, json.dumps(JUDGED))
+        .where(
+            "(r.item IN (SELECT value FROM json_each(?)) OR r.state IN (SELECT value FROM json_each(?)))",
+            json.dumps(COMMENTS),
+            json.dumps(JUDGED),
+        )
     )
     found: dict[str, list[Feedback]] = {}
     for row in records.fetch_all(conn, Feedback, said):

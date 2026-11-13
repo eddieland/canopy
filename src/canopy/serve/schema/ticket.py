@@ -43,8 +43,8 @@ class LeftFeedback(Model):
     """The repository of the unit whose PR it is on."""
     pr_url: str
     """The PR it is on."""
-    item: Literal["review", "comment"]
-    """A review comment, or a review with something to say."""
+    item: Literal["review", "comment", "pr_comment"]
+    """A review comment, a review with something to say, or a comment on the PR's conversation."""
     id: int
     """GitHub's id for it."""
     author: str | None = None
