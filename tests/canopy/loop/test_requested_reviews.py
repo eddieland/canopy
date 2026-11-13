@@ -24,6 +24,7 @@ from tests.conftest import SHARED_TOML
 
 if TYPE_CHECKING:
     import sqlite3
+    from collections.abc import Mapping
 
     from canopy.core.context import Context
     from tests.conftest import CanopyEnv
@@ -543,7 +544,7 @@ def test_a_poll_finds_a_review_the_harness_would_start_and_no_news_in_its_wait(c
 )
 def test_the_overseers_own_review_leaves_the_harnesss_requested_review_its_worker_and_review_run(
     scenario: Scenario,
-    capacity: dict[str, int],
+    capacity: Mapping[str, int],
     free: str,
 ) -> None:
     """Refused `reserved` as it is asked for, so the request, ranked first, is not refused `capacity` at its start."""
