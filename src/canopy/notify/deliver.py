@@ -13,12 +13,13 @@ import sqlite3
 from collections.abc import Collection, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from canopy.core import contract, db, outbox, records, spend, sql
 from canopy.core.config import Sink, notify_words
-from canopy.infra import procs
+from canopy.infra import metrics, procs
 from canopy.notify import journal, message
 
 if TYPE_CHECKING:
@@ -38,12 +39,25 @@ _URGENT_KINDS = frozenset({"loop.failing", "loop.sink_failing", "plan.proposed",
 _ASKING_KINDS = frozenset({"run.ended", "task.ended"})
 
 
+class Delivered(StrEnum):
+    """How one sink's delivery went; a delivery sent is counted in `canopy.notifications` by it (D132)."""
+
+    #: Its command took the message.
+    DELIVERED = "delivered"
+    #: There was nothing to send.
+    NOTHING = "nothing"
+    #: Held for its batch.
+    HELD = "held"
+    #: Its command did not take the message.
+    FAILED = "failed"
+
+
 @dataclass(frozen=True)
 class Delivery:
     """How one sink's delivery went: `delivered`, `nothing` to send, `held` for its batch, or `failed` with why."""
 
     sink: str
-    outcome: str
+    outcome: Delivered
     detail: str = ""
 
 
@@ -110,7 +124,7 @@ def test(ctx: Context, names: Iterable[str]) -> list[Delivery]:
         event = message.Event(0, "test", db.now(), {"text": f"canopy test message for {ctx.repo}; nothing is wrong"})
         msg = message.Message(name, ctx.repo, ctx.state_dir / "attention.md", None, 0, [event], None)
         failure = send(ctx, sink, msg.render(sink.format))
-        results.append(Delivery(name, "delivered" if failure is None else "failed", failure or ""))
+        results.append(Delivery(name, Delivered.DELIVERED if failure is None else Delivered.FAILED, failure or ""))
     return results
 
 
@@ -274,7 +288,7 @@ def _deliver(
             .where("name = ?", name)
             .run(ctx.conn)
         )
-        return Delivery(name, "nothing")
+        return Delivery(name, Delivered.NOTHING)
     fields = {
         "sink": name,
         "added": len(change.added) if change else 0,
@@ -285,19 +299,21 @@ def _deliver(
     if _batching(row, sink, now) and not _urgent(change, events):
         # Nothing moves: the next tick gathers all of this again, with whatever happened since.
         log.info("notification held", extra=fields)
-        return Delivery(name, "held")
+        return Delivery(name, Delivered.HELD)
     failure = send(ctx, sink, msg.render(sink.format))
+    # The sink's name is config text, so not a label (D132).
+    metrics.count("canopy.notifications", status=Delivered.DELIVERED if failure is None else Delivered.FAILED)
     if failure is None:
         journal.mark_delivered(ctx.conn, name, change, cursor=cursor, digest=digest is not None)
         log.info("notified", extra=fields)
-        return Delivery(name, "delivered")
+        return Delivery(name, Delivered.DELIVERED)
     # The count and its alert are one write, so a stop between them cannot skip the alert for this streak.
     with db.transaction(ctx.conn):
         failures = journal.mark_failed(ctx.conn, name, failure)
         if failures == FAILING_AFTER and ctx.config.notify.takes(outbox.LOOP):
             db.record_event(ctx.conn, outbox.sink_failing(name, failure))
     log.warning("notify command failed", extra={**fields, "error": failure, "failures": failures})
-    return Delivery(name, "failed", failure)
+    return Delivery(name, Delivered.FAILED, failure)
 
 
 def _batching(row: records.NotifySink, sink: Sink, now: datetime) -> bool:

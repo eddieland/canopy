@@ -4,9 +4,9 @@ A run's metrics are recorded once, where its row is closed and after the transac
 whatever process closes it: the run's own, or a tick's reconcile for a run whose process died. So a run that crashed
 is counted as one that ended well is, and what is counted is what the journal holds. A tick's overseer runs are
 recorded as the tick closes, or, for a tick whose process died, as the next tick closes it `abandoned`, counting the
-tick too. What the loop holds now is a set of gauges the tick sets as it closes, so a collector can tell whether the
-loop still ticks and whether work piles up. Recording a metric never fails what closed the row: what goes wrong is
-logged, and the metric is lost.
+tick too, and so are its decisions. What the loop holds now is a set of gauges the tick sets as it closes, so a
+collector can tell whether the loop still ticks and whether work piles up. Recording a metric never fails what closed
+the row: what goes wrong is logged, and the metric is lost.
 
     canopy.runs              count     role, status, kind (a worker's)    each run that ended
     canopy.run.duration      seconds   role, status                       how long it ran
@@ -20,6 +20,11 @@ logged, and the metric is lost.
     canopy.capacity.limit    gauge     role                               that capacity, as config sets it
     canopy.attention.open    gauge                                        the items waiting on the operator
     canopy.disk.free         bytes                                        free space where the state directory is
+    canopy.decisions         count     kind, outcome, decider, dry_run    each decision a tick recorded, or refused
+
+The rest are recorded where what they count happens: each step of a tick's time (`canopy.tick.step.duration`, by
+step) in `loop.tick`, each delivery to a notification sink (`canopy.notifications`, by status) in `notify.deliver`,
+and each run of a connector (`canopy.connector.runs`, by its source's kind and status) in `core.connector_runs`.
 """
 
 from __future__ import annotations
@@ -27,6 +32,7 @@ from __future__ import annotations
 import functools
 import logging
 import shutil
+from collections import Counter
 from collections.abc import Callable, Collection, Iterable, Mapping
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
@@ -34,7 +40,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from canopy.core import records, sql
-from canopy.core.vocab import OverseerRunStatus, Phase, StartStatus, TickStatus
+from canopy.core.vocab import Decider, OverseerRunStatus, Phase, StartStatus, TickStatus
 from canopy.infra import metrics
 
 if TYPE_CHECKING:
@@ -53,6 +59,34 @@ class Role(StrEnum):
     REVIEW = "review"
     CHORE = "chore"
     OVERSEER = "overseer"
+
+
+class DecisionKind(StrEnum):
+    """What a decision was, as `canopy.decisions`' `kind` label names it: the word its action starts with.
+
+    A refusal's action names the guard that refused it, not what was asked: it is a `dispatch` when its row names the
+    kind of run it asked for, as a refused dispatch's does, and `other` otherwise.
+    """
+
+    DISPATCH = "dispatch"
+    WAIT = "wait"
+    SKIP = "skip"
+    DONE = "done"
+    ATTENTION = "attention"
+    #: A review request's end, `review:end`.
+    REVIEW = "review"
+    CURSOR = "cursor"
+    QUERIED = "queried"
+    MIRROR = "mirror"
+    #: Any action whose word is none of these.
+    OTHER = "other"
+
+
+class DecisionOutcome(StrEnum):
+    """Whether a decision was made or a guard refused it, as `canopy.decisions`' `outcome` label names it."""
+
+    MADE = "made"
+    REFUSED = "refused"
 
 
 class TokenType(StrEnum):
@@ -121,8 +155,24 @@ def overseer_ended(conn: sqlite3.Connection, tick_id: int) -> None:
 
 
 @_never_raises
+def decisions(conn: sqlite3.Connection, tick_id: int, *, dry_run: bool) -> None:
+    """Count tick `tick_id`'s decisions as it closes, each by its kind, its outcome, and who made it.
+
+    Read from the journal, as a run's metrics are: the overseer records its decisions through canopy's tools, in a
+    process of their own. The guard that refused one is left out: guards are words each verb names as it refuses,
+    held in no closed vocabulary (D132).
+    """
+    if not metrics.enabled():
+        return
+    found = Counter(_decided(row) for row in records.select(records.Decision).where("tick_id = ?", tick_id).all(conn))
+    for (kind, outcome, decider), n in found.items():
+        by = {} if decider is None else {"decider": decider}
+        metrics.count("canopy.decisions", n, kind=kind, outcome=outcome, dry_run=dry_run, **by)
+
+
+@_never_raises
 def abandoned(conn: sqlite3.Connection, tick_ids: Iterable[int]) -> None:
-    """Count the ticks a dead process left, `tick_ids`, and their overseer's runs, as a tick closes them `abandoned`.
+    """Count the ticks a dead process left, `tick_ids`, their decisions, and their overseer's runs, as one closes them.
 
     A tick that died recorded no metrics, so it is counted here or never. Its duration is not recorded: it ended when
     its process died, not when it was found dead.
@@ -133,6 +183,7 @@ def abandoned(conn: sqlite3.Connection, tick_ids: Iterable[int]) -> None:
         tick = records.select(records.Tick).where("id = ?", tick_id).one(conn)
         if tick is not None:
             metrics.count("canopy.ticks", status=TickStatus.ABANDONED, dry_run=tick.dry_run)
+            decisions(conn, tick_id, dry_run=tick.dry_run)
         tick_closed(conn, tick_id)
         overseer_ended(conn, tick_id)
 
@@ -237,6 +288,26 @@ class _InPhase(records.View):
 
     phase: Phase
     tickets: int
+
+
+#: The word a refusal's action starts with, before the guard that refused it.
+_REFUSED = "refused"
+#: Each word an action may start with that names its kind.
+_KIND_WORDS = frozenset(kind.value for kind in DecisionKind)
+
+
+def _decided(row: records.Decision) -> tuple[DecisionKind, DecisionOutcome, Decider | None]:
+    """A decision's labels: its kind, read from its action's first word, its outcome, and who made it.
+
+    Returns:
+        The kind, the outcome, and the decider, None on a decision from before the journal recorded one.
+    """
+    word = row.action.partition(":")[0]
+    if word == _REFUSED:
+        kind = DecisionKind.DISPATCH if row.kind is not None else DecisionKind.OTHER
+        return kind, DecisionOutcome.REFUSED, row.decider
+    kind = DecisionKind(word) if word in _KIND_WORDS else DecisionKind.OTHER
+    return kind, DecisionOutcome.MADE, row.decider
 
 
 #: Each token type, by the column that holds it.

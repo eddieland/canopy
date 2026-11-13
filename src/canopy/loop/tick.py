@@ -9,12 +9,14 @@ each ticket, what it did about the operator's messages it read (`acknowledge.py`
 
 from __future__ import annotations
 
+import contextlib
 import json
 import shutil
 import time
 from collections import Counter
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
+from enum import StrEnum
 from typing import TYPE_CHECKING, Literal, Protocol, assert_never
 
 import canopy_mcp
@@ -85,7 +87,7 @@ from canopy.runtime import project_config, servers, stdout
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Iterable, Iterator, Sequence
 
     from canopy.core import records
     from canopy.core.context import Context
@@ -461,13 +463,14 @@ def _locked(ctx: Context, *, dry_run: bool, woken_by: WokenBy | None) -> Outcome
 
 
 def _meter(ctx: Context, tick_id: int, status: TickStatus, *, dry_run: bool, seconds: float) -> None:
-    """Record tick `tick_id`'s metrics as it closes: it, its overseer's runs, and what the loop holds now (D132).
+    """Record tick `tick_id`'s metrics as it closes: it, its decisions and overseer's runs, and what the loop holds now.
 
     What it holds is the runs at work against their capacity, the open tickets by phase, and the disk; the attention
-    list's length is set once the tick publishes it.
+    list's length is set once the tick publishes it (D132).
     """
     metrics.count("canopy.ticks", status=status, dry_run=dry_run)
     metrics.record("canopy.tick.duration", seconds, unit="s", status=status)
+    run_metrics.decisions(ctx.conn, tick_id, dry_run=dry_run)
     run_metrics.overseer_ended(ctx.conn, tick_id)
     run_metrics.tick_closed(ctx.conn, tick_id)
     run_metrics.active(ctx.conn, ctx.config.capacity)
@@ -497,10 +500,10 @@ def _steps(
     """
     if not dry_run:
         # First, so a tick whose reconcile fails, as one on a full disk may, still frees what retention lets go.
-        with tracing.span("gc"):
+        with _step(Step.GC):
             gc_pass.run(ctx, tick_id, log)
             _measure_plans(ctx, log)
-    with tracing.span("reconcile"):
+    with _step(Step.RECONCILE):
         try:
             # Reviews first: a review whose `_review` is gone returns its slot, and then frees worker capacity.
             review_reconcile.run(ctx, log)
@@ -520,7 +523,7 @@ def _steps(
     _decide_in_code(ctx, tick_id, archive_unpushed, log, dry_run=dry_run)
 
     now = datetime.now(UTC)
-    with tracing.span("state") as state:
+    with _step(Step.STATE) as state:
         _query(ctx, tick_id, now, log)
         rendered = _render(ctx, tick_id=tick_id, dry_run=dry_run, now=now, reconciled=reconciled, woken_by=woken_by)
         state.set(left=len(rendered.left))
@@ -531,7 +534,7 @@ def _steps(
     db.set_tick_overseer(ctx.conn, tick_id, ran=overseer and halted is None)
     if halted is not None:
         return finish(*halted)
-    with tracing.span("overseer") as traced:
+    with _step(Step.OVERSEER) as traced:
         failure, usage = _overseer(ctx, tick_id, rendered, dry_run=dry_run, log=log)
         traced.set(
             failed=failure is not None,
@@ -540,7 +543,7 @@ def _steps(
         )
     # After the overseer, whatever its run ended as, every run it recorded and the harness's own; a tick halted before
     # it starts none (DESIGN §37, §40).
-    with tracing.span("spawn"):
+    with _step(Step.SPAWN):
         _spawn(ctx, tick_id, log)
     if failure is not None:
         return finish(TickStatus.OVERSEER_FAILED, failure, usage)
@@ -569,6 +572,35 @@ def _steps(
         return finish(TickStatus.OK, f"{prefix}{actions.total()} decisions: {counts}", usage)
 
 
+class Step(StrEnum):
+    """A step of a tick, the name of its span and the `step` label of `canopy.tick.step.duration` (D132)."""
+
+    GC = "gc"
+    RECONCILE = "reconcile"
+    TASKS = "tasks"
+    EPICS = "epics"
+    CONNECTORS = "connectors"
+    DERIVE = "derive"
+    STATE = "state"
+    OVERSEER = "overseer"
+    SPAWN = "spawn"
+
+
+@contextlib.contextmanager
+def _step(step: Step) -> Iterator[tracing.Span]:
+    """Trace the `with` block as a span named for `step`, and record how long it took, whether or not it raised.
+
+    Yields:
+        The step's span.
+    """
+    began = time.monotonic()
+    try:
+        with tracing.span(step) as traced:
+            yield traced
+    finally:
+        metrics.record("canopy.tick.step.duration", time.monotonic() - began, unit="s", step=step)
+
+
 # The plans the journal has no current measurements of, a few a tick (`plan_lengths`). A failure is logged, and the
 # tick goes on: the Plans report measures what is missing itself.
 def _measure_plans(ctx: Context, log: logs.TickAdapter) -> None:
@@ -592,7 +624,7 @@ def _start_tasks(
     Returns:
         What reconcile left, less the capacity the tasks started now hold.
     """
-    with tracing.span("tasks") as traced:
+    with _step(Step.TASKS) as traced:
         started = task_starts.start_queued(ctx, tick_id, log)
         traced.set(started=len(started))
     if not started:
@@ -612,7 +644,7 @@ def _start_epic_plans(
     Returns:
         What reconcile left, less the capacity the plan runs started now hold.
     """
-    with tracing.span("epics") as traced:
+    with _step(Step.EPICS) as traced:
         started = epic_starts.start_due(ctx, tick_id, log)
         traced.set(started=len(started))
     if not started:
@@ -623,7 +655,7 @@ def _start_epic_plans(
 
 def _observe(ctx: Context, tick_id: int, log: logs.TickAdapter, *, dry_run: bool) -> None:
     """Run the sources: after the reconcile, and before the harness's items, as a failing source raises one (§30)."""
-    with tracing.span("connectors"):
+    with _step(Step.CONNECTORS):
         drafted.reconcile(ctx, connectors.run(ctx, tick_id, log, dry_run=dry_run).read, log)
         # What moved on a waiting feedback plan's PRs, first seen now: its quiet period runs from the newest (§32).
         feedback_plans.note_moves(ctx.conn, ctx.config, ctx.workspace)
@@ -638,7 +670,7 @@ def _decide_in_code(
     dry_run: bool,
 ) -> None:
     """Derive what the journal says, record the harness's own items, and decide what it decides in code (DESIGN §37)."""
-    with tracing.span("derive"):
+    with _step(Step.DERIVE):
         # Before the derivation and the block, so both read each cursor past what needs no handling (DESIGN §37).
         _harness_cursors(ctx, tick_id, log, dry_run=dry_run)
         derived = _derive(ctx, tick_id, log)

@@ -11,8 +11,9 @@ from unittest import mock
 
 from canopy.core import db, overseer_runs, run_metrics
 from canopy.core.run_metrics import Role
-from canopy.core.vocab import Phase, TickStatus
+from canopy.core.vocab import Decider, Phase, RunKind, TickStatus
 from canopy.infra import metrics
+from canopy.loop.tick import Step
 from tests.canopy.helpers import KEY, in_tick, raises, waits
 from tests.canopy.scenario_helpers import dispatches
 
@@ -150,6 +151,62 @@ def test_a_tick_a_dead_process_left_is_counted_as_the_next_closes_it(scenario: S
     # When the next tick closed it, beside when that tick closed itself.
     assert ("canopy.tick.last", {"status": "abandoned"}) in found
     assert ("canopy.tick.last", {"status": "ok"}) in found
+
+
+def test_a_refused_dispatch_a_failed_sink_and_each_step_are_counted(
+    scenario: Scenario,
+    sink_script: Path,
+    tmp_path: Path,
+) -> None:
+    """The guards and the loop's edges: what was decided or refused, what a sink did not take, what a source read."""
+    out = tmp_path / "phone.txt"
+    # The sink exits 1, as one that is down does.
+    Path(f"{out}.exit").write_text("1")
+    scenario.configures("private", telemetry={"metrics": "file"})
+    sink = {"cmd": f"{sink_script} {out} {out}.exit"}
+    scenario.configures(capacity={"max_workers": 1}, notify={"sinks": {"phone": sink}})
+    scenario.seen(KEY, "PROJ-2")
+    # One worker at once: the second dispatch is refused, and the item the overseer raises is what the sink is sent.
+    ticked = scenario.tick(dispatches(), dispatches("PROJ-2"), raises("PROJ-2", "needs_human"))
+    assert [d.action for d in ticked.decisions if d.ticket_key == "PROJ-2"][:1] == ["refused:capacity"]
+    metrics.configure(Path(), "off")
+    found = points(scenario.env.state_dir / metrics.METRICS_FILE_NAME)
+    counted: dict[str, list[tuple[dict[str, object], int]]] = {}
+    for name, labels, point in found:
+        if "asInt" in point:
+            counted.setdefault(name, []).append((labels, int(point["asInt"])))
+    decided = {"decider": Decider.OVERSEER.value, "dry_run": False}
+    assert ({"kind": "dispatch", "outcome": "made", **decided}, 1) in counted["canopy.decisions"]
+    assert ({"kind": "dispatch", "outcome": "refused", **decided}, 1) in counted["canopy.decisions"]
+    assert counted["canopy.notifications"] == [({"status": "failed"}, 1)]
+    # The tests' tracker, beside the source that reads the PRs.
+    assert ({"kind": "tracker", "status": "ok"}, 1) in counted["canopy.connector.runs"]
+    steps = {str(labels["step"]) for name, labels, _ in found if name == "canopy.tick.step.duration"}
+    assert steps == {step.value for step in Step}
+
+
+def test_a_decision_is_counted_by_its_actions_first_word_and_a_refusal_by_what_it_names(scenario: Scenario) -> None:
+    """A word no kind names is `other`; a refusal is a dispatch's when it names a run kind, and `other` when not."""
+    with in_tick(scenario.conn) as tick_id:
+        db.record_decision(scenario.conn, tick_id, KEY, "wait", "w", decider=Decider.HARNESS)
+        db.record_decision(scenario.conn, tick_id, KEY, "refused:cooldown", "c", kind=RunKind.RESUME)
+        db.record_decision(scenario.conn, tick_id, KEY, "refused:decided", "d")
+        db.record_decision(scenario.conn, tick_id, KEY, "something_new", "n")
+    path = scenario.env.state_dir / metrics.METRICS_FILE_NAME
+    metrics.configure(scenario.env.state_dir, "file")
+    run_metrics.decisions(scenario.conn, tick_id, dry_run=True)
+    metrics.configure(Path(), "off")
+    found = sorted(
+        (str(labels["kind"]), str(labels["outcome"]), str(labels["decider"]))
+        for name, labels, _ in points(path)
+        if name == "canopy.decisions"
+    )
+    assert found == [
+        ("dispatch", "refused", "overseer"),
+        ("other", "made", "overseer"),
+        ("other", "refused", "overseer"),
+        ("wait", "made", "harness"),
+    ]
 
 
 def test_a_metric_that_fails_is_logged_and_never_fails_the_tick(scenario: Scenario) -> None:
