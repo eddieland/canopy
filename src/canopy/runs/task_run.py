@@ -262,14 +262,21 @@ def stop_now(ctx: Context, run: records.TaskRun, log: logs.TickAdapter) -> endin
     current = tasks.get_run(ctx.conn, run.id)
     if current is None or current.status is not RunStatus.RUNNING or not db.ask_stop(ctx.conn, "task_runs", run.id):
         return ending.Ending.GONE
-    for pid in (current.pid, current.agent_pid):
-        # Never this process's own group: a `_task` claimed in-process, as tests run it, has this pid.
-        if pid is not None and pid not in (os.getpid(), os.getpgid(0)):
-            procs.kill_group(pid)
+    _kill(current.pid)
+    # Its `_task` first, so it starts no agent after this; then the agent the row names now, which may be one `_task`
+    # started since the read above, such as a run asked again for its result (DESIGN §13).
+    now = tasks.get_run(ctx.conn, run.id)
+    _kill((now if now is not None else current).agent_pid)
     returned = _close(ctx, current, RunStatus.STOPPED, STOP_NOTE, log)
     if returned is None:
         return ending.Ending.GONE
     return ending.Ending.ENDED if returned else ending.Ending.KEPT
+
+
+def _kill(pid: int | None) -> None:
+    """Kill process group `pid`, if any, but never this process's own, as a `_task` run in-process by tests has."""
+    if pid is not None and pid not in (os.getpid(), os.getpgid(0)):
+        procs.kill_group(pid)
 
 
 def keep_report(ctx: Context, run: records.TaskRun, log: logs.TickAdapter) -> str:
