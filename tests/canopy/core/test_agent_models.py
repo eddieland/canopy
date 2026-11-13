@@ -3,6 +3,7 @@
 import json
 import re
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -13,6 +14,7 @@ from canopy.runtime import agents
 from canopy.runtime.agents import Model
 from canopy.runtime.implementation import Version
 from canopy.runtime.report import ModelList
+from tests.canopy.helpers import listed, lists_asked, model_list, untimed
 from tests.conftest import CanopyEnv
 
 MODEL = "acme/fake-model-1"
@@ -210,6 +212,75 @@ def test_a_model_not_listed_or_a_list_not_read_is_refused(opencode_state: Path, 
     with pytest.raises(agent_models.ModelError) as failed:
         agent_models.check(procs.SubprocessRunner(), tmp_path, Model(MODEL, "high"), version=Version.ONE)
     assert "`opencode models --verbose` exited 1" in failed.value.reason
+
+
+@pytest.mark.parametrize("version", list(Version))
+def test_a_list_that_fails_once_is_asked_for_again_and_read(
+    opencode_state: Path,
+    tmp_path: Path,
+    version: Version,
+) -> None:
+    """A list command that exits non-zero often reads the next time, so one failure refuses nothing (DESIGN §13)."""
+    listed(opencode_state, MODEL, fails=1, stderr="Error: provider timed out\n")
+    agent_models.check(procs.SubprocessRunner(), tmp_path, Model(MODEL), version=version)
+    assert lists_asked(opencode_state) == [(model_list(version)[0], str(tmp_path))] * 2
+
+
+@pytest.mark.parametrize("version", list(Version))
+def test_a_list_that_fails_every_time_is_refused_naming_its_attempts_with_the_end_of_its_stderr(
+    opencode_state: Path,
+    tmp_path: Path,
+    version: Version,
+) -> None:
+    listed(opencode_state, MODEL, fails=3, stderr="starting\nError: provider timed out\n")
+    with pytest.raises(agent_models.ModelError) as failed:
+        agent_models.check(procs.SubprocessRunner(), tmp_path, Model(MODEL), version=version)
+    assert failed.value.guard == agent_models.LIST_FAILED
+    assert untimed(failed.value.reason) == (
+        f"could not look up the model {MODEL} chosen in runtime.models: `{model_list(version)[1]}` exited 1, the last "
+        "of 3 attempts, which took N, N and N seconds. Nothing ran on another model; the work resumes once the list "
+        "can be read"
+    )
+    # The runtime's own words, kept apart from canopy's.
+    assert failed.value.stderr == "starting\nError: provider timed out"
+    assert len(lists_asked(opencode_state)) == 3
+
+
+@pytest.mark.parametrize("version", list(Version))
+def test_a_model_missing_from_a_list_that_was_read_is_refused_at_once(
+    opencode_state: Path,
+    tmp_path: Path,
+    version: Version,
+) -> None:
+    """A list that was read is the runtime's answer: a model missing from it is config's to fix, not a passing fault."""
+    listed(opencode_state, OTHER)
+    with pytest.raises(agent_models.ModelError) as missing:
+        agent_models.check(procs.SubprocessRunner(), tmp_path, Model(MODEL), version=version)
+    assert (missing.value.guard, missing.value.stderr) == (agent_models.MISSING, "")
+    assert len(lists_asked(opencode_state)) == 1
+
+
+def test_a_list_that_times_out_is_asked_for_again_after_each_wait_and_one_that_cannot_start_is_not() -> None:
+    """The waits between attempts are `RETRY_SECONDS`; a list that cannot start would not start the next time."""
+    answers = [
+        procs.Result(("opencode", "models"), -9, "", "fetching the catalog\n", timed_out=True),
+        procs.Result(("opencode", "models"), 1, "", "Error: auth refresh failed\n"),
+        procs.Result(("opencode", "models"), 0, f"{MODEL}\n", ""),
+    ]
+    runner = mock.create_autospec(procs.SubprocessRunner, instance=True)
+    runner.run.side_effect = answers
+    with (
+        mock.patch.object(agent_models, "RETRY_SECONDS", (5.0, 15.0)),
+        mock.patch.object(agent_models.time, "sleep", autospec=True) as slept,
+    ):
+        agent_models.check(runner, Path("/ws"), Model(MODEL), version=Version.ONE)
+    assert slept.call_args_list == [mock.call(5.0), mock.call(15.0)]
+    assert runner.run.call_count == 3
+
+    runner.run.side_effect = procs.CommandNotFoundError("opencode")
+    with pytest.raises(agent_models.ModelError, match=r"opencode is not on PATH\. Nothing ran"):
+        agent_models.check(runner, Path("/ws"), Model(MODEL), version=Version.ONE)
+    assert runner.run.call_count == 4
 
 
 CHORE_CMD = "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore --format json {prompt}"

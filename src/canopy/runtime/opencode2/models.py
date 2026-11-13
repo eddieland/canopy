@@ -10,7 +10,8 @@ on the provider, so canopy looks the model up first. A plugin that adds a provid
 is read, so a model of its is refused as missing rather than run unchecked.
 
 Only `providerID`, `id`, and the variants' `id` are read: a model's `settings` and `headers` may hold a provider's key,
-so no failure quotes what was printed. An entry that does not name a model canopy renders is passed over.
+so no failure quotes what was printed on stdout; one that exits non-zero or times out keeps the end of its stderr, for
+the operator to see why. An entry that does not name a model canopy renders is passed over.
 
 OpenCode 2.1.2 ran a primary agent on the default model, whatever its definition named; 2.1.4 runs it on the
 definition's model and variant, so a model chosen in config needs 2.1.4 or later.
@@ -64,7 +65,7 @@ def listed(runner: procs.Runner, *, cwd: Path, variants: bool = False) -> ModelL
 
     Returns:
         The models it listed, with their variants when asked for; or none, with why, when OpenCode could not be run,
-        failed, or printed what canopy cannot read.
+        failed, or printed what canopy cannot read, and the end of its stderr when it failed.
     """
     argv = ["opencode", "api", STANDALONE, "model.list"]
     try:
@@ -74,9 +75,9 @@ def listed(runner: procs.Runner, *, cwd: Path, variants: bool = False) -> ModelL
     except procs.ProcError as e:
         return ModelList(error=f"`{COMMAND}` could not start: {e}")
     if result.timed_out:
-        return ModelList(error=f"`{COMMAND}` took over {TIMEOUT_SECONDS} seconds")
+        return ModelList.failed(f"`{COMMAND}` took over {TIMEOUT_SECONDS} seconds", result.stderr)
     if not result.ok:
-        return ModelList(error=f"`{COMMAND}` exited {result.returncode}")
+        return ModelList.failed(f"`{COMMAND}` exited {result.returncode}", result.stderr)
     try:
         printed = _Models.model_validate_json(result.stdout)
     except ValidationError:

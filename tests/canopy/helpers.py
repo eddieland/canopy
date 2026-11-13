@@ -69,6 +69,8 @@ PLAN_PROMPT = "You are planning PROJ-1.\n\nThe operator said: keep it small.\n"
 BRANCH = f"agent/{KEY}-work"
 # The label the test operator's tickets carry (`user_toml`).
 LABEL = "agent-ready-tester"
+# How long each attempt at a model list took, as a refusal of the model says it (`untimed`).
+_TOOK_RE = re.compile(r"which took ([\d, and]+) seconds")
 #: The PR WORKER_DONE reports, as a URL that names no PR, so no source reads it.
 WORKER_PR = "https://example.test/pr/1"
 #: A `done` worker's result in the tests' workspace of one repository, `repo`, as its `result` call reports it.
@@ -712,9 +714,31 @@ def pool(treehouse_state: Path) -> list[dict[str, object]]:
     return slots
 
 
-def listed(state: Path, *lines: str, variants: Mapping[str, Sequence[str]] | None = None) -> None:
-    """Have the fake `opencode models`, whose state file is `state`, print `lines`, and with `--verbose` `variants`."""
-    state.write_text(json.dumps({"models": list(lines), "variants": dict(variants or {})}))
+def listed(
+    state: Path,
+    *lines: str,
+    variants: Mapping[str, Sequence[str]] | None = None,
+    fails: int = 0,
+    stderr: str = "",
+) -> None:
+    """Have the fake `opencode models`, whose state file is `state`, print `lines`, and with `--verbose` `variants`.
+
+    With `fails`, the list first fails that many times, printing `stderr` and exiting 1 each time.
+    """
+    failing = {"list_fails": fails, "stderr": stderr} if fails else {}
+    state.write_text(json.dumps({"models": list(lines), "variants": dict(variants or {}), **failing}))
+
+
+def lists_asked(state: Path) -> list[tuple[list[str], str]]:
+    """Each list of models the fake `opencode`, whose state file is `state`, was asked for, and where it ran.
+
+    That is 1's `models` and 2's `model.list`, each by its argv, whether it answered or failed.
+    """
+    log = state.with_name("opencode.jsonl")
+    if not log.exists():
+        return []
+    entries = [json.loads(line) for line in log.read_text().splitlines()]
+    return [(e["argv"], e["cwd"]) for e in entries if e["argv"][0] == "models" or e["argv"][-1] == "model.list"]
 
 
 def model_list(runtime: Version, *, variants: bool = False) -> tuple[list[str], str]:
@@ -727,6 +751,14 @@ def model_list(runtime: Version, *, variants: bool = False) -> tuple[list[str], 
         return ["api", "--standalone", "model.list"], "opencode api model.list"
     argv = ["models", "--verbose"] if variants else ["models"]
     return argv, f"opencode {' '.join(argv)}"
+
+
+def untimed(text: str) -> str:
+    """`text`, a refusal of a model whose list was asked for more than once, each attempt's seconds made `N`.
+
+    How long each attempt took is the fake's own time, which a test cannot know.
+    """
+    return _TOOK_RE.sub(lambda m: f"which took {re.sub(r'\d+', 'N', m[1])} seconds", text)
 
 
 def pool_statuses(treehouse_state: Path) -> list[str]:

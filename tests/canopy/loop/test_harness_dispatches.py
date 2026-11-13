@@ -40,6 +40,7 @@ from tests.canopy.helpers import (
     overseer_calls,
     overseer_does,
     tracker_holds,
+    untimed,
     waits,
 )
 from tests.canopy.observation_helpers import PR, TRUST, number_of, observe_ticket, review_number
@@ -147,14 +148,15 @@ def test_the_harnesss_chore_on_a_model_it_cannot_look_up_is_refused_with_an_atte
     canopy_env.configure(canopy_env.user_file, {"runtime": {"models": {"chore": "acme/fake-model-1"}}})
     reason = (
         "could not look up the model acme/fake-model-1 chosen in runtime.models: "
-        f"`{model_list(canopy_env.runtime)[1]}` exited 1. Nothing ran on another model; the work resumes once the "
-        "list can be read"
+        f"`{model_list(canopy_env.runtime)[1]}` exited 1, the last of 3 attempts, which took N, N and N seconds. "
+        "Nothing ran on another model; the work resumes once the list can be read"
     )
     conn = canopy_env.journal()
     with overseer_does(chore_waits(THEIRS, "not a weekday")):
         assert main(["tick"], runner=InlineRunner()) == 0
     tick = last_tick(conn)
-    assert [(d.action, d.rationale, d.decider) for d in db.decisions_for_tick(conn, tick.id) if d.chore == MINE] == [
+    mine = [d for d in db.decisions_for_tick(conn, tick.id) if d.chore == MINE]
+    assert [(d.action, untimed(d.rationale), d.decider) for d in mine] == [
         ("refused:model_list_failed", reason, Decider.HARNESS),
         ("attention:model_list_failed", reason, Decider.HARNESS),
     ]

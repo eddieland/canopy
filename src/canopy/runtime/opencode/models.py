@@ -53,7 +53,7 @@ def listed(runner: procs.Runner, *, cwd: Path, variants: bool = False) -> ModelL
 
     Returns:
         The models it listed, with their variants when asked for; or none, with why, when OpenCode could not be run or
-        failed.
+        failed, and the end of its stderr when it failed.
     """
     command = f"{COMMAND} {VERBOSE}" if variants else COMMAND
     argv = ["opencode", "models", VERBOSE] if variants else ["opencode", "models"]
@@ -64,9 +64,9 @@ def listed(runner: procs.Runner, *, cwd: Path, variants: bool = False) -> ModelL
     except procs.ProcError as e:
         return ModelList(error=f"`{command}` could not start: {e}")
     if result.timed_out:
-        return ModelList(error=f"`{command}` took over {TIMEOUT_SECONDS} seconds")
+        return ModelList.failed(f"`{command}` took over {TIMEOUT_SECONDS} seconds", result.stderr)
     if not result.ok:
-        return ModelList(error=f"`{command}` exited {result.returncode}")
+        return ModelList.failed(f"`{command}` exited {result.returncode}", result.stderr)
     if variants:
         found = _verbose(result.stdout)
         return ModelList(frozenset(found), found)

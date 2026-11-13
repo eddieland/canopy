@@ -23,9 +23,9 @@ RECORDED = Path(__file__).parent / "recorded" / "model-list.json"
 ARGV = ("opencode", "api", "--standalone", "model.list")
 
 
-def runner(stdout: str = "", *, code: int = 0, timed_out: bool = False) -> mock.NonCallableMagicMock:
+def runner(stdout: str = "", *, code: int = 0, timed_out: bool = False, stderr: str = "") -> mock.NonCallableMagicMock:
     def printed(args: Sequence[str], **_: object) -> procs.Result:
-        return procs.Result(tuple(args), code, stdout, "", timed_out=timed_out)
+        return procs.Result(tuple(args), code, stdout, stderr, timed_out=timed_out)
 
     found = mock.create_autospec(procs.SubprocessRunner, instance=True)
     found.run.side_effect = printed
@@ -76,24 +76,35 @@ def test_an_opencode_with_no_provider_lists_no_model() -> None:
 
 
 @pytest.mark.parametrize(
-    ("list_runner", "error"),
+    ("list_runner", "error", "transient"),
     [
-        (runner(code=1), "`opencode api model.list` exited 1"),
-        (runner(listing(), timed_out=True, code=-9), "`opencode api model.list` took over 60 seconds"),
+        (runner(code=1), "`opencode api model.list` exited 1", True),
+        (runner(listing(), timed_out=True, code=-9), "`opencode api model.list` took over 60 seconds", True),
         # What it printed is not quoted: a model's settings may hold a provider's key.
-        (runner('{"data": [{"providerID": "x", "settings": {"apiKey": "sk-s3cret"}}]}'), "printed what canopy"),
-        (runner("not json"), "printed what canopy cannot read"),
+        (runner('{"data": [{"providerID": "x", "settings": {"apiKey": "sk-s3cret"}}]}'), "printed what canopy", False),
+        (runner("not json"), "printed what canopy cannot read", False),
     ],
 )
 def test_a_list_that_cannot_be_read_says_why_in_canopy_s_words(
     list_runner: mock.NonCallableMagicMock,
     error: str,
+    transient: bool,  # noqa: FBT001
 ) -> None:
+    """A command that exits non-zero or times out is one asking again may read; one that printed garbage is not."""
     found = models.listed(list_runner, cwd=Path("/ws"))
     assert found.models == frozenset()
     assert found.error is not None
     assert error in found.error
     assert "s3cret" not in found.error
+    assert (found.transient, found.stderr) == (transient, "")
+
+
+def test_a_list_that_fails_keeps_the_end_of_what_opencode_printed_on_stderr_never_its_stdout() -> None:
+    """Its stdout may hold a provider's key, which stays unquoted; its stderr's end says why it failed."""
+    stderr = "x" * 5000 + "\nError: provider timed out\n"
+    found = models.listed(runner('{"settings": "sk-s3cret"}', code=1, stderr=stderr), cwd=Path("/ws"))
+    assert found.stderr == ("x" * 5000 + "\nError: provider timed out")[-2000:]
+    assert "s3cret" not in found.stderr
 
 
 def test_opencode_missing_from_path_fails() -> None:
