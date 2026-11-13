@@ -219,15 +219,17 @@ it. A fresh candidate carries:
   unit's `pr_url` in `tickets`; its `checks` at the head: how many `passed`, the names of those `pending`, each `failed`
   one with its `number`, `conclusion`, `run_id`, and `url`, `stale` naming any that ended neither way, and `human` the
   checks that wait on a person, which are not CI and never make a unit `ci_running` or `ci_red`; `verdicts`, each
-  person's latest approval, change request, or dismissal, whenever it came; and `reviews`, the reviews and review
-  comments past the unit's `review` cursor, oldest first, each with its `number` and marked `trusted` and `worker` by
+  person's latest approval, change request, or dismissal, whenever it came; and `reviews`, the reviews, review
+  comments (`comment`, on a line of the diff), and comments on the PR's conversation (`pr_comment`) past the unit's
+  `review` cursor, oldest first, each with its `number` and marked `trusted` and `worker` by
   canopy. An item's `body` is shown once, to the first overseer that decides the ticket with it listed and ends its
   tick well; after that it carries `seen: true` instead, and while the ticket or the unit can only wait (`running`,
   `ci_running`, `needs_human` with no reply, `awaiting_reply`, `attempt_limit`, `plan_review`, or, for the untrusted
   items alone, untrusted feedback the operator has not answered) it carries `held: true`, since the hold decides and
   not the feedback. `canopy_review-items` reads the text of a listed candidate's items again, by
   `number`, as JSON, for a judgment that needs it, such as `needs_author` or a `passed` reason; a `wait` needs none.
-  An item's link is the PR's URL with `#pullrequestreview-<id>` for a review, or `#discussion_r<id>` for a comment. A
+  An item's link is the PR's URL with `#pullrequestreview-<id>` for a review, `#discussion_r<id>` for a review
+  comment, or `#issuecomment-<id>` for a PR comment. A
   unit without a PR has `branch`, the ticket's branch seen on origin, or null;
 - `derived`, on the ticket and each fresh unit: the rows of the phase table canopy's own reading found holding. It is a
   reading, not a ruling: where the table, applied to the observations, says otherwise, follow the table.
@@ -429,7 +431,8 @@ An `implement` after a failed run: `Try again: authorized reply in ticket commen
 
 ## Reviewers and the operator's go-ahead
 
-Review feedback is a PR's reviews, review comments, and requested changes, and canopy's review findings. Who wrote it
+Review feedback is a PR's reviews, review comments, comments on its conversation, and requested changes, and canopy's
+review findings; a bot's comment on the conversation is not feedback, and needs no handling. Who wrote it
 decides whether a worker may address it unasked. `trust.trusted_reviewers` lists the trusted: VCS host logins, matched
 case-insensitively and in full (`codebot` is not `codebot[bot]`), never on a display name, and `canopy:review` for
 canopy's own review run, known only from `reviews.prs`. An empty list trusts nobody.

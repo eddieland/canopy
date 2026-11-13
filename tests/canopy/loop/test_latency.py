@@ -60,7 +60,7 @@ def commented(conn: sqlite3.Connection, key: str, ident: str, source_at: str, ob
 
 def reviewed(conn: sqlite3.Connection, item: ReviewItem, ident: int, source_at: str, observed_at: str) -> None:
     """A review item of `PR` at `source_at`, first observed at `observed_at` and last read a day later."""
-    kind = NumberedItem.REVIEW if item is ReviewItem.REVIEW else NumberedItem.REVIEW_COMMENT
+    kind = item_numbers.of_review(item)
     records.insert(
         records.ObservedReview,
         pr_url=PR,
@@ -69,7 +69,7 @@ def reviewed(conn: sqlite3.Connection, item: ReviewItem, ident: int, source_at: 
         bot=0,
         created_at=source_at,
         body="Looks off.",
-        thread_id=None if item is ReviewItem.REVIEW else "PRRT_1",
+        thread_id="PRRT_1" if item is ReviewItem.COMMENT else None,
         # A later read replaces the row's `observed_at`: its number keeps the first.
         observed_at=at(db.parse_time(observed_at), 24 * 60),
         number=item_numbers.take(conn, kind, PR, ident, at=observed_at),
@@ -131,6 +131,7 @@ def test_each_kind_waits_for_the_first_live_tick_after_it_was_observed(conn: sql
     commented(conn, "PROJ-1", "c1", at(base, 0), at(base, 1))
     reviewed(conn, ReviewItem.REVIEW, 11, at(base, 0.5), at(base, 1))
     reviewed(conn, ReviewItem.COMMENT, 12, at(base, 0.5), at(base, 1))
+    reviewed(conn, ReviewItem.PR_COMMENT, 12, at(base, 0.5), at(base, 1))
     check_completed(conn, 21, at(base, 1.5))
     ticked(conn, at(base, 1.6), {"PROJ-1": "dispatch:resume"}, dry_run=True)
     ticked(conn, at(base, 2), {"PROJ-1": "dispatch:resume"}, woken_by=latency.POLL)
@@ -140,9 +141,10 @@ def test_each_kind_waits_for_the_first_live_tick_after_it_was_observed(conn: sql
         "comment": (1, 1, 1, 0, 120.0, 120.0, 60.0),
         "review": (1, 1, 1, 0, 90.0, 90.0, 60.0),
         "review_comment": (1, 1, 1, 0, 90.0, 90.0, 60.0),
+        "pr_comment": (1, 1, 1, 0, 90.0, 90.0, 60.0),
         # No source time: only canopy's own part of its wait.
         "check_run": (1, 1, 1, 0, None, None, 30.0),
-        "all": (4, 4, 4, 0, 90.0, 120.0, 60.0),
+        "all": (5, 5, 5, 0, 90.0, 120.0, 60.0),
     }
 
 
@@ -216,6 +218,7 @@ def test_the_report_is_printed_as_a_table(conn: sqlite3.Connection) -> None:
         "comment             3      2        2          1   2m15s  2m15s          1m15s",
         "review              0      0        0          0       -      -              -",
         "review comment      0      0        0          0       -      -              -",
+        "PR comment          0      0        0          0       -      -              -",
         "check run           1      1        1          0       -      -            45s",
         "all                 4      3        3          1   2m15s  2m15s          1m15s",
         "",
@@ -246,6 +249,6 @@ def test_canopy_latency_prints_the_last_days(canopy_env: CanopyEnv, capsys: pyte
         "p90_s": 120.0,
         "observed_median_s": 60.0,
     }
-    assert [k["kind"] for k in found["kinds"]] == ["comment", "review", "review_comment", "check_run"]
+    assert [k["kind"] for k in found["kinds"]] == ["comment", "review", "review_comment", "pr_comment", "check_run"]
     assert found["total"]["items"] == 1
     assert main(["latency", "--days", "0"]) == 2
