@@ -20,6 +20,8 @@ from typing import Annotated, Literal
 
 from pydantic import Field, StrictInt
 
+from canopy.infra import text
+
 #: Far above anything one model call reports, and low enough that no run's sums overflow a float or SQLite's integers.
 MAX_TOKENS = 10**12
 MAX_COST_USD = 10**6
@@ -46,6 +48,10 @@ MAX_MODEL_NAME = 200
 #: How long a runtime's version, as a session's record names it, may be: `1.19.3` and its like are far shorter.
 MAX_RUNTIME_VERSION = 40
 OTHER_MODELS = "(other models)"
+#: How much of the runtime's stderr a list of models it failed to print keeps: enough to say why, such as a provider's
+#: error and the lines before it, and little enough for an attention item and a log line.
+STDERR_LINES = 20
+STDERR_CHARS = 2000
 #: A message the runtime names in a session's record and on each event of a model call: the reply the call wrote, the
 #: key that joins a call in the run's log to the model the record names for it. As a session id is shaped.
 MESSAGE_ID_RE = SESSION_ID_RE
@@ -315,6 +321,23 @@ class ModelList:
     variants: Mapping[str, Sequence[str]] = field(default_factory=dict)
     #: Why the list could not be read, in canopy's words, never what the runtime printed; None when it was read.
     error: str | None = None
+    #: Whether asking again may read it: the runtime's command ran, then exited non-zero or timed out, as it does for a
+    #: cause that passes (a slow provider, a network blip). False when the list was read, or the command could not
+    #: start, or printed what canopy cannot read, which asking again would not change.
+    transient: bool = False
+    #: The end of what the runtime printed on stderr when it failed `transient`, as `failed` keeps it; empty otherwise.
+    #: The runtime's own words, untrusted: it may name the operator's paths and config.
+    stderr: str = ""
+
+    @classmethod
+    def failed(cls, error: str, stderr: str) -> ModelList:
+        """A list whose command ran and exited non-zero or timed out, `error` saying which, which asking again may read.
+
+        Returns:
+            None of the models, `transient`, with `error` and the end of `stderr`: its last `STDERR_LINES` lines, at
+            most `STDERR_CHARS` characters, control characters dropped.
+        """
+        return cls(error=error, transient=True, stderr=text.tail(stderr, lines=STDERR_LINES, chars=STDERR_CHARS))
 
 
 @dataclass(frozen=True)

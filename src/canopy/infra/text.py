@@ -26,6 +26,17 @@ def quoted(text: str) -> str:
     return "\n".join(f"> {line}" for line in printable(text).splitlines() or [""])
 
 
+def tail(text: str, *, lines: int, chars: int) -> str:
+    """The end of `text`, another program's output, to quote it: its last `lines` lines, at most `chars` characters.
+
+    Returns:
+        `printable(text)` without the blank space around it, cut to its last `lines` lines, then to its last `chars`
+        characters; empty for text that is all blank space.
+    """
+    kept = "\n".join(printable(text).strip().splitlines()[-lines:])
+    return kept[-chars:]
+
+
 def one_line(text: str) -> str:
     """Agent-written text, fit for one terminal line: control characters dropped, whitespace collapsed, and cut.
 

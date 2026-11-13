@@ -22,11 +22,13 @@ from tests.canopy.helpers import (
     Called,
     in_tick,
     listed,
+    lists_asked,
     model_list,
     planner_does,
     pool_statuses,
     ran_on,
     trailers_on,
+    untimed,
 )
 from tests.canopy.review_helpers import CLEAN, feature_commit, head, reviewer_reports
 from tests.canopy.scenario_helpers import Ran, Scenario, dispatches, pushes, reviews
@@ -62,7 +64,7 @@ def test_a_run_on_a_chosen_model_records_it_and_its_definition_names_it(
     assert f'\nmodel: "{MODEL}"\n' in (snapshot / "agents" / "canopy-worker.md").read_text()
     # The list is read in the workspace root, not in the run's slot, whose own runtime config could change it: at the
     # ask, and again as the tick starts the run (DESIGN §40).
-    assert calls(opencode_state) == [(model_list(scenario.env.runtime)[0], str(scenario.env.root))] * 2
+    assert lists_asked(opencode_state) == [(model_list(scenario.env.runtime)[0], str(scenario.env.root))] * 2
     assert f"  model {MODEL}  log {run.row['log_path']}\n" in scenario.operator("status").out
     # Its commits credit the model that did the work (TRUST_MODEL T5).
     assert f"`Co-authored-by: {MODEL} (canopy worker) <noreply@canopy.invalid>`" in run.prompt_file.read_text()
@@ -75,7 +77,7 @@ def test_a_run_with_no_model_chosen_goes_to_the_runtimes_default_and_reads_no_li
 ) -> None:
     run = scenario.run(worker=pushes())
     assert run.row["model"] is None
-    assert calls(opencode_state) == []
+    assert lists_asked(opencode_state) == []
     assert "  model " not in scenario.operator("status").out
     assert "`Co-authored-by: canopy worker <noreply@canopy.invalid>`" in run.prompt_file.read_text()
 
@@ -165,7 +167,10 @@ def test_a_run_at_a_variant_records_it_and_its_definition_names_it(
     worker = scenario.env.root / ".canopy" / definitions.RUNTIME_DIR / digest / "agents" / "canopy-worker.md"
     assert f'\nmodel: "{MODEL}"\nvariant: "high"\n' in worker.read_text()
     # The variants are read only when one is chosen: the runtime drops one its model lacks without a word.
-    assert calls(opencode_state) == [(model_list(scenario.env.runtime, variants=True)[0], str(scenario.env.root))] * 2
+    assert (
+        lists_asked(opencode_state)
+        == [(model_list(scenario.env.runtime, variants=True)[0], str(scenario.env.root))] * 2
+    )
     assert f"`Co-authored-by: {MODEL}@high (canopy worker) <noreply@canopy.invalid>`" in run.prompt_file.read_text()
 
 
@@ -193,9 +198,10 @@ def test_a_list_that_cannot_be_read_refuses_the_run(scenario: Scenario, opencode
     scenario.configures(runtime={"models": {"worker": MODEL}})
     reason = (
         f"could not look up the model {MODEL} chosen in runtime.models: `{model_list(scenario.env.runtime)[1]}` "
-        "exited 1. Nothing ran on another model; the work resumes once the list can be read"
+        "exited 1, the last of 3 attempts, which took N, N and N seconds. Nothing ran on another model; the work "
+        "resumes once the list can be read"
     )
-    refused = scenario.refuses(dispatches())
+    refused = [(action, untimed(why)) for action, why in scenario.refuses(dispatches())]
     assert refused == [("refused:model_list_failed", reason), ("attention:model_list_failed", reason)]
     assert scenario.attention() == [(KEY, "model_list_failed")]
     assert scenario.conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
@@ -277,11 +283,11 @@ def test_canopy_model_refuses_a_model_not_listed_an_unknown_agent_and_inside_a_r
     assert "give MODEL or --clear" in scenario.operator("model", KEY, OTHER, "--clear", code=2).err
     assert "model refused (unsupported)" in scenario.operator("model", "chore:deps", OTHER, code=1).err
     # No agent chooses a model, the overseer's own ticket's least of all (TRUST_MODEL T1), and the list is not read.
-    before = calls(opencode_state)
+    before = lists_asked(opencode_state)
     with in_tick(scenario.conn, ends_ok=True):
         assert main(["model", KEY, OTHER, "--agent", "reviewer"]) == 1
     assert "model refused (inside_run): CANOPY_TICK_ID is set" in capsys.readouterr().err
-    assert calls(opencode_state) == before
+    assert lists_asked(opencode_state) == before
     # Nor a dispatch: it takes no model.
     move = dispatches()
     refused = scenario.overseer(Called(move.name, {**move.arguments, "model": OTHER}), error=True)
@@ -307,7 +313,7 @@ def test_an_override_at_a_variant_reaches_the_tickets_runs_and_one_naming_none_d
     said = scenario.operator("model", KEY, f"{MODEL}@low").out
     assert said == f"{KEY}'s worker runs use {MODEL}@low from their next run: this ticket's override.\n"
     # The variants were read to look it up, as they are again when the run starts.
-    assert calls(opencode_state) == [(model_list(scenario.env.runtime, variants=True)[0], str(scenario.env.root))]
+    assert lists_asked(opencode_state) == [(model_list(scenario.env.runtime, variants=True)[0], str(scenario.env.root))]
     assert scenario.run(worker=pushes()).row["model"] == f"{MODEL}@low"
     assert ran_on(agent_log) == f"{MODEL}@low"
     err = scenario.operator("model", KEY, f"{MODEL}@max", code=1).err
@@ -434,12 +440,3 @@ def test_a_reviewers_model_in_config_the_runtime_does_not_list_refuses_a_review_
     listed(opencode_state, OTHER, MODEL)
     assert scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(CLEAN)).row.model == MODEL
     assert scenario.conn.execute("SELECT count(*) FROM review_runs").fetchone()[0] == 1
-
-
-def calls(state: Path) -> list[tuple[list[str], str]]:
-    """Each list of models the fake `opencode` printed, `models` or OpenCode 2's `model.list`, and where it ran."""
-    log = state.with_name("opencode.jsonl")
-    if not log.exists():
-        return []
-    entries = [json.loads(line) for line in log.read_text().splitlines()]
-    return [(e["argv"], e["cwd"]) for e in entries if e["argv"][0] == "models" or e["argv"][-1] == "model.list"]

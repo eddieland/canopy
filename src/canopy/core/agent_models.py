@@ -18,11 +18,14 @@ read in the workspace root, since a repository's own runtime config could change
 model's variants too, since a runtime may drop a variant the model lacks without a word, or fail the run on it. A
 model or variant the list lacks refuses the run as `model_missing`, and a list that cannot be read as
 `model_list_failed`: never the runtime's default instead, since a run on a model nobody chose would read as the one
-the operator chose.
+the operator chose. A list command that runs, then exits non-zero or times out, is asked again after each of
+`RETRY_SECONDS`, since such a failure often passes; a model missing from a list that was read is a config problem, and
+is refused at once.
 """
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from fnmatch import fnmatchcase
 from typing import TYPE_CHECKING, Literal
@@ -33,7 +36,7 @@ from canopy.runtime.agents import Model
 from canopy.runtime.definitions import MODEL_RE, VARIANT_RE
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Iterable, Mapping, Sequence
     from pathlib import Path
 
     from canopy.core.config import Chore, Config
@@ -60,6 +63,10 @@ LIST_FAILED = "model_list_failed"
 #: (`chore`), the definition of an agent of the operator's own that a chore runs, which canopy does not write
 #: (`agent`), or nothing, the runtime's default (`default`).
 type Source = Literal["config", "chore", "agent", "default"]
+#: How many seconds `check` waits before each further ask of a list it could not read: a list command that exits
+#: non-zero or times out has done so for a cause that passes (a slow provider, an auth refresh), and the next ask
+#: often reads it, so one such failure neither refuses a run nor skips a tick. As many asks as waits, after the first.
+RETRY_SECONDS: Sequence[float] = (5.0, 15.0)
 # The most variants a refusal names of those the model lists.
 _MAX_NAMED = 8
 
@@ -77,13 +84,18 @@ class Chosen:
 
 
 class ModelError(Exception):
-    """A run's model cannot be used: `guard` is `MISSING` or `LIST_FAILED`, and the message says why, naming it."""
+    """A run's model cannot be used: `guard` is `MISSING` or `LIST_FAILED`, and the message says why, naming it.
 
-    def __init__(self, guard: str, reason: str) -> None:
-        """Name the guard and say why."""
+    `stderr` is the end of what the runtime printed on stderr the last time its list failed, its own words and
+    untrusted, kept apart from `reason`, which is canopy's; empty when it printed none, or the list was read.
+    """
+
+    def __init__(self, guard: str, reason: str, *, stderr: str = "") -> None:
+        """Name the guard and say why, with what the runtime printed on stderr."""
         super().__init__(reason)
         self.guard = guard
         self.reason = reason
+        self.stderr = stderr
 
 
 def parse(value: str) -> Model:
@@ -206,16 +218,22 @@ def check(
 
     `chosen` says where the model was chosen, to name it in a refusal: in `runtime.models`, or by a ticket's override.
 
+    A list whose command exits non-zero or times out is asked for again after each of `RETRY_SECONDS`, until one is
+    read or one fails otherwise; a model or variant missing from a list that was read is refused at once.
+
     Raises:
         ModelError: (`MISSING`) the runtime does not list the model or its variant, or (`LIST_FAILED`) its list could
-            not be read.
+            not be read, the refusal naming how many times it was asked and how long each took, with the end of
+            what the runtime last printed on stderr.
     """
-    found = runtime_models.listed(runner, version=version, cwd=root, variants=model.variant is not None)
+    found, took = _listed(runner, root, model, version=version)
     if found.error is not None:
+        tried = "" if len(took) == 1 else f", the last of {len(took)} attempts, which took {_seconds(took)} seconds"
         raise ModelError(
             LIST_FAILED,
-            f"could not look up the model {model.name} chosen {chosen}: {found.error}. Nothing ran on another "
+            f"could not look up the model {model.name} chosen {chosen}: {found.error}{tried}. Nothing ran on another "
             "model; the work resumes once the list can be read",
+            stderr=found.stderr,
         )
     if model.id not in found.models:
         raise ModelError(
@@ -229,6 +247,34 @@ def check(
             f"{invocation.NAME} lists the model {model.id} chosen {chosen} but not its variant "
             f"{model.variant} ({variants_listed(found, model.id)}); nothing ran. Choose a variant it lists",
         )
+
+
+def _listed(runner: procs.Runner, root: Path, model: Model, *, version: Version) -> tuple[ModelList, list[float]]:
+    """Ask the runtime for its list, again after each of `RETRY_SECONDS` while it fails in a way that may pass.
+
+    Returns:
+        The last list asked for, read or not, and how many seconds each ask took, in order.
+    """
+    waits = iter(RETRY_SECONDS)
+    took: list[float] = []
+    while True:
+        started = time.monotonic()
+        found = runtime_models.listed(runner, version=version, cwd=root, variants=model.variant is not None)
+        took.append(time.monotonic() - started)
+        wait = next(waits, None) if found.error is not None and found.transient else None
+        if wait is None:
+            return found, took
+        time.sleep(wait)
+
+
+def _seconds(took: Sequence[float]) -> str:
+    """Say how long each of two or more asks took, in whole seconds: `51, 38 and 40`.
+
+    Returns:
+        The seconds, joined as a list in words.
+    """
+    *first, last = (f"{round(t)}" for t in took)
+    return f"{', '.join(first)} and {last}"
 
 
 def variants_listed(found: ModelList, model: str) -> str:

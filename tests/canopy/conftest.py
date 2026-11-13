@@ -17,7 +17,7 @@ import pytest
 from syrupy.assertion import SnapshotAssertion
 from syrupy.extensions.single_file import SingleFileSnapshotExtension, WriteMode
 
-from canopy.core import config, db, hostgit
+from canopy.core import agent_models, config, db, hostgit
 from canopy.core.context import Context
 from canopy.infra import resources
 from canopy.serve import mock as serve_mock
@@ -26,6 +26,13 @@ from tests.canopy.helpers import context, titled_workers
 from tests.canopy.review_helpers import PR, REPORT, THEIRS, feature_commit, reviewer_reports
 from tests.canopy.scenario_helpers import Scenario, reviews
 from tests.conftest import HERMETIC_GIT, CanopyEnv, GitPool, Journals, executable, git
+
+
+@pytest.fixture(autouse=True)
+def model_list_asked_again_at_once() -> Iterator[None]:
+    """Ask again at once for a model list the runtime failed to print: a test waits on conditions, never on time."""
+    with mock.patch.object(agent_models, "RETRY_SECONDS", (0.0, 0.0)):
+        yield
 
 
 @pytest.fixture

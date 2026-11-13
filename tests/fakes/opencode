@@ -33,6 +33,8 @@ Keys of the state besides `sessions`, each optional, each read by both versions 
     variants  each model's variants by its line: 1's `models --verbose` prints them in the model's JSON after its
             line, indented as OpenCode indents it, `{"id": ..., "variants": {NAME: {...}}}`, and 2's `model.list`
             lists them with it. Default none.
+    list_fails  how many more times the model list, 1's `models` or 2's `model.list`, fails before it answers: each
+            prints `stderr` and exits 1, and counts it down in the state file. Default none.
 
 2's `serve` says where it listens, then waits to be stopped; `api --server URL` answers `agent.list`, `skill.list`, and
 `config.get` from the state, and `api --standalone model.list` the models. An export, and what 2's `api` prints, is
@@ -124,6 +126,8 @@ def models(*, verbose: bool) -> int:
     if "exit" in state:
         sys.stderr.write(str(state.get("stderr", "")))
         return int(state["exit"])
+    if list_fails(state):
+        return 1
     variants = state.get("variants", {})
     for line in state.get("models", []):
         print(line)
@@ -190,6 +194,8 @@ def api(operation: str) -> int:
                 if config.get("mcp"):
                     printed.append({"type": "document", "info": {"mcp": {"servers": servers(config["mcp"])}}})
         case "model.list":
+            if list_fails(state):
+                return 1
             variants = state.get("variants", {})
             printed = {
                 "data": [
@@ -257,6 +263,16 @@ def write(printed: str) -> None:
     os.set_blocking(sys.stdout.fileno(), False)
     with contextlib.suppress(BlockingIOError):
         os.write(sys.stdout.fileno(), printed.encode())
+
+
+def list_fails(state: dict[str, Any]) -> bool:
+    """Whether this model list fails, as `list_fails` says: if so, print `stderr` and count it down in the state."""
+    left = int(state.get("list_fails", 0))
+    if left <= 0:
+        return False
+    sys.stderr.write(str(state.get("stderr", "")))
+    Path(os.environ["FAKE_OPENCODE_STATE"]).write_text(json.dumps({**state, "list_fails": left - 1}))
+    return True
 
 
 def read_state() -> dict[str, Any]:

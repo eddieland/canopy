@@ -473,6 +473,9 @@ promises:
   variant, or a list that cannot be read, refuses the run with an attention item, spending no attempt and leasing no
   slot, so the work resumes once the model is back: a task waits, and a tick closes without its overseer (§6 step 5).
   It never falls back to the default, since a run on a model nobody chose would read as the one the operator chose.
+  A list command that exits non-zero or times out is asked again twice, after a short wait, before the run is refused,
+  since such a failure often passes; the item then names the attempts and ends with the runtime's stderr. A model
+  missing from a list that was read is refused at once.
 - **Hiding narrows only what is shown.** `runtime.hide_models` leaves models and variants matching its globs out of the
   lists canopy shows, `canopy models` and the web UI's menus, never out of the check above: config or a ticket may
   still name a hidden one, and its runs run.

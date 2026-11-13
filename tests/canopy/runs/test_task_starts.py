@@ -61,6 +61,7 @@ from tests.canopy.helpers import (
     told,
     tools_of,
     trailers_on,
+    untimed,
     waits,
     with_events,
     with_rebase,
@@ -353,8 +354,9 @@ def test_the_commit_trailer_names_the_private_workers_chosen_model(
             {"exit": 1, "stderr": "Error: something broke\n"},
             "model_list_failed",
             (
-                "could not look up the model provider/model-a chosen in runtime.models: `{list}` exited 1. "
-                "Nothing ran on another model; the work resumes once the list can be read"
+                "could not look up the model provider/model-a chosen in runtime.models: `{list}` exited 1, the "
+                "last of 3 attempts, which took N, N and N seconds. Nothing ran on another model; the work resumes "
+                "once the list can be read"
             ),
         ),
     ],
@@ -381,7 +383,9 @@ def test_tasks_wait_while_the_private_workers_model_cannot_be_used(
     submit()
     with in_tick(ctx.conn, ends_ok=True) as tick_id:
         assert task_starts.start_queued(ctx, tick_id, logs.for_tick(tick_id)) == []
-    raised = [(d.ticket_key, d.action, d.rationale, d.decider) for d in db.decisions_for_tick(ctx.conn, tick_id)]
+    raised = [
+        (d.ticket_key, d.action, untimed(d.rationale), d.decider) for d in db.decisions_for_tick(ctx.conn, tick_id)
+    ]
     why = why.replace("{list}", model_list(canopy_env.runtime)[1])
     assert raised == [(None, f"attention:{guard}", f"queued tasks wait: {why}", Decider.HARNESS)]
     assert every_run(ctx.conn) == []

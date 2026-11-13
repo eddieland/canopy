@@ -31,6 +31,7 @@ from tests.canopy.helpers import (
     has_deadline,
     in_tick,
     listed,
+    lists_asked,
     minute,
     model_list,
     only_tick,
@@ -43,6 +44,7 @@ from tests.canopy.helpers import (
     tools_of,
     tools_printed,
     tracker_holds,
+    untimed,
     waits,
     with_events,
     worker_ran,
@@ -697,15 +699,30 @@ def test_an_overseers_model_the_runtime_does_not_list_closes_the_tick_without_it
     raised = next(d for d in halted[0].decisions if d.action.startswith("attention:"))
     assert item.since == raised.created_at  # open since the first tick of the streak
 
-    # A list that cannot be read halts it too, with a status of its own.
-    opencode_state.write_text(json.dumps({"exit": 1, "stderr": "Error: something broke\n"}))
+    # A model missing from a list that was read is config's to fix: the list was asked for once a tick.
+    assert len(lists_asked(opencode_state)) == 2
+
+    # A list that cannot be read halts it too, with a status of its own, once every attempt has failed.
+    opencode_state.write_text(json.dumps({"exit": 1, "stderr": "starting\nError: something broke\n"}))
     failed = scenario.tick(*waits(KEY), dry_run=True, code=1)
     assert failed.tick.status == TickStatus.MODEL_LIST_FAILED
-    assert failed.tick.summary == (
+    summary = (
         f"could not look up the model {model} chosen in runtime.models: `{model_list(scenario.env.runtime)[1]}` "
-        "exited 1. Nothing ran on another model; the work resumes once the list can be read"
+        "exited 1, the last of 3 attempts, which took N, N and N seconds. Nothing ran on another model; the work "
+        "resumes once the list can be read"
     )
+    assert untimed(failed.tick.summary or "") == summary
+    assert len(lists_asked(opencode_state)) == 5
     assert scenario.attention() == [(None, "model_list_failed")]
+    # The item, and the log, say what the runtime printed on stderr, after canopy's own words.
+    [item] = attention.current(scenario.conn)
+    assert untimed(item.detail) == (
+        f"{summary}; the overseer did not run. The next tick looks it up again. OpenCode printed on stderr, ending:\n"
+        "starting\nError: something broke"
+    )
+    log_lines = [json.loads(line) for line in (scenario.env.state_dir / "canopy.log").read_text().splitlines()]
+    [logged] = [line for line in log_lines if line.get("tick_id") == failed.tick.id and "stderr" in line]
+    assert (logged["msg"], logged["stderr"]) == ("overseer not started", "starting\nError: something broke")
 
     # Once the runtime lists it, the next tick runs the overseer, and the item is gone.
     listed(opencode_state, "acme/fake-model-2", model)
@@ -715,6 +732,25 @@ def test_an_overseers_model_the_runtime_does_not_list_closes_the_tick_without_it
     # It records the model its overseer asked for; a tick that halted before its overseer, or chose none, records none.
     assert ran.tick.model == model
     assert [t.tick.model for t in (*halted, failed)] == [None] * 3
+
+
+def test_an_overseers_model_list_that_fails_once_is_read_the_next_time_and_the_tick_runs(
+    scenario: Scenario,
+    opencode_state: Path,
+) -> None:
+    """A list command that fails for a cause that passes, such as a slow provider, does not skip the tick (DESIGN §13).
+
+    It is asked for again within the tick, and once read, the overseer runs on its model as on any other tick.
+    """
+    model = "acme/fake-model-1"
+    listed(opencode_state, model, fails=1, stderr="Error: provider timed out\n")
+    scenario.configures(runtime={"models": {"overseer": model}})
+    ran = scenario.tick(*waits(KEY), dry_run=True)
+    assert ran.tick.status == TickStatus.OK
+    assert ran.tick.model == model
+    assert len(agent_runs(scenario.agent_log)) == 1
+    assert lists_asked(opencode_state) == [(model_list(scenario.env.runtime)[0], str(scenario.env.root))] * 2
+    assert scenario.attention() == []
 
 
 def test_busy_lock_exits_zero_without_a_tick(

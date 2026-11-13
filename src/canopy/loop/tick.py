@@ -81,7 +81,7 @@ from canopy.runs import (
     reconcile,
     task_starts,
 )
-from canopy.runtime import project_config, servers, stdout
+from canopy.runtime import invocation, project_config, servers, stdout
 
 if TYPE_CHECKING:
     import sqlite3
@@ -952,8 +952,11 @@ def _halt(ctx: Context, tick_id: int, log: logs.TickAdapter, *, overseer: bool) 
         status, summary = TickStatus.CANOPY_UNAVAILABLE, unavailable
         then = "Make `canopy _mcp` start where the loop runs"
     elif (refused := _check_model(ctx, log)) is not None:
-        status, summary = refused
+        status, summary, said = refused
         then = "The next tick looks it up again"
+        if said:
+            # Last, so a notification that cuts the detail keeps canopy's own words first.
+            then += f". {invocation.NAME} printed on stderr, ending:\n{said}"
     else:
         return None
     _harness_item(ctx, tick_id, None, status, f"{summary}; the overseer did not run. {then}")
@@ -1029,16 +1032,16 @@ def _check_server(ctx: Context, tick_id: int, log: logs.TickAdapter) -> str | No
     return failure
 
 
-def _check_model(ctx: Context, log: logs.TickAdapter) -> tuple[TickStatus, str] | None:
+def _check_model(ctx: Context, log: logs.TickAdapter) -> tuple[TickStatus, str, str] | None:
     """Look the overseer's chosen model up in the runtime's list, as a worker's dispatch does (DESIGN §13).
 
     The model is the one `runtime.models` chooses for the agent `runtime.overseer_cmd` runs; the overseer works on no
     one ticket, so no override reaches it. It is never fallen back from: an overseer on a model nobody chose would
-    decide for the loop unseen.
+    decide for the loop unseen. A list that could not be read is asked for again first, as `agent_models.check` does.
 
     Returns:
-        The status the tick closes with, `model_missing` or `model_list_failed`, and why, or None when no model is
-        chosen or the runtime lists it.
+        The status the tick closes with, `model_missing` or `model_list_failed`, why, and the end of what the runtime
+        last printed on stderr, empty for none; or None when no model is chosen or the runtime lists it.
     """
     model = agent_models.of_template(ctx.config.runtime.models, ctx.config.runtime.overseer_cmd)
     if model is None:
@@ -1049,9 +1052,9 @@ def _check_model(ctx: Context, log: logs.TickAdapter) -> tuple[TickStatus, str] 
         refused = e
     else:
         return None
-    log.error("overseer not started", extra={"reason": refused.reason})
+    log.error("overseer not started", extra={"reason": refused.reason, "stderr": refused.stderr})
     missing = refused.guard == agent_models.MISSING
-    return TickStatus.MODEL_MISSING if missing else TickStatus.MODEL_LIST_FAILED, refused.reason
+    return TickStatus.MODEL_MISSING if missing else TickStatus.MODEL_LIST_FAILED, refused.reason, refused.stderr
 
 
 def _initialized(out: str) -> bool:
