@@ -123,8 +123,15 @@ def listing(
         query = _matching(whose, state_dir, exclude, archived=archived, directory=directory)
         for word in words:
             query = query.where("title LIKE ? ESCAPE '\\'", f"%{_escaped(word)}%")
-        if not words:
+        if not words and directory is None:
             query = query.where("parent_id IS NULL OR parent_id NOT IN (SELECT session_id FROM runtime_sessions)")
+        elif not words:
+            # Narrowed, a session whose parent ran in another directory heads a tree of its own, so every session
+            # that ran here is listed, however deep it ran.
+            query = query.where(
+                "parent_id IS NULL OR parent_id NOT IN (SELECT session_id FROM runtime_sessions WHERE directory = ?)",
+                directory,
+            )
         found = records.fetch_all(conn, _Session, query.order_by("started_at DESC, session_id").limit(limit + 1))
         shown = found[:limit]
         ids = [s.session_id for s in shown]
@@ -215,15 +222,22 @@ def _subagents(
 ) -> list[_Session]:
     if not ids:
         return []
+    # Narrowed, the walk stays in the directory: one that ran elsewhere ends it, and what ran below it here heads a
+    # tree of its own (`listing`).
+    first, then = sql.frag("1"), sql.frag("1")
+    if directory is not None:
+        first, then = sql.frag("directory = ?", directory), sql.frag("s.directory = ?", directory)
     query = (
         _matching(whose, state_dir, exclude, archived=archived, directory=directory)
         .with_(
             "below(session_id, depth) AS ("
-            "SELECT session_id, 1 FROM runtime_sessions WHERE parent_id IN (SELECT value FROM json_each(?))"
+            "SELECT session_id, 1 FROM runtime_sessions WHERE parent_id IN (SELECT value FROM json_each(?)) AND {}"
             " UNION SELECT s.session_id, b.depth + 1 FROM runtime_sessions s JOIN below b ON s.parent_id = b.session_id"
-            " WHERE b.depth < ?)",
+            " WHERE b.depth < ? AND {})",
             json.dumps(list(ids)),
+            first,
             _MAX_DEPTH,
+            then,
             recursive=True,
         )
         .where("session_id IN (SELECT session_id FROM below)")

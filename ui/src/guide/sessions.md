@@ -51,10 +51,11 @@ epic. That page has its transcript while the run's log is kept.
 
 A title is whatever the runtime made of your first words; where you were is usually the better memory. So a row's
 directory is a link: click it and the list narrows to the sessions that ran in that directory, exactly, not the ones
-below it. The header says `in …/acme/infra` while it's narrowed, and its `×` clears it. The count and the link to the
-newest 500 follow the narrowed list, since canopy narrows it before it picks the newest. The directory sits in the
-address with the other filters, so you can link to a narrowed list, and Back undoes it. Typing a directory `exclude`
-names into the address gets you an empty list: the URL is not a side door.
+below it. A subagent that ran there while its parent ran somewhere else gets a row of its own, so nothing that ran in
+the directory goes missing. The header says `in …/acme/infra` while it's narrowed, and its `×` clears it. The count and
+the link to the newest 500 follow the narrowed list, since canopy narrows it before it picks the newest. The directory
+sits in the address with the other filters, so you can link to a narrowed list, and Back undoes it. Typing a directory
+`exclude` names into the address gets you an empty list: the URL is not a side door.
 
 ## Finding one
 
