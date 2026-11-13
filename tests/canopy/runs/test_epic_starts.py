@@ -141,6 +141,24 @@ def test_a_plan_canopy_cannot_read_is_not_recorded(inline: Context, plan: str | 
     assert epics.plans_of(inline.conn, 1) == []
 
 
+def test_a_planner_that_ends_without_a_result_is_asked_once_more_in_its_session(
+    inline: Context,
+    agent_log: Path,
+) -> None:
+    """As a worker's run is (DESIGN §13): what it reports when asked again is the run's result."""
+    assert operator("epic", "submit", GOAL) == 0
+    [started] = start(inline)
+    blocked = json.dumps({"status": "blocked", "summary": "stuck", "question": "A or B?"})
+    with planner_does(plan=None, result={"status": "finished"}, resent=blocked, session="ses_epic"):
+        run_plan(started.run_id)
+    run = present(epic_runs.get_run(inline.conn, started.run_id))
+    assert run.status is RunStatus.BLOCKED
+    assert json.loads(present(run.result_json))["question"] == "A or B?"
+    first, again = agent_runs(agent_log)
+    assert again["argv"][:-2] == first["argv"][:-1]
+    assert again["argv"][-1] == "--session=ses_epic"
+
+
 def test_a_revision_starts_as_the_plan_it_replaces_and_is_refused_left_so(inline: Context, agent_log: Path) -> None:
     """#2099: an epic's revision starts with its file as the plan it replaces; left so after a reply, it is no plan."""
     assert operator("epic", "submit", GOAL) == 0

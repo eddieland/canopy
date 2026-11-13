@@ -23,6 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictStr
 
 from canopy.core import (
     agent_models,
+    ask_again,
     cards,
     contract,
     conversation,
@@ -307,7 +308,8 @@ def _run_agent(
     # The prompt's fixed instructions are its agent's body, in a snapshot every epic's plan run shares (§13).
     bodies, message = definitions.run_prompt(prompt, runtime.plan_cmd)
     snapshot = definitions.ensure(ctx.state_dir, ctx.config, models, bodies)
-    command = render_command(runtime.worker_template(runtime.plan_cmd), message, snapshot, f"epic:{run.epic_id}")
+    template, title = runtime.worker_template(runtime.plan_cmd), f"epic:{run.epic_id}"
+    command = render_command(template, message, snapshot, title)
     argv = sandboxing.wrap(runtime, list(trees), "worker", command.argv, snapshot)
     try:
         desk = desks.make(ctx.workspace.root, epic_runs.desk_key(run.epic_id), trees.items())
@@ -337,18 +339,30 @@ def _run_agent(
     )
     reports = CONTRACT.asked()
     env |= reports.env()
-    result = ctx.runner.run(
-        argv,
-        cwd=desk,
-        env=env,
-        stdin=command.stdin,
-        timeout=timeout_minutes * 60,
-        on_start=lambda pid: db.set_agent_pid(ctx.conn, "epic_runs", run.id, pid),
-        on_line=lambda line: _echo(out, line),
-    )
-    out.write(f"\n--- planner stderr ---\n{result.stderr}\n")
-    out.write(f"--- planner exit {result.returncode}{' (timed out)' if result.timed_out else ''} ---\n")
-    out.flush()
+
+    def start(again: ask_again.Again | None) -> procs.Result:
+        words, stdin = argv, command.stdin
+        if again is not None:
+            out.write("--- planner asked again for its result ---\n")
+            resent = again.render(template, snapshot, title)
+            words, stdin = sandboxing.wrap(runtime, list(trees), "worker", resent.argv, snapshot), resent.stdin
+        ran = ctx.runner.run(
+            words,
+            cwd=desk,
+            env=env,
+            stdin=stdin,
+            timeout=again.seconds if again is not None else timeout_minutes * 60,
+            on_start=lambda pid: db.set_agent_pid(ctx.conn, "epic_runs", run.id, pid),
+            on_line=lambda line: _echo(out, line),
+        )
+        out.write(f"\n--- planner stderr ---\n{ran.stderr}\n")
+        out.write(f"--- planner exit {ran.returncode}{' (timed out)' if ran.timed_out else ''} ---\n")
+        out.flush()
+        return ran
+
+    # A run that ends with no result is asked once more for it, in its session (DESIGN §13).
+    seconds = timeout_minutes * 60
+    result, reported = ask_again.run(start, reports, server=cards.SERVER, version=runtime.version, seconds=seconds)
     output = stdout.read(result.stdout, version=runtime.version)
     if output.session_id is not None or output.usage is not None:
         db.set_run_report(
@@ -360,7 +374,7 @@ def _run_agent(
             digest=snapshot.name,
             tools=output.tools,
         )
-    return result, run_result.reported(result.stdout, reports, server=cards.SERVER, version=runtime.version)
+    return result, reported
 
 
 def _echo(out: TextIO, line: str) -> None:

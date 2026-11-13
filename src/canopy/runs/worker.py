@@ -41,6 +41,7 @@ from pydantic import (
 
 from canopy.core import (
     agent_models,
+    ask_again,
     cards,
     checklist_answers,
     checklists,
@@ -70,7 +71,7 @@ from canopy.core import (
     run_result,
     sandboxing,
 )
-from canopy.core.config import render_command, setup_words
+from canopy.core.config import Rendered, render_command, setup_words
 from canopy.core.vocab import FlakyCause, PlanEffort, PoolKind, Proposal, RunKind, RunStatus
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import logs, procs, stopping
@@ -785,7 +786,8 @@ def _run_agent(
     `marks` are what canopy's git hooks put on every commit the agent makes (`commit_hooks`).
     `follows_plan` says the run has its copy of an approved plan where it starts, which canopy's plugin names to it.
     `reports` is what the agent reports with canopy's `result` tool (DESIGN §13): its last such call the server took
-    is the run's result, and nothing it prints is.
+    is the run's result, and nothing it prints is. An agent that ends cleanly with none is asked once more for it, in
+    its session, for the rest of the run's time (`ask_again`).
 
     The session and cost the runtime reported are recorded on the run at once, so a git step after the agent that
     fails does not lose them (DESIGN §13).
@@ -819,12 +821,8 @@ def _run_agent(
     bodies, message = definitions.run_prompt(prompt, template)
     snapshot = definitions.ensure(ctx.state_dir, ctx.config, models, bodies)
     command = ctx.config.runtime.worker_template(template)
-    rendered = render_command(
-        command,
-        message,
-        snapshot,
-        session_title(ctx.conn, str(run["ticket_key"]), str(run["kind"])),
-    )
+    title = session_title(ctx.conn, str(run["ticket_key"]), str(run["kind"]))
+    rendered = render_command(command, message, snapshot, title)
     argv = sandboxing.wrap(ctx.config.runtime, [s.repo for s in slots], "worker", rendered.argv, snapshot)
     if desked:
         cwd = desks.make(ctx.workspace.root, str(run["ticket_key"]), trees)
@@ -881,6 +879,21 @@ def _run_agent(
         _held_for(_answers(ctx, run), slots),
         slots=[s.path for s in slots],
     )
+    start = _Start(
+        ctx,
+        run_id,
+        out,
+        command=command,
+        snapshot=snapshot,
+        title=title,
+        repos=[s.repo for s in slots],
+        first=Rendered(argv, rendered.stdin),
+        cwd=cwd,
+        env=env,
+        seconds=timeout_minutes * 60,
+        # One for both starts, so what it has spent is counted from the first.
+        progress=_Progress(ctx, run_id, out, log),
+    )
     with run_offers.probing(
         ctx.conn,
         "runs",
@@ -892,18 +905,14 @@ def _run_agent(
         env=env,
         log=log,
     ):
-        result = ctx.runner.run(
-            argv,
-            cwd=cwd,
-            env=env,
-            stdin=rendered.stdin,
-            timeout=timeout_minutes * 60,
-            on_start=lambda pid: db.set_agent_pid(ctx.conn, "runs", run_id, pid),
-            on_line=_Progress(ctx, run_id, out, log),
+        # A run that ends with no result is asked once more for it, in its session (DESIGN §13).
+        result, reported = ask_again.run(
+            start,
+            reports,
+            server=cards.SERVER,
+            version=ctx.config.runtime.version,
+            seconds=timeout_minutes * 60,
         )
-    out.write(f"\n--- worker stderr ---\n{result.stderr}\n")
-    out.write(f"--- worker exit {result.returncode}{' (timed out)' if result.timed_out else ''} ---\n")
-    out.flush()
     # Also after a timeout: whatever it printed before the kill names its session and what it had spent.
     output = stdout.read(result.stdout, version=ctx.config.runtime.version)
     if output.session_id is not None or output.usage is not None:
@@ -918,12 +927,56 @@ def _run_agent(
         )
         spent = output.usage.spent() if output.usage else {}
         log.info("worker reported", extra={"run_id": run_id, "session_id": output.session_id, **spent})
-    return result, _reported(ctx, result, reports)
+    return result, reported
 
 
-def _reported(ctx: Context, result: procs.Result, reports: run_result.Asked) -> str:
-    # The last `result` call the run's server took, read from the events the agent printed (DESIGN §13).
-    return run_result.reported(result.stdout, reports, server=cards.SERVER, version=ctx.config.runtime.version)
+@dataclass(frozen=True)
+class _Start:
+    """Starts a run's agent and waits for it: with its prompt, or asked again for its result (`ask_again.Start`)."""
+
+    ctx: Context
+    run_id: int
+    #: The run log, which the agent's output is written to as it prints it, by `progress`.
+    out: TextIO
+    #: The run's command template, between the worker's prefix and suffix, which the run's prompt was rendered into.
+    command: str
+    snapshot: Path
+    title: str
+    #: The repositories of the run's slots, whose sandbox, if any, wraps the command.
+    repos: Sequence[str]
+    #: The command with the run's prompt, wrapped, and what it is sent on stdin.
+    first: Rendered
+    cwd: Path
+    env: Mapping[str, str]
+    #: The run's time, in seconds.
+    seconds: float
+    progress: Callable[[str], None]
+
+    def __call__(self, again: ask_again.Again | None, /) -> procs.Result:
+        """Run the agent once: with the run's prompt for the run's time, or `again`.
+
+        Returns:
+            Its process, as the runner returned it, its stderr and exit written to the run log.
+        """
+        run = self.first
+        if again is not None:
+            self.out.write("--- worker asked again for its result ---\n")
+            resent = again.render(self.command, self.snapshot, self.title)
+            words = sandboxing.wrap(self.ctx.config.runtime, self.repos, "worker", resent.argv, self.snapshot)
+            run = Rendered(words, resent.stdin)
+        done = self.ctx.runner.run(
+            run.argv,
+            cwd=self.cwd,
+            env=self.env,
+            stdin=run.stdin,
+            timeout=again.seconds if again is not None else self.seconds,
+            on_start=lambda pid: db.set_agent_pid(self.ctx.conn, "runs", self.run_id, pid),
+            on_line=self.progress,
+        )
+        self.out.write(f"\n--- worker stderr ---\n{done.stderr}\n")
+        self.out.write(f"--- worker exit {done.returncode}{' (timed out)' if done.timed_out else ''} ---\n")
+        self.out.flush()
+        return done
 
 
 def _held_for(answers: Path, slots: Iterable[_Slot]) -> dict[Path, Path]:

@@ -253,6 +253,12 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
   message from the ticket's page that narrows the ticket. Expect it told on its next tool call, the message fetched, as
   its transcript and `canopy show run:ID` show, and its PR to keep to the narrower scope. Over a week of real use,
   count from `canopy show` how many messages were fetched before their run ended, and record it in `MEASUREMENTS.md`.
+- **S82. A run asked again for its result** (taken on request 2026-11-13, #2245). Not yet run on OpenCode 2. On a toy
+  ticket, once sandboxed and once not, have a worker's prompt override tell it never to call `result`. Expect the run
+  log to show `--- worker asked again for its result ---`, the runtime to take `--session=ID` on the run's own command
+  (OpenCode 2 with `--standalone` too), the transcript to show one session with canopy's message, and the run to end
+  with the result it then reported. A new session, or an error naming the option, means the runtime no longer
+  continues a session so: the run is `unknown`, as it was before.
 
 ### What canopy keeps
 

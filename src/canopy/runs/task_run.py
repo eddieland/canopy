@@ -29,6 +29,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictStr
 
 from canopy.core import (
     agent_models,
+    ask_again,
     cards,
     checklist_answers,
     checklists,
@@ -261,14 +262,21 @@ def stop_now(ctx: Context, run: records.TaskRun, log: logs.TickAdapter) -> endin
     current = tasks.get_run(ctx.conn, run.id)
     if current is None or current.status is not RunStatus.RUNNING or not db.ask_stop(ctx.conn, "task_runs", run.id):
         return ending.Ending.GONE
-    for pid in (current.pid, current.agent_pid):
-        # Never this process's own group: a `_task` claimed in-process, as tests run it, has this pid.
-        if pid is not None and pid not in (os.getpid(), os.getpgid(0)):
-            procs.kill_group(pid)
+    _kill(current.pid)
+    # Its `_task` first, so it starts no agent after this; then the agent the row names now, which may be one `_task`
+    # started since the read above, such as a run asked again for its result (DESIGN §13).
+    now = tasks.get_run(ctx.conn, run.id)
+    _kill((now if now is not None else current).agent_pid)
     returned = _close(ctx, current, RunStatus.STOPPED, STOP_NOTE, log)
     if returned is None:
         return ending.Ending.GONE
     return ending.Ending.ENDED if returned else ending.Ending.KEPT
+
+
+def _kill(pid: int | None) -> None:
+    """Kill process group `pid`, if any, but never this process's own, as a `_task` run in-process by tests has."""
+    if pid is not None and pid not in (os.getpid(), os.getpgid(0)):
+        procs.kill_group(pid)
 
 
 def keep_report(ctx: Context, run: records.TaskRun, log: logs.TickAdapter) -> str:
@@ -592,7 +600,8 @@ def _run_agent(
     # The prompt's fixed instructions are its agent's body, in a snapshot every task's run shares (DESIGN §13).
     bodies, message = definitions.run_prompt(prompt, runtime.private_worker_cmd)
     snapshot = definitions.ensure(ctx.state_dir, ctx.config, bodies=bodies)
-    command = render_command(runtime.worker_template(runtime.private_worker_cmd), message, snapshot, f"task:{task.id}")
+    template, title = runtime.worker_template(runtime.private_worker_cmd), f"task:{task.id}"
+    command = render_command(template, message, snapshot, title)
     argv = sandboxing.wrap(runtime, [run.repo], "worker", command.argv, snapshot)
     timeout_minutes = runtime.worker_timeout_minutes
     log.info(
@@ -624,27 +633,41 @@ def _run_agent(
     # a sandboxed run may read and not write (DESIGN §24, §42, §44).
     env[cards.ANSWERS_ENV] = str(answers)
     env |= commit_hooks.env(snapshot, marks, os.environ, held, slots=[slot])
-    done = ctx.runner.run(
-        argv,
-        cwd=slot,
-        env=env,
-        stdin=command.stdin,
-        timeout=timeout_minutes * 60,
-        on_start=lambda pid: db.set_agent_pid(ctx.conn, "task_runs", run.id, pid),
-        on_line=progress.Progress(
-            ctx.conn,
-            "task_runs",
-            run.id,
-            out,
-            log,
-            agent="task",
-            fields={"task_run_id": run.id},
-            version=ctx.config.runtime.version,
-        ),
+    # One for both starts, so what it has spent is counted from the first.
+    on_line = progress.Progress(
+        ctx.conn,
+        "task_runs",
+        run.id,
+        out,
+        log,
+        agent="task",
+        fields={"task_run_id": run.id},
+        version=ctx.config.runtime.version,
     )
-    out.write(f"\n--- worker stderr ---\n{done.stderr}\n")
-    out.write(f"--- worker exit {done.returncode}{' (timed out)' if done.timed_out else ''} ---\n")
-    out.flush()
+
+    def start(again: ask_again.Again | None) -> procs.Result:
+        words, stdin = argv, command.stdin
+        if again is not None:
+            out.write("--- worker asked again for its result ---\n")
+            resent = again.render(template, snapshot, title)
+            words, stdin = sandboxing.wrap(runtime, [run.repo], "worker", resent.argv, snapshot), resent.stdin
+        ran = ctx.runner.run(
+            words,
+            cwd=slot,
+            env=env,
+            stdin=stdin,
+            timeout=again.seconds if again is not None else timeout_minutes * 60,
+            on_start=lambda pid: db.set_agent_pid(ctx.conn, "task_runs", run.id, pid),
+            on_line=on_line,
+        )
+        out.write(f"\n--- worker stderr ---\n{ran.stderr}\n")
+        out.write(f"--- worker exit {ran.returncode}{' (timed out)' if ran.timed_out else ''} ---\n")
+        out.flush()
+        return ran
+
+    # A run that ends with no result is asked once more for it, in its session (DESIGN §13).
+    version = ctx.config.runtime.version
+    done, reported = ask_again.run(start, reports, server=cards.SERVER, version=version, seconds=timeout_minutes * 60)
     # Also after a timeout: whatever it printed before the kill names its session and what it had spent.
     output = stdout.read(done.stdout, version=ctx.config.runtime.version)
     if output.session_id is not None or output.usage is not None:
@@ -657,8 +680,7 @@ def _run_agent(
             digest=snapshot.name,
             tools=output.tools,
         )
-    version = ctx.config.runtime.version
-    return done, run_result.reported(done.stdout, reports, server=cards.SERVER, version=version)
+    return done, reported
 
 
 def _rewritten(slot: Path, link: bytes | None) -> Path | None:

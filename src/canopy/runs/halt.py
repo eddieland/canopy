@@ -40,12 +40,19 @@ def end(ctx: Context, run: records.Run, log: logs.TickAdapter) -> bool:
     current = db.get_run(ctx.conn, run.id)
     if current is None or current["status"] != "running" or not db.ask_stop(ctx.conn, "runs", run.id):
         return False
-    for pid in (current["pid"], current["worker_pid"]):
-        # Never this process's own group: a `_run` claimed in-process, as tests run it, has this pid.
-        if pid is not None and pid not in (os.getpid(), os.getpgid(0)):
-            procs.kill_group(int(pid))
+    _kill(current["pid"])
+    # Its `_run` first, so it starts no agent after this; then the worker the row names now, which may be one `_run`
+    # started since the read above, such as a run asked again for its result (DESIGN §13).
+    now = db.get_run(ctx.conn, run.id)
+    _kill((now if now is not None else current)["worker_pid"])
     reconcile.end_run(ctx, current, RunStatus.STOPPED, reconcile.STOP_NOTE, log)
     return True
+
+
+def _kill(pid: int | None) -> None:
+    """Kill process group `pid`, if any, but never this process's own, as a `_run` run in-process by tests has."""
+    if pid is not None and pid not in (os.getpid(), os.getpgid(0)):
+        procs.kill_group(int(pid))
 
 
 def wrap_up(ctx: Context, run: records.Run, log: logs.TickAdapter) -> bool:

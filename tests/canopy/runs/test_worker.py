@@ -19,13 +19,15 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import cards, config, db, definitions, prompts, run_models, workspace
+from canopy.core import ask_again, cards, config, db, definitions, prompts, run_models, workspace
 from canopy.core.vocab import FlakyCause, RunStatus
 from canopy.runs import worker
 from canopy.runtime import servers
 from tests.canopy.helpers import (
+    QUESTION,
     InlineRunner,
     agent_runs,
+    blocked_result,
     calls,
     commit_and_push,
     has_deadline,
@@ -516,6 +518,56 @@ def test_a_worker_that_reports_no_result_is_unknown(
     run = scenario.run(worker=worker_does(result=result, exit_code=exit_code))
     assert run.status == "unknown"
     assert json.loads(run.row["result_json"]) == {"harness": "the worker reported no result"}
+
+
+def test_a_worker_that_ends_without_a_result_is_asked_once_more_in_its_session(
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    """Its session is sent canopy's own message, once, and what it then reports is the run's result."""
+    blocked = json.dumps(blocked_result())
+    run = scenario.run(worker=worker_does(result="", resent=blocked, session="ses_work"))
+    assert run.status == "blocked"
+    assert json.loads(run.row["result_json"])["question"] == QUESTION
+    first, again = agent_runs(scenario.agent_log)
+    # The same command, told the same of its result, sent the message in place of the prompt, in the same session.
+    assert again["argv"][:-2] == first["argv"][:-1]
+    assert again["argv"][-2:] == [ask_again.message(cards.SERVER), "--session=ses_work"]
+    assert again["env"]["CANOPY_RESULT"] == first["env"]["CANOPY_RESULT"]
+    assert "--- worker asked again for its result ---" in run.printed.out
+
+
+def test_a_worker_asked_again_that_still_reports_none_is_unknown(scenario: Scenario, git_pool: GitPool) -> None:
+    """It is asked once: a second answer that is no result leaves the run as it was."""
+    run = scenario.run(worker=worker_does(result="not json"))
+    assert run.status == "unknown"
+    assert json.loads(run.row["result_json"]) == {"harness": "the worker reported no result"}
+    assert len(agent_runs(scenario.agent_log)) == 2
+
+
+@pytest.mark.parametrize(
+    ("exit_code", "errors", "min_seconds"),
+    [
+        # A crash, or a session the runtime reported failing, is not a result left unsaid.
+        (1, [], ask_again.MIN_SECONDS),
+        (0, [{"name": "APIError", "data": {"message": "overloaded"}}], ask_again.MIN_SECONDS),
+        # Nor is a run with too little of its time left to report: here, less than a day.
+        (0, [], 24 * 60 * 60),
+    ],
+)
+def test_a_worker_is_not_asked_again_after_a_crash_or_near_its_end(
+    scenario: Scenario,
+    git_pool: GitPool,
+    exit_code: int,
+    errors: list[object],
+    min_seconds: float,
+) -> None:
+    resent = json.dumps(blocked_result())
+    with mock.patch.object(ask_again, "MIN_SECONDS", min_seconds):
+        worker = worker_does(result="", resent=resent, exit_code=exit_code, errors=json.dumps(errors))
+        run = scenario.run(worker=worker)
+    assert run.status != "blocked"
+    assert len(agent_runs(scenario.agent_log)) == 1
 
 
 RESULT = "canopy_run_result"

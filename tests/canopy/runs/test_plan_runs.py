@@ -529,7 +529,8 @@ def test_a_planner_that_may_not_approve_is_not_asked_whether_its_plan_needs_revi
     assert run.status == RunStatus.UNKNOWN
     assert json.loads(run.row["result_json"]) == {"harness": "the planner reported no result"}
     assert "## Whether the operator reviews this plan" not in run.prompt
-    assert asked_of(scenario) == ["plan"]
+    # Its start, and the one that asks it again for the result it did not report, sending the same.
+    assert asked_of(scenario) == ["plan", "plan"]
     assert plans.history(scenario.conn, KEY) == []
     # And the reader, which takes the fields whatever the run was asked, approves nothing by itself.
     assert worker.PlanResult.model_validate(NO_REVIEW).no_review() == "A one-line copy fix the ticket spells out."

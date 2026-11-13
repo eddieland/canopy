@@ -365,7 +365,9 @@ while a tier is on (§28). It refuses any other field, and a result that does no
 send it again. The server writes nothing: the harness reads the last call the server took from the events the run
 prints, as it reads an update, holds it to the same input, and then checks it as untrusted (D026). So config refuses a
 template of these agents that does not ask for the runtime's events, and nothing an agent prints is its result. The
-definitions allow the tool by exact name (§27). A run that reports none is `unknown`.
+definitions allow the tool by exact name (§27). A worker's, planner's, or task's run that exits cleanly with none, with
+no error in its session and time left, is asked for it once more in that session, in canopy's own words that name the
+tool and nothing else. A run that reports none is `unknown`.
 
 A chore that runs the operator's own command or agent prints its result instead, one JSON line, the last of its text
 that starts with `{`: a line that is not JSON only for a few closing brackets, outside any string, is read with them

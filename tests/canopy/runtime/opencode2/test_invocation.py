@@ -129,3 +129,8 @@ def test_prints_events_finds_the_option_that_asks_for_json_events(command: str, 
 def test_with_agent_runs_another_agent_in_place_of_the_one_named(command: str, replaced: str) -> None:
     assert invocation.with_agent(command, "canopy-chore-triage") == replaced
     assert invocation.agent_of(replaced) == ("canopy-chore-triage" if "--agent" in command else None)
+
+
+def test_continuing_names_the_session_in_one_word_so_no_id_reads_as_an_option() -> None:
+    assert invocation.continuing("ses_1") == ["--session=ses_1"]
+    assert invocation.continuing("-x") == ["--session=-x"]
