@@ -8,8 +8,9 @@ Every span canopy makes goes through this module, as every process it starts goe
 
 An attribute is named `canopy.<keyword>` and holds one of canopy's own facts: an id, a kind, a status, a model, a count,
 or a duration. Never text canopy read from elsewhere, such as a prompt, a ticket, a PR, or a tool's output, which is
-untrusted and may be private (TRUST_MODEL T2). A span that ends by raising is marked failed with its exception's type
-alone, for the same reason: an exception's message may quote what canopy read.
+untrusted and may be private (TRUST_MODEL T2). An event, a moment inside a span, such as a decision made or a lease
+taken (`event`), holds attributes by the same rule. A span that ends by raising is marked failed with its exception's
+type alone, for the same reason: an exception's message may quote what canopy read.
 
 Until `configure` turns tracing on, a span is a no-op and OpenTelemetry is never imported, so a process that traces
 nothing pays nothing for it. A child process carries its parent's span in `TRACEPARENT`, the W3C trace context, which
@@ -79,6 +80,11 @@ class Span:
         """
         if self._inner is not None:
             self._inner.set_attributes(_standard(attributes))
+
+    def event(self, name: str, **attributes: Attribute) -> None:
+        """Record a moment in the span, `name`, with each attribute named `canopy.<keyword>`, as `set` names them."""
+        if self._inner is not None:
+            self._inner.add_event(name, _named(attributes))
 
     def fail(self, why: str) -> None:
         """Mark the span failed, though its block raised nothing; `why` is canopy's word, never text it read."""
@@ -158,6 +164,13 @@ def tally(**amounts: float) -> None:
     traced = _OPEN.get()
     if traced is not None:
         traced.tally(**amounts)
+
+
+def event(name: str, **attributes: Attribute) -> None:
+    """Record a moment in the span open now in this process, as `Span.event` does; outside every span, nothing."""
+    traced = _OPEN.get()
+    if traced is not None:
+        traced.event(name, **attributes)
 
 
 def here() -> Here | None:
@@ -350,7 +363,7 @@ class _Tracing:
 
 
 _tracing = _Tracing()
-#: The span of canopy's open now in this thread or task, for `tally`.
+#: The span of canopy's open now in this thread or task, for `tally` and `event`.
 _OPEN: contextvars.ContextVar[Span | None] = contextvars.ContextVar("canopy_span", default=None)
 _CONFIGURING = threading.Lock()
 _OFF = Span(None)

@@ -587,14 +587,26 @@ def in_zone(zone: str) -> Iterator[None]:
 
 
 def spans(path: Path) -> list[dict[str, Any]]:
-    """Each span in a traces file, in the order written, with its attributes as a plain dict of their values."""
+    """Each span in a traces file, in the order written, with its attributes and its events' as plain dicts of values.
+
+    A span with no events has an empty list of them.
+    """
     return [
-        {**span, "attributes": {a["key"]: next(iter(a["value"].values()), None) for a in span["attributes"]}}
+        {
+            **span,
+            "attributes": _attribute_values(span["attributes"]),
+            "events": [{**e, "attributes": _attribute_values(e["attributes"])} for e in span.get("events", [])],
+        }
         for line in path.read_text().splitlines()
         for resource in json.loads(line)["resourceSpans"]
         for scope in resource["scopeSpans"]
         for span in scope["spans"]
     ]
+
+
+def _attribute_values(listed: Iterable[dict[str, Any]]) -> dict[str, Any]:
+    """OTLP JSON's list of attributes, as a plain dict of their values."""
+    return {a["key"]: next(iter(a["value"].values()), None) for a in listed}
 
 
 def only_tick(conn: sqlite3.Connection) -> records.Tick:
