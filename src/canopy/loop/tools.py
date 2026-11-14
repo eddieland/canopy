@@ -823,6 +823,9 @@ def attend(ctx: Context, request: Attention) -> Outcome[AttentionRecorded]:
     if key is not None:
         _refuse_unknown(ctx, current.id, [key], "attention")
         _refuse_decided(ctx, current.id, key, "attention")
+        if pr is not None:
+            # The ticket is this run's; the PR must be too, one of its units' (TRUST_MODEL T1).
+            refuse_other_subject(ctx, current.id, "attention", key=key, pr=pr)
         db.touch_ticket(ctx.conn, key, ctx.repo)
     else:
         refuse_other_subject(ctx, current.id, "attention", pr=pr)

@@ -25,6 +25,7 @@ from tests.canopy.helpers import (
     decides,
     overseer_script,
     overseer_titles,
+    raises,
     titled_overseer,
 )
 from tests.canopy.scenario_helpers import dispatches, due_chore, review_waits
@@ -164,6 +165,25 @@ def test_a_request_on_a_ticket_s_pr_is_its_run_s_and_another_ticket_s_run_may_no
     parts = {p["subject"]: p for p in split(messages(per_subject.agent_log))[1]}
     assert [r["url"] for r in parts["PROJ-1"]["reviews"]["requests"]] == [REQUESTED]
     assert "requests" not in parts["PROJ-2"].get("reviews", {})
+
+
+def test_a_ticket_s_run_may_not_raise_an_item_on_another_ticket_s_pr(per_subject: Scenario) -> None:
+    per_subject.seen("PROJ-1", "PROJ-2")
+    db.set_unit(per_subject.conn, "PROJ-1", str(per_subject.env.root), "repo", pr_url=REQUESTED)
+    # PROJ-2's run names its own ticket, and PROJ-1's PR.
+    ticked = per_subject.tick(
+        overseers={
+            "PROJ-1": overseer_script(decides("PROJ-1")),
+            "PROJ-2": overseer_script(raises("PROJ-2", "needs_human", pr=REQUESTED), decides("PROJ-2")),
+        },
+    )
+    assert ticked.tick.status == TickStatus.OK
+    [refused] = [d for d in ticked.decisions if d.action == attention.REFUSED_DECIDED]
+    assert (refused.ticket_key, refused.pr) == ("PROJ-2", REQUESTED)
+    assert refused.rationale == f"this run is given PROJ-2 alone; record nothing about pr:{REQUESTED}"
+    assert not [
+        d for d in ticked.decisions if d.ticket_key == "PROJ-2" and d.action.startswith(attention.ACTION_PREFIX)
+    ]
 
 
 def test_runs_that_fail_or_leave_their_duty_undone_hold_up_no_other(per_subject: Scenario, git_pool: GitPool) -> None:
