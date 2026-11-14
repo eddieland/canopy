@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from canopy.cli.health import SANDBOX_OFF
 from canopy.cli.main import main
 from canopy.core import db, health
 from canopy.core.vocab import RunKind
@@ -275,14 +276,16 @@ def test_canopy_health_prints_the_report(canopy_env: CanopyEnv, capsys: pytest.C
     assert out[causes + 2].startswith("    workers; latest run:")
     assert out[causes + 5].split() == ["3", "other:", "an", "agent's", "summary,", "or", "no", "note"]
     assert out[causes + 6].startswith("    workers, chores, reviews; latest chore:deps run ")
-    assert out[-3] == "Refused by a guard:"
-    assert out[-2].startswith("  capacity: 3 times in 2 ticks, last in tick ")
+    refused = out.index("Refused by a guard:")
+    assert out[refused + 1].startswith("  capacity: 3 times in 2 ticks, last in tick ")
+    # Where the sandbox stands closes it: here, nowhere, in one line (`tests/canopy/setup/test_sandbox_health.py`).
+    assert out[refused + 3 :] == ["", SANDBOX_OFF]
 
 
 def test_canopy_health_on_an_empty_journal(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["health", "--days", "1"]) == 0
     out = capsys.readouterr().out.splitlines()
-    assert out[1:] == ["", "No tick or run ended."]
+    assert out[1:] == ["", "No tick or run ended.", "", SANDBOX_OFF]
 
 
 def test_canopy_health_json_is_the_report(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:

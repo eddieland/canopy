@@ -8,7 +8,7 @@ dispatch (`mixed`); one that disagrees by the time it runs, after the config cha
 from __future__ import annotations
 
 import sys
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Literal
 
@@ -21,6 +21,16 @@ WRAPPER = Path(sys.executable).parent / config.SANDBOX_WRAPPER
 
 #: The wrapper's roles canopy starts a run in: a worker run's, `setup_cmd`'s, and a review's.
 Role = Literal["worker", "setup", "review"]
+
+#: The role `runtime.sandbox_repos` starts each command in, by what it starts, as `canopy config commands` names it: a
+#: worker run's commands, setup, and the reviewer. `canopy config commands` and `canopy health` both read it.
+COMMAND_ROLES: Mapping[str, Role] = {
+    "worker": "worker",
+    "private worker": "worker",
+    "planner": "worker",
+    "reviewer": "review",
+    "setup": "setup",
+}
 
 
 def wrap(

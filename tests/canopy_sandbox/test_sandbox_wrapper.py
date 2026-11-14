@@ -1048,6 +1048,20 @@ def test_a_template_that_would_not_confine_the_command_runs_nothing(
     assert error in done.stderr
     assert not sandbox.log.exists()
     assert list(sandbox.runs_root().glob("run.*")) == []
+    # What `canopy health` asks, before any run: the same refusal.
+    with pytest.raises(canopy_sandbox.SandboxError) as refused:
+        canopy_sandbox.validate_template("chore")
+    assert error in str(refused.value)
+
+
+@pytest.mark.usefixtures("sandbox")
+@pytest.mark.parametrize("role", ROLES)
+def test_each_shipped_template_loads_before_any_run(role: str) -> None:
+    """Its placeholders filled with no paths, as `canopy health` checks it, and nothing made."""
+    canopy_sandbox.validate_template(role)
+
+    assert not canopy_sandbox.runs_root().exists()
+    assert not canopy_sandbox.cache_root().exists()
 
 
 def test_a_chore_whose_cwd_holds_the_role_caches_runs_nothing(sandbox: Sandbox, tmp_path: Path) -> None:

@@ -49,6 +49,8 @@ NPM = STUB.replace(
 sys.stderr.write""",
 )
 LINUX_COMMANDS = ("bwrap", "socat", "rg", "npm", "canopy-sandbox")
+#: What os-release says on Ubuntu, of what setup reads.
+UBUNTU = {"ID": "ubuntu", "ID_LIKE": "debian"}
 
 
 class Call(TypedDict):
@@ -62,8 +64,8 @@ class Call(TypedDict):
 class Machine:
     """The machine the stubs play.
 
-    The stubs' directory, which is all of PATH, the log of what they were run with, the user's id, uname, and whether
-    its kernel lacks IPv6.
+    The stubs' directory, which is all of PATH, the log of what they were run with, the user's id, uname, whether
+    its kernel lacks IPv6, and its os-release.
     """
 
     bin: Path
@@ -71,6 +73,7 @@ class Machine:
     geteuid: mock.NonCallableMock
     uname: mock.NonCallableMock
     ipv6_missing: mock.NonCallableMock
+    os_release: mock.NonCallableMock
 
     def install(self, *names: str) -> None:
         for name in names:
@@ -86,7 +89,7 @@ class Machine:
 
 @pytest.fixture
 def machine(canopy_env: CanopyEnv, tmp_path: Path) -> Iterator[Machine]:
-    """An x86_64 machine with IPv6 and nothing installed, run by a user who is not root, with HOME in `canopy_env`."""
+    """An x86_64 Ubuntu machine with IPv6 and nothing installed, run by a user not root, with HOME in `canopy_env`."""
     assert canopy_env.home.is_dir()
     (tmp_path / "bin").mkdir()
     with (
@@ -94,8 +97,9 @@ def machine(canopy_env: CanopyEnv, tmp_path: Path) -> Iterator[Machine]:
         mock.patch.object(os, "geteuid", autospec=True, return_value=1000) as geteuid,
         mock.patch.object(os, "uname", autospec=True, return_value=uname("x86_64")) as host,
         mock.patch.object(canopy_sandbox, "ipv6_missing", autospec=True, return_value=False) as ipv6_missing,
+        mock.patch.object(sandbox, "freedesktop_os_release", autospec=True, return_value=UBUNTU) as os_release,
     ):
-        yield Machine(tmp_path / "bin", tmp_path / "calls.jsonl", geteuid, host, ipv6_missing)
+        yield Machine(tmp_path / "bin", tmp_path / "calls.jsonl", geteuid, host, ipv6_missing, os_release)
 
 
 def uname(machine: str) -> os.uname_result:
@@ -307,6 +311,34 @@ def test_what_is_missing_is_said_and_nothing_else_is_tried(machine: Machine, can
     assert "sudo apt-get install socat ripgrep" in report.todo[1]
     assert report.runtime == ""
     assert not runtime(canopy_env).exists()
+
+
+@pytest.mark.parametrize(
+    ("release", "install"),
+    [
+        ({"ID": "fedora"}, "Install them:\n    sudo dnf install socat ripgrep"),
+        ({"ID": "rocky", "ID_LIKE": "rhel centos fedora"}, "Install them:\n    sudo dnf install socat ripgrep"),
+        ({"ID": "arch"}, "Install them:\n    sudo pacman -S socat ripgrep"),
+        ({"ID": "opensuse-tumbleweed", "ID_LIKE": "opensuse suse"}, "Install them:\n    sudo zypper install socat"),
+        ({"ID": "alpine"}, "Install them:\n    sudo apk add socat ripgrep"),
+        ({"ID": "linuxmint", "ID_LIKE": "ubuntu debian"}, "Install them:\n    sudo apt-get install socat ripgrep"),
+        ({"ID": "nixos"}, "Install them with your package manager, such as:\n    sudo apt-get install socat"),
+        (OSError("no os-release"), "Install them with your package manager, such as:\n    sudo apt-get install"),
+    ],
+)
+def test_what_is_missing_is_installed_by_the_distributions_own_package_manager(
+    machine: Machine,
+    release: dict[str, str] | OSError,
+    install: str,
+) -> None:
+    machine.install("bwrap", "npm", "canopy-sandbox")
+    machine.os_release.side_effect = release if isinstance(release, OSError) else None
+    machine.os_release.return_value = release
+
+    report = sandbox.run_setup(SubprocessRunner(), "linux")
+
+    [todo] = [t for t in report.todo if t.startswith("srt needs socat, ripgrep. ")]
+    assert install in todo
 
 
 def test_a_failed_npm_install_is_reported(machine: Machine) -> None:

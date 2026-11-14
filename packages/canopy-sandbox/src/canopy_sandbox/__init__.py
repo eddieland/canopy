@@ -605,6 +605,25 @@ def load_template(role: str) -> object:
         raise SandboxError(f"the policy template {path} could not be read: {e}") from None
 
 
+def validate_template(role: str) -> None:
+    """Refuse the policy template for `role` as a run would, before any run's paths are known.
+
+    It reads the template, fills each placeholder with no paths, and checks the policy that makes, as `run` does,
+    against what the wrapper denies every run: the run directories, the role caches, and their data directories. What
+    only a run's own paths can break, such as a chore's cwd above them, or a workspace's `.canopy/`, is left to the run.
+    It makes nothing.
+
+    Raises:
+        SandboxError: it is missing, unreadable, or not JSON, names an unknown placeholder or one inside a longer
+            string, or would run with no sandbox, the network open, or another run's directories readable (`check`).
+    """
+    # A run's placeholders, each filled with no paths: their names are `placeholders`'s, whatever it gains.
+    nowhere = Path()
+    names = placeholders(nowhere, [], None, nowhere, cache=nowhere, data=nowhere, reads=[], journal=[], workspace=[])
+    denied = (runs_root(), cache_root(), data_root())
+    check(fill(load_template(role), dict.fromkeys(names, ())), denied, (), unwritable=())
+
+
 def template_path(role: str) -> Path:
     """Return where the policy template for `role` is read from: `$XDG_CONFIG_HOME/canopy/sandbox/ROLE.json`.
 
@@ -727,7 +746,7 @@ def make_run_dir() -> Path:
     Raises:
         SandboxError: the parent directory is not the user's own private directory.
     """
-    root = Path(tempfile.gettempdir()) / f"canopy-sandbox-{os.getuid()}"
+    root = runs_root()
     try:
         root.mkdir(mode=0o700, exist_ok=True)
         info = root.lstat()
@@ -743,6 +762,15 @@ def make_run_dir() -> Path:
     (run_dir / "pid.new").write_text(f"{os.getpid()}\n", encoding="utf-8")
     (run_dir / "pid.new").replace(run_dir / "pid")
     return run_dir
+
+
+def runs_root() -> Path:
+    """The directory that holds each run's own directory: this user's, under the system temp directory.
+
+    Returns:
+        The directory. It may not exist.
+    """
+    return Path(tempfile.gettempdir()) / f"canopy-sandbox-{os.getuid()}"
 
 
 def check_socket_room(tmp: Path) -> None:

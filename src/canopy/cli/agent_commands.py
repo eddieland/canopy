@@ -27,15 +27,6 @@ EXAMPLE_KEY = "PROJ-1"
 #: The PR an example reviewer's title names.
 EXAMPLE_PR = "https://github.com/owner/repo/pull/1"
 
-#: The wrapper's role for each command a run in a sandboxed repository starts in it (DESIGN §24).
-_SANDBOX_ROLES: dict[str, sandboxing.Role] = {
-    "worker": "worker",
-    "private worker": "worker",
-    "planner": "worker",
-    "reviewer": "review",
-    "setup": "setup",
-}
-
 
 @dataclass(frozen=True)
 class Key:
@@ -131,7 +122,7 @@ def _sandboxed(found: Sequence[Command], runtime: config.Runtime, key: Key, defi
     named = ", ".join(repos)
     wrapped: list[Command] = []
     for command in found:
-        role = _SANDBOX_ROLES.get(command.role)
+        role = sandboxing.COMMAND_ROLES.get(command.role)
         if role is None:
             continue
         argv = sandboxing.wrap(runtime, repos, role, command.argv, None if role == "setup" else definitions_dir)
