@@ -9,7 +9,7 @@ import pytest
 
 from canopy.core.vocab import TickStatus
 from canopy.infra import tracing
-from tests.canopy.helpers import KEY, decides, listed, spans
+from tests.canopy.helpers import KEY, calls, decides, listed, spans
 from tests.canopy.scenario_helpers import dispatches, fails
 
 if TYPE_CHECKING:
@@ -100,31 +100,47 @@ def test_a_dry_tick_s_trace_holds_a_moment_for_each_decision_it_recorded(scenari
         if e["name"] == "decision"
     }
     assert sorted(moments) == sorted(d.id for d in ticked.decisions)
-    by_action = {d.action: (d, *moments[d.id]) for d in ticked.decisions}
-    # Each of the overseer's is a moment in the tool call that recorded it, in the overseer's process.
-    dispatched, span_name, attributes = by_action["dispatch:implement"]
-    assert span_name == "tools/call dispatch"
-    assert attributes == {
-        "canopy.decision_id": str(dispatched.id),
-        "canopy.kind": "dispatch",
-        "canopy.outcome": "made",
-        "canopy.decider": "overseer",
-    }
-    [(refused, span_name, attributes)] = [v for action, v in by_action.items() if action.startswith("refused:")]
-    assert span_name == "tools/call dispatch"
-    assert attributes == {
-        "canopy.decision_id": str(refused.id),
-        "canopy.kind": "dispatch",
-        "canopy.outcome": "refused",
-        "canopy.guard": refused.action.removeprefix("refused:"),
-        "canopy.decider": "overseer",
-        "canopy.run_kind": "implement",
-    }
-    assert by_action["wait"][1] == "tools/call decide"
+    # Each of the overseer's is a moment in the tool call that recorded it, in the overseer's process: each checked by
+    # its id, so two decisions of one action are each held to it.
+    made = [d for d in ticked.decisions if d.action == "dispatch:implement"]
+    assert made
+    for dispatched in made:
+        assert moments[dispatched.id] == (
+            "tools/call dispatch",
+            {
+                "canopy.decision_id": str(dispatched.id),
+                "canopy.kind": "dispatch",
+                "canopy.outcome": "made",
+                "canopy.decider": "overseer",
+            },
+        )
+    [refused] = [d for d in ticked.decisions if d.action.startswith("refused:")]
+    assert moments[refused.id] == (
+        "tools/call dispatch",
+        {
+            "canopy.decision_id": str(refused.id),
+            "canopy.kind": "dispatch",
+            "canopy.outcome": "refused",
+            "canopy.guard": refused.action.removeprefix("refused:"),
+            "canopy.decider": "overseer",
+            "canopy.run_kind": "implement",
+        },
+    )
+    [waited] = [d for d in ticked.decisions if d.action == "wait"]
+    assert moments[waited.id][0] == "tools/call decide"
     # Canopy's own words alone: never a ticket's key or the overseer's rationale.
     text = (scenario.env.state_dir / tracing.TRACES_FILE_NAME).read_text()
     assert "a-secret-rationale" not in text
     assert "PROJ-2" not in text
+
+
+def test_a_tool_call_refused_for_its_arguments_is_a_failed_span(scenario: Scenario) -> None:
+    scenario.configures("private", telemetry={"traces": "file"})
+    scenario.seen(KEY)
+    # A decision with no ticket is refused for its form, then the overseer decides as it should.
+    scenario.tick(calls("canopy_decide", decisions=[{"action": "wait", "rationale": "r"}]), decides(KEY), dry_run=True)
+    called = [s for s in spans(scenario.env.state_dir / tracing.TRACES_FILE_NAME) if s["name"] == "tools/call decide"]
+    assert sorted(s["status"]["code"] for s in called) == [UNSET, ERROR]
 
 
 def test_a_tick_that_does_not_end_ok_is_a_failed_span(scenario: Scenario) -> None:

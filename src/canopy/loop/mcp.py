@@ -102,9 +102,10 @@ def tool[R: BaseModel, O: tools.Result](
     def call(arguments: Mapping[str, object], opened: Opener) -> tools.Outcome[O]:
         if os.environ.get(conversation.RUN_ID_ENV):
             raise tools.Refused(_inside_run())
-        asked = request.model_validate(arguments)
         with opened() as ctx, tracing.span(f"tools/call {name}", server=True) as traced:
             traced.set_standard({"gen_ai.operation.name": "execute_tool", "gen_ai.tool.name": name})
+            # Inside the span, so a call refused for its arguments is a failed span in the trace too.
+            asked = request.model_validate(arguments)
             tools.running_tick(ctx)
             return do(ctx, asked)
 
