@@ -144,8 +144,11 @@ class Fake:
     #: How many requests next, of any operation, are answered with the error GitHub sends, with a 200, for a query it
     #: failed to run, as one past its time limit.
     went_wrong: int = 0
-    # PRs' numbers a batch that names one is answered with a 502 for, as a query too heavy to answer in time is.
+    #: PRs' numbers a batch that names one, and asks for the pages a PR is read in, is answered with a 502 for, as a
+    #: query too heavy to answer in time is; in smaller pages, GitHub answers it.
     heavy: set[int] = field(default_factory=set)
+    #: PRs' numbers a batch that names one is answered with a 502 for, whatever pages it asks for.
+    too_heavy: set[int] = field(default_factory=set)
     seen: list[tuple[str, str, dict[str, Any]]] = field(default_factory=list)
     next_id: int = 9000
 
@@ -167,7 +170,9 @@ class Fake:
         return None
 
     def names_heavy(self, variables: Mapping[str, Any]) -> bool:
-        return any(variables[f"k{i}"] in self.heavy for i in range(len(variables) // 3))
+        named = {v for k, v in variables.items() if re.fullmatch(r"k\d+", k)}
+        whole = variables["threads"] == read_module.PAGES.threads
+        return bool(named & self.too_heavy) or (whole and bool(named & self.heavy))
 
     def handle(self, document: str, variables: dict[str, Any]) -> Mapping[str, Any]:  # noqa: C901, PLR0911, PLR0912, PLR0915
         match = re.match(r"\s*(?:query|mutation)\s+(\w+)", document)
@@ -847,7 +852,7 @@ def test_a_query_github_refuses_whole_reads_none_of_its_prs(github: tuple[Fake, 
     code, lines, err = read(url, {"prs": [PR]})
     assert (code, lines) == (1, [{"kind": "end", "prs": []}])
     assert "HTTP 502: bad gateway" in err
-    assert fake.ops().count("PullRequests") == 3, "a query GitHub fails to answer is sent again, twice"
+    assert fake.ops().count("PullRequests") == 1 + 3, "then in smaller pages, which are sent again, twice"
 
 
 def test_a_query_github_answers_with_its_unicorn_is_sent_again(github: tuple[Fake, str]) -> None:
@@ -861,7 +866,7 @@ def test_a_query_github_answers_with_its_unicorn_is_sent_again(github: tuple[Fak
 
 def test_a_unicorn_is_named_rather_than_quoted(github: tuple[Fake, str]) -> None:
     fake, url = github
-    fake.unicorns = 3
+    fake.unicorns = 4
     code, _, err = read(url, {"prs": [PR]})
     assert code == 1
     assert f"cannot read {PR}: HTTP 502: GitHub's error page" in err
@@ -879,7 +884,7 @@ def test_a_query_github_failed_to_run_is_sent_again(github: tuple[Fake, str]) ->
 
 def test_a_query_github_fails_to_run_each_time_says_so_and_keeps_its_request_id(github: tuple[Fake, str]) -> None:
     fake, url = github
-    fake.went_wrong = 3
+    fake.went_wrong = 4
     code, lines, err = read(url, {"prs": [PR]})
     assert (code, lines) == (1, [{"kind": "end", "prs": []}])
     assert f"cannot read {PR}: GitHub failed to run the query, likely a timeout or a brief outage on its side" in err
@@ -913,7 +918,7 @@ def test_an_error_page_answered_as_a_success_is_named_and_sent_again(github: tup
     code, _, err = read(url, {"prs": [PR]})
     assert code == 1
     assert f"cannot read {PR}: GitHub's reply is not JSON: GitHub's error page" in err
-    assert fake.ops().count("PullRequests") == 3
+    assert fake.ops().count("PullRequests") == 1 + 3
 
 
 def test_a_query_whose_reply_is_cut_off_is_sent_again(github: tuple[Fake, str]) -> None:
@@ -940,7 +945,7 @@ def test_a_query_whose_connection_breaks_each_time_is_named_and_the_read_still_e
     assert (code, lines) == (1, [{"kind": "end", "prs": []}])
     assert f"cannot read {PR}: the connection to {url.removesuffix('/graphql')} broke: " in err
     assert message in err
-    assert fake.ops().count("PullRequests") == 3
+    assert fake.ops().count("PullRequests") == 1 + 3
 
 
 def test_a_server_error_whose_reply_is_cut_off_is_still_one() -> None:
@@ -968,13 +973,47 @@ def test_a_batch_github_cannot_answer_is_read_in_halves_down_to_the_pr_it_cannot
     for n in numbers:
         fake.pulls["acme", "api", n] = Pull(node=f"PR_{n}")
     prs = [PR, *(f"https://github.com/acme/api/pull/{n}" for n in numbers)]
-    fake.heavy.add(12)
+    fake.too_heavy.add(12)
     code, lines, err = read(url, {"prs": prs})
     assert code == 1
     assert lines[-1]["prs"] == [p for p in prs if not p.endswith("/12")]
     assert "cannot read https://github.com/acme/api/pull/12: HTTP 502" in err
-    # Seven PRs, then 7 into 3 and 4, 4 into 2 and 2, 2 into 1 and 1: only the query of #12 alone is tried three times.
-    assert fake.ops().count("PullRequests") == 7 + 2
+    # Seven PRs, then 7 into 3 and 4, 4 into 2 and 2, 2 into 1 and 1; then #12 alone in smaller pages, tried 3 times.
+    assert fake.ops().count("PullRequests") == 7 + 3
+
+
+def test_a_pr_github_cannot_answer_alone_is_read_in_smaller_pages_as_whole(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    pull = fake.pulls["acme", "api", 7]
+    pull.threads += [
+        Thread(id=f"PRRT_{n}", path="a.py", line=n, comments=[Comment(id=600 + 10 * n + i, body="x") for i in range(3)])
+        for n in range(3, 8)
+    ]
+    pull.comments = [Comment(id=n, body="y") for n in (701, 702, 703)]
+    _, whole, _ = read(url, {"prs": [PR]})
+    fake.seen.clear()
+    fake.heavy.add(7)
+    code, lines, _ = read(url, {"prs": [PR]})
+    assert code == 0
+    assert lines == whole
+    sizes = [(v["threads"], v["comments"]) for op, _, v in fake.seen if op in {"PullRequests", "Threads"}]
+    small = (read_module.SMALL_PAGES.threads, read_module.SMALL_PAGES.comments)
+    assert sizes[0] == (read_module.PAGES.threads, read_module.PAGES.comments)
+    assert sizes[1:] == [small] * (len(sizes) - 1)
+    assert fake.ops().count("PullRequests") == 2
+    assert "Threads" in fake.ops(), "its later pages of threads are small too"
+
+
+def test_a_pr_github_cannot_answer_in_a_batch_is_read_in_smaller_pages_once_alone(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    fake.pulls["acme", "api", 8] = Pull(node="PR_8")
+    prs = [PR, "https://github.com/acme/api/pull/8"]
+    fake.heavy.add(7)
+    code, lines, _ = read(url, {"prs": prs})
+    assert code == 0
+    assert lines[-1]["prs"] == prs
+    asked = [(len(v) // 3, v["threads"]) for op, _, v in fake.seen if op == "PullRequests"]
+    assert asked == [(2, 50), (1, 50), (1, 50), (1, 10)]
 
 
 def test_a_batch_github_answers_with_its_unicorn_is_read_in_halves_rather_than_sent_again(
