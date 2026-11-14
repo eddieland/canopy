@@ -262,16 +262,7 @@ def configure(
     Raises:
         ValueError: `traces` is `otlp` and `endpoint` names none.
     """
-    match traces:
-        case "off":
-            target = None
-        case "file":
-            target = str(state_dir / TRACES_FILE_NAME)
-        case "otlp":
-            if not endpoint:
-                msg = "telemetry.traces = 'otlp' needs telemetry.endpoint"
-                raise ValueError(msg)
-            target = endpoint.rstrip("/") + TRACES_PATH
+    target = destination(state_dir, traces, endpoint)
     # The resource is a setting only while spans go somewhere: off is off, whatever workspace it is in.
     settings = _Settings(traces, target, state_dir, dict(resource or {})) if target is not None else None
     # Held across the check and the change: the web server's threads may each open a workspace at once.
@@ -281,6 +272,27 @@ def configure(
         _tracing.stop()
         if settings is not None:
             _tracing.start(settings)
+
+
+def destination(state_dir: Path, traces: Traces, endpoint: str | None) -> str | None:
+    """Where `traces` sends a workspace's spans: a file's path, an endpoint's URL, or nowhere.
+
+    Returns:
+        The path or the URL, or None while traces are off.
+
+    Raises:
+        ValueError: `traces` is `otlp` and `endpoint` names none.
+    """
+    match traces:
+        case "off":
+            return None
+        case "file":
+            return str(state_dir / TRACES_FILE_NAME)
+        case "otlp":
+            if not endpoint:
+                msg = "telemetry.traces = 'otlp' needs telemetry.endpoint"
+                raise ValueError(msg)
+            return endpoint.rstrip("/") + TRACES_PATH
 
 
 @dataclass(frozen=True)
@@ -315,23 +327,24 @@ class _Tracing:
         # Imported here, never at import time: a process that traces nothing never loads OpenTelemetry.
         from opentelemetry import context  # noqa: PLC0415
         from opentelemetry.sdk.trace import TracerProvider  # noqa: PLC0415
-        from opentelemetry.sdk.trace.export import BatchSpanProcessor, SimpleSpanProcessor  # noqa: PLC0415
+        from opentelemetry.sdk.trace.export import SimpleSpanProcessor  # noqa: PLC0415
         from opentelemetry.sdk.trace.sampling import ALWAYS_ON  # noqa: PLC0415
         from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator  # noqa: PLC0415
 
-        from canopy.infra import otlp  # noqa: PLC0415
+        from canopy.infra import exports, otlp  # noqa: PLC0415
 
         # Every span, whatever the parent says: the operator turned tracing on, and a `TRACEPARENT` canopy did not set,
         # from whatever started it, may say its trace is not sampled.
         resource = otlp.resource(settings.state_dir, settings.resource)
         provider = TracerProvider(resource=resource, sampler=ALWAYS_ON)
+        ledger = exports.Ledger(settings.state_dir, exports.Signal.TRACES, settings.target)
         if settings.traces == "otlp":
             # Sent in batches, by a thread of the SDK's, so no step waits on the network; what is left is sent as the
             # process exits, within the exporter's timeout, so an endpoint that is down delays an exit by that alone.
-            provider.add_span_processor(BatchSpanProcessor(otlp.HttpExporter(settings.target)))
+            provider.add_span_processor(otlp.SpanBatcher(otlp.HttpExporter(settings.target, ledger)))
         else:
             # Each span is written as it ends: a detached run may be killed before a batch would have been.
-            provider.add_span_processor(SimpleSpanProcessor(otlp.FileExporter(Path(settings.target))))
+            provider.add_span_processor(SimpleSpanProcessor(otlp.FileExporter(Path(settings.target), ledger)))
         inherited = {key.lower(): value for key, value in os.environ.items() if key in {TRACEPARENT, "TRACESTATE"}}
         parent = TraceContextTextMapPropagator().extract(inherited)
         self.parent = context.attach(parent) if inherited else None

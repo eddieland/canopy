@@ -5,6 +5,9 @@ a request per line, and what an OTLP/HTTP endpoint takes as `application/json`. 
 way, through `append_line` and `Poster`. Only `tracing` and `metrics` import these modules, and only once their signal
 is on, since importing them loads OpenTelemetry's SDK.
 
+Each exporter tells its `exports.Ledger` how each export went, and `SpanBatcher` each span its queue had no room for,
+so what was lost is counted and `canopy status` can say whether each signal is taken.
+
 `Poster` is the harness's one network call (TRUST_MODEL T2): made only to the endpoint the operator names in their own
 config, carrying canopy's spans and metrics and nothing else, through no proxy and following no redirect, so they reach
 that endpoint or none.
@@ -22,16 +25,19 @@ from collections.abc import Mapping, Sequence
 from importlib.metadata import version
 from pathlib import Path
 from typing import TYPE_CHECKING, override
+from urllib.error import HTTPError
 
 # The harness's one network call: this module alone may make it (TRUST_MODEL T2).
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener  # noqa: TID251
 
 from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
+from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter, SpanExportResult
 
 if TYPE_CHECKING:
     from opentelemetry.sdk.trace import ReadableSpan
     from opentelemetry.util.types import AttributeValue
+
+    from canopy.infra import exports
 
 #: Who may read a telemetry file: the operator alone, as the log (TRUST_MODEL T2).
 FILE_MODE = 0o600
@@ -42,6 +48,8 @@ INSTANCE_FILE_NAME = "instance-id"
 #: This process's `service.instance.id` when the workspace's can be neither made nor read: one id, so its spans and
 #: its metrics still name the same instance.
 _PROCESS_INSTANCE = str(uuid.uuid4())
+#: Why a file export failed, for the state file: the line was not written whole.
+UNWRITTEN = "not written"
 #: How long a post may take: the longest an endpoint that is down delays a process's exit, which sends what is left.
 TIMEOUT_SECONDS = 5
 
@@ -49,9 +57,10 @@ TIMEOUT_SECONDS = 5
 class FileExporter(SpanExporter):
     """Appends each batch of spans to a file, as one line of OTLP JSON."""
 
-    def __init__(self, path: Path) -> None:
-        """Append to `path`, which is made, readable by the operator alone, if it is not there."""
+    def __init__(self, path: Path, ledger: exports.Ledger) -> None:
+        """Append to `path`, which is made, readable by the operator alone, if it is not there, and tell `ledger`."""
         self.path = path
+        self.ledger = ledger
 
     @override
     def export(self, spans: Sequence[ReadableSpan]) -> SpanExportResult:
@@ -60,7 +69,9 @@ class FileExporter(SpanExporter):
         Returns:
             Whether the whole line was written.
         """
-        return SpanExportResult.SUCCESS if append_line(self.path, encoded(spans)) else SpanExportResult.FAILURE
+        written = append_line(self.path, encoded(spans))
+        self.ledger.noted(took=written, why=UNWRITTEN)
+        return SpanExportResult.SUCCESS if written else SpanExportResult.FAILURE
 
     @override
     def shutdown(self) -> None:
@@ -70,9 +81,9 @@ class FileExporter(SpanExporter):
 class HttpExporter(SpanExporter):
     """Posts each batch of spans, as OTLP JSON, to an OTLP/HTTP endpoint's spans URL."""
 
-    def __init__(self, url: str) -> None:
-        """Post to `url`, `<endpoint>/v1/traces`, which config held to `http` or `https`."""
-        self.poster = Poster(url, "traces")
+    def __init__(self, url: str, ledger: exports.Ledger) -> None:
+        """Post to `url`, `<endpoint>/v1/traces`, which config held to `http` or `https`, and tell `ledger`."""
+        self.poster = Poster(url, ledger)
 
     @override
     def export(self, spans: Sequence[ReadableSpan]) -> SpanExportResult:
@@ -86,6 +97,25 @@ class HttpExporter(SpanExporter):
     @override
     def shutdown(self) -> None:
         """Nothing to close: each post opens and closes its own connection."""
+
+
+class SpanBatcher(BatchSpanProcessor):
+    """Sends spans in batches, as OpenTelemetry's processor does, counting each its full queue drops (`exports`)."""
+
+    def __init__(self, exporter: HttpExporter) -> None:
+        """Send through `exporter`, telling its ledger of each span dropped."""
+        super().__init__(exporter)
+        self.ledger = exporter.poster.ledger
+
+    @override
+    def on_end(self, span: ReadableSpan) -> None:
+        """Queue `span` to be sent, as the SDK does, which drops one, saying nothing, when the queue is full."""
+        # The SDK keeps the queue to itself, and counts what it drops only in its own metrics, which canopy does not
+        # read: so the queue is checked as the SDK checks it, before the span goes in.
+        queue = self._batch_processor._queue  # noqa: SLF001
+        if queue.maxlen is not None and len(queue) >= queue.maxlen:
+            self.ledger.dropped()
+        super().on_end(span)
 
 
 def resource(state_dir: Path, extra: Mapping[str, str]) -> Resource:
@@ -168,10 +198,10 @@ def append_line(path: Path, request: Mapping[str, object]) -> bool:
 class Poster:
     """Posts OTLP/JSON export requests to one of an endpoint's URLs: the harness's one network call (TRUST_MODEL T2)."""
 
-    def __init__(self, url: str, signal: str) -> None:
-        """Post to `url`, which config held to `http` or `https`; `signal`, `traces` or `metrics`, names it in logs."""
+    def __init__(self, url: str, ledger: exports.Ledger) -> None:
+        """Post to `url`, which config held to `http` or `https`, telling `ledger`, whose signal names it in logs."""
         self.url = url
-        self.signal = signal
+        self.ledger = ledger
         self._failing = False
 
     def post(self, request: Mapping[str, object]) -> bool:
@@ -190,10 +220,14 @@ class Poster:
             with _OPENER.open(posted, timeout=TIMEOUT_SECONDS) as response:
                 took = 200 <= response.status < 300  # noqa: PLR2004  (HTTP's success range)
                 why = f"HTTP {response.status}"
+        # An answer outside the 2xx range is raised: its status, a number, says why, where the error's type would not.
+        except HTTPError as e:
+            took, why = False, f"HTTP {e.code}"
         # Whatever the network or the endpoint does, telemetry never fails what canopy was doing.
         except Exception as e:  # noqa: BLE001
             took, why = False, type(e).__name__
         self._note(took=took, why=why)
+        self.ledger.noted(took=took, why=why)
         return took
 
     def _note(self, *, took: bool, why: str) -> None:
@@ -202,10 +236,10 @@ class Poster:
             return
         self._failing = not took
         if took:
-            _LOG.info(f"{self.signal} sent again", extra={"endpoint": self.url})
+            _LOG.info(f"{self.ledger.signal} sent again", extra={"endpoint": self.url})
         else:
             _LOG.warning(
-                f"{self.signal} not sent; they are dropped until the endpoint takes them",
+                f"{self.ledger.signal} not sent; they are dropped until the endpoint takes them",
                 extra={"endpoint": self.url, "error": why},
             )
 

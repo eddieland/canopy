@@ -75,6 +75,12 @@ jq -c 'select(.tick_id == 12)' .canopy/canopy.log
 With `telemetry.traces` on, a line logged inside a span also has its `trace_id` and `span_id`, spelled as
 `traces.jsonl` spells them, so a run's lines line up with its trace.
 
+With `telemetry.traces` or `telemetry.metrics` on, `canopy status` ends with a Telemetry section: where each signal
+goes, when its last export was taken, and, while your collector refuses them, that it's not being taken, since when,
+and why (`HTTP 503`). What was lost is counted too: the metrics carry `canopy.telemetry.exports`, by signal and outcome
+(`sent` or `failed`), and `canopy.telemetry.spans.dropped`, for spans the queue had no room for, on the next export
+your collector takes.
+
 Its `loop started` line names the loop's pid. A live tick rotates the log past `retention.log_max_mib`, 50 MiB, to
 `canopy.log.1`, the newest, keeping `retention.log_keep`, three. The overseer's own output for each tick is on
 [the tick's page](ticks#a-ticks-page).

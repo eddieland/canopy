@@ -9,7 +9,8 @@ Every metric canopy records goes through this module, as every span goes through
 A label is one of canopy's closed vocabularies, a `StrEnum` member or a flag, so a label never holds a ticket key, a
 path, or text, and a metric's series stay as few as the vocabularies' words (D132). The one other label is `model`,
 which only the operator's config names. Each metric is named in `INSTRUMENTS`, with its description and, for a
-histogram, its buckets' bounds, so the type checker refuses a name it does not hold.
+histogram, its buckets' bounds, so the type checker refuses a name it does not hold; the counts of telemetry's own
+exports alone are kept by `exports`, so they outlive an export the endpoint did not take.
 
 Counts and histograms are exported as deltas, what changed since the last export: canopy's processes are many and
 short, a detached run's among them, so a collector adds up what each sends. A process sends what is left as it exits.
@@ -23,6 +24,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
+
+from canopy.infra import exports
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -159,16 +162,7 @@ def configure(
     Raises:
         ValueError: `metrics` is `otlp` and `endpoint` names none.
     """
-    match metrics:
-        case "off":
-            target = None
-        case "file":
-            target = str(state_dir / METRICS_FILE_NAME)
-        case "otlp":
-            if not endpoint:
-                msg = "telemetry.metrics = 'otlp' needs telemetry.endpoint"
-                raise ValueError(msg)
-            target = endpoint.rstrip("/") + METRICS_PATH
+    target = destination(state_dir, metrics, endpoint)
     # The resource is a setting only while metrics go somewhere: off is off, whatever workspace it is in.
     settings = _Settings(metrics, target, state_dir, dict(resource or {})) if target is not None else None
     # Held across the check and the change: the web server's threads may each open a workspace at once.
@@ -178,6 +172,27 @@ def configure(
         _metrics.stop()
         if settings is not None:
             _metrics.start(settings)
+
+
+def destination(state_dir: Path, metrics: Metrics, endpoint: str | None) -> str | None:
+    """Where `metrics` sends a workspace's metrics: a file's path, an endpoint's URL, or nowhere.
+
+    Returns:
+        The path or the URL, or None while metrics are off.
+
+    Raises:
+        ValueError: `metrics` is `otlp` and `endpoint` names none.
+    """
+    match metrics:
+        case "off":
+            return None
+        case "file":
+            return str(state_dir / METRICS_FILE_NAME)
+        case "otlp":
+            if not endpoint:
+                msg = "telemetry.metrics = 'otlp' needs telemetry.endpoint"
+                raise ValueError(msg)
+            return endpoint.rstrip("/") + METRICS_PATH
 
 
 @dataclass(frozen=True)
@@ -217,23 +232,28 @@ class _Metrics:
 
         from canopy.infra import otlp, otlp_metrics  # noqa: PLC0415
 
+        ledger = exports.Ledger(settings.state_dir, exports.Signal.METRICS, settings.target)
         exporter: MetricExporter = (
-            otlp_metrics.MetricHttpExporter(settings.target)
+            otlp_metrics.MetricHttpExporter(settings.target, ledger)
             if settings.metrics == "otlp"
-            else otlp_metrics.MetricFileExporter(Path(settings.target))
+            else otlp_metrics.MetricFileExporter(Path(settings.target), ledger)
         )
         reader = PeriodicExportingMetricReader(exporter, export_interval_millis=EXPORT_EVERY_MILLIS)
         provider = MeterProvider(
             resource=otlp.resource(settings.state_dir, settings.resource),
             metric_readers=[reader],
         )
+        # Counts made before metrics were on had nothing to carry them: they start from here.
+        exports.forget()
         self.settings = settings
-        self.provider, self.meter = provider, provider.get_meter("canopy")
+        self.provider, self.meter = provider, provider.get_meter(otlp_metrics.SCOPE)
 
     def stop(self) -> None:
         """Send what is left, close the provider, if any, and record nothing more."""
         if self.provider is not None:
+            # Its last export carries what is left of the counts of exports; what it could not carry is dropped.
             self.provider.shutdown()
+            exports.forget()
         self.settings, self.provider, self.meter = None, None, None
         self.counters.clear()
         self.histograms.clear()
