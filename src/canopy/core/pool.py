@@ -28,7 +28,19 @@ from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 
 from canopy.core import db, hostgit, records
-from canopy.core.pools import AVAILABLE, QUARANTINED, Lease, PoolError, Process, ReturnOutcome, Slot, holder_for
+from canopy.core.pools import (
+    AVAILABLE,
+    QUARANTINED,
+    Lease,
+    PoolError,
+    Process,
+    ReturnOutcome,
+    Slot,
+    given_back,
+    holder_for,
+    taken,
+)
+from canopy.core.vocab import PoolKind
 from canopy.infra import cwds, lock, procs
 
 POOLS_DIR = "pools"
@@ -103,7 +115,7 @@ class CanopyPool:
             PoolError: The declared slots are all busy, none can be reused and the pool is at its bound, or the slot
                 could not be fetched, reset, made, or seeded.
         """
-        return self._lease(holder_for(key), base=base, fetch=True, refuse_busy=True)
+        return taken(PoolKind.CANOPY, self._lease(holder_for(key), base=base, fetch=True, refuse_busy=True))
 
     def lease_as(self, holder: str, *, base: str | None = None, fetch: bool = True) -> Lease:
         """Lease any slot for `holder`, making one if none can be reused, up to the pool's bound.
@@ -117,7 +129,7 @@ class CanopyPool:
             PoolError: No slot can be reused and the pool is at its bound, or the slot could not be fetched, reset,
                 made, or seeded.
         """
-        return self._lease(holder, base=base, fetch=fetch, refuse_busy=False)
+        return taken(PoolKind.CANOPY, self._lease(holder, base=base, fetch=fetch, refuse_busy=False))
 
     def return_slot(self, path: Path, *, lease_id: str, lease_holder: str) -> ReturnOutcome:
         """Return slot `path` only if it is still held under this exact lease, forced.
@@ -137,8 +149,8 @@ class CanopyPool:
         with self._locked():
             row = self._row(path)
             if row is None or row.lease_holder is None or (row.lease_id, row.lease_holder) != (lease_id, lease_holder):
-                return ReturnOutcome.FAILED
-            return self._free(path, row)
+                return given_back(PoolKind.CANOPY, ReturnOutcome.FAILED)
+            return given_back(PoolKind.CANOPY, self._free(path, row))
 
     def release(self, path: Path) -> ReturnOutcome:
         """Return slot `path` only if a failed seeding still holds it (`QUARANTINED`), as `return_slot` frees a lease.
@@ -156,8 +168,8 @@ class CanopyPool:
         with self._locked():
             row = self._row(path)
             if row is None or row.lease_id is not None or row.lease_holder != QUARANTINED:
-                return ReturnOutcome.FAILED
-            return self._free(path, row)
+                return given_back(PoolKind.CANOPY, ReturnOutcome.FAILED)
+            return given_back(PoolKind.CANOPY, self._free(path, row))
 
     def destroy(self, path: Path) -> str | None:
         """Remove slot `path` if nothing in it could be lost: unleased, idle, clean, and merged.

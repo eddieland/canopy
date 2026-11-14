@@ -56,7 +56,7 @@ from canopy.core import (
     run_inbox,
     run_result,
 )
-from canopy.infra import logs
+from canopy.infra import logs, tracing
 from canopy.loop import chore_tools, observation_tools, readback, review_tools, tools, waiting
 from canopy.runs import epic_run, task_run, worker
 
@@ -92,7 +92,8 @@ def tool[R: BaseModel, O: tools.Result](
 ) -> Tool:
     """Make verb `do` a tool, taking `request` as its arguments and answering with `result`, with `hints` for a client.
 
-    Every call is refused inside a run, and outside a running tick.
+    Every call is refused inside a run, and outside a running tick. Each is a span, `tools/call <name>`, opened once the
+    workspace has turned tracing on, so what the verb records, such as a decision, is an event in the tick's trace.
 
     Returns:
         The tool.
@@ -101,8 +102,10 @@ def tool[R: BaseModel, O: tools.Result](
     def call(arguments: Mapping[str, object], opened: Opener) -> tools.Outcome[O]:
         if os.environ.get(conversation.RUN_ID_ENV):
             raise tools.Refused(_inside_run())
-        asked = request.model_validate(arguments)
-        with opened() as ctx:
+        with opened() as ctx, tracing.span(f"tools/call {name}", server=True) as traced:
+            traced.set_standard({"gen_ai.operation.name": "execute_tool", "gen_ai.tool.name": name})
+            # Inside the span, so a call refused for its arguments is a failed span in the trace too.
+            asked = request.model_validate(arguments)
             tools.running_tick(ctx)
             return do(ctx, asked)
 

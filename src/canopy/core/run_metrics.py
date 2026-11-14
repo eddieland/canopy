@@ -40,7 +40,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from canopy.core import records, sql
-from canopy.core.vocab import Decider, OverseerRunStatus, Phase, StartStatus, TickStatus
+from canopy.core.vocab import Decider, OverseerRunStatus, Phase, RunKind, StartStatus, TickStatus
 from canopy.infra import metrics
 
 if TYPE_CHECKING:
@@ -182,6 +182,22 @@ def decisions(conn: sqlite3.Connection, tick_id: int, *, dry_run: bool) -> None:
         metrics.count("canopy.decisions", n, kind=kind, outcome=outcome, dry_run=dry_run, **by)
 
 
+def classified(action: str, run_kind: RunKind | None) -> tuple[DecisionKind, DecisionOutcome]:
+    """A decision's kind, read from its `action`'s first word, and its outcome, as `canopy.decisions` labels them.
+
+    `run_kind` is the kind of run a refused dispatch asked for, which makes the refusal a dispatch's.
+
+    Returns:
+        The kind and the outcome.
+    """
+    word = action.partition(":")[0]
+    if word == _REFUSED:
+        kind = DecisionKind.DISPATCH if run_kind is not None else DecisionKind.OTHER
+        return kind, DecisionOutcome.REFUSED
+    kind = DecisionKind(word) if word in _KIND_WORDS else DecisionKind.OTHER
+    return kind, DecisionOutcome.MADE
+
+
 @_never_raises
 def abandoned(conn: sqlite3.Connection, tick_ids: Iterable[int]) -> None:
     """Count the ticks a dead process left, `tick_ids`, their decisions, and their overseer's runs, as one closes them.
@@ -309,17 +325,12 @@ _KIND_WORDS = frozenset(kind.value for kind in DecisionKind)
 
 
 def _decided(row: records.Decision) -> tuple[DecisionKind, DecisionOutcome, Decider | None]:
-    """A decision's labels: its kind, read from its action's first word, its outcome, and who made it.
+    """A decision's labels: its kind and outcome, as `classified` reads them, and who made it.
 
     Returns:
         The kind, the outcome, and the decider, None on a decision from before the journal recorded one.
     """
-    word = row.action.partition(":")[0]
-    if word == _REFUSED:
-        kind = DecisionKind.DISPATCH if row.kind is not None else DecisionKind.OTHER
-        return kind, DecisionOutcome.REFUSED, row.decider
-    kind = DecisionKind(word) if word in _KIND_WORDS else DecisionKind.OTHER
-    return kind, DecisionOutcome.MADE, row.decider
+    return *classified(row.action, row.kind), row.decider
 
 
 #: Each token type, by the column that holds it.

@@ -284,7 +284,10 @@ steps, and so is each run it starts, in a process of its own, linked to the step
 starts is given the current span as `TRACEPARENT`. A run's span says what canopy chose for it (its role, kind, attempt,
 model, and sandbox), and a tick or run that ends in a failing status is a failed span, as one that raised is. Each
 command canopy runs and waits for is a span, named for its program and subcommand, `git fetch`, with its exit code,
-never its other arguments or what it read or printed. Each span
+never its other arguments or what it read or printed. A moment inside a step is an event on its span: each decision
+recorded (its id, kind, outcome, decider, and a refusal's guard), each lease taken or returned, and each process group
+killed, by a timeout or not. Each of the overseer's tool calls is a span in canopy's MCP server, under the overseer's
+run, so a decision it records is in the tick's trace. Each span
 adds up the journal queries run under it and how long they took, and a query slower than 50 ms is a span of its own,
 holding its SQL, which is canopy's code alone, never a value bound to it. Within a run, the overseer's included, each
 model call and each tool call is a span, at the times the runtime printed, under OpenTelemetry's conventions for
