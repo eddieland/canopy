@@ -974,8 +974,8 @@ those credentials is the next step (HOST_ISOLATION §8); until then this risk is
 corporate proxy, which `srt` forwards through, `srt` makes no address checks and the proxy's rules are the only ones. A
 chore steered by what it read can put up to 20 findings of its choosing in front of the operator and into `notify.cmd`,
 wherever that sends them, and a finding's link can carry data in its URL. A steered agent likewise chooses up to 500
-characters per attention item, and 300 per worker summary and question, that a sink puts in front of whoever reads its
-destination.
+characters per attention item, 300 per worker summary and question, and 2,000 per summary of a chore whose table sends
+it whole (`whole_summary`), that a sink puts in front of whoever reads its destination.
 A steered reviewer can put what it read into its findings, which reach the operator and, through `resume`, a worker on
 that ticket, who can push and comment; the worker reads them as data, as it reads any review comment. A write tool
 the operator's runtime grants anyway, on GitHub's server or another the tracker's rules do not cover, under a name the

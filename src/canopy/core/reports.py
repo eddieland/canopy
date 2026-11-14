@@ -4,7 +4,8 @@ Health, spend, agent memory, the config's settings, and what each agent is offer
 spend --json`, `canopy memory lessons`, `proposals`, and `list` with `--json`, `canopy config show --json`, and `canopy
 agents --json` print them, and an agent reads them through tools of the same names, `canopy_reports_health` and so on,
 which `canopy _mcp --reports` serves (DESIGN §27), beside the read-back of the journal as text that `loop.readback`
-holds: a tick's decisions, a run, and a chore. The server is named for what it serves, not for whom: a chore's run is
+holds, a tick's decisions, a run, and a chore, and the report of what waits on the operator, which `loop.waiting`
+holds. The server is named for what it serves, not for whom: a chore's run is
 the one given it today. Both build a request here and call its function, in the style of the overseer's verbs
 (`loop.tools`), so a tool and its command take the same bounds and say the same text. None of them writes to the
 journal; `agents` writes the definitions snapshot a run would, for the runtime to read.
@@ -63,6 +64,7 @@ SHOW_RUN = "show-run"
 SHOW_CHORE = "show-chore"
 CONFIG_SHOW = "config-show"
 AGENTS = "agents"
+WAITING = "waiting"
 TOOLS = (
     HEALTH,
     SPEND,
@@ -74,6 +76,7 @@ TOOLS = (
     SHOW_CHORE,
     CONFIG_SHOW,
     AGENTS,
+    WAITING,
 )
 
 

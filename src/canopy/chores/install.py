@@ -211,14 +211,16 @@ def _render(name: str, table: Mapping[str, object]) -> str:
 
 
 def _value(value: object) -> str:
-    """Return `value`, a string, integer, or list of strings as a chore's table holds them, as TOML.
+    """Return `value`, a string, switch, integer, or list of strings as a chore's table holds them, as TOML.
 
     Raises:
         InstallError: it is something else, which no example's table holds.
     """
     if isinstance(value, str):
         return _string(value)
-    if isinstance(value, int) and not isinstance(value, bool):
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int):
         return str(value)
     if isinstance(value, list):
         return "[" + ", ".join(_value(item) for item in value) + "]"

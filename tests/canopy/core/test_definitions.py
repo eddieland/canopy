@@ -504,6 +504,7 @@ CHORE_AGENTS: Mapping[str, tuple[Sequence[str], Sequence[str]]] = {
         ),
     ),
     "canopy-memory-tickets": ((), (reports.MEMORY_LESSONS, reports.MEMORY_PROPOSALS, reports.MEMORY_LIST)),
+    "canopy-briefing": ((), (reports.WAITING,)),
 }
 
 

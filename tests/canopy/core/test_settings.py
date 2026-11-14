@@ -100,6 +100,7 @@ def test_text_commands_and_paths_are_left_out(canopy_env: CanopyEnv, capsys: pyt
         "chores.build-health.days",
         "chores.build-health.max_findings",
         "chores.build-health.timeout_minutes",
+        "chores.build-health.whole_summary",
     }
     days = keys["chores.build-health.days"]
     assert (days["value"], days["set_in"], days["choices"][:2]) == (["mon", "tue"], "private", ["mon", "tue"])

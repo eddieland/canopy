@@ -90,6 +90,10 @@ most once per that many minutes; anything that needs you goes at once and takes 
 open items on that interval, even when nothing happened, so a digest that stops arriving tells you the loop did. With
 `digest_min_usd` it waits for spend instead ([details](slack#digests)).
 
+A digest counts; it doesn't judge. No model writes it, which is why you can trust it to arrive. For "ana asked for
+changes on PROJ-1 and it's waiting on you" install the `briefing` chore ([chores](chores)): it reads what waits on you
+and writes a few lines on what matters since its last run, which a sink taking `chores` gets whole.
+
 ## Formats
 
 `format` decides what a sink reads on stdin.
