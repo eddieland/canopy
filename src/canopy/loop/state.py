@@ -482,6 +482,12 @@ def shared_block(state: OverseerState) -> str:
         The section as Markdown, its state as a fenced JSON block, ending with a blank line.
     """
     shared: dict[str, object] = {k: v for k, v in state.items() if k not in SUBJECT_KEYS}
+    # A slot's holder names a ticket, which may be another subject's (TRUST_MODEL T1): the shared part says only that
+    # the slot is held, and since when.
+    shared["repositories"] = [
+        {**r, "leased_slots": [{k: v for k, v in s.items() if k != "lease_holder"} for s in r["leased_slots"]]}
+        for r in state["repositories"]
+    ]
     observed = state["observations"]
     shared["observations"] = {
         "max_age_minutes": observed["max_age_minutes"],

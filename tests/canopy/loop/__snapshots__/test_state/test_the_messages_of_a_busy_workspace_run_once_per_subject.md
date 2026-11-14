@@ -47,7 +47,6 @@ This tick runs you once for each subject: a ticket, a PR to review, or the due c
       "leased_slots": [
         {
           "path": "/workspace/slots/repo-2",
-          "lease_holder": "canopy:PROJ-2",
           "leased_at": "2026-10-16T09:55Z"
         }
       ]

@@ -69,6 +69,7 @@ def test_the_messages_of_a_busy_workspace_run_once_per_subject(
             reconciled=reconcile.Reconciled(capacity, {"repo": leased}),
         )
     [shared] = {message.split("## Subject\n", 1)[0] for _, message in said}
+    assert "lease_holder" not in shared, "a slot's holder names a ticket, which may be another subject's"
     shown = [f"# {subject.name}\n\n{indented(message.removeprefix(shared))}" for subject, message in said]
     whole = "\n".join([f"# Shared by every run\n\n{indented(shared)}", *shown])
     assert whole.replace(str(canopy_env.root), WORKSPACE) == markdown_snapshot
