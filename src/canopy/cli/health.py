@@ -1,4 +1,8 @@
-"""`canopy health`: how the agent runs of the last days ended, the newest failures and their causes, and refusals."""
+"""`canopy health`: how the agent runs of the last days ended, the newest failures and their causes, and refusals.
+
+Then, for the operator alone, where the sandbox stands: an agent that read it from inside one of canopy's own runs
+would see the machine as its sandbox shows it.
+"""
 
 from __future__ import annotations
 
@@ -9,13 +13,17 @@ import click
 
 from canopy.cli.common import open_context
 from canopy.cli.spend import cost_text, since_text
-from canopy.core import db, health, reports, spend
+from canopy.core import conversation, db, health, reports, spend
+from canopy.setup import sandbox_health
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from canopy.core.health import Cause, Duration, Failure, Health
+    from canopy.setup.sandbox_health import Standing
 
+#: Where the sandbox stands when no command starts in it: said, never flagged, since the sandbox is opt-in (M26).
+SANDBOX_OFF = "Sandbox: no command starts in canopy-sandbox. It is opt-in (docs/SANDBOX.md)."
 _KIND_WIDTH = 10
 _WHAT_WIDTH = 18
 _STATUS_WIDTH = 20
@@ -45,7 +53,8 @@ def cmd_health(click_ctx: click.Context, *, days: int, as_json: bool) -> int:
     Each kind of run by how it ended and what that cost: the overseer's ticks, workers by kind, plan runs, chores by
     name, and reviews. Then the newest ticks and runs that failed, each with its id for `canopy decisions` or
     `canopy show`, every failure by the harness's note on it, and the overseer's asks a guard refused, by guard. Between
-    them, how long each sort of run took against its timeout.
+    them, how long each sort of run took against its timeout. Last, whether each command starts in canopy-sandbox,
+    and, when any does, whether srt is the pinned one and each template in use loads; left out inside canopy's runs.
     """
     ctx = open_context(click_ctx)
     if as_json:
@@ -58,6 +67,10 @@ def cmd_health(click_ctx: click.Context, *, days: int, as_json: bool) -> int:
         durations = health.durations(ctx.conn, now, days, ctx.config)
     for line in render(found, durations):
         click.echo(line)
+    if _operator():
+        click.echo()
+        for line in render_sandbox(sandbox_health.standing(ctx.config, ctx.runner)):
+            click.echo(line)
     return 0
 
 
@@ -83,6 +96,48 @@ def render(found: Health, durations: Sequence[Duration] = ()) -> list[str]:
         lines.extend(["", *_causes(found.causes)])
     lines.extend(["", *_refusals(found)])
     return lines
+
+
+def render_sandbox(found: Standing) -> list[str]:
+    """Where the sandbox stands as `canopy health` prints it: one line when no command starts in it, else each's.
+
+    When one does, each outside it is flagged, as are an srt other than the pinned one and a template a run would
+    refuse. Nothing is flagged when none does: the sandbox is opt-in.
+
+    Returns:
+        Its lines, without line ends.
+    """
+    if not found.sandboxed:
+        return [SANDBOX_OFF]
+    width = max(len(c.what) for c in found.commands) + 2
+    lines = ["Sandbox, by the config in force (! outside it, or what keeps a run from starting in it):"]
+    for c in found.commands:
+        if c.role is None:
+            state = f"outside the sandbox: {c.key} !"
+        else:
+            state = f"{c.role}.json" + (f" in {', '.join(c.repos)}" if c.repos else "")
+        lines.append(f"  {c.what:<{width}}{state}")
+    if found.srt is None:
+        lines.append(f"  srt {found.pinned}, as pinned")
+    else:
+        lines.append(f"  {found.srt}: run `canopy sandbox setup` !")
+    if loading := [f"{role}.json" for role, problem in found.templates.items() if problem is None]:
+        lines.append(f"  {', '.join(loading)} load{'s' if len(loading) == 1 else ''}")
+    lines.extend(f"  {role}.json: {problem} !" for role, problem in found.templates.items() if problem is not None)
+    return lines
+
+
+def _operator() -> bool:
+    """Whether the operator runs this, not an agent inside one of canopy's own ticks or runs.
+
+    Returns:
+        True outside them.
+    """
+    try:
+        conversation.check_operator()
+    except conversation.Refused:
+        return False
+    return True
 
 
 def _line(kind: str, what: str, status: str, runs: str, spent: str) -> str:

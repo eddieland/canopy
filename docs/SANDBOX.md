@@ -55,7 +55,8 @@ again after each upgrade of canopy: it keeps your templates and installs a new `
   other on `PATH`;
 - checks what needs root, which it never runs, and prints the commands for it (below).
 
-On Linux, `srt` needs bubblewrap, socat, and ripgrep:
+On Linux, `srt` needs bubblewrap, socat, and ripgrep. Setup prints the command of your distribution's package manager
+for the ones missing (`apt-get`, `dnf`, `pacman`, `zypper`, or `apk`); on Debian and Ubuntu:
 
 ```sh
 sudo apt-get install bubblewrap socat ripgrep
@@ -327,6 +328,24 @@ does not, and exits 1. What it left unchecked is a `Note:` below them, as the ne
 
 Then run `canopy loop --ticks 1` on a ticket and read the run's log, `.canopy/runs/<id>.log`: the worker should push
 and open its PR as before.
+
+`canopy health` ends with where the sandbox stands, by the config in force: a line for each command canopy starts,
+with the template it runs under or, marked `!`, the key of one that starts outside the sandbox, such as a
+`private_worker_cmd` left unprefixed; then whether the `srt` the wrapper would run is the one canopy pins, and whether
+each template in use loads as a run would read it. It installs nothing, and runs no sandbox. With no command in the
+sandbox it says so in one line, and flags nothing.
+
+```text
+Sandbox, by the config in force (! outside it, or what keeps a run from starting in it):
+  overseer        outside the sandbox: runtime.overseer_cmd !
+  worker          worker.json
+  private worker  outside the sandbox: runtime.private_worker_cmd !
+  planner         worker.json
+  reviewer        review.json
+  chore           chore.json
+  srt 0.0.81, as pinned
+  worker.json, review.json, chore.json load
+```
 
 From a checkout of canopy, `make sandbox-canary` runs the whole canary against what `canopy sandbox setup` installed:
 every denial and positive control DESIGN §24 lists, with the shipped templates unchanged. It needs to reach

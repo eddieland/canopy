@@ -23,6 +23,7 @@ import sys
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from platform import freedesktop_os_release
 
 import canopy_sandbox
 from canopy_sandbox import credentials
@@ -35,6 +36,15 @@ LINUX_TOOLS = (
     (("bwrap", "--version"), "bubblewrap"),
     (("socat", "-V"), "socat"),
     (("rg", "--version"), "ripgrep"),
+)
+#: The command that installs a package on each family of Linux distributions, by the IDs its os-release names: the
+#: packages above have these names on each.
+PACKAGE_MANAGERS = (
+    (("debian", "ubuntu"), "apt-get install"),
+    (("fedora", "rhel", "centos"), "dnf install"),
+    (("arch",), "pacman -S"),
+    (("opensuse", "suse", "sles"), "zypper install"),
+    (("alpine",), "apk add"),
 )
 # The oldest bubblewrap srt fully supports (its OLDEST_FULLY_SUPPORTED_BWRAP_VERSION). An older one still sandboxes.
 OLDEST_BWRAP = (0, 5, 0)
@@ -152,6 +162,29 @@ def pinned_version() -> str:
     spec = json.loads((canopy_sandbox.RUNTIME_SPEC / "package.json").read_text(encoding="utf-8"))
     version: str = spec["dependencies"][canopy_sandbox.SRT_PACKAGE]
     return version
+
+
+def runtime_problem(runner: procs.Runner) -> str | None:
+    """Say how the srt the wrapper would run differs from the one setup installs, if it does. It installs nothing.
+
+    Returns:
+        The sentence, or None when setup's srt is there, installed from this canopy's lockfile, and answers the pinned
+        version.
+    """
+    target = canopy_sandbox.runtime_dir()
+    version = pinned_version()
+    if _pinned_installed(runner, target, version):
+        return None
+    try:
+        srt = canopy_sandbox.find_srt()
+    except canopy_sandbox.SandboxError:
+        return f"srt is not installed, so no sandboxed run starts; canopy pins {version}"
+    if srt.is_relative_to(target):
+        found = _srt_version(runner, target)
+        if found != version:
+            return f"srt in {target} answers {found or 'nothing'} to --version, not the pinned {version}"
+        return f"srt {version} in {target} was not installed from this canopy's lockfile"
+    return f"the wrapper runs {srt}, from PATH, not the srt {version} canopy pins"
 
 
 def _copy_templates(report: Report) -> None:
@@ -285,7 +318,7 @@ def _install_runtime(runner: procs.Runner, report: Report) -> None:
     version = pinned_version()
     lock = canopy_sandbox.RUNTIME_SPEC / "package-lock.json"
     installed = target / INSTALLED_LOCK
-    if installed.is_file() and installed.read_bytes() == lock.read_bytes() and _srt_version(runner, target) == version:
+    if _pinned_installed(runner, target, version):
         report.runtime = f"kept    srt {version} in {target}"
         return
     if not _answers(runner, ["npm", "--version"]):
@@ -318,6 +351,21 @@ def _install_runtime(runner: procs.Runner, report: Report) -> None:
     report.runtime = f"installed srt {version} in {target}"
 
 
+def _pinned_installed(runner: procs.Runner, target: Path, version: str) -> bool:
+    """Whether setup's last install in `target` finished from this canopy's lockfile, and its srt answers `version`.
+
+    Returns:
+        True when it did and does.
+    """
+    lock = canopy_sandbox.RUNTIME_SPEC / "package-lock.json"
+    installed = target / INSTALLED_LOCK
+    try:
+        same = installed.is_file() and installed.read_bytes() == lock.read_bytes()
+    except OSError:
+        return False
+    return same and _srt_version(runner, target) == version
+
+
 def _srt_version(runner: procs.Runner, target: Path) -> str | None:
     srt = target / "node_modules" / ".bin" / "srt"
     if not srt.is_file():
@@ -339,10 +387,10 @@ def _check_platform(runner: procs.Runner, platform: str, report: Report) -> None
         return
     missing = [package for args, package in LINUX_TOOLS if not _answers(runner, list(args))]
     if missing:
-        packages = " ".join(missing)
+        install = _install_command()
+        how = "Install them" if install else "Install them with your package manager, such as"
         report.todo.append(
-            f"srt needs {', '.join(missing)}. Install them with your package manager, such as:\n"
-            f"    sudo apt-get install {packages}",
+            f"srt needs {', '.join(missing)}. {how}:\n    sudo {install or 'apt-get install'} {' '.join(missing)}",
         )
     if "bubblewrap" not in missing:
         _check_bwrap_version(runner, report)
@@ -352,6 +400,24 @@ def _check_platform(runner: procs.Runner, platform: str, report: Report) -> None
     machine = os.uname().machine
     if machine not in SECCOMP_MACHINES:
         report.todo.append(NO_SECCOMP.format(machine=machine, machines=" and ".join(SECCOMP_MACHINES)))
+
+
+def _install_command() -> str | None:
+    """Return the command that installs a package on the Linux distribution this runs on, by its os-release.
+
+    Returns:
+        The command without its packages, such as `dnf install`, or None for a distribution `PACKAGE_MANAGERS` does
+        not know, or no os-release.
+    """
+    try:
+        release = freedesktop_os_release()
+    except OSError:
+        return None
+    for name in (release.get("ID", ""), *release.get("ID_LIKE", "").split()):
+        for distributions, command in PACKAGE_MANAGERS:
+            if name in distributions:
+                return command
+    return None
 
 
 def _check_bwrap_version(runner: procs.Runner, report: Report) -> None:
