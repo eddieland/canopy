@@ -195,10 +195,19 @@ def read(state_dir: Path) -> dict[Signal, Record]:
         fields = {
             key: value
             for key in ("sent_at", "failed_at", "error", "dropped_at")
-            if isinstance(value := kept.get(key), str)
+            if isinstance(value := kept.get(key), str) and (key == "error" or _is_time(value))
         }
         found[signal] = Record(to=kept["to"], **fields)
     return found
+
+
+def _is_time(value: str) -> bool:
+    """Return whether `value` reads as a time: one in a file cut short or edited by hand is left out, not raised."""
+    try:
+        datetime.fromisoformat(value)
+    except ValueError:
+        return False
+    return True
 
 
 class _Tally:

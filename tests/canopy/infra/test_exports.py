@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import stat
 from typing import TYPE_CHECKING
 from unittest import mock
@@ -54,6 +55,10 @@ def test_a_new_destination_starts_its_record_anew(tmp_path: Path) -> None:
 def test_a_state_file_that_cannot_be_read_says_nothing_and_fails_nothing(tmp_path: Path) -> None:
     (tmp_path / exports.STATE_FILE_NAME).write_text("not json")
     assert exports.read(tmp_path) == {}
+    # A time that does not read as one is left out, so status does not raise on it.
+    kept = {"to": TO, "sent_at": "x", "failed_at": "2026-11-14T", "error": "HTTP 503"}
+    (tmp_path / exports.STATE_FILE_NAME).write_text(json.dumps({exports.Signal.TRACES.value: kept}))
+    assert exports.read(tmp_path) == {exports.Signal.TRACES: exports.Record(to=TO, error="HTTP 503")}
     exports.Ledger(tmp_path, exports.Signal.TRACES, TO).noted(took=True)
     assert exports.read(tmp_path)[exports.Signal.TRACES].sent_at is not None
     # A state file that cannot be written loses the record, and nothing else.
