@@ -32,9 +32,34 @@ from canopy_github import (
     text,
 )
 
+
+@dataclass(frozen=True)
+class Pages:
+    """How many of a PR's heaviest nodes one query asks for: its review threads, their comments, and its reviews."""
+
+    #: Review threads a page, each with its first page of comments.
+    threads: int
+    #: Comments in a thread's first page, and reviews and conversation comments in the PR's.
+    comments: int
+
+    def variables(self) -> dict[str, object]:
+        """The variables of a query that asks for these pages.
+
+        Returns:
+            The variables, by name.
+        """
+        return {"threads": self.threads, "comments": self.comments}
+
+
+#: The pages a PR is read in.
+PAGES = Pages(threads=50, comments=100)
+#: The pages a PR is read in once GitHub could not answer a query of it alone in `PAGES`, as it cannot one too heavy to
+#: run within its time limit: some 240 comments and reviews a query rather than 5,200. Later pages bring the rest, so
+#: the PR is read as whole.
+SMALL_PAGES = Pages(threads=10, comments=20)
 #: PRs one query reads: GitHub refuses a query that could return more than 500,000 nodes, and each PR asks for some
-#: 5,500 (50 threads of 100 comments, and a page each of reviews, conversation comments, labels, checks, and timeline
-#: events).
+#: 5,500 (`PAGES`' 50 threads of 100 comments, and a page each of reviews, conversation comments, labels, checks, and
+#: timeline events).
 BATCH = 20
 #: The most labels a PR's line carries: canopy refuses a line with more, so a PR with more is not read whole.
 MAX_LABELS = 100
@@ -63,7 +88,7 @@ _THREAD = (
     """
 fragment Thread on PullRequestReviewThread {
   id path line diffSide isOutdated isResolved
-  comments(first: 100) { pageInfo { hasNextPage endCursor } nodes { ...ThreadComment } }
+  comments(first: $comments) { pageInfo { hasNextPage endCursor } nodes { ...ThreadComment } }
 }
 """
     + _COMMENT
@@ -97,9 +122,9 @@ fragment Pull on PullRequest {{
   id url number title state isDraft headRefOid baseRefName mergeable mergeStateStatus createdAt mergedAt closedAt
   author {{ __typename login }}
   labels(first: 100) {{ pageInfo {{ hasNextPage endCursor }} nodes {{ name }} }}
-  reviews(first: 100) {{ pageInfo {{ hasNextPage endCursor }} nodes {{ ...Review }} }}
-  reviewThreads(first: 50) {{ pageInfo {{ hasNextPage endCursor }} nodes {{ ...Thread }} }}
-  comments(first: 100) {{ pageInfo {{ hasNextPage endCursor }} nodes {{ ...PrComment }} }}
+  reviews(first: $comments) {{ pageInfo {{ hasNextPage endCursor }} nodes {{ ...Review }} }}
+  reviewThreads(first: $threads) {{ pageInfo {{ hasNextPage endCursor }} nodes {{ ...Thread }} }}
+  comments(first: $comments) {{ pageInfo {{ hasNextPage endCursor }} nodes {{ ...PrComment }} }}
   commits(last: 1) {{ nodes {{ commit {{ id oid statusCheckRollup {{ contexts(first: 100) {{ ...Contexts }} }} }} }} }}
   timelineItems({_EVENTS}) {{ ...Timeline }}
 }}
@@ -137,10 +162,10 @@ query PrComments($id: ID!, $after: String) {
 
 _THREADS = (
     """
-query Threads($owner: String!, $name: String!, $number: Int!, $after: String) {
+query Threads($owner: String!, $name: String!, $number: Int!, $after: String, $threads: Int!, $comments: Int!) {
   repository(owner: $owner, name: $name) {
     pullRequest(number: $number) {
-      reviewThreads(first: 50, after: $after) { pageInfo { hasNextPage endCursor } nodes { ...Thread } }
+      reviewThreads(first: $threads, after: $after) { pageInfo { hasNextPage endCursor } nodes { ...Thread } }
     }
   }
 }
@@ -209,9 +234,9 @@ def pull_requests(client: Client, refs: Sequence[Ref]) -> dict[str, Pulled]:
     """Read each of `refs`, all on `client`'s host, whole: `BATCH` to a query, then any page past each one's first.
 
     The lines are DESIGN §30's: ids, states, times, and bodies cut at `MAX_BODY`, never a diff or a log. A PR GitHub
-    does not return, or one a later page of fails, is not read whole, and the rest still are. A query of many PRs
-    GitHub answers with a server error is read again in halves rather than sent again whole, as one too heavy to answer
-    in time would fail each time; a query of one PR is sent again.
+    does not return, or one a later page of fails, is not read whole, and the rest still are. A query GitHub answers
+    with a server error is not sent again as it was, as one too heavy to answer in time would fail each time: a query
+    of many PRs is read again in halves, and one of a lone PR in `SMALL_PAGES`, which alone is sent again.
 
     Returns:
         Each PR's read, by its URL.
@@ -219,7 +244,7 @@ def pull_requests(client: Client, refs: Sequence[Ref]) -> dict[str, Pulled]:
     found: dict[str, Pulled] = {}
     for start in range(0, len(refs), BATCH):
         chunk = refs[start : start + BATCH]
-        found |= _read(client, chunk, _ask(client, chunk))
+        found |= _read(client, chunk, _ask(client, chunk, PAGES))
     return found
 
 
@@ -232,32 +257,44 @@ def threads(client: Client, ref: Ref) -> list[Thread]:
     Raises:
         GitHubError: GitHub refused a page, could not be reached, or has no such PR.
     """
-    return list(_threads(client, ref, None))
+    return list(_threads(client, ref, None, PAGES))
 
 
-def _ask(client: Client, refs: Sequence[Ref]) -> Reply | GitHubError:
-    # A batch's halves are its new tries: sending it again whole would spend the connector's time on what may fail
-    # each time.
+def _ask(client: Client, refs: Sequence[Ref], sizes: Pages) -> Reply | GitHubError:
+    # A batch's halves, or a lone PR's smaller pages, are its new tries: sending it again as it was would spend the
+    # connector's time on what may fail each time.
     try:
-        return client.ask(_batch(len(refs)), _variables(refs), retry=len(refs) == 1)
+        return client.ask(_batch(len(refs)), _variables(refs) | sizes.variables(), retry=sizes == SMALL_PAGES)
     except GitHubError as e:
         return e
 
 
-def _read(client: Client, refs: Sequence[Ref], reply: Reply | GitHubError, *, split: bool = True) -> dict[str, Pulled]:
-    """Each of `refs` from the reply to the query that read them, or, for a server error, from its halves' replies.
+def _read(
+    client: Client,
+    refs: Sequence[Ref],
+    reply: Reply | GitHubError,
+    *,
+    sizes: Pages = PAGES,
+    split: bool = True,
+) -> dict[str, Pulled]:
+    """Each of `refs` from the reply to the query that read them in `sizes`, or, for a server error, read again.
+
+    A server error to a query in `PAGES` reads its PRs again, in halves, or, for a lone PR, in `SMALL_PAGES`, unless
+    `split` is false.
 
     Returns:
         Each PR's read, by its URL.
     """
-    if split and isinstance(reply, ServerError) and len(refs) > 1:
-        return _halves(client, refs)
+    if split and isinstance(reply, ServerError) and sizes == PAGES:
+        if len(refs) > 1:
+            return _halves(client, refs)
+        return _read(client, refs, _ask(client, refs, SMALL_PAGES), sizes=SMALL_PAGES)
     if isinstance(reply, GitHubError):
         return {ref.url: Pulled(error=reply) for ref in refs}
     found: dict[str, Pulled] = {}
     for alias, ref in zip(_aliases(len(refs)), refs, strict=True):
         try:
-            found[ref.url] = Pulled(_pull(client, ref, _aliased(reply, alias, ref)))
+            found[ref.url] = Pulled(_pull(client, ref, _aliased(reply, alias, ref), sizes))
         except GitHubError as e:
             found[ref.url] = Pulled(error=e)
     return found
@@ -267,14 +304,14 @@ def _halves(client: Client, refs: Sequence[Ref]) -> dict[str, Pulled]:
     """Read `refs`, whose query GitHub answered with a server error, in two halves, a half that fails split again.
 
     When both halves fail, GitHub is failing whatever it is asked rather than one PR too heavy for a query, and neither
-    is split again: a GitHub that is down is sent three queries a batch, or more for a batch of two or three.
+    is split again, nor read in smaller pages: a GitHub that is down is sent three queries a batch.
 
     Returns:
         Each PR's read, by its URL.
     """
     middle = len(refs) // 2
     halves = (refs[:middle], refs[middle:])
-    replies = [_ask(client, half) for half in halves]
+    replies = [_ask(client, half, PAGES) for half in halves]
     split = not all(isinstance(reply, GitHubError) for reply in replies)
     found: dict[str, Pulled] = {}
     for half, reply in zip(halves, replies, strict=True):
@@ -285,10 +322,14 @@ def _halves(client: Client, refs: Sequence[Ref]) -> dict[str, Pulled]:
 def _batch(count: int) -> str:
     """The query that reads `count` PRs, each under its alias, with its owner, name, and number as variables.
 
+    Its pages are variables too, `Pages.variables`.
+
     Returns:
         The query.
     """
-    params = ", ".join(f"$o{i}: String!, $n{i}: String!, $k{i}: Int!" for i in range(count))
+    params = ", ".join(
+        ["$threads: Int!, $comments: Int!"] + [f"$o{i}: String!, $n{i}: String!, $k{i}: Int!" for i in range(count)],
+    )
     fields = "\n".join(
         f"  {alias}: repository(owner: $o{i}, name: $n{i}) {{ pullRequest(number: $k{i}) {{ ...Pull }} }}"
         for i, alias in enumerate(_aliases(count))
@@ -329,8 +370,10 @@ def _about(error: Mapping[str, object], alias: str) -> bool:
     return not isinstance(path, list) or not path or path[0] == alias
 
 
-def _pull(client: Client, ref: Ref, pr: Mapping[str, object]) -> list[Mapping[str, object]]:
+def _pull(client: Client, ref: Ref, pr: Mapping[str, object], sizes: Pages) -> list[Mapping[str, object]]:
     """Read the rest of one PR from its first page: its `pr` line, checks, reviews, review comments, and PR comments.
+
+    Its later pages of threads are read in `sizes`, as its first was.
 
     Returns:
         The lines, the `pr` line first.
@@ -355,13 +398,13 @@ def _pull(client: Client, ref: Ref, pr: Mapping[str, object]) -> list[Mapping[st
     lines.extend(_checks(client, ref, pr))
     lines.extend(_review(ref, review) for review in more(obj(pr.get("reviews"), "reviews"), reviews_after))
     first = obj(pr.get("reviewThreads"), "reviewThreads")
-    lines.extend(comment for thread in _threads(client, ref, first) for comment in thread.comments)
+    lines.extend(comment for thread in _threads(client, ref, first, sizes) for comment in thread.comments)
     lines.extend(_pr_comment(ref, c) for c in more(obj(pr.get("comments"), "comments"), comments_after))
     return lines
 
 
-def _threads(client: Client, ref: Ref, first: Mapping[str, object] | None) -> Iterator[Thread]:
-    """Each review thread of `ref`, from its first page when in hand, each with every comment.
+def _threads(client: Client, ref: Ref, first: Mapping[str, object] | None, sizes: Pages) -> Iterator[Thread]:
+    """Each review thread of `ref`, from its first page when in hand, each with every comment, a page in `sizes`.
 
     Yields:
         Each thread, in GitHub's order.
@@ -370,7 +413,7 @@ def _threads(client: Client, ref: Ref, first: Mapping[str, object] | None) -> It
     def fetch(after: str | None) -> Mapping[str, object]:
         if after is None and first is not None:
             return first
-        variables = {"owner": ref.owner, "name": ref.name, "number": ref.number, "after": after}
+        variables = {"owner": ref.owner, "name": ref.name, "number": ref.number, "after": after} | sizes.variables()
         repository = obj(client.query(_THREADS, variables).get("repository"), f"repository {ref.owner}/{ref.name}")
         pr = obj(repository.get("pullRequest"), f"pull request {ref.url}")
         return obj(pr.get("reviewThreads"), "reviewThreads")
