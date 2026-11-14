@@ -9,8 +9,9 @@ time. With CANOPY_RUN_ID set, or outside a running tick, it lists no tool and re
 `canopy _mcp --chore`) is one tool, its own chore's history (`chores.history`, DESIGN §19), which `canopy chore history`
 also reads. The reports' (`REPORTS`, `canopy _mcp --reports`) are canopy's read-only reports, health, spend, the memory
 listings, the config's settings, and what each agent is offered, which those commands print with `--json`
-(`core.reports`), and the read-back of a tick's decisions, a run, and a chore (`loop.readback`). Each lists and serves
-its tools only where CANOPY_RUN_ID names a chore's run, and serves nothing of the overseer's. The reviewer's and the
+(`core.reports`), the read-back of a tick's decisions, a run, and a chore (`loop.readback`), and what waits on the
+operator (`loop.waiting`). Each lists and serves its tools only where CANOPY_RUN_ID names a chore's run, and serves
+nothing of the overseer's. The reviewer's and the
 planner's (`git_mode`, `canopy _mcp --git NAME=PATH ...`) are read-only git in the checkouts its command line names, the
 run's own (`core.git_tools`); it opens no workspace, and serves nothing else. A worker's, planner's, reviewer's, or
 one-off task's (`STATUS`, `canopy _mcp --status`) is `status`, its progress (`core.cards`, DESIGN §41), listed only
@@ -56,7 +57,7 @@ from canopy.core import (
     run_result,
 )
 from canopy.infra import logs
-from canopy.loop import chore_tools, observation_tools, readback, review_tools, tools
+from canopy.loop import chore_tools, observation_tools, readback, review_tools, tools, waiting
 from canopy.runs import epic_run, task_run, worker
 
 if TYPE_CHECKING:
@@ -363,6 +364,15 @@ REPORT_TOOLS = (
         "It starts the runtime to ask, so it takes a few seconds.",
         reports.Agents,
         reports.read_agents,
+    ),
+    _report(
+        reports.WAITING,
+        "What waits on the operator, and what happened since a time, as JSON: the attention list as their "
+        "notifications name it, each item marked new when it began since then (attention); each open ticket's open "
+        "PRs, with each reviewer's latest review and the feedback no plan has handled yet, by who wrote it (prs); and "
+        "the counts of ticks, runs, and spend since then (happened).",
+        waiting.Waiting,
+        waiting.read_waiting,
     ),
 )
 

@@ -1,10 +1,10 @@
 # Chores in practice
 
 What engineers may want to use chores for, with worked examples. `build-health.md`, `sentry-triage.md`,
-`canopy-health.md`, `canopy-efficiency.md`, and `memory-tickets.md` in this directory are the
+`canopy-health.md`, `canopy-efficiency.md`, `memory-tickets.md`, and `briefing.md` in this directory are the
 prompts that ship; the rest are ideas to write your own from. The rules are in DESIGN §19.
 
-`canopy chore install <name>` sets up one of the five in the workspace you run it in. It copies the prompt to the
+`canopy chore install <name>` sets up one of the six in the workspace you run it in. It copies the prompt to the
 workspace's `.canopy/chore-prompts/<name>.md`, and the agent the example comes with, if any, from `agents/` here. It
 writes the `[chores.<name>]` table from `<name>.toml` here to its private config, `cwd` set to the workspace root
 where the chore reads canopy's journal, then prints what is left to do, such as the lists to fill in. The copies stay
@@ -100,6 +100,7 @@ Cadence is a suggested `every_minutes` plus a `days`/`hours` window; `when` is t
 | --- | --- | --- | --- | --- |
 | `canopy-health` | Ticks and runs that keep failing, guards the overseer keeps running into, tools that error, each with a setting to tune, a fix, or a feature canopy lacks ([canopy-health.md](canopy-health.md)) | `ticks/<status>`, `runs/<kind>/<what>/<status>`, `refused/<guard>` | 720 min, weekdays 08:00-11:00 | Its own agent, `canopy-introspect`, canopy's health, spend, decisions, run and chore pages, and config reports, no shell |
 | `canopy-efficiency` | Where the week's spend went: MCP servers and skills an agent never uses, tools that fill context, idle ticks, cold starts, cost per ticket done ([canopy-efficiency.md](canopy-efficiency.md)) | `unused/<kind>/<server>`, `heavy/<kind>/<tool>`, `idle` | Weekly, Mondays | Its own agent, `canopy-introspect`, as `canopy-health`, with its agents report |
+| `briefing` | Not findings but a briefing, sent to your sinks whole: what waits on your decision and who is waiting on you, reviewers' feedback no plan has handled by who wrote it, what is stuck, and what changed since the last one ([briefing.md](briefing.md)) | none | 240 min, weekdays 08:00-18:00; `when`: "only when something is new" | Its own agent, `canopy-briefing`, canopy's waiting report, no shell |
 | `memory-tickets` | Workers' notes, proposals, and lessons that should become a ticket: a workaround a fix would make needless, a lesson ready for a repository's `AGENTS.md`, each checked against open tickets and issues ([memory-tickets.md](memory-tickets.md)) | `fix/<repo>/<key>`, `graduate/<repo>/<key>` | Weekly, Mondays | Its own agent, `canopy-memory-tickets`, canopy's three memory listing tools, tracker and GitHub MCP read tools, no shell |
 
 ## Writing a good chore
@@ -259,6 +260,43 @@ timeout_minutes = 15
 - **A finding is a recommendation.** Its title says which kind (`Tune:`, `Disable:`, `Fix:`, `Feature:`), and its
   detail the figures it rests on. Act on it, or answer it with `canopy reply chore:canopy-efficiency '<note>'` ("keep
   the jira server for workers; it is for private tickets"), and the next run leaves it out.
+
+### Worked example: `briefing`
+
+canopy's digest (DESIGN §20) counts what happened, written by no model, so it arrives even when the loop stopped
+thinking. A briefing adds the judgment it leaves out, in a few lines a few times a day: "ana asked for changes on
+PROJ-1 (acme/web#7), new since this morning; PROJ-4's plan has waited on you 2d; 3 PRs wait on reviewers". The prompt
+is in [briefing.md](briefing.md). Keep the digest as the heartbeat; the briefing is a chore, so the overseer may skip
+it, and a model may fail to write it.
+
+```toml
+[chores.briefing]
+prompt = "~/.config/canopy/chores/briefing.md"
+cmd = 'opencode run --agent canopy-briefing --format json --title={title} {prompt}'
+cwd = "~/work/acme"       # the workspace root
+every_minutes = 240
+days = ["mon", "tue", "wed", "thu", "fri"]
+hours = "08:00-18:00"
+when = "Run it when something waits on me the last briefing did not name, or it is a working day old; else skip it."
+whole_summary = true
+timeout_minutes = 10
+```
+
+- **Its summary is the briefing.** It reports no findings: what needs you is on your attention list already. With
+  `whole_summary`, the `chore.ended` event a sink taking `chores` hears of carries the summary whole, a line of it
+  each, as `summary_lines`, and the `text` format and the Slack sink show those lines under the event. Without it, a
+  sink gets the summary cut to one line of 300 characters, as for every other chore.
+- **One report.** [`canopy-briefing`](agents/canopy-briefing.md) is `canopy-chore` with `canopy_reports_waiting`
+  allowed and no shell: the attention list, each item marked new since the last briefing; each open ticket's open PRs
+  with each reviewer's latest review and the feedback no plan has handled, by who wrote it; and the counts of what
+  happened. `canopy waiting --since TIME` prints the same JSON. It needs no MCP server; deny yours for the agent by
+  name, as for canopy's own chores.
+- **Since the last one.** Each run passes the previous `ok` run's end as `since`, and reads that run's summary in its
+  prompt, so it says what is new and leaves out what it already told you, unless it has waited long enough to be stuck.
+- **Not sandboxed.** It reads the journal in `.canopy/`, which the sandbox hides, as for canopy's own chores.
+- **Who reads it.** It words reviewers' comments and ticket titles, text anyone who can comment or file a ticket
+  writes, for your sinks. The prompt keeps it to a few words of its own for each and no URL, but point the sinks taking
+  `chores` only where everyone may read what your PRs' reviewers write.
 
 ### Worked example: `memory-tickets`
 

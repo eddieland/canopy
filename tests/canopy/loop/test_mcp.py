@@ -8,6 +8,7 @@ import sqlite3
 from collections.abc import Iterator, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest import mock
 
@@ -954,6 +955,8 @@ def test_a_chores_history_tool_refuses_what_its_command_refuses(
 
 
 #: Each of canopy's reports a chore reads, as a tool's call and the command that prints the same.
+#: A time the waiting report counts from, the same for its tool and its command.
+SINCE = db.format_time(datetime.now(UTC) - timedelta(days=1))
 REPORT_READS: list[tuple[str, Mapping[str, object], list[str]]] = [
     (reports.HEALTH, {}, ["health", "--json"]),
     (reports.HEALTH, {"days": 30}, ["health", "--json", "--days", "30"]),
@@ -969,6 +972,7 @@ REPORT_READS: list[tuple[str, Mapping[str, object], list[str]]] = [
     (reports.SHOW_CHORE, {"name": "build-health"}, ["show", "chore:build-health"]),
     (reports.CONFIG_SHOW, {}, ["config", "show", "--json"]),
     (reports.AGENTS, {}, ["agents", "--json"]),
+    (reports.WAITING, {"since": SINCE}, ["waiting", "--since", SINCE]),
 ]
 
 
@@ -1081,6 +1085,7 @@ def test_the_reports_refuse_what_their_commands_refuse(overseen: CanopyEnv) -> N
         ("show-chore", {"name": "queue-age"}, "no chore 'queue-age' is configured for this workspace"),
         ("show-chore", {"name": "../x"}, "invalid chore name '../x'"),
         ("config-show", {"json": True}, "json: Extra inputs are not permitted"),
+        ("waiting", {"since": "yesterday"}, "invalid time 'yesterday': must be ISO 8601"),
     ]
     with in_run("chore-2"):
         served = mcp_session(*(tool_call(name, **arguments) for name, arguments, _ in refused), reports=True)

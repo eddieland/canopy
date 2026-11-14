@@ -59,7 +59,7 @@ def test_an_example_that_runs_an_agent_of_canopys_naming_comes_with_it_and_runs_
         assert copied.read_text() == (resources.example_chores_dir() / "agents" / copied.name).read_text()
         assert config.load(canopy_env.root).chores[name].cmd == f"env OPENCODE_CONFIG_DIR={agent_dir} {cmd}"
         came_with += 1
-    assert came_with == 3
+    assert came_with == 4
 
 
 def test_install_writes_the_prompt_and_the_table_and_keeps_the_rest(
@@ -171,7 +171,7 @@ def test_install_lists_the_examples_and_refuses_an_unknown_one_a_missing_file_an
     assert main(["chore", "install"]) == 0
     assert capsys.readouterr().out.split() == install.available()
     assert main(["chore", "install", "nope"]) == 1
-    assert "no example chore named 'nope'; there are: build-health, " in capsys.readouterr().err
+    assert "no example chore named 'nope'; there are: briefing, build-health, " in capsys.readouterr().err
     assert main(["chore", "install", "build-health"]) == 1
     assert f"there is no private config at {canopy_env.private_file}" in capsys.readouterr().err
     canopy_env.write_private(PRIVATE)

@@ -147,7 +147,8 @@ worker started or ended, a plan proposed or approved by its planner, §25, an ep
 `reviews` (§21), `tasks` (a task's run ended, §36), `replies` (a reply read from Slack recorded or refused, below),
 and `loop` (ticks failing and recovering, a sink failing, the month's spend reaching its budget or one of its alerts,
 and each forced push canopy makes to kick a flaky check, §23). Each carries only bounded fields, its text on one
-line. No plan event carries the plan's text. `run.ended` carries a `blocked` run's question, since the needs-human
+line, but for a chore's summary its table sends whole (`whole_summary`), which keeps its lines. No plan event carries
+the plan's text. `run.ended` carries a `blocked` run's question, since the needs-human
 label is not an attention item.
 
 Attention is a diff of state per sink (§14): each sink hears of each open item once, and a sink that was down gets the
@@ -172,7 +173,9 @@ the loop, and a failed delivery starts no window.
 
 A sink with `digest_every_minutes` gets a summary every interval: ticks, runs, what the runs that started in it cost by
 kind (§11), the open attention list, and the workers running. It is sent even when nothing happened: a missing digest
-shows ticks stopped, which canopy cannot report itself. No model writes it; a report needing judgment is a chore (§19).
+shows ticks stopped, which canopy cannot report itself. No model writes it, so it comes when no model can; a report
+needing judgment is a chore (§19). The shipped briefing is one: it reads what waits on the operator, and who on them,
+through the `waiting` report (§27), and its summary, sent whole, says what matters since its last run.
 With `digest_min_usd`, a due digest waits until the runs since the last one cost at least that much: the sink hears of
 spend, at most once an interval, and gives up the heartbeat.
 
@@ -229,7 +232,8 @@ stay in canopy.
   and metrics (D132), and reads no token. The Slack sink does
   both, but runs only as a configured sink, and lint keeps network modules and the sink out of the harness.
 - T6: notifications carry agent- and org-member-written text off the machine. Controls: only bounded fields; Slack
-  escaping. Residual: a steered agent picks text shown in the channel, and a link can carry data.
+  escaping. Residual: a steered agent picks text shown in the channel, and a link can carry data; a chore's summary
+  sent whole is up to 2,000 characters of it.
 - §7: point a sink only where the audience may read what it quotes; keep the secret file the operator's alone, and
   give a bot token only `chat:write`, and a `slack` source's one history scope. Channel readers see what the loop
   does; only the Slack ids a `slack` source lists steer it, by replying (T1).

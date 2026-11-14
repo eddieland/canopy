@@ -290,6 +290,7 @@ cmd = "canopy-connect-jira --site acme.atlassian.net"
 # timeout_minutes = 20
 # workspaces = ["acme"]   # default: every workspace
 # model = "provider/model@low"   # default runtime.models.chore; only for a chore that runs canopy-chore
+# whole_summary = true   # sinks get its summary whole, its lines kept, not cut to one line; for a briefing
 
 # Optional: adversarial reviews of PRs (DESIGN §21). A fresh reviewer reads each new commit and reports to canopy only:
 # it posts nothing on the PR and never approves (D114). Read reviews with `canopy review show`. Point review_cmd at a

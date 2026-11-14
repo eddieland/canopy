@@ -1,0 +1,13 @@
+# Keep this chore out of the sandbox, since it reads the journal in .canopy/; its agent comes with it, and
+# `whole_summary` sends its summary to your sinks whole, a line of it each:
+# https://github.com/eddieland/canopy/blob/main/examples/chores/README.md#worked-example-briefing
+[chores.briefing]
+prompt = "~/.config/canopy/chores/briefing.md"
+cmd = 'opencode run --agent canopy-briefing --format json --title={title} {prompt}'
+cwd = "~"
+every_minutes = 240
+days = ["mon", "tue", "wed", "thu", "fri"]
+hours = "08:00-18:00"
+when = "Run it when something waits on me the last briefing did not name, or it is a working day old; else skip it."
+whole_summary = true
+timeout_minutes = 10

@@ -14,7 +14,7 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db, outbox, runtime_sessions, spend
+from canopy.core import chore_result, db, outbox, runtime_sessions, spend
 from canopy.core.config import ConfigError, load
 from canopy.core.items import Item, fingerprint
 from canopy.notify import journal as notify_journal
@@ -714,6 +714,49 @@ def test_chore_runs_reach_a_sink_that_takes_chores(scenario: Scenario, sink_scri
         scenario.tick()
     [message] = messages(out)
     assert "< chore:check run 1 ended ok (0 findings): all clear\n" in message
+
+
+def test_a_chores_summary_reaches_the_sinks_whole_when_its_table_says_so(
+    scenario: Scenario,
+    sink_script: Path,
+    tmp_path: Path,
+) -> None:
+    prompt = scenario.env.home / "briefing.md"
+    prompt.write_text("Brief me.\n")
+    briefing = {
+        "prompt": str(prompt),
+        "every_minutes": 60,
+        "cmd": "agent run --agent canopy-chore --format json {prompt}",
+        "when": "When anything changed.",
+        "whole_summary": True,
+    }
+    scenario.configures(chores={"briefing": briefing})
+    text, as_json = tmp_path / "text.txt", tmp_path / "json.txt"
+    add_sink(scenario, sink_script, "a", text, format="text", events=["chores"])
+    add_sink(scenario, sink_script, "b", as_json, format="json", events=["chores"])
+    # A new sink starts with no backlog, so a tick first, which sees the sinks.
+    scenario.tick(chore_waits("briefing", "nothing changed"))
+    summary = "Two things wait on you.\n\n- ana   asked for changes on PROJ-1.\n- PROJ-2's plan waits " + "x" * 2000
+    with chore_reports({"status": "ok", "summary": summary[: chore_result.MAX_SUMMARY], "findings": []}):
+        with in_tick(scenario.conn, ends_ok=True):
+            assert not overseer_calls(chore_runs("briefing"), runner=InlineRunner()).error
+            tick_starts(InlineRunner())
+            assert main(["_chore", "1"], runner=InlineRunner()) == 0
+        scenario.tick()
+    [message] = messages(text)
+    lines = message.splitlines()
+    at = lines.index("< chore:briefing run 1 ended ok (0 findings):")
+    # The summary as the run reported it, up to the contract's bound, each line whole, its blank line and doubled
+    # spaces left out.
+    sent = summary[: chore_result.MAX_SUMMARY]
+    first, second = "Two things wait on you.", "- ana asked for changes on PROJ-1."
+    last = "- PROJ-2's plan waits " + "x" * sent.count("x")
+    assert lines[at + 1 : at + 4] == [f"  {first}", f"  {second}", f"  {last}"]
+    assert lines[at + 4] == f"Full list: {scenario.env.state_dir / 'attention.md'}"
+    [event] = json.loads(messages(as_json)[0])["events"]
+    assert event["summary_lines"] == [first, second, last]
+    # The one-line summary stays as every sink had it.
+    assert len(event["summary"]) == outbox.SUMMARY_LIMIT
 
 
 def test_a_finding_the_operator_dismissed_is_marked_so_in_both_formats() -> None:
