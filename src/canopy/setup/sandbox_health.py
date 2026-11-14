@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 
 import canopy_sandbox
 
-from canopy.core import config
+from canopy.core import config, sandboxing
 from canopy.setup import sandbox
 
 if TYPE_CHECKING:
@@ -23,16 +23,6 @@ if TYPE_CHECKING:
 
     from canopy.core.config import Config
     from canopy.infra import procs
-
-#: The wrapper's role `runtime.sandbox_repos` starts each command in, by what it starts, as `canopy config commands`
-#: names it: a worker run's commands, setup, and the reviewer.
-_REPO_ROLES = {
-    "worker": "worker",
-    "private worker": "worker",
-    "planner": "worker",
-    "reviewer": "review",
-    "setup": "setup",
-}
 
 
 @dataclass(frozen=True)
@@ -110,7 +100,7 @@ def _command(runtime: config.Runtime, what: str, key: str, words: Sequence[str])
     if words and Path(words[0]).name == config.SANDBOX_WRAPPER:
         # The wrapper refuses a role it does not know, so the word is kept as it is, to say so.
         return Command(what, key, words[1] if len(words) > 1 else "")
-    if runtime.sandbox_repos and (role := _REPO_ROLES.get(what)) is not None:
+    if runtime.sandbox_repos and (role := sandboxing.COMMAND_ROLES.get(what)) is not None:
         return Command(what, key, role, runtime.sandbox_repos)
     return Command(what, key, None)
 
