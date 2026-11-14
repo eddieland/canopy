@@ -308,7 +308,9 @@ reconcile for one whose process died, and a tick whose process died is counted a
 counted is what the journal holds. A metric that cannot be recorded is logged and lost, never failing what it counts.
 A label is a word of one of canopy's closed vocabularies or a configured model, never a key or text, so series stay
 few. Counts and times go as deltas, which a collector adds up across canopy's many short processes, to
-`<state_dir>/metrics.jsonl` or the same endpoint (D132).
+`<state_dir>/metrics.jsonl` or the same endpoint (D132). Nothing is lost silently: the metrics count each signal's
+exports, taken or not, and the spans a full queue dropped, riding the next export taken; `canopy status` says where
+each signal goes and whether its last export was taken.
 Every span and metric names canopy, its version, and its workspace, by a random id rather than its path, so one
 collector tells workspaces and machines apart, with attributes the operator adds themselves, and no others.
 

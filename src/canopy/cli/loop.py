@@ -29,7 +29,7 @@ from canopy.core import (
     run_models,
 )
 from canopy.core.vocab import ReplyMode, TickStatus
-from canopy.infra import hangup, keys, lock
+from canopy.infra import exports, hangup, keys, lock, metrics, tracing
 from canopy.infra.text import one_line, printable
 from canopy.loop import attention, readback, repeat, reread, tick
 from canopy.loop.render import (
@@ -181,6 +181,7 @@ def cmd_status(click_ctx: click.Context) -> int:
     _print_chores(ctx)
     _print_connectors(ctx)
     _print_sinks(ctx)
+    _print_telemetry(ctx)
     return 0
 
 
@@ -215,6 +216,50 @@ def _print_sinks(ctx: Context) -> None:
         last = f"last delivered {attention.age(s.last_delivery_at)} ago" if s.last_delivery_at else "never delivered"
         failing = f"; {s.failures} failed in a row: {s.last_error}" if s.failures else ""
         click.echo(f"  {s.name}  {last}; {s.waiting} events waiting{failing}")
+
+
+def _print_telemetry(ctx: Context) -> None:
+    """A line per signal, while either is on: where it goes, and whether its exports are taken (DESIGN §12)."""
+    telemetry = ctx.config.telemetry
+    destinations = {
+        exports.Signal.TRACES: tracing.destination(ctx.state_dir, telemetry.traces, telemetry.endpoint),
+        exports.Signal.METRICS: metrics.destination(ctx.state_dir, telemetry.metrics, telemetry.endpoint),
+    }
+    if not any(destinations.values()):
+        return
+    kept = exports.read(ctx.state_dir)
+    click.echo("\nTelemetry:")
+    for signal, to in destinations.items():
+        if to is None:
+            click.echo(f"  {signal}  off")
+            continue
+        record = kept.get(signal)
+        # A record of where the signal went before the operator changed it says nothing of where it goes now.
+        how = _exported(record if record is not None and record.to == to else None, endpoint=to.startswith("http"))
+        click.echo(f"  {signal}  to {to}, {how}")
+
+
+def _exported(record: exports.Record | None, *, endpoint: bool) -> str:
+    """How a signal's exports went, taken by an `endpoint` or written to a file, as `_print_telemetry` says it.
+
+    Returns:
+        The words.
+    """
+    if record is None:
+        return "no export yet"
+    verb = "taken" if endpoint else "written"
+    last = f"last {verb} {attention.age(record.sent_at)} ago" if record.sent_at else f"never {verb}"
+    failed = ""
+    if record.failed_at is not None:
+        why = f" ({record.error})" if record.error else ""
+        failed = f"failed {attention.age(record.failed_at)} ago{why}"
+    if record.failing:
+        said = f"not being {verb}: the last export {failed}; {last}"
+    else:
+        said = f"{verb}, {last}" + (f"; one last {failed}" if failed else "")
+    if record.dropped_at is not None:
+        said += f"; spans last dropped {attention.age(record.dropped_at)} ago, the queue to send them full"
+    return said
 
 
 def _print_replies(ctx: Context) -> None:
