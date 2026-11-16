@@ -298,27 +298,42 @@ test.describe("Starry Skies's stars", () => {
         await storePalette(page, 'dark', 'starry-skies')
     })
 
-    test('prints its stars on both layers, masked, and twinkles the bright ones', async ({ page }) => {
+    test('prints its stars on both layers, masked, twinkles them, and sends its meteors', async ({ page }) => {
         await page.goto('workspace/runs')
         await settled(page)
         for (const layer of await canvasTone(page)) {
             expect(layer.image).toMatch(/^radial-gradient\(/u)
             expect(layer.mask).toMatch(/^linear-gradient\(/u)
         }
-        expect(await twinkle(page)).toBe('twinkle')
+        expect(await skyMotion(page)).toEqual(['star-shimmer', 'twinkle', 'meteor', 'meteor-2'])
     })
 
-    test('holds its stars still under reduced motion', async ({ page }) => {
+    test('holds its stars still and draws no meteor under reduced motion', async ({ page }) => {
         await page.emulateMedia({ reducedMotion: 'reduce' })
         await page.goto('workspace/runs')
         await settled(page)
-        expect(await twinkle(page)).toBe('none')
+        expect(await skyMotion(page)).toEqual(['none', 'none', 'none', 'none'])
+        expect(await page.evaluate(() => getComputedStyle(document.body, '::before').content)).toBe('none')
+    })
+
+    test('draws no meteor on another palette', async ({ page }) => {
+        await storePalette(page, 'dark', 'black')
+        await page.goto('workspace/runs')
+        await settled(page)
+        expect(await skyMotion(page)).toEqual(['none', 'none', 'none', 'none'])
     })
 })
 
-/** The animation the canvas's second layer runs: a palette's twinkle, or none. */
-function twinkle(page: Page): Promise<string> {
-    return page.evaluate(() => getComputedStyle(document.documentElement, '::after').animationName)
+/** The animations the sky runs: the canvas's two layers, then its two meteors, each by name, or none. */
+function skyMotion(page: Page): Promise<string[]> {
+    return page.evaluate(() =>
+        [
+            [document.documentElement, '::before'],
+            [document.documentElement, '::after'],
+            [document.body, '::before'],
+            [document.body, '::after'],
+        ].map(([element, layer]) => getComputedStyle(element as Element, layer as string).animationName),
+    )
 }
 
 /** What the canvas's two tone layers paint, the dots and their swell: each one's background and mask. */

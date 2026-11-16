@@ -68,7 +68,8 @@ export const PALETTE_DESCRIPTIONS: { readonly [T in ResolvedTheme]: Readonly<Rec
         black: 'A near-black canvas, kind to an OLED screen, with no edges and an ultraviolet glow.',
         forest: 'A deep green canvas, the dark side of Sage, with a heather accent.',
         plum: 'A dark wine purple, warmer than indigo, with an orchid accent and the softest corners.',
-        'starry-skies': 'A night blue under a field of stars, a few of them twinkling, and starlight for an accent.',
+        'starry-skies':
+            'A night blue under a field of twinkling stars, a meteor now and then, and starlight for an accent.',
         solarized: "Solarized's dark base tones and its blue, crisp and flat.",
         gruvbox:
             "Gruvbox's dark tones and its bright purple, in mono with hard shadows, like an editor of the nineties.",
