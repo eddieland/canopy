@@ -59,6 +59,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `proposal-change`, `-decline`, `-ask` | A feedback plan's proposal chip: what it does with an item, never a state. |
 | `syntax-key`, `-string`, `-number`, `-literal` | Agent output's JSON keys, strings, numbers, literals; code. |
 | `code-chip`, `code-size` | Inline code's chip, a tint of its own ink, and code's size against its line (Rich text). |
+| `chip-plain` | A plain chip's fill: a tint of its own ink, or the paper where a palette prints chips on it. |
 | `flair-*`, `buddy-*`, `rave-dark` | Fun's own colors (Fun, below), each named in `tokens.css`. Never a status. |
 
 Rules:
@@ -132,8 +133,10 @@ Rules:
   selected row's outline and drop, a field's and an outline button's line in ink, a tone printed on the canvas, the
   primary action pressed into its shadow, a page title dropped in its section's color and lettered, a bubble's balloon
   tail, and a starburst where a cleared item drops its leaf. Each is a shadow, a transform, a background, or drawn
-  beside its box, so it takes no room, and a texture is clear where text sits. Pulp, a comic in four-color print, takes
-  them all; both its sides ink by the same rings, dark's line its cream.
+  beside its box, so it takes no room, and a texture is clear where text sits; a box that clips what overflows it, as a
+  list's cell does, still paints the few pixels past its edge that the ink and a focus ring reach (`clip-reach`), so
+  neither is cut. Pulp, a comic in four-color print, takes them all; both its sides ink by the same rings, dark's line
+  its cream.
   A palette may also give the shell's signature a form of its own, the first place it is felt: the aurora (a gradient
   hairline, a stepped bar of solid blocks, a print strip of those blocks, or a line that blooms), the name (the
   aurora's gradient, on a solid block, on a tilted plate, or glowing), and the nav's highlight (a tint and a bar, a
@@ -699,7 +702,8 @@ reader, so no table repeats them.
   sessions go and what waits on what. A subject's row is its latest run, which says where it stands, and under it
   `Show N earlier runs`, a `Disclosure` that opens the runs before it, each one line in the row's own columns. A ticket
   that asked, got its answer, and asked again is one blocked row, not two. The state filter goes by each subject's
-  latest run, as do the rail's working runs: a blocked run a later one followed waits on nothing. Under the page's
+  latest run, as do the rail's working runs: a blocked run a later one followed waits on nothing, and a subject that
+  waits on the operator is on a question's tint, its whole row, as the rail's is. Under the page's
   description, a line counts what runs against each `[capacity]` limit as the harness counts it, a full one in
   `status-blocked` with `full`. A ticket's page lists its runs flat (`RunsTable`), since every row there is the same
   ticket's.
@@ -780,8 +784,9 @@ reader, so no table repeats them.
   fixed word and a count are muted monospace, never a chip. A chip with a long word in a narrow column cuts it to fit,
   the whole word in its tip; none is stretched to its column. Its color is its `tone`, from the one map of them (`Chip`
   in `src/components/status.tsx`): its color's hairline over the same color's tint, so it holds its edge on a selected
-  row; `plain` in `muted-foreground`, else the status color of the state it marks, or a proposal's own hue. No chip is
-  colored by classes of its own.
+  row, and where a palette inks it, the ink in place of the hairline, never one line inside another. A palette may
+  print a plain one on the paper (`chip-plain`). `plain` in `muted-foreground`, else the status color of the state it
+  marks, or a proposal's own hue. No chip is colored by classes of its own.
 - **A status on a detail page** is its description's first word alone; the identity panel's header names the panel
   and nothing else, so the state is said once. A run's journal says `done` where a tick's and a chore run's say `ok`:
   each is the CLI's word for its own, kept as it prints it, and in a list's row both wear `status-done`.

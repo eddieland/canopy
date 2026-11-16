@@ -30,7 +30,7 @@ import { choreRunRef } from '@/lib/refs'
 import { shortSha, verdictText, verdictTone } from '@/lib/reviews'
 import { ROW_SUBGRID, rowLineFrom } from '@/lib/rows'
 import { commitsLeftOutText, diffAnchor, linesText, rangeSpan, rangeTitle } from '@/lib/run-changes'
-import { RUN_TEXT } from '@/lib/run-state'
+import { inState, RUN_TEXT } from '@/lib/run-state'
 import type { SubjectRuns } from '@/lib/run-state'
 import { taskTitle } from '@/lib/tasks'
 import { cn } from '@/lib/utils'
@@ -38,6 +38,13 @@ import { NO_TICKET, runKind } from '@/lib/words'
 
 // A run's worktrees named in its row before `+N more`: three repositories' worth, on one line in most panels.
 const WORKTREES_SHOWN = 3
+
+// A run's head line sits on its text's baseline rather than each cell's middle: a chip wrapped under another leaves the
+// title on the first line, and the small print beside the title shares its line.
+const ON_BASELINE = 'items-baseline'
+
+// A subject waiting on your answer, its whole row on a question's tint, as the rail's working runs show one.
+const WAITS = 'bg-status-blocked/8'
 
 /**
  * Runs, one row each: state, the run's id (opening its page), the ticket, the run's kind, the ticket's title, cost,
@@ -106,17 +113,24 @@ function RunRow({
     names: ModelNames
 }) {
     return (
-        <ListRow kind={ticket ? 'run' : 'own-run'} className="group/copy" data-testid={`run-${run.id}`}>
+        <ListRow
+            kind={ticket ? 'run' : 'own-run'}
+            className={cn('group/copy', ticket && ON_BASELINE)}
+            data-testid={`run-${run.id}`}
+        >
             <RunBody run={run} ticket={ticket} ownPr={ownPr} names={names} />
         </ListRow>
     )
 }
 
 function SubjectRow({ group, names }: { group: SubjectRuns; names: ModelNames }) {
+    // As the state filter reads it: a running run that asks you a question waits on you too.
+    const className = cn('group/copy', ON_BASELINE, inState(group, 'blocked') && WAITS)
     switch (group.of) {
         case 'worker': {
             return (
                 <Folding
+                    className={className}
                     testId={`run-${group.latest.id}`}
                     earlierTestId={`earlier-runs-${group.latest.ticket_key}`}
                     head={<RunBody run={group.latest} ticket names={names} />}
@@ -129,6 +143,7 @@ function SubjectRow({ group, names }: { group: SubjectRuns; names: ModelNames })
         case 'review': {
             return (
                 <Folding
+                    className={className}
                     testId={`review-${group.latest.id}`}
                     earlierTestId={`earlier-reviews-${group.latest.id}`}
                     head={<ReviewBody review={group.latest} />}
@@ -141,6 +156,7 @@ function SubjectRow({ group, names }: { group: SubjectRuns; names: ModelNames })
         case 'chore': {
             return (
                 <Folding
+                    className={className}
                     testId={`chore-run-${group.chore}-${group.latest.id}`}
                     earlierTestId={`earlier-chore-runs-${group.chore}`}
                     head={<ChoreRunBody chore={group.chore} title={group.title} run={group.latest} />}
@@ -153,7 +169,7 @@ function SubjectRow({ group, names }: { group: SubjectRuns; names: ModelNames })
         case 'task': {
             // A task lists its newest run alone: the ones before it are on the task's page.
             return (
-                <ListRow kind="run" className="group/copy" data-testid={`task-run-${group.task.id}-${group.latest.id}`}>
+                <ListRow kind="run" className={className} data-testid={`task-run-${group.task.id}-${group.latest.id}`}>
                     <TaskRunBody task={group.task} run={group.latest} />
                 </ListRow>
             )
@@ -167,16 +183,18 @@ function Folding({
     earlierTestId,
     head,
     earlier,
+    className,
 }: {
     testId: string
     earlierTestId: string
     head: ReactNode
     earlier: ReactNode[]
+    className: string
 }) {
     const [open, setOpen] = useState(false)
     return (
         <Collapsible asChild open={open} onOpenChange={setOpen}>
-            <ListRow kind="run" className="group/copy" data-testid={testId}>
+            <ListRow kind="run" className={className} data-testid={testId}>
                 {head}
                 {earlier.length > 0 && (
                     <>
@@ -397,7 +415,9 @@ function RunBody({
                 <>
                     <RunLink id={run.id} />
                     <TicketLink ticketKey={run.ticket_key} className="truncate" />
-                    <RunChips run={run} />
+                    {/* A second chip wraps into the line under the head, empty in this column, rather than push the
+                        summary down. */}
+                    <RunChips run={run} className={cn(run.private && 'row-span-2')} />
                     <TicketTitle title={run.ticket_title} />
                 </>
             ) : (
@@ -599,10 +619,13 @@ function RunWorktrees({ paths }: { paths: string[] }) {
     )
 }
 
-/** A run's chips: its kind, with a resume's reasons, and `private` for a private ticket's. */
-function RunChips({ run }: { run: Run }) {
+/**
+ * A run's chips: its kind, with a resume's reasons, and `private` for a private ticket's, under it where the column
+ * has no room for both on one line.
+ */
+function RunChips({ run, className }: { run: Run; className?: string }) {
     return (
-        <span className="flex min-w-0 items-center gap-3">
+        <span className={cn('flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5', className)}>
             <Chip word={runKind(run)} className="min-w-0 shrink" />
             {run.private && <Chip>private</Chip>}
         </span>

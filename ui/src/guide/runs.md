@@ -17,7 +17,8 @@ runs page. If nothing runs and the last tick was idle, that is the loop doing it
 **Runs**, under [Workspace](/workspace), lists every agent canopy runs: workers on tickets, reviews of PRs, chores, and
 tasks. Each gets one row per subject, by its latest run: a ticket's, a PR's, a chore's, a task's. The running ones come
 first, then the ones that ended most recently. A subject with earlier runs shows **Show N earlier runs** under it, so a
-PR reviewed at every push is one row and not a wall of them. The overseer's ticks are not among them: the **Ticks** link
+PR reviewed at every push is one row and not a wall of them. A row waiting on your answer sits on the same amber
+wash the rail gives it, so it shows from across the room. The overseer's ticks are not among them: the **Ticks** link
 in the page's description opens [their page](ticks#the-ticks-page), beside it under Workspace, **Worktrees** opens
 the [pools](#worktrees) the runs work in, and **Checklists** [each repository's list](checklists#the-checklists-page).
 The nav opens all four under **Workspace** while you're here, too.

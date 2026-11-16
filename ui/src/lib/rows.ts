@@ -87,8 +87,10 @@ export const ROW_COLUMNS = {
         ['run', fit(8, 5), 4],
         // A chore's name is longer than a ticket's key: the list widens to it when it holds one.
         ['key', fit(14, 6)],
-        // Its chips go before its age: they describe the run, where the age says whether it is current.
-        ['kind', fit(16, 10), 2],
+        // Its chips go before its age: they describe the run, where the age says whether it is current. A second chip
+        // (`private`) wraps under the first rather than widen the column, and so the gap before every row's title, for
+        // the few runs that carry two.
+        ['kind', fit(10), 2],
         ['title', FREE],
         ['cost', COST, 1],
         ['age', AGE, 3],
@@ -455,13 +457,14 @@ export function rowHidden(kind: RowKind): string {
 /**
  * The classes that hold each cell of a row's head line of `kind` to its column, its first cells, one per column: no
  * wider than the column (`min-w-0`, where a grid's item is as wide as its content), and what still overflows it, a
- * word with nowhere to break, cut with an ellipsis rather than drawn over the next column. A cell's text wraps as it
- * did, and one that cuts itself to one line (`Clipped`) gives the whole in its tip. The classes are built here, so
- * `index.css` lists them for Tailwind (`@source inline`).
+ * word with nowhere to break, cut with an ellipsis rather than drawn over the next column. What it paints a few pixels
+ * past its edge, a focus ring or a chip's ink, still shows (`clip-reach`), so a chip as wide as its column keeps its
+ * edge. A cell's text wraps as it did, and one that cuts itself to one line (`Clipped`) gives the whole in its tip. The
+ * classes are built here, so `index.css` lists them for Tailwind (`@source inline`).
  */
 export function rowCells(kind: RowKind): string {
     const head = `[&>:nth-child(-n+${ROW_COLUMNS[kind].length})]`
-    return `${head}:min-w-0 ${head}:overflow-x-clip ${head}:text-ellipsis`
+    return `${head}:min-w-0 ${head}:overflow-clip ${head}:clip-reach ${head}:text-ellipsis`
 }
 
 /** Whether a column that shows from `from` (any width when undefined) shows on a list at least `tier` wide. */
