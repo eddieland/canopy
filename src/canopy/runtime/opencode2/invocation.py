@@ -17,6 +17,7 @@ the command, with the command's environment and inside its sandbox, and gone whe
 from __future__ import annotations
 
 import re
+import shlex
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
 
@@ -46,6 +47,8 @@ FORMAT_OPTION = "--format"
 EVENTS_FORMAT = "json"
 # The agent a command runs, as `opencode run` takes it, by a name that is safe as one path component.
 _AGENT_RE = re.compile(r"(--agent[ =])([a-z][a-z0-9-]*)(?=\s|$)")
+# The words that start a run, `opencode run`, by any path to `opencode`.
+_RUN_RE = re.compile(r"(?<!\S)((?:\S*/)?opencode[ \t]+run)(?=\s|$)")
 
 
 def default_template(agent: str, *, definitions_dir: str, title: str) -> str:
@@ -71,6 +74,20 @@ def with_config_dir(directory: str, command: str) -> str:
         `command`, run by `env` with the config directory set.
     """
     return f"env {CONFIG_DIR_ENV}={directory} {command}"
+
+
+def on_private_server(command: str) -> str:
+    """Return `command` running `opencode run` with `--standalone`, as the defaults do, unless it already does.
+
+    On the shared background service, the config directory and the rest of the command's environment never reach the
+    run, so an agent defined only there is not found.
+
+    Returns:
+        `command` with the flag after its first `opencode run`, or as it is when it passes the flag or runs none.
+    """
+    if STANDALONE in shlex.split(command):
+        return command
+    return _RUN_RE.sub(lambda found: f"{found[1]} {STANDALONE}", command, count=1)
 
 
 def agent_of(command: str) -> str | None:

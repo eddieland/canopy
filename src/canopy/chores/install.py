@@ -3,8 +3,9 @@
 An example is a prompt, `<name>.md`, and its config table, `<name>.toml`, in `examples/chores/`, and may come with the
 agent its `cmd` names, `agents/<agent>.md`. Installing one copies the prompt into the workspace's state directory,
 `chore-prompts/<name>.md`, and the agent to `chore-agents/<name>/agents/`, and writes the table to the workspace's
-private file: `prompt` names the copy, `cmd` starts by pointing the runtime's config at the agent's directory, and
-`cwd`, where the example has one, is the workspace root. All are the workspace's own: another workspace's copy of the
+private file: `prompt` names the copy, `cmd` starts by pointing the runtime's config at the agent's directory and runs
+the agent apart from any service the runtime shares, so that directory reaches it, and `cwd`, where the example has
+one, is the workspace root. All are the workspace's own: another workspace's copy of the
 same example is filled in apart from it, and an upgraded canopy changes none of them until the chore is installed again.
 The state directory is the operator's alone, as a prompt file must be (TRUST_MODEL T7), and neither copy is in
 `chores/`, under which a chore with no `cwd` runs.
@@ -106,7 +107,7 @@ def install(ws: Workspace, name: str) -> Installed:
     shipped_text = shipped.read_text(encoding="utf-8")
     try:
         # The workspace's config must load as it is, which also holds the private file to being the operator's own.
-        config.load(ws.root)
+        version = config.load(ws.root).runtime.version
     except config.ConfigError as e:
         raise InstallError(f"the config does not load, so nothing was written: {e}") from None
     private = config.private_config_path(ws.root)
@@ -127,6 +128,8 @@ def install(ws: Workspace, name: str) -> Installed:
         table["cwd"] = str(ws.root.absolute())
     agent_dir = ws.state_dir / AGENTS_DIR / name
     agent = _agent(table.get("cmd"))
+    if "cmd" in table:
+        table["cmd"] = invocation.on_private_server(table["cmd"], version=version)
     if agent is not None:
         table["cmd"] = invocation.with_config_dir(shlex.quote(str(agent_dir)), table["cmd"])
     config.Chore.model_validate(table)

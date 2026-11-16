@@ -1,6 +1,7 @@
 """`canopy chore install` (DESIGN §19): an example chore canopy ships, set up in a workspace, owned by the command."""
 
 import re
+import shlex
 import shutil
 import tomllib
 from pathlib import Path
@@ -13,6 +14,7 @@ from canopy.cli.main import main
 from canopy.core import config, workspace
 from canopy.infra import resources
 from canopy.runtime import definitions
+from canopy.runtime.implementation import Version
 from tests.canopy.helpers import in_run
 from tests.conftest import CanopyEnv
 
@@ -57,7 +59,8 @@ def test_an_example_that_runs_an_agent_of_canopys_naming_comes_with_it_and_runs_
         assert copied is not None
         assert copied == agent_dir / "agents" / f"{agent[1]}.md"
         assert copied.read_text() == (resources.example_chores_dir() / "agents" / copied.name).read_text()
-        assert config.load(canopy_env.root).chores[name].cmd == f"env OPENCODE_CONFIG_DIR={agent_dir} {cmd}"
+        expected = f"env OPENCODE_CONFIG_DIR={agent_dir} {apart(cmd, canopy_env.runtime)}"
+        assert config.load(canopy_env.root).chores[name].cmd == expected
         came_with += 1
     assert came_with == 4
 
@@ -88,9 +91,22 @@ def test_install_writes_the_prompt_and_the_table_and_keeps_the_rest(
     assert chore.prompt == prompt
     assert chore.cwd == canopy_env.root.absolute()
     assert chore.cmd == (
-        f"env OPENCODE_CONFIG_DIR={agent.parent.parent} opencode run --agent canopy-memory-tickets --format json "
-        "--title={title} {prompt}"
+        f"env OPENCODE_CONFIG_DIR={agent.parent.parent} "
+        + apart("opencode run --agent canopy-memory-tickets --format json --title={title} {prompt}", canopy_env.runtime)
     )
+
+
+def test_under_opencode_2_every_example_runs_its_agent_on_a_private_server(canopy_env: CanopyEnv) -> None:
+    """On the shared background service, the config directory the command sets never reaches the run (#2367)."""
+    canopy_env.write_private(PRIVATE)
+    ws = workspace.find(canopy_env.root)
+    for name in install.available():
+        install.install(ws, name)
+    for name, chore in config.load(canopy_env.root).chores.items():
+        if chore.cmd is None or "opencode run" not in chore.cmd:
+            continue
+        words = shlex.split(chore.cmd)
+        assert ("--standalone" in words) == (canopy_env.runtime == Version.TWO), name
 
 
 def test_installing_again_replaces_the_prompt_and_the_whole_table(
@@ -179,3 +195,8 @@ def test_install_lists_the_examples_and_refuses_an_unknown_one_a_missing_file_an
         assert main(["chore", "install", "build-health"]) == 1
         assert "chore install refused (inside_run)" in capsys.readouterr().err
     assert "chores" not in tomllib.loads(canopy_env.private_file.read_text())
+
+
+def apart(cmd: str, runtime: Version) -> str:
+    """An example's `cmd` as installed for `runtime`: on a private server of its own under OpenCode 2."""
+    return cmd.replace("opencode run", "opencode run --standalone") if runtime == Version.TWO else cmd

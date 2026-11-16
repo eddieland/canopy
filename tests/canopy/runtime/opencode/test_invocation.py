@@ -24,6 +24,10 @@ def test_the_default_template_points_the_runtime_at_the_definitions_and_asks_for
     assert invocation.agent_of(template) == "canopy-worker"
 
 
+def test_on_private_server_leaves_the_command_as_it_is() -> None:
+    assert invocation.on_private_server("opencode run --agent x {prompt}") == "opencode run --agent x {prompt}"
+
+
 def test_with_config_dir_runs_the_command_with_the_directory_set() -> None:
     command = invocation.with_config_dir(shlex.quote("/state/my dir"), "opencode run --agent x {prompt}")
     assert shlex.split(command)[:2] == ["env", f"{invocation.CONFIG_DIR_ENV}=/state/my dir"]

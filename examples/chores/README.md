@@ -7,7 +7,9 @@ prompts that ship; the rest are ideas to write your own from. The rules are in D
 `canopy chore install <name>` sets up one of the six in the workspace you run it in. It copies the prompt to the
 workspace's `.canopy/chore-prompts/<name>.md`, and the agent the example comes with, if any, from `agents/` here. It
 writes the `[chores.<name>]` table from `<name>.toml` here to its private config, `cwd` set to the workspace root
-where the chore reads canopy's journal, then prints what is left to do, such as the lists to fill in. The copies stay
+where the chore reads canopy's journal, and, under OpenCode 2, `--standalone` after `opencode run`, as canopy's own
+commands run, so the run is the command's own and finds the copied agent. It then prints what is left to do, such as
+the lists to fill in. The copies stay
 as installed when canopy is upgraded. The command owns them: running it again replaces them with the shipped ones, so
 an edit to any is lost. Steer an installed chore with `canopy reply` notes, which survive it, or copy it under a name
 of your own. `canopy chore install` alone lists the examples.
