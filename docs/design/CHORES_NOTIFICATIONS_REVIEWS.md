@@ -143,20 +143,15 @@ operator's programs. This generalizes `notify.cmd` (§14), which stays and behav
 
 A closed set, written by the harness from the journal, in groups: `attention` (an item opened or resolved), `runs` (a
 worker started or ended, a plan proposed or approved by its planner, §25, an epic's plan changed under its members,
-§43, follow-ups filed, §18, a check left as flaky, §23), `chores` (§19),
-`reviews` (§21), `tasks` (a task's run ended, §36), `replies` (a reply read from Slack recorded or refused, below),
-and `loop` (ticks failing and recovering, a sink failing, the month's spend reaching its budget or one of its alerts,
-and each forced push canopy makes to kick a flaky check, §23). Each carries only bounded fields, its text on one
-line, but for a chore's summary its table sends whole (`whole_summary`), which keeps its lines. No plan event carries
-the plan's text. `run.ended` carries a `blocked` run's question, since the needs-human
-label is not an attention item.
+§43, follow-ups filed, §18, a check left as flaky, §23), `chores` (§19), `reviews` (§21), `tasks` (§36), `replies`
+(below), and `loop` (ticks failing and recovering, a sink failing, the month's spend reaching a budget alert, and each
+forced push kicking a flaky check, §23). Each carries only bounded fields, its text on one line, but a chore's summary
+its table sends whole (`whole_summary`), an event of its own beside the run's status. No plan event carries the plan's
+text. `run.ended` carries a `blocked` run's question, since the needs-human label is not an attention item.
 
-Each event has a name, `<group>.<subject>.<kind>` (`runs.PROJ-1.started`, `chores.briefing.summary`), its subject a
-ticket key, chore, repository, epic, or task, and none for `loop` and `attention`. A sink's `events` lists patterns over
-names: `*` one segment, `**` any number, a bare group all of it, `!` excludes, and the last match decides. A pattern
-that can match no name is a config error, so a typo is refused rather than silent. A chore's summary sent whole is its
-own event, beside its status, so a sink takes either alone. Names are config surface: a rename keeps the old name as
-an alias. `canopy notify events` lists them, with example fields and the sinks that take each.
+Each is named `<group>.<subject>.<kind>` (`runs.PROJ-1.started`; no subject for `loop` and `attention`), and a sink's
+`events` are patterns over names: `*` one segment, `**` any, a bare group all of it, `!` excludes, the last match
+decides; one matching no name is a config error. Names are config surface: a rename keeps an alias.
 
 Attention is a diff of state per sink (§14): each sink hears of each open item once, and a sink that was down gets the
 net change. The other kinds are point events in an outbox, written in the same transaction as the fact they report,
@@ -181,10 +176,9 @@ the loop, and a failed delivery starts no window.
 A sink with `digest_every_minutes` gets a summary every interval: ticks, runs, what the runs that started in it cost by
 kind (§11), the open attention list, and the workers running. It is sent even when nothing happened: a missing digest
 shows ticks stopped, which canopy cannot report itself. No model writes it, so it comes when no model can; a report
-needing judgment is a chore (§19). The shipped briefing is one: it reads what waits on the operator, and who on them,
-through the `waiting` report (§27), and its summary, sent whole, says what matters since its last run.
-With `digest_min_usd`, a due digest waits until the runs since the last one cost at least that much: the sink hears of
-spend, at most once an interval, and gives up the heartbeat.
+needing judgment is a chore (§19), such as the shipped briefing, from the `waiting` report (§27). With
+`digest_min_usd`, a due digest waits until the runs since the last one cost that much: the sink hears of spend, at most
+once an interval, and gives up the heartbeat.
 
 ### Formats
 
@@ -200,8 +194,7 @@ string. So the harness never learns a channel's markup, and a new event kind nee
 ### The desktop sink
 
 `canopy-notify-desktop` ships inside canopy (D035) and runs only as a configured sink. It passes title and body to
-`notify-send` or a fixed `osascript` script as arguments, never as a shell command or script, so agent or org-member
-text runs nothing.
+`notify-send` or a fixed `osascript` script as arguments, never as a shell or script, so their text runs nothing.
 
 ### The Slack sink
 
@@ -236,8 +229,8 @@ stay in canopy.
 ### Trust model changes
 
 - T2: the harness makes no outbound call except through configured commands, and its opt-in OTLP export of spans
-  and metrics (D132), and reads no token. The Slack sink does
-  both, but runs only as a configured sink, and lint keeps network modules and the sink out of the harness.
+  and metrics (D132), and reads no token. The Slack sink does both, but runs only as a configured sink, and lint
+  keeps network modules and the sink out of the harness.
 - T6: notifications carry agent- and org-member-written text off the machine. Controls: only bounded fields; Slack
   escaping. Residual: a steered agent picks text shown in the channel, and a link can carry data; a chore's summary
   sent whole is up to 2,000 characters of it.
@@ -247,7 +240,7 @@ stay in canopy.
 
 ### Open
 
-- Routing finer than groups; digests at fixed times of day; reminders for items open long.
+- Digests at fixed times of day; reminders for items open long.
 - A sink secret read from a command (a password manager's CLI) instead of a file.
 
 ## 21. Reviews

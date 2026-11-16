@@ -3,8 +3,9 @@
 from typing import get_type_hints
 
 import pytest
+from pydantic import TypeAdapter
 
-from canopy.core import event_names, outbox
+from canopy.core import config, event_names, outbox
 from canopy.core.event_names import Pattern
 
 
@@ -83,6 +84,9 @@ def test_the_last_pattern_that_matches_decides(patterns: list[str], name: str, *
         ("runs.*", "matches no event"),
         ("loop.*.failing", "matches no event"),
         ("chores.a.b.c.d", "matches no event"),
+        # A subject no event can have: a task's id is a number, a chore's name is lowercase.
+        ("tasks.deploy.ended", "matches no event"),
+        ("chores.Briefing.summary", "matches no event"),
         ("runs." + "x" * 200, "longer than"),
     ],
 )
@@ -106,6 +110,10 @@ def test_many_double_stars_are_matched_quickly() -> None:
         (["runs.**", "!runs.PROJ-1.started"], "run.started", "some"),
         (["runs.**", "!runs.*.started"], "run.started", "none"),
         (["runs.PROJ-1.*", "runs.**"], "run.started", "all"),
+        # The last match decides for each subject, so overlapping patterns are read whole.
+        (["runs.PROJ-1.*", "!runs.PROJ-1.*"], "run.started", "none"),
+        (["runs.**", "!runs.PROJ-1.*", "runs.PROJ-1.started"], "run.started", "all"),
+        (["runs.PROJ-1.*", "runs.PROJ-2.*", "!runs.PROJ-1.ended"], "run.ended", "some"),
         (["loop"], "loop.failing", "all"),
         (["loop.failing"], "ci.kicked", "none"),
         (["attention"], "attention", "all"),
@@ -156,5 +164,14 @@ def test_every_name_has_a_template_and_an_example_of_its_fields() -> None:
     assert set(shapes) == set(outbox.EXAMPLES)
     for kind, shape in shapes.items():
         assert set(outbox.EXAMPLES[kind]) == set(get_type_hints(shape)), kind
+        # Each value of the type its field is, too.
+        TypeAdapter(shape).validate_python(outbox.EXAMPLES[kind], strict=True)
         named = event_names.name_of(spec(kind).group, kind, outbox.EXAMPLES[kind])
         assert named.split(".")[-1] == spec(kind).last, kind
+
+
+def test_a_subject_is_spelled_as_config_checks_it() -> None:
+    """A pattern's subject is held to what config accepts, so the two cannot drift apart."""
+    assert event_names.SUBJECTS["ticket"].pattern == config.KEY_RE.pattern
+    assert event_names.SUBJECTS["chore"].pattern == config.CHORE_NAME_RE.pattern
+    assert event_names.SUBJECTS["repo"].pattern == config.REPO_NAME_RE.pattern

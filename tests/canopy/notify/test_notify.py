@@ -15,7 +15,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import chore_result, db, outbox, runtime_sessions, spend
-from canopy.core.config import ConfigError, Sink, load
+from canopy.core.config import ConfigError, load
 from canopy.core.items import Item, fingerprint
 from canopy.notify import journal as notify_journal
 from canopy.notify import message
@@ -217,17 +217,19 @@ def test_a_sink_takes_events_by_name_and_one_no_sink_takes_is_not_recorded(
     assert [r[0] for r in scenario.conn.execute("SELECT kind FROM notify_events")] == ["run.ended"]
 
 
-def test_a_sink_that_takes_replies_is_given_them(conn: sqlite3.Connection) -> None:
-    """What came of a reply from Slack reaches a sink that takes `replies`, and no other."""
-    refused = {"ticket": None, "ts": "1.2", "guard": "no_ticket", "reason": "r"}
-    with db.transaction(conn):
-        first = db.record_event(conn, db.Event(outbox.REPLIES, "reply.refused", refused))
-        db.record_event(conn, db.Event(outbox.RUNS, "run.started", {"ticket": KEY, "run": 1}))
-    taking = Sink(cmd="x", events=("replies",))
-    assert [(e.id, notify_journal.name(e)) for e in notify_journal.events_after(conn, 0, taking)] == [
-        (first, "replies.-.refused"),
-    ]
-    assert notify_journal.events_after(conn, 0, Sink(cmd="x", events=("replies.*.recorded",))) == []
+def test_a_sink_that_takes_replies_is_given_them(scenario: Scenario, sink_script: Path, tmp_path: Path) -> None:
+    """What came of a reply from Slack reaches a sink that takes `replies` at the tick's end, and no other."""
+    replies, recorded = tmp_path / "replies.txt", tmp_path / "recorded.txt"
+    add_sink(scenario, sink_script, "replies", replies, format="text", events=["replies"])
+    add_sink(scenario, sink_script, "recorded", recorded, format="text", events=["replies.*.recorded"])
+    scenario.tick()  # the sinks' first publish: from here on they hear every event
+    refused = {"ticket": None, "ts": "1.2", "guard": "no_ticket", "reason": "it names no ticket"}
+    with db.transaction(scenario.conn):
+        db.record_event(scenario.conn, db.Event(outbox.REPLIES, "reply.refused", refused))
+    scenario.tick()
+    [message] = messages(replies)
+    assert "! your reply from Slack not recorded (no_ticket): it names no ticket" in message
+    assert messages(recorded) == []
 
 
 def test_notify_events_lists_each_name_and_the_sinks_that_take_it(scenario: Scenario) -> None:

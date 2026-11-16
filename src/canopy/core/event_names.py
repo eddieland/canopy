@@ -26,6 +26,16 @@ SEGMENT_RE = re.compile(r"[A-Za-z0-9_-]+")
 MAX_PATTERN = 200
 #: How a sink takes events of one name for some subjects: every one, none, or some, by its subject.
 Taken = Literal["all", "some", "none"]
+#: How each kind of subject is spelled, as config and the journal check it: a ticket key (`config.KEY_RE`), a chore's or
+#: a repository's name (`CHORE_NAME_RE`, `REPO_NAME_RE`), and an epic's or a task's id. A pattern naming a subject no
+#: event can have is refused, as `tasks.deploy.ended` is.
+SUBJECTS: Mapping[str, re.Pattern[str]] = {
+    "ticket": re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*"),
+    "chore": re.compile(r"[a-z][a-z0-9-]*"),
+    "repo": re.compile(r"[a-z][a-z0-9-]*"),
+    "epic": re.compile(r"[0-9]+"),
+    "task": re.compile(r"[0-9]+"),
+}
 
 _ONE = "*"
 _ANY = "**"
@@ -171,7 +181,7 @@ class Pattern:
         Returns:
             The fit.
         """
-        subject = 1 if spec.subject is not None else None
+        subject = (1, SUBJECTS[spec.subject]) if spec.subject is not None else None
         template = spec.template.split(".")
         return _match(self.segments, template, subject=subject)
 
@@ -204,16 +214,14 @@ def taken(patterns: Sequence[Pattern], spec: Spec) -> Taken:
         `all` when it takes them whatever their subject, `none` when it takes none, and `some` when it depends on the
         subject, as `runs.PROJ-1.*` takes `run.started` for one ticket.
     """
-    outcomes: set[bool] = set()
-    for pattern in reversed(patterns):
-        fit = pattern.fits(spec)
-        if fit is not Fit.NO:
-            outcomes.add(not pattern.exclude)
-        if fit is Fit.YES:
-            break
-    else:
-        # No pattern matches every subject, so a subject none matches is not taken.
-        outcomes |= {False}
+    if spec.subject is None:
+        return "all" if takes(patterns, spec.name(None)) else "none"
+    # A subject no pattern spells is taken as any other such subject is, so the subjects patterns spell, and one
+    # none does, are every case there is.
+    literals = {s for p in patterns for s in p.segments}
+    spelled = {s for s in literals if SUBJECTS[spec.subject].fullmatch(s)}
+    other = next(f"{spec.subject}{n}" for n in range(len(literals) + 1) if f"{spec.subject}{n}" not in literals)
+    outcomes = {takes(patterns, spec.name(subject)) for subject in (*spelled, other)}
     if outcomes == {True}:
         return "all"
     return "none" if outcomes == {False} else "some"
@@ -229,10 +237,11 @@ def groups(patterns: Sequence[Pattern]) -> list[str]:
     return [g for g in GROUPS if g in named]
 
 
-def _match(pattern: Sequence[str], name: Sequence[str], *, subject: int | None) -> Fit:
-    """Match `pattern` to `name`'s segments, `name[subject]` standing for any subject when `subject` is given.
+def _match(pattern: Sequence[str], name: Sequence[str], *, subject: _Subject | None) -> Fit:
+    """Match `pattern` to `name`'s segments, the segment at `subject`'s index standing for any subject it spells.
 
-    A literal segment matches the subject only for some subjects; `*` and `**` match it for every one.
+    A literal segment matches the subject only for some subjects, and only if it spells one; `*` and `**` match it for
+    every one.
 
     Returns:
         The best fit of any way to match.
@@ -240,7 +249,11 @@ def _match(pattern: Sequence[str], name: Sequence[str], *, subject: int | None) 
     return _fit(tuple(pattern), tuple(name), 0, 0, subject)
 
 
-def _fit(pattern: tuple[str, ...], name: tuple[str, ...], p: int, n: int, subject: int | None) -> Fit:
+#: Where a name's subject is, and how a subject is spelled.
+_Subject = tuple[int, re.Pattern[str]]
+
+
+def _fit(pattern: tuple[str, ...], name: tuple[str, ...], p: int, n: int, subject: _Subject | None) -> Fit:
     if p == len(pattern):
         return Fit.YES if n == len(name) else Fit.NO
     if sum(1 for s in pattern[p:] if s != _ANY) > len(name) - n:
@@ -257,8 +270,8 @@ def _fit(pattern: tuple[str, ...], name: tuple[str, ...], p: int, n: int, subjec
         return Fit.NO
     if head == _ONE:
         here = Fit.YES
-    elif n == subject:
-        here = Fit.SOME
+    elif subject is not None and n == subject[0]:
+        here = Fit.SOME if subject[1].fullmatch(head) else Fit.NO
     else:
         here = Fit.YES if head == name[n] else Fit.NO
     if here is Fit.NO:
