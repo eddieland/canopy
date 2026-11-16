@@ -57,6 +57,37 @@ def test_a_list_parses_into_its_items(canopy_env: CanopyEnv) -> None:
     assert found.text == LIST.strip()
 
 
+def test_a_retired_item_is_kept_in_the_file_and_asked_of_no_run(canopy_env: CanopyEnv) -> None:
+    """A retired item needs no rule, and is left out of the items and of the text a run hears."""
+    retired = "## trailing-commas\npaths: **/*.py\nstatus: retired\nnote: enforced by the linter\n\n"
+    (checklists_dir(canopy_env) / "repo.md").write_text(retired + LIST + "\n## gone\nstatus: retired\n")
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    found = checklists.load(cfg, "repo")
+    assert found is not None
+    assert found.ids() == ["general-types", "newspaper-order", "doc-comments"]
+    assert found.text == LIST.strip()
+    assert [(i.id, i.status, i.note, i.rule) for i in found.retired] == [
+        ("trailing-commas", "retired", "enforced by the linter", ""),
+        ("gone", "retired", None, ""),
+    ]
+    # Its text, as written for a run, reads back as the same list.
+    assert checklists.parse("the list", found.text) == (list(found.items), found.text, [])
+
+
+def test_a_list_whose_items_are_all_retired_is_asked_of_no_run(canopy_env: CanopyEnv) -> None:
+    (checklists_dir(canopy_env) / "repo.md").write_text("## one\nstatus: retired\nRule one.\n")
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    found = checklists.load(cfg, "repo")
+    assert found is not None
+    assert (found.items, [i.id for i in found.retired]) == ([], ["one"])
+    assert checklists.for_repos(cfg, ["repo"]) == []
+
+
+def test_an_active_status_is_the_default() -> None:
+    [item], _, retired = checklists.parse("the list", "## one\nstatus: active\nRule.\n")
+    assert (item.status, retired) == ("active", [])
+
+
 def test_a_repository_without_a_list_has_none(canopy_env: CanopyEnv) -> None:
     cfg = load(canopy_env.root, canopy_env.user_file)
     assert cfg.paths.checklists is None
@@ -99,6 +130,8 @@ def test_no_list_writes_no_file(tmp_path: Path) -> None:
         ("## one\npaths: /etc/passwd\nRule.\n", "item one: paths entry '/etc/passwd' must be a path"),
         ("## one\npaths: src/[ab]/\nRule.\n", "item one: paths entry 'src/[ab]/' must be a path"),
         ("## one\nseverity: critical\nRule.\n", "item one: severity is one of blocking, major, minor, not 'critical'"),
+        ("## one\nstatus: dropped\nRule.\n", "item one: status is one of active, retired, not 'dropped'"),
+        ("## one\nstatus: retired\nstatus: active\nRule.\n", "item one has two 'status:' lines"),
     ],
 )
 def test_a_text_that_is_not_a_list_is_refused(text: str, error: str) -> None:

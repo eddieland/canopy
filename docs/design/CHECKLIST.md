@@ -26,10 +26,12 @@ by a run that did not write the code.
 `paths.personas` holds a file per persona: it is instructions in every run it reaches, as `paths.worker_instructions`
 is, so a shared workspace file can neither supply it nor choose one. A repository without a list is not asked, by
 reminder or review. One item per heading: an id, the paths it is about, a severity the review alone uses (`minor` unless
-the item says), and the rule in plain words with what passes and what fails. Each file is bounded, and refused with
-hidden characters as a persona is (§31). A run whose list cannot be read is refused as `bad_prompt`, never run without
-it. Rejected: the list read from the repository's checkout, a file of its own included, which a PR could rewrite and a
-shared workspace cannot vouch for (T1, T7); the team's copy stays with its docs, and the operator's file is what runs.
+the item says), and the rule in plain words with what passes and what fails. An item the operator marks retired stays
+in the file, with its counts, and is asked of no run, by reminder or review; a list of retired items alone is no list.
+Each file is bounded, and refused with hidden characters as a persona is (§31). A run whose list cannot be read is
+refused as `bad_prompt`, never run without it. Rejected: the list read from the repository's checkout, a file of its
+own included, which a PR could rewrite and a shared workspace cannot vouch for (T1, T7); the team's copy stays with its
+docs, and the operator's file is what runs.
 The web UI's Checklists page under Workspace (§22) reads each list as a run would, and changes none: a list canopy
 cannot use shows why before a run is refused over it.
 
@@ -65,7 +67,7 @@ The worker's result gains `checklist`: for each repository and item, `pass`, `fi
 `n/a`, validated (D026). A reminded run whose result answers no item is recorded as unanswered, never refused: its push
 is already made. The answers are the record the standing instructions lacked: the run's page shows them, and canopy
 counts, per repository and item, how often it was reminded, passed, fixed, held, and left unanswered, so an item earns
-its place or is dropped. No answer raises attention: a human reviewer still reads the PR, and a `held` item is on its
+its place or is retired. No answer raises attention: a human reviewer still reads the PR, and a `held` item is on its
 page for them.
 
 What lets it run (TRUST_MODEL): a forged `[canopy]` line can only ask the agent to check its own diff against a list it

@@ -88,6 +88,23 @@ def test_a_joint_run_hears_each_list_under_its_repository(ws_scenario: Scenario)
     assert shown(ws_scenario.agent_log) == "## api-rule\nThe api's rule.\n## web-rule\nThe web's rule.\n"
 
 
+def test_a_retired_item_is_never_asked_of_a_run(scenario: Scenario, git_pool: GitPool) -> None:
+    """A retired item is not in the list the hook prints, and a run's answer to it is dropped as one to no item."""
+    retired = "## trailing-commas\nstatus: retired\nnote: enforced by the linter\n\n"
+    (checklists_dir(scenario.env) / "repo.md").write_text(retired + LIST)
+    answered = {"repo": {"general-types": "pass", "trailing-commas": "pass"}}
+    run = scenario.run(worker=worker_does(SHOW, result=worker_result(checklist=answered)))
+    assert shown(scenario.agent_log) == LIST
+    assert [(a.item, a.answer) for a in checklist_answers.of_run(scenario.conn, run.id)] == [
+        ("general-types", ItemAnswer.PASSED),
+    ]
+    # A list whose items are all retired is no list: the run is given no file, and its push is never held.
+    (checklists_dir(scenario.env) / "repo.md").write_text(retired)
+    run = scenario.run(dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CONFLICT]), worker=worker_does(SHOW))
+    assert shown(scenario.agent_log) is None
+    assert "Push held" not in run.prompt
+
+
 def test_a_runs_answers_are_recorded_and_shown(scenario: Scenario, git_pool: GitPool) -> None:
     (checklists_dir(scenario.env) / "repo.md").write_text(f"{LIST}\n## newspaper\n\nPublic names first.\n")
     held = {"answer": "held", "reason": "The helper\u202e stays where it is."}
@@ -171,3 +188,20 @@ def test_canopy_checklist_counts_what_the_runs_answered(scenario: Scenario, git_
     assert scenario.operator("checklist", "--repo", "other").out.endswith(
         "\n\nNo worker run of the window was given a list.\n",
     )
+
+
+def test_canopy_checklist_marks_a_retired_item(scenario: Scenario, git_pool: GitPool) -> None:
+    """A retired item keeps its past counts, marked retired, and is named with its note, counted or not."""
+    (checklists_dir(scenario.env) / "repo.md").write_text(LIST)
+    scenario.run(worker=worker_does(result=worker_result(checklist={"repo": {"general-types": "pass"}})))
+    retired = LIST.replace("paths: src/\n", "paths: src/\nstatus: retired\nnote: enforced by the linter\n")
+    (checklists_dir(scenario.env) / "repo.md").write_text(f"{retired}\n## old\nstatus: retired\n\n## kept\nRule.\n")
+    out = scenario.operator("checklist").out
+    assert "\nrepo  general-types         1     1      0     0    0           0  retired\n" in out
+    assert "\nRetired, so asked of no run:\n  repo general-types: enforced by the linter\n  repo old\n" in out
+    found = json.loads(scenario.operator("checklist", "--json").out)
+    assert found["retired"] == [
+        {"repo": "repo", "item": "general-types", "note": "enforced by the linter"},
+        {"repo": "repo", "item": "old", "note": None},
+    ]
+    assert json.loads(scenario.operator("checklist", "--repo", "other", "--json").out)["retired"] == []

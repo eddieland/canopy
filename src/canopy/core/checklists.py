@@ -2,10 +2,14 @@
 
 A list is a file, `<repo>.md`, in the operator's `paths.checklists` directory, for the mapped repository of that name;
 a repository without one is never asked. Each item opens with a `## <id>` heading, then, before its rule, an optional
-`paths:` line of the paths it is about, compared as `high_impact_paths` are, and an optional `severity:` line, which
-only the checklist review reads. A list is instructions in every run it reaches, so it is bounded and holds none of the
-characters a persona may not (DESIGN §31), and it is parsed here, so a run's answers can be held to its ids. A list
-canopy cannot use refuses the run (`bad_prompt`), never runs it without the list.
+`paths:` line of the paths it is about, compared as `high_impact_paths` are, an optional `severity:` line, which only
+the checklist review reads, and an optional `status:` line. A list is instructions in every run it reaches, so it is
+bounded and holds none of the characters a persona may not (DESIGN §31), and it is parsed here, so a run's answers can
+be held to its ids. A list canopy cannot use refuses the run (`bad_prompt`), never runs it without the list.
+
+An item whose status is `retired`, with why on an optional `note:` line and no rule needed, stays in the file for its
+history and is asked of no run: it is left out of the list's items and of the text a run hears, so the hook never holds
+a push over it, and a list whose items are all retired is no list. `canopy checklist` names it, with its past counts.
 
 Before a worker run that may push starts, or a one-off task's (§36), the list of each of its repositories is written
 to its answers directory (§41), a file to a repository, where canopy's `pre-push` hook in that repository's slot finds
@@ -42,12 +46,16 @@ SEVERITIES: tuple[Severity, ...] = ("blocking", "major", "minor")
 DEFAULT_SEVERITY: Severity = "minor"
 #: The kinds of worker run that may push, and so hear their repositories' lists; a task's run, of no kind, hears its.
 REMINDED: frozenset[RunKind] = frozenset({RunKind.IMPLEMENT, RunKind.RESUME})
+#: Whether a run is asked an item: `active`, the default, or `retired`, kept in the file and asked of none.
+Status = Literal["active", "retired"]
+#: Every status an item may name.
+STATUSES: tuple[Status, ...] = ("active", "retired")
 #: An item's heading, which names its id.
 _HEADING = re.compile(r"## (.*)")
 #: An item's id: a word of letters, digits, `-`, `_`, and `.`, which a run's answer names as a key.
 _ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
 #: A line an item may open with, before its rule: its key and its value.
-_FIELD = re.compile(r"(paths|severity):[ \t]*(.*)")
+_FIELD = re.compile(r"(paths|severity|status|note):[ \t]*(.*)")
 
 
 class ChecklistError(Exception):
@@ -63,8 +71,11 @@ class Item:
     #: The paths it is about, each compared as a `high_impact_paths` entry is; empty for every path.
     paths: Sequence[str]
     severity: Severity
-    #: The rule in the operator's words, with what passes and what fails.
+    #: The rule in the operator's words, with what passes and what fails; may be empty for a retired item.
     rule: str
+    status: Status = "active"
+    #: Why the item was retired, its `note:` line; None when it has none.
+    note: str | None = None
 
 
 @dataclass(frozen=True)
@@ -72,9 +83,12 @@ class Checklist:
     """A repository's list, as a run gets it."""
 
     repo: str
+    #: The items a run is asked, in the list's order: none retired.
     items: Sequence[Item]
-    #: The file's text without its surrounding blank lines, as the worker reads it.
+    #: The file's text without its surrounding blank lines or its retired items, as the worker reads it.
     text: str
+    #: The items the operator retired, in the list's order, which no run is asked.
+    retired: Sequence[Item] = ()
 
     def ids(self) -> list[str]:
         """Return the ids of the list's items, in its order."""
@@ -104,38 +118,43 @@ def load(config: Config, repo: str) -> Checklist | None:
 
 
 def for_repos(config: Config, repos: Iterable[str]) -> list[Checklist]:
-    """Return the list of each of `repos` that has one, in their order.
+    """Return the list of each of `repos` that has one with an item a run is asked, in their order.
 
     Returns:
-        The lists; none when no repository has one.
+        The lists; none when no repository has one, or each one's items are all retired.
 
     Raises:
         ChecklistError: a file is one canopy would not put in a run.
     """
-    return [found for repo in repos if (found := load(config, repo)) is not None]
+    return [found for repo in repos if (found := load(config, repo)) is not None and found.items]
 
 
-def parse(where: str, text: str) -> tuple[list[Item], str]:
+def parse(where: str, text: str) -> tuple[list[Item], str, list[Item]]:
     """Parse a list's text into its items, refusing one that is not a list.
 
     Returns:
-        Its items, in order, and the text without its surrounding blank lines.
+        The items a run is asked, in order; the text a run hears, without its surrounding blank lines or the sections
+        of its retired items; and its retired items, in order.
 
     Raises:
-        ChecklistError: it holds no item, text before its first, an id that is not a word or is repeated, an item with
-            no rule, a `paths:` entry that is not a path from the repository's root, or a severity a finding cannot
-            take.
+        ChecklistError: it holds no item, text before its first, an id that is not a word or is repeated, an active
+            item with no rule, a `paths:` entry that is not a path from the repository's root, a severity a finding
+            cannot take, or a status that is not one.
     """
     items: list[Item] = []
     heading: str | None = None
     body: list[str] = []
-    for number, line in enumerate(text.splitlines(), start=1):
+    # The line each item's section starts at, by its place in `items`, to leave a retired one's out of the text.
+    starts: list[int] = []
+    lines = text.splitlines()
+    for number, line in enumerate(lines, start=1):
         matched = _HEADING.fullmatch(line.rstrip())
         if matched is not None:
             if heading is not None:
                 items.append(_item(where, heading, body))
             heading = matched[1].strip()
             body = []
+            starts.append(number - 1)
             if not _ID.fullmatch(heading):
                 raise ChecklistError(f"{where}: line {number}: an item's id is a word, {_ID.pattern}, not {heading!r}")
             if heading in {item.id for item in items}:
@@ -148,7 +167,17 @@ def parse(where: str, text: str) -> tuple[list[Item], str]:
     if heading is None:
         raise ChecklistError(f"{where}: no item, each opening with a '## <id>' heading")
     items.append(_item(where, heading, body))
-    return items, text.strip()
+    retired = [item for item in items if item.status == "retired"]
+    if not retired:
+        return items, text.strip(), []
+    ends = [*starts[1:], len(lines)]
+    kept = [
+        line
+        for item, start, end in zip(items, starts, ends, strict=True)
+        if item.status != "retired"
+        for line in lines[start:end]
+    ]
+    return [item for item in items if item.status != "retired"], "\n".join(kept).strip(), retired
 
 
 def file_of(answers: Path, repo: str) -> Path:
@@ -216,7 +245,7 @@ def _item(where: str, id_: str, body: Sequence[str]) -> Item:
     """Return the item `id_` whose lines after its heading are `body`: its fields, then its rule.
 
     Raises:
-        ChecklistError: a field is given twice or is not one, or the item has no rule.
+        ChecklistError: a field is given twice or is not one, or an item that is not retired has no rule.
     """
     fields: dict[str, str] = {}
     lines = list(body)
@@ -228,7 +257,11 @@ def _item(where: str, id_: str, body: Sequence[str]) -> Item:
             raise ChecklistError(f"{where}: item {id_} has two '{matched[1]}:' lines")
         fields[matched[1]] = matched[2].strip()
     rule = "\n".join(lines).strip()
-    if not rule:
+    named_status = fields.get("status", "active")
+    status = next((s for s in STATUSES if s == named_status), None)
+    if status is None:
+        raise ChecklistError(f"{where}: item {id_}: status is one of {', '.join(STATUSES)}, not {named_status!r}")
+    if not rule and status != "retired":
         raise ChecklistError(f"{where}: item {id_} has no rule")
     paths: list[str] = []
     for entry in fields.get("paths", "").split(","):
@@ -242,4 +275,4 @@ def _item(where: str, id_: str, body: Sequence[str]) -> Item:
     severity = next((s for s in SEVERITIES if s == named), None)
     if severity is None:
         raise ChecklistError(f"{where}: item {id_}: severity is one of {', '.join(SEVERITIES)}, not {named!r}")
-    return Item(id_, tuple(paths), severity, rule)
+    return Item(id_, tuple(paths), severity, rule, status, fields.get("note") or None)

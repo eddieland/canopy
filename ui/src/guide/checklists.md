@@ -21,7 +21,7 @@ named for the repository as the workspace map names it: `api.md` for `api`. A re
 so you can start with the one whose reviews annoy you most. The key is yours alone: a list is instructions in every run
 it reaches, so the shared workspace file can't set it, and canopy refuses to start if it does.
 
-Each item opens with a `## <id>` heading, then two optional lines, then the rule in plain words:
+Each item opens with a `## <id>` heading, then optional lines, then the rule in plain words:
 
 ```markdown
 ## general-types
@@ -47,6 +47,8 @@ migration's sha256. Passes: both files in the diff. Fails: a migration alone.
   that asks the same list of a PR, which canopy doesn't run yet.
 - **The rule** says what passes and what fails, ideally with one example of each. A rule a worker has to guess at gets
   guesses for answers.
+- **`status:`** is `active`, the default, or `retired`. A retired item stays in the file but is asked of no run, and
+  its push is never held over it; it needs no rule, and an optional **`note:`** line says why it was retired.
 
 Ten to fifteen items is plenty. A longer list is usually two lists, or a list with a linter hiding in it: anything a
 machine can check belongs in the linter, which never gets tired of saying so.
@@ -136,7 +138,7 @@ their job, not a rule kept, so a migrations item that's n/a on most diffs is fin
 - An item without `paths:` that's mostly **n/a** is about less than every diff. Give it the paths it's about, so runs
   that never touch them stop paying to read it.
 - An item that's never anything but **pass** where it applied is a rule your workers keep without being asked, and
-  every reminded run pays tokens to agree with it. Drop it, and keep it in `AGENTS.md`. But wait for enough answers:
+  every reminded run pays tokens to agree with it. Retire it, and keep it in `AGENTS.md`. But wait for enough answers:
   a rule that fails one diff in ten shows no failure in ten answers a third of the time. And check that its nit isn't
   still reaching your reviewers first, because a pass is the worker's own word.
 - An item that's often **held** is a disagreement. Read the reasons (the page's **held** count lists the runs and what
@@ -145,6 +147,23 @@ their job, not a rule kept, so a migrations item that's n/a on most diffs is fin
 - A lot of **unanswered** is mostly runs that never pushed, so were never held. canopy counts every item of a run it
   gave a list to, pushed or not, and errs toward too many. On a run that pushed, it is a worker that skipped the list:
   n/a would have said it looked and found nothing to check.
+
+### Retiring an item
+
+When a linter starts enforcing an item, or it has stopped earning its place, retire it rather than deleting it:
+
+```markdown
+## trailing-commas
+paths: **/*.py
+status: retired
+note: enforced by the linter
+```
+
+The next run isn't asked it, and its push isn't held over it, while the file keeps the item and why it went.
+`canopy checklist` still counts the window's past answers to it, marks its line **retired**, and names each retired
+item with its note below the table; `--json` lists them under `retired`. A list whose items are all retired is no list,
+so its repository's runs aren't held at all. To bring one back, delete the `status:` line. The checklists page shows a
+list as runs hear it, so a retired item isn't on it.
 
 A list is worth its tokens when its items get **fixed**: each one is a review comment nobody had to write, and a CI run
 nobody had to wait for.
