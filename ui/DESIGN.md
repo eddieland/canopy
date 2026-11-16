@@ -132,7 +132,9 @@ Rules:
   selected row's outline and drop, a field's and an outline button's line in ink, a tone printed on the canvas, the
   primary action pressed into its shadow, a page title dropped in its section's color and lettered, a bubble's balloon
   tail, and a starburst where a cleared item drops its leaf. Each is a shadow, a transform, a background, or drawn
-  beside its box, so it takes no room, and a texture is clear where text sits. Pulp, a comic in four-color print, takes
+  beside its box, so it takes no room, and a texture is clear where text sits; a box that clips what overflows it, as a
+  list's cell does, still paints the few pixels past its edge that the ink and a focus ring reach (`clip-reach`), so
+  neither is cut. Pulp, a comic in four-color print, takes
   them all; both its sides ink by the same rings, dark's line its cream.
   A palette may also give the shell's signature a form of its own, the first place it is felt: the aurora (a gradient
   hairline, a stepped bar of solid blocks, a print strip of those blocks, or a line that blooms), the name (the

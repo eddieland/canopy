@@ -195,7 +195,8 @@ describe('rowCells', () => {
     it("holds each of the head line's cells to its column, and none of what goes under it", () => {
         expect(rowCells('chore').split(' ')).toEqual([
             '[&>:nth-child(-n+3)]:min-w-0',
-            '[&>:nth-child(-n+3)]:overflow-x-clip',
+            '[&>:nth-child(-n+3)]:overflow-clip',
+            '[&>:nth-child(-n+3)]:clip-reach',
             '[&>:nth-child(-n+3)]:text-ellipsis',
         ])
     })
