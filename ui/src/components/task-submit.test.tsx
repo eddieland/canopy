@@ -4,6 +4,7 @@ import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { api } from '@/api/client'
+import { mockAttachmentLimits } from '@/api/mocks'
 import { keys } from '@/api/queries'
 import type { Meta, TaskSummary } from '@/api/types'
 import { ToastContext } from '@/hooks/use-toast'
@@ -49,6 +50,7 @@ function renderForm(repos: string[], tasks: Pick<TaskSummary, 'repo'>[] = [], fi
         ticket_url: null,
         version: '0.4.0',
         workspace_root: '/w',
+        attachment_limits: mockAttachmentLimits,
         repos,
     }
     client.setQueryData(keys.meta, meta)

@@ -7,7 +7,7 @@ import type { AttachmentSubject } from '@/api/mutations'
 import type { Attachments as AttachmentsData } from '@/api/types'
 import { Notice } from '@/components/notice'
 import { Button } from '@/components/ui/button'
-import { readAttachment, sizeText } from '@/lib/attachments'
+import { ATTACHMENT_TYPES, readAttachment, sizeText } from '@/lib/attachments'
 import { attachedText, detachedText } from '@/lib/outcomes'
 import { epicRef, taskRef } from '@/lib/refs'
 import { cn } from '@/lib/utils'
@@ -88,7 +88,7 @@ export function Attachments({
                             className="sr-only"
                             tabIndex={-1}
                             aria-label="File to attach"
-                            accept=".md,.markdown,.txt,.text,.rst,.adoc,.csv,.json,.yaml,.yml,.toml,text/*"
+                            accept={ATTACHMENT_TYPES}
                             onChange={(event) => {
                                 const file = event.currentTarget.files?.[0]
                                 // Cleared, so choosing the same file again uploads it again.

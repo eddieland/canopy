@@ -60,6 +60,15 @@ def test_a_file_uploaded_to_an_epic_is_shown_on_its_page_and_removed(ctx: Contex
     assert c.get("/api/epics/1").json()["attachments"]["items"] == []
 
 
+def test_the_server_s_meta_says_the_limits_a_form_checks_its_files_against_before_it_submits(ctx: Context) -> None:
+    c, _ = signed_in_client(ctx)
+    assert c.get("/api/meta").json()["attachment_limits"] == {
+        "max_files": 5,
+        "max_file_bytes": 512 * 1024,
+        "max_total_bytes": 1024 * 1024,
+    }
+
+
 def test_an_upload_canopy_cannot_use_is_refused_as_the_cli_refuses_it(ctx: Context) -> None:
     c, headers = signed_in_client(ctx)
     assert refused(c.put("/api/tasks/9/attachments/a.md", content=b"x", headers=headers)) == (

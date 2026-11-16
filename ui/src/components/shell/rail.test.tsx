@@ -2,7 +2,7 @@ import { QueryClient } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { mockChores, mockReviews, mockRuns, mockTasks } from '@/api/mocks'
+import { mockChores, mockReviews, mockRuns, mockTasks, mockAttachmentLimits } from '@/api/mocks'
 import { keys } from '@/api/queries'
 import type { ChoreSummary, Meta, ReviewSummary, Run, Spend, TaskSummary } from '@/api/types'
 import { DEFAULT_CLOCK } from '@/lib/clock'
@@ -255,6 +255,7 @@ describe('RailFooter', () => {
         ticket_url: null,
         version: '0.4.0+abc123',
         workspace_root: '/w',
+        attachment_limits: mockAttachmentLimits,
         repos: ['repo'],
     }
 

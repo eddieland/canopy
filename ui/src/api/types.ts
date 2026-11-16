@@ -430,10 +430,12 @@ export type EpicMemberRemoved = Schemas['EpicMemberRemoved']
 export type EpicStopped = Schemas['EpicStopped']
 /** What submitting an epic recorded: the epic, whose plan run the next tick starts, and the repositories it reads. */
 export type EpicSubmitted = Schemas['EpicSubmitted']
-/** A text file the operator attached to a ticket or a task, for its runs to read as data (DESIGN §22). */
+/** A text file the operator attached to a ticket, a task, or an epic, for its runs to read as data (DESIGN §22). */
 export type Attachment = Schemas['Attachment']
-/** A ticket's or a task's attachments, and the limits `policy` holds them to. */
+/** A ticket's, a task's, or an epic's attachments, and the limits `policy` holds them to. */
 export type Attachments = Schemas['Attachments']
+/** The limits `policy` holds one ticket's, task's, or epic's attachments to, as the server's meta says them. */
+export type AttachmentLimits = Schemas['AttachmentLimits']
 /** What an upload recorded: the attachment, as its subject's page lists it. */
 export type Attached = Schemas['Attached']
 /** What a removal of an attachment removed: its name. */

@@ -4,6 +4,9 @@ import { ApiError } from '@/api/client'
 const NAME_RE = /^(?=[A-Za-z0-9._-]{1,100}$)[A-Za-z0-9][A-Za-z0-9._-]*$/u
 const KIB = 1024
 
+/** What a file picker for an attachment offers first: the kinds of text people send, though any UTF-8 text is taken. */
+export const ATTACHMENT_TYPES = '.md,.markdown,.txt,.text,.rst,.adoc,.csv,.json,.yaml,.yml,.toml,text/*'
+
 /**
  * The name an attachment gets from a file's, as `canopy attach` makes it when given none: each run of other characters
  * made `-`, a `-` before a `.` or at the end dropped, leading `.`, `_`, and `-` dropped, and cut to 100. Null when
@@ -35,6 +38,16 @@ export interface AttachmentLimits {
     max_file_bytes: number
 }
 
+/** A file read for an upload that a form holds until it sends it. */
+export interface HeldFile {
+    /** The name it is attached as. */
+    name: string
+    /** Its text, the file's bytes as UTF-8. */
+    text: string
+    /** How many bytes it holds. */
+    size: number
+}
+
 /**
  * Read `file` for an upload, refusing what the server would before sending it, with the CLI's guard and words: a name
  * nothing is left of, a file over the bound, and bytes that are not UTF-8. Any BOM is kept, so the text sent is the
@@ -60,6 +73,41 @@ export async function readAttachment(file: File, limits: AttachmentLimits): Prom
     } catch {
         throw refusal('not_text', `${name} is not UTF-8 text; export it as Markdown or plain text`)
     }
+}
+
+/**
+ * Read `file` to attach beside `held`, the files a form holds for `subject` before it sends them, such as the new epic
+ * the epics page submits: refused as `readAttachment` refuses it, and as the server's `_check_room` would once they are
+ * all attached, in its words: past the count, a name one of them has, and past the total.
+ *
+ * @returns The file, read.
+ * @throws {ApiError} A refusal, as the server's would be.
+ */
+export async function readBeside(
+    file: File,
+    held: readonly HeldFile[],
+    limits: AttachmentLimits & { max_total_bytes: number },
+    subject: string,
+): Promise<HeldFile> {
+    const { name, text } = await readAttachment(file, limits)
+    if (held.length >= limits.max_files) {
+        throw refusal('too_many', `${subject} has ${held.length} attachments, the most it may hold; remove one first`)
+    }
+    if (held.some((h) => h.name === name)) {
+        throw refusal(
+            'taken',
+            `${subject} already has an attachment named ${name}; remove it first, or rename the file`,
+        )
+    }
+    const total = held.reduce((sum, h) => sum + h.size, file.size)
+    if (total > limits.max_total_bytes) {
+        throw refusal(
+            'too_large',
+            `${subject}'s attachments would hold ${sizeText(total)}, over the ${sizeText(limits.max_total_bytes)} ` +
+                'they may together',
+        )
+    }
+    return { name, text, size: file.size }
 }
 
 function refusal(guard: string, reason: string): ApiError {

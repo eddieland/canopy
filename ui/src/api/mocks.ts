@@ -1,6 +1,7 @@
 // Typed fixtures for unit tests, a few of the rows canopy/serve/mock/ seeds its journal with. The dev server and the
 // end-to-end tests get the whole seeded journal from `python -m canopy.serve --mock`.
 import type {
+    AttachmentLimits,
     Attachments,
     AttentionItem,
     Capacity,
@@ -26,13 +27,15 @@ import type {
     TicketSummary,
 } from './types'
 
-/** A ticket's, a task's, or an epic's attachments while it has none, under the default limits (DESIGN §22). */
-export const mockNoAttachments: Attachments = {
-    items: [],
+/** The default limits on a ticket's, a task's, or an epic's attachments: five files, 512 KiB each, 1 MiB in all. */
+export const mockAttachmentLimits: AttachmentLimits = {
     max_files: 5,
     max_file_bytes: 512 * 1024,
     max_total_bytes: 1024 * 1024,
 }
+
+/** A ticket's, a task's, or an epic's attachments while it has none, under the default limits (DESIGN §22). */
+export const mockNoAttachments: Attachments = { items: [], ...mockAttachmentLimits }
 
 /** The default `[capacity]`: two workers, one review among them, and one chore apart. */
 export const mockCapacity: Capacity = { workers: 2, reviews: 1, chores: 1 }

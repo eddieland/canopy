@@ -40,6 +40,7 @@ from canopy.runs import changes as changes_kept
 from canopy.serve import change_views, checklist_views, desk_views, draft_views, feedback_plan_views, memory_views
 from canopy.serve.schema import (
     Attachment,
+    AttachmentLimits,
     Attachments,
     AttentionItem,
     Capacity,
@@ -87,6 +88,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from datetime import datetime
 
+    from canopy.core.config import Policy
     from canopy.core.context import Context
     from canopy.serve import backend as served
     from canopy.serve.backend import Backend
@@ -872,9 +874,18 @@ def attachments_of(ctx: Context, ref: conversation.Ref) -> Attachments:
     Returns:
         Each attachment it holds, and `policy`'s limits.
     """
-    limits = attachments.Limits.from_policy(ctx.config.policy)
-    return Attachments(
-        items=[attachment(a) for a in attachments.of(ctx.conn, ref)],
+    limits = attachment_limits(ctx.config.policy)
+    return Attachments(items=[attachment(a) for a in attachments.of(ctx.conn, ref)], **limits.model_dump())
+
+
+def attachment_limits(policy: Policy) -> AttachmentLimits:
+    """The limits `policy` holds each ticket's, task's, or epic's attachments to, in files and bytes (§22).
+
+    Returns:
+        How many one subject may hold, and how many bytes one and all of them may.
+    """
+    limits = attachments.Limits.from_policy(policy)
+    return AttachmentLimits(
         max_files=limits.files,
         max_file_bytes=limits.file_bytes,
         max_total_bytes=limits.total_bytes,

@@ -2,7 +2,7 @@ import { QueryClient } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { mockCapacity } from '@/api/mocks'
+import { mockCapacity, mockAttachmentLimits } from '@/api/mocks'
 import { keys } from '@/api/queries'
 import type { LoopState, MemoryState, Meta, Spend, SpendMonth, Tick } from '@/api/types'
 import type { StreamStatus } from '@/hooks/use-event-stream'
@@ -19,6 +19,7 @@ const META: Meta = {
     ticket_url: null,
     version: '0.4.0',
     workspace_root: '/w',
+    attachment_limits: mockAttachmentLimits,
     repos: ['repo'],
 }
 
