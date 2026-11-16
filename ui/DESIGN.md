@@ -780,8 +780,9 @@ reader, so no table repeats them.
   fixed word and a count are muted monospace, never a chip. A chip with a long word in a narrow column cuts it to fit,
   the whole word in its tip; none is stretched to its column. Its color is its `tone`, from the one map of them (`Chip`
   in `src/components/status.tsx`): its color's hairline over the same color's tint, so it holds its edge on a selected
-  row; `plain` in `muted-foreground`, else the status color of the state it marks, or a proposal's own hue. No chip is
-  colored by classes of its own.
+  row, and where a palette inks it, the ink in place of the hairline, never one line inside another; `plain` in
+  `muted-foreground`, else the status color of the state it marks, or a proposal's own hue. No chip is colored by
+  classes of its own.
 - **A status on a detail page** is its description's first word alone; the identity panel's header names the panel
   and nothing else, so the state is said once. A run's journal says `done` where a tick's and a chore run's say `ok`:
   each is the CLI's word for its own, kept as it prints it, and in a list's row both wear `status-done`.

@@ -326,6 +326,7 @@ describe('inline code size', () => {
 describe("the inside ink's knobs", () => {
     it.each([
         ['--depth-chip', 'none'],
+        ['--chip-line', '40%'],
         ['--depth-selected', 'none'],
         ['--lift-x', '0px'],
         ['--lift-y', '0px'],

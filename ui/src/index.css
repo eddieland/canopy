@@ -85,7 +85,7 @@
 /* Numbers that change in place keep their width. Use on every counter, timer, cost, and id. */
 /*
  * How far past its box a box that clips (`overflow-clip`) still paints: the focus ring's reach, a 2px outline 2px off,
- * which also covers the ink a palette draws around a chip (Pulp's, 3px). It takes no room, so nothing moves, and text
+ * which also covers the ink a palette draws around a chip (Pulp's ring). It takes no room, so nothing moves, and text
  * is still cut at the box's edge by its ellipsis. Browsers honour it only where both axes clip.
  */
 @utility clip-reach {
