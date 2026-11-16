@@ -51,6 +51,19 @@ def with_config_dir(directory: str, command: str) -> str:
     return _shared.with_config_dir(directory, command)
 
 
+def on_private_server(command: str, *, version: Version) -> str:
+    """Return `command`, run by the runtime `version` runs, with its agent's run in the command's own process.
+
+    Where the runtime shares one service between commands, a run handed to it has that service's config and
+    environment, not the command's: neither the config directory the command points at nor a sandbox wrapping it
+    reaches the run. The default templates already run apart from it.
+
+    Returns:
+        `command` with whatever the runtime needs to run it apart, or as it is when it needs nothing.
+    """
+    return pick(version, one.invocation, two.invocation).on_private_server(command)
+
+
 def agent_of(command: str) -> str | None:
     """Return the agent `command` runs, or None when it names none a path component could hold."""
     return _shared.agent_of(command)

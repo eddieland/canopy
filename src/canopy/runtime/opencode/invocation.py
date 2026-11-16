@@ -65,6 +65,15 @@ def with_config_dir(directory: str, command: str) -> str:
     return f"env {CONFIG_DIR_ENV}={directory} {command}"
 
 
+def on_private_server(command: str) -> str:
+    """Return `command` as it is: each of OpenCode 1's runs is its own process, with no service shared between them.
+
+    Returns:
+        `command`.
+    """
+    return command
+
+
 def agent_of(command: str) -> str | None:
     """Return the agent `command` names with `--agent`, or None when it names none a path component could hold."""
     found = _AGENT_RE.search(command)

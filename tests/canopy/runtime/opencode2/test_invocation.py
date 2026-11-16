@@ -31,6 +31,21 @@ def test_with_config_dir_runs_the_command_with_the_directory_set() -> None:
 
 
 @pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        ("opencode run --agent x {prompt}", "opencode run --standalone --agent x {prompt}"),
+        ("env A=1 /usr/bin/opencode run", "env A=1 /usr/bin/opencode run --standalone"),
+        ("opencode run --standalone --agent x", "opencode run --standalone --agent x"),
+        ("opencode run --agent x --standalone", "opencode run --agent x --standalone"),
+        ("wrap myopencode run --agent x", "wrap myopencode run --agent x"),
+        ("opencode runner --agent x", "opencode runner --agent x"),
+    ],
+)
+def test_on_private_server_adds_the_flag_to_a_run_that_lacks_it(command: str, expected: str) -> None:
+    assert invocation.on_private_server(command) == expected
+
+
+@pytest.mark.parametrize(
     ("command", "agent"),
     [
         ("opencode run --standalone --agent=canopy-chore {prompt}", "canopy-chore"),
