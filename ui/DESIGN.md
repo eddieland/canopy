@@ -134,8 +134,8 @@ Rules:
   tail, and a starburst where a cleared item drops its leaf. Each is a shadow, a transform, a background, or drawn
   beside its box, so it takes no room, and a texture is clear where text sits; a box that clips what overflows it, as a
   list's cell does, still paints the few pixels past its edge that the ink and a focus ring reach (`clip-reach`), so
-  neither is cut. Pulp, a comic in four-color print, takes
-  them all; both its sides ink by the same rings, dark's line its cream.
+  neither is cut. Pulp, a comic in four-color print, takes them all; both its sides ink by the same rings, dark's line
+  its cream.
   A palette may also give the shell's signature a form of its own, the first place it is felt: the aurora (a gradient
   hairline, a stepped bar of solid blocks, a print strip of those blocks, or a line that blooms), the name (the
   aurora's gradient, on a solid block, on a tilted plate, or glowing), and the nav's highlight (a tint and a bar, a

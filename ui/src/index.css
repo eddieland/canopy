@@ -82,7 +82,6 @@
     }
 }
 
-/* Numbers that change in place keep their width. Use on every counter, timer, cost, and id. */
 /*
  * How far past its box a box that clips (`overflow-clip`) still paints: the focus ring's reach, a 2px outline 2px off,
  * which also covers the ink a palette draws around a chip (Pulp's ring). It takes no room, so nothing moves, and text
@@ -92,6 +91,7 @@
     overflow-clip-margin: 4px;
 }
 
+/* Numbers that change in place keep their width. Use on every counter, timer, cost, and id. */
 @utility readout {
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums slashed-zero;
