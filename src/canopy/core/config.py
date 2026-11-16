@@ -48,7 +48,7 @@ from pydantic import (
     model_validator,
 )
 
-from canopy.core import agent_models, bash_allows, chore_result, contract, hostgit
+from canopy.core import agent_models, bash_allows, chore_result, contract, event_names, hostgit
 from canopy.core.vocab import MemoryMode, PlannerApproval, PoolKind, ReplyMode
 from canopy.infra import procs, tracing
 from canopy.infra.metrics import Metrics  # noqa: TC001  (pydantic reads `Telemetry.metrics` at run time)
@@ -1530,8 +1530,6 @@ class Personas(Section):
 # A sink's name is a table name and appears in `canopy notify test` and the journal (DESIGN §20).
 SINK_NAME_RE = re.compile(r"[a-z][a-z0-9-]*")
 MAX_SINKS = 5
-# The event groups a sink may take. `attention` is the attention list's diff; the others are point events.
-EventGroup = Literal["attention", "loop", "runs", "chores", "reviews", "tasks", "replies"]
 # The sink `notify.cmd` stands for.
 DEFAULT_SINK = "default"
 MIN_DIGEST_MINUTES = 60
@@ -1551,12 +1549,23 @@ def _sink_command(value: str) -> str:
     return value
 
 
+def _event_pattern(value: str) -> str:
+    event_names.Pattern.parse(value)
+    return value
+
+
+#: One entry of a sink's `events`: a pattern over the names of the events canopy sends (`canopy.core.event_names`).
+EventPattern = Annotated[StrictStr, AfterValidator(_event_pattern)]
+
+
 class Sink(Section):
     """One `[notify.sinks.<name>]` table: a command that reads one message on stdin (DESIGN §20)."""
 
     cmd: Annotated[StrictStr, AfterValidator(_notify_command), AfterValidator(_sink_command)]
     format: Literal["json", "text"] = "json"
-    events: tuple[EventGroup, ...] = ("attention", "loop")
+    #: The events it takes, by name: `chores.*.summary`, `!runs.*.started`. A bare group takes every event of it; the
+    #: last pattern that matches an event decides.
+    events: tuple[EventPattern, ...] = ("attention", "loop")
     digest_every_minutes: Annotated[StrictInt, Field(ge=MIN_DIGEST_MINUTES)] | None = None
     #: In US dollars: a due digest waits until the runs since the last one cost at least this much, so the sink hears
     #: once per this much spent, at most once per interval. Such a sink's digests are no heartbeat.
@@ -1569,6 +1578,22 @@ class Sink(Section):
         if self.digest_min_usd is not None and self.digest_every_minutes is None:
             raise ValueError("digest_min_usd needs digest_every_minutes: it holds back digests, and none are sent")
         return self
+
+    def patterns(self) -> tuple[event_names.Pattern, ...]:
+        """Its `events`, read.
+
+        Returns:
+            Each pattern, in order.
+        """
+        return event_names.parse_all(self.events)
+
+    def takes(self, name: str) -> bool:
+        """Whether it takes the event named `name`, such as `runs.PROJ-1.started`, or the attention list's, `attention`.
+
+        Returns:
+            True when the last of its patterns that matches `name` takes it.
+        """
+        return event_names.takes(self.patterns(), name)
 
 
 SinkName = Annotated[str, AfterValidator(_sink_name)]
@@ -1601,13 +1626,13 @@ class Notify(Section):
             found[DEFAULT_SINK] = Sink(cmd=self.cmd, format="text", events=("attention",))
         return dict(sorted(found.items()))
 
-    def takes(self, group: str) -> bool:
-        """Whether any sink takes `group`: events of a group no sink takes are not recorded.
+    def takes(self, name: str) -> bool:
+        """Whether any sink takes the event named `name`: an event no sink takes is not recorded.
 
         Returns:
-            True when at least one sink's `events` names `group`.
+            True when at least one sink takes it.
         """
-        return any(group in sink.events for sink in self.all_sinks().values())
+        return any(sink.takes(name) for sink in self.all_sinks().values())
 
 
 # A source's name is a table name, as a sink's is (ROADMAP M36).

@@ -5,14 +5,19 @@ Each sink's cursor and failures, the attention items it was told about, and the 
 
 from __future__ import annotations
 
+import json
 import operator
 import sqlite3
 from collections.abc import Collection, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
 
-from canopy.core import db, records, sql
+from canopy.core import db, event_names, records, sql
 from canopy.core.items import Item, fingerprint, subject
+
+if TYPE_CHECKING:
+    from canopy.core.config import Sink
 
 # Events every sink has passed are deleted once they are this old.
 KEEP_EVENTS = timedelta(days=7)
@@ -68,10 +73,11 @@ def forget_sinks(conn: sqlite3.Connection, keep: Iterable[str]) -> list[str]:
 def events_after(
     conn: sqlite3.Connection,
     cursor: int,
-    groups: Sequence[str],
+    sink: Sink,
     upto: int | None = None,
 ) -> list[records.NotifyEvent]:
-    """Return the events after `cursor`, and up to `upto` if given, in `groups`, oldest first."""
+    """Return the events after `cursor`, and up to `upto` if given, that `sink` takes, oldest first."""
+    groups = event_names.groups(sink.patterns())
     if not groups:
         return []
     q = (
@@ -81,7 +87,21 @@ def events_after(
         .where_in("grp", groups)
         .order_by("id")
     )
-    return q.all(conn)
+    return [e for e in q.all(conn) if sink.takes(name(e))]
+
+
+def name(event: records.NotifyEvent) -> str:
+    """The name a sink's `events` match an outbox row by (`canopy.core.event_names`).
+
+    Returns:
+        Its dotted name. Fields that do not parse as a JSON object name no subject.
+    """
+    try:
+        parsed: object = json.loads(event.fields)
+    except json.JSONDecodeError:
+        parsed = None
+    fields = {str(k): v for k, v in parsed.items()} if isinstance(parsed, dict) else {}
+    return event_names.name_of(event.grp, event.kind, fields)
 
 
 def prune_events(conn: sqlite3.Connection, now: datetime) -> int:
@@ -220,10 +240,10 @@ def mark_failed(conn: sqlite3.Connection, sink_name: str, error: str) -> int:
     return row.failures if row is not None else 0
 
 
-def waiting(conn: sqlite3.Connection, cursor: int, groups: Sequence[str]) -> int:
-    """How many events in `groups` wait for a sink whose cursor is `cursor`.
+def waiting(conn: sqlite3.Connection, cursor: int, sink: Sink) -> int:
+    """How many events `sink` takes wait for it, its cursor at `cursor`.
 
     Returns:
         The count of events after `cursor`, up to the newest.
     """
-    return len(events_after(conn, cursor, groups))
+    return len(events_after(conn, cursor, sink))

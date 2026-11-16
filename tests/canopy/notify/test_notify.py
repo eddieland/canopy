@@ -15,7 +15,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import chore_result, db, outbox, runtime_sessions, spend
-from canopy.core.config import ConfigError, load
+from canopy.core.config import ConfigError, Sink, load
 from canopy.core.items import Item, fingerprint
 from canopy.notify import journal as notify_journal
 from canopy.notify import message
@@ -77,6 +77,7 @@ def needing_reviewers(*keys: str) -> list[Called]:
         ("[notify.sinks.slack]\ncmd = 'post {prompt}'\n", r"must not contain \{prompt\}"),
         ("[notify.sinks.slack]\ncmd = ''\n", "must not be empty"),
         ("[notify.sinks.slack]\ncmd = 'x'\nevents = ['everything']\n", "events"),
+        ("[notify.sinks.slack]\ncmd = 'x'\nevents = ['runs.*.strated']\n", "matches no event canopy sends"),
         ("[notify.sinks.slack]\ncmd = 'x'\ndigest_every_minutes = 30\n", "greater than or equal to 60"),
         ("[notify.sinks.slack]\ncmd = 'x'\ndigest_min_usd = 5\n", "digest_min_usd needs digest_every_minutes"),
         ("[notify.sinks.slack]\ncmd = 'x'\ndigest_every_minutes = 60\ndigest_min_usd = 0\n", "greater than 0"),
@@ -193,6 +194,60 @@ def titled(key: str, title: str, scenario: Scenario) -> None:
 def test_without_sinks_no_event_is_recorded(scenario: Scenario, git_pool: GitPool) -> None:
     scenario.run(worker=worker_does())
     assert scenario.conn.execute("SELECT count(*) FROM notify_events").fetchone()[0] == 0
+
+
+def test_a_sink_takes_events_by_name_and_one_no_sink_takes_is_not_recorded(
+    scenario: Scenario,
+    git_pool: GitPool,
+    sink_script: Path,
+    tmp_path: Path,
+) -> None:
+    """A sink hears the events its patterns name, the last that matches deciding, and nothing else."""
+    ends, watch = tmp_path / "ends.txt", tmp_path / "watch.txt"
+    add_sink(scenario, sink_script, "ends", ends, format="text", events=["runs", "!runs.*.started"])
+    add_sink(scenario, sink_script, "watch", watch, format="text", events=["runs.PROJ-2.*"])
+    scenario.tick()  # the sinks' first publish: from here on they hear every event
+    scenario.run(worker=done_with_no_pr())
+    scenario.tick(*waits(KEY))
+    [message] = messages(ends)
+    assert f"< {KEY} run 1 implement ended done" in message
+    assert f"> {KEY} run 1 started" not in message
+    assert messages(watch) == []
+    # No sink takes a run's start, so none was recorded.
+    assert [r[0] for r in scenario.conn.execute("SELECT kind FROM notify_events")] == ["run.ended"]
+
+
+def test_a_sink_that_takes_replies_is_given_them(conn: sqlite3.Connection) -> None:
+    """What came of a reply from Slack reaches a sink that takes `replies`, and no other."""
+    refused = {"ticket": None, "ts": "1.2", "guard": "no_ticket", "reason": "r"}
+    with db.transaction(conn):
+        first = db.record_event(conn, db.Event(outbox.REPLIES, "reply.refused", refused))
+        db.record_event(conn, db.Event(outbox.RUNS, "run.started", {"ticket": KEY, "run": 1}))
+    taking = Sink(cmd="x", events=("replies",))
+    assert [(e.id, notify_journal.name(e)) for e in notify_journal.events_after(conn, 0, taking)] == [
+        (first, "replies.-.refused"),
+    ]
+    assert notify_journal.events_after(conn, 0, Sink(cmd="x", events=("replies.*.recorded",))) == []
+
+
+def test_notify_events_lists_each_name_and_the_sinks_that_take_it(scenario: Scenario) -> None:
+    """`canopy notify events` says which sinks take each name, all of it or for some subjects."""
+    sinks = {
+        "slack": {"cmd": "x", "events": ["attention", "chores.*.summary", "runs.**", "!runs.*.started"]},
+        "watch": {"cmd": "x", "events": ["runs.PROJ-1.*"]},
+    }
+    scenario.configures(notify={"sinks": sinks})
+    lines = scenario.operator("notify", "events").out.splitlines()
+    at = lines.index("runs.<ticket>.started  (run.started)")
+    assert lines[at + 1] == "  taken by: no sink; for some tickets: watch"
+    assert json.loads(lines[at + 2]) == outbox.EXAMPLES["run.started"]
+    at = lines.index("runs.<ticket>.ended  (run.ended)")
+    assert lines[at + 1] == "  taken by: slack; for some tickets: watch"
+    at = lines.index("chores.<chore>.summary  (chore.summary)")
+    assert lines[at + 1] == "  taken by: slack"
+    at = lines.index("loop.failing  (loop.failing)")
+    assert lines[at + 1] == "  taken by: no sink"
+    assert lines[:2] == ["attention", "  taken by: slack"]
 
 
 def test_a_failing_sink_does_not_hold_back_another_and_catches_up(
@@ -721,6 +776,7 @@ def test_a_chores_summary_reaches_the_sinks_whole_when_its_table_says_so(
     sink_script: Path,
     tmp_path: Path,
 ) -> None:
+    """A summary sent whole is an event of its own, beside the run's status, so a sink takes either alone."""
     prompt = scenario.env.home / "briefing.md"
     prompt.write_text("Brief me.\n")
     briefing = {
@@ -732,8 +788,11 @@ def test_a_chores_summary_reaches_the_sinks_whole_when_its_table_says_so(
     }
     scenario.configures(chores={"briefing": briefing})
     text, as_json = tmp_path / "text.txt", tmp_path / "json.txt"
+    status, output = tmp_path / "status.txt", tmp_path / "output.txt"
     add_sink(scenario, sink_script, "a", text, format="text", events=["chores"])
     add_sink(scenario, sink_script, "b", as_json, format="json", events=["chores"])
+    add_sink(scenario, sink_script, "c", status, format="json", events=["chores.*.ended"])
+    add_sink(scenario, sink_script, "d", output, format="json", events=["chores.briefing.summary"])
     # A new sink starts with no backlog, so a tick first, which sees the sinks.
     scenario.tick(chore_waits("briefing", "nothing changed"))
     summary = "Two things wait on you.\n\n- ana   asked for changes on PROJ-1.\n- PROJ-2's plan waits " + "x" * 2000
@@ -745,18 +804,21 @@ def test_a_chores_summary_reaches_the_sinks_whole_when_its_table_says_so(
         scenario.tick()
     [message] = messages(text)
     lines = message.splitlines()
-    at = lines.index("< chore:briefing run 1 ended ok (0 findings):")
+    at = lines.index("< chore:briefing run 1 ended ok (0 findings)")
     # The summary as the run reported it, up to the contract's bound, each line whole, its blank line and doubled
     # spaces left out.
     sent = summary[: chore_result.MAX_SUMMARY]
     first, second = "Two things wait on you.", "- ana asked for changes on PROJ-1."
     last = "- PROJ-2's plan waits " + "x" * sent.count("x")
-    assert lines[at + 1 : at + 4] == [f"  {first}", f"  {second}", f"  {last}"]
-    assert lines[at + 4] == f"Full list: {scenario.env.state_dir / 'attention.md'}"
-    [event] = json.loads(messages(as_json)[0])["events"]
-    assert event["summary_lines"] == [first, second, last]
-    # The one-line summary stays as every sink had it.
-    assert len(event["summary"]) == outbox.SUMMARY_LIMIT
+    assert lines[at + 1 : at + 5] == ["= chore:briefing run 1 summary:", f"  {first}", f"  {second}", f"  {last}"]
+    assert lines[at + 5] == f"Full list: {scenario.env.state_dir / 'attention.md'}"
+    ended, whole = json.loads(messages(as_json)[0])["events"]
+    assert (ended["kind"], ended["name"], ended["summary"]) == ("chore.ended", "chores.briefing.ended", None)
+    assert (whole["kind"], whole["name"]) == ("chore.summary", "chores.briefing.summary")
+    assert whole["lines"] == [first, second, last]
+    # Status alone, and output alone.
+    assert [e["kind"] for e in json.loads(messages(status)[0])["events"]] == ["chore.ended"]
+    assert [e["kind"] for e in json.loads(messages(output)[0])["events"]] == ["chore.summary"]
 
 
 def test_a_finding_the_operator_dismissed_is_marked_so_in_both_formats() -> None:

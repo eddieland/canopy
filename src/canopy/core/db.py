@@ -17,7 +17,7 @@ from importlib.metadata import version
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, LiteralString, assert_never
 
-from canopy.core import item_numbers, records, run_metrics, sql
+from canopy.core import event_names, item_numbers, records, run_metrics, sql
 from canopy.core.vocab import (
     Decider,
     NumberedItem,
@@ -115,6 +115,11 @@ class Event:
     group: str
     kind: str
     fields: Mapping[str, object]
+
+    @property
+    def name(self) -> str:
+        """The name a sink's `events` match it by, such as `runs.PROJ-1.started` (`canopy.core.event_names`)."""
+        return event_names.name_of(self.group, self.kind, self.fields)
 
 
 @dataclass(frozen=True)

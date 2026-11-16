@@ -133,7 +133,7 @@ operator's programs. This generalizes `notify.cmd` (§14), which stays and behav
 - Sinks are private (§12), like every `notify.*` key (TRUST_MODEL T7). At most 5, since each can hold the tick lock.
 - `cmd` follows `notify.cmd`'s rules (§12): argv, no shell. Exit 0 means delivered; anything else, timeout included,
   means retry next tick.
-- Each sink sets its `format` (`json` or `text`), the event groups it takes, and optional batching and digest (below).
+- Each sink sets its `format` (`json` or `text`), the events it takes, and optional batching and digest (below).
 - `canopy notify test [SINK]` sends a test message and changes no delivery state. It refuses when `CANOPY_TICK_ID` or
   `CANOPY_RUN_ID` is set, so no agent can page.
 - `notify.cmd` is shorthand for a `text` sink taking attention alone, so switching re-notifies nothing. Setting both
@@ -151,9 +151,16 @@ line, but for a chore's summary its table sends whole (`whole_summary`), which k
 the plan's text. `run.ended` carries a `blocked` run's question, since the needs-human
 label is not an attention item.
 
+Each event has a name, `<group>.<subject>.<kind>` (`runs.PROJ-1.started`, `chores.briefing.summary`), its subject a
+ticket key, chore, repository, epic, or task, and none for `loop` and `attention`. A sink's `events` lists patterns over
+names: `*` one segment, `**` any number, a bare group all of it, `!` excludes, and the last match decides. A pattern
+that can match no name is a config error, so a typo is refused rather than silent. A chore's summary sent whole is its
+own event, beside its status, so a sink takes either alone. Names are config surface: a rename keeps the old name as
+an alias. `canopy notify events` lists them, with example fields and the sinks that take each.
+
 Attention is a diff of state per sink (§14): each sink hears of each open item once, and a sink that was down gets the
 net change. The other kinds are point events in an outbox, written in the same transaction as the fact they report,
-with a cursor per sink. A failing streak is reported once.
+with a cursor per sink. A failing streak is reported once. An event no sink takes is not recorded.
 
 ### Delivery
 

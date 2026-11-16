@@ -615,7 +615,13 @@ def spawn(ctx: Context, run_id: int, lease: pools.Lease, prompt: str) -> Started
             run_id,
             ReviewRunStatus.CRASHED,
             note,
-            event=outbox.review_ended(ctx.config, run, ReviewRunStatus.CRASHED, note),
+            event=outbox.review_ended(
+                ctx.config,
+                run,
+                ReviewRunStatus.CRASHED,
+                note,
+                repo=ctx.workspace.run_repo(run.repo),
+            ),
         )
         raise Refusal("spawn_failed", str(e)) from e
     db.claim_run(ctx.conn, "review_runs", run_id, pid)
