@@ -19,7 +19,7 @@ like before you commit to it. The defaults tint the canvas with the accent's hue
 editor. **Pulp**, on either side, is a comic printed in four colors: newsprint cream in light, a night blue in dark,
 loud flat section colors on both, and process magenta for the button you actually came to press. Dark can be a plain
 **Grey**, a near **Black** for an OLED screen, a deep green **Forest**, a wine-dark
-**Plum**, **Starry Skies**, a night blue with stars behind the panels, or the dark side of **Solarized**, **Gruvbox**,
+**Plum**, **Starry Skies**, a night blue with stars between the panels, or the dark side of **Solarized**, **Gruvbox**,
 or **Monokai**. The background, surfaces, text, and accent change. Schemes with an accent bring it: Nord and Solarized
 their blues, Monokai its hot pink, Rosé Pine its dusty one, Acme its dark blue, Gruvbox its purple, since its orange
 looked like every run was blocked. The rest get one that suits them: ink blue on Off-white, heather on Sage and in the
