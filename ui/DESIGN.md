@@ -726,7 +726,10 @@ reader, so no table repeats them.
   `epic:N`, its repositories, its goal's first line in the free column, how many of its breakdown's entries are filed,
   and the age, newest first. Above it, a `New epic` panel (`EpicSubmitForm`), the tasks page's form with the goal in a
   `MarkdownField` with its toolbar, since a goal runs to a paragraph: on success a toast says what the CLI says and the
-  form opens the epic's page; with no stream event for epics, the page reads the list again.
+  form opens the epic's page; with no stream event for epics, the page reads the list again. An outline **Attach a
+  file** in its row of fields holds files for the epic, listed under the goal as Attachments lists them, each with a
+  ghost ✕ named `Drop NAME`; each is checked as it is chosen against the limits `/api/meta` says, and the form takes
+  no submit while one is read. Both file controls are `type="button"`, so neither submits it.
 - **An epic** (`/epics/$id`) leads with its breakdown, since what is left to file is what the page answers: the board
   (`EpicBoard`), at the page's width, a table with a row per entry in the plan's order and a column for each part of it,
   headed, so an id reads by its column; the members fulfilling it, each its run's dot, key, and phase, or `none yet`,
@@ -1336,11 +1339,11 @@ reader, so no table repeats them.
   read says why, offers no model, and has a `Read again` item. While a choice saves, its trigger is `aria-busy` and
   `aria-disabled`, never `disabled`, so the focus the list hands back stays on it.
 - **Attachments** (`src/components/attachments.tsx`, DESIGN §22) are a section with a `panel-label` heading, under the
-  verbs at the foot of a ticket's or a task's conversation, beside the reply that says what to do with them: each file
-  a row of its name in monospace, its size muted, and a ghost `icon-xs` ✕ named `Remove NAME`; an outline `xs` **Attach
-  a file** beside the heading opens the browser's file picker. A muted line says how much of the limits it holds. The
-  page refuses a file over the bound or not UTF-8 before sending it, as an `ApiError` naming the CLI's guard, so it
-  reads in the `Notice` as the server's refusal would.
+  verbs at the foot of a ticket's, a task's, or an epic's conversation, beside the reply that says what to do with
+  them: each file a row of its name in monospace, its size muted, and a ghost `icon-xs` ✕ named `Remove NAME`; an
+  outline `xs` **Attach a file** beside the heading opens the browser's file picker. A muted line says how much of the
+  limits it holds. The page refuses a file over the bound, not UTF-8, holding a NUL, or blank before sending it, as an
+  `ApiError` naming the CLI's guard, so it reads in the `Notice` as the server's refusal would.
 - **A limit something is stuck at** (`GrantLimits`) sits under a ticket's actions, after its reply, but under the run on
   a broken run's item, which asks for another try first, and in the foot of a PR's Pull request panel. While something
   is stuck it is a block on the `status-failed` tint, the color its `attempt_limit` chip wears, so it stands out from

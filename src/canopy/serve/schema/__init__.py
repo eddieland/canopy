@@ -89,6 +89,9 @@ class Meta(Model):
     """The workspace's repositories, by name, in its file's order: the ones a task may be submitted to run in."""
     dictation: bool = False
     """Whether `serve.dictation_cmd` is set, so a field offers to record the operator and fill in what it heard."""
+    attachment_limits: AttachmentLimits
+    """The limits `policy` holds each subject's attachments to, which a form that attaches files as it submits checks
+    them against before it sends anything."""
 
 
 class Session(Model):
@@ -701,7 +704,7 @@ class Message(Model):
 
 
 class Attachment(Model):
-    """A text file the operator attached to a ticket or a task, for its runs to read as data (DESIGN §22)."""
+    """A text file the operator attached to a ticket, a task, or an epic, for its runs to read as data (DESIGN §22)."""
 
     name: str
     """What its runs see it as: a plain file name of letters, digits, `.`, `_`, and `-`."""
@@ -713,17 +716,22 @@ class Attachment(Model):
     """When the operator attached it."""
 
 
-class Attachments(Model):
-    """A ticket's, a task's, or an epic's attachments, and the limits `policy` holds them to (DESIGN §22)."""
+class AttachmentLimits(Model):
+    """The limits `policy` holds one ticket's, task's, or epic's attachments to (DESIGN §22)."""
 
-    items: list[Attachment]
-    """Each attachment it holds, the first attached first."""
     max_files: int
     """How many it may hold at once, `policy.max_attachments`; 0 when attaching is off."""
     max_file_bytes: int
     """The most bytes one may hold, `policy.max_attachment_kib`."""
     max_total_bytes: int
     """The most bytes all of them may hold together, `policy.max_attachments_total_kib`."""
+
+
+class Attachments(AttachmentLimits):
+    """A ticket's, a task's, or an epic's attachments, and the limits `policy` holds them to (DESIGN §22)."""
+
+    items: list[Attachment]
+    """Each attachment it holds, the first attached first."""
 
 
 class Attached(Model):

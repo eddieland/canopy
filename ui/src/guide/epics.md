@@ -26,11 +26,17 @@ Write it as you would a reply, with the same toolbar, and the same microphone wh
 - **Tracker project**, optional: where its tickets are filed. With none, the epic files no tickets.
 - **Tracker epic**, optional: a [tracker epic](glossary#tracker-epic) whose tickets are put to you as suggestions.
   They're only that: none becomes a member until you add it.
+- **Attach a file**, optional: text files for the epic, such as the spec the goal is about, listed under the goal with
+  a ✕ to drop one. Each is checked as you choose it, against the same limits as the epic's page, so a PDF or one
+  file too many is refused before anything is recorded. Once the epic is, each is attached to it, the same as
+  `canopy attach epic:N FILE`, so its first plan run reads them. Say in the goal what to do with them.
 
 **Submit**, or the send key, records it and opens the epic's page, `queued`: the next tick starts its plan run, before
 the overseer, within `capacity.max_workers`. A submission refuses as the command does, naming the guard: an empty goal,
 a repository the workspace hasn't got, a project or tracker epic that isn't a plain key, and anything sent from inside
-a tick or a run.
+a tick or a run. Should the server still refuse a file after the epic is recorded, say because someone lowered a limit
+between your choosing it and your pressing Submit, the epic stands, the other files are attached, and a toast names
+the one that wasn't: attach it on the epic's page before the next tick, or reply once it is.
 
 From the shell it is the same:
 
