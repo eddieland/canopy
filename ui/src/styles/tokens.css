@@ -215,12 +215,10 @@
      * and a field's or an outline or secondary button's line in ink (`--control-line`, `--control-line-quiet`). The
      * defaults draw none of it: no shadow, no nudge, a field's and an outline button's line the border, and a
      * secondary button's none. A chip's own hairline, its tone at `--chip-line` strength, gives way where its ink is
-     * drawn, so the two never stand one inside the other. A chip's word is lettered as it is spelled (`--chip-case`),
-     * and a plain chip sits on a tenth of its own ink (`--chip-plain`), as inline code does; a palette may letter it in
-     * caps, which in the mono every chip is set in takes the same width, and print a plain one on its paper. */
+     * drawn, so the two never stand one inside the other. A plain chip sits on a tenth of its own ink
+     * (`--chip-plain`), as inline code does, and a palette may print it on its paper instead. */
     --depth-chip: none;
     --chip-line: 40%;
-    --chip-case: none;
     --chip-plain: color-mix(in oklab, currentColor 10%, transparent);
     --depth-selected: none;
     --lift-x: 0px;
@@ -626,13 +624,12 @@
     --burst-leaf: none;
     --burst-plate: block;
     /* The ink goes on inside a panel at a lighter hand: a chip inked at one line in place of its hairline, flat, as a
-     * caption box is, since it labels and is not pressed, and a drop would read as a button's, lettered in caps and a
-     * plain one on the paper, as a caption is; the selected row inked
-     * as a panel is and lifted a pixel up and left off the list, the one thing on the page drawn as standing out of
-     * it; and a field's and a quiet button's line inked as the panel's. */
+     * caption box is, since it labels and is not pressed, and a drop would read as a button's, and a plain one on the
+     * paper, as a caption is; the selected row inked as a panel is and lifted a pixel up and left off the list, the
+     * one thing on the page drawn as standing out of it; and a field's and a quiet button's line inked as the panel's.
+     */
     --depth-chip: 0 0 0 1px var(--ink);
     --chip-line: 0%;
-    --chip-case: uppercase;
     --chip-plain: var(--surface);
     --depth-selected: 0 0 0 1.5px var(--ink), 3px 3px 0 1.5px var(--ink);
     --lift-x: -1px;
@@ -981,12 +978,11 @@
     --title-drop-alpha: 1;
     --burst-leaf: none;
     --burst-plate: block;
-    /* Inside a panel, as light's: a chip inked flat in the cream in place of its hairline, lettered in caps, the
-     * selected row inked and lifted off the list onto its drop, and a field's and a quiet button's line in the
+    /* Inside a panel, as light's: a chip inked flat in the cream in place of its hairline, a plain one on the paper,
+     * the selected row inked and lifted off the list onto its drop, and a field's and a quiet button's line in the
      * cream. */
     --depth-chip: 0 0 0 1px var(--ink);
     --chip-line: 0%;
-    --chip-case: uppercase;
     --chip-plain: var(--surface);
     --depth-selected: 0 0 0 1px var(--ink), 4px 4px 0 1px var(--ink-drop);
     --lift-x: -1px;
