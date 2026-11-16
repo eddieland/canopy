@@ -87,8 +87,10 @@ export const ROW_COLUMNS = {
         ['run', fit(8, 5), 4],
         // A chore's name is longer than a ticket's key: the list widens to it when it holds one.
         ['key', fit(14, 6)],
-        // Its chips go before its age: they describe the run, where the age says whether it is current.
-        ['kind', fit(16, 10), 2],
+        // Its chips go before its age: they describe the run, where the age says whether it is current. A second chip
+        // (`private`) wraps under the first rather than widen the column, and so the gap before every row's title, for
+        // the few runs that carry two.
+        ['kind', fit(10), 2],
         ['title', FREE],
         ['cost', COST, 1],
         ['age', AGE, 3],

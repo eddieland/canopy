@@ -699,7 +699,8 @@ reader, so no table repeats them.
   sessions go and what waits on what. A subject's row is its latest run, which says where it stands, and under it
   `Show N earlier runs`, a `Disclosure` that opens the runs before it, each one line in the row's own columns. A ticket
   that asked, got its answer, and asked again is one blocked row, not two. The state filter goes by each subject's
-  latest run, as do the rail's working runs: a blocked run a later one followed waits on nothing. Under the page's
+  latest run, as do the rail's working runs: a blocked run a later one followed waits on nothing, and a subject that
+  waits on the operator is on a question's tint, its whole row, as the rail's is. Under the page's
   description, a line counts what runs against each `[capacity]` limit as the harness counts it, a full one in
   `status-blocked` with `full`. A ticket's page lists its runs flat (`RunsTable`), since every row there is the same
   ticket's.
