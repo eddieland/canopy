@@ -646,13 +646,21 @@ def _task_ended(e: Mapping[str, object]) -> _Shown:
 
 
 def _chore_ended(e: Mapping[str, object]) -> _Shown:
-    # A chore whose table sends its summary whole, such as a briefing, gives it as lines, each shown as one.
-    whole = _lines(e.get("summary_lines"))
     return _Shown(
         [
             _ended(e, f"*chore:{escape(e.get('chore'))}* · run {escape(e.get('run'))}")
             + f" · {_findings(e.get('findings'))}",
-            *([_linked(line) for line in whole] if whole else [_linked(e.get("summary")) if e.get("summary") else ""]),
+            _linked(e.get("summary")) if e.get("summary") else "",
+        ],
+    )
+
+
+def _chore_summary(e: Mapping[str, object]) -> _Shown:
+    # A chore whose table sends its summary whole, such as a briefing, gives it as lines, each shown as one.
+    return _Shown(
+        [
+            f":memo: *chore:{escape(e.get('chore'))}* · run {escape(e.get('run'))}",
+            *(_linked(line) for line in _lines(e.get("lines"))),
         ],
     )
 
@@ -744,6 +752,7 @@ _EVENTS: dict[str, Callable[[Mapping[str, object]], _Shown]] = {
     "ci.kicked": _ci_kicked,
     "task.ended": _task_ended,
     "chore.ended": _chore_ended,
+    "chore.summary": _chore_summary,
     "review.ended": _review_ended,
     "loop.failing": _loop_failing,
     "loop.recovered": _loop_recovered,
@@ -1435,7 +1444,7 @@ def _thread(item: Mapping[str, object]) -> str | None:
         return f"review:{item['pr']}" if item.get("pr") else None
     ticket = item.get("ticket")
     # A chore's results stay in the channel: the operator reads them as they come, not in a thread of their own.
-    if kind == "chore.ended" or not ticket or str(ticket).startswith(_CHORE):
+    if kind in {"chore.ended", "chore.summary"} or not ticket or str(ticket).startswith(_CHORE):
         return None
     return str(ticket)
 

@@ -285,9 +285,10 @@ timeout_minutes = 10
 ```
 
 - **Its summary is the briefing.** It reports no findings: what needs you is on your attention list already. With
-  `whole_summary`, the `chore.ended` event a sink taking `chores` hears of carries the summary whole, a line of it
-  each, as `summary_lines`, and the `text` format and the Slack sink show those lines under the event. Without it, a
-  sink gets the summary cut to one line of 300 characters, as for every other chore.
+  `whole_summary`, each run sends a `chore.summary` event, `chores.briefing.summary`, carrying the summary whole, a
+  line of it each, as `lines`; the `text` format and the Slack sink show those lines. Its `chore.ended` is then its
+  status alone, so a sink taking `chores.briefing.summary` gets the briefing without every chore's status line.
+  Without it, a sink gets the summary on `chore.ended`, cut to one line of 300 characters, as for every other chore.
 - **One report.** [`canopy-briefing`](agents/canopy-briefing.md) is `canopy-chore` with `canopy_reports_waiting`
   allowed and no shell: the attention list, each item marked new since the last briefing; each open ticket's open PRs
   with each reviewer's latest review and the feedback no plan has handled, by who wrote it; and the counts of what

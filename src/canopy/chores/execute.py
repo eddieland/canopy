@@ -7,6 +7,7 @@ every exit path this process can see; SIGKILL cannot be caught, and reconcile fi
 
 from __future__ import annotations
 
+import functools
 import json
 import os
 from dataclasses import dataclass
@@ -33,6 +34,8 @@ from canopy.infra import logs, procs, stopping
 from canopy.runtime import project_config, stdout
 
 if TYPE_CHECKING:
+    import sqlite3
+
     from canopy.core import records
     from canopy.core.config import Chore, Rendered
     from canopy.core.context import Context
@@ -109,7 +112,9 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
             stop.armed = False
             stored = outcome.result_json()
             ended = outbox.chore_ended(ctx.config, run.chore, run_id, outcome.status, stored)
-            if not db.finish_run(ctx.conn, "chore_runs", run_id, outcome.status, stored, event=ended):
+            summary = outbox.chore_summary(ctx.config, run.chore, run_id, stored)
+            told = functools.partial(_record_summary, ctx.conn, summary)
+            if not db.finish_run(ctx.conn, "chore_runs", run_id, outcome.status, stored, event=ended, then=told):
                 log.warning("chore run was already closed; its outcome is not recorded", extra=fields)
             procs.drop_lifelock(Path(run.log_path))
             log.info("chore run finished", extra={**fields, "status": outcome.status})
@@ -244,6 +249,12 @@ def _work(ctx: Context, run: records.ChoreRun, out: TextIO, log: logs.TickAdapte
         spent = output.usage.spent() if output.usage else {}
         log.info("chore reported", extra={"chore_run_id": run_id, "session_id": output.session_id, **spent})
     return outcome_of(done, output, chore, reported=reported(ctx, done))
+
+
+def _record_summary(conn: sqlite3.Connection, summary: db.Event | None) -> None:
+    """Record a chore's `chore.summary` event, if it has one, in the transaction that closes its run."""
+    if summary is not None:
+        db.record_event(conn, summary)
 
 
 def _cwd(ctx: Context, name: str, chore: Chore) -> Path:

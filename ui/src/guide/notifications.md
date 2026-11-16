@@ -73,13 +73,40 @@ config otherwise. It counts toward the five.
 
 ## Choosing what a sink hears
 
-`events` lists the groups a sink takes: `attention`, `runs`, `reviews`, `chores`, `tasks`, `loop`, and `replies`, which
-only matters with Slack. Leave it out and you get `["attention", "loop"]`. What each group holds is on the Slack page,
-under [Choosing what it hears](slack#choosing-what-it-hears); it's the same for every sink.
+`events` lists what a sink takes. The short way is by group: `attention`, `runs`, `reviews`, `chores`, `tasks`,
+`loop`, and `replies`, which only matters with Slack. Leave it out and you get `["attention", "loop"]`. What each group
+holds is on the Slack page, under [Choosing what it hears](slack#choosing-what-it-hears); it's the same for every sink.
+
+A group is often more than you want, so every event also has a name of its own, `<group>.<subject>.<kind>`:
+`runs.PROJ-1.started`, `chores.briefing.summary`, `reviews.api.ended`. The subject is the ticket, chore, repository,
+epic, or task it's about; the loop's own events and the attention list have none (`loop.failing`, `attention`). Each
+entry in `events` is a pattern over those names: `*` matches one segment, `**` any number, a bare group means all of
+it, and a leading `!` takes back what an earlier entry gave. When two entries match, the last one wins.
+
+```toml
+[notify.sinks.phone]
+cmd = "canopy-notify-desktop"
+events = [
+  "attention",
+  "loop.failing", "loop.recovered", "loop.budget_reached",
+  "chores.*.summary",        # what the briefing says, without every chore's status line
+  "runs.*.plan_proposed",    # a plan waits on you; the rest of a run's life doesn't
+]
+
+[notify.sinks.log]
+cmd = "logger -t canopy"
+format = "text"
+events = ["runs", "!runs.*.started", "runs.PROJ-1.*"]   # every run ending, and everything about PROJ-1
+```
+
+`canopy notify events` lists every name canopy can send, an example of the fields each carries, and which of your
+sinks take it, so you can check a pattern before you sit waiting for an event that will never come. canopy checks too:
+a pattern no event could match, a typo like `runs.*.strated`, is a config error rather than a sink that quietly hears
+nothing.
 
 A new sink starts from now. If it takes `attention`, its first message lists every item open on the list, since it
-hasn't heard of any, but it gets none of the events from before it existed. canopy doesn't record events of a group no
-sink takes, so adding `runs` to a sink later doesn't bring back the runs you missed. Take a sink out of the config and
+hasn't heard of any, but it gets none of the events from before it existed. canopy doesn't record an event no sink
+takes, so adding `runs` to a sink later doesn't bring back the runs you missed. Take a sink out of the config and
 canopy forgets it; put it back, or rename it, and it starts over as new.
 
 ## Batching and digests
@@ -92,7 +119,7 @@ open items on that interval, even when nothing happened, so a digest that stops 
 
 A digest counts; it doesn't judge. No model writes it, which is why you can trust it to arrive. For "ana asked for
 changes on PROJ-1 and it's waiting on you" install the `briefing` chore ([chores](chores)): it reads what waits on you
-and writes a few lines on what matters since its last run, which a sink taking `chores` gets whole.
+and writes a few lines on what matters since its last run, which a sink taking `chores.briefing.summary` gets whole.
 
 ## Formats
 

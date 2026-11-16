@@ -1,12 +1,17 @@
-"""`canopy notify test`: send a test message to the notification sinks, outside any tick (DESIGN §20)."""
+"""`canopy notify`: send a test message to the notification sinks, and list the events they can take (DESIGN §20)."""
 
 from __future__ import annotations
+
+import json
 
 import click
 
 from canopy.cli.common import CliError, open_context
-from canopy.core import conversation
+from canopy.core import conversation, event_names, outbox
 from canopy.notify import deliver
+
+#: What `canopy notify events` says of the attention list, which is a diff of items, not a point event with fields.
+_ATTENTION = "the attention list's items added and resolved since the sink last heard: the json format's `attention`"
 
 
 @click.group("notify")
@@ -35,3 +40,26 @@ def cmd_notify_test(click_ctx: click.Context, sink: str | None) -> int:
         detail = f": {result.detail}" if result.detail else ""
         click.echo(f"{result.sink}: {result.outcome}{detail}")
     return 0 if all(r.outcome == "delivered" for r in results) else 1
+
+
+@notify_group.command("events")
+@click.pass_context
+def cmd_notify_events(click_ctx: click.Context) -> int:
+    """List every event name canopy can send, an example of its fields, and which configured sinks take it.
+
+    A sink's `events` lists patterns over these names: `*` matches one segment, `**` any number, a bare group every
+    event of it, and a leading `!` excludes. A sink that takes a name for some subjects alone, such as `runs.PROJ-1.*`,
+    is listed under `for some`.
+    """
+    ctx = open_context(click_ctx)
+    sinks = {name: sink.patterns() for name, sink in ctx.config.notify.all_sinks().items()}
+    for spec in event_names.SPECS:
+        taken = {name: event_names.taken(patterns, spec) for name, patterns in sinks.items()}
+        every = [name for name, how in taken.items() if how == "all"]
+        some = [name for name, how in taken.items() if how == "some"]
+        click.echo(spec.template if spec.kind == outbox.ATTENTION else f"{spec.template}  ({spec.kind})")
+        line = f"  taken by: {', '.join(every) or 'no sink'}"
+        click.echo(f"{line}; for some {spec.subject}s: {', '.join(some)}" if some else line)
+        example = outbox.EXAMPLES.get(spec.kind)
+        click.echo(f"  {json.dumps(example)}" if example is not None else f"  {_ATTENTION}")
+    return 0

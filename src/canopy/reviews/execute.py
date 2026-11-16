@@ -140,7 +140,13 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
             stop.armed = False
             clean_up(ctx, run, log)
             stored = outcome.result_json()
-            ended = outbox.review_ended(ctx.config, run, outcome.status, stored)
+            ended = outbox.review_ended(
+                ctx.config,
+                run,
+                outcome.status,
+                stored,
+                repo=ctx.workspace.run_repo(run.repo),
+            )
             hold = functools.partial(_hold, ctx, run, outcome, log)
             if not db.finish_run(ctx.conn, "review_runs", run_id, outcome.status, stored, event=ended, then=hold):
                 log.warning("review run was already closed; its outcome is not recorded", extra=fields)

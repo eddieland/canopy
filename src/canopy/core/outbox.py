@@ -1,15 +1,16 @@
 """The events notification sinks receive (DESIGN §20): a closed set, built here from what the harness already knows.
 
 Dispatch, `_run`, `_chore`, and reconcile record them through `canopy.core.db` in the transaction that records the fact;
-the `canopy.notify` feature delivers them. An event is built only when some sink takes its group, so with no sinks no
-event is recorded. Text fields are cut to the limits DESIGN §20 lists and kept to one line.
+the `canopy.notify` feature delivers them. An event is recorded only when some sink takes its name
+(`canopy.core.event_names`), so with no sinks no event is recorded. Text fields are cut to the limits DESIGN §20 lists
+and kept to one line.
 """
 
 from __future__ import annotations
 
 import sqlite3
 from collections.abc import Callable, Mapping, Sequence
-from typing import TYPE_CHECKING, NotRequired, TypedDict
+from typing import TYPE_CHECKING, TypedDict
 
 from canopy.core import chore_result, contract, epic_outline, review_result
 from canopy.core.db import Event
@@ -19,6 +20,8 @@ if TYPE_CHECKING:
     from canopy.core.config import Config
     from canopy.core.vocab import ChoreRunStatus, ReviewRunStatus, RunStatus
 
+#: The attention list's diff: a group, and the name a sink takes it by, with no events of its own in the outbox.
+ATTENTION = "attention"
 RUNS = "runs"
 LOOP = "loop"
 CHORES = "chores"
@@ -161,21 +164,31 @@ class CiKicked(TypedDict):
 
 
 class ChoreEnded(TypedDict):
-    """A `chore.ended` event's fields."""
+    """A `chore.ended` event's fields: how a chore's run ended, its status alone."""
 
     chore: str
     run: int
     status: str
+    #: Its summary on one line; None when it has none, or when a `chore.summary` event carries it whole.
     summary: str | None
     findings: int
-    #: The summary whole, a line of it each, for a chore whose table sets `whole_summary`; left out for any other.
-    summary_lines: NotRequired[list[str]]
+
+
+class ChoreSummary(TypedDict):
+    """A `chore.summary` event's fields: the summary of a chore whose table sets `whole_summary`, sent whole."""
+
+    chore: str
+    run: int
+    #: The summary, a line of it each.
+    lines: list[str]
 
 
 class ReviewEnded(TypedDict):
     """A `review.ended` event's fields: how many findings, never what they are (D114)."""
 
     pr: str
+    #: The repository the PR is in, as the workspace map names it; None when canopy cannot tell.
+    repo: str | None
     ticket: str | None
     run: int
     status: str
@@ -276,6 +289,119 @@ class BudgetReached(TypedDict):
     sessions_read: str | None
 
 
+#: An example of each event's fields, by kind, for `canopy notify events`: what a sink's command reads.
+EXAMPLES: Mapping[str, Mapping[str, object]] = {
+    "run.started": RunStarted(
+        ticket="PROJ-1",
+        run=12,
+        run_kind="implement",
+        branch="canopy/PROJ-1",
+        attempt=1,
+        limit=3,
+    ),
+    "run.ended": RunEnded(
+        ticket="PROJ-1",
+        run=12,
+        run_kind="implement",
+        status="done",
+        branch="canopy/PROJ-1",
+        pr="https://github.example/acme/api/pull/7",
+        prs=["https://github.example/acme/api/pull/7"],
+        summary="Added the retry to the upload client.",
+        question=None,
+        message=40,
+    ),
+    "plan.proposed": PlanProposed(ticket="PROJ-1", run=11, plan=3),
+    "plan.approved": PlanApproved(
+        ticket="PROJ-1",
+        run=11,
+        plan=3,
+        feedback=False,
+        reason="One file, no new behavior.",
+    ),
+    "follow_ups.filed": FollowUpsFiled(ticket="PROJ-1", run=12, follow_ups={"PROJ-9": "api"}, count=1),
+    "ci.flaky": CiFlaky(
+        ticket="PROJ-1",
+        run=13,
+        prs=["https://github.example/acme/api/pull/7"],
+        kicked=["api"],
+        estimate="The upload test timed out on a slow runner.",
+        cause="runner",
+        other_cause=None,
+        note=None,
+    ),
+    "epic.changed": EpicChanged(
+        epic=2,
+        plan=5,
+        ids=["auth.login"],
+        count=1,
+        stale=["PROJ-4"],
+        held=[],
+        told=["PROJ-5"],
+    ),
+    "chore.ended": ChoreEnded(chore="deps", run=20, status="ok", summary="Two advisories, both filed.", findings=2),
+    "chore.summary": ChoreSummary(
+        chore="briefing",
+        run=21,
+        lines=["3 PRs wait on you.", "ana asked for changes on PROJ-1."],
+    ),
+    "review.ended": ReviewEnded(
+        pr="https://github.example/acme/api/pull/7",
+        repo="api",
+        ticket="PROJ-1",
+        run=30,
+        status="done",
+        verdict="findings",
+        impact="low",
+        findings=1,
+    ),
+    "task.ended": TaskEnded(
+        task=4,
+        run=31,
+        status="done",
+        summary="Bumped the base image.",
+        question=None,
+        branch="canopy/task-4",
+        head="0123456789abcdef0123456789abcdef01234567",
+        pr="https://github.example/acme/api/pull/7",
+        message=41,
+        tickets=[],
+    ),
+    "reply.recorded": ReplyRecorded(ticket="PROJ-1", message=42, ts="1790000000.000100", body="use the staging config"),
+    "reply.refused": ReplyRefused(
+        ticket=None,
+        ts="1790000000.000200",
+        guard="no_ticket",
+        reason="the reply names no ticket",
+    ),
+    "loop.failing": LoopFailing(count=3, status="error", tick=88, log=".canopy/ticks/88.log"),
+    "loop.recovered": LoopRecovered(failed=3),
+    "loop.sink_failing": SinkFailing(sink="slack", error="exited 1: invalid_auth"),
+    "loop.budget_reached": BudgetReached(
+        month="2026-11",
+        budget=300,
+        percent=80,
+        spent=241.5,
+        projected=310.2,
+        runs=200.0,
+        outside=41.5,
+        sessions_read_at="2026-11-16T09:00:00.000Z",
+        sessions_read="found",
+    ),
+    "ci.kicked": CiKicked(
+        ticket="PROJ-1",
+        run=13,
+        repo="api",
+        branch="canopy/PROJ-1",
+        pr="https://github.example/acme/api/pull/7",
+        from_head="0123456789abcdef0123456789abcdef01234567",
+        to_head="89abcdef0123456789abcdef0123456789abcdef",
+        kick=1,
+        limit=2,
+    ),
+}
+
+
 def cut(text: object, limit: int) -> str:
     """One line of `text`, at most `limit` characters.
 
@@ -320,8 +446,6 @@ def run_started(
     """Return what builds a `run.started` event from the new run's id, for `db.insert_run`."""
 
     def build(run_id: int) -> Event | None:
-        if not config.notify.takes(RUNS):
-            return None
         fields: RunStarted = {
             "ticket": key,
             "run": run_id,
@@ -330,7 +454,7 @@ def run_started(
             "attempt": attempt,
             "limit": limit,
         }
-        return Event(RUNS, "run.started", fields)
+        return _taken(config, Event(RUNS, "run.started", fields))
 
     return build
 
@@ -346,14 +470,12 @@ def run_ended(
     `db.finish_ticket_run` calls it once it knows the run's messages.
 
     It is built from the id of the message the run recorded (`message`): its question for a `blocked` run and its
-    report otherwise, so a channel can say what a reply answers (DESIGN §22). It is None if no sink takes runs.
+    report otherwise, so a channel can say what a reply answers (DESIGN §22). It is None if no sink takes it.
     `question` is set only for a `blocked` run: a blocked worker waits on a label or a reply, not an attention item, so
     this is how a sink hears that it asked something.
     """
 
     def build(message: int | None) -> Event | None:
-        if not config.notify.takes(RUNS):
-            return None
         result = contract.stored_object(result_json)
         prs = result.get("prs")
         pr = result.get("pr")
@@ -374,7 +496,7 @@ def run_ended(
             "question": cut(question, SUMMARY_LIMIT) if question else None,
             "message": message,
         }
-        return Event(RUNS, "run.ended", fields)
+        return _taken(config, Event(RUNS, "run.ended", fields))
 
     return build
 
@@ -391,12 +513,10 @@ def plan_recorded(
     A plan that waits on the operator is `plan.proposed`, for a ticket's plan alone; one the harness approved on its
     planner's word, with the planner's reason, is `plan.approved`, for a feedback plan too, so the operator hears of it
     with nothing waiting on them (DESIGN §25). Each names the ticket, the run, and the plan, and no plan text, so
-    nothing of the plan leaves the machine through a sink. It is None if no sink takes runs.
+    nothing of the plan leaves the machine through a sink. It is None if no sink takes it.
     """
 
     def build(plan_id: int, reason: str | None) -> Event | None:
-        if not config.notify.takes(RUNS):
-            return None
         if reason is not None:
             approved: PlanApproved = {
                 "ticket": key,
@@ -405,11 +525,11 @@ def plan_recorded(
                 "feedback": feedback,
                 "reason": cut(reason, SUMMARY_LIMIT),
             }
-            return Event(RUNS, "plan.approved", approved)
+            return _taken(config, Event(RUNS, "plan.approved", approved))
         if feedback:
             return None
         fields: PlanProposed = {"ticket": key, "run": run_id, "plan": plan_id}
-        return Event(RUNS, "plan.proposed", fields)
+        return _taken(config, Event(RUNS, "plan.proposed", fields))
 
     return build
 
@@ -421,12 +541,10 @@ def epic_changed(
 
     `epics.approve` builds it once, in the approval's transaction, when the change reached a member: the operator's one
     word of which members it reached, each way (DESIGN §43). No plan text, so nothing of the plan leaves the machine
-    through a sink. It is None if no sink takes runs.
+    through a sink. It is None if no sink takes it.
     """
 
     def build(plan: records.EpicPlan, change: epic_outline.Change, reached: epic_changes.Reached) -> Event | None:
-        if not config.notify.takes(RUNS):
-            return None
         ids = epic_outline.ordered(change.ids())
         fields: EpicChanged = {
             "epic": plan.epic_id,
@@ -437,7 +555,7 @@ def epic_changed(
             "held": list(reached.held),
             "told": list(reached.told),
         }
-        return Event(RUNS, "epic.changed", fields)
+        return _taken(config, Event(RUNS, "epic.changed", fields))
 
     return build
 
@@ -449,9 +567,9 @@ def follow_ups_filed(config: Config, *, key: str, run_id: int, filed: Mapping[st
     nothing canopy watches, and the operator labels or starts the ones they want worked (DESIGN §18).
 
     Returns:
-        The event, or None if no sink takes runs or nothing was filed.
+        The event, or None if no sink takes it or nothing was filed.
     """
-    if not filed or not config.notify.takes(RUNS):
+    if not filed:
         return None
     fields: FollowUpsFiled = {
         "ticket": key,
@@ -459,7 +577,7 @@ def follow_ups_filed(config: Config, *, key: str, run_id: int, filed: Mapping[st
         "follow_ups": dict(list(filed.items())[:MAX_FOLLOW_UPS]),
         "count": len(filed),
     }
-    return Event(RUNS, "follow_ups.filed", fields)
+    return _taken(config, Event(RUNS, "follow_ups.filed", fields))
 
 
 def ci_flaky(
@@ -480,10 +598,8 @@ def ci_flaky(
     once the overseer reads it (DESIGN §23), so the sink hears the worker's estimate of why either way.
 
     Returns:
-        The event, or None if no sink takes runs.
+        The event, or None if no sink takes it.
     """
-    if not config.notify.takes(RUNS):
-        return None
     fields: CiFlaky = {
         "ticket": key,
         "run": run_id,
@@ -494,7 +610,7 @@ def ci_flaky(
         "other_cause": cut(other_cause, DETAIL_LIMIT) if other_cause else None,
         "note": cut(note, DETAIL_LIMIT) if note else None,
     }
-    return Event(RUNS, "ci.flaky", fields)
+    return _taken(config, Event(RUNS, "ci.flaky", fields))
 
 
 def ci_kicked(
@@ -513,10 +629,8 @@ def ci_kicked(
     """Return the `ci.kicked` event for a forced push run `run_id` of `key` made to `branch` in `repo`, once it is made.
 
     Returns:
-        The event, or None if no sink takes the loop's events.
+        The event, or None if no sink takes it.
     """
-    if not config.notify.takes(LOOP):
-        return None
     fields: CiKicked = {
         "ticket": key,
         "run": run_id,
@@ -528,7 +642,7 @@ def ci_kicked(
         "kick": kick,
         "limit": limit,
     }
-    return Event(LOOP, "ci.kicked", fields)
+    return _taken(config, Event(LOOP, "ci.kicked", fields))
 
 
 def chore_ended(
@@ -538,9 +652,11 @@ def chore_ended(
     status: ChoreRunStatus,
     result_json: str | None,
 ) -> Event | None:
-    """Return the `chore.ended` event for run `run_id` of `chore`, or None if no sink takes chores."""
-    if not config.notify.takes(CHORES):
-        return None
+    """Return the `chore.ended` event for run `run_id` of `chore`, or None if no sink takes it.
+
+    A summary `chore_summary` sends whole is left off it: status and output are separate events, so a sink can take
+    one without the other.
+    """
     result = contract.stored_object(result_json)
     findings = result.get("findings")
     summary = contract.stored_note(result)
@@ -548,13 +664,24 @@ def chore_ended(
         "chore": chore,
         "run": run_id,
         "status": status,
-        "summary": cut(summary, SUMMARY_LIMIT) if summary else None,
+        "summary": cut(summary, SUMMARY_LIMIT) if summary and not _whole_summary(config, chore, result) else None,
         "findings": len(findings) if isinstance(findings, list) else 0,
     }
-    table = config.chores.get(chore)
-    if summary and table is not None and table.whole_summary:
-        fields["summary_lines"] = cut_lines(summary, chore_result.MAX_SUMMARY)
-    return Event(CHORES, "chore.ended", fields)
+    return _taken(config, Event(CHORES, "chore.ended", fields))
+
+
+def chore_summary(config: Config, chore: str, run_id: int, result_json: str | None) -> Event | None:
+    """Return the `chore.summary` event for run `run_id` of `chore`, recorded with its `chore.ended`.
+
+    Returns:
+        The event, or None unless the chore's table sets `whole_summary`, the run's result holds its summary, and some
+        sink takes it. A harness note, such as a crash's, is the run's status, not its output, so it sends none.
+    """
+    summary = _whole_summary(config, chore, contract.stored_object(result_json))
+    if summary is None:
+        return None
+    fields: ChoreSummary = {"chore": chore, "run": run_id, "lines": cut_lines(summary, chore_result.MAX_SUMMARY)}
+    return _taken(config, Event(CHORES, "chore.summary", fields))
 
 
 def review_ended(
@@ -562,17 +689,20 @@ def review_ended(
     run: records.ReviewRun,
     status: ReviewRunStatus,
     result_json: str | None,
+    *,
+    repo: str | None,
 ) -> Event | None:
-    """Return the `review.ended` event for a review run, or None if no sink takes reviews, or for a revision.
+    """Return the `review.ended` event for a review run in `repo`, or None if no sink takes it, or for a revision.
 
     A revision of a review's draft (DESIGN §34) reports no verdict, and the operator who asked for it reads its version
     in canopy.
     """
-    if not config.notify.takes(REVIEWS) or run.revises is not None:
+    if run.revises is not None:
         return None
     result = review_result.stored(result_json)
     fields: ReviewEnded = {
         "pr": run.pr_url,
+        "repo": repo,
         "ticket": run.ticket_key,
         "run": run.id,
         "status": status,
@@ -581,7 +711,7 @@ def review_ended(
         # How many, not what: the findings stay in the journal (D114).
         "findings": len(result.findings) if result is not None else 0,
     }
-    return Event(REVIEWS, "review.ended", fields)
+    return _taken(config, Event(REVIEWS, "review.ended", fields))
 
 
 def task_ended(
@@ -598,10 +728,9 @@ def task_ended(
 
     `tickets` are the keys the run's close recorded against the task (DESIGN §36).
 
-    It is None unless a sink takes `tasks`: a task's work is private, and a sink's audience may not be (DESIGN §36).
+    It is None unless a sink takes it, which none does unless the operator lists `tasks`: a task's work is private, and
+    a sink's audience may not be (DESIGN §36).
     """
-    if not config.notify.takes(TASKS):
-        return None
     result = contract.stored_object(result_json)
     summary = contract.stored_note(result)
     question = result.get("question") if status == "blocked" else None
@@ -620,31 +749,27 @@ def task_ended(
         "message": message,
         "tickets": list(tickets[:MAX_FOLLOW_UPS]),
     }
-    return Event(TASKS, "task.ended", fields)
+    return _taken(config, Event(TASKS, "task.ended", fields))
 
 
 def reply_recorded(config: Config, *, key: str, ts: str, body: str) -> Callable[[int], Event | None]:
     """Return what builds a `reply.recorded` event from the operator message's id, for `conversation.reply`."""
 
     def build(message: int) -> Event | None:
-        if not config.notify.takes(REPLIES):
-            return None
         fields: ReplyRecorded = {"ticket": key, "message": message, "ts": ts, "body": cut(body, SUMMARY_LIMIT)}
-        return Event(REPLIES, "reply.recorded", fields)
+        return _taken(config, Event(REPLIES, "reply.recorded", fields))
 
     return build
 
 
 def reply_refused(config: Config, *, key: str | None, ts: str, guard: str, reason: str) -> Event | None:
-    """A `reply.refused` event, or None if no sink takes replies.
+    """A `reply.refused` event, or None if no sink takes it.
 
     Returns:
         The event.
     """
-    if not config.notify.takes(REPLIES):
-        return None
     fields: ReplyRefused = {"ticket": key, "ts": ts, "guard": guard, "reason": cut(reason, DETAIL_LIMIT)}
-    return Event(REPLIES, "reply.refused", fields)
+    return _taken(config, Event(REPLIES, "reply.refused", fields))
 
 
 def loop_failing(count: int, status: str, tick_id: int, log: str) -> Event:
@@ -698,3 +823,21 @@ def budget_reached(month: spend.Month, percent: int) -> Event:
         "sessions_read": month.sessions_read.value if month.sessions_read is not None else None,
     }
     return Event(LOOP, BUDGET_REACHED, fields)
+
+
+def _taken(config: Config, event: Event) -> Event | None:
+    """Return `event` if some sink takes its name, else None: an event no sink takes is not recorded."""
+    return event if config.notify.takes(event.name) else None
+
+
+def _whole_summary(config: Config, chore: str, result: Mapping[str, object]) -> str | None:
+    """The agent's summary in `result`, when `chore`'s table sends it whole (`whole_summary`) and it has one.
+
+    Returns:
+        The summary, not cut, or None.
+    """
+    table = config.chores.get(chore)
+    if table is None or not table.whole_summary or result.get("harness"):
+        return None
+    summary = contract.stored_note(result)
+    return summary or None
