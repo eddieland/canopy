@@ -423,7 +423,9 @@ holds only the rules it all keeps; what each one does is written in its code. No
 
 Motion says something arrived or changed, and gives the page some life without asking for attention. It is short
 (at most 700ms), eased out (`cubic-bezier(0.2, 0, 0, 1)`), and never loops on anything but the logo, a running run,
-a skeleton, a palette's stars, and fun (Fun, above). The keyframes and utilities are in `src/index.css`.
+a skeleton, a palette's stars, and fun (Fun, above). A loop is the one exception to the length and the easing: it keeps
+the pace of what it draws, a breath or a star's twinkle, since a 700ms loop eased out would read as a flash. The
+keyframes and utilities are in `src/index.css`.
 
 - Route changes cross-fade through the `<ViewTransition>` around the outlet. The old page stays until the new one is
   ready, because navigations run inside React transitions. A transition that redraws part of a page, as a transcript's
