@@ -93,6 +93,7 @@ canopy runs only in a workspace, even for one repository. Run these anywhere in 
 | `canopy workspace sync [--dry-run]` | Converges `repos/` on the map and each pool on its declared size. |
 | `canopy workspace add [NAME=]URL...` | Adds repositories to the map by clone URL, then syncs. |
 | `canopy notify test [SINK]` | Sends a test message to every notification sink, or one. Changes nothing. |
+| `canopy notify events` | Lists every event name a sink's `events` can match, example fields, and which sinks take it. |
 | `canopy skill [--install [DIR]]` | Prints this skill, or saves it in `DIR/canopy/`, `~/.agents/skills` by default. |
 | `canopy --version`, `canopy --help` | As usual; `canopy <command> --help` for options. |
 

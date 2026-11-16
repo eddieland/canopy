@@ -32,7 +32,13 @@ def run(ctx: Context, log: logs.TickAdapter) -> list[int]:
         dead_runs.kill_agent("review_runs", row, log, fields)
         execute.clean_up(ctx, run, log)
         note = json.dumps({"harness": "the review process is gone"})
-        ended = outbox.review_ended(ctx.config, run, ReviewRunStatus.CRASHED, note)
+        ended = outbox.review_ended(
+            ctx.config,
+            run,
+            ReviewRunStatus.CRASHED,
+            note,
+            repo=ctx.workspace.run_repo(run.repo),
+        )
         if dead_runs.crash(ctx.conn, "review_runs", row, note, event=ended):
             closed.append(run.id)
             log.warning("review process is gone; review run marked crashed", extra=fields)

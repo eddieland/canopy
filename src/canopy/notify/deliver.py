@@ -1,7 +1,7 @@
 """Delivering to notification sinks at the end of each tick (DESIGN §6 step 7, §20).
 
-For each sink, in name order: gather its attention diff if it takes `attention`, its events after its cursor in the
-groups it takes, and a digest if one is due; hold it if the sink batches and nothing in it is urgent; else render one
+For each sink, in name order: gather its attention diff if it takes `attention`, the events after its cursor it takes
+by name, and a digest if one is due; hold it if the sink batches and nothing in it is urgent; else render one
 message in its format and run its command with the message on stdin. Exit 0 within the timeout is a delivery,
 recorded in the journal; anything else changes nothing but the sink's failure count, so the next tick tries again.
 Sinks run one after another under the tick lock.
@@ -31,7 +31,10 @@ TIMEOUT_SECONDS = 60
 # A sink that fails this many deliveries in a row raises `loop.sink_failing` once; so many failed ticks raise
 # `loop.failing` once.
 FAILING_AFTER = 3
-_POINT_GROUPS = (outbox.LOOP, outbox.RUNS, outbox.CHORES, outbox.REVIEWS, outbox.TASKS)
+#: The names of the loop's own events, which a sink's `events` match (`canopy.core.event_names`).
+_FAILING = "loop.failing"
+_RECOVERED = "loop.recovered"
+_SINK_FAILING = "loop.sink_failing"
 # Events a batching sink sends at once, with whatever it held: the loop or a sink failing, a plan waiting on the
 # operator, which holds its ticket until they answer (DESIGN §25), or a forced push canopy made (DESIGN §23).
 _URGENT_KINDS = frozenset({"loop.failing", "loop.sink_failing", "plan.proposed", "ci.kicked"})
@@ -82,8 +85,10 @@ def publish(
     for name in journal.forget_sinks(ctx.conn, sinks):
         log.info("notification sink removed from the config; forgot it", extra={"sink": name})
     now = datetime.now(UTC)
-    if ctx.config.notify.takes(outbox.LOOP):
+    # Failing and recovered are a streak's two ends, each how the other is told apart: both are recorded, or neither.
+    if ctx.config.notify.takes(_FAILING) or ctx.config.notify.takes(_RECOVERED):
         _record_loop_events(ctx)
+    if ctx.config.notify.takes(outbox.BUDGET_REACHED):
         _record_budget_event(ctx, now)
     deliveries = [
         _deliver(ctx, name, sink, items, path=path, now=now, log=log, dismissed=dismissed, ui=ui)
@@ -121,7 +126,13 @@ def test(ctx: Context, names: Iterable[str]) -> list[Delivery]:
     results: list[Delivery] = []
     for name in names:
         sink = sinks[name]
-        event = message.Event(0, "test", db.now(), {"text": f"canopy test message for {ctx.repo}; nothing is wrong"})
+        event = message.Event(
+            0,
+            "test",
+            db.now(),
+            {"text": f"canopy test message for {ctx.repo}; nothing is wrong"},
+            "test",
+        )
         msg = message.Message(name, ctx.repo, ctx.state_dir / "attention.md", None, 0, [event], None)
         failure = send(ctx, sink, msg.render(sink.format))
         results.append(Delivery(name, Delivered.DELIVERED if failure is None else Delivered.FAILED, failure or ""))
@@ -148,7 +159,6 @@ def status(ctx: Context) -> list[SinkStatus]:
     found: list[SinkStatus] = []
     for name, sink in ctx.config.notify.all_sinks().items():
         row = journal.sink(ctx.conn, name)
-        groups = [g for g in sink.events if g in _POINT_GROUPS]
         if row is None:
             found.append(SinkStatus(name, None, 0, None, 0))
             continue
@@ -158,7 +168,7 @@ def status(ctx: Context) -> list[SinkStatus]:
                 row.last_delivery_at,
                 row.failures,
                 row.last_error,
-                journal.waiting(ctx.conn, row.cursor, groups),
+                journal.waiting(ctx.conn, row.cursor, sink),
             ),
         )
     return found
@@ -250,11 +260,10 @@ def _deliver(
     ui: str | None,
 ) -> Delivery:
     row = journal.ensure_sink(ctx.conn, name)
-    groups = [g for g in sink.events if g in _POINT_GROUPS]
     # Read first: a detached `_run` may record an event while this sink is served, and the cursor must not pass it.
     cursor = journal.newest_event_id(ctx.conn)
-    events = [message.Event.of(e) for e in journal.events_after(ctx.conn, row.cursor, groups, cursor)]
-    change = journal.diff(ctx.conn, name, items, dismissed) if "attention" in sink.events else None
+    events = [message.Event.of(e) for e in journal.events_after(ctx.conn, row.cursor, sink, cursor)]
+    change = journal.diff(ctx.conn, name, items, dismissed) if sink.takes(outbox.ATTENTION) else None
     digest = None
     if _digest_due(row, sink, now) and sink.digest_every_minutes is not None:
         # The first digest covers one interval back, or, under a spend floor, back to when the sink was added too, so
@@ -281,7 +290,7 @@ def _deliver(
         ui=ui,
     )
     if msg.is_empty():
-        # Nothing to say; the cursor still moves past events of groups this sink does not take.
+        # Nothing to say; the cursor still moves past events this sink does not take.
         (
             records.update(records.NotifySink)
             .set_to("cursor = max(cursor, ?)", cursor)
@@ -310,7 +319,7 @@ def _deliver(
     # The count and its alert are one write, so a stop between them cannot skip the alert for this streak.
     with db.transaction(ctx.conn):
         failures = journal.mark_failed(ctx.conn, name, failure)
-        if failures == FAILING_AFTER and ctx.config.notify.takes(outbox.LOOP):
+        if failures == FAILING_AFTER and ctx.config.notify.takes(_SINK_FAILING):
             db.record_event(ctx.conn, outbox.sink_failing(name, failure))
     log.warning("notify command failed", extra={**fields, "error": failure, "failures": failures})
     return Delivery(name, Delivered.FAILED, failure)

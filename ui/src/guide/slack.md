@@ -116,14 +116,16 @@ posts to two channels.
 
 ## Choosing what it hears
 
-`events` lists the groups a sink takes. Leave it out and you get `["attention", "loop"]`.
+`events` lists the groups a sink takes, or narrower patterns over each event's name
+([how](notifications#choosing-what-a-sink-hears)). Leave it out and you get `["attention", "loop"]`.
 
 - `attention`: an item joined the attention list or left it. This is the one you want; it's everything that needs
   a human.
 - `runs`: a worker started or ended, with a question when it ended waiting on you, a plan waiting on your approval
   or approved by its planner, and follow-up tickets a run filed.
 - `reviews`: a review run ended, with its verdict and how many findings.
-- `chores`: a chore's run ended, with how many findings. The findings themselves are attention items.
+- `chores`: a chore's run ended, with how many findings, and the summary of one that sends it whole, such as
+  the briefing, as an event of its own (`chores.<chore>.summary`). The findings themselves are attention items.
 - `tasks`: a task's run ended, with its PR or its question.
 - `replies`: what came of a reply you wrote in Slack: a mention recorded on its ticket, or any reply canopy refused,
   and why ([below](#replying-from-slack)).

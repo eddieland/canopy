@@ -19,7 +19,7 @@
 @source inline('@3xl:grid-cols-(--row-3xl) @4xl:grid-cols-(--row-4xl)');
 @source inline('{@max-sm,@max-md,@max-lg,@max-xl}:[&>:nth-child({1,2,3,4,5,6,7,8})]:hidden');
 @source inline('{@max-2xl,@max-3xl,@max-4xl}:[&>:nth-child({1,2,3,4,5,6,7,8})]:hidden');
-@source inline('[&>:nth-child(-n+{2,3,4,5,6,7,8})]:{min-w-0,overflow-x-clip,text-ellipsis}');
+@source inline('[&>:nth-child(-n+{2,3,4,5,6,7,8})]:{min-w-0,overflow-clip,clip-reach,text-ellipsis}');
 
 /* Defined so shadcn output compiles; `npm run lint` refuses it in our code. Themes change tokens, not components. */
 @custom-variant dark (&:where(.dark, .dark *));
@@ -124,6 +124,15 @@
         outline: 2px solid var(--ring);
         outline-offset: 2px;
     }
+}
+
+/*
+ * How far past its box a box that clips (`overflow-clip`) still paints: the focus ring's reach, a 2px outline 2px off,
+ * which also covers the ink a palette draws around a chip (Pulp's ring). It takes no room, so nothing moves, and text
+ * is still cut at the box's edge by its ellipsis. Browsers honour it only where both axes clip.
+ */
+@utility clip-reach {
+    overflow-clip-margin: 4px;
 }
 
 /* Numbers that change in place keep their width. Use on every counter, timer, cost, and id. */

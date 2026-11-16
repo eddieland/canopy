@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, TypedDict, cast
 from urllib.parse import quote
 
-from canopy.core import contract, db, records, spend, sql
+from canopy.core import contract, db, event_names, records, spend, sql
 from canopy.core.items import Item, age
 from canopy.core.vocab import FlakyCause, RunStatus, SessionsRead
 
@@ -48,13 +48,13 @@ def _line(text: object) -> str:
     return " ".join(str(text).split())
 
 
-def _summary_lines(fields: Mapping[str, object]) -> list[str]:
-    """A `chore.ended` event's summary sent whole (DESIGN §20), or none.
+def _summary_lines(kind: str, fields: Mapping[str, object]) -> list[str]:
+    """A `chore.summary` event's summary, sent whole (DESIGN §20), or none for any other event.
 
     Returns:
-        Its lines as text, or an empty list for an event without them.
+        Its lines as text, or an empty list.
     """
-    found = fields.get("summary_lines")
+    found = fields.get("lines") if kind == "chore.summary" else None
     return [str(line) for line in cast("list[object]", found)] if isinstance(found, list) else []
 
 
@@ -62,7 +62,7 @@ def event_line(kind: str, fields: Mapping[str, object]) -> str:  # noqa: C901, P
     """One line of text for an event, for a person.
 
     Returns:
-        The line, led by `>`, `<`, `?`, `+`, `!`, or `*` for the event's kind. A kind it does not know shows its
+        The line, led by `>`, `<`, `=`, `?`, `+`, `!`, or `*` for the event's kind. A kind it does not know shows its
         fields as JSON.
     """
     f = fields
@@ -119,10 +119,10 @@ def event_line(kind: str, fields: Mapping[str, object]) -> str:  # noqa: C901, P
     if kind == "chore.ended":
         findings = f.get("findings") or 0
         text = f"< chore:{f.get('chore')} run {f.get('run')} ended {f.get('status')} ({findings} findings)"
-        # A summary sent whole is listed under the line (`Event.lines`), not cut onto it.
-        if _summary_lines(f):
-            return _line(f"{text}:")
         return _line(f"{text}: {f.get('summary')}" if f.get("summary") else text)
+    if kind == "chore.summary":
+        # The summary is listed under the line (`Event.lines`), a line of it each, not cut onto it.
+        return _line(f"= chore:{f.get('chore')} run {f.get('run')} summary:")
     if kind == "review.ended":
         ticket = f" ({f.get('ticket')})" if f.get("ticket") else ""
         verdict = " ".join(str(x) for x in (f.get("verdict"), f.get("impact")) if x)
@@ -236,7 +236,7 @@ def event_page(ui: str | None, kind: str, fields: Mapping[str, object]) -> str |
             return page(ui, "tickets", f["ticket"], *(() if f.get("feedback") else ("plan",)))
         case "reply.recorded" if f.get("ticket"):
             return page(ui, "tickets", f["ticket"])
-        case "chore.ended" if f.get("chore") and f.get("run"):
+        case "chore.ended" | "chore.summary" if f.get("chore") and f.get("run"):
             return page(ui, "chores", f["chore"], "runs", f["run"])
         case "review.ended" if f.get("run"):
             return page(ui, "reviews", f["run"])
@@ -270,6 +270,8 @@ class Event:
     kind: str
     at: str
     fields: Mapping[str, object]
+    #: The name a sink's `events` match it by, such as `runs.PROJ-1.started` (`canopy.core.event_names`).
+    name: str = ""
 
     @classmethod
     def of(cls, row: records.NotifyEvent) -> Event:
@@ -284,7 +286,7 @@ class Event:
             parsed = None
         # The event's own keys come first in the `json` format; a field of the same name would shadow them.
         fields = {str(k): v for k, v in parsed.items() if k not in _OWN} if isinstance(parsed, dict) else {}
-        return cls(row.id, row.kind, row.at, fields)
+        return cls(row.id, row.kind, row.at, fields, event_names.name_of(row.grp, row.kind, fields))
 
     @property
     def line(self) -> str:
@@ -294,22 +296,22 @@ class Event:
     @property
     def lines(self) -> list[str]:
         """The event for a person: its line, then a chore's summary sent whole, a line of it each, indented."""
-        return [self.line, *(f"  {_line(line)}" for line in _summary_lines(self.fields))]
+        return [self.line, *(f"  {_line(line)}" for line in _summary_lines(self.kind, self.fields))]
 
     def as_json(self, titles: Mapping[str, str] | None = None, ui: str | None = None) -> dict[str, object]:
         """The event as the `json` format lists it: an event about a ticket also carries its title from `titles`.
 
         Returns:
-            The event's id, kind, time, fields, the ticket's title if it has one, its `line`, and its page in the web
-            UI at `ui`, None when there is none.
+            The event's id, kind, name, time, fields, the ticket's title if it has one, its `line`, and its page in
+            the web UI at `ui`, None when there is none.
         """
         ticket = self.fields.get("ticket")
         named = {"title": (titles or {}).get(str(ticket))} if ticket else {}
         own = {"line": self.line, "ui": event_page(ui, self.kind, self.fields)}
-        return {"id": self.id, "kind": self.kind, "at": self.at, **self.fields, **named, **own}
+        return {"id": self.id, "kind": self.kind, "name": self.name, "at": self.at, **self.fields, **named, **own}
 
 
-_OWN = ("id", "kind", "at", "line", "ui")
+_OWN = ("id", "kind", "name", "at", "line", "ui")
 
 
 class DoneRun(TypedDict):

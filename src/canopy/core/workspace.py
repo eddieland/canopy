@@ -211,6 +211,16 @@ class Workspace:
             return None
         return next((r for r in self.repos if r.name == name), None)
 
+    def run_repo(self, name: str | None) -> str | None:
+        """The repository a run whose row names `name` ran in: a workspace of one records none, and means its one.
+
+        Returns:
+            `name`, or the one repository's name when `name` is None in a workspace of one, else None.
+        """
+        if name is None and len(self.repos) == 1:
+            return self.repos[0].name
+        return name
+
     def check_roles(self, name: str | None) -> Mapping[str, CheckRole]:
         """Return the roles repository `name` gives its checks, by name: none for a repository the map does not have.
 
