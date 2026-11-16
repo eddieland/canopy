@@ -50,8 +50,8 @@ export interface HeldFile {
 
 /**
  * Read `file` for an upload, refusing what the server would before sending it, with the CLI's guard and words: a name
- * nothing is left of, a file over the bound, and bytes that are not UTF-8. Any BOM is kept, so the text sent is the
- * file's bytes.
+ * nothing is left of, a file over the bound, bytes that are not UTF-8 or hold a NUL, and blank text. Any BOM is kept,
+ * so the text sent is the file's bytes.
  *
  * @returns The name it is attached as, and its text.
  * @throws {ApiError} A refusal, as the server's would be.
@@ -67,9 +67,19 @@ export async function readAttachment(file: File, limits: AttachmentLimits): Prom
     if (file.size > limits.max_file_bytes) {
         throw refusal('too_large', `${name} is over the ${sizeText(limits.max_file_bytes)} one attachment may hold`)
     }
-    const bytes = await file.arrayBuffer()
+    const text = decoded(name, await file.arrayBuffer())
+    if (text.includes('\0')) {
+        throw refusal('not_text', `${name} holds a NUL byte, so it is not plain text`)
+    }
+    if (text.trim() === '') {
+        throw refusal('empty', `${name} is empty`)
+    }
+    return { name, text }
+}
+
+function decoded(name: string, bytes: ArrayBuffer): string {
     try {
-        return { name, text: new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes) }
+        return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes)
     } catch {
         throw refusal('not_text', `${name} is not UTF-8 text; export it as Markdown or plain text`)
     }

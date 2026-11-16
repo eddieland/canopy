@@ -208,6 +208,9 @@ describe('EpicSubmitForm', () => {
         })
         fireEvent.click(screen.getByRole('button', { name: 'Drop fields.csv' }))
         expect(held()).toEqual(['Invoice-spec-v2.md7 bytes'])
+        // Neither file control submits the form it sits in.
+        fireEvent.click(screen.getByRole('button', { name: /Attach a file/u }))
+        expect(sent).toEqual([])
         submit()
         await waitFor(() => {
             expect(router.state.location.pathname).toBe('/epics/4')
@@ -229,6 +232,13 @@ describe('EpicSubmitForm', () => {
             [new File([new Uint8Array([37, 80, 68, 70, 255, 254])], 'spec.pdf')],
             mockAttachmentLimits,
             'refused (not_text): spec.pdf is not UTF-8 text; export it as Markdown or plain text',
+        ],
+        ['a blank file', [new File([' \n\t'], 'blank.md')], mockAttachmentLimits, 'refused (empty): blank.md is empty'],
+        [
+            'a file holding a NUL',
+            [new File(['a\0b'], 'nul.txt')],
+            mockAttachmentLimits,
+            'refused (not_text): nul.txt holds a NUL byte, so it is not plain text',
         ],
         [
             'a name it holds',
@@ -258,6 +268,57 @@ describe('EpicSubmitForm', () => {
             expect(uploads).toEqual([])
         },
     )
+
+    it('holds the files after a refused one, and says the refusal over an earlier failed submission', async () => {
+        answer = Response.json({ detail: { guard: 'bad_key', reason: "'a b' is not --project" } }, { status: 409 })
+        await renderForm(['web'])
+        write(GOAL, 'a b')
+        submit()
+        expect((await screen.findByRole('alert')).textContent).toBe("refused (bad_key): 'a b' is not --project")
+        choose(new File([''], 'empty.md'), new File(['kept'], 'kept.md'))
+        await waitFor(() => {
+            expect(screen.getByRole('alert').textContent).toBe('refused (empty): empty.md is empty')
+        })
+        expect(held()).toEqual(['kept.md4 bytes'])
+    })
+
+    it('neither submits nor takes more files while chosen ones are read', async () => {
+        await renderForm(['web'])
+        write(GOAL)
+        const read: { done?: (bytes: ArrayBuffer) => void } = {}
+        const slow = new File(['# Spec\n'], 'spec.md')
+        slow.arrayBuffer = () =>
+            new Promise((resolve) => {
+                read.done = resolve
+            })
+        choose(slow)
+        await waitFor(() => {
+            expect(submitButton().disabled).toBe(true)
+        })
+        expect(screen.getByRole<HTMLButtonElement>('button', { name: /Attach a file/u }).disabled).toBe(true)
+        read.done?.(new TextEncoder().encode('# Spec\n').buffer)
+        await waitFor(() => {
+            expect(submitButton().disabled).toBe(false)
+        })
+        expect(held()).toEqual(['spec.md7 bytes'])
+    })
+
+    it('says a file may have been attached when the server failed rather than refused it', async () => {
+        uploadAnswer = () => new Response(null, { status: 502 })
+        await renderForm(['web'])
+        write(GOAL)
+        choose(new File(['one'], 'a.md'))
+        await waitFor(() => {
+            expect(held()).toHaveLength(1)
+        })
+        submit()
+        await waitFor(() => {
+            expect(toasts).toHaveLength(1)
+        })
+        expect(toasts[0]?.title).toBe(
+            'Submitted epic:4, but a.md may not have been attached: check its page before the next tick.',
+        )
+    })
 
     it('offers no files where attaching is off', async () => {
         await renderForm(['web'], false, { ...mockAttachmentLimits, max_files: 0 })

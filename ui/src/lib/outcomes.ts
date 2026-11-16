@@ -692,17 +692,17 @@ export interface Missed {
 /**
  * The toast a submission shows as its form opens the epic's page, in the words `canopy epic submit` says it: the epic,
  * whose plan run the next tick starts, as its title, with the files `canopy attach epic:N` attached to it after; the
- * repositories its plan reads under it. Files the server refused (`missed`) fail the toast: the epic is recorded and
- * the rest attached, the title says to attach those on its page before its plan run starts, and the first one's
- * refusal is under it.
+ * repositories its plan reads under it. Files that failed (`missed`) fail the toast: the epic is recorded and the rest
+ * attached, the title says to attach those on its page before its plan run starts, or, for a failure that is not a
+ * refusal, which may have come after the file was kept, to check its page; the first one's failure is under it.
  */
 export function epicSubmittedToast(
     submitted: EpicSubmitted,
     attached: readonly Attached[] = [],
     missed: readonly Missed[] = [],
 ): NewToast {
-    const names = attached.map((a) => a.attachment.name)
-    const head = `Submitted ${epicRef(submitted.id)}${names.length === 0 ? '' : ` with ${filesText(names)}`}`
+    const kept = attached.map((a) => a.attachment.name)
+    const head = `Submitted ${epicRef(submitted.id)}${kept.length === 0 ? '' : ` with ${filesText(kept)}`}`
     const [first] = missed
     if (first === undefined) {
         return {
@@ -713,14 +713,23 @@ export function epicSubmittedToast(
     }
     const one = missed.length === 1
     const guard = first.error instanceof ApiError ? first.error.guard : null
+    const names = filesText(missed.map((m) => m.name))
+    // A refusal is certain; any other failure may have come after the server attached it, which its page says.
+    const refused = missed.every((m) => m.error instanceof ApiError && m.error.guard !== null)
     return {
-        title:
-            `${head}, but ${filesText(missed.map((m) => m.name))} ${one ? 'was' : 'were'} not attached: ` +
-            `attach ${one ? 'it' : 'them'} on its page before the next tick.`,
+        title: refused ? `${head}, but ${names} ${notAttached(one)}` : `${head}, but ${names} ${mayNotBe}`,
         detail: `${one ? '' : `${first.name}: `}${refusedText(guard)}${failedText(first.error)}`,
         tone: 'failed',
     }
 }
+
+// What a toast says of files the server refused, `one` or several: to attach them on the epic's page.
+function notAttached(one: boolean): string {
+    return `${one ? 'was' : 'were'} not attached: attach ${one ? 'it' : 'them'} on its page before the next tick.`
+}
+
+// What a toast says of files that failed some other way, which the server may have kept before it failed.
+const mayNotBe = 'may not have been attached: check its page before the next tick.'
 
 // How a refusal's words start, naming its guard as `Notice` does; nothing for any other failure.
 function refusedText(guard: string | null): string {

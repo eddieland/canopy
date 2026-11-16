@@ -52,6 +52,8 @@ export function EpicSubmitForm() {
     const [trackerEpic, setTrackerEpic] = useState('')
     const [files, setFiles] = useState<HeldFile[]>([])
     const [fileError, setFileError] = useState<unknown>(null)
+    // While chosen files are read, the form neither submits nor takes more, so none is lost or checked twice.
+    const [reading, setReading] = useState(false)
     const picker = useRef<HTMLInputElement>(null)
     const limits = meta?.attachment_limits
     // A workspace of one needs no name: the server reads its one repository, as the CLI does.
@@ -80,21 +82,26 @@ export function EpicSubmitForm() {
     })
     const unnamed = several && named.length === 0
     // Until the workspace's repositories are read, a workspace of several would be refused for naming none.
-    const ready = meta !== undefined && text.trim() !== '' && !unnamed && !mutation.isPending
+    const ready = meta !== undefined && text.trim() !== '' && !unnamed && !mutation.isPending && !reading
 
     async function hold(picked: readonly File[]) {
-        setFileError(null)
+        setReading(true)
         const held = [...files]
+        let refused: unknown = null
         for (const file of picked) {
             try {
                 // oxlint-disable-next-line eslint/no-await-in-loop -- each is checked beside the ones before it
                 held.push(await readBeside(file, held, limits ?? NO_LIMITS, 'the epic'))
             } catch (error) {
-                setFileError(error)
-                break
+                // The first refusal is said; the files after it are still checked, and held if the epic takes them.
+                if (refused === null) {
+                    refused = error
+                }
             }
         }
         setFiles(held)
+        setFileError(refused)
+        setReading(false)
     }
 
     function submit(event: SubmitEvent<HTMLFormElement>) {
@@ -125,11 +132,12 @@ export function EpicSubmitForm() {
                             </span>
                             <span className="shrink-0 text-muted-foreground">{sizeText(file.size)}</span>
                             <Button
+                                type="button"
                                 variant="ghost"
                                 size="icon-xs"
                                 className="ml-auto"
                                 aria-label={`Drop ${file.name}`}
-                                disabled={mutation.isPending}
+                                disabled={mutation.isPending || reading}
                                 onClick={() => {
                                     setFileError(null)
                                     setFiles(files.filter((f) => f !== file))
@@ -170,8 +178,9 @@ export function EpicSubmitForm() {
                 {limits !== undefined && limits.max_files > 0 && (
                     <>
                         <Button
+                            type="button"
                             variant="outline"
-                            disabled={mutation.isPending || files.length >= limits.max_files}
+                            disabled={mutation.isPending || reading || files.length >= limits.max_files}
                             title={`canopy attach epic:N FILE, once it is recorded: at most ${limits.max_files} files`}
                             onClick={() => picker.current?.click()}
                         >
@@ -208,7 +217,7 @@ export function EpicSubmitForm() {
                     <SendKeycap keys={sendKeys.shortcut} />
                 </Button>
             </div>
-            <Notice error={mutation.error ?? fileError}>
+            <Notice error={fileError ?? mutation.error}>
                 {several && 'Its plan reads only the repositories you name. '}
                 With no project it files no tickets. A tracker epic&apos;s tickets are only suggestions: none is a
                 member until you add it.
