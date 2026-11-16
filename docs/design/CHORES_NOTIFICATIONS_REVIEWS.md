@@ -154,8 +154,8 @@ Each is named `<group>.<subject>.<kind>` (`runs.PROJ-1.started`; no subject for 
 decides; one matching no name is a config error. Names are config surface: a rename keeps an alias.
 
 Attention is a diff of state per sink (§14): each sink hears of each open item once, and a sink that was down gets the
-net change. The other kinds are point events in an outbox, written in the same transaction as the fact they report,
-with a cursor per sink. A failing streak is reported once. An event no sink takes is not recorded.
+net change. The other kinds are point events in an outbox, written in the same transaction as the fact they report, with
+a cursor per sink. An event no sink takes is not recorded, but a failing streak, reported once, keeps both ends.
 
 ### Delivery
 
