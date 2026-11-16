@@ -52,10 +52,11 @@
     }
 
     /*
-     * A palette's tone over the canvas, which only Pulp prints: its dots (`--canvas-texture`) and, outside them, the
-     * swell they grow into (`--canvas-swell`), each where its mask lets it. Fixed to the window and under everything
-     * else, so it is painted once, never on a scroll, and the panels, the header, and the rail sit over it. By default
-     * both are none, and the two layers draw nothing.
+     * A palette's tone over the canvas, which Pulp and Starry Skies print: Pulp's dots (`--canvas-texture`) and,
+     * outside them, the swell they grow into (`--canvas-swell`), or the sky's faint stars and its bright ones, each
+     * where its mask lets it. Fixed to the window and under everything else, so it is painted once, never on a scroll,
+     * and the panels, the header, and the rail sit over it. By default both are none, and the two layers draw nothing.
+     * The second may twinkle (`--canvas-twinkle`): its opacity alone, which the compositor runs without a repaint.
      */
     html::before,
     html::after {
@@ -74,6 +75,9 @@
     html::after {
         background: var(--canvas-swell);
         mask: var(--canvas-swell-mask);
+        @media (prefers-reduced-motion: no-preference) {
+            animation: var(--canvas-twinkle) 9s ease-in-out infinite;
+        }
     }
 
     :focus-visible {
@@ -510,6 +514,23 @@
     50% {
         opacity: 0.45;
         transform: scale(0.7);
+    }
+}
+
+/* A sky's bright stars scintillate (`--canvas-twinkle`): uneven steps of their brightness, never out, so the rhythm
+reads as air moving over them rather than a pulse. */
+@keyframes twinkle {
+    20% {
+        opacity: 0.55;
+    }
+    35% {
+        opacity: 0.95;
+    }
+    60% {
+        opacity: 0.7;
+    }
+    80% {
+        opacity: 1;
     }
 }
 

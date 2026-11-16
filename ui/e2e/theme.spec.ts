@@ -291,6 +291,36 @@ test.describe("Pulp's Ben-Day tone", () => {
     }
 })
 
+test.describe("Starry Skies's stars", () => {
+    test.beforeEach(async ({ page }) => {
+        await signIn(page)
+        await storeTheme(page, 'dark')
+        await storePalette(page, 'dark', 'starry-skies')
+    })
+
+    test('prints its stars on both layers, masked, and twinkles the bright ones', async ({ page }) => {
+        await page.goto('workspace/runs')
+        await settled(page)
+        for (const layer of await canvasTone(page)) {
+            expect(layer.image).toMatch(/^radial-gradient\(/u)
+            expect(layer.mask).toMatch(/^linear-gradient\(/u)
+        }
+        expect(await twinkle(page)).toBe('twinkle')
+    })
+
+    test('holds its stars still under reduced motion', async ({ page }) => {
+        await page.emulateMedia({ reducedMotion: 'reduce' })
+        await page.goto('workspace/runs')
+        await settled(page)
+        expect(await twinkle(page)).toBe('none')
+    })
+})
+
+/** The animation the canvas's second layer runs: a palette's twinkle, or none. */
+function twinkle(page: Page): Promise<string> {
+    return page.evaluate(() => getComputedStyle(document.documentElement, '::after').animationName)
+}
+
 /** What the canvas's two tone layers paint, the dots and their swell: each one's background and mask. */
 function canvasTone(page: Page): Promise<{ image: string; mask: string }[]> {
     return page.evaluate(() =>
