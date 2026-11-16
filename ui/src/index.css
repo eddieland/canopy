@@ -91,6 +91,11 @@
     overflow-clip-margin: 4px;
 }
 
+/* A chip's word, as a palette letters it (`--chip-case`): as spelled, or in caps, the width the same in its mono. */
+@utility chip-case {
+    text-transform: var(--chip-case);
+}
+
 /* Numbers that change in place keep their width. Use on every counter, timer, cost, and id. */
 @utility readout {
     font-family: var(--font-mono);

@@ -59,6 +59,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `proposal-change`, `-decline`, `-ask` | A feedback plan's proposal chip: what it does with an item, never a state. |
 | `syntax-key`, `-string`, `-number`, `-literal` | Agent output's JSON keys, strings, numbers, literals; code. |
 | `code-chip`, `code-size` | Inline code's chip, a tint of its own ink, and code's size against its line (Rich text). |
+| `chip-plain` | A plain chip's fill: a tint of its own ink, or the paper where a palette prints chips on it. |
 | `flair-*`, `buddy-*`, `rave-dark` | Fun's own colors (Fun, below), each named in `tokens.css`. Never a status. |
 
 Rules:
@@ -780,7 +781,8 @@ reader, so no table repeats them.
   fixed word and a count are muted monospace, never a chip. A chip with a long word in a narrow column cuts it to fit,
   the whole word in its tip; none is stretched to its column. Its color is its `tone`, from the one map of them (`Chip`
   in `src/components/status.tsx`): its color's hairline over the same color's tint, so it holds its edge on a selected
-  row, and where a palette inks it, the ink in place of the hairline, never one line inside another; `plain` in
+  row, and where a palette inks it, the ink in place of the hairline, never one line inside another. A palette may
+  letter a chip in caps, the same width in its mono, and print a plain one on the paper (`chip-plain`). `plain` in
   `muted-foreground`, else the status color of the state it marks, or a proposal's own hue. No chip is colored by
   classes of its own.
 - **A status on a detail page** is its description's first word alone; the identity panel's header names the panel

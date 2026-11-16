@@ -9,11 +9,11 @@ import { cn } from '@/lib/utils'
 import { readable } from '@/lib/words'
 
 // Every chip's color, the one map of them (ui/DESIGN.md, "Chips"): its color's hairline at 40% (`--chip-line`) over
-// the same color at 10%, so it holds its edge on a selected row's tint too. Plain is muted-foreground's, and so is a
-// `leave` proposal's, which does nothing. Written out so Tailwind finds them. A palette that inks its chips
-// (`shadow-chip`) draws its ink in place of the hairline, which it clears, so a chip is never two lines one inside the
-// other.
-const PLAIN = 'border-muted-foreground/(--chip-line) bg-muted-foreground/10 text-muted-foreground'
+// the same color at 10% (a plain one's, `bg-chip-plain`, a palette's paper where it prints on one), so it holds its
+// edge on a selected row's tint too. Plain is muted-foreground's, and so is a `leave` proposal's, which does nothing.
+// Written out so Tailwind finds them. A palette that inks its chips (`shadow-chip`) draws its ink in place of the
+// hairline, which it clears, so a chip is never two lines one inside the other.
+const PLAIN = 'border-muted-foreground/(--chip-line) bg-chip-plain text-muted-foreground'
 const TONE: Record<Tone | ProposalTone, string> = {
     plain: PLAIN,
     failed: 'border-status-failed/(--chip-line) bg-status-failed/10 text-status-failed',
@@ -68,7 +68,7 @@ export function Chip({
             <span
                 className={cn(
                     'inline-flex h-5 shrink-0 items-center gap-1 rounded-sm border px-1.5 font-mono text-2xs',
-                    'shadow-chip',
+                    'chip-case shadow-chip',
                     TONE[tone],
                     className,
                 )}

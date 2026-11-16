@@ -327,6 +327,8 @@ describe("the inside ink's knobs", () => {
     it.each([
         ['--depth-chip', 'none'],
         ['--chip-line', '40%'],
+        ['--chip-case', 'none'],
+        ['--chip-plain', 'color-mix(in oklab, currentColor 10%, transparent)'],
         ['--depth-selected', 'none'],
         ['--lift-x', '0px'],
         ['--lift-y', '0px'],
