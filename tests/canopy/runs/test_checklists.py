@@ -155,6 +155,7 @@ def test_canopy_checklist_counts_what_the_runs_answered(scenario: Scenario, git_
             "n/a": 0,
             "unanswered": 1,
             "held_by": 0,
+            "retired": False,
         },
         {
             "repo": "repo",
@@ -166,8 +167,37 @@ def test_canopy_checklist_counts_what_the_runs_answered(scenario: Scenario, git_
             "n/a": 0,
             "unanswered": 1,
             "held_by": 1,
+            "retired": False,
         },
     ]
     assert scenario.operator("checklist", "--repo", "other").out.endswith(
         "\n\nNo worker run of the window was given a list.\n",
     )
+
+
+def test_a_retired_item_is_asked_of_no_run_and_its_counts_read_on(scenario: Scenario, git_pool: GitPool) -> None:
+    path = checklists_dir(scenario.env) / "repo.md"
+    path.write_text(f"{LIST}\n## newspaper\n\nPublic names first.\n")
+    scenario.run(worker=worker_does(result=worker_result(checklist={"repo": {"newspaper": "pass"}})))
+    path.write_text(f"{LIST}\n## newspaper\nstatus: retired\nnote: the linter holds it\n\nPublic names first.\n")
+    answered = {"repo": {"general-types": "pass", "newspaper": "pass"}}
+    run = scenario.run(worker=worker_does(SHOW, result=worker_result(checklist=answered)))
+    # The run neither reads it nor is held to it: an answer to it is one to an item its list does not hold.
+    assert shown(scenario.agent_log) == LIST
+    assert [(a.item, a.answer) for a in checklist_answers.of_run(scenario.conn, run.id)] == [
+        ("general-types", ItemAnswer.PASSED),
+    ]
+    found = json.loads(scenario.operator("checklist", "--json").out)
+    assert [(i["item"], i["reminded"], i["retired"]) for i in found["items"]] == [
+        ("general-types", 2, False),
+        ("newspaper", 1, True),
+    ]
+    table = scenario.operator("checklist").out.splitlines()
+    assert [line.split() for line in table if "newspaper" in line] == [
+        ["repo", "newspaper", "(retired)", "1", "1", "0", "0", "0", "0"],
+    ]
+    # Every item retired: the repository's runs are given no list, and so never held.
+    path.write_text("## general-types\nstatus: retired\n\n## newspaper\nstatus: retired\n")
+    run = scenario.run(dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CONFLICT]), worker=worker_does(SHOW))
+    assert shown(scenario.agent_log) is None
+    assert "Push held" not in run.prompt

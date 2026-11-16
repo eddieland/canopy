@@ -11,10 +11,12 @@ import click
 from canopy.cli.common import open_context
 from canopy.cli.params import REPO
 from canopy.cli.spend import since_text
-from canopy.core import checklist_answers, spend
+from canopy.core import checklist_answers, checklists, spend
 from canopy.core.vocab import ItemAnswer
 
 if TYPE_CHECKING:
+    from collections.abc import Set as AbstractSet
+
     from canopy.core.checklist_answers import Counts
 
 #: The table's count columns after the item: the runs given it, then each answer by its word.
@@ -38,19 +40,24 @@ def cmd_checklist(click_ctx: click.Context, *, days: int, repo: str | None, as_j
 
     Reminded is the runs given the item, a task's included, by when they started. Each answered it pass, fixed, held,
     or n/a, or said nothing of it, counted unanswered. An item that never fails where it applies is one to drop, and one
-    held often, by several tickets, one to argue: held_by in --json counts the tickets. Why a run held an item is on its
-    run: canopy show run:ID, or task:N for a task's.
+    held often, by several tickets, one to argue: held_by in --json counts the tickets. An item its list now marks
+    status: retired is asked of no run, and its counts are marked retired. Why a run held an item is on its run:
+    canopy show run:ID, or task:N for a task's.
     """
     ctx = open_context(click_ctx)
     found = checklist_answers.counts(ctx.conn, datetime.now(UTC), days, repo=repo)
-    click.echo(json.dumps(found.as_json(), indent=2) if as_json else "\n".join(render(found)))
+    # Only a mapped repository's list is read: a name the journal keeps for one no longer mapped names no file.
+    mapped = {r.name for r in ctx.ws.repos}
+    retired = checklists.retired_items(ctx.config, sorted(mapped.intersection(c.repo for c in found.items)))
+    click.echo(json.dumps(found.as_json(retired), indent=2) if as_json else "\n".join(render(found, retired)))
     return 0
 
 
-def render(found: Counts) -> list[str]:
+def render(found: Counts, retired: AbstractSet[tuple[str, str]] = frozenset()) -> list[str]:
     """The counts as `canopy checklist` prints them: a line per repository and item, in its list's order.
 
-    A `held` answer's reason is the worker's text, and its run's `show` prints it: this table counts it alone.
+    A `held` answer's reason is the worker's text, and its run's `show` prints it: this table counts it alone. An item
+    of `retired`, by repository and id, is marked so after its id.
 
     Returns:
         Its lines, without line ends.
@@ -60,13 +67,14 @@ def render(found: Counts) -> list[str]:
     head = f"{whose} over {days}, since {since_text(found.since)}, by repository and item."
     if not found.items:
         return [head, "", "No worker run of the window was given a list."]
+    names = [f"{c.item} (retired)" if (c.repo, c.item) in retired else c.item for c in found.items]
     repo_width = max(len("repo"), *(len(c.repo) for c in found.items))
-    item_width = max(len("item"), *(len(c.item) for c in found.items))
+    item_width = max(len("item"), *(len(name) for name in names))
     lines = [head, "", f"{'repo':<{repo_width}}  {'item':<{item_width}}" + "".join(f"  {h}" for h in _COUNTS)]
     lines.extend(
-        f"{c.repo:<{repo_width}}  {c.item:<{item_width}}  {c.reminded:>{len('reminded')}}"
+        f"{c.repo:<{repo_width}}  {name:<{item_width}}  {c.reminded:>{len('reminded')}}"
         + "".join(f"  {c.of(a):>{len(a)}}" for a in ItemAnswer)
-        for c in found.items
+        for c, name in zip(found.items, names, strict=True)
     )
     lines.extend(["", "Why a run held an item is on its run: canopy show run:ID, or task:N for a task's."])
     return lines
