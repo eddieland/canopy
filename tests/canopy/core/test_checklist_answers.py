@@ -220,6 +220,7 @@ def test_canopy_checklist_counts_the_last_days(canopy_env: CanopyEnv, capsys: py
             "n/a": 0,
             "unanswered": 0,
             "held_by": 1,
+            "retired": False,
         },
     ]
     # A held item's reason is the worker's text: never in the counts.

@@ -191,7 +191,9 @@ def _paths(ctx: Context, repos: Iterable[str]) -> dict[tuple[str, str], list[str
             loaded = checklists.load(ctx.config, repo)
         except checklists.ChecklistError:
             continue
-        found.update({(repo, item.id): list(item.paths) for item in loaded.items} if loaded is not None else {})
+        if loaded is not None:
+            # A retired item's too: its counts read on after it is no longer asked.
+            found.update({(repo, item.id): list(item.paths) for item in (*loaded.items, *loaded.retired)})
     return found
 
 

@@ -32,6 +32,7 @@ from canopy.core.vocab import ItemAnswer
 
 if TYPE_CHECKING:
     import sqlite3
+    from collections.abc import Set as AbstractSet
     from datetime import datetime
 
     from canopy.core.checklists import Checklist
@@ -167,13 +168,17 @@ class Counts:
         """Of those, the ones a run's result said nothing of."""
         return sum(c.unanswered for c in self.items)
 
-    def as_json(self) -> dict[str, object]:
+    def as_json(self, retired: AbstractSet[tuple[str, str]] = frozenset()) -> dict[str, object]:
         """Return the counts as one JSON object.
+
+        Args:
+            retired: The items, by repository and id, the operator's lists now keep retired
+                (`checklists.retired_items`).
 
         Returns:
             `since`, `until`, `days`, `repo`, and `items`, each with its `repo`, `item`, `reminded`, a count under
-            each answer's word: `pass`, `fixed`, `held`, `n/a`, and `unanswered`, and `held_by`, the tickets that
-            held it.
+            each answer's word: `pass`, `fixed`, `held`, `n/a`, and `unanswered`, `held_by`, the tickets that held it,
+            and `retired`, whether it is one of `retired`.
         """
         return {
             "since": self.since,
@@ -187,6 +192,7 @@ class Counts:
                     "reminded": c.reminded,
                     **{str(a): c.of(a) for a in ItemAnswer},
                     "held_by": c.held_by,
+                    "retired": (c.repo, c.item) in retired,
                 }
                 for c in self.items
             ],

@@ -21,7 +21,7 @@ named for the repository as the workspace map names it: `api.md` for `api`. A re
 so you can start with the one whose reviews annoy you most. The key is yours alone: a list is instructions in every run
 it reaches, so the shared workspace file can't set it, and canopy refuses to start if it does.
 
-Each item opens with a `## <id>` heading, then two optional lines, then the rule in plain words:
+Each item opens with a `## <id>` heading, then a few optional lines, then the rule in plain words:
 
 ```markdown
 ## general-types
@@ -45,6 +45,9 @@ migration's sha256. Passes: both files in the diff. Fails: a migration alone.
   part. With no `paths:` line, the item is about every path.
 - **`severity:`** is `blocking`, `major`, or `minor`, the default. The reminder doesn't use it; it's there for a review
   that asks the same list of a PR, which canopy doesn't run yet.
+- **`status:`** is `active`, the default, or `retired`: see [Retiring an item](#retiring-an-item).
+- **`note:`** is a line for you, such as why an item was retired. Like the rest of an item, a worker reads it while the
+  item is asked.
 - **The rule** says what passes and what fails, ideally with one example of each. A rule a worker has to guess at gets
   guesses for answers.
 
@@ -148,3 +151,24 @@ their job, not a rule kept, so a migrations item that's n/a on most diffs is fin
 
 A list is worth its tokens when its items get **fixed**: each one is a review comment nobody had to write, and a CI run
 nobody had to wait for.
+
+## Retiring an item
+
+When a linter takes over a rule, or the rule stops earning its tokens, retire the item rather than deleting it:
+
+```markdown
+## trailing-commas
+paths: **/*.py
+status: retired
+note: enforced by the linter
+```
+
+A retired item stays in the file, and no run hears it: canopy leaves its section out of the list a worker reads and
+canopy's hook prints, holds no push for it, and drops an answer to it as one to an item the list doesn't hold. It needs
+no rule, so you can cut the rule and keep the heading. Its past answers keep counting: `canopy checklist` marks it
+**(retired)**, and `--json` gives each item a `retired` flag. Deleting the section instead also works, but the counts
+then name an item no file explains, and the reason you dropped it leaves with it.
+
+A list whose every item is retired is no list: its repository's runs are given none and never held. The
+[checklists page](#the-checklists-page) shows only the items still asked, as a run would hear them. Set `status:`
+back to `active`, or remove the line, and the next run hears the item again.

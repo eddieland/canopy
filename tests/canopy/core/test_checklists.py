@@ -57,6 +57,44 @@ def test_a_list_parses_into_its_items(canopy_env: CanopyEnv) -> None:
     assert found.text == LIST.strip()
 
 
+def test_a_retired_item_stays_in_its_file_and_reaches_no_run(canopy_env: CanopyEnv) -> None:
+    text = (
+        "## general-types\nA parameter takes the most general type.\n\n"
+        "## trailing-commas\npaths: **/*.py\nstatus: retired\nnote: enforced by the linter\n\nA trailing comma.\n\n"
+        "## gone\nstatus: retired\n\n"
+        "## newspaper-order\nstatus: active\nPublic names first.\n"
+    )
+    (checklists_dir(canopy_env) / "repo.md").write_text(text)
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    found = checklists.load(cfg, "repo")
+    assert found is not None
+    # Asked: only the items still active, in order. A retired item needs no rule, and keeps its note.
+    assert found.ids() == ["general-types", "newspaper-order"]
+    trailing, gone = found.retired
+    assert (trailing.id, trailing.paths, trailing.note, trailing.retired) == (
+        "trailing-commas",
+        ("**/*.py",),
+        "enforced by the linter",
+        True,
+    )
+    assert (gone.id, gone.rule) == ("gone", "")
+    # The text a run reads, and canopy's hook prints, holds no retired section.
+    assert found.text == (
+        "## general-types\nA parameter takes the most general type.\n\n## newspaper-order\nstatus: active\n"
+        "Public names first."
+    )
+    assert checklists.retired_items(cfg, ["repo", "other"]) == {("repo", "trailing-commas"), ("repo", "gone")}
+
+
+def test_a_list_whose_every_item_is_retired_is_no_list(canopy_env: CanopyEnv) -> None:
+    (checklists_dir(canopy_env) / "repo.md").write_text("## one\nstatus: retired\nRule one.\n")
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    found = checklists.load(cfg, "repo")
+    assert found is not None
+    assert (found.ids(), found.text) == ([], "")
+    assert checklists.for_repos(cfg, ["repo"]) == []
+
+
 def test_a_repository_without_a_list_has_none(canopy_env: CanopyEnv) -> None:
     cfg = load(canopy_env.root, canopy_env.user_file)
     assert cfg.paths.checklists is None
@@ -99,6 +137,9 @@ def test_no_list_writes_no_file(tmp_path: Path) -> None:
         ("## one\npaths: /etc/passwd\nRule.\n", "item one: paths entry '/etc/passwd' must be a path"),
         ("## one\npaths: src/[ab]/\nRule.\n", "item one: paths entry 'src/[ab]/' must be a path"),
         ("## one\nseverity: critical\nRule.\n", "item one: severity is one of blocking, major, minor, not 'critical'"),
+        ("## one\nstatus: dropped\nRule.\n", "item one: status is one of active, retired, not 'dropped'"),
+        ("## one\nstatus: active\n\n## two\nRule.\n", "item one has no rule"),
+        ("## one\nnote: a\nnote: b\nRule.\n", "item one has two 'note:' lines"),
     ],
 )
 def test_a_text_that_is_not_a_list_is_refused(text: str, error: str) -> None:
