@@ -172,6 +172,7 @@ from canopy.core.records.ticks import (
     RecordedRun,
     RequestDerivation,
     Tick,
+    UpkeepRun,
 )
 
 # Kept importable from here: callers name a table and its query from one module, as `records.select(records.Run)`.
@@ -289,6 +290,7 @@ __all__ = [
     "TicketOverride",
     "TicketUnit",
     "Update",
+    "UpkeepRun",
     "View",
     "WebWrite",
     "columns",

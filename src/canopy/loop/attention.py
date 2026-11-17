@@ -111,6 +111,9 @@ HALTS = frozenset({UNAVAILABLE, DISK_LOW})
 MODEL_HALTS: frozenset[str] = frozenset({TickStatus.MODEL_MISSING, TickStatus.MODEL_LIST_FAILED})
 #: A primary clone whose own config leaves git's automatic maintenance on, which sync turns off (DESIGN §18).
 MAINTENANCE_ON = "auto_maintenance_on"
+#: The newest of the pools' upkeep in a repository's primary clone or a slot of its pool failed (`loop.upkeep`,
+#: DESIGN §26).
+UPKEEP_FAILED = "upkeep_failed"
 #: A run's question the operator has not answered: a private ticket's worker's, or a planner's (DESIGN §22, §25).
 AWAITING_REPLY = "awaiting_reply"
 #: A git on `PATH` too old to put canopy's marks on a worker's commits (TRUST_MODEL T5).
@@ -154,6 +157,7 @@ ALWAYS_HARNESS: frozenset[str] = frozenset(
         chore_view.FAILED_REASON,
         "repo_missing",
         MAINTENANCE_ON,
+        UPKEEP_FAILED,
         GIT_TOO_OLD,
         *ONLY_FROM_CAUSES,
         *HALTS,

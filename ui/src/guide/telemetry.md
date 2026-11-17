@@ -151,7 +151,7 @@ children's included, and how long they took.
 | Span | What it is | Attributes |
 |---|---|---|
 | `tick` | a tick, a trace of its own | `canopy.tick_id`, `canopy.dry_run`, `canopy.status`, `canopy.cost_usd`, `canopy.new_tokens` |
-| `gc`, `reconcile`, `connectors`, `derive`, `spawn` | a step of a tick | |
+| `gc`, `reconcile`, `connectors`, `derive`, `spawn`, `upkeep` | a step of a tick | |
 | `tasks`, `epics` | the steps that start your tasks' and epics' runs | `canopy.started` |
 | `state` | the step that builds the overseer's state | `canopy.left` |
 | `overseer` | the step that runs the overseer | `canopy.failed`, `canopy.cost_usd`, `canopy.new_tokens` |

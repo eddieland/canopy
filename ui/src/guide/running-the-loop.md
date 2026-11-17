@@ -134,3 +134,13 @@ for good. Nor does it delete a branch.
 - `--git`: packs each primary clone's loose objects and small packs, pruning nothing, skipping a repository while a
   slot of its pool is leased.
 - `--caches`: empties each sandbox role's cache that no live run is using.
+
+You rarely need `--git`: a live tick runs the same steps on its own in a clone whose pool is idle, once git counts more
+than `pools.git_max_packs`, 50, packs or `pools.git_max_loose`, 10,000, loose objects there, looking at most once in
+`pools.git_every_hours`, 24. `pools.git_maintenance = false` turns that off. `--dry-run` shows each clone's counts.
+
+A slot's build can keep a lot outside the slot, such as bazel's output base for its path. `pools.idle_cmd` names a
+command per repository, `{ api = "bazel clean --expunge" }`, that a tick runs in a slot nothing has leased for
+`pools.idle_after_days`, 3, once each idle spell, never in a leased slot, and stops after
+`pools.idle_timeout_minutes`, 30. It runs on your machine in the slot's checkout, as `runtime.setup_cmd` does, so it
+belongs in your own config. A run of either that fails shows as `upkeep_failed` on the repository's attention list.

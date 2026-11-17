@@ -37,6 +37,17 @@ max_chores = 1
 # [capacity.repo_slots]   # per repository, by its name in the map; wins over slots_per_repo
 # api = 4
 
+# Optional: the pools' upkeep a live tick runs, one job at a time, while a pool or slot is idle (DESIGN §26).
+# [pools]
+# git_maintenance = true    # pack an idle repository's primary clone, as `canopy gc --git` does, once git counts
+# git_max_packs = 50        # more than this many packs
+# git_max_loose = 10000     # or this many loose objects there,
+# git_every_hours = 24      # looking at most this often
+# idle_after_days = 3       # run idle_cmd in a slot no lease has held this long, once each idle spell
+# idle_timeout_minutes = 30
+# [pools.idle_cmd]          # per repository; it runs on this machine, in the slot's checkout
+# api = "bazel clean --expunge"
+
 [runtime]
 # The major version of OpenCode canopy runs: 1, the default, or 2 for OpenCode 2.1.4 or later, whose MCP servers each
 # need `"codemode": false` (D077). A template you leave out is the version's default; OpenCode 2's start a private

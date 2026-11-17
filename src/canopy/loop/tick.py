@@ -66,6 +66,7 @@ from canopy.loop import (
     requested_reviews,
     spawns,
     state,
+    upkeep,
 )
 from canopy.memory import attention as memory_attention
 from canopy.memory import reconcile as memory_reconcile
@@ -546,6 +547,7 @@ def _steps(
     # it starts none (DESIGN §37, §40).
     with _step(Step.SPAWN):
         _spawn(ctx, tick_id, log)
+    _upkeep(ctx, tick_id, log, dry_run=dry_run)
     if failure is not None:
         return finish(TickStatus.OVERSEER_FAILED, failure, usage)
     owed = rendered.owed
@@ -585,6 +587,7 @@ class Step(StrEnum):
     STATE = "state"
     OVERSEER = "overseer"
     SPAWN = "spawn"
+    UPKEEP = "upkeep"
 
 
 @contextlib.contextmanager
@@ -803,6 +806,14 @@ def _spawn(ctx: Context, tick_id: int, log: logs.TickAdapter) -> None:
         log.exception("starting the runs after the overseer raised", extra={"error": str(e)})
 
 
+def _upkeep(ctx: Context, tick_id: int, log: logs.TickAdapter, *, dry_run: bool) -> None:
+    """Run the pools' upkeep on a live tick, after the spawn, so each slot this tick dispatched to is leased (§26)."""
+    if dry_run:
+        return
+    with _step(Step.UPKEEP):
+        upkeep.run(ctx, tick_id, log)
+
+
 def _mark_shown(ctx: Context, tick_id: int, shown: Iterable[tuple[str, int]]) -> None:
     """Mark the review items whose text the block showed of each ticket the overseer decided, as tick `tick_id` closes.
 
@@ -885,6 +896,8 @@ def _record_harness_items(ctx: Context, tick_id: int, archive_unpushed: str | No
     if archive_unpushed is not None:
         _harness_item(ctx, tick_id, None, archive.REASON, archive_unpushed)
     _record_git_items(ctx, tick_id)
+    for failed in upkeep.failed_items(ctx):
+        _harness_item(ctx, tick_id, None, upkeep.REASON, failed.detail, repo=failed.repo)
 
 
 def _record_from_causes(
