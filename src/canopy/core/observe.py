@@ -708,7 +708,7 @@ def _record(
                 continue
             if _insert(conn, config, line, now, known, operators=operators):
                 recorded[line.kind] += 1
-                ignored += isinstance(line, _Comment | _Review) and config.connect.ignores(line.body)
+                ignored += isinstance(line, _Comment | _Review) and _ignores(config, line)
         if kind is SourceKind.TRACKER:
             _release(conn, config, now, operators=operators)
     return dict(recorded), ignored
@@ -783,7 +783,7 @@ def _insert(
                 closed_at=line.closed_at,
             ).or_replace().run(conn)
         case _Review():
-            _insert_review(conn, line, now, ignored=config.connect.ignores(line.body))
+            _insert_review(conn, line, now, ignored=_ignores(config, line))
         case _Check():
             number = _keep_check_run(conn, line, now)
             if line.run_id is None:
@@ -838,7 +838,7 @@ def _record_comment(
         if conversation.worker_marked(line.body, config.trust.comment_prefix, config.trust.comment_suffix)
         else "tracker"
     )
-    ignored = config.connect.ignores(line.body)
+    ignored = _ignores(config, line)
     cursor = (
         records.insert(
             records.ObservedComment,
@@ -872,11 +872,26 @@ def _record_comment(
     return True
 
 
+def _ignores(config: Config, line: _Comment | _Review) -> bool:
+    """Whether `connect.ignore_comments` names `line`'s text.
+
+    A tracker comment too long to record whole is never ignored: its row holds the cut text, which `_release` could
+    not tell from one the patterns name no longer.
+
+    Returns:
+        True for a comment or review to record ignored.
+    """
+    if isinstance(line, _Comment) and len(line.body.strip()) > conversation.MAX_COMMENT:
+        return False
+    return config.connect.ignores(line.body)
+
+
 def _release(conn: sqlite3.Connection, config: Config, now: str, *, operators: AbstractSet[str]) -> None:
     """Take up each tracker comment recorded ignored that `connect.ignore_comments` no longer names.
 
     The tracker source is asked only for comments newer than the newest it recorded, so one ignored is not printed
-    again: it is taken up from its row, numbered now, as a comment first observed now is.
+    again: it is taken up from its row, which holds its text whole (`_ignores`), numbered now, as a comment first
+    observed now is.
     """
     held = records.select(records.ObservedComment).where("ignored = 1").order_by("commented_at, id").all(conn)
     for c in held:
