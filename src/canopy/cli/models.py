@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import click
 
 from canopy.cli.common import CliError, open_context
-from canopy.core import agent_models, conversation, ticket_models
+from canopy.core import agent_models, chore_view, conversation, ticket_models
 from canopy.infra import logs
 from canopy.runtime import invocation
 from canopy.runtime import models as runtime_models
@@ -101,11 +101,11 @@ def cmd_model(
 def cmd_models(click_ctx: click.Context, *, show_all: bool) -> int:
     """List the models the runtime can run an agent on, read from it now in the workspace root.
 
-    Each line names the agents [runtime.models] chooses it for. The list is the runtime's own, from its cache or the
-    catalog built into it: a model on it can still fail when called. What runtime.hide_models matches is left out
-    unless --all, and still checked against. Exits 1 when the list cannot be read, or an agent's model in
-    [runtime.models] is not on it, or its variant is not one the model lists, since that agent's runs are refused until
-    it is.
+    Each line names the agents [runtime.models] chooses it for, and the chores of this workspace whose own model it
+    is. The list is the runtime's own, from its cache or the catalog built into it: a model on it can still fail when
+    called. What runtime.hide_models matches is left out unless --all, and still checked against. Exits 1 when the list
+    cannot be read, or an agent's model in [runtime.models] or a chore's own model is not on it, or its variant is not
+    one the model lists, since those runs are refused until it is.
     """
     ctx = open_context(click_ctx)
     listed = runtime_models.listed(
@@ -115,7 +115,13 @@ def cmd_models(click_ctx: click.Context, *, show_all: bool) -> int:
         variants=True,
     )
     hidden = frozenset[str]() if show_all else agent_models.hidden(listed, ctx.config.runtime.hide_models)
-    lines, refused = render(listed, ctx.config.runtime.models, hidden)
+    # A chore's own model, as its runs take it: one that runs an agent of the operator's own takes none of canopy's.
+    chores = {
+        name: chore.model
+        for name, chore in chore_view.defined(ctx.config, ctx.workspace).items()
+        if chore.model is not None and agent_models.of_chore(ctx.config, chore).source == "chore"
+    }
+    lines, refused = render(listed, ctx.config.runtime.models, hidden, chores)
     for line in lines:
         click.echo(line)
     return int(refused)
@@ -158,46 +164,63 @@ def render(
     listed: ModelList,
     models: Mapping[str, str],
     hidden: AbstractSet[str] = frozenset(),
+    chores: Mapping[str, str] | None = None,
 ) -> tuple[list[str], bool]:
-    """The models as `canopy models` prints them, and whether an agent's runs would be refused their model.
+    """The models as `canopy models` prints them, and whether an agent's or a chore's runs would be refused their model.
 
-    A model in `models`, `runtime.models`, may name a variant, `provider/model@variant`, as dispatch reads it
-    (`agent_models.parse`): it is listed when its model is, and its variant is one `listed` gives the model. `hidden`,
-    as `agent_models.hidden` gives it, is left out of the lines but not of that check.
+    A model in `models`, `runtime.models`, or in `chores`, each chore's own `model` by the chore's name, may name a
+    variant, `provider/model@variant`, as dispatch reads it (`agent_models.parse`): it is listed when its model is, and
+    its variant is one `listed` gives the model. `hidden`, as `agent_models.hidden` gives it, is left out of the lines
+    but not of that check.
 
     Returns:
-        The lines, without line ends: a line per model not hidden, with its variants not hidden and the agents given
-        it, then one per model `models` names that is not listed, or whose variant is not; and True when the list
-        could not be read or such a model is named.
+        The lines, without line ends: a line per model not hidden, with its variants not hidden and the agents and
+        chores given it, then one per model `models` or `chores` names that is not listed, or whose variant is not; and
+        True when the list could not be read or such a model is named.
     """
     if listed.error is not None:
         return [f"could not read the models {invocation.NAME} lists ({agent_models.LIST_FAILED}): {listed.error}"], True
     count = len(listed.models)
     lines = [f"{invocation.NAME} lists {count} {_plural(count, 'model')}{_hiding(listed, hidden)}:"]
     chosen = {role: agent_models.parse(value) for role, value in models.items()}
+    owned = {name: agent_models.parse(value) for name, value in (chores or {}).items()}
     for model in sorted(listed.models - hidden):
         line = f"  {model}"
         if variants := sorted(v for v in listed.variants.get(model, ()) if f"{model}@{v}" not in hidden):
             line += f"  variants: {', '.join(variants)}"
         roles = [_given(role, m) for role, m in chosen.items() if m.id == model]
-        lines.append(f"{line}  (runtime.models: {', '.join(roles)})" if roles else line)
-    refusals: list[str] = []
-    for role, m in chosen.items():
-        if m.id not in listed.models:
-            refusals.append(
-                f"runtime.models.{role} names {m.name}, which {invocation.NAME} does not list: its runs refuse "
-                f"({agent_models.MISSING}).",
-            )
-        elif m.variant is not None and m.variant not in listed.variants.get(m.id, ()):
-            refusals.append(
-                f"runtime.models.{role} names {m.name}, whose variant {m.variant} {invocation.NAME} does not list "
-                f"({agent_models.variants_listed(listed, m.id)}): its runs refuse ({agent_models.MISSING}).",
-            )
+        names = [_given(name, m) for name, m in owned.items() if m.id == model]
+        given = [f"{what}: {', '.join(who)}" for what, who in (("runtime.models", roles), ("chores", names)) if who]
+        lines.append(f"{line}  ({'; '.join(given)})" if given else line)
+    keyed = [
+        *((f"runtime.models.{role}", m) for role, m in chosen.items()),
+        *((f"chores.{name}.model", m) for name, m in owned.items()),
+    ]
+    refusals = [refused for key, m in keyed if (refused := _refusal(listed, key, m)) is not None]
     return lines + refusals, bool(refusals)
 
 
+def _refusal(listed: ModelList, key: str, model: Model) -> str | None:
+    """Say why the runs whose model the config key `key` names, `model`, would be refused it, if they would.
+
+    Returns:
+        The line, without its end; None when `listed` lists the model, and its variant if it names one.
+    """
+    if model.id not in listed.models:
+        return (
+            f"{key} names {model.name}, which {invocation.NAME} does not list: its runs refuse "
+            f"({agent_models.MISSING})."
+        )
+    if model.variant is not None and model.variant not in listed.variants.get(model.id, ()):
+        return (
+            f"{key} names {model.name}, whose variant {model.variant} {invocation.NAME} does not list "
+            f"({agent_models.variants_listed(listed, model.id)}): its runs refuse ({agent_models.MISSING})."
+        )
+    return None
+
+
 def _given(role: str, model: Model) -> str:
-    """Name `role` as a model's line lists the agents given it: with the variant it runs the model at, if any.
+    """Name `role`, an agent's or a chore's, as a model's line lists those given it: with the variant, if any.
 
     Returns:
         The words, such as `reviewer` or `reviewer@xhigh`.

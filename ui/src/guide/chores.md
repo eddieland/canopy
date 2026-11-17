@@ -47,7 +47,9 @@ with its own agent, as some `canopy chore install` sets up do, takes both the sa
 the installed agent each time the chore runs. A chore whose command runs an agent of your own can't take one: canopy
 doesn't write that agent's definition, so the model goes
 there, and config refuses a `model` beside it rather than let two places disagree. [Settings](settings#models) shows
-which model each chore ends up on, and each run's page names the one it asked for, then the one that served it.
+which model each chore ends up on, and each run's page names the one it asked for, then the one that served it, as
+`canopy chore history NAME` and `canopy chore try NAME` do. `canopy models` checks a chore's own `model` against what
+the runtime lists, beside `[runtime.models]`.
 
 You don't have to start from a blank page. `canopy chore install` lists the chores canopy ships, and
 `canopy chore install NAME` copies one's prompt, its table, and the agent it runs if it comes with one into this

@@ -235,6 +235,22 @@ def served_by(conn: sqlite3.Connection, table: RunTable, run_ids: Collection[int
     return {run_id: [m.model for m in models] for run_id, models in of_runs(conn, table, run_ids).items()}
 
 
+def served_of(models: Sequence[records.RunModel]) -> str:
+    """The models a run's session says served it (DESIGN §13), as `  served provider/model`.
+
+    A run more than one model served names each with its cost, the most costly first, as the run's page shows its share:
+    `  served a/x $0.40, b/y $0.10`.
+
+    Returns:
+        The models with two leading spaces, to append to a line, or "" for a run whose session names none yet.
+    """
+    if not models:
+        return ""
+    if len(models) == 1:
+        return f"  served {models[0].model}"
+    return "  served " + ", ".join(f"{m.model} ${m.cost_usd:.2f}" for m in models)
+
+
 def replies_of(conn: sqlite3.Connection, table: RunTable, run_id: int) -> dict[str, str]:
     """The model that wrote each reply of a run more than one model served, by the reply's message.
 

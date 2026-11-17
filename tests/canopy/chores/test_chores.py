@@ -1193,6 +1193,39 @@ def test_a_chore_run_records_what_it_cost(
         assert db.spent_since(conn, "2000-01-01T00:00:00Z") == 0.5
 
 
+def test_a_chores_try_and_history_name_the_model_asked_for_and_the_ones_that_served_it(
+    canopy_env: CanopyEnv,
+    chores: Path,
+    agent_log: Path,
+    opencode_state: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """DESIGN §13: what a chore ran on is shown where its runs are, as a worker run's is."""
+    model = "anthropic/claude-x"
+    opencode_state.write_text(
+        json.dumps({"models": [model], "sessions": {"ses_chore": [["anthropic", "claude-x", 1]]}}),
+    )
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"models": {"chore": model}}})
+    with_events(canopy_env, "canopy-chore")
+    with chore_reports(OK, ["echo", "read it"], session="ses_chore"):
+        conn = canopy_env.journal()
+        run_inline(conn, OK)
+        capsys.readouterr()
+        assert main(["chore", "try", "build-health", "--no-record"]) == 0
+        printed = capsys.readouterr()
+        assert " minutes, model anthropic/claude-x); nothing is recorded" in printed.err
+        # A try that records nothing has no session canopy reads.
+        assert "served" not in printed.out
+        assert main(["chore", "try", "build-health"]) == 0
+        printed = capsys.readouterr()
+        assert ", model anthropic/claude-x); recorded as chore run 2" in printed.err
+        assert "  served anthropic/claude-x ---\n" in printed.out
+    assert main(["chore", "history", "build-health"]) == 0
+    out = capsys.readouterr().out
+    assert "(tried by hand)  model anthropic/claude-x  served anthropic/claude-x\n" in out
+    assert "(the overseer's)  model anthropic/claude-x  served anthropic/claude-x\n" in out
+
+
 def test_the_default_chore_cmd_asks_for_events(canopy_env: CanopyEnv) -> None:
     assert "--format json" in load(canopy_env.root, canopy_env.user_file).runtime.chore_cmd
 
