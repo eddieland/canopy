@@ -1,9 +1,11 @@
 """The feedback people left on PRs canopy observed (DESIGN §11): other people's, not bots', and when a PR waited."""
 
+from typing import Final
+
 from canopy.core import pr_feedback, records
 from canopy.core.vocab import PrState, ReviewItem, ReviewState
 
-PR = "https://github.com/acme/web/pull/7"
+PR: Final = "https://github.com/acme/web/pull/7"
 
 
 def feedback(at: str | None, state: ReviewState | None = ReviewState.APPROVED) -> pr_feedback.Feedback:

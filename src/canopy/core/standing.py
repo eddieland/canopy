@@ -22,7 +22,7 @@ import secrets
 import stat
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Final, Literal
 
 from canopy.core import conversation, prompts
 from canopy.core.conversation import Refused
@@ -35,35 +35,35 @@ if TYPE_CHECKING:
     from canopy.core.config import Config, StandingAgent
 
 #: Every agent, in the order the instructions page shows them.
-AGENTS: tuple[StandingAgent, ...] = ("worker", "overseer", "reviewer", "chore")
+AGENTS: Final[tuple[StandingAgent, ...]] = ("worker", "overseer", "reviewer", "chore")
 
 #: The most bytes of a file a run takes: a longer one refuses every run of its agent.
-MAX_BYTES = prompts.MAX_STANDING_BYTES
+MAX_BYTES: Final = prompts.MAX_STANDING_BYTES
 
 #: How many versions of each agent's file are kept: the newest, each the file as it was before a change.
-KEEP_VERSIONS = 10
+KEEP_VERSIONS: Final = 10
 
 #: The state directory's directory of versions, one directory in it for each agent.
-VERSIONS_DIR = "instructions"
+VERSIONS_DIR: Final = "instructions"
 
 # Read by name from the request, so each guard's words are the operator's to act on.
-CONFIGURED = "configured"
-TOO_LARGE = "too_large"
-STALE = "stale"
-UNSAFE_FILE = "unsafe_file"
-NO_VERSION = "no_version"
+CONFIGURED: Final = "configured"
+TOO_LARGE: Final = "too_large"
+STALE: Final = "stale"
+UNSAFE_FILE: Final = "unsafe_file"
+NO_VERSION: Final = "no_version"
 
 # How much of a file each read takes.
-_CHUNK = 64 * 1024
+_CHUNK: Final = 64 * 1024
 
 #: A version's name: when it was kept, to the microsecond, in UTC, so names sort as times do; then what made it.
-_STAMP = "%Y%m%dT%H%M%S%fZ"
+_STAMP: Final = "%Y%m%dT%H%M%S%fZ"
 #: A name of that shape, in ASCII digits alone: anything else in the directory is not a version, and is never listed,
 #: counted, or pruned.
-_VERSION_NAME = re.compile(r"[0-9]{8}T[0-9]{12}Z-(?:edit|delete)\.md")
+_VERSION_NAME: Final = re.compile(r"[0-9]{8}T[0-9]{12}Z-(?:edit|delete)\.md")
 
 # The most of a file the page is shown: past the bound, so the operator can trim one from the page, but not without end.
-_MAX_SHOWN = 16 * MAX_BYTES
+_MAX_SHOWN: Final = 16 * MAX_BYTES
 
 #: What made a version: a save over the file, or its deletion.
 type VersionKind = Literal["edit", "delete"]

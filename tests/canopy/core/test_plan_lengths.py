@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 from unittest import mock
 
 from canopy.core import plan_lengths, plan_metrics, plans, records
@@ -17,8 +17,8 @@ if TYPE_CHECKING:
 
     from tests.conftest import CanopyEnv
 
-TEXT = "# Plan\n\nOne step, then another.\n"
-MEASURED = Metrics(words=5, lines=3, code_blocks=0, tables=0, diagrams=0)
+TEXT: Final = "# Plan\n\nOne step, then another.\n"
+MEASURED: Final = Metrics(words=5, lines=3, code_blocks=0, tables=0, diagrams=0)
 
 
 def test_a_kept_plan_is_read_from_the_journal_not_its_file(conn: sqlite3.Connection, canopy_env: CanopyEnv) -> None:

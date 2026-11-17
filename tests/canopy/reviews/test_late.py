@@ -1,6 +1,7 @@
 """Late findings (DESIGN §21): a later review's findings on code unchanged since its PR's first review, held."""
 
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -22,7 +23,7 @@ def finding(severity: str, title: str, location: str) -> dict[str, str]:
 
 
 #: The second review's report: findings 1, 8, and 9 are on lines the second commit leaves as they were, and are late.
-LATER = {
+LATER: Final = {
     **FINDINGS,
     "findings": [
         finding("minor", "c is unused", "src/retry.py:3"),
@@ -38,7 +39,7 @@ LATER = {
     ],
 }
 #: The second review's findings that are not late.
-NOT_LATE = [
+NOT_LATE: Final = [
     "b is too big",
     "d breaks the build",
     "e is new",

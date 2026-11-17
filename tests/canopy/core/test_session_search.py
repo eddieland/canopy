@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.cli.main import main
 from canopy.core import db, records, session_index, session_list, session_search
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from tests.conftest import CanopyEnv
 
 #: 2026-11-17T12:00:00Z, in milliseconds since the epoch.
-NOON_MS = 1_794_916_800_000
+NOON_MS: Final = 1_794_916_800_000
 
 
 def kept(ctx: Context, *sessions: Kept) -> None:

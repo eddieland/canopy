@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import click
 
@@ -17,10 +17,10 @@ if TYPE_CHECKING:
     from canopy.core.tool_results import RoleResults, ToolResult, ToolResults
 
 #: How many days the report reads unless told otherwise: the two weeks the milestone measures over.
-DEFAULT_DAYS = 14
+DEFAULT_DAYS: Final = 14
 #: A tool's columns, as the table's head names them.
-_HEADS = ("tool", "calls", "chars", "median", "share", "cut", "unknown", "repeated")
-_MIB = 1024 * 1024
+_HEADS: Final = ("tool", "calls", "chars", "median", "share", "cut", "unknown", "repeated")
+_MIB: Final = 1024 * 1024
 
 
 @click.command("tool-results")

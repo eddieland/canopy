@@ -10,7 +10,7 @@ within a review's diff's bounds (`review_diff.read`), and said to be missing, or
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING, Final, assert_never
 
 from canopy.core import checklist_answers, checklists, conversation, db, health, review_diff, spend
 from canopy.core.vocab import ItemAnswer
@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 
 #: How many of a run's stretches its page is sent, each with its diff, as large as a review's may be: far more than a
 #: run makes, as it is held again only after half an hour's work.
-MAX_STRETCHES = 5
+MAX_STRETCHES: Final = 5
 
 
 def lists(ctx: Context) -> ChecklistList:

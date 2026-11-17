@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 from unittest import mock
 
 import pytest
@@ -53,17 +53,17 @@ if TYPE_CHECKING:
     from tests.conftest import CanopyEnv, GitPool
 
 #: Two rows a measurement might enable, each with its fixed context.
-ENABLED = {
+ENABLED: Final = {
     Phase.CONFLICTED: harness_dispatches.Row(ResumeReason.CONFLICT, "The PR conflicts with its base: bring it in."),
     Phase.PUSHED_NO_PR: harness_dispatches.Row(ResumeReason.NO_PR, "The branch has no PR: open one."),
 }
 #: Two rows whose reasons have cursors: `ci`'s and `review`'s.
-WITH_CURSORS = {
+WITH_CURSORS: Final = {
     Phase.CI_RED: harness_dispatches.Row(ResumeReason.CI, "A check failed at the head: fix it."),
     Phase.CHANGES_REQUESTED: harness_dispatches.Row(ResumeReason.REVIEW, "A reviewer asked for changes: make them."),
 }
 #: A check run of PR that failed at its head, as the fake GitHub holds it.
-FAILED = {"name": "build", "status": "completed", "conclusion": "failure", "run_id": 11}
+FAILED: Final = {"name": "build", "status": "completed", "conclusion": "failure", "run_id": 11}
 #: A chore with no `when`, which the harness runs, and one with a `when`, which the overseer decides.
 MINE, THEIRS = "deps", "build-health"
 

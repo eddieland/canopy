@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import sys
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING, Final, assert_never
 
 import click
 
@@ -27,9 +27,9 @@ if TYPE_CHECKING:
     from canopy.core import epic_changes, records
     from canopy.core.context import Context
 
-CLI = "cli"
+CLI: Final = "cli"
 #: How much of an epic's text `canopy epic list` shows on its line.
-LIST_TEXT = 80
+LIST_TEXT: Final = 80
 
 
 @click.group("epic")

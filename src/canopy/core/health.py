@@ -13,7 +13,7 @@ import bisect
 import math
 import statistics
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING, Final, assert_never
 
 from canopy.core import contract, db, spend, sql
 from canopy.core.vocab import ChoreRunStatus, ReviewRunStatus, RunKind, RunStatus, TickStatus
@@ -27,21 +27,21 @@ if TYPE_CHECKING:
     from canopy.core.spend import Kind
 
 # The newest failures a report lists, across every kind.
-FAILURES = 20
+FAILURES: Final = 20
 # What a failure's note is cut to: enough to tell one cause from another, which `canopy show` and the web UI give whole.
-NOTE_LIMIT = 300
-REFUSED = "refused:"
+NOTE_LIMIT: Final = 300
+REFUSED: Final = "refused:"
 #: The asks a refusal lists of what its guard refused, the most often refused first.
-ASKS = 5
+ASKS: Final = 5
 
 
 # The statuses each kind of run ends in when it did not do what it was started for. A worker that asked a question
 # (`blocked`) or that the operator stopped did, as did a tick that closed `ok`. A plan run (§25), an old triage before
 # a plan among them, is a run of the `runs` table, and fails as a worker does.
-_WORKER_FAILED = frozenset(
+_WORKER_FAILED: Final = frozenset(
     {RunStatus.FAILED, RunStatus.UNKNOWN, RunStatus.UNPUSHED, RunStatus.CRASHED, RunStatus.TIMEOUT},
 )
-_FAILED: dict[Kind, frozenset[str]] = {
+_FAILED: Final[dict[Kind, frozenset[str]]] = {
     "overseer": frozenset(TickStatus) - {TickStatus.RUNNING, TickStatus.OK},
     "workers": _WORKER_FAILED,
     "plans": _WORKER_FAILED,
@@ -54,11 +54,11 @@ _FAILED: dict[Kind, frozenset[str]] = {
 # `review`), its status, when it started and ended, what it was about, its note, and its cost. A plan run is a row of
 # `runs`, a kind of its own, an old triage among them, as `canopy spend` counts them. The tables are fixed, never input,
 # and each is built from literal SQL (D125).
-_RUN_ROWS = sql.select(
+_RUN_ROWS: Final = sql.select(
     "id, kind AS what, status, started_at, ended_at, ticket_key AS subject, result_json AS note, cost_usd",
 ).from_("runs")
-_PLAN_KINDS = (RunKind.PLAN, RunKind.NEEDS_PLAN)
-_ROWS: Mapping[Kind, sql.Select] = {
+_PLAN_KINDS: Final = (RunKind.PLAN, RunKind.NEEDS_PLAN)
+_ROWS: Final[Mapping[Kind, sql.Select]] = {
     "overseer": sql.select(
         "id, CASE WHEN dry_run THEN 'dry run' WHEN overseer_ran = 0 THEN 'no overseer' ELSE 'live' END AS what, "
         "status, started_at, ended_at, NULL AS subject, summary AS note, cost_usd",
@@ -78,9 +78,9 @@ _ROWS: Mapping[Kind, sql.Select] = {
 }
 #: What each band of `Bins` holds: a run whose length, over its kind's limit, is under the first, then the next; a run
 #: at or past its limit is over it.
-BANDS = (0.25, 0.5, 0.75, 1.0)
+BANDS: Final = (0.25, 0.5, 0.75, 1.0)
 # A tick that ran no overseer has no timeout of its own.
-_NO_OVERSEER = "no overseer"
+_NO_OVERSEER: Final = "no overseer"
 
 
 @dataclass(frozen=True)

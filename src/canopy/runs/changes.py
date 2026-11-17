@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import review_diff, run_changes
 from canopy.core.config import AUTOSQUASH
@@ -35,18 +35,18 @@ if TYPE_CHECKING:
     from canopy.infra import logs
 
 #: The kinds of worker run that record what they changed: those that work on the ticket's branch. A plan pushes none.
-RECORDED: frozenset[str] = frozenset({RunKind.IMPLEMENT, RunKind.FIX_CI, RunKind.RESUME})
+RECORDED: Final[frozenset[str]] = frozenset({RunKind.IMPLEMENT, RunKind.FIX_CI, RunKind.RESUME})
 #: How much of what git said a reason a diff was not kept holds.
-_MAX_REASON = 300
+_MAX_REASON: Final = 300
 #: How much of a commit's subject a run records, every hidden character named: a page or a terminal line's worth.
-MAX_SUBJECT = 200
+MAX_SUBJECT: Final = 200
 #: How much of `git log`'s output the commits are read from: far more than `run_changes.MAX_COMMITS` subjects and
 #: their trailers fill. A commit cut off at the end is not recorded.
-_MAX_LOG_CHARS = 512 * 1024
+_MAX_LOG_CHARS: Final = 512 * 1024
 #: One piece of a subject with its hidden characters named: a name, `<U+200B>`, or any other character.
-_NAMED_RE = re.compile(r"<U\+[0-9A-F]{4,6}>|.", re.DOTALL)
+_NAMED_RE: Final = re.compile(r"<U\+[0-9A-F]{4,6}>|.", re.DOTALL)
 #: The trailer key of a co-author, as git matches it, ignoring case.
-_CO_AUTHOR = "co-authored-by"
+_CO_AUTHOR: Final = "co-authored-by"
 
 
 def keep(

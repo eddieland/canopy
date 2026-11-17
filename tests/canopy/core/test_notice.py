@@ -10,7 +10,7 @@ import sqlite3
 import sys
 from datetime import UTC, datetime, timedelta, tzinfo
 from pathlib import Path
-from typing import override
+from typing import Final, override
 from unittest import mock
 
 import pytest
@@ -38,8 +38,8 @@ from tests.canopy.scenario_helpers import FEEDBACK_RED, Scenario, dispatches, gi
 from tests.canopy.web_helpers import DEFAULT_CAPACITY, refused, signed_in_client
 from tests.conftest import CanopyEnv, GitPool
 
-OUTAGE = "Artifactory is down: CI builds that fetch dependencies will likely fail."
-SECTION = "## Notice from the operator\n\n"
+OUTAGE: Final = "Artifactory is down: CI builds that fetch dependencies will likely fail."
+SECTION: Final = "## Notice from the operator\n\n"
 
 
 def notice_of(prompt: str) -> str | None:

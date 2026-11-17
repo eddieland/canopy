@@ -3,6 +3,7 @@
 import io
 import sqlite3
 import sys
+from typing import Final
 from unittest import mock
 
 import pytest
@@ -14,7 +15,7 @@ from tests.canopy.conftest import Ws
 from tests.canopy.helpers import operator, present
 from tests.conftest import CanopyEnv
 
-TEXT = "Move sessions to the new store, across the API and the web app."
+TEXT: Final = "Move sessions to the new store, across the API and the web app."
 
 
 def submit(*args: str, code: int = 0) -> None:

@@ -1,11 +1,13 @@
 """An epic plan's ids and breakdown, read in the outline's shape, and what an approval changed (DESIGN §43)."""
 
+from typing import Final
+
 import pytest
 
 from canopy.core import epic_outline
 from canopy.core.epic_outline import Change, Outline, OutlineError
 
-PLAN = """\
+PLAN: Final = """\
 # Sessions in the new store
 
 ## Goal

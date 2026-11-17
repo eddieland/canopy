@@ -5,6 +5,7 @@ import sys
 import tomllib
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import pytest
@@ -19,7 +20,7 @@ from tests.conftest import CanopyEnv
 
 #: Where each runtime reads a project's config from, as its warning about a copy of canopy's agents says: OpenCode 2
 #: reads the directories above the start directory too.
-WHERE = {Version.ONE: "here", Version.TWO: "here or above"}
+WHERE: Final = {Version.ONE: "here", Version.TWO: "here or above"}
 
 
 @pytest.fixture
@@ -278,7 +279,7 @@ def test_sandbox_suggestion_puts_the_wrapper_before_the_prefix(prefix: str, tmp_
     assert shlex.split(_suggested_prefix(out)) == [*SANDBOX_PREFIX, *shlex.split(prefix)]
 
 
-SANDBOX_PREFIX = ["canopy-sandbox", "worker", "--read", "{definitions_dir}", "--"]
+SANDBOX_PREFIX: Final = ["canopy-sandbox", "worker", "--read", "{definitions_dir}", "--"]
 
 
 def _suggested_prefix(out: str) -> str:

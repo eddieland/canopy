@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.cli import cards as cards_cli
 from canopy.cli.main import main
@@ -25,8 +25,8 @@ if TYPE_CHECKING:
 
     from tests.conftest import CanopyEnv, Journals
 
-NOW = datetime(2026, 10, 8, 12, tzinfo=UTC)
-CARD = cards.Card.model_validate({"summary": "Fixing the parser.", "now": "running the tests"})
+NOW: Final = datetime(2026, 10, 8, 12, tzinfo=UTC)
+CARD: Final = cards.Card.model_validate({"summary": "Fixing the parser.", "now": "running the tests"})
 
 
 def at(start: datetime, minutes: float) -> str:

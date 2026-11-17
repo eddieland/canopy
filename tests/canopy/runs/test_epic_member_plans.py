@@ -3,6 +3,7 @@
 import json
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Final
 
 from canopy.core import epics, plans
 from canopy.core.vocab import PlannerApproval, PlanStatus, RunKind, RunStatus
@@ -25,10 +26,10 @@ from tests.canopy.helpers import (
 from tests.canopy.scenario_helpers import Scenario, dispatches
 from tests.conftest import GitPool
 
-PLAN = dispatches(kind=RunKind.PLAN)
-TEXT = "# Plan for PROJ-1\n\n## Goal\n\nMove the store.\n\n## Epic\n\nCovers R1; provides C1.\n"
+PLAN: Final = dispatches(kind=RunKind.PLAN)
+TEXT: Final = "# Plan for PROJ-1\n\n## Goal\n\nMove the store.\n\n## Epic\n\nCovers R1; provides C1.\n"
 #: `EPIC_PLAN` with a second entry, which a later approval of `EPIC_PLAN` drops.
-TWO_ENTRIES = EPIC_PLAN.replace(
+TWO_ENTRIES: Final = EPIC_PLAN.replace(
     "## Decisions",
     "### B2. Read from the store\n\n- Covers: R1\n- Provides: none\n- Uses: C1\n- Repositories: repo\n"
     "- After: B1\n- Trivial: no\n\n## Decisions",
@@ -297,7 +298,7 @@ def test_a_worker_override_without_the_epic_is_refused_once_its_plan_is_approved
 
 
 #: `EPIC_PLAN` with `B1` marked trivial, which skips its member's own plan under `policy.plan`.
-TRIVIAL = EPIC_PLAN.replace("- Trivial: no", "- Trivial: yes, a one-line config change")
+TRIVIAL: Final = EPIC_PLAN.replace("- Trivial: no", "- Trivial: yes, a one-line config change")
 
 
 def plans_by_approval(scenario: Scenario, *, planner_may_approve: bool = True) -> None:

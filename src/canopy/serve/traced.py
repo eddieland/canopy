@@ -11,7 +11,7 @@ so one of a stream the page holds open is as long as the page kept it.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.infra import tracing
 
@@ -19,9 +19,9 @@ if TYPE_CHECKING:
     from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 #: The methods HTTP names; any other a client sends is recorded as `_OTHER`, as the convention has it.
-METHODS = frozenset({"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "CONNECT", "TRACE"})
+METHODS: Final = frozenset({"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "CONNECT", "TRACE"})
 #: The least status that fails a server's span: a 4xx is the client's error, not the server's.
-SERVER_ERROR = 500
+SERVER_ERROR: Final = 500
 
 
 class Traced:

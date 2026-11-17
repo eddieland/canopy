@@ -8,7 +8,7 @@ does. Each agent's and chore's model the page shows and never changes: the opera
 from __future__ import annotations
 
 import contextlib
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from fastapi import APIRouter
 
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
     from canopy.runtime.agents import Model
 
-TAG = "config"
+TAG: Final = "config"
 router = APIRouter(tags=[TAG])
 _log = logs.for_tick(None)
 

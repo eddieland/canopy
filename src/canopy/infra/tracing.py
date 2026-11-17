@@ -25,7 +25,7 @@ import os
 import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Final, Literal
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
@@ -41,15 +41,15 @@ type Traces = Literal["off", "file", "otlp"]
 type Attribute = str | int | float | bool | None
 
 #: The file spans are appended to, as OTLP JSON, a line per span, in the state directory.
-TRACES_FILE_NAME = "traces.jsonl"
+TRACES_FILE_NAME: Final = "traces.jsonl"
 #: The semantic conventions whose attributes a span may carry by their own names: the database's, for slow journal
 #: queries, generative AI's, for model calls, HTTP's, for the web UI's requests, and process's, for the commands canopy
 #: runs.
-STANDARD_PREFIXES = ("db.", "gen_ai.", "http.", "process.")
+STANDARD_PREFIXES: Final = ("db.", "gen_ai.", "http.", "process.")
 #: Where an OTLP/HTTP endpoint takes spans, under its base URL.
-TRACES_PATH = "/v1/traces"
+TRACES_PATH: Final = "/v1/traces"
 #: The variable a child process finds its parent's span in, as OpenTelemetry names it for an environment.
-TRACEPARENT = "TRACEPARENT"
+TRACEPARENT: Final = "TRACEPARENT"
 
 
 class Span:
@@ -379,7 +379,7 @@ _tracing = _Tracing()
 #: The span of canopy's open now in this thread or task, for `tally` and `event`.
 _OPEN: contextvars.ContextVar[Span | None] = contextvars.ContextVar("canopy_span", default=None)
 _CONFIGURING = threading.Lock()
-_OFF = Span(None)
+_OFF: Final = Span(None)
 
 
 def _standard(attributes: Mapping[str, Attribute]) -> dict[str, str | int | float | bool]:

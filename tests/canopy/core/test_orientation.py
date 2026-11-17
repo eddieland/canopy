@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 from unittest import mock
 
 import pytest
@@ -31,8 +31,8 @@ if TYPE_CHECKING:
 
     from tests.conftest import CanopyEnv, Journals
 
-NOW = datetime(2026, 10, 8, 12, tzinfo=UTC)
-SESSION = "ses_abc123"
+NOW: Final = datetime(2026, 10, 8, 12, tzinfo=UTC)
+SESSION: Final = "ses_abc123"
 #: A tool call each, as the log holds it: (tool, input), completed unless the input says `"failed": True`.
 type Call = tuple[str, dict[str, object]]
 
@@ -65,9 +65,9 @@ def edit(path: str) -> Call:
     return ("edit", {"filePath": path, "oldString": "a", "newString": "b"})
 
 
-GREP: Call = ("grep", {"pattern": "parse"})
-SHELL_SEARCH: Call = ("bash", {"command": "rg parse"})
-TESTS: Call = ("bash", {"command": "uv run pytest"})
+GREP: Final[Call] = ("grep", {"pattern": "parse"})
+SHELL_SEARCH: Final[Call] = ("bash", {"command": "rg parse"})
+TESTS: Final[Call] = ("bash", {"command": "uv run pytest"})
 
 
 def worker(
@@ -196,7 +196,7 @@ def uses(*touches: Touch) -> list[Use]:
     return [Use(t, completed=True, spent=float(i)) for i, t in enumerate(touches)]
 
 
-SEARCH = Touch("search")
+SEARCH: Final = Touch("search")
 
 
 def test_a_workers_anchor_is_the_first_read_of_the_file_its_first_edit_changed() -> None:

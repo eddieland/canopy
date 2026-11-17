@@ -23,7 +23,7 @@ import math
 import statistics
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import db, health, records, spend, sql
 from canopy.core.vocab import NumberedItem, ReviewItem
@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from canopy.loop import tick
 
 #: The kinds of item counted, in the order the report lists them: a review run is canopy's own, never external.
-KINDS: Sequence[NumberedItem] = (
+KINDS: Final[Sequence[NumberedItem]] = (
     NumberedItem.COMMENT,
     NumberedItem.REVIEW,
     NumberedItem.REVIEW_COMMENT,
@@ -44,9 +44,9 @@ KINDS: Sequence[NumberedItem] = (
     NumberedItem.CHECK_RUN,
 )
 #: What `ticks.woken_by` says of a tick a poll of the connectors woke (DESIGN §39).
-POLL: tick.WokenBy = "poll"
+POLL: Final[tick.WokenBy] = "poll"
 #: The share of the items whose latency the high figure is at or above.
-_HIGH = 0.9
+_HIGH: Final = 0.9
 
 
 @dataclass(frozen=True)

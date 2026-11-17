@@ -6,7 +6,7 @@ from collections.abc import Callable, Generator, Mapping, Sequence
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler
 from itertools import starmap
-from typing import Any, ClassVar, override
+from typing import Any, ClassVar, Final, override
 from unittest import mock
 
 import canopy_github
@@ -20,8 +20,8 @@ from tests.canopy_github.helpers import InProcess, serving
 from tests.conftest import CanopyEnv, invoke
 
 #: What the stand-in pages by: smaller than the connector asks for, so every read crosses a page.
-PAGE = 2
-REPO = "acme/api"
+PAGE: Final = 2
+REPO: Final = "acme/api"
 
 
 @dataclass

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal, LiteralString
+from typing import TYPE_CHECKING, Final, Literal, LiteralString
 
 from canopy.core import cards, db, records, spend, sql
 from canopy.core.vocab import RunKind
@@ -21,8 +21,8 @@ if TYPE_CHECKING:
     from datetime import datetime
 
 #: The roles that are not a run kind: a review's run, and a one-off task's.
-REVIEW = "review"
-TASK = "task"
+REVIEW: Final = "review"
+TASK: Final = "task"
 
 
 @dataclass(frozen=True)
@@ -130,9 +130,9 @@ class Ran(records.View):
 
 
 #: What `_ran` reads of each run after its role.
-_COLUMNS = sql.frag("started_at, ended_at, tool_calls, card_at, card_calls, card_lapses, card_stale")
+_COLUMNS: Final = sql.frag("started_at, ended_at, tool_calls, card_at, card_calls, card_lapses, card_stale")
 #: A run in the window, by when it started.
-_WINDOW: LiteralString = "started_at >= ? AND started_at < ?"
+_WINDOW: Final[LiteralString] = "started_at >= ? AND started_at < ?"
 
 
 def _ran(conn: sqlite3.Connection, since: str, until: str) -> list[Ran]:

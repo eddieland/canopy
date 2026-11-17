@@ -12,7 +12,7 @@ PR page reads its branch's diff and lists both runs' commits as its branch's his
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import records, review_diff, run_changes
 from canopy.serve.mock import checklists
@@ -23,19 +23,19 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 #: Where main was when run 39 started, which its branch still leaves.
-_MAIN = "71c3e0a5" + "1" * 32
+_MAIN: Final = "71c3e0a5" + "1" * 32
 #: Where PR 86's branch was when run 40 started, and the commit it made but never pushed.
-_HEAD_86 = "a40d2f97" + "4" * 32
-_UNPUSHED_86 = "d8e61b30" + "8" * 32
+_HEAD_86: Final = "a40d2f97" + "4" * 32
+_UNPUSHED_86: Final = "d8e61b30" + "8" * 32
 #: Where main was when task 1's run started, and the head it pushed.
-_MAIN_TASK = "2c9a17e4" + "2" * 32
-_HEAD_97 = "5e0b7c2a9d41f3e86a2c4b7d9e1f0a3c5b8d2e4f"
+_MAIN_TASK: Final = "2c9a17e4" + "2" * 32
+_HEAD_97: Final = "5e0b7c2a9d41f3e86a2c4b7d9e1f0a3c5b8d2e4f"
 #: Task 1's run's first commit, made around canopy's hooks.
-_AROUND = "3f7a0d52" + "3" * 32
+_AROUND: Final = "3f7a0d52" + "3" * 32
 #: Why run 37 kept no diff, as `runs.changes` says it.
-_NOT_KEPT = "the run left no branch on origin and no commit of its own in its slot"
+_NOT_KEPT: Final = "the run left no branch on origin and no commit of its own in its slot"
 
-_DEBOUNCE = """\
+_DEBOUNCE: Final = """\
 diff --git a/src/search/useSearch.ts b/src/search/useSearch.ts
 index 9c41e07..b2d8a15 100644
 --- a/src/search/useSearch.ts
@@ -84,7 +84,7 @@ index 0000000..4e7f1c2
 +})
 """
 
-_RETRY = """\
+_RETRY: Final = """\
 diff --git a/e2e/checkout.spec.ts b/e2e/checkout.spec.ts
 index 51a0c3e..e07b9d4 100644
 --- a/e2e/checkout.spec.ts
@@ -96,7 +96,7 @@ index 51a0c3e..e07b9d4 100644
      await page.frameLocator('#payment').getByLabel('Card number').fill('4242 4242 4242 4242')
 """
 
-_BUNDLE = """\
+_BUNDLE: Final = """\
 diff --git a/src/checkout/DatePicker.tsx b/src/checkout/DatePicker.tsx
 index 0b4e6f2..c71a9d8 100644
 --- a/src/checkout/DatePicker.tsx
@@ -112,7 +112,7 @@ index 0b4e6f2..c71a9d8 100644
 """
 
 #: Run 38's whole change: the v1 client it deleted before it was shown web's list, then the stretch it pushed after.
-_BILLING = (
+_BILLING: Final = (
     """\
 diff --git a/src/billing/v1.ts b/src/billing/v1.ts
 deleted file mode 100644

@@ -7,7 +7,7 @@ does, and is refused inside canopy's own ticks and runs: a desk is the operator'
 from __future__ import annotations
 
 import contextlib
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from fastapi import APIRouter
 
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
     from canopy.core.context import Context
 
-TAG = "desks"
+TAG: Final = "desks"
 router = APIRouter(tags=[TAG])
 _log = logs.for_tick(None)
 

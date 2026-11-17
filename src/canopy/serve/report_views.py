@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from itertools import starmap
-from typing import TYPE_CHECKING, Literal, assert_never, cast
+from typing import TYPE_CHECKING, Final, Literal, assert_never, cast
 
 from canopy.core import (
     ci,
@@ -106,9 +106,9 @@ if TYPE_CHECKING:
 
 
 # How `canopy health` names a task's run's subject: its task's id after it.
-_TASK = "task:"
+_TASK: Final = "task:"
 # The guard whose refusals the CI page shows: a `resume` for `ci` alone held until its checks had time to run again.
-_COOLDOWN = "cooldown"
+_COOLDOWN: Final = "cooldown"
 
 
 def monthly_report(backend: Backend, ctx: Context, months: int) -> MonthlyReport:

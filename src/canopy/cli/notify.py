@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Final
 
 import click
 
@@ -11,7 +12,9 @@ from canopy.core import conversation, event_names, outbox
 from canopy.notify import deliver
 
 #: What `canopy notify events` says of the attention list, which is a diff of items, not a point event with fields.
-_ATTENTION = "the attention list's items added and resolved since the sink last heard: the json format's `attention`"
+_ATTENTION: Final = (
+    "the attention list's items added and resolved since the sink last heard: the json format's `attention`"
+)
 
 
 @click.group("notify")

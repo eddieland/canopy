@@ -2,7 +2,7 @@
 
 import json
 from collections.abc import Mapping
-from typing import Annotated
+from typing import Annotated, Final
 
 import canopy_mcp
 import pytest
@@ -35,7 +35,7 @@ def _breaks(arguments: Mapping[str, object], served: None) -> str:
     raise RuntimeError("a bug")
 
 
-TOOLS: tuple[Echo, ...] = (
+TOOLS: Final[tuple[Echo, ...]] = (
     canopy_mcp.Tool("echo", "Echo text.", _Said, _echo, hints=canopy_mcp.READS),
     canopy_mcp.Tool("breaks", "Fail.", _Said, _breaks),
 )

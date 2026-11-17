@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import pytest
@@ -32,8 +33,8 @@ from tests.canopy.helpers import (
 from tests.canopy.scenario_helpers import Scenario, dispatches
 from tests.conftest import CanopyEnv, GitPool
 
-GOAL = "Move sessions to the new store."
-PLAN = """\
+GOAL: Final = "Move sessions to the new store."
+PLAN: Final = """\
 # Epic: sessions in the new store
 
 ## Goal

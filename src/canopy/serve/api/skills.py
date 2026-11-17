@@ -6,13 +6,15 @@ It changes nothing: a skill is added, denied, or removed in the runtime's own co
 
 from __future__ import annotations
 
+from typing import Final
+
 from fastapi import APIRouter
 
 from canopy.serve import skills
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.schema.skill import SkillList
 
-TAG = "skills"
+TAG: Final = "skills"
 router = APIRouter(tags=[TAG])
 
 

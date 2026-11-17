@@ -7,7 +7,7 @@ operator recorded into, for them to read before they send anything. One recordin
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 from fastapi import APIRouter, Request
 from starlette.concurrency import run_in_threadpool
@@ -23,12 +23,12 @@ from canopy.serve.schema.dictation import Dictated
 if TYPE_CHECKING:
     from canopy.serve.backend import Backend
 
-TAG = "dictation"
+TAG: Final = "dictation"
 router = APIRouter(tags=[TAG])
 _log = logs.for_tick(None)
 
 # The body is the recording's bytes, not JSON, which would grow it by a third.
-_BODY: dict[str, Any] = {
+_BODY: Final[dict[str, Any]] = {
     "requestBody": {
         "required": True,
         "description": f"The recording: a WAV of 16-bit mono PCM at {dictation.SAMPLE_RATE} Hz, at most "

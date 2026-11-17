@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 from unittest import mock
 
 from canopy.core import db, records, session_index, session_search
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 #: When the tests' steps run.
-NOW = datetime(2026, 11, 17, 12, tzinfo=UTC)
+NOW: Final = datetime(2026, 11, 17, 12, tzinfo=UTC)
 
 
 def step(ctx: Context, *, exclude: Sequence[str] = (), seconds: float = 60.0, now: datetime = NOW) -> bool:

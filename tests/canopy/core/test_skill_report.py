@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import db, records, run_offers, skill_report, spend, sql
 from canopy.core.vocab import ChoreRunStatus, PoolKind, ReviewRunStatus, RunKind, RunStatus
@@ -24,9 +24,9 @@ if TYPE_CHECKING:
     from canopy.core.run_models import RunTable
     from tests.conftest import Journals
 
-NOW = datetime(2026, 11, 8, 12, tzinfo=UTC)
+NOW: Final = datetime(2026, 11, 8, 12, tzinfo=UTC)
 #: How long the tests' offers say each skill's entry in the runtime's list is: its front matter, as a call carries it.
-SIZES = {"tracker-jira": 92, "release-notes": 73, "terse": 5}
+SIZES: Final = {"tracker-jira": 92, "release-notes": 73, "terse": 5}
 
 
 def tick(conn: sqlite3.Connection, started: str, *, overseer_ran: int = 1) -> int:

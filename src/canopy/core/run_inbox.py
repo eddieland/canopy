@@ -32,7 +32,7 @@ import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, assert_never
+from typing import TYPE_CHECKING, Final, Literal, assert_never
 
 from pydantic import BaseModel, ConfigDict, StrictInt, StrictStr, ValidationError
 
@@ -48,28 +48,28 @@ if TYPE_CHECKING:
     from canopy.runtime.report import Called
 
 #: The tool, served by the run's own server beside `status`: the agent sees it as `canopy_run_messages`.
-TOOL = "messages"
+TOOL: Final = "messages"
 #: The file in a run's answers directory that holds the messages sent to it, which the tool reads, and the file that
 #: marks the newest of them by its id alone, which canopy's plugin reads.
-TEXTS_FILE = "messages.json"
-MARK_FILE = "message.json"
+TEXTS_FILE: Final = "messages.json"
+MARK_FILE: Final = "message.json"
 #: How many messages one run may be sent: each is at most `conversation.MAX_OPERATOR` characters, so the tool's result,
 #: which carries them all, stays bounded.
-MAX_MESSAGES = 20
+MAX_MESSAGES: Final = 20
 #: A run's CANOPY_RUN_ID that names a run that takes messages: a worker's or a planner's id, or a task's, `task-3`. A
 #: review's, `review-7`, takes none (DESIGN §44, Open).
-RUN_ID_RE = re.compile(r"(?:task-)?[0-9]{1,18}")
+RUN_ID_RE: Final = re.compile(r"(?:task-)?[0-9]{1,18}")
 #: The run tables whose running runs take messages, and the column of `messages` that names the run each was sent to.
 type MessageTable = Literal["runs", "task_runs"]
-_TO: Mapping[MessageTable, Literal["to_run_id", "to_task_run_id"]] = {
+_TO: Final[Mapping[MessageTable, Literal["to_run_id", "to_task_run_id"]]] = {
     "runs": "to_run_id",
     "task_runs": "to_task_run_id",
 }
 #: The statuses a run's report ends it with, `done` and `blocked`: such a run says what it did with what it fetched.
-_REPORTED = (RunStatus.DONE, RunStatus.BLOCKED)
+_REPORTED: Final = (RunStatus.DONE, RunStatus.BLOCKED)
 #: The ids of the messages a run fetched and then reported on: answered, so the loop reads past them, as it reads past
 #: an operator message its cursor has passed. Every other message to a run stays the operator's word to its subject.
-HEARD = sql.frag(
+HEARD: Final = sql.frag(
     "SELECT h.id FROM messages h WHERE h.fetched_at IS NOT NULL AND ("
     "h.to_run_id IN (SELECT r.id FROM runs r WHERE r.status IN (?, ?))"
     " OR h.to_task_run_id IN (SELECT t.id FROM task_runs t WHERE t.status IN (?, ?)))",

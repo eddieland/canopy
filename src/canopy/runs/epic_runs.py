@@ -13,7 +13,7 @@ import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import conversation, db, pools, records, sql
 from canopy.core.items import Item
@@ -31,15 +31,15 @@ if TYPE_CHECKING:
     from canopy.infra import logs
 
 #: What a plan run's slots are leased as, after `canopy:` (DESIGN §18): `canopy:epic:<id>`, which no ticket key can be.
-HOLDER_KEY = "epic:"
+HOLDER_KEY: Final = "epic:"
 #: Where plan runs' logs and prompts live: `<state_dir>/epic-runs/`, the operator's only.
-RUNS_DIR = "epic-runs"
+RUNS_DIR: Final = "epic-runs"
 #: Where a ticket key would be, an attention item about an epic names it so (DESIGN §43).
-EPIC_PREFIX = "epic:"
+EPIC_PREFIX: Final = "epic:"
 #: The attention reason an epic's plan waiting on the operator raises, as a ticket's does (DESIGN §25, §43).
-REASON = "plan_review"
+REASON: Final = "plan_review"
 #: The note a plan run ended by the operator's stop is closed with.
-STOP_NOTE = "the operator stopped the epic with `canopy stop --now`"
+STOP_NOTE: Final = "the operator stopped the epic with `canopy stop --now`"
 
 
 def desk_key(epic_id: int) -> str:

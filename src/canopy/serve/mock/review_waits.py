@@ -10,7 +10,7 @@ operator approved on Sep 30 carry their planner's estimates: ABC-130's and ABC-1
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import db, records
 from canopy.core.vocab import PlanEffort, RunKind
@@ -22,9 +22,9 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 #: When the reader began keeping a PR's times: a PR read before it has none.
-TIMES_FROM = datetime(2026, 9, 15, tzinfo=UTC)
+TIMES_FROM: Final = datetime(2026, 9, 15, tzinfo=UTC)
 # The planner's estimate of each approved feedback plan, by its ticket.
-_EFFORTS = {"ABC-130": PlanEffort.SMALL, "ABC-131": PlanEffort.SMALL, "ABC-132": PlanEffort.MEDIUM}
+_EFFORTS: Final = {"ABC-130": PlanEffort.SMALL, "ABC-131": PlanEffort.SMALL, "ABC-132": PlanEffort.MEDIUM}
 
 
 def seed(conn: sqlite3.Connection, at: Callable[[int], str]) -> None:

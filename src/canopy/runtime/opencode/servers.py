@@ -16,18 +16,18 @@ which OpenCode merges deep into the operator's own, so the server never starts.
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
     from pathlib import Path
 
 #: The variable OpenCode reads inline config from, merged after every config file but those managed for the operator.
-INLINE_CONFIG_ENV = "OPENCODE_CONFIG_CONTENT"
+INLINE_CONFIG_ENV: Final = "OPENCODE_CONFIG_CONTENT"
 #: The variable that turns OpenCode's code mode on or off, over `OPENCODE_EXPERIMENTAL`.
-CODE_MODE_ENV = "OPENCODE_EXPERIMENTAL_CODE_MODE"
+CODE_MODE_ENV: Final = "OPENCODE_EXPERIMENTAL_CODE_MODE"
 #: The variables canopy sets to give a run a server, which no run started below it may inherit.
-VARIABLES = frozenset({INLINE_CONFIG_ENV, CODE_MODE_ENV})
+VARIABLES: Final = frozenset({INLINE_CONFIG_ENV, CODE_MODE_ENV})
 
 
 def env(

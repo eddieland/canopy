@@ -7,6 +7,7 @@ the state directory as the CLI reads it.
 import json
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Final
 
 from canopy.core import cards, checklist_answers, conversation, db, pools, records, review_diff, run_changes
 from canopy.core.checklist_answers import Answer, Checked, Pushed
@@ -19,8 +20,8 @@ from canopy.serve.task_views import RUN_STANDINGS
 from tests.canopy.helpers import present
 from tests.canopy.web_helpers import client
 
-TEXT = "Find out why the nightly export\x07 takes an hour, and say what would halve it."
-REPORT = "# Nightly export\n\nThe <script>alert(1)</script> step\x1b[31m re-reads every row.\n"
+TEXT: Final = "Find out why the nightly export\x07 takes an hour, and say what would halve it."
+REPORT: Final = "# Nightly export\n\nThe <script>alert(1)</script> step\x1b[31m re-reads every row.\n"
 
 
 def test_a_task_is_listed_with_where_it_stands_as_it_goes(backend: Backend) -> None:

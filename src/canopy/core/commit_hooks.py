@@ -35,7 +35,7 @@ import re
 import stat
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import checklists, hostgit, prompts
 from canopy.infra import procs
@@ -47,38 +47,38 @@ if TYPE_CHECKING:
     from canopy.core.config import Config
 
 #: The directory in canopy's snapshot that holds the hooks.
-HOOKS_DIR = "git-hooks"
+HOOKS_DIR: Final = "git-hooks"
 #: The trailers the hooks add, one to a line.
-TRAILERS_ENV = "CANOPY_COMMIT_TRAILERS"
+TRAILERS_ENV: Final = "CANOPY_COMMIT_TRAILERS"
 #: The text the hooks put before a commit's subject.
-PREFIX_ENV = "CANOPY_COMMIT_PREFIX"
+PREFIX_ENV: Final = "CANOPY_COMMIT_PREFIX"
 #: The run's slots, a top level to a line, whose commits alone the hooks mark.
-SLOTS_ENV = "CANOPY_SLOTS"
+SLOTS_ENV: Final = "CANOPY_SLOTS"
 #: The lists `pre-push` holds a push for: a line per slot, its top level and its list's file, split by a tab.
-CHECKLISTS_ENV = "CANOPY_CHECKLISTS"
+CHECKLISTS_ENV: Final = "CANOPY_CHECKLISTS"
 #: The file in a slot's own git directory where `pre-push` marks its hold: the run's id and the time, in Unix seconds.
-HOLD_MARKER = "canopy-checklist-hold"
+HOLD_MARKER: Final = "canopy-checklist-hold"
 #: The file in a slot's own git directory where `pre-push` notes each time it showed the run its list, and each push it
 #: let through after a hold: a line `<shown|sent> <run id> <commit>`, which the harness reads, and removes, as the run
 #: ends (`pushes_after`).
-PUSHES_LOG = "canopy-checklist-pushes"
+PUSHES_LOG: Final = "canopy-checklist-pushes"
 #: How much of that file the harness reads: far more than a run's pushes fill.
-MAX_PUSHES_BYTES = 64 * 1024
+MAX_PUSHES_BYTES: Final = 64 * 1024
 #: A commit id, as git names one: SHA-1, or SHA-256.
-_COMMIT_RE = re.compile(r"[0-9a-f]{40}(?:[0-9a-f]{24})?")
+_COMMIT_RE: Final = re.compile(r"[0-9a-f]{40}(?:[0-9a-f]{24})?")
 #: How long after a hold a push of the same run goes through: past it, a push after a long stretch of work is held
 #: again. Long enough to diff, fix, and commit; a push held a second time still goes through the time after.
-HOLD_WINDOW_SECONDS = 30 * 60
+HOLD_WINDOW_SECONDS: Final = 30 * 60
 #: The stretch before `CANOPY_DEADLINE` in which no push is held, since a held push then risks the run ending unpushed:
 #: the clock's last stretch at its longest (DESIGN §33), as the hook knows the deadline, not when the run started.
-LAST_STRETCH_SECONDS = 10 * 60
+LAST_STRETCH_SECONDS: Final = 10 * 60
 #: The oldest git that reads `GIT_CONFIG_COUNT`, through which a worker's git finds the hooks.
-MIN_GIT = (2, 31)
+MIN_GIT: Final = (2, 31)
 #: How `git --version` names its version, as Linux, macOS, and Windows builds print it.
-_GIT_VERSION_RE = re.compile(r"git version (\d+)\.(\d+)")
-_GIT_VERSION_TIMEOUT_SECONDS = 30
+_GIT_VERSION_RE: Final = re.compile(r"git version (\d+)\.(\d+)")
+_GIT_VERSION_TIMEOUT_SECONDS: Final = 30
 #: The client-side hooks git runs from its hooks directory, each of which canopy's must hand on to the repository's.
-NAMES = (
+NAMES: Final = (
     "applypatch-msg",
     "commit-msg",
     "post-applypatch",
@@ -98,7 +98,7 @@ NAMES = (
     "sendemail-validate",
 )
 #: Each hook, under each name: POSIX sh, so a hook costs a shell and one git, not a Python start.
-SCRIPT = (
+SCRIPT: Final = (
     r"""#!/bin/sh
 # canopy's git hook (TRUST_MODEL T5): puts canopy's prefix and trailers on the message, as prepare-commit-msg, holds a
 # worker's push for its repository's checklist, as pre-push (DESIGN §42), then runs the repository's own hook of this
@@ -268,7 +268,7 @@ class Marks:
 
 
 #: No marks: what a run that makes no commit gets.
-NONE = Marks()
+NONE: Final = Marks()
 
 
 def marks(

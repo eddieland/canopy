@@ -10,7 +10,7 @@ with a snippet read from the runtime's record. A title and a snippet are untrust
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import db, records, session_index, session_list
 from canopy.runtime import sessions as runtime_sessions
@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     from canopy.serve.schema.sessions import SessionRunKind
 
 #: What each table of canopy's runs is, as a session's run names it.
-RUN_KINDS: dict[RunTable, SessionRunKind] = {
+RUN_KINDS: Final[dict[RunTable, SessionRunKind]] = {
     "ticks": "tick",
     "runs": "run",
     "chore_runs": "chore_run",
@@ -44,7 +44,7 @@ RUN_KINDS: dict[RunTable, SessionRunKind] = {
     "epic_runs": "epic_run",
 }
 # A row whose id is among those of a JSON array.
-_AMONG = "id IN (SELECT value FROM json_each(?))"
+_AMONG: Final = "id IN (SELECT value FROM json_each(?))"
 
 
 def listed(

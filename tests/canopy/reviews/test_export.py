@@ -1,6 +1,7 @@
 """`canopy review export`: a review as Markdown for a person or an agent who has the code."""
 
 import re
+from typing import Final
 
 from syrupy.assertion import SnapshotAssertion
 
@@ -11,7 +12,7 @@ from tests.canopy.scenario_helpers import Scenario, dispatches, pushes, reviews
 from tests.conftest import CanopyEnv, GitPool
 
 #: A review of PROJ-1's PR with something in every part an export shows, and text a reader must not take for its own.
-REPORT = {
+REPORT: Final = {
     "status": "done",
     "verdict": "findings",
     "impact": "normal",

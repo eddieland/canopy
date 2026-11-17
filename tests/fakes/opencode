@@ -49,14 +49,14 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 # The rules OpenCode 2 starts every agent from, before its own.
-DEFAULTS = [["*", "*", "allow"], ["read", "*.env", "ask"], ["read", "*.env.*", "ask"]]
+DEFAULTS: Final = [["*", "*", "allow"], ["read", "*.env", "ask"], ["read", "*.env.*", "ask"]]
 # What OpenCode 2 reads each of OpenCode 1's permissions as.
-RENAMED = {"bash": "shell", "task": "subagent", "write": "edit", "patch": "edit"}
+RENAMED: Final = {"bash": "shell", "task": "subagent", "write": "edit", "patch": "edit"}
 # Where `serve` says it listens.
-URL = "http://127.0.0.1:41234"
+URL: Final = "http://127.0.0.1:41234"
 
 
 def main() -> int:  # noqa: PLR0911 - one return for each command it plays

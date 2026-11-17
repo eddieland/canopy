@@ -18,7 +18,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import db, records, sql
 from canopy.core.vocab import SessionsRead
@@ -35,12 +35,12 @@ if TYPE_CHECKING:
     from canopy.runtime.report import SessionCursor, SessionHead, SessionPage, SessionSpend
 
 #: How many directories `spend` lists of the sessions outside canopy, the costliest first.
-DIRECTORIES = 10
+DIRECTORIES: Final = 10
 #: The tables of this journal's agent runs, each with the session its run ran in.
-RUN_TABLES: tuple[RunTable, ...] = ("ticks", "runs", "chore_runs", "review_runs", "task_runs", "epic_runs")
+RUN_TABLES: Final[tuple[RunTable, ...]] = ("ticks", "runs", "chore_runs", "review_runs", "task_runs", "epic_runs")
 #: How many sessions up a subagent's is looked for the session of canopy's it ran for: far deeper than any runtime
 #: nests them, and a bound on a parent chain a run wrote into a loop.
-MAX_DEPTH = 50
+MAX_DEPTH: Final = 50
 
 
 @dataclass(frozen=True)

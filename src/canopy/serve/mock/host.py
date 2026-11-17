@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import math
 from datetime import datetime, timedelta
+from typing import Final
 
 from canopy.serve import host
 from canopy.serve.schema.host import (
@@ -35,31 +36,31 @@ from canopy.serve.schema.host import (
     Stalls,
 )
 
-_GIB = 1024**3
-_MIB = 1024**2
+_GIB: Final = 1024**3
+_MIB: Final = 1024**2
 #: The minutes before the last reading run 41's build started: it is still running at the last reading.
-_BUILD_START = 12
+_BUILD_START: Final = 12
 #: The minutes the build takes, from its start, to keep every core busy.
-_BUILD_RAMP = 4
+_BUILD_RAMP: Final = 4
 #: The share of the cores the mock's processors keep busy while no build runs.
-_IDLE_BUSY = 0.15
+_IDLE_BUSY: Final = 0.15
 #: The share of the cores busy at the last reading, the build at full tilt.
-_BUILD_BUSY = 0.91
+_BUILD_BUSY: Final = 0.91
 #: The mock's cores.
-_CORES = 12
+_CORES: Final = 12
 #: How long the mock's machine has been up.
-_UP = timedelta(days=9, hours=4)
+_UP: Final = timedelta(days=9, hours=4)
 #: The time between two readings.
-_STEP = timedelta(seconds=host.SAMPLE_SECONDS)
+_STEP: Final = timedelta(seconds=host.SAMPLE_SECONDS)
 #: The loop's process id, which its process and the processes' list share.
-_LOOP = 48213
+_LOOP: Final = 48213
 #: The pids of the running runs' processes in `_PROCESSES`, by run id: the run's own, then its agent's, as the mock's
 #: journal records them, so the page ties each to its run.
-RUN_PIDS: dict[int, tuple[int, int]] = {41: (50110, 50128), 43: (50140, 50152)}
+RUN_PIDS: Final[dict[int, tuple[int, int]]] = {41: (50110, 50128), 43: (50140, 50152)}
 #: The mock's processes, parent first: pid, parent, name, user, state, processors kept busy, memory in MiB, threads,
 #: minutes since it started, and command line. Runs 41 and 43 are running in its journal, started 30 and 25 minutes
 #: before the reading; 41's agent is compiling, its two `rustc` holding most of the memory the build took.
-_PROCESSES: tuple[tuple[int, int, str, str, ProcessState, float, int, int, int, str], ...] = (
+_PROCESSES: Final[tuple[tuple[int, int, str, str, ProcessState, float, int, int, int, str], ...]] = (
     (1, 0, "systemd", "root", "sleeping", 0.002, 14, 1, 13200, "/sbin/init splash"),
     (612, 1, "systemd-journal", "root", "sleeping", 0.004, 48, 1, 13200, "/usr/lib/systemd/systemd-journald"),
     (880, 1, "sshd", "root", "sleeping", 0.0, 9, 1, 13199, "sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups"),

@@ -6,6 +6,7 @@ import sqlite3
 import threading
 import time
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -41,12 +42,20 @@ from tests.canopy.scenario_helpers import Scenario, dispatches, pushes, sets_pha
 from tests.conftest import executable, git
 
 #: The branch PROJ-1's first implement names, with its slug.
-LOGIN = "agent/PROJ-1-login"
-PRS = {"api": "https://x.test/api/pull/1", "web": "https://x.test/web/pull/2", "docs": "https://x.test/docs/pull/3"}
+LOGIN: Final = "agent/PROJ-1-login"
+PRS: Final = {
+    "api": "https://x.test/api/pull/1",
+    "web": "https://x.test/web/pull/2",
+    "docs": "https://x.test/docs/pull/3",
+}
 #: PRs the tests' `vcs` source reads, where PRS name none it can.
-READ_PRS = {"api": "https://github.com/acme/api/pull/1", "web": "https://github.com/acme/web/pull/2"}
+READ_PRS: Final = {"api": "https://github.com/acme/api/pull/1", "web": "https://github.com/acme/web/pull/2"}
 # Each PR's own title as the worker reports it: web's spans lines, and docs is not one of the run's repositories.
-TITLES = {"api": "PROJ-1: add the endpoint", "web": "PROJ-1: call\n  the endpoint", "docs": "PROJ-1: document it"}
+TITLES: Final = {
+    "api": "PROJ-1: add the endpoint",
+    "web": "PROJ-1: call\n  the endpoint",
+    "docs": "PROJ-1: document it",
+}
 
 
 def push_in(repo: str, message: str = "PROJ-1: the change") -> list[list[str]]:

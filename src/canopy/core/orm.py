@@ -39,7 +39,7 @@ import typing
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import Field, asdict, dataclass, fields
 from enum import StrEnum
-from typing import Any, ClassVar, LiteralString, Self, override
+from typing import Any, ClassVar, Final, LiteralString, Self, override
 
 from canopy.core import sql
 
@@ -296,7 +296,7 @@ class Delete[R: Row](_Write[R], sql.Delete):
 #: What makes a value of a type its field accepts the field's own, refusing one it cannot be.
 type _Convert = Callable[[object], object]
 #: A column's value as `insert_rows` binds it, from each row `Insert.many` runs for.
-_PER_ROW = sql.frag("?", sql.ROW)
+_PER_ROW: Final = sql.frag("?", sql.ROW)
 
 
 @dataclass(frozen=True)

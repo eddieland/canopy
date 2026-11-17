@@ -30,7 +30,7 @@ import sqlite3
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import db, runtime_sessions, session_sizes, sql
 from canopy.runtime import indexed_text
@@ -45,33 +45,33 @@ if TYPE_CHECKING:
     from canopy.runtime.report import MessageText, SessionCursor, SessionHead
 
 #: The index's file, in the workspace's state directory.
-FILE_NAME = "sessions.db"
+FILE_NAME: Final = "sessions.db"
 #: The index's shape: its tables and how it splits text into words. A new one drops the index, and builds it again.
-SHAPE = 1
+SHAPE: Final = 1
 #: The cut of a session's text the index holds, as the operator chose it from stage 0's measurement (ROADMAP M72).
-CUT: Cut = "read"
+CUT: Final[Cut] = "read"
 #: How many characters of one message are indexed, how many of one session, and how many of its messages: far more than
 #: a message or a session holds that a person reads, and few enough that a session a run wrote cannot fill the disk.
-MAX_MESSAGE_CHARS = 65_536
-MAX_SESSION_CHARS = 4 * 1024 * 1024
-MAX_MESSAGES = 10_000
+MAX_MESSAGE_CHARS: Final = 65_536
+MAX_SESSION_CHARS: Final = 4 * 1024 * 1024
+MAX_MESSAGES: Final = 10_000
 #: How long one step takes new sessions for, in seconds: the session it is indexing when the time runs out is finished,
 #: each within its own read's bound, so the wait it runs in still ends when it is due.
-STEP_SECONDS = 1.0
+STEP_SECONDS: Final = 1.0
 #: How many sessions a step reads at once.
-BATCH = 50
+BATCH: Final = 50
 #: How often a step drops the sessions the runtime no longer keeps.
-SWEEP_EVERY = timedelta(days=1)
+SWEEP_EVERY: Final = timedelta(days=1)
 #: The first SQLite that can delete a row from an index that keeps no content.
-CONTENTLESS_DELETE = session_sizes.CONTENTLESS_DELETE
+CONTENTLESS_DELETE: Final = session_sizes.CONTENTLESS_DELETE
 #: What `why_titles` says of a SQLite too old to keep the index.
-OLD_SQLITE = (
+OLD_SQLITE: Final = (
     f"sessions.search is text, but this Python's SQLite, {sqlite3.sqlite_version}, is older than 3.43, which the "
     "index of sessions' text needs: sessions are found by their titles"
 )
 # The index's tables: the step's state, a row for each session indexed, a row for each of its messages, and the words,
 # splitting text into words as memory's index does (DESIGN §28), so a word matches as memory's search matches it.
-_SCHEMA: tuple[sql.Fragment, ...] = (
+_SCHEMA: Final[tuple[sql.Fragment, ...]] = (
     sql.frag(
         "CREATE TABLE meta (id INTEGER PRIMARY KEY CHECK (id = 1), setting TEXT NOT NULL, front_ms INTEGER,"
         " front_id TEXT, back_ms INTEGER, back_id TEXT, built INTEGER NOT NULL DEFAULT 0, read_at TEXT,"
@@ -89,7 +89,7 @@ _SCHEMA: tuple[sql.Fragment, ...] = (
     ),
 )
 # The sessions among a JSON array of ids.
-_AMONG = "session_id IN (SELECT value FROM json_each(?))"
+_AMONG: Final = "session_id IN (SELECT value FROM json_each(?))"
 
 
 @dataclass(frozen=True)

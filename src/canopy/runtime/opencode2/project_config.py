@@ -18,7 +18,7 @@ comment naming an agent is a false positive, which only asks the operator to rew
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.runtime.agents import CHORE_COPY_PREFIX
 from canopy.runtime.opencode2 import definitions
@@ -28,15 +28,15 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 #: The directory of a project's OpenCode config, the patterns of the agent files in it, and its JSON config files.
-CONFIG_DIR = ".opencode"
-_AGENT_PATTERNS = ("agent/**/*.md", "agents/**/*.md", "mode/*.md", "modes/*.md")
-_CONFIG_FILES = ("opencode.json", "opencode.jsonc")
+CONFIG_DIR: Final = ".opencode"
+_AGENT_PATTERNS: Final = ("agent/**/*.md", "agents/**/*.md", "mode/*.md", "modes/*.md")
+_CONFIG_FILES: Final = ("opencode.json", "opencode.jsonc")
 #: A key named `canopy`, or `canopy` and more, in a JSON config file: how one names an MCP server of canopy's, `canopy`
 #: for the overseer's or `canopy_run`, `canopy_git`, and the rest for the other agents' (DESIGN §27). OpenCode names a
 #: server's tool `<server>_<tool>` with every character outside `[A-Za-z0-9_-]` made `_` (`servers.tool_name`), so a
 #: server named `canopy_run`, or `canopy.run`, would answer a worker's `canopy_run_status`: the key is refused when what
 #: follows `canopy` would sanitize to `_`. A hyphen survives sanitizing, so `canopy-docs` names no tool of canopy's.
-_CANOPY_KEY_RE = re.compile(r'"canopy(?:[^A-Za-z0-9"-][^"]*)?"\s*:')
+_CANOPY_KEY_RE: Final = re.compile(r'"canopy(?:[^A-Za-z0-9"-][^"]*)?"\s*:')
 
 
 def shadowing(root: Path, names: Collection[str] | None = None) -> list[Path]:

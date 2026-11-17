@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -14,7 +15,7 @@ from tests.canopy.helpers import present, tick_reads, waits
 from tests.canopy.review_helpers import THEIRS
 from tests.canopy.scenario_helpers import Scenario
 
-ITEM = f"{attention.PR_PREFIX}{THEIRS}"
+ITEM: Final = f"{attention.PR_PREFIX}{THEIRS}"
 
 
 def listed(ctx: Context) -> list[Item]:

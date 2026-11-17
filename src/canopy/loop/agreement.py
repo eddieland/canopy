@@ -29,7 +29,7 @@ import statistics
 from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import db, records, spend, sql
 from canopy.core.vocab import ConnectorRunStatus, Decider, Phase, TickStatus
@@ -40,12 +40,12 @@ if TYPE_CHECKING:
     from datetime import datetime
 
 #: The row each of the operator's open review requests counts under (DESIGN §21, §37).
-REQUEST = "review_request"
+REQUEST: Final = "review_request"
 #: The row a ticket with no row held counts under: `closed` when the tracker said it was closed, else `none`.
-CLOSED = "closed"
-NONE = "none"
+CLOSED: Final = "closed"
+NONE: Final = "none"
 #: The rows in the order the report lists them: the vocabulary's, then the three above.
-ROW_ORDER: Sequence[str] = (*(str(p) for p in Phase), REQUEST, CLOSED, NONE)
+ROW_ORDER: Final[Sequence[str]] = (*(str(p) for p in Phase), REQUEST, CLOSED, NONE)
 
 
 @dataclass(frozen=True)

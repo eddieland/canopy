@@ -18,7 +18,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Final
 
 from pydantic import (
     AfterValidator,
@@ -42,26 +42,26 @@ from canopy.core.config import (
 )
 from canopy.infra import logs
 
-MAP_FILE_NAME = "MAP.md"
+MAP_FILE_NAME: Final = "MAP.md"
 # The shared config file earlier canopy read from a repository's root. It is never read now; finding one only adds a
 # hint to the error that there is no workspace (D016).
-OLD_REPO_FILE_NAME = "canopy.toml"
-REPOS_DIR = "repos"
-POOLS_DIR = ".treehouse"
-DESKS_DIR = "desks"
-MAX_SUMMARY = 200
+OLD_REPO_FILE_NAME: Final = "canopy.toml"
+REPOS_DIR: Final = "repos"
+POOLS_DIR: Final = ".treehouse"
+DESKS_DIR: Final = "desks"
+MAX_SUMMARY: Final = 200
 #: The longest name of a check a repository's `checks` names: a connector's longest (DESIGN §30).
-MAX_CHECK_NAME = 200
+MAX_CHECK_NAME: Final = 200
 # Where a repository's `branch_url` puts a branch's name.
-BRANCH_NAME = "{branch}"
+BRANCH_NAME: Final = "{branch}"
 # A GitHub clone URL as `git clone` takes it: https (credentials allowed, and dropped), scp-style SSH, or ssh://, with
 # an optional `.git` and trailing slash. Its owner and repository name make the default `branch_url` (D115).
-GITHUB_URL_RE = re.compile(
+GITHUB_URL_RE: Final = re.compile(
     r"(?:https://(?:[^@/\s]+@)?|ssh://git@|git@)github\.com[/:]([A-Za-z0-9-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?/?",
     re.IGNORECASE,
 )
 #: The `--filter` specs a repository's `clone_filter` may name: no blobs, blobs up to a size, or trees to a depth.
-CLONE_FILTER_RE = re.compile(r"blob:none|blob:limit=[0-9]+[kmg]?|tree:[0-9]+")
+CLONE_FILTER_RE: Final = re.compile(r"blob:none|blob:limit=[0-9]+[kmg]?|tree:[0-9]+")
 
 
 class CheckRole(StrEnum):

@@ -24,7 +24,7 @@ from __future__ import annotations
 import contextlib
 import json
 import sqlite3
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Final, cast
 
 from canopy.runtime.opencode import sessions
 from canopy.runtime.report import (
@@ -43,29 +43,29 @@ if TYPE_CHECKING:
 
 #: How long a read of a database's whole text may take, in seconds: a measurement the operator runs by hand, over every
 #: session, which may be long; a database a run wrote to answer never is still stopped.
-READ_SECONDS = 3600.0
+READ_SECONDS: Final = 3600.0
 #: How many sessions one database's count reads at most: far more than any record holds, so one a run wrote cannot
 #: fill memory.
-MAX_KEPT = 1_000_000
+MAX_KEPT: Final = 1_000_000
 #: Which of OpenCode's session tables a database has: OpenCode 2's, `session_v2`, and OpenCode 1's, `session`.
-TABLES_SQL = "SELECT name FROM sqlite_schema WHERE type = 'table' AND name IN ('session', 'session_v2')"
+TABLES_SQL: Final = "SELECT name FROM sqlite_schema WHERE type = 'table' AND name IN ('session', 'session_v2')"
 #: Every session, as `KeptSession` reads it, in the order of its id.
-SESSIONS_SQL = """
+SESSIONS_SQL: Final = """
 SELECT id, parent_id, directory, time_archived FROM session_v2 ORDER BY id LIMIT ?
 """
 #: How many sessions only OpenCode 1's table holds.
-EARLIER_SQL = """
+EARLIER_SQL: Final = """
 SELECT count(*) FROM session WHERE id NOT IN (SELECT id FROM session_v2)
 """
 #: How many sessions OpenCode 1's table holds, in a database that has no table of OpenCode 2's.
-EARLIER_ALL_SQL = "SELECT count(*) FROM session"
+EARLIER_ALL_SQL: Final = "SELECT count(*) FROM session"
 #: Each part of every session's text, as `TextRow` reads it: its session, which part, and the text, none empty, among
 #: the parts a JSON array names, `?2`, that holds every pattern of `LIKE` another names, `?1`: every part, read whole,
 #: when the first names none, and a plain scan of the record in place, with no index, when it names some. With `?3`
 #: false, as a scan is run, the text itself is left behind, so the scan is timed as an index's search is, on what it
 #: finds, not on carrying it out; and only a part that is text is found. A message whose data is not JSON is read as an
 #: empty object, so SQLite takes nothing out of it and raises nothing.
-PARTS_SQL = """
+PARTS_SQL: Final = """
 WITH message AS (
     SELECT session_id, type, CASE WHEN json_valid(data) THEN data ELSE '{}' END AS data FROM session_message
 ),
@@ -106,10 +106,10 @@ WHERE text IS NOT NULL AND text != '' AND part IN (SELECT value FROM json_each(?
   AND NOT EXISTS (SELECT 1 FROM json_each(?1) w WHERE text NOT LIKE w.value ESCAPE '\\')
 """
 #: `PARTS_SQL`'s `?3`: whether it reads each part's text, or leaves it behind.
-WITH_TEXT = 1
-WITHOUT_TEXT = 0
+WITH_TEXT: Final = 1
+WITHOUT_TEXT: Final = 0
 #: What `PARTS_SQL` takes to read every part whole: no pattern, every part, and its text.
-EVERY_PART = ("[]", json.dumps(TEXT_PARTS), WITH_TEXT)
+EVERY_PART: Final = ("[]", json.dumps(TEXT_PARTS), WITH_TEXT)
 
 
 def record() -> SessionRecord:

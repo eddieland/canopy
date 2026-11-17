@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING, Final, assert_never
 
 from canopy.core import cards, conversation, db, dead_runs, definitions, pool, pools, workspace
 from canopy.core.vocab import PoolKind, RunStatus
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
 #: The note a ticket's run ended by the operator's `canopy stop --now` is closed with, by the stop or, should the stop
 #: not live to close it, by reconcile.
-STOP_NOTE = "the operator stopped the ticket with `canopy stop --now`"
+STOP_NOTE: Final = "the operator stopped the ticket with `canopy stop --now`"
 
 
 @dataclass(frozen=True)

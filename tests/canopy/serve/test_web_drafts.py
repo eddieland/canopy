@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 import pytest
 
@@ -40,8 +40,8 @@ if TYPE_CHECKING:
     from tests.canopy.scenario_helpers import Scenario
     from tests.conftest import CanopyEnv, GitPool
 
-PR = DRAFTS_PR
-OLD = "2020-01-01T00:00:00Z"
+PR: Final = DRAFTS_PR
+OLD: Final = "2020-01-01T00:00:00Z"
 
 
 def migrated(canopy_env: CanopyEnv) -> Context:

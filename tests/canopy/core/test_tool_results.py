@@ -11,7 +11,7 @@ import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 from unittest import mock
 
 from canopy.cli import tool_results as tool_results_cli
@@ -31,8 +31,8 @@ if TYPE_CHECKING:
 
     from tests.conftest import CanopyEnv, Journals
 
-NOW = datetime(2026, 11, 8, 12, tzinfo=UTC)
-SESSION = "ses_abc123"
+NOW: Final = datetime(2026, 11, 8, 12, tzinfo=UTC)
+SESSION: Final = "ses_abc123"
 
 
 @dataclass(frozen=True)
@@ -113,7 +113,7 @@ def worker(conn: sqlite3.Connection, log: Path, start: datetime, calls: Sequence
 
 #: The first implement run's calls: two reads of one file, a cut read, a cut `gh run view` behind a `cd`, a `gh pr
 #: view`, a failed search whose metadata says nothing of a cut, and two `status` calls.
-FIRST: Sequence[Made] = (
+FIRST: Final[Sequence[Made]] = (
     read("/pool/web/1/src/a.py", 100),
     read("/pool/web/1/./src/a.py", 100),
     read("/pool/web/1/src/b.py", 50, cut=True),
@@ -123,7 +123,7 @@ FIRST: Sequence[Made] = (
     Made("grep", {"pattern": "parse"}, "no matches", failed=True),
     status("Done.", "pushing"),
 )
-SECOND: Sequence[Made] = (status("Started.", "reading"), read("/pool/web/2/src/c.py", 30))
+SECOND: Final[Sequence[Made]] = (status("Started.", "reading"), read("/pool/web/2/src/c.py", 30))
 
 
 def journal_of_runs(conn: sqlite3.Connection, tmp_path: Path, state_dir: Path, now: datetime, version: Version) -> None:

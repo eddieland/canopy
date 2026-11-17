@@ -6,6 +6,7 @@ import re
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Final
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -18,9 +19,9 @@ from canopy.runtime.report import ModelUse, SessionPage, SessionSpend, ToolUse, 
 from tests.canopy.helpers import earlier, in_zone
 from tests.conftest import CanopyEnv, Journals
 
-NOW = datetime(2026, 10, 8, 12, tzinfo=UTC)
+NOW: Final = datetime(2026, 10, 8, 12, tzinfo=UTC)
 #: A workspace state directory no session in these journals ran in.
-STATE_DIR = Path("/work/.canopy")
+STATE_DIR: Final = Path("/work/.canopy")
 
 
 def noon_today() -> datetime:

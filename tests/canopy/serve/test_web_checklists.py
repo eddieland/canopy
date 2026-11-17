@@ -3,7 +3,7 @@
 Read from the operator's files when asked, and changing nothing.
 """
 
-from typing import Any
+from typing import Any, Final
 
 from canopy.core import db
 from canopy.infra import resources
@@ -13,7 +13,7 @@ from tests.canopy.web_helpers import client, signed_in_client
 from tests.conftest import REPO_NAME, CanopyEnv
 
 #: A list of two items, the second with every optional line.
-LIST = """\
+LIST: Final = """\
 ## general-types
 A parameter takes the most general type its body needs.
 

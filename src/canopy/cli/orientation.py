@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import click
 
@@ -16,9 +16,9 @@ if TYPE_CHECKING:
     from canopy.core.orientation import Orientation, RoleOrientation
 
 #: How many days the report reads unless told otherwise: the two weeks the milestone's gate is measured over.
-DEFAULT_DAYS = 14
+DEFAULT_DAYS: Final = 14
 #: The table's columns after the role and the repository, as its head names them.
-_COLUMNS = ("runs", "read", "anchored", "calls", "before", "searches", "share", "spend")
+_COLUMNS: Final = ("runs", "read", "anchored", "calls", "before", "searches", "share", "spend")
 
 
 @click.command("orientation")

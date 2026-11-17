@@ -9,6 +9,7 @@ import sqlite3
 from collections.abc import Callable, Iterable, Mapping
 from importlib.metadata import version
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -34,11 +35,11 @@ from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
 from tests.conftest import TRACKER_SOURCE, GitPool
 
 #: A review cursor as canopy keeps one: the newest handled item's journal number (DESIGN §35).
-REVIEWED: Mapping[str, str] = {"review": "4127"}
+REVIEWED: Final[Mapping[str, str]] = {"review": "4127"}
 
 
 #: Each tool that takes a ticket's key, as a call of it that names the key given.
-KEYED: Mapping[str, Callable[[str], Called]] = {
+KEYED: Final[Mapping[str, Callable[[str], Called]]] = {
     "dispatch": dispatches,
     "decide": lambda key: decides(key, "wait", "r"),
     "attention": lambda key: raises(key, "needs_author", "d"),

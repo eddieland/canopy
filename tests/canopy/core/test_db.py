@@ -8,6 +8,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from importlib.metadata import version
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import pytest
@@ -26,12 +27,12 @@ from tests.conftest import Journals
 # endings and holds a row for each table the migration creates, in an order the foreign keys allow. A file each, not a
 # list in this module, so PRs that add migrations never meet in it; two that take the same version still collide, on
 # the companion's name, which is the one conflict worth having.
-COMPANIONS = Path(__file__).parent / "migrations"
-HASH = re.compile(r"-- sha256 of (\S+): ([0-9a-f]{64})\n")
+COMPANIONS: Final = Path(__file__).parent / "migrations"
+HASH: Final = re.compile(r"-- sha256 of (\S+): ([0-9a-f]{64})\n")
 #: The tables a migration means to delete rows of, by its version. None does yet.
-DELETES: Mapping[int, AbstractSet[str]] = {}
+DELETES: Final[Mapping[int, AbstractSet[str]]] = {}
 #: The tables a migration renames, by its version: each old name to its new one and its renamed columns. None does yet.
-RENAMES: Mapping[int, Mapping[str, tuple[str, Mapping[str, str]]]] = {}
+RENAMES: Final[Mapping[int, Mapping[str, tuple[str, Mapping[str, str]]]]] = {}
 
 
 def companion(number: int) -> str:
@@ -220,7 +221,7 @@ def test_journal_newer_than_code_is_an_error(tmp_path: Path, journals: Journals)
 
 # What the shared run lifecycle reads and writes in every table of detached runs (`db.claim_run` and the rest), besides
 # the column each keeps its agent's pid in.
-LIFECYCLE_COLUMNS = frozenset(
+LIFECYCLE_COLUMNS: Final = frozenset(
     {
         "id",
         "pid",
@@ -300,7 +301,7 @@ def test_a_report_replaces_the_tools_a_run_recorded(tmp_path: Path, journals: Jo
 #: The closed columns of the tables made before M36, which list their values in comments: their schema was kept when
 #: the migrations were squashed into 0001 (D068). Every other column of a closed vocabulary (`core/vocab.py`)
 #: constrains its values in SQL.
-UNCHECKED = frozenset(
+UNCHECKED: Final = frozenset(
     {
         "chore_runs.status",
         "messages.kind",
@@ -314,7 +315,7 @@ UNCHECKED = frozenset(
         "ticks.status",
     },
 )
-CLOSED_COLUMNS = frozenset({"status", "kind", "phase"})
+CLOSED_COLUMNS: Final = frozenset({"status", "kind", "phase"})
 
 
 def unchecked(conn: sqlite3.Connection, made: Iterable[str]) -> list[str]:

@@ -16,7 +16,7 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import conversation, db, memory, records, sql
 from canopy.core.memory_text import TextRefused, check_key, check_text
@@ -28,18 +28,18 @@ if TYPE_CHECKING:
     from canopy.core.config import Config
 
 #: The notes and proposals no longer in force: a lesson's text, its versions' included, is never expired.
-RETIRED = sql.all_of(
+RETIRED: Final = sql.all_of(
     sql.frag("scope != ?", MemoryScope.LESSON),
     sql.in_("status", (MemoryStatus.SUPERSEDED, MemoryStatus.INVALID)),
 )
 #: When a retired memory left force: when it was invalidated, else when the first memory to supersede it was written.
-_LEFT_FORCE_AT = sql.frag(
+_LEFT_FORCE_AT: Final = sql.frag(
     "coalesce(invalidated_at, (SELECT min(n.created_at) FROM memories n WHERE n.supersedes = memories.id))",
 )
 #: What an expiry adds to the reason a memory left force, which it keeps.
-EXPIRED_WHY = "text removed after retention.memory_days"
+EXPIRED_WHY: Final = "text removed after retention.memory_days"
 #: The statement that sets `secure_delete` back to each value `PRAGMA secure_delete` reads, which a PRAGMA cannot bind.
-_SECURE_DELETE: Mapping[int, sql.Fragment] = {
+_SECURE_DELETE: Final[Mapping[int, sql.Fragment]] = {
     0: sql.frag("PRAGMA secure_delete = OFF"),
     1: sql.frag("PRAGMA secure_delete = ON"),
     2: sql.frag("PRAGMA secure_delete = FAST"),

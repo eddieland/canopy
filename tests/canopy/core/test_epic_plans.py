@@ -1,6 +1,7 @@
 """An epic's plan, approved by the operator alone; replies asking for the next; members registered (§43)."""
 
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import pytest
@@ -13,7 +14,7 @@ from canopy.runs import epic_starts
 from tests.canopy.helpers import epic_planned, in_tick, inline_context, operator, present
 from tests.conftest import CanopyEnv, GitPool
 
-PLAN = """\
+PLAN: Final = """\
 # Epic: sessions
 
 ## Goal

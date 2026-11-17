@@ -22,7 +22,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING, Final, assert_never
 
 from canopy.core import db, pools, sandboxing, upkeep_runs
 from canopy.core.config import setup_words
@@ -39,11 +39,11 @@ if TYPE_CHECKING:
     from canopy.infra import logs
 
 #: The attention item a run of the upkeep that failed raises, about its repository.
-REASON = attention.UPKEEP_FAILED
+REASON: Final = attention.UPKEEP_FAILED
 #: The statuses of a slot `idle_cmd` may run in: treehouse's and canopy's for a slot no lease holds and no process uses.
-IDLE_STATUSES = frozenset({"available", "dirty"})
+IDLE_STATUSES: Final = frozenset({"available", "dirty"})
 #: The most of a command's output a failure's detail keeps.
-_MAX_OUTPUT = 500
+_MAX_OUTPUT: Final = 500
 
 
 @dataclass(frozen=True)

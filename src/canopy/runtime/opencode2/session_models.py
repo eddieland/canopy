@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Final
 
 from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, StrictStr, ValidationError
 
@@ -52,18 +52,18 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 #: How long one export may take: it starts OpenCode's server, which reads its config and plugins, then the session.
-TIMEOUT_SECONDS = 60
+TIMEOUT_SECONDS: Final = 60
 #: The command, as canopy's words for a failure name it.
-COMMAND = "opencode session export --sanitize"
+COMMAND: Final = "opencode session export --sanitize"
 #: What OpenCode prints on stderr for a session it does not have.
-NOT_FOUND = "Session not found"
+NOT_FOUND: Final = "Session not found"
 #: In a sandbox role's database, the version of OpenCode that made a session, by its id.
-SESSION_SQL = "SELECT version FROM session_v2 WHERE id = ?"
+SESSION_SQL: Final = "SELECT version FROM session_v2 WHERE id = ?"
 #: Its messages, by its id and at most how many, in the order OpenCode wrote them: each one's id and type, and of its
 #: data, as JSON, only the fields `_Message` reads, which SQLite takes out of each, as OpenCode 1's reader does
 #: (`canopy.runtime.opencode.session_models.MESSAGES_SQL`): a reply's data holds its content, which may be long. An id
 #: longer than any canopy keeps (`MESSAGE_ID_RE`) is left out, and its message with its model and cost kept.
-MESSAGES_SQL = """
+MESSAGES_SQL: Final = """
 SELECT CASE WHEN length(id) <= 100 THEN id END, type, data FROM (
     SELECT id, type, seq, json_object(
         'model', json_object(
@@ -81,7 +81,7 @@ ORDER BY seq
 LIMIT ?
 """
 # Where a JSON object starts a line.
-_OBJECT_RE = re.compile(r"^\{", re.MULTILINE)
+_OBJECT_RE: Final = re.compile(r"^\{", re.MULTILINE)
 
 
 class _Model(BaseModel):

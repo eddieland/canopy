@@ -6,7 +6,7 @@ import json
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import pydantic
 import pytest
@@ -48,14 +48,14 @@ if TYPE_CHECKING:
     from tests.conftest import CanopyEnv, GitPool
 
 #: The overseer dispatches KEY's implement on its `work` branch.
-WORK = dispatches(slug="work")
+WORK: Final = dispatches(slug="work")
 #: The overseer dispatches a resume of KEY to fix CI.
-FIX_CI = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CI])
-LESSON = "Run the API's tests with `make test-api`; plain `pytest` misses its fixtures."
-HEADING = "## Lessons from the operator"
+FIX_CI: Final = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CI])
+LESSON: Final = "Run the API's tests with `make test-api`; plain `pytest` misses its fixtures."
+HEADING: Final = "## Lessons from the operator"
 #: What the run's note says when its `result` tool took no result.
-NO_RESULT = "the worker reported no result"
-VALUES = {
+NO_RESULT: Final = "the worker reported no result"
+VALUES: Final = {
     **PROMPT_VALUES,
     "AUTHORIZATION": prompts.plan_authorization(["agent-ready-alice"], private=False),
     "PLAN_FILE": ".canopy-plan.md",
@@ -63,7 +63,7 @@ VALUES = {
     "MAX_PLAN_CHARS": "100,000",
     "CONVERSATION": "No messages yet.",
 }
-PROMPTS = [(str(k), False) for k in prompts.WORKER] + [(str(k), True) for k in prompts.WORKER_PRIVATE]
+PROMPTS: Final = [(str(k), False) for k in prompts.WORKER] + [(str(k), True) for k in prompts.WORKER_PRIVATE]
 
 
 def memory_modes(ticket_notes: str = "off", proposals: str = "off") -> dict[str, str]:
@@ -834,8 +834,8 @@ def test_the_queue_refuses_the_twenty_first_pending_proposal(scenario: Scenario,
 
 
 #: The overseer dispatches PROJ-2's implement, a ticket other than KEY's.
-OTHER = "PROJ-2"
-WORK_OTHER = dispatches(OTHER, slug="work")
+OTHER: Final = "PROJ-2"
+WORK_OTHER: Final = dispatches(OTHER, slug="work")
 
 
 def seconds_of(conn: sqlite3.Connection, proposal: int) -> list[tuple[str, int]]:

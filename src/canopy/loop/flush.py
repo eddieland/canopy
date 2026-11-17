@@ -12,7 +12,7 @@ step of the wait.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.infra import lock
 from canopy.loop import attention
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from canopy.infra import logs
 
 #: How long the loop's wait leaves between two deliveries, so an event waits for its sink under a minute.
-EVERY_SECONDS = 30.0
+EVERY_SECONDS: Final = 30.0
 
 
 def run(ctx: Context, log: logs.TickAdapter, *, ui: str | None = None) -> None:

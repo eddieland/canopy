@@ -27,7 +27,7 @@ import dataclasses
 import json
 import re
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, StrictFloat, StrictInt, StrictStr, ValidationError
 
@@ -40,23 +40,23 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping
 
 # Milliseconds since the epoch, as OpenCode stamps events: up to the year 9999.
-_MAX_MS = 253_402_300_799_999
+_MAX_MS: Final = 253_402_300_799_999
 # The fields of a tool call's input that say what it did, in the order a title takes the first that is a string: a
 # shell's command, a file tool's path, a search's pattern, a fetch's address, a search's query, a skill's id.
-_SAID_BY = ("command", "path", "pattern", "url", "query", "id")
+_SAID_BY: Final = ("command", "path", "pattern", "url", "query", "id")
 
 #: The tools that read one file, that edit one, that edit those a patch names, and that search.
-_READS = frozenset({"read"})
-_EDITS = frozenset({"edit", "write"})
-_PATCHES = frozenset({"patch", "apply_patch"})
-_SEARCHES = frozenset({"grep", "glob"})
+_READS: Final = frozenset({"read"})
+_EDITS: Final = frozenset({"edit", "write"})
+_PATCHES: Final = frozenset({"patch", "apply_patch"})
+_SEARCHES: Final = frozenset({"grep", "glob"})
 # OpenCode 2 runs a call an agent names `bash` as its `shell`, and prints the call under the name the agent gave.
 #: The shell, by each name a call of it is printed under: OpenCode 2's own, and `bash`, OpenCode 1's.
-_SHELLS = frozenset({"shell", "bash"})
+_SHELLS: Final = frozenset({"shell", "bash"})
 #: The fields of a file tool's input that name its file: OpenCode 2's own, then OpenCode 1's.
-_PATH_BY = ("path", "filePath")
+_PATH_BY: Final = ("path", "filePath")
 #: A patch's line naming a file it changes: `*** Update File: src/a.py`, and the path it moves one to.
-_PATCH_FILE_RE = re.compile(r"^\*\*\* (?:Add File|Update File|Delete File|Move to): (.+?)\s*$", re.MULTILINE)
+_PATCH_FILE_RE: Final = re.compile(r"^\*\*\* (?:Add File|Update File|Delete File|Move to): (.+?)\s*$", re.MULTILINE)
 
 Millis = Annotated[StrictInt, Field(ge=0, le=_MAX_MS)]
 

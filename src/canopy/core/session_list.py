@@ -18,7 +18,7 @@ from __future__ import annotations
 import dataclasses
 import json
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, Final, Literal, cast
 
 from canopy.core import db, memory_search, records, runtime_sessions, session_search, sql
 
@@ -37,13 +37,13 @@ if TYPE_CHECKING:
 type Whose = Literal["outside", "canopy"]
 
 #: How many sessions one list holds at most, and how many it holds by default.
-MAX_LISTED = 500
-LISTED = 50
+MAX_LISTED: Final = 500
+LISTED: Final = 50
 #: How many subagents' sessions a list holds at most under the sessions it lists: far more than a run starts.
-MAX_SUBAGENTS = 2000
+MAX_SUBAGENTS: Final = 2000
 #: How many sessions up a subagent's is looked for the run that made it: far deeper than any runtime nests them, and a
 #: bound on a parent chain a run wrote into a loop.
-_MAX_DEPTH = 50
+_MAX_DEPTH: Final = 50
 
 
 @dataclass(frozen=True)

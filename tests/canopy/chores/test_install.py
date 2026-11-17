@@ -5,6 +5,7 @@ import shlex
 import shutil
 import tomllib
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import pytest
@@ -18,7 +19,7 @@ from canopy.runtime.implementation import Version
 from tests.canopy.helpers import context, in_run
 from tests.conftest import CanopyEnv
 
-PRIVATE = """\
+PRIVATE: Final = """\
 # My labels.
 [tracker]
 labels = ["agent-ready-tester"]

@@ -10,7 +10,7 @@ A session is reopened as OpenCode 1's is, `opencode --session ID` in its directo
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.runtime.opencode import sessions as opencode1
 from canopy.runtime.report import MAX_SESSIONS
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from canopy.runtime.report import SessionCursor, SessionPage
 
 #: A page of sessions updated after a cursor, as OpenCode 1's reader takes it (`opencode1.SESSIONS_SQL`).
-SESSIONS_SQL = """
+SESSIONS_SQL: Final = """
 SELECT id, parent_id, directory, time_created, time_updated,
        cost, tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write
 FROM session_v2
@@ -29,7 +29,7 @@ ORDER BY time_updated, id
 LIMIT ?
 """
 #: Each model's replies in the sessions a JSON array of ids names, and their cost, as `opencode1.MODELS_SQL` reads them.
-MODELS_SQL = """
+MODELS_SQL: Final = """
 SELECT session_id, json_extract(data, '$.model.providerID'), json_extract(data, '$.model.id'),
        json_extract(data, '$.model.variant'), count(*), total(json_extract(data, '$.cost'))
 FROM session_message
@@ -42,14 +42,14 @@ WHERE session_id IN (SELECT value FROM json_each(?))
 GROUP BY 1, 2, 3, 4
 """
 #: The title of each session a JSON array of ids names, and when it was archived, as `opencode1.TITLES_SQL` reads them.
-TITLES_SQL = "SELECT id, title, time_archived FROM session_v2 WHERE id IN (SELECT value FROM json_each(?))"
+TITLES_SQL: Final = "SELECT id, title, time_archived FROM session_v2 WHERE id IN (SELECT value FROM json_each(?))"
 #: The same, of a table with no column for the archive.
-UNARCHIVED_SQL = "SELECT id, title, NULL FROM session_v2 WHERE id IN (SELECT value FROM json_each(?))"
+UNARCHIVED_SQL: Final = "SELECT id, title, NULL FROM session_v2 WHERE id IN (SELECT value FROM json_each(?))"
 #: How OpenCode 2's record is asked for its sessions' titles.
-TITLES = opencode1.TitleQueries("session_v2", TITLES_SQL, UNARCHIVED_SQL)
+TITLES: Final = opencode1.TitleQueries("session_v2", TITLES_SQL, UNARCHIVED_SQL)
 #: Between a model and its variant, as canopy's config spells one (`canopy.core.agent_models`), not as OpenCode 2's own
 #: `#`, so the same variant reads the same under either runtime (`canopy.runtime.opencode2.session_models`).
-VARIANT_MARK = "@"
+VARIANT_MARK: Final = "@"
 
 
 def updated_after(cursor: SessionCursor | None, *, limit: int = MAX_SESSIONS, titles: bool = False) -> SessionPage:

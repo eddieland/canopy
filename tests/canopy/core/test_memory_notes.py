@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import pydantic
 import pytest
@@ -37,14 +37,14 @@ if TYPE_CHECKING:
     from tests.conftest import CanopyEnv, GitPool
 
 #: The overseer dispatches KEY's implement on its `work` branch.
-WORK = dispatches(slug="work")
+WORK: Final = dispatches(slug="work")
 #: The overseer dispatches a resume of KEY to fix CI.
-FIX_CI = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CI])
+FIX_CI: Final = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CI])
 #: Ticket notes at `record`, in the workspace's private file.
-RECORDING = {"ticket_notes": "record"}
-NOTE = "The lint job fails on a cold cache: run `make lint` twice before trusting it."
+RECORDING: Final = {"ticket_notes": "record"}
+NOTE: Final = "The lint job fails on a cold cache: run `make lint` twice before trusting it."
 #: What the run's note says when its `result` tool took no result.
-NO_RESULT = "the worker reported no result"
+NO_RESULT: Final = "the worker reported no result"
 
 
 @pytest.mark.parametrize(
@@ -237,7 +237,7 @@ def refusals(conn: sqlite3.Connection, run_id: int) -> list[tuple[str, str | Non
 
 
 #: Notes of the wrong shape: not a list, and an entry that is not an object of a key and a text.
-MISSHAPEN: list[JsonValue] = [
+MISSHAPEN: Final[list[JsonValue]] = [
     {"key": "lint", "text": NOTE},
     ["not an object"],
     [{"key": "lint"}],

@@ -8,7 +8,7 @@ dropped, as a page shows it. What is not a diff, a repository's heading and why 
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import click
 
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from canopy.core import records
 
 #: How many characters of a commit a heading names.
-_SHORT = 12
+_SHORT: Final = 12
 
 
 def echo(changes: Sequence[records.RunChange], *, log_path: str, ref: str) -> None:

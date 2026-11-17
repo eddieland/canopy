@@ -27,6 +27,7 @@ import tempfile
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
 import canopy_sandbox
 
@@ -34,20 +35,20 @@ from canopy.core import config, hostgit, sandboxing
 from canopy.infra import procs
 
 #: The role checked: the one whose template `worker_cmd`, `private_worker_cmd`, and `plan_cmd` run under.
-ROLE = "worker"
+ROLE: Final = "worker"
 #: What every name the check plants starts with, before a token of the check's own.
-PREFIX = "canopy-sandbox-check-"
+PREFIX: Final = "canopy-sandbox-check-"
 #: A host the shipped templates do not allow, and no operator's is likely to.
-DENIED_HOST = "example.com"
+DENIED_HOST: Final = "example.com"
 #: The allowed host tried first when the template lists it, as the shipped one does: one that answers anyone.
-PREFERRED_HOST = "github.com"
-_GIT_TIMEOUT = 60
-_RUN_TIMEOUT = 180
+PREFERRED_HOST: Final = "github.com"
+_GIT_TIMEOUT: Final = 60
+_RUN_TIMEOUT: Final = 180
 # One line per attempt, `KEY 1` when the command succeeded inside the sandbox and `KEY 0` when it did not. Each
 # attempt's one path, name, or URL is `$1` of its own shell, so none is ever read as shell. The commit runs no hook:
 # one of the repository's could fail it for reasons of its own. `proxy-refused` asks whether srt's proxy answered the
 # host off the allowlist with its 403, which tells a refusal from a host that could not be reached anyway.
-_SCRIPT = """\
+_SCRIPT: Final = """\
 try() { if sh -c "$2" sh "$3" >/dev/null 2>&1; then echo "$1 1"; else echo "$1 0"; fi; }
 try read-home 'cat "$1"' "$1"
 try read-config 'cat "$1"' "$2"

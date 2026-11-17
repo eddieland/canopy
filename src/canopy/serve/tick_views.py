@@ -7,7 +7,7 @@ written, as a run's log is.
 from __future__ import annotations
 
 from itertools import starmap
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import db, run_models
 from canopy.core.vocab import TickStatus
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from canopy.serve.schema.transcript import RawOutput, Transcript
 
 #: The ticks list, newest first.
-TICKS = 50
+TICKS: Final = 50
 
 
 def last_tick(ctx: Context) -> LastTick:

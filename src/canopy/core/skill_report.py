@@ -397,13 +397,13 @@ _ASKED: Final[tuple[RunTable, ...]] = ("ticks", "runs", "chore_runs", "review_ru
 #: Every table of agent runs, whose calls of the skill tool are all recorded.
 _TABLES: Final[tuple[RunTable, ...]] = (*_ASKED, "task_runs", "epic_runs")
 #: A run `r` of the window: one that started in it and has ended, so what it called is recorded.
-_WINDOW: LiteralString = "r.started_at >= ? AND r.started_at < ? AND r.ended_at IS NOT NULL"
+_WINDOW: Final[LiteralString] = "r.started_at >= ? AND r.started_at < ? AND r.ended_at IS NOT NULL"
 #: Which of a table's rows are an agent's runs: every one, but a tick that ran no overseer.
-_EVERY = sql.frag("1")
-_RUNS: Mapping[RunTable, sql.Fragment] = {"ticks": sql.frag("r.overseer_ran IS NOT 0")}
+_EVERY: Final = sql.frag("1")
+_RUNS: Final[Mapping[RunTable, sql.Fragment]] = {"ticks": sql.frag("r.overseer_ran IS NOT 0")}
 #: The agent a run `r` of each table ran, where its offer does not name one: the one canopy ships for its kind of run
 #: (DESIGN §13). A plan's is the planner, as a feedback plan's is; a private repository's worker is its own.
-_SHIPPED: Mapping[RunTable, sql.Fragment] = {
+_SHIPPED: Final[Mapping[RunTable, sql.Fragment]] = {
     "ticks": sql.frag("?", names.OVERSEER),
     "runs": sql.frag(
         "CASE WHEN {} THEN ? WHEN r.private THEN ? ELSE ? END",
@@ -419,13 +419,13 @@ _SHIPPED: Mapping[RunTable, sql.Fragment] = {
 }
 #: How many model calls a run `r` made, as its session's record says once read: NULL until it is, or when it names no
 #: model. The `?` is the run's table.
-_CALLS: LiteralString = "(SELECT SUM(m.replies) FROM run_models m WHERE m.run_table = ? AND m.run_id = r.id)"
+_CALLS: Final[LiteralString] = "(SELECT SUM(m.replies) FROM run_models m WHERE m.run_table = ? AND m.run_id = r.id)"
 #: A figure, the `{}`, over the skills a run `r` was offered. The `?` is the run's table.
-_LIST: LiteralString = "(SELECT {} FROM run_offered_skills s WHERE s.run_table = ? AND s.run_id = r.id)"
+_LIST: Final[LiteralString] = "(SELECT {} FROM run_offered_skills s WHERE s.run_table = ? AND s.run_id = r.id)"
 #: Of the rows `_ran` reads, a run the runtime answered for that was offered a skill, and one of those with every
 #: skill's length on record.
-_LISTED = sql.frag("said AND skills > 0")
-_SIZED = sql.frag("said AND skills > 0 AND sized")
+_LISTED: Final = sql.frag("said AND skills > 0")
+_SIZED: Final = sql.frag("said AND skills > 0 AND sized")
 #: What a call of the skill tool is counted under when canopy cannot read which skill it loaded: the tool's own name.
 _UNNAMED: Final = SKILL_PREFIX.removesuffix(":")
 

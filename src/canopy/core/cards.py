@@ -34,7 +34,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Literal, LiteralString
+from typing import TYPE_CHECKING, Annotated, Final, Literal, LiteralString
 
 from pydantic import (
     AfterValidator,
@@ -57,58 +57,58 @@ if TYPE_CHECKING:
 
 #: The server of the `status` tool, as a run's inline config names it, and the tool: the agent sees it as
 #: `canopy_run_status`.
-SERVER = "canopy_run"
-TOOL = "status"
+SERVER: Final = "canopy_run"
+TOOL: Final = "status"
 #: How the runtime starts the server: this interpreter's canopy, which `-P` keeps off the working directory's modules
 #: (TRUST_MODEL T7).
-SERVER_COMMAND = (sys.executable, "-P", "-m", "canopy", "_mcp", "--status")
+SERVER_COMMAND: Final = (sys.executable, "-P", "-m", "canopy", "_mcp", "--status")
 #: A run's CANOPY_RUN_ID that names a run keeping a card: a worker's or a planner's id, a review's, `review-7`, or a
 #: one-off task's, `task-3`.
-RUN_ID_RE = re.compile(r"(?:review-|task-)?[0-9]{1,18}")
+RUN_ID_RE: Final = re.compile(r"(?:review-|task-)?[0-9]{1,18}")
 #: One that names a run whose card may ask the operator a question, and so has an answers directory: any of those but a
 #: task's, whose question is its final line's, answered by a reply to the task (DESIGN §36).
-ASKING_RUN_ID_RE = re.compile(r"(?:review-)?[0-9]{1,18}")
+ASKING_RUN_ID_RE: Final = re.compile(r"(?:review-)?[0-9]{1,18}")
 #: The variable that names a run's answers directory, and the file in it that holds the operator's latest answer.
-ANSWERS_ENV = "CANOPY_ANSWERS"
-ANSWER_FILE = "answer.json"
+ANSWERS_ENV: Final = "CANOPY_ANSWERS"
+ANSWER_FILE: Final = "answer.json"
 #: The file in a run's answers directory that asks its agent to wrap up, once the operator stops its ticket so (§22).
-WRAP_UP_FILE = "wrap_up.json"
+WRAP_UP_FILE: Final = "wrap_up.json"
 #: The variable that names a worker's copy of the approved plan it follows, set only when it follows one: canopy's
 #: plugin names the file, and the steps the worker last reported, when it asks for an update (DESIGN §41, Staleness).
-PLAN_ENV = "CANOPY_PLAN"
+PLAN_ENV: Final = "CANOPY_PLAN"
 #: The run tables whose runs keep a card: a worker's and a planner's, a review's, and a one-off task's.
 type CardTable = Literal["runs", "review_runs", "task_runs"]
 #: Each card table's status of a run still running.
-_RUNNING: Mapping[CardTable, RunStatus | ReviewRunStatus] = {
+_RUNNING: Final[Mapping[CardTable, RunStatus | ReviewRunStatus]] = {
     "runs": RunStatus.RUNNING,
     "review_runs": ReviewRunStatus.RUNNING,
     "task_runs": RunStatus.RUNNING,
 }
 
 #: How long the summary and what is in the way may be, and every other line, in characters.
-MAX_SUMMARY = 400
-MAX_LINE = 200
+MAX_SUMMARY: Final = 400
+MAX_LINE: Final = 200
 #: How many steps `done` and `next` may each hold, and how many `steps` may.
-MAX_STEPS = 20
-MAX_PLAN_STEPS = 40
+MAX_STEPS: Final = 20
+MAX_PLAN_STEPS: Final = 40
 #: A step's status, on the card's `steps`.
 type StepStatus = Literal["not_started", "working", "blocked", "done", "skipped"]
 #: The share of a run's time limit a step may stay working before it is shown stuck: its last fifth's length.
-STUCK_SHARE = 5
+STUCK_SHARE: Final = 5
 #: How many tool calls, or minutes, a running run may go with no update to its card before the card is shown stale.
 #: canopy's plugin asks the agent for one at the same count of calls, and sooner for its first
 #: (`.agents/plugins/canopy.js`, DESIGN §41).
-STALE_CALLS = 20
-STALE_MINUTES = 10
+STALE_CALLS: Final = 20
+STALE_MINUTES: Final = 10
 #: The letters a question's options go by, in order, and so how many it may have.
 type Letter = Literal["A", "B", "C", "D", "E"]
-LETTERS: tuple[Letter, ...] = ("A", "B", "C", "D", "E")
+LETTERS: Final[tuple[Letter, ...]] = ("A", "B", "C", "D", "E")
 #: The attention reason of a running run's question that waits on the operator's answer (DESIGN §41), and where a
 #: ticket key would be, how its item names the run: `run:41` for a worker's or a planner's, `review:7` for a review's.
 #: A ticket key has no colon (DESIGN §17), so neither can equal one.
-REASON = "run_question"
-RUN_PREFIX = "run:"
-REVIEW_PREFIX = "review:"
+REASON: Final = "run_question"
+RUN_PREFIX: Final = "run:"
+REVIEW_PREFIX: Final = "review:"
 
 
 def _line(value: str) -> str:
@@ -336,7 +336,7 @@ def record_call(conn: sqlite3.Connection, table: CardTable, run_id: int, card: C
 
 
 #: The columns `record_call` reads of a run before it records a call.
-_BEFORE: LiteralString = (
+_BEFORE: Final[LiteralString] = (
     "started_at, tool_calls, card_json, card_at, card_calls, card_working_since, card_asked_at, card_stale"
 )
 
@@ -666,7 +666,7 @@ def lines(
 
 
 #: How `canopy show` marks a step by its status.
-_MARKS: Mapping[StepStatus, str] = {
+_MARKS: Final[Mapping[StepStatus, str]] = {
     "not_started": "[ ]",
     "working": "[>]",
     "blocked": "[!]",

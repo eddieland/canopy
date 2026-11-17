@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 from unittest import mock
 
 import pytest
@@ -29,20 +29,20 @@ if TYPE_CHECKING:
 
     from tests.canopy.scenario_helpers import Scenario
 
-PR = "https://github.com/acme/api/pull/7"
-KEYS = ("PROJ-1", "PROJ-2")
+PR: Final = "https://github.com/acme/api/pull/7"
+KEYS: Final = ("PROJ-1", "PROJ-2")
 #: Both sources the fake connector plays, each under its own name.
-SOURCES = {
+SOURCES: Final = {
     "sources": {
         "jira": {"kind": "tracker", "cmd": "connector jira", "timeout_minutes": 1},
         "github": {"kind": "vcs", "cmd": "connector github", "timeout_minutes": 1},
     },
 }
 #: An artifact store's comment feed, the fake connector playing it as `louvre`.
-ARTIFACTS = {"kind": "artifacts", "cmd": "connector louvre", "timeout_minutes": 1}
+ARTIFACTS: Final = {"kind": "artifacts", "cmd": "connector louvre", "timeout_minutes": 1}
 #: The Slack sink's ticket threads, the fake connector playing their reader as `slack`, one operator listed.
-OPERATOR = "U0OPERATOR"
-SLACK = {"kind": "slack", "cmd": "connector slack", "timeout_minutes": 1, "operators": [OPERATOR]}
+OPERATOR: Final = "U0OPERATOR"
+SLACK: Final = {"kind": "slack", "cmd": "connector slack", "timeout_minutes": 1, "operators": [OPERATOR]}
 
 
 def ticket(key: str, title: str = "Fix the build", **more: object) -> dict[str, object]:

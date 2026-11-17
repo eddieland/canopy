@@ -13,20 +13,21 @@ import sys
 import tomllib
 from collections.abc import Mapping
 from pathlib import Path
+from typing import Final
 
 #: Where the bundled files sit in a checkout. The record names each file by its path relative to this.
-AGENTS = Path(__file__).resolve().parents[2] / ".agents"
+AGENTS: Final = Path(__file__).resolve().parents[2] / ".agents"
 #: The directories whose every file has a recorded size: what agent runs read. The operator's skill is not among them.
-HELD = ("agents", "personas", "prompts", "skills")
+HELD: Final = ("agents", "personas", "prompts", "skills")
 #: The record: each file's size in characters, one line per file.
-SIZES = AGENTS / "sizes.toml"
+SIZES: Final = AGENTS / "sizes.toml"
 #: The record's path as the messages name it, from the repository root.
-SHOWN = SIZES.relative_to(AGENTS.parent).as_posix()
+SHOWN: Final = SIZES.relative_to(AGENTS.parent).as_posix()
 #: How many characters under its recorded size a file may shrink before its number is updated too. Any growth shows;
 #: a trim of up to 512 characters need not, but a larger one does, so the record stays accurate.
-SLACK = 512
+SLACK: Final = 512
 #: Characters per token, for the rough estimate the script prints.
-CHARS_PER_TOKEN = 4
+CHARS_PER_TOKEN: Final = 4
 
 
 def test_each_bundled_file_matches_its_recorded_size() -> None:

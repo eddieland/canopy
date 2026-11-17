@@ -22,6 +22,7 @@ import shutil
 from collections.abc import Collection, Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 from urllib.parse import urlsplit, urlunsplit
 
 from canopy.core import hostgit, pool, pools, workspace
@@ -29,17 +30,17 @@ from canopy.core.config import REPO_NAME_RE, WORKSPACE_FILE_NAME, WORKSPACE_STAT
 from canopy.infra import procs
 from canopy.setup import init
 
-GITIGNORE = ".gitignore"
+GITIGNORE: Final = ".gitignore"
 # Everything under the root that is canopy's or treehouse's, never the workspace repository's.
-IGNORED = tuple(
+IGNORED: Final = tuple(
     f"/{d}/"
     for d in (workspace.REPOS_DIR, workspace.POOLS_DIR, pool.POOLS_DIR, workspace.DESKS_DIR, WORKSPACE_STATE_DIR)
 )
-_CLONE_TIMEOUT_SECONDS = 1800
-_GIT_TIMEOUT_SECONDS = 30
-_FETCH_TIMEOUT_SECONDS = 900
+_CLONE_TIMEOUT_SECONDS: Final = 1800
+_GIT_TIMEOUT_SECONDS: Final = 30
+_FETCH_TIMEOUT_SECONDS: Final = 900
 
-MAP_TEXT = """\
+MAP_TEXT: Final = """\
 # Workspace map
 
 Prose for the overseer and people: what each repository in canopy-workspace.toml owns, which depends on which, where

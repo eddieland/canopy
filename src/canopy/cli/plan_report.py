@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import click
 
@@ -22,9 +22,9 @@ if TYPE_CHECKING:
     from canopy.core.vocab import PlannerApproval
 
 #: How many days the report reads unless told otherwise: the Plans page's shorter window, since a week holds few plans.
-DEFAULT_DAYS = 30
+DEFAULT_DAYS: Final = 30
 #: The approvals table's columns after the level and how, as its head names them.
-_GROUP_COLUMNS = (
+_GROUP_COLUMNS: Final = (
     "plans",
     "edited",
     "commented",
@@ -38,9 +38,9 @@ _GROUP_COLUMNS = (
     "done",
 )
 #: The length table's columns after the length.
-_LENGTH_COLUMNS = ("plans", "to approve", "as written")
+_LENGTH_COLUMNS: Final = ("plans", "to approve", "as written")
 #: How the tables name each way a plan went.
-_HOW = {
+_HOW: Final = {
     Outcome.PLANNER: "planner",
     Outcome.AS_WRITTEN: "as written",
     Outcome.REVISED: "revised",
@@ -49,7 +49,7 @@ _HOW = {
     Outcome.WAITING: "waiting on you",
 }
 #: How the table names the level of a plan run from before canopy kept it.
-_UNRECORDED = "unrecorded"
+_UNRECORDED: Final = "unrecorded"
 
 
 @click.command("plans")

@@ -3,6 +3,7 @@
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Final
 
 from canopy.core import chore_runs, db, records, review_runs
 from canopy.core.vocab import RunStatus
@@ -10,8 +11,8 @@ from canopy.serve import mock, process_work
 from canopy.serve.schema.host import HostProcess, HostProcesses, ProcessWork
 from tests.canopy.web_helpers import client
 
-NOW = datetime(2026, 10, 8, 12, 0, tzinfo=UTC)
-PR = "https://github.com/acme/web/pull/88"
+NOW: Final = datetime(2026, 10, 8, 12, 0, tzinfo=UTC)
+PR: Final = "https://github.com/acme/web/pull/88"
 
 
 def a_process(pid: int) -> HostProcess:

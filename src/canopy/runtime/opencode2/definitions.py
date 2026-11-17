@@ -29,6 +29,7 @@ import json
 import os
 import re
 from pathlib import Path
+from typing import Final
 
 from canopy.runtime.opencode.definitions import (
     AGENTS_SUBDIR,
@@ -62,15 +63,15 @@ __all__ = [
 ]
 
 #: The file of a config directory that says whether OpenCode's commands share a background service.
-SERVICE_FILE = "service.json"
+SERVICE_FILE: Final = "service.json"
 #: The names canopy counts a skill under: OpenCode 1's rule, lowercase letters and digits in words joined by single
 #: hyphens, at most 64. OpenCode 2 takes any directory's name as a skill's id.
-SKILL_NAME_RE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
-MAX_SKILL_NAME = 64
+SKILL_NAME_RE: Final = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+MAX_SKILL_NAME: Final = 64
 
 
 #: The JSON config files OpenCode 2 reads from its own config directory.
-USER_CONFIG_FILES = ("config.json", "opencode.json", "opencode.jsonc")
+USER_CONFIG_FILES: Final = ("config.json", "opencode.json", "opencode.jsonc")
 
 
 def links() -> dict[str, Path]:

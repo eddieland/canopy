@@ -8,7 +8,7 @@ last commit the run made there, a crashed run keeps nothing, and a kick after th
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 from unittest import mock
 
 from canopy.cli.main import main
@@ -38,9 +38,9 @@ if TYPE_CHECKING:
     from tests.canopy.scenario_helpers import Ran, Scenario
     from tests.conftest import CanopyEnv, GitPool
 
-BRANCH = "agent/PROJ-1-work"
+BRANCH: Final = "agent/PROJ-1-work"
 #: The branch task 1 works on, under the test operator's `agent/` prefix.
-TASK_BRANCH = "agent/task/1"
+TASK_BRANCH: Final = "agent/task/1"
 
 
 def writes(name: str, text: str, *, repo: str | None = None) -> list[list[str]]:

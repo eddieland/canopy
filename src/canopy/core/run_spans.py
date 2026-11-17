@@ -12,7 +12,7 @@ from __future__ import annotations
 import contextlib
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol, assert_never
+from typing import TYPE_CHECKING, Final, Protocol, assert_never
 
 from canopy.core import records, sandboxing
 from canopy.core.run_metrics import ROLES
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from canopy.core.vocab import AnyRunStatus
 
 #: Each run table's span: its name, and the attribute it names its run by.
-SPANS: Mapping[RunTable, tuple[str, str]] = {
+SPANS: Final[Mapping[RunTable, tuple[str, str]]] = {
     "runs": ("run", "run_id"),
     "task_runs": ("task", "task_run_id"),
     "epic_runs": ("epic", "epic_run_id"),

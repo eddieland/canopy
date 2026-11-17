@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import click
 
@@ -21,11 +21,11 @@ if TYPE_CHECKING:
 
 #: The rows tables' count columns after the row. `phase only` is of the count before it: the decisions that disagreed,
 #: then the situations that did, about the phase alone.
-_ROW_COUNTS = ("decisions", "agree", "disagree", "phase only", "situations", "disagreeing", "phase only")
+_ROW_COUNTS: Final = ("decisions", "agree", "disagree", "phase only", "situations", "disagreeing", "phase only")
 #: The sources table's columns after the source.
-_SOURCE_COLUMNS = ("kind", "tick runs", "poll runs", "failed", "median s", "s per tick")
+_SOURCE_COLUMNS: Final = ("kind", "tick runs", "poll runs", "failed", "median s", "s per tick")
 #: How many of the sources table's columns are words, the source's name and its kind, aligned left.
-_WORDS = 2
+_WORDS: Final = 2
 
 
 @click.command("agreement")

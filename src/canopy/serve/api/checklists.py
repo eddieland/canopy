@@ -6,13 +6,15 @@ edited where it is. How runs answered the lists is under reports.
 
 from __future__ import annotations
 
+from typing import Final
+
 from fastapi import APIRouter
 
 from canopy.serve import checklist_views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.schema.checklist import ChecklistList
 
-TAG = "checklists"
+TAG: Final = "checklists"
 router = APIRouter(tags=[TAG])
 
 

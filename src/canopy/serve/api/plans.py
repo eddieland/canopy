@@ -9,6 +9,8 @@ since a passage is chosen by selecting it.
 
 from __future__ import annotations
 
+from typing import Final
+
 from fastapi import APIRouter, HTTPException
 
 from canopy.core import conversation, plan_threads, plans
@@ -32,7 +34,7 @@ from canopy.serve.schema.plan import (
     TicketPlans,
 )
 
-TAG = "plans"
+TAG: Final = "plans"
 router = APIRouter(tags=[TAG])
 _log = logs.for_tick(None)
 

@@ -28,7 +28,7 @@ from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, LiteralString
+from typing import TYPE_CHECKING, Final, Literal, LiteralString
 
 from canopy.core import db, plans, records, review_diff, spend, sql
 from canopy.core.vocab import RunKind
@@ -43,21 +43,21 @@ if TYPE_CHECKING:
     from canopy.runtime.transcript import Use
 
 #: The roles that are not a run kind: a review's run, and a one-off task's.
-REVIEW = "review"
-TASK = "task"
+REVIEW: Final = "review"
+TASK: Final = "task"
 #: The run kinds the gate reads as a worker's: those that edit a ticket's branch.
-WORKER_KINDS: Sequence[RunKind] = (RunKind.IMPLEMENT, RunKind.RESUME, RunKind.FIX_CI, RunKind.SPLIT)
+WORKER_KINDS: Final[Sequence[RunKind]] = (RunKind.IMPLEMENT, RunKind.RESUME, RunKind.FIX_CI, RunKind.SPLIT)
 #: The gate: stage 1 starts if the median worker run spends more than this share of its calls before its anchor...
-GATE_SHARE = 0.25
+GATE_SHARE: Final = 0.25
 #: ...or more than this many searches.
-GATE_SEARCHES = 3
+GATE_SEARCHES: Final = 3
 #: How a run whose slots name no repository, one of a workspace of one, is listed.
-NO_REPO = "-"
+NO_REPO: Final = "-"
 #: A word of a plan's text, and the shape of a file's name with an extension: `README.md` or `a.py`, not `1.5`.
-_PLAN_WORD_RE = re.compile(r"[\w./-]+")
-_FILE_NAME_RE = re.compile(r"[\w-]+(?:\.[\w-]+)*\.[A-Za-z][A-Za-z0-9]*")
+_PLAN_WORD_RE: Final = re.compile(r"[\w./-]+")
+_FILE_NAME_RE: Final = re.compile(r"[\w-]+(?:\.[\w-]+)*\.[A-Za-z][A-Za-z0-9]*")
 #: An abbreviation shaped as a file's name, a letter and a letter: `e.g`, `i.e`.
-_ABBREVIATION_RE = re.compile(r"\w\.\w")
+_ABBREVIATION_RE: Final = re.compile(r"\w\.\w")
 
 type Anchor = Literal["edit", "plan", "diff", "none"]
 
@@ -295,7 +295,7 @@ class _Ran(records.View):
 
 
 #: A run in the window, by when it started, that has ended.
-_WINDOW: LiteralString = "started_at >= ? AND started_at < ? AND ended_at IS NOT NULL"
+_WINDOW: Final[LiteralString] = "started_at >= ? AND started_at < ? AND ended_at IS NOT NULL"
 
 
 def _ran(conn: sqlite3.Connection, since: str, until: str) -> list[_Ran]:

@@ -13,7 +13,7 @@ from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, TypedDict, cast
+from typing import TYPE_CHECKING, Final, TypedDict, cast
 from urllib.parse import quote
 
 from canopy.core import contract, db, event_names, records, spend, sql
@@ -23,21 +23,21 @@ from canopy.core.vocab import FlakyCause, RunStatus, SessionsRead
 if TYPE_CHECKING:
     from canopy.notify.journal import Diff
 
-VERSION = 1
+VERSION: Final = 1
 # At most this many attention lines and this many events in one message; the rest are counted, and count as delivered.
-MAX_LINES = 20
+MAX_LINES: Final = 20
 # Events older than this when a sink next succeeds are counted, not listed.
-STALE_EVENTS = timedelta(hours=24)
-_DONE_LISTED = 10
+STALE_EVENTS: Final = timedelta(hours=24)
+_DONE_LISTED: Final = 10
 # The attention list's subjects that are not tickets: a chore, by `chore:<name>`, a PR, by `pr:<url>`, a one-off
 # task, by `task:<id>`, which has no page of its own yet (DESIGN §36), and an epic, by `epic:<id>`, whose one item is
 # its plan waiting on the operator (§43).
-_CHORE = "chore:"
-_PR = "pr:"
-_TASK = "task:"
-_EPIC = "epic:"
+_CHORE: Final = "chore:"
+_PR: Final = "pr:"
+_TASK: Final = "task:"
+_EPIC: Final = "epic:"
 #: How a `ci.flaky` event's `cause` reads in its line: the worker's estimate, so hedged.
-_CAUSES = {
+_CAUSES: Final = {
     FlakyCause.TEST: "likely a flaky test",
     FlakyCause.RUNNER: "likely the CI runner",
     FlakyCause.SERVICE: "likely a service the job calls",
@@ -311,7 +311,7 @@ class Event:
         return {"id": self.id, "kind": self.kind, "name": self.name, "at": self.at, **self.fields, **named, **own}
 
 
-_OWN = ("id", "kind", "name", "at", "line", "ui")
+_OWN: Final = ("id", "kind", "name", "at", "line", "ui")
 
 
 class DoneRun(TypedDict):

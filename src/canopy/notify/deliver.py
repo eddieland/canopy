@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import contract, db, outbox, records, run_metrics, spend, sql
 from canopy.core.config import Sink, notify_words
@@ -28,19 +28,19 @@ if TYPE_CHECKING:
     from canopy.core.items import Item
     from canopy.infra import logs
 
-TIMEOUT_SECONDS = 60
+TIMEOUT_SECONDS: Final = 60
 # A sink that fails this many deliveries in a row raises `loop.sink_failing` once; so many failed ticks raise
 # `loop.failing` once.
-FAILING_AFTER = 3
+FAILING_AFTER: Final = 3
 #: The names of the loop's own events, which a sink's `events` match (`canopy.core.event_names`).
-_FAILING = "loop.failing"
-_RECOVERED = "loop.recovered"
-_SINK_FAILING = "loop.sink_failing"
+_FAILING: Final = "loop.failing"
+_RECOVERED: Final = "loop.recovered"
+_SINK_FAILING: Final = "loop.sink_failing"
 # Events a batching sink sends at once, with whatever it held: the loop or a sink failing, a plan waiting on the
 # operator, which holds its ticket until they answer (DESIGN §25), or a forced push canopy made (DESIGN §23).
-_URGENT_KINDS = frozenset({"loop.failing", "loop.sink_failing", "plan.proposed", "ci.kicked"})
+_URGENT_KINDS: Final = frozenset({"loop.failing", "loop.sink_failing", "plan.proposed", "ci.kicked"})
 # The events whose `blocked` run asked the operator a question: a ticket's run's, and a one-off task's (DESIGN §36).
-_ASKING_KINDS = frozenset({"run.ended", "task.ended"})
+_ASKING_KINDS: Final = frozenset({"run.ended", "task.ended"})
 
 
 class Delivered(StrEnum):

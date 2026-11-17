@@ -31,7 +31,7 @@ from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import TextIO
+from typing import Final, TextIO
 
 import click
 
@@ -55,17 +55,17 @@ from canopy_jira import (
 from canopy_jira import field as at
 
 #: The fields each ticket is read with: no more than its line needs.
-FIELDS = ("summary", "description", "status", "labels", "updated", "issuelinks")
+FIELDS: Final = ("summary", "description", "status", "labels", "updated", "issuelinks")
 #: More than any one request needs: canopy asks for the tickets its state block lists.
-MAX_TICKETS = 1000
+MAX_TICKETS: Final = 1000
 #: The most open tickets a query may return before it counts as not read: narrow a query that returns more.
-MAX_QUERY = 1000
+MAX_QUERY: Final = 1000
 #: Items a page asks for: the most Jira returns of an issue's comments or changelog, and of issues fetched at once.
-PAGE = 100
+PAGE: Final = 100
 #: The link type whose inward side, "is blocked by", names a ticket's blockers (the `tracker-jira` skill).
-BLOCKS = "Blocks"
+BLOCKS: Final = "Blocks"
 #: A ticket's key, as canopy reads one.
-_KEY = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}")
+_KEY: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}")
 
 
 @dataclass(frozen=True)
