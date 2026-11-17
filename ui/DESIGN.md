@@ -1078,8 +1078,10 @@ reader, so no table repeats them.
   on the left, the pages by group (`SOURCES`), the page shown in the accent, once the pane holds it and the article's
   whole measure, else folded into a `Guide pages` toggle above the page; in the middle, the article at `max-w-3xl`, in
   a document's type (Primitives), each `##` a section under a hairline and each heading a link to itself on hover, and
-  at its foot Previous and Next; on the right, once the pane holds that too, `On this page`. So the article never
-  narrows as the window widens: a column comes in only where the article keeps its measure. It reads what rich text
+  at its foot Previous and Next; on the right, once the pane holds that too, `On this page`, the section being read in
+  the accent. So the article never narrows as the window widens: a column comes in only where the article keeps its
+  measure. Both side columns stay under the header as the page scrolls, and one taller than the window scrolls on its
+  own, so its last entry is always in reach. It reads what rich text
   reads, headings as real headings with their anchors as ids, and labelled links in the accent: to a guide page, a
   heading, a section of the UI, or the web in a new tab. A link to anything else stays characters, and `guide.test.ts`
   fails on it. A page opens with `# Title` and then a lead, says what the operator sees and does in the UI's own words
