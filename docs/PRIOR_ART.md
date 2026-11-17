@@ -234,9 +234,11 @@ three things to measure was checked live.
   journal says how often edits fail and how many more follow, before a line is written.
 - **What a compaction keeps.** It hands the runtime's summary a shape: the requests as written, the goal, the work
   done, the work left, and what must not be done
-  ([compaction-context-injector](https://github.com/opensoft/oh-my-opencode/blob/aead4ae/src/hooks/compaction-context-injector/index.ts)). canopy records the context
-  overflow a run compacts after and says nothing to the agent then; its nudge already names the plan's file (§41).
-  How often a run compacts, and whether such a run still ends in a valid result line, is in the journal.
+  ([compaction-context-injector](https://github.com/opensoft/oh-my-opencode/blob/aead4ae/src/hooks/compaction-context-injector/index.ts)). canopy says nothing
+  to the agent then; its nudge already names the plan's file (§41). Under OpenCode 1 it records the context overflow a
+  run compacts after. OpenCode 2 compacts before one and prints no event for it, and keeps a run's prompt, its only
+  user message, as the summary alone. So how often a run compacts is in OpenCode's record of the session, not the
+  journal, and whether such a run still ends in a valid result line is not yet measured (#2410).
 
 ### In prompts
 
