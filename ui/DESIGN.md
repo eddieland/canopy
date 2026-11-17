@@ -475,9 +475,10 @@ Light, dark, and system, stored in `localStorage` under `canopy-theme` (absent m
 The blocking script in `index.html` sets the `dark` class, `color-scheme`, and `data-theme` on `<html>` before first
 paint; `src/theme/store.ts` keeps them current afterwards. Change one, change both: `theme-script.test.ts` runs the
 inline script and checks it against the store's key. Each theme's palette is kept the same way (`src/theme/palette.ts`)
-and set on `<html>` by the same script. What else the operator sets for this browser alone, the key that sends a
-reply, each list's order, and each fun setting, is kept under a `canopy-*` key of its own, synced across tabs, never
-in the journal.
+and set on `<html>` by the same script; a pick writes its own theme's alone, into what is stored at that moment, so
+another tab's pick not yet heard of, or a palette a newer build stored, is never overwritten. What else the operator
+sets for this browser alone, the key that sends a reply, each list's order, and each fun setting, is kept under a
+`canopy-*` key of its own, synced across tabs, never in the journal.
 
 ## Primitives
 
