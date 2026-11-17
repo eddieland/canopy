@@ -2,8 +2,9 @@
 
 A tick is the overseer's turn, and its pace is set by what a model run costs; a delivery costs none, only each sink's
 command run over rows the journal already holds. So during each wait the loop delivers every `EVERY_SECONDS`, as the
-end of a tick does (`attention.publish`): the attention list rewritten, then each sink given what it has not heard. It
-runs under the tick lock, so it never overlaps a tick or a `canopy tick` run by hand, and it starts no overseer.
+end of a tick does (`attention.publish`): each sink is given what it has not heard, and `attention.md` is rewritten
+when one was sent something. It runs under the tick lock, so it never overlaps a tick or a `canopy tick` run by hand,
+and it starts no overseer.
 
 A sink whose last delivery failed is left for the next tick, so one that hangs costs a tick its timeout, never every
 step of the wait.
