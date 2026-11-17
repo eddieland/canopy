@@ -1050,7 +1050,8 @@ def _covered(conn: sqlite3.Connection, plan_id: int, seen: Mapping[Key, records.
             .one(conn)
         )
         then = seen.get((i.pr_url, i.item, i.item_id))
-        if row is None or then is None:
+        # An item the operator has come to ignore changed nothing a plan should hear of (DESIGN §30).
+        if row is None or then is None or row.ignored:
             continue
         if row.resolved:
             found.append(Change(Changed.RESOLVED, i.pr_url, item=row.item, id=i.item_id))

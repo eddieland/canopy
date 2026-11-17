@@ -152,7 +152,10 @@ def test_a_comment_since_the_draft_refuses_the_send_once_and_names_it(scenario: 
     run_id = drafted_run(scenario, github_state, [thread(501)])
     state = state_of(github_state)
     newer = {**comment(510, author="bob", body="Also the docstring."), "time": "2099-01-01T00:00:00Z"}
-    state["prs"][PR]["reviews"].append(newer)
+    # A sign-off the operator ignores, newer still, is no comment to read before sending (DESIGN §30).
+    scenario.configures("private", connect={"ignore_comments": ["I looked at this"]})
+    signed = {**comment(511, author="bob", body="I looked at this"), "time": "2099-01-02T00:00:00Z"}
+    state["prs"][PR]["reviews"] += [newer, signed]
     github_state.write_text(json.dumps(state))
     wanted = hashed(scenario.conn, run_id, 1)
     err = scenario.operator("draft", "send", f"run:{run_id}", wanted, code=1).err

@@ -444,7 +444,8 @@ def _check_threads(
 def _newer_comments(conn: sqlite3.Connection, draft: records.Draft) -> list[records.ObservedReview]:
     """The comments on the draft's thread newer than its basis, but the operator's sent ones and a pending review's.
 
-    The operator sent theirs through canopy, and nobody else sees a pending review's.
+    The operator sent theirs through canopy, and nobody else sees a pending review's. Nor one the operator ignores
+    (DESIGN §30): a sign-off on the thread changes nothing a reply answers.
 
     Returns:
         The comments, oldest first.
@@ -469,6 +470,7 @@ def _newer_comments(conn: sqlite3.Connection, draft: records.Draft) -> list[reco
         .where("o.item = ?", ReviewItem.COMMENT)
         .where("o.thread_id = ?", draft.thread_id)
         .where("o.created_at > ?", draft.basis)
+        .where("o.ignored = 0")
         .where("o.id NOT IN ({})", sent)
         .where("NOT EXISTS ({})", pending)
         .order_by("o.created_at, o.id")
