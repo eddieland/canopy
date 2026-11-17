@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import db, records, sql, workspace
 from canopy.core.vocab import Phase, RunKind, RunStatus
@@ -29,10 +29,10 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
-OPUS = "anthropic/claude-opus-4-1"
-SONNET = "anthropic/claude-sonnet-4-5"
+OPUS: Final = "anthropic/claude-opus-4-1"
+SONNET: Final = "anthropic/claude-sonnet-4-5"
 # The words a branch name leaves out of its ticket's title.
-_SMALL_WORDS = frozenset({"a", "an", "the", "to", "in", "on", "for", "of"})
+_SMALL_WORDS: Final = frozenset({"a", "an", "the", "to", "in", "on", "for", "of"})
 
 
 @dataclass(frozen=True)
@@ -113,7 +113,7 @@ def _fix_ci(hours: float, cost: float, summary: str, *, status: RunStatus = RunS
 
 
 #: The tickets, the oldest first.
-TICKETS: Sequence[Ticket] = (
+TICKETS: Final[Sequence[Ticket]] = (
     Ticket(
         "ABC-041",
         "Add a health check endpoint",
@@ -412,27 +412,27 @@ TICKETS: Sequence[Ticket] = (
 
 # What a run's tokens are per dollar it cost, as the fixtures' runs are, but for the cache read, which grew as the
 # prompts settled: by the month the run started in.
-_CACHE_READ_PER_USD = {4: 90_000, 5: 140_000, 6: 220_000, 7: 300_000, 8: 330_000, 9: 380_000}
+_CACHE_READ_PER_USD: Final = {4: 90_000, 5: 140_000, 6: 220_000, 7: 300_000, 8: 330_000, 9: 380_000}
 #: The definitions snapshot the runs loaded until a prompt change on Monday Sep 21, and the one after it, which the
 #: fixtures' runs load too: a smaller prefix, which the week of the change read little of from the cache.
-FIRST_SNAPSHOT = "3c9e1f07a2b84d65"
-SNAPSHOT = "a81d2c4e9f306b17"
-_SNAPSHOT_FROM = _on(9, 21, 0)
+FIRST_SNAPSHOT: Final = "3c9e1f07a2b84d65"
+SNAPSHOT: Final = "a81d2c4e9f306b17"
+_SNAPSHOT_FROM: Final = _on(9, 21, 0)
 #: The runtime's version the runs' sessions named until an upgrade on Monday Sep 28, and the one after, the fixtures'
 #: too.
-FIRST_RUNTIME = "1.0.98"
-RUNTIME = "1.0.104"
-_RUNTIME_FROM = _on(9, 28, 0)
+FIRST_RUNTIME: Final = "1.0.98"
+RUNTIME: Final = "1.0.104"
+_RUNTIME_FROM: Final = _on(9, 28, 0)
 # What a run's first model call was sent, by its kind, before the prompt change took this much off it.
-_FIRST_SENT = {RunKind.IMPLEMENT: 24_200, RunKind.RESUME: 25_100, RunKind.FIX_CI: 23_600}
-_SNAPSHOT_SAVED = 1_800
+_FIRST_SENT: Final = {RunKind.IMPLEMENT: 24_200, RunKind.RESUME: 25_100, RunKind.FIX_CI: 23_600}
+_SNAPSHOT_SAVED: Final = 1_800
 # The share of it read from the cache, by the month the run started in, which grew as the prompts settled; from
 # September on, but for the week of the prompt change, and the runtime's upgrade the week after.
-_FIRST_HIT = {4: 0.31, 5: 0.47, 6: 0.64, 7: 0.76, 8: 0.82, 9: 0.85}
-_FIRST_HIT_CHANGED = 0.57
-_FIRST_HIT_UPGRADED = 0.79
-_REVIEW_IDS = 4_100_100_000
-_COMMENT_IDS = 2_460_100_000
+_FIRST_HIT: Final = {4: 0.31, 5: 0.47, 6: 0.64, 7: 0.76, 8: 0.82, 9: 0.85}
+_FIRST_HIT_CHANGED: Final = 0.57
+_FIRST_HIT_UPGRADED: Final = 0.79
+_REVIEW_IDS: Final = 4_100_100_000
+_COMMENT_IDS: Final = 2_460_100_000
 
 
 def seed(conn: sqlite3.Connection, root: Path) -> None:

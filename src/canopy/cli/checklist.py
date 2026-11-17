@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import click
 
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from canopy.core.checklist_answers import Counts
 
 #: The table's count columns after the item: the runs given it, then each answer by its word.
-_COUNTS = ("reminded", *(str(a) for a in ItemAnswer))
+_COUNTS: Final = ("reminded", *(str(a) for a in ItemAnswer))
 
 
 @click.command("checklist")

@@ -10,6 +10,7 @@ import sqlite3
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -25,9 +26,9 @@ from tests.conftest import CanopyEnv, executable, git
 
 type ContextMaker = Callable[..., Context]
 
-LEASE = {"lease_id": "id-1", "lease_holder": "canopy:PROJ-9", "leased_at": "2026-10-22T00:00:00Z"}
-NOW = datetime.now(UTC)
-LONG_AGO = NOW - timedelta(days=10)
+LEASE: Final = {"lease_id": "id-1", "lease_holder": "canopy:PROJ-9", "leased_at": "2026-10-22T00:00:00Z"}
+NOW: Final = datetime.now(UTC)
+LONG_AGO: Final = NOW - timedelta(days=10)
 
 
 @pytest.fixture

@@ -9,7 +9,7 @@ runs on one config from its start to its end.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import config, workspace
 
@@ -19,12 +19,12 @@ if TYPE_CHECKING:
     from canopy.core.workspace import Workspace
 
 # How a reload names a change to the workspace file's map, its `[workspace]` and `[repos]` tables.
-WORKSPACE_MAP = "workspace map"
+WORKSPACE_MAP: Final = "workspace map"
 # Keys whose change takes effect only when the loop restarts: the web UI's listener is started once, with the loop.
-RESTART_PREFIX = "serve."
+RESTART_PREFIX: Final = "serve."
 #: The `serve.` keys a reload does apply: dictation's command is read by each recording from the config the server
 #: serves, which a reload replaces.
-RELOADED_SERVE_KEYS = frozenset({"serve.dictation_cmd"})
+RELOADED_SERVE_KEYS: Final = frozenset({"serve.dictation_cmd"})
 
 
 @dataclass

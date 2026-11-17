@@ -10,6 +10,7 @@ from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import canopy_mcp
@@ -59,11 +60,11 @@ from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
 from tests.conftest import CanopyEnv, GitPool, executable, git
 
 #: One of the loop's own PRs, PROJ-1's in `repo`, which reviews are on for.
-PR = "https://github.com/acme/api/pull/7"
+PR: Final = "https://github.com/acme/api/pull/7"
 #: A PR the operator asked canopy to review.
-REQUESTED = "https://github.com/acme/api/pull/8"
+REQUESTED: Final = "https://github.com/acme/api/pull/8"
 #: Every tool, by name, as the overseer's definition will allow each one.
-TOOL_NAMES = [
+TOOL_NAMES: Final = [
     "dispatch",
     "decide",
     "attention",
@@ -77,9 +78,9 @@ TOOL_NAMES = [
     "chore-wait",
 ]
 #: What a chore reports, for a run a tool starts.
-CHORE_OK: Mapping[str, object] = {"status": "ok", "summary": "nothing found", "findings": []}
+CHORE_OK: Final[Mapping[str, object]] = {"status": "ok", "summary": "nothing found", "findings": []}
 #: What the read of PROJ-1's one review item returns, as fields and as the JSON in its text.
-READ_ITEM: Mapping[str, object] = {
+READ_ITEM: Final[Mapping[str, object]] = {
     "key": "PROJ-1",
     "repo": "repo",
     "items": [
@@ -152,7 +153,16 @@ class Done:
 
 
 #: The tables a verb writes.
-RECORDED = ("decisions", "tickets", "ticket_units", "messages", "review_requests", "chore_runs", "runs", "review_runs")
+RECORDED: Final = (
+    "decisions",
+    "tickets",
+    "ticket_units",
+    "messages",
+    "review_requests",
+    "chore_runs",
+    "runs",
+    "review_runs",
+)
 
 
 def by_tool(env: CanopyEnv, verb: Verb) -> Done:
@@ -204,7 +214,7 @@ def recorded(conn: sqlite3.Connection) -> dict[str, list[dict[str, object]]]:
     }
 
 
-RECORDS = [
+RECORDS: Final = [
     pytest.param(
         Verb(
             "dispatch",
@@ -435,7 +445,7 @@ def test_each_tool_records_what_it_says_it_did(overseen: CanopyEnv, verb: Verb) 
         validator(tool.schema).validate(tool.structured)
 
 
-REFUSALS = [
+REFUSALS: Final = [
     pytest.param(
         Verb(
             "decide",
@@ -868,7 +878,7 @@ def test_a_chores_run_is_served_its_history_alone(overseen: CanopyEnv) -> None:
 
 
 #: Arguments each report needs, for a call that a guard, not the request, refuses.
-REPORT_ARGUMENTS: Mapping[str, Mapping[str, object]] = {
+REPORT_ARGUMENTS: Final[Mapping[str, Mapping[str, object]]] = {
     reports.SHOW_RUN: {"run": 1},
     reports.SHOW_CHORE: {"name": "build-health"},
 }
@@ -956,8 +966,8 @@ def test_a_chores_history_tool_refuses_what_its_command_refuses(
 
 #: Each of canopy's reports a chore reads, as a tool's call and the command that prints the same.
 #: A time the waiting report counts from, the same for its tool and its command.
-SINCE = db.format_time(datetime.now(UTC) - timedelta(days=1))
-REPORT_READS: list[tuple[str, Mapping[str, object], list[str]]] = [
+SINCE: Final = db.format_time(datetime.now(UTC) - timedelta(days=1))
+REPORT_READS: Final[list[tuple[str, Mapping[str, object], list[str]]]] = [
     (reports.HEALTH, {}, ["health", "--json"]),
     (reports.HEALTH, {"days": 30}, ["health", "--json", "--days", "30"]),
     (reports.SPEND, {"days": 1}, ["spend", "--json", "--days", "1"]),
@@ -1235,7 +1245,7 @@ def test_the_git_server_takes_absolute_checkouts_and_serves_nothing_else() -> No
 # nothing (DESIGN §41).
 
 #: A card the status tool takes.
-CARD: Mapping[str, object] = {
+CARD: Final[Mapping[str, object]] = {
     "summary": "Fixing the parser; the tests pass and the branch is pushed.",
     "now": "writing the PR body",
     "done": [{"step": "fix the parser", "proof": "tests pass: 42/42"}, {"step": "push", "proof": "pushed abc123"}],

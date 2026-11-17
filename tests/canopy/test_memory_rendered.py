@@ -9,7 +9,7 @@ snapshots are syrupy's, in `__snapshots__/test_memory_rendered/`; `make snapshot
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import pytest
 
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from canopy.core import run_result
 
 # Every pair of modes but both off, which asks for no field.
-MODES = [
+MODES: Final = [
     (notes, proposals)
     for notes in MemoryMode
     for proposals in MemoryMode

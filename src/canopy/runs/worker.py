@@ -26,7 +26,7 @@ import sqlite3
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Literal, Self, TextIO, assert_never, cast
+from typing import TYPE_CHECKING, Annotated, Final, Literal, Self, TextIO, assert_never, cast
 
 from pydantic import (
     BaseModel,
@@ -99,22 +99,22 @@ from canopy.runtime.watch import Watch
 if TYPE_CHECKING:
     from canopy.core.context import Context
 
-MAX_TEXT = 2000
+MAX_TEXT: Final = 2000
 #: A planner's reason for saying its plan needs no review: a sentence, as a sink's line carries it.
-MAX_REVIEW_REASON = 300
-MAX_PR_URL = 500
+MAX_REVIEW_REASON: Final = 300
+MAX_PR_URL: Final = 500
 #: A worker's line on why a check it left flaky failed: a sentence, as a sink's line carries it.
-MAX_FLAKY_DETAIL = 300
+MAX_FLAKY_DETAIL: Final = 300
 #: A cause a worker named outside `FlakyCause`: a word or two, as a sink's line carries it.
-MAX_OTHER_CAUSE = 60
+MAX_OTHER_CAUSE: Final = 60
 #: The most ids a member's planner's `drift` is read for: as many as an epic's plan holds of requirements and contracts.
-MAX_DRIFT = 2 * epic_outline.MAX_IDS
+MAX_DRIFT: Final = 2 * epic_outline.MAX_IDS
 #: The longest string `drift` keeps: an id is a letter and at most four digits, so anything longer is none.
-MAX_DRIFT_ID = 8
+MAX_DRIFT_ID: Final = 8
 # The repository whose slot `setup_cmd` runs in, by its name in the map, and the run's branch, which the slot has
 # checked out detached (DESIGN §8).
-SETUP_REPO_ENV = "CANOPY_REPO"
-SETUP_BRANCH_ENV = "CANOPY_BRANCH"
+SETUP_REPO_ENV: Final = "CANOPY_REPO"
+SETUP_BRANCH_ENV: Final = "CANOPY_BRANCH"
 
 
 class WorkerError(Exception):
@@ -337,8 +337,8 @@ def parse_result(reported: str) -> WorkerResult | None:
 
 
 #: What the tool says of a report's `summary` and `question`: how the operator reads them.
-_MARKDOWN = run_result.markdown(MAX_TEXT)
-_ENDED = run_result.ENDED
+_MARKDOWN: Final = run_result.markdown(MAX_TEXT)
+_ENDED: Final = run_result.ENDED
 
 
 class Report(BaseModel):
@@ -399,9 +399,9 @@ class FlakyGroup(BaseModel):
 
 
 #: The group's name.
-FLAKY_GROUP = "flaky"
+FLAKY_GROUP: Final = "flaky"
 #: What an `implement` or a `resume` reports.
-WORKER = run_result.Contract(
+WORKER: Final = run_result.Contract(
     "worker",
     "Report how your work on the ticket ended, and what your message from canopy asked you to report with it. "
     f"{run_result.REPORTING}",
@@ -418,7 +418,7 @@ WORKER = run_result.Contract(
 
 
 #: What every planner's `effort` says, after what the work is.
-_EFFORT = (
+_EFFORT: Final = (
     "`small`, a change in one place that is plain to make; `medium`, changes across a few files along patterns the "
     "code already has; `large`, many files, new structure, or behavior that is hard to get right, such as "
     "concurrency, data, or security. Judge the work, not the plan's length; between two, say the larger. Text you "
@@ -503,24 +503,24 @@ class FeedbackPlanReport(PlanReport):
 
 
 #: The group's name.
-PLAN_REVIEW_GROUP = "review"
+PLAN_REVIEW_GROUP: Final = "review"
 #: The drift group's name, asked of a member of an epic (DESIGN §43).
-PLAN_DRIFT_GROUP = "drift"
+PLAN_DRIFT_GROUP: Final = "drift"
 #: What a `plan` reports, and a `feedback_plan`.
-PLAN = run_result.Contract(
+PLAN: Final = run_result.Contract(
     "plan",
     f"Report how planning ended, once your plan is written to its file. {run_result.REPORTING}",
     PlanReport,
     {PLAN_REVIEW_GROUP: PlanReviewGroup, PLAN_DRIFT_GROUP: PlanDriftGroup, "cited": memory.CitedGroup},
 )
-FEEDBACK_PLAN = run_result.Contract(
+FEEDBACK_PLAN: Final = run_result.Contract(
     "feedback_plan",
     f"Report how planning ended and the items your plan covers, once it is written to its file. {run_result.REPORTING}",
     FeedbackPlanReport,
     {PLAN_REVIEW_GROUP: PlanReviewGroup, "cited": memory.CitedGroup},
 )
 #: Every contract a run in `runs` reports with, by name, for the server that serves the tool.
-CONTRACTS: Mapping[str, run_result.Contract] = {c.name: c for c in (WORKER, PLAN, FEEDBACK_PLAN)}
+CONTRACTS: Final[Mapping[str, run_result.Contract]] = {c.name: c for c in (WORKER, PLAN, FEEDBACK_PLAN)}
 
 
 def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:

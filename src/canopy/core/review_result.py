@@ -7,21 +7,21 @@ bounded. A result that does not validate is `unknown`.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Annotated, Literal, Self
+from typing import Annotated, Final, Literal, Self
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, StrictInt, StrictStr, model_validator
 
 from canopy.core import contract, run_result
 from canopy.core.contract import bounded, one_line
 
-MAX_SUMMARY = 2000
-MAX_TITLE = 200
-MAX_LOCATION = 300
-MAX_DETAIL = 1000
-MAX_FINDINGS = 20
+MAX_SUMMARY: Final = 2000
+MAX_TITLE: Final = 200
+MAX_LOCATION: Final = 300
+MAX_DETAIL: Final = 1000
+MAX_FINDINGS: Final = 20
 #: A revised version's bounds: a draft's text and comments, as `replies` bounds them (it imports too much for here).
-MAX_REVISED_TEXT = 4000
-MAX_REVISED_COMMENTS = 30
+MAX_REVISED_TEXT: Final = 4000
+MAX_REVISED_COMMENTS: Final = 30
 
 
 def _finding_number(value: object) -> object:
@@ -207,14 +207,14 @@ class RevisionReport(BaseModel):
 
 
 #: What a reviewer reports, and a reviser.
-REVIEW = run_result.Contract(
+REVIEW: Final = run_result.Contract(
     "review",
     f"Report your review: it is the whole review, which canopy hands to whoever acts on it. {run_result.REPORTING}",
     Report,
 )
-REVISION = run_result.Contract(
+REVISION: Final = run_result.Contract(
     "revision",
     f"Report the draft's new version, whole. {run_result.REPORTING}",
     RevisionReport,
 )
-CONTRACTS: Mapping[str, run_result.Contract] = {c.name: c for c in (REVIEW, REVISION)}
+CONTRACTS: Final[Mapping[str, run_result.Contract]] = {c.name: c for c in (REVIEW, REVISION)}

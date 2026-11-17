@@ -4,6 +4,7 @@ import json
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -12,10 +13,10 @@ from canopy.core.vocab import Phase, RunKind, RunStatus
 from tests.canopy.helpers import earlier
 from tests.conftest import Journals
 
-NOW = datetime(2026, 10, 8, 12, tzinfo=UTC)
-PR_1 = "https://github.com/acme/web/pull/1"
-PR_2 = "https://github.com/acme/api/pull/2"
-PR_3 = "https://github.com/acme/web/pull/3"
+NOW: Final = datetime(2026, 10, 8, 12, tzinfo=UTC)
+PR_1: Final = "https://github.com/acme/web/pull/1"
+PR_2: Final = "https://github.com/acme/api/pull/2"
+PR_3: Final = "https://github.com/acme/web/pull/3"
 
 
 def ran(conn: sqlite3.Connection, key: str, started: str, result: dict[str, object] | None) -> None:

@@ -8,7 +8,7 @@ harness reads an update (§41). A row is written only when a line changed one.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.infra import tracing
 from canopy.runtime.implementation import one, pick, two
@@ -111,4 +111,4 @@ class Watch:
                 )
 
 
-_NS_PER_MS = 1_000_000
+_NS_PER_MS: Final = 1_000_000

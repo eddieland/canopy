@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import pydantic
 import pytest
@@ -29,13 +29,13 @@ from tests.canopy.scenario_helpers import dispatches
 if TYPE_CHECKING:
     from tests.conftest import CanopyEnv
 
-WORK = dispatches(slug="work")
-FIX_CI = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CI])
+WORK: Final = dispatches(slug="work")
+FIX_CI: Final = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CI])
 #: A resume for review, which no cooldown holds back, so one may follow another.
-FOR_REVIEW = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REVIEW])
-NOTE = "The lint job fails on a cold cache: run `make lint` twice before trusting it."
-HEADING = "## Notes from earlier runs\n\n"
-OTHER = "PROJ-2"
+FOR_REVIEW: Final = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REVIEW])
+NOTE: Final = "The lint job fails on a cold cache: run `make lint` twice before trusting it."
+HEADING: Final = "## Notes from earlier runs\n\n"
+OTHER: Final = "PROJ-2"
 
 pytestmark = pytest.mark.usefixtures("git_pool")
 

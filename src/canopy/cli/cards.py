@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import click
 
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from canopy.core.card_lapses import Lapses
 
 #: The table's count columns after the role, as its head names them.
-_COUNTS = ("runs", "carded", "lapsed", "lapses", "ended", "ended stale")
+_COUNTS: Final = ("runs", "carded", "lapsed", "lapses", "ended", "ended stale")
 
 
 @click.command("cards")

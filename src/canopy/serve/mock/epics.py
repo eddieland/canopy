@@ -18,7 +18,7 @@ other fixture's: `seed` runs last.
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import conversation, db, epics, plans, records
 from canopy.core.vocab import PlanEffort, PlannerApproval, PlanStatus, RunKind, RunStatus
@@ -30,31 +30,31 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 #: The epic whose plan is approved, with members.
-APPROVED = 1
+APPROVED: Final = 1
 #: The epic whose plan waits on the operator, after their reply.
-PROPOSED = 2
+PROPOSED: Final = 2
 #: The epic whose first plan run works.
-PLANNING = 3
+PLANNING: Final = 3
 #: The epic the operator stopped before any plan run of it started.
-STOPPED = 4
+STOPPED: Final = 4
 
 # The operator's words, as typed: a paragraph is one line.
-_BILLING = (
+_BILLING: Final = (
     "Move billing to the v2 API everywhere it is called, web and mobile both, and retire v1 once nothing reads it.\n\n"
     "v2 is down for a minute or two most weeks, so a call that fails should wait and try again rather than show the "
     "customer an error. Keep the invoices' numbers exactly as they are."
 )
 
-_OFFLINE = (
+_OFFLINE: Final = (
     "Show a customer's order history in the mobile app when it is offline, as of their last sync. The web account "
     "page has the same list; keep the two in step."
 )
 
-_DARK = "Give the web app a dark theme that follows the system's setting."
+_DARK: Final = "Give the web app a dark theme that follows the system's setting."
 
-_FLAGS = "Replace the feature flags read from the `flags` table with the flags service, in api and web."
+_FLAGS: Final = "Replace the feature flags read from the `flags` table with the flags service, in api and web."
 
-_BILLING_PLAN = """\
+_BILLING_PLAN: Final = """\
 # Billing on v2
 
 ## Goal
@@ -119,7 +119,7 @@ Every billing call goes to v2, a failed call is retried from a queue, and the v1
 - The invoices' PDF layout.
 """
 
-_OFFLINE_FIRST = """\
+_OFFLINE_FIRST: Final = """\
 # Offline order history
 
 ## Goal
@@ -168,12 +168,12 @@ The order history reads from a local copy when the app is offline.
 - Placing an order offline.
 """
 
-_OFFLINE_REPLY = (
+_OFFLINE_REPLY: Final = (
     "Drop the web half: the account page already reads the same API, so the two cannot drift. Keep it to mobile, and "
     "say how the local copy is cleared when the customer signs out."
 )
 
-_OFFLINE_SECOND = """\
+_OFFLINE_SECOND: Final = """\
 # Offline order history
 
 ## Goal
@@ -232,7 +232,7 @@ The mobile app's order history reads from a local copy when it is offline, and t
 """
 
 # ABC-103's plan, for B1, written against epic 1's approved plan.
-_MEMBER_PLAN = """\
+_MEMBER_PLAN: Final = """\
 # A v2 billing client in web
 
 ## What changes
@@ -246,7 +246,7 @@ In **web**, a `BillingClient` for the v2 endpoint, as the epic's contract C1 nam
 - [ ] nothing in web imports the v1 client
 """
 
-_EPICS = (
+_EPICS: Final = (
     # id, text, repositories, project, channel, submitted
     (APPROVED, _BILLING, ("api", "web", "mobile"), "ABC", "cli", -720),
     (PROPOSED, _OFFLINE, ("mobile", "web"), "ABC", "web", -260),
@@ -255,17 +255,17 @@ _EPICS = (
 )
 
 #: When the operator stopped epic 4: as soon as they submitted it.
-_STOPPED_AT = -1
+_STOPPED_AT: Final = -1
 
 #: A plan run's row as `seed` writes it: run, epic, started, ended, status, summary, the plan it wrote.
 type _Run = tuple[int, int, int, int | None, RunStatus, str | None, str | None]
 
 #: When the operator replied to epic 2's first plan, asking for changes.
-_REPLIED = -200
+_REPLIED: Final = -200
 #: The plan run whose plan the operator approved.
-_APPROVED_RUN = 1
+_APPROVED_RUN: Final = 1
 
-_RUNS: tuple[_Run, ...] = (
+_RUNS: Final[tuple[_Run, ...]] = (
     (_APPROVED_RUN, APPROVED, -715, -690, RunStatus.DONE, "A plan of four entries; B4 is trivial.", _BILLING_PLAN),
     (2, PROPOSED, -258, -240, RunStatus.DONE, "A plan of two entries, one per repository.", _OFFLINE_FIRST),
     (3, PROPOSED, -190, -170, RunStatus.DONE, "Kept it to mobile, and added clearing at sign-out.", _OFFLINE_SECOND),
@@ -273,7 +273,7 @@ _RUNS: tuple[_Run, ...] = (
 )
 
 #: Epic 1's members: key, the entries each fulfils, and when it was added.
-_MEMBERS = (
+_MEMBERS: Final = (
     ("ABC-103", ("B1",), -290),
     ("ABC-104", ("B2",), -285),
     ("ABC-100", (), -200),

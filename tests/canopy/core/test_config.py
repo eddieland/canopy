@@ -3,6 +3,7 @@ import os
 import re
 import tomllib
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import pytest
@@ -18,9 +19,9 @@ from canopy.runtime.implementation import Version
 from tests.conftest import HERMETIC_GIT, SHARED_TOML, TRACKER_SOURCE, TRACKER_TOML, CanopyEnv, git, user_toml
 
 #: A reviewer's command the operator set, without a private server.
-REVIEW_CMD = "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-reviewer --format json"
+REVIEW_CMD: Final = "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-reviewer --format json"
 
-EXAMPLES = Path(__file__).parents[3] / "examples"
+EXAMPLES: Final = Path(__file__).parents[3] / "examples"
 
 
 def test_defaults_fill_in_everything_else(canopy_env: CanopyEnv) -> None:
@@ -213,7 +214,7 @@ def test_the_resource_takes_a_bounded_number_of_attributes(canopy_env: CanopyEnv
 
 
 #: An eval case's keys but `kind` and `lines` (DESIGN §21, Scoring the reviewer).
-EVAL_CASE = f'pr = "https://github.com/acme/api/pull/7"\nrepo = "api"\nsha = "{"a" * 40}"\nbase = "{"b" * 40}"\n'
+EVAL_CASE: Final = f'pr = "https://github.com/acme/api/pull/7"\nrepo = "api"\nsha = "{"a" * 40}"\nbase = "{"b" * 40}"\n'
 
 
 def test_an_eval_case_is_a_pr_at_a_commit_with_the_lines_its_bug_is_on(canopy_env: CanopyEnv) -> None:
@@ -736,7 +737,7 @@ def test_the_default_templates_name_the_definitions_dir(canopy_env: CanopyEnv) -
 
 
 #: A command that runs canopy's chore agent.
-CHORE_CMD = "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore {prompt}"
+CHORE_CMD: Final = "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore {prompt}"
 
 
 @pytest.mark.parametrize(

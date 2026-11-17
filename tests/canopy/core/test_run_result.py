@@ -1,6 +1,6 @@
 """A run's result, reported with canopy's `result` tool: its contract, the groups asked of it, and reading a call."""
 
-from typing import Literal
+from typing import Final, Literal
 
 import pytest
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from canopy.core import run_result
 from canopy.runtime.report import Called
 
-SERVER = "canopy_run"
+SERVER: Final = "canopy_run"
 
 
 class _Core(BaseModel):
@@ -23,8 +23,8 @@ class _Notes(BaseModel):
     notes: list[str] = Field(default_factory=list, description="Notes.")
 
 
-CONTRACT = run_result.Contract("worker", "Report.", _Core, {"notes": _Notes})
-CONTRACTS = {CONTRACT.name: CONTRACT}
+CONTRACT: Final = run_result.Contract("worker", "Report.", _Core, {"notes": _Notes})
+CONTRACTS: Final = {CONTRACT.name: CONTRACT}
 
 
 def test_a_runs_input_holds_its_contracts_fields_and_the_groups_asked_of_it() -> None:

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import os
 import shlex
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 from urllib.parse import quote
 
 from canopy.core import db
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from canopy.serve.backend import Backend
 
 #: The variable WSL sets in every process it starts, naming the distribution: VS Code's remote names it too.
-WSL_DISTRO = "WSL_DISTRO_NAME"
+WSL_DISTRO: Final = "WSL_DISTRO_NAME"
 
 
 def ticket_desk(backend: Backend, ctx: Context, key: str) -> TicketDesk:

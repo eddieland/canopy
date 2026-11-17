@@ -7,6 +7,7 @@ import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import pytest
@@ -17,14 +18,14 @@ from canopy.core.vocab import ReviewRunStatus, RunStatus
 from canopy.runtime.report import Called
 from tests.canopy.helpers import in_tick, plan_run, present
 
-CARD: dict[str, object] = {
+CARD: Final[dict[str, object]] = {
     "summary": "Fixing the parser;\nthe tests pass.",
     "now": "  writing\tthe PR body ",
     "done": [{"step": "fix the parser", "proof": "tests pass: 42/42"}],
     "next": ["open the PR", "answer the review"],
 }
 #: A time long before the test runs.
-OLD = "2026-01-01T00:00:00.000Z"
+OLD: Final = "2026-01-01T00:00:00.000Z"
 
 
 def status(card: object, *, completed: bool = True, tool: str = "canopy_run_status") -> Called:
@@ -241,7 +242,7 @@ def test_an_update_that_comes_too_late_counts_the_lapse_it_ends(conn: sqlite3.Co
     assert lapses(conn, running) == (1, False)
 
 
-QUESTION: dict[str, object] = {
+QUESTION: Final[dict[str, object]] = {
     "ask": "Keep the old endpoint for the mobile app, or remove it?",
     "options": ["keep it, deprecated", "remove it now"],
     "recommend": "A",

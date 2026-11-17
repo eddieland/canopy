@@ -13,7 +13,7 @@ import functools
 import json
 from datetime import timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING, Final, assert_never
 
 from canopy.core import (
     agent_models,
@@ -95,36 +95,36 @@ if TYPE_CHECKING:
     from canopy.serve.schema.transcript import RawOutput, Transcript
 
 # How many runs that ended the runs list carries, after the running ones.
-RECENT_RUNS = 50
+RECENT_RUNS: Final = 50
 # How many tickets the tickets list carries, by most recent activity.
-TICKETS = 200
+TICKETS: Final = 200
 # A ticket's page: its latest runs, messages, and decisions.
-TICKET_RUNS = 10
-TICKET_MESSAGES = 100
-TICKET_DECISIONS = 20
+TICKET_RUNS: Final = 10
+TICKET_MESSAGES: Final = 100
+TICKET_DECISIONS: Final = 20
 #: The most of a run's summary a page is sent: as much as a worker's result may hold, so a page shows it whole and folds
 #: it in a list itself. Only a harness note longer than that is cut.
-SUMMARY_LENGTH = worker.MAX_TEXT
+SUMMARY_LENGTH: Final = worker.MAX_TEXT
 # The windows the spend figures and a chore's spend cover: the last day and the last 30.
-SPEND_DAY_HOURS = 24
-SPEND_MONTH_HOURS = 30 * 24
+SPEND_DAY_HOURS: Final = 24
+SPEND_MONTH_HOURS: Final = 30 * 24
 #: The local days a ticket's worker spend by model covers: the Spend page's longest window, which its line links to.
-TICKET_MODEL_DAYS = 30
-_CHORE = "chore:"
-_PR = "pr:"
+TICKET_MODEL_DAYS: Final = 30
+_CHORE: Final = "chore:"
+_PR: Final = "pr:"
 # A one-off task's item (DESIGN §36): no ticket, chore, or PR, but the task's own page.
-_TASK = "task:"
+_TASK: Final = "task:"
 # An epic's item (DESIGN §43): its plan waiting on the operator, read on the epic's plan page.
-_EPIC = "epic:"
-_SOURCES: dict[str, MessageSource] = {
+_EPIC: Final = "epic:"
+_SOURCES: Final[dict[str, MessageSource]] = {
     "worker": "worker",
     "operator": "operator",
     "tracker": "tracker",
     "canopy": "canopy",
 }
-_PAUSE_CHANNELS: dict[str, PauseChannel] = {"loop": "loop", "cli": "cli", "web": "web"}
-_NOTICE_CHANNELS: dict[str, NoticeChannel] = {"cli": "cli", "web": "web"}
-_KINDS: dict[str, MessageKind] = {
+_PAUSE_CHANNELS: Final[dict[str, PauseChannel]] = {"loop": "loop", "cli": "cli", "web": "web"}
+_NOTICE_CHANNELS: Final[dict[str, NoticeChannel]] = {"cli": "cli", "web": "web"}
+_KINDS: Final[dict[str, MessageKind]] = {
     "report": "report",
     "question": "question",
     "reply": "reply",

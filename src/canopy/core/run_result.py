@@ -18,7 +18,7 @@ import functools
 import json
 import re
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
@@ -32,27 +32,27 @@ if TYPE_CHECKING:
     from canopy.runtime.report import Called
 
 #: The tool, as its server names it: the agent sees it as `<server>_result`.
-TOOL = "result"
+TOOL: Final = "result"
 #: The variable that says what the run reports: its contract's name, then, after a colon, the groups asked of it,
 #: joined by commas, as `worker:created,notes`.
-ENV = "CANOPY_RESULT"
+ENV: Final = "CANOPY_RESULT"
 #: What a note says of a run that ended without one.
-MISSING = "reported no result"
+MISSING: Final = "reported no result"
 #: What the tool says of itself to every agent that reports with it, after what its result is.
-REPORTING = (
+REPORTING: Final = (
     "Call it once, as the last thing you do: it is how your run reports, and nothing you print is read as a result. "
     "A refusal names the field that is wrong; fix it and call again. Once it is taken, end your run, and call it "
     "again only to correct it. It changes nothing: canopy reads the call when your run ends."
 )
 #: What a `status` of `blocked` or `failed` says, after what `done` means for the run's kind.
-ENDED = (
+ENDED: Final = (
     "`blocked` when you cannot go on without the operator's answer, which `question` asks; `failed` when you could "
     "not do it, with why in `summary`."
 )
 # A contract's name and a group's: a word of the variable's value.
-_WORD_RE = re.compile(r"[a-z][a-z_]{0,39}")
+_WORD_RE: Final = re.compile(r"[a-z][a-z_]{0,39}")
 # How many groups a value may name: more than any contract has.
-_MAX_GROUPS = 20
+_MAX_GROUPS: Final = 20
 
 
 # Compared by identity: a contract is one of a few constants, and so the key its inputs are kept by.

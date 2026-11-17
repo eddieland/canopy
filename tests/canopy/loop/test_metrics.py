@@ -5,7 +5,7 @@ from __future__ import annotations
 import shutil
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 from unittest import mock
 
 from canopy.core import db, overseer_runs, run_metrics
@@ -21,9 +21,9 @@ if TYPE_CHECKING:
     from tests.canopy.scenario_helpers import Scenario
 
 #: How long a detached run's process may take to exit, sending its metrics as it does.
-DEADLINE_SECONDS = 30
+DEADLINE_SECONDS: Final = 30
 #: The gauges of what the loop holds, each set as a tick closes or publishes its attention list.
-LOOP_GAUGES = {
+LOOP_GAUGES: Final = {
     "canopy.tick.last",
     "canopy.tickets",
     "canopy.capacity.used",

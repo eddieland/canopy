@@ -7,7 +7,7 @@ the run, leasing no slot. What the run answered of each item is recorded with it
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Final, cast
 
 from canopy.core import cards, checklist_answers, checklists, contract, records
 from canopy.core.vocab import ItemAnswer, ResumeReason, RunKind, RunStatus
@@ -28,9 +28,9 @@ if TYPE_CHECKING:
     from tests.conftest import GitPool
 
 #: What the fake agent runs to show the lists it was handed, as canopy's hook reads them, each repository's in turn.
-SHOW = ["sh", "-c", f'cat "${cards.ANSWERS_ENV}/{checklists.DIR}"/*{checklists.SUFFIX}']
+SHOW: Final = ["sh", "-c", f'cat "${cards.ANSWERS_ENV}/{checklists.DIR}"/*{checklists.SUFFIX}']
 #: A list of one item.
-LIST = "## general-types\npaths: src/\n\nA parameter takes the most general type its body needs.\n"
+LIST: Final = "## general-types\npaths: src/\n\nA parameter takes the most general type its body needs.\n"
 
 
 def shown(agent_log: Path, agent: str = "canopy-worker") -> str | None:

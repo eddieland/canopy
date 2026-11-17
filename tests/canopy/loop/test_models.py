@@ -6,6 +6,7 @@ Each live tick reads its overseer's session, and the wait after it reads the run
 import json
 import sqlite3
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import pytest
@@ -21,9 +22,9 @@ from tests.canopy.scenario_helpers import Scenario
 from tests.conftest import CanopyEnv
 
 #: The fake agent's session id on every event it prints.
-SESSION = "ses_fake"
+SESSION: Final = "ses_fake"
 #: How a failed read names the command it ran, as each runtime is asked.
-EXPORT = {Version.ONE: "opencode export --sanitize", Version.TWO: "opencode session export --sanitize"}
+EXPORT: Final = {Version.ONE: "opencode export --sanitize", Version.TWO: "opencode session export --sanitize"}
 
 
 def sessions(state: Path, **calls: list[tuple[str, str, float]]) -> None:

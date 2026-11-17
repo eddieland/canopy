@@ -3,7 +3,7 @@
 import json
 import sqlite3
 from pathlib import Path
-from typing import cast
+from typing import Final, cast
 
 import pydantic
 import pytest
@@ -28,11 +28,11 @@ from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
 from tests.conftest import GitPool
 
 #: The follow-up the parent's worker files, and its repository.
-FOLLOW_UP = "PROJ-14"
+FOLLOW_UP: Final = "PROJ-14"
 #: A private worker's result: done, and nothing filed.
-DONE: dict[str, object] = {"status": "done", "summary": "did it"}
+DONE: Final[dict[str, object]] = {"status": "done", "summary": "did it"}
 #: What the run's note says when its `result` tool took no result.
-NO_RESULT = "the worker reported no result"
+NO_RESULT: Final = "the worker reported no result"
 
 
 def recorded(conn: sqlite3.Connection) -> list[tuple[str, str, int, str | None]]:

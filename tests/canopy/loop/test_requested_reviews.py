@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 from unittest import mock
 
 import pytest
@@ -30,17 +30,17 @@ if TYPE_CHECKING:
     from tests.conftest import CanopyEnv
 
 #: A PR of the workspace's one repository, whose clone URL is `https://example.test/acme/repo.git`.
-PR = "https://example.test/acme/repo/pull/12"
+PR: Final = "https://example.test/acme/repo/pull/12"
 #: A PR of a repository the workspace does not have.
-ELSEWHERE = "https://example.test/acme/other/pull/3"
-HEAD = "a" * 40
+ELSEWHERE: Final = "https://example.test/acme/other/pull/3"
+HEAD: Final = "a" * 40
 #: The tests' `vcs` source: the fake connector, playing GitHub.
-GITHUB = {"kind": "vcs", "cmd": "connector github", "timeout_minutes": 1}
+GITHUB: Final = {"kind": "vcs", "cmd": "connector github", "timeout_minutes": 1}
 #: What a start of a run or a review, or a guard's refusal of one, records as its action.
-STARTS = ("dispatch:", "refused:")
+STARTS: Final = ("dispatch:", "refused:")
 #: One of the loop's own PRs, KEY's unit's, which the overseer reviews below the operator's requests in §7's order.
-OWN = "https://example.test/acme/repo/pull/13"
-REVIEWER = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-reviewer --format json {prompt}"
+OWN: Final = "https://example.test/acme/repo/pull/13"
+REVIEWER: Final = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-reviewer --format json {prompt}"
 
 
 def requested(conn: sqlite3.Connection, url: str = PR) -> records.ReviewRequest:

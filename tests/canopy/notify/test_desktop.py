@@ -4,6 +4,7 @@ import json
 import os
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import pytest
@@ -14,7 +15,7 @@ from canopy.notify.desktop import Notifier
 from tests.conftest import executable, invoke
 
 # The fields of a `json` message the desktop sink reads; the rest of one it ignores.
-MESSAGE = {
+MESSAGE: Final = {
     "version": 1,
     "sink": "desktop",
     "repo": "/home/me/src/api",
@@ -22,7 +23,7 @@ MESSAGE = {
     "text": "canopy attention: 1 new, 1 resolved\n+ PROJ-3 needs_reviewer: x\nFull list: /home/me/attention.md\n",
 }
 #: The sink as it runs on Linux, its notifier run for real.
-LINUX = Notifier(SubprocessRunner(), "linux")
+LINUX: Final = Notifier(SubprocessRunner(), "linux")
 
 
 @pytest.fixture

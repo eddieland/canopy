@@ -10,7 +10,7 @@ flaky check: the mock leaves `trust.max_flaky_kicks` at 0. A skipped and a cance
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import records
 from canopy.core.vocab import CheckConclusion
@@ -22,15 +22,15 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 #: ABC-100's PR, which its run 37 opened.
-PR_86 = "https://github.com/acme/web/pull/86"
+PR_86: Final = "https://github.com/acme/web/pull/86"
 # The heads only these check runs name.
-_SHA_86 = "3f6b2e19" + "6" * 32
-_SHA_12_A = "71c0a9d4" + "2" * 32
-_SHA_12_B = "b2e98f13" + "2" * 32
-_SHA_12_C = "e5d4c37a" + "2" * 32
-_SHA_14_A = "4a90d1be" + "8" * 32
+_SHA_86: Final = "3f6b2e19" + "6" * 32
+_SHA_12_A: Final = "71c0a9d4" + "2" * 32
+_SHA_12_B: Final = "b2e98f13" + "2" * 32
+_SHA_12_C: Final = "e5d4c37a" + "2" * 32
+_SHA_14_A: Final = "4a90d1be" + "8" * 32
 # The check runs' ids on their host, from here up.
-_RUN_IDS = 9_200_000
+_RUN_IDS: Final = 9_200_000
 _S, _F, _T, _C, _K = (
     CheckConclusion.SUCCESS,
     CheckConclusion.FAILURE,
@@ -39,7 +39,7 @@ _S, _F, _T, _C, _K = (
     CheckConclusion.SKIPPED,
 )
 #: Each check run: its PR, head, name, conclusion, and when it was observed, in minutes after T0, the oldest first.
-_RUNS: tuple[tuple[str, str, str, CheckConclusion, int], ...] = (
+_RUNS: Final[tuple[tuple[str, str, str, CheckConclusion, int], ...]] = (
     (PR_12, _SHA_12_A, "lint", _S, -7330),
     (PR_12, _SHA_12_A, "unit", _F, -7325),
     (PR_12, _SHA_12_A, "build", _S, -7322),

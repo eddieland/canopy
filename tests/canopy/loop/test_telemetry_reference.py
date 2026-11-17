@@ -12,7 +12,7 @@ import re
 import time
 import typing
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 from canopy.core import run_spans
 from canopy.core.vocab import FAILED_RUN_STATUSES
@@ -26,21 +26,21 @@ if TYPE_CHECKING:
 
     from tests.canopy.scenario_helpers import Scenario
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT: Final = Path(__file__).resolve().parents[3]
 #: The guide's page, whose tables are held here.
-GUIDE = ROOT / "ui" / "src" / "guide" / "telemetry.md"
+GUIDE: Final = ROOT / "ui" / "src" / "guide" / "telemetry.md"
 #: The example collector's dashboard and alerts.
-DASHBOARD = ROOT / "examples" / "otel" / "dashboard.json"
-ALERTS = ROOT / "examples" / "otel" / "alerts.yaml"
+DASHBOARD: Final = ROOT / "examples" / "otel" / "dashboard.json"
+ALERTS: Final = ROOT / "examples" / "otel" / "alerts.yaml"
 #: What every span may carry, the journal queries run under it, which the guide names in its prose.
-TALLIES = frozenset({"canopy.journal_queries", "canopy.journal_seconds"})
+TALLIES: Final = frozenset({"canopy.journal_queries", "canopy.journal_seconds"})
 #: Each unit canopy records, as the collector's Prometheus exporter adds it to a name: `1` and an annotation in braces
 #: add nothing, and a unit the exporter does not know, `USD`, is added as it is.
-PROMETHEUS_UNITS = {"1": "", "s": "seconds", "By": "bytes", "USD": "USD", "{token}": ""}
+PROMETHEUS_UNITS: Final = {"1": "", "s": "seconds", "By": "bytes", "USD": "USD", "{token}": ""}
 #: The series a histogram is served as in Prometheus, besides none under its own name.
-HISTOGRAM_SERIES = ("_bucket", "_sum", "_count")
+HISTOGRAM_SERIES: Final = ("_bucket", "_sum", "_count")
 #: How long a detached run's process may take to exit, writing what it recorded as it does.
-DEADLINE_SECONDS = 30
+DEADLINE_SECONDS: Final = 30
 
 
 def test_the_guide_names_every_metric_as_the_kind_canopy_records_it() -> None:

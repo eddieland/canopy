@@ -19,7 +19,7 @@ import statistics
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Literal, NamedTuple, cast
+from typing import TYPE_CHECKING, Final, Literal, NamedTuple, cast
 
 from canopy.core import db, records, run_metrics, spend, sql
 from canopy.core.vocab import ConnectorRunStatus, SourceKind
@@ -32,9 +32,9 @@ if TYPE_CHECKING:
     from canopy.core.observe import Observed, Request
 
 #: The attention reason a source's run that read less than it was asked raises (DESIGN §14, §30): the harness's.
-FAILED_REASON = "connector_failed"
+FAILED_REASON: Final = "connector_failed"
 #: The newest runs that read less than asked a report lists, across every source.
-NEWEST = 20
+NEWEST: Final = 20
 
 
 #: A table of what a connector observed.

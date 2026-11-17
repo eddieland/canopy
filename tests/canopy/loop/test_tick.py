@@ -10,7 +10,7 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 from unittest import mock
 
 import pytest
@@ -350,7 +350,7 @@ def test_the_done_token_in_an_earlier_message_fails_the_tick(scenario: Scenario)
 
 #: An `error` event's `error` as each runtime prints one, and how a failure names it: OpenCode 1's with its name, its
 #: message in `data`, and where its own log has the detail; OpenCode 2's with its type and message.
-RUNTIME_ERRORS = {
+RUNTIME_ERRORS: Final = {
     Version.ONE: (
         {"name": "UnknownError", "data": {"message": "Unexpected server error.", "ref": "err_ccf1"}},
         "UnknownError: Unexpected server error. (err_ccf1)",

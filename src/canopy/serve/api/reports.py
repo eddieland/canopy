@@ -7,7 +7,7 @@ were approved, how each connector's runs ended, and which skills the agents were
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Final
 
 from fastapi import APIRouter, Query
 
@@ -24,7 +24,7 @@ from canopy.serve.schema.reports import MonthlyReport
 from canopy.serve.schema.review_report import ReviewsReport
 from canopy.serve.schema.skill_report import SkillsReport
 
-TAG = "reports"
+TAG: Final = "reports"
 router = APIRouter(tags=[TAG])
 
 

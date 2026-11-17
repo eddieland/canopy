@@ -7,7 +7,7 @@ would see the machine as its sandbox shows it.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING, Final, assert_never
 
 import click
 
@@ -23,17 +23,17 @@ if TYPE_CHECKING:
     from canopy.setup.sandbox_health import Standing
 
 #: Where the sandbox stands when no command starts in it: said, never flagged, since the sandbox is opt-in (M26).
-SANDBOX_OFF = "Sandbox: no command starts in canopy-sandbox. It is opt-in (docs/SANDBOX.md)."
-_KIND_WIDTH = 10
-_WHAT_WIDTH = 18
-_STATUS_WIDTH = 20
-_COUNT_WIDTH = 7
-_COST_WIDTH = 9
-_LENGTH_WIDTH = 9
+SANDBOX_OFF: Final = "Sandbox: no command starts in canopy-sandbox. It is opt-in (docs/SANDBOX.md)."
+_KIND_WIDTH: Final = 10
+_WHAT_WIDTH: Final = 18
+_STATUS_WIDTH: Final = 20
+_COUNT_WIDTH: Final = 7
+_COST_WIDTH: Final = 9
+_LENGTH_WIDTH: Final = 9
 # The newest failures the text lists; `--json` lists `health.FAILURES`.
-_FAILURES = 10
+_FAILURES: Final = 10
 # What the failures an agent's own words explained are counted as.
-_OTHER = "other: an agent's summary, or no note"
+_OTHER: Final = "other: an agent's summary, or no note"
 
 
 @click.command("health")

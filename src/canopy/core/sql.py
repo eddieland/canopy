@@ -34,7 +34,7 @@ import time
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import Field, dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Any, ClassVar, LiteralString, Self, override
+from typing import TYPE_CHECKING, Any, ClassVar, Final, LiteralString, Self, override
 
 from canopy.infra import tracing
 
@@ -42,7 +42,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 #: How long a statement takes, to its first row, for it to be a span of its own while traces are on.
-SLOW_SECONDS = 0.05
+SLOW_SECONDS: Final = 0.05
 #: A value sqlite3 binds to a `?`. A `StrEnum` member is a `str`, and a `bool` an `int`.
 type Value = str | int | float | bytes | None
 
@@ -54,7 +54,7 @@ class PerRow(Enum):
 
 
 #: A value bound from each row a statement is run for, by `execute_many`, in the order the `ROW`s appear.
-ROW = PerRow.ROW
+ROW: Final = PerRow.ROW
 #: What a fragment binds to its `?`s: a value, or a `ROW` that `execute_many` fills.
 type Bound = Value | PerRow
 
@@ -667,8 +667,8 @@ class Delete(Write, _Guarded):
 
 
 # A slot, or a quoted string or identifier, whose `?`s and `{}`s are not slots.
-_TOKEN = re.compile(r"'(?:[^']|'')*'|\"(?:[^\"]|\"\")*\"|\?|\{\}")
-_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+_TOKEN: Final = re.compile(r"'(?:[^']|'')*'|\"(?:[^\"]|\"\")*\"|\?|\{\}")
+_IDENTIFIER: Final = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 
 def _fill(text: str, args: Sequence[Arg]) -> Fragment:

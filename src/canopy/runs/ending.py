@@ -8,6 +8,7 @@ leased: it is said so, never reported returned.
 from __future__ import annotations
 
 from enum import Enum
+from typing import Final
 
 
 class Ending(Enum):
@@ -23,4 +24,4 @@ class Ending(Enum):
 
 
 #: What a stop says of a slot it could not return, after `but its slot was not returned;`, in the CLI and the web UI.
-KEPT_NOTE = "the next tick returns it, or one canopy could not tidy stays leased for you: canopy.log says which"
+KEPT_NOTE: Final = "the next tick returns it, or one canopy could not tidy stays leased for you: canopy.log says which"

@@ -5,7 +5,7 @@ Runs of one kind share the body, and so the snapshot that holds it and the prefi
 
 import json
 from pathlib import Path
-from typing import NamedTuple
+from typing import Final, NamedTuple
 
 import pytest
 
@@ -17,7 +17,7 @@ from tests.canopy.scenario_helpers import Ran, Scenario, Worker, dispatches, pus
 from tests.conftest import GitPool
 
 #: What the shipped worker definitions end with when a run gives them no body: the stub, after the frontmatter.
-STUB = 'Your task is the prompt canopy starts this run with. If it is not a "# canopy worker" prompt, print\n'
+STUB: Final = 'Your task is the prompt canopy starts this run with. If it is not a "# canopy worker" prompt, print\n'
 
 
 class Sent(NamedTuple):

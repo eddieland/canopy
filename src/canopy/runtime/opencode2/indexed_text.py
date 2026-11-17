@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import operator
 import sqlite3
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Final, cast
 
 from canopy.runtime.opencode import sessions
 from canopy.runtime.report import (
@@ -41,15 +41,15 @@ if TYPE_CHECKING:
 
 #: How long reading one session's messages may take, in seconds, before canopy stops it and reads it as cut: a run can
 #: write a session no read would end.
-SESSION_SECONDS = 5.0
+SESSION_SECONDS: Final = 5.0
 #: How many session ids `kept` reads of one database at most: far more than any record holds.
-MAX_KEPT = 1_000_000
+MAX_KEPT: Final = 1_000_000
 #: Whether a database has OpenCode 2's table of sessions.
-TABLE_SQL = "SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'session_v2'"
+TABLE_SQL: Final = "SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'session_v2'"
 #: Sessions updated after a cursor, the least recently updated first: the cursor's update, or NULL for every session,
 #: its id, and how many. A row whose update or id is not of its column's type is never read: the cursor could not pass
 #: it.
-AFTER_SQL = """
+AFTER_SQL: Final = """
 SELECT id, parent_id, directory, title, time_updated FROM session_v2
 WHERE typeof(time_updated) = 'integer' AND typeof(id) = 'text'
   AND (?1 IS NULL OR time_updated > ?1 OR (time_updated = ?1 AND id > ?2))
@@ -57,7 +57,7 @@ ORDER BY time_updated, id
 LIMIT ?3
 """
 #: Sessions updated before a cursor, the most recently updated first, as `AFTER_SQL` takes its values.
-BEFORE_SQL = """
+BEFORE_SQL: Final = """
 SELECT id, parent_id, directory, title, time_updated FROM session_v2
 WHERE typeof(time_updated) = 'integer' AND typeof(id) = 'text'
   AND (?1 IS NULL OR time_updated < ?1 OR (time_updated = ?1 AND id < ?2))
@@ -65,16 +65,16 @@ ORDER BY time_updated DESC, id DESC
 LIMIT ?3
 """
 #: Whether the record keeps a session, by its id.
-KEEPS_SQL = "SELECT 1 FROM session_v2 WHERE id = ?"
+KEEPS_SQL: Final = "SELECT 1 FROM session_v2 WHERE id = ?"
 #: How many messages a session has, by its id.
-COUNT_SQL = "SELECT count(*) FROM session_message WHERE session_id = ?"
+COUNT_SQL: Final = "SELECT count(*) FROM session_message WHERE session_id = ?"
 #: Every session's id, at most how many.
-IDS_SQL = "SELECT id FROM session_v2 WHERE typeof(id) = 'text' LIMIT ?"
+IDS_SQL: Final = "SELECT id FROM session_v2 WHERE typeof(id) = 'text' LIMIT ?"
 #: Each part of a session's messages, by the session's id, `?1`, and, unless NULL, one message's, `?2`, of its first
 #: `?3` messages in their order: the message's id, the part, as `canopy.runtime.opencode2.session_text.PARTS_SQL` names
 #: them, its text cut to `?4` characters, and whether it was longer. A message whose data is not JSON is read as an
 #: empty object, so SQLite takes nothing out of it and raises nothing; a part that is not text is left out.
-PARTS_SQL = """
+PARTS_SQL: Final = """
 WITH message AS (
     SELECT id, seq, type, CASE WHEN json_valid(data) THEN data ELSE '{}' END AS data FROM session_message
     WHERE session_id = ?1 AND (?2 IS NULL OR id = ?2)

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Final
 
 from fastapi import APIRouter, Query
 from fastapi.exceptions import RequestValidationError
@@ -11,7 +11,7 @@ from canopy.serve import search, search_views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.schema.search import SearchResults
 
-TAG = "search"
+TAG: Final = "search"
 router = APIRouter(tags=[TAG])
 
 

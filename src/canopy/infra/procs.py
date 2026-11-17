@@ -25,23 +25,25 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import IO, Protocol, cast
+from typing import IO, Final, Protocol, cast
 
 from canopy.infra import lock, tracing
 
 #: The variable a child started with a timeout finds its deadline in, as Unix seconds: the moment `run` kills it, taken
 #: when its clock starts, so the two agree (DESIGN §33). A child started without a timeout gets none, not even one its
 #: parent had: a deadline is for the process it was set for alone.
-DEADLINE_ENV = "CANOPY_DEADLINE"
+DEADLINE_ENV: Final = "CANOPY_DEADLINE"
 #: What a subcommand looks like, `fetch` or `pr-view`, for a span to be named for it: a short word of lowercase letters
 #: and hyphens, so a key, a path, a hash, a URL, or a sentence is never one.
-SUBCOMMAND = re.compile(r"[a-z][a-z-]{0,23}")
+SUBCOMMAND: Final = re.compile(r"[a-z][a-z-]{0,23}")
 #: The options canopy puts before a subcommand, git's, that take the next argument as their value.
-_OPTIONS_WITH_VALUE = frozenset({"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env"})
+_OPTIONS_WITH_VALUE: Final = frozenset({"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env"})
 #: The options canopy puts before a subcommand that take no value.
-_FLAGS = frozenset({"--no-pager", "--no-replace-objects", "--literal-pathspecs", "--no-optional-locks", "--bare"})
+_FLAGS: Final = frozenset(
+    {"--no-pager", "--no-replace-objects", "--literal-pathspecs", "--no-optional-locks", "--bare"},
+)
 #: How many characters of a child's stdout a bounded read takes at a time.
-_CHUNK = 64 * 1024
+_CHUNK: Final = 64 * 1024
 
 
 class ProcError(Exception):

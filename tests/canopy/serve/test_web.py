@@ -11,6 +11,7 @@ import time
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import httpx2
@@ -67,7 +68,7 @@ from tests.canopy.web_helpers import DEFAULT_CAPACITY, ORIGIN, client, free_port
 from tests.conftest import SHARED_TOML, CanopyEnv, GitPool, user_toml
 
 #: A stretch's diff, as `checklist_pushes.keep` writes it: the branch's text, a control character in its last line.
-STRETCH = """\
+STRETCH: Final = """\
 diff --git a/src/canopy/order.py b/src/canopy/order.py
 index 1111111..2222222 100644
 --- a/src/canopy/order.py

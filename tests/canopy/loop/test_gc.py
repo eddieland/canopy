@@ -4,6 +4,7 @@ import json
 import operator
 import os
 from datetime import UTC, datetime
+from typing import Final
 from unittest import mock
 
 import pytest
@@ -19,7 +20,7 @@ from canopy.runtime.implementation import Version
 from tests.canopy.helpers import KEY, PLAN, Kept, earlier, ended_tick, run_with_files, runtime_record, write_file
 from tests.conftest import CanopyEnv
 
-MIB = 1024 * 1024
+MIB: Final = 1024 * 1024
 
 
 def dry_run(capsys: pytest.CaptureFixture[str]) -> dict[str, dict[str, object]]:

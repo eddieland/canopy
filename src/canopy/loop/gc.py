@@ -16,7 +16,7 @@ import stat
 from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Final, Literal
 
 import canopy_sandbox
 
@@ -36,13 +36,13 @@ if TYPE_CHECKING:
     from canopy.core.config import Retention
     from canopy.core.context import Context
 
-TICKS_DIR = "ticks"
+TICKS_DIR: Final = "ticks"
 # A file under the run directories that no journal row names goes only once it is this old: a review run writes its
 # prompt before its row (DESIGN §26).
-UNRECORDED_AGE = timedelta(hours=1)
-KIB = 1024
-MIB = KIB * KIB
-_COUNT_OBJECTS_TIMEOUT_SECONDS = 60
+UNRECORDED_AGE: Final = timedelta(hours=1)
+KIB: Final = 1024
+MIB: Final = KIB * KIB
+_COUNT_OBJECTS_TIMEOUT_SECONDS: Final = 60
 #: A table of the journal a pass removes rows of (DESIGN §26, The journal).
 type RowTable = Literal[
     "decisions",
@@ -53,29 +53,29 @@ type RowTable = Literal[
     "observed_status_runs",
 ]
 # The bytes of each row's text, in each table a pass removes rows of: what it holds, not the pages it fills.
-_DECISION_BYTES = sql.frag(
+_DECISION_BYTES: Final = sql.frag(
     "length(CAST(action AS BLOB)) + length(CAST(rationale AS BLOB)) + length(CAST(created_at AS BLOB)) + "
     "coalesce(length(CAST(ticket_key AS BLOB)), 0) + coalesce(length(CAST(repo AS BLOB)), 0) + "
     "coalesce(length(CAST(chore AS BLOB)), 0) + coalesce(length(CAST(pr AS BLOB)), 0)",
 )
-_RUN_BYTES = sql.frag(
+_RUN_BYTES: Final = sql.frag(
     "length(CAST(request AS BLOB)) + length(CAST(recorded AS BLOB)) + length(CAST(refused AS BLOB)) + "
     "length(CAST(stderr AS BLOB)) + coalesce(length(CAST(missed AS BLOB)), 0) + "
     "coalesce(length(CAST(query_result AS BLOB)), 0) + coalesce(length(CAST(review_query_result AS BLOB)), 0)",
 )
-_DERIVED_BYTES = sql.frag(
+_DERIVED_BYTES: Final = sql.frag(
     "length(CAST(ticket_key AS BLOB)) + coalesce(length(CAST(repo AS BLOB)), 0) + length(CAST(phases AS BLOB)) + "
     "coalesce(length(CAST(stale AS BLOB)), 0) + coalesce(length(CAST(overseer_phase AS BLOB)), 0)",
 )
-_REQUEST_DERIVED_BYTES = sql.frag(
+_REQUEST_DERIVED_BYTES: Final = sql.frag(
     "length(CAST(pr_url AS BLOB)) + length(CAST(action AS BLOB)) + coalesce(length(CAST(reason AS BLOB)), 0) + "
     "coalesce(length(CAST(head_sha AS BLOB)), 0) + coalesce(length(CAST(stale AS BLOB)), 0)",
 )
-_CHECK_RUN_BYTES = sql.frag(
+_CHECK_RUN_BYTES: Final = sql.frag(
     "length(CAST(pr_url AS BLOB)) + length(CAST(name AS BLOB)) + length(CAST(head_sha AS BLOB)) + "
     "length(CAST(conclusion AS BLOB)) + length(CAST(observed_at AS BLOB))",
 )
-_STATUS_RUN_BYTES = sql.frag(
+_STATUS_RUN_BYTES: Final = sql.frag(
     "length(CAST(pr_url AS BLOB)) + length(CAST(name AS BLOB)) + length(CAST(head_sha AS BLOB)) + "
     "coalesce(length(CAST(conclusion AS BLOB)), 0) + length(CAST(observed_at AS BLOB))",
 )

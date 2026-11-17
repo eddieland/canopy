@@ -19,36 +19,36 @@ from __future__ import annotations
 import re
 import shlex
 from pathlib import PurePosixPath
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
 #: The runtime, as messages to the operator name it.
-NAME = "OpenCode"
+NAME: Final = "OpenCode"
 #: The variable OpenCode reads its config directory from.
-CONFIG_DIR_ENV = "OPENCODE_CONFIG_DIR"
+CONFIG_DIR_ENV: Final = "OPENCODE_CONFIG_DIR"
 #: The flag that gives a command a private server of its own rather than the shared background service.
-STANDALONE = "--standalone"
+STANDALONE: Final = "--standalone"
 #: The options of `opencode run` that choose a model, its short form, and the model's variant, taken to be 1's: a
 #: template refused for one 2 does not take loses nothing, while one it does take would beat the model in the agent's
 #: definition (DESIGN §13).
-MODEL_OPTION = "--model"
-SHORT_MODEL_OPTION = "-m"
-VARIANT_OPTION = "--variant"
+MODEL_OPTION: Final = "--model"
+SHORT_MODEL_OPTION: Final = "-m"
+VARIANT_OPTION: Final = "--variant"
 
 #: The options of `opencode` that approve every permission an agent's rules leave at `ask`, `--auto` and its hidden
 #: aliases, flags of the command itself as OpenCode 2.2.5 takes them, and 1's camel case besides.
-APPROVE_OPTIONS = frozenset(
+APPROVE_OPTIONS: Final = frozenset(
     {"--auto", "--yolo", "--dangerously-skip-permissions", "--dangerouslySkipPermissions"},
 )
 #: The option of `opencode run` that chooses what it prints, and its value for one JSON event a line.
-FORMAT_OPTION = "--format"
-EVENTS_FORMAT = "json"
+FORMAT_OPTION: Final = "--format"
+EVENTS_FORMAT: Final = "json"
 # The agent a command runs, as `opencode run` takes it, by a name that is safe as one path component.
-_AGENT_RE = re.compile(r"(--agent[ =])([a-z][a-z0-9-]*)(?=\s|$)")
+_AGENT_RE: Final = re.compile(r"(--agent[ =])([a-z][a-z0-9-]*)(?=\s|$)")
 # The words that start a run, `opencode run`, by any path to `opencode`.
-_RUN_RE = re.compile(r"(?<!\S)((?:\S*/)?opencode[ \t]+run)(?=\s|$)")
+_RUN_RE: Final = re.compile(r"(?<!\S)((?:\S*/)?opencode[ \t]+run)(?=\s|$)")
 
 
 def default_template(agent: str, *, definitions_dir: str, title: str) -> str:

@@ -14,7 +14,7 @@ first build or a catch-up goes on, else `INDEX_EVERY_SECONDS`. Below `text` it r
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import pause, runtime_sessions, session_index
 from canopy.core.vocab import SessionsRead
@@ -27,13 +27,13 @@ if TYPE_CHECKING:
     from canopy.infra import logs
 
 #: How long after one read the next starts once the reading has caught up: sessions outside canopy run on their own.
-EVERY_SECONDS = 300.0
+EVERY_SECONDS: Final = 300.0
 #: How long after a full page the next starts, while the history is read.
-GAP_SECONDS = 10.0
+GAP_SECONDS: Final = 10.0
 #: How long after one step of the index the next starts once it has caught up, and while it has not: a session that
 #: ended is found after the loop's next wait, and the first build goes on in the waits without filling them.
-INDEX_EVERY_SECONDS = 60.0
-INDEX_GAP_SECONDS = 2.0
+INDEX_EVERY_SECONDS: Final = 60.0
+INDEX_GAP_SECONDS: Final = 2.0
 
 
 @dataclass

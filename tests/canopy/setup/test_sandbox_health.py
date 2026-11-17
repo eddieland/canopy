@@ -10,6 +10,7 @@ import sys
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import canopy_sandbox
@@ -23,10 +24,10 @@ from canopy.setup import sandbox, sandbox_health
 from tests.conftest import CanopyEnv, executable
 
 #: The prefix `canopy init` prints for a worker run's commands, and its like for the others.
-WORKER = "canopy-sandbox worker --read {definitions_dir} --"
-REVIEW = "canopy-sandbox review --read {definitions_dir} --"
+WORKER: Final = "canopy-sandbox worker --read {definitions_dir} --"
+REVIEW: Final = "canopy-sandbox review --read {definitions_dir} --"
 #: The words of a command the fake agent runs, after a prefix.
-AGENT = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent {agent} --format json {prompt}"
+AGENT: Final = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent {agent} --format json {prompt}"
 
 
 @dataclass(frozen=True)

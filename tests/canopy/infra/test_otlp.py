@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, override
+from typing import TYPE_CHECKING, Any, ClassVar, Final, override
 from unittest import mock
 
 import pytest
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from tests.canopy.scenario_helpers import Scenario
 
 #: The longest a test waits for an export, or holds one at work.
-DEADLINE_SECONDS = 30
+DEADLINE_SECONDS: Final = 30
 
 
 @dataclass

@@ -7,6 +7,7 @@ and when that run's agent fetched it.
 
 import json
 from datetime import UTC, datetime, timedelta
+from typing import Final
 
 import pytest
 from fastapi.testclient import TestClient
@@ -21,7 +22,7 @@ from tests.canopy.helpers import in_run, present
 from tests.canopy.web_helpers import client, refused, signed_in
 
 #: A message's form, with the submission id it drew. Run 41 of the mock runs, working ABC-101; run 39 has ended.
-MESSAGE = {"body": "Drop the logout half: ABC-107 has it now.", "submission": "form-0001"}
+MESSAGE: Final = {"body": "Drop the logout half: ABC-107 has it now.", "submission": "form-0001"}
 
 
 def test_a_message_reaches_the_running_run_and_its_ticket_says_when_it_was_fetched(backend: Backend) -> None:

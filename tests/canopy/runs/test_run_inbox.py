@@ -4,6 +4,7 @@ import json
 from collections.abc import Mapping
 from datetime import timedelta
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import pytest
@@ -15,8 +16,8 @@ from tests.canopy.helpers import KEY, Script, agent_runs, calls, context, planne
 from tests.canopy.scenario_helpers import Scenario, dispatches, fails, pushes, reads_messages
 from tests.conftest import GitPool
 
-MESSAGES = run_inbox.tool_name()
-NARROWER = "Drop the web half of the ticket: only the parser, in this PR."
+MESSAGES: Final = run_inbox.tool_name()
+NARROWER: Final = "Drop the web half of the ticket: only the parser, in this PR."
 
 
 def test_a_running_worker_fetches_the_message_and_its_report_answers_it(scenario: Scenario, git_pool: GitPool) -> None:

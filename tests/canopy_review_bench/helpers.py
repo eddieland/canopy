@@ -7,7 +7,7 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
+from typing import Final, Literal
 from unittest import mock
 
 from canopy_review_bench.github import GitHub
@@ -16,11 +16,11 @@ from canopy_review_bench.run import Clock
 from tests.conftest import git
 
 #: The reviewer whose comments count.
-BOT = "review-bot[bot]"
+BOT: Final = "review-bot[bot]"
 #: The repository the PRs are opened in.
-REPO = "acme/api-bench"
+REPO: Final = "acme/api-bench"
 
-BEFORE = """\
+BEFORE: Final = """\
 def fetch(get, attempts):
     last = None
     for _ in range(attempts):
@@ -31,7 +31,7 @@ def fetch(get, attempts):
     raise last
 """
 # The PR: a delay between attempts.
-PR_HEAD = """\
+PR_HEAD: Final = """\
 import time
 
 
@@ -46,7 +46,7 @@ def fetch(get, attempts, delay=0.1):
     raise last
 """
 # The fix: no attempts at all raised None. Lines 5 and 6 are the guard.
-FIXED = """\
+FIXED: Final = """\
 import time
 
 
@@ -62,7 +62,7 @@ def fetch(get, attempts, delay=0.1):
             time.sleep(delay)
     raise last
 """
-FIX_TEST = """\
+FIX_TEST: Final = """\
 def test_no_attempts():
     pass
 """

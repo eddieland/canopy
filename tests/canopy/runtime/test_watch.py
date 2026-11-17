@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from typing import Final
 
 from canopy.infra import tracing
 from canopy.runtime.implementation import Version
@@ -9,7 +10,7 @@ from canopy.runtime.report import Called
 from canopy.runtime.watch import Change, Watch
 from tests.canopy.helpers import spans
 
-TOKENS = {"input": 100, "output": 20, "reasoning": 3, "cache": {"read": 400, "write": 50}}
+TOKENS: Final = {"input": 100, "output": 20, "reasoning": 3, "cache": {"read": 400, "write": 50}}
 
 
 def event(kind: str, part: object, session: object = "ses_abc123") -> str:
@@ -52,7 +53,7 @@ def test_a_tool_call_is_given_as_the_agent_made_it_under_either_version() -> Non
         assert change.called == Called("canopy_run_status", completed=False, input={"summary": "s"})
 
 
-RECORDED = Path(__file__).parent / "opencode2" / "recorded" / "run.jsonl"
+RECORDED: Final = Path(__file__).parent / "opencode2" / "recorded" / "run.jsonl"
 
 
 def test_each_model_call_and_tool_call_is_a_span_at_the_times_the_runtime_printed(tmp_path: Path) -> None:

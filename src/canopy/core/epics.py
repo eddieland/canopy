@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import conversation, db, epic_changes, epic_outline, plans, records, sql
 from canopy.core.conversation import Refused
@@ -30,20 +30,20 @@ if TYPE_CHECKING:
     from canopy.core.workspace import Workspace
 
 #: The most an epic's text holds, as an operator message does.
-MAX_TEXT = conversation.MAX_OPERATOR
+MAX_TEXT: Final = conversation.MAX_OPERATOR
 #: A tracker project's key, or a tracker epic's, as a ticket key spells it (DESIGN §18).
-KEY_RE = conversation.KEY_RE
-MAX_KEY = conversation.MAX_KEY
+KEY_RE: Final = conversation.KEY_RE
+MAX_KEY: Final = conversation.MAX_KEY
 #: The copy of an approved plan's text, kept beside its file when the operator approves it: what the next approval is
 #: compared with, whatever later becomes of the file. Named for the run and the text's hash,
 #: `<run>.<sha256>.approved.md`, so an approval retried after one that wrote its copy and then failed finds the copy it
 #: would write already there.
-APPROVED_SUFFIX = ".approved.md"
+APPROVED_SUFFIX: Final = ".approved.md"
 #: The copy of a member's epic's approved plan in its planner's desk, read as the operator approved it (DESIGN §43).
-EPIC_COPY = ".canopy-epic-plan.md"
+EPIC_COPY: Final = ".canopy-epic-plan.md"
 #: Where an epic's plans are kept, `<state_dir>/epics/<id>/<run_id>.md`, readable only by the operator, as a
 #: ticket's plans are (DESIGN §25, §43).
-PLANS_DIR = "epics"
+PLANS_DIR: Final = "epics"
 
 
 @dataclass(frozen=True)

@@ -7,7 +7,7 @@ the measurement says so, and reads nothing.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.runtime.report import SessionRecord
 
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from canopy.runtime.report import TextPart, TextRow
 
 #: Why nothing is read, in canopy's words.
-UNSUPPORTED = (
+UNSUPPORTED: Final = (
     "runtime.version 1 is deprecated, and its sessions' text has no reader: canopy sessions reads OpenCode 2's record"
 )
 

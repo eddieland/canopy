@@ -32,7 +32,7 @@ import json
 import statistics
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, Final, Literal, cast
 
 from canopy.core import contract, db, records, spend, sql, tracked_prs
 from canopy.core.vocab import CheckConclusion, ResumeReason, RunKind
@@ -47,11 +47,11 @@ if TYPE_CHECKING:
     from canopy.core.vocab import Phase, RunStatus
 
 #: The conclusions that count a check run red. `success` alone counts it green; every other counts as neither.
-RED = frozenset(
+RED: Final = frozenset(
     {CheckConclusion.FAILURE, CheckConclusion.ERROR, CheckConclusion.TIMED_OUT, CheckConclusion.STARTUP_FAILURE},
 )
 #: How many check names the red-by-day chart names apart, the most often red first; the rest are one series.
-TOP_CHECKS = 4
+TOP_CHECKS: Final = 4
 
 #: How a check run ended, as the page counts it.
 type Verdict = Literal["green", "red", "neither"]
@@ -77,7 +77,7 @@ class _Run(records.View):
 
 
 #: Every completed run the page counts, check runs and commit status runs alike.
-_EVERY_RUN = sql.union(
+_EVERY_RUN: Final = sql.union(
     sql.select("pr_url, run_id AS key, name, head_sha, conclusion, observed_at").from_("observed_check_runs"),
     sql.select("pr_url, -id AS key, name, head_sha, conclusion, observed_at")
     .from_("observed_status_runs")

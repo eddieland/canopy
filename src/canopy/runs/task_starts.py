@@ -19,7 +19,7 @@ import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import agent_models, cards, checklist_answers, checklists, conversation, db, notice, pools, prompts
 from canopy.core.vocab import Decider, RunStatus
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 #: Where task runs' logs, prompts, object and answers directories live: `<state_dir>/task-runs/`, the operator's only.
-RUNS_DIR = "task-runs"
+RUNS_DIR: Final = "task-runs"
 
 
 @dataclass(frozen=True)

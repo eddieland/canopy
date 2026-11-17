@@ -16,7 +16,7 @@ import tempfile
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 from unittest import mock
 
 import canopy_sandbox
@@ -53,16 +53,16 @@ from tests.conftest import HERMETIC_GIT, CanopyEnv, GitPool, executable, git, us
 
 # The command the install puts beside python, which is how canopy runs it: never `python -m`, which would put the
 # slot's own directory first on the import path.
-WRAPPER = Path(sys.executable).parent / "canopy-sandbox"
-ROLES = ("worker", "setup", "chore", "review", "overseer")
-FAKES = Path(__file__).resolve().parents[1] / "fakes"
-SRT_PACKAGE = "@anthropic-ai/sandbox-runtime"
+WRAPPER: Final = Path(sys.executable).parent / "canopy-sandbox"
+ROLES: Final = ("worker", "setup", "chore", "review", "overseer")
+FAKES: Final = Path(__file__).resolve().parents[1] / "fakes"
+SRT_PACKAGE: Final = "@anthropic-ai/sandbox-runtime"
 # Quotes, a line break, and what a shell would expand: the command must receive it as it was given (§5 item 3).
-PROMPT = 'it\'s "quoted"\n$(touch pwned) `id` $HOME \\ ; | & *'
-PRINT_ARG = ["sh", "-c", 'printf %s "$1"', "sh"]
+PROMPT: Final = 'it\'s "quoted"\n$(touch pwned) `id` $HOME \\ ; | & *'
+PRINT_ARG: Final = ["sh", "-c", 'printf %s "$1"', "sh"]
 # The operator's OpenCode logins, as OpenCode 1.19.3 writes them: a provider's OAuth login, whose `expires` is in
 # milliseconds, and a remote MCP server's, whose `expiresAt` is in seconds.
-OAUTH = {
+OAUTH: Final = {
     "type": "oauth",
     "refresh": "refresh-1",
     "access": "access-1",
@@ -70,8 +70,8 @@ OAUTH = {
     "accountId": "mine",
     "enterpriseUrl": "https://ghe.example.com",
 }
-API = {"type": "api", "key": "key-mine"}
-MCP = {
+API: Final = {"type": "api", "key": "key-mine"}
+MCP: Final = {
     "tokens": {"accessToken": "mcp-1", "refreshToken": "mcp-refresh-1", "expiresAt": 100.5, "scope": "read"},
     "clientInfo": {"clientId": "mine"},
     "serverUrl": "https://mcp.example.com/mcp",

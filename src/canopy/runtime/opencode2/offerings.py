@@ -29,7 +29,7 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, StrictBool, StrictStr
 
@@ -45,14 +45,14 @@ if TYPE_CHECKING:
     from canopy.infra import procs
 
 #: How long the server's plugins may take to load, and how long to wait between asking whether they have.
-LOADED_SECONDS = 30
-POLL_SECONDS = 0.25
+LOADED_SECONDS: Final = 30
+POLL_SECONDS: Final = 0.25
 #: OpenCode's tool that loads a skill, the permission its rules name, and the tool that runs code calling other tools.
-SKILL = "skill"
-EXECUTE = "execute"
+SKILL: Final = "skill"
+EXECUTE: Final = "execute"
 # Each built-in tool OpenCode 2.1.2 sends a primary agent, and the permission it asks under: the file tools that
 # write share `edit`. `patch` stands in for `edit` on some models only, and `todowrite` is an experiment off by default.
-_BUILTIN = {
+_BUILTIN: Final = {
     "shell": "shell",
     "read": "read",
     "edit": "edit",
@@ -67,11 +67,11 @@ _BUILTIN = {
     EXECUTE: EXECUTE,
 }
 # An agent's name, as one path component could hold it.
-_AGENT_RE = re.compile(r"[a-z][a-z0-9-]*")
+_AGENT_RE: Final = re.compile(r"[a-z][a-z0-9-]*")
 # What OpenCode makes of a server's name in its tools' names: anything but a letter, a digit, `_`, or `-` is `_`.
-_UNSAFE_RE = re.compile(r"[^a-zA-Z0-9_-]")
+_UNSAFE_RE: Final = re.compile(r"[^a-zA-Z0-9_-]")
 # The regex characters OpenCode escapes in a pattern before it reads `*` and `?` as wildcards.
-_SPECIAL_RE = re.compile(r"[.+^${}()|\[\]\\]")
+_SPECIAL_RE: Final = re.compile(r"[.+^${}()|\[\]\\]")
 
 
 class _Rule(BaseModel):

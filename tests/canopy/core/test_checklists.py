@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import pytest
 
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from tests.conftest import CanopyEnv
 
 #: A list of three items: one with both fields, one with neither, and one whose rule holds a heading of its own.
-LIST = """\
+LIST: Final = """\
 
 ## general-types
 paths: src/**/*.py, packages/

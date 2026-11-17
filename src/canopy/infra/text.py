@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Final
+
 #: Agent-written text is cut to this many characters to fit one terminal line.
-SUMMARY_WIDTH = 160
+SUMMARY_WIDTH: Final = 160
 
 
 def printable(text: str) -> str:

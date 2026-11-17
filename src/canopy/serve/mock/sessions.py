@@ -12,7 +12,7 @@ eight minutes after T0.
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import db, records, runtime_sessions
 from canopy.runtime.report import SessionPage, SessionSpend
@@ -24,15 +24,15 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 #: The directory the mock's `sessions.exclude` names, whose sessions are listed nowhere.
-EXCLUDED = "/home/op/clients/globex"
+EXCLUDED: Final = "/home/op/clients/globex"
 #: The operator's session that ran a subagent of its own, under which the page lists it.
-DEPLOY = "ses_op_deploy"
+DEPLOY: Final = "ses_op_deploy"
 #: The subagent run 41's worker ran.
-EXPLORE = "ses_mock41_explore"
+EXPLORE: Final = "ses_mock41_explore"
 
 # The sessions outside canopy: id, the session it ran for, title, directory, minutes after T0 it started and was last
 # updated, what it cost, and whether the runtime archived it.
-_OUTSIDE: tuple[tuple[str, str | None, str, str, int, int, float, bool], ...] = (
+_OUTSIDE: Final[tuple[tuple[str, str | None, str, str, int, int, float, bool], ...]] = (
     (DEPLOY, None, "Why does the deploy script hang on staging?", "/home/op/acme/infra", -48, -9, 0.84, False),
     (
         "ses_op_deploy_find",

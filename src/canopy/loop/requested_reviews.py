@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import TYPE_CHECKING, NamedTuple, assert_never
+from typing import TYPE_CHECKING, Final, NamedTuple, assert_never
 
 from canopy.core import db, observe, records, review_runs
 from canopy.core.items import ACTION_PREFIX
@@ -39,13 +39,13 @@ if TYPE_CHECKING:
     from canopy.loop.phases import Verdict
 
 #: The `refused:<guard>` decisions of the `review-end` tool, an end the overseer asked for, not a review.
-_END_REFUSALS = frozenset({"refused:not_requested", "refused:bad_reason"})
+_END_REFUSALS: Final = frozenset({"refused:not_requested", "refused:bad_reason"})
 #: The `refused:<guard>` decisions of the `attention` tool, which may name the PR too: an item, not a review.
-_ATTENTION_REFUSALS = frozenset({f"refused:{RAISED}", f"refused:{UNNAMED}"})
+_ATTENTION_REFUSALS: Final = frozenset({f"refused:{RAISED}", f"refused:{UNNAMED}"})
 #: The refusal that answers a request whose head is reviewed already (`review_requests.answered`).
-_REVIEWED = f"refused:{review_requests.REVIEWED}"
+_REVIEWED: Final = f"refused:{review_requests.REVIEWED}"
 #: The end each state of a PR that is not open makes of its request.
-_ENDS: Mapping[PrState, str] = {PrState.MERGED: review_requests.MERGED, PrState.CLOSED: review_requests.CLOSED}
+_ENDS: Final[Mapping[PrState, str]] = {PrState.MERGED: review_requests.MERGED, PrState.CLOSED: review_requests.CLOSED}
 
 
 @dataclass(frozen=True)

@@ -16,7 +16,7 @@ reviewer's text, so git reads it as a literal path, never a pattern.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import hostgit, review_diff, review_runs
 from canopy.core.vocab import ReviewRunStatus
@@ -31,9 +31,9 @@ if TYPE_CHECKING:
     from canopy.core import review_result as result
     from canopy.infra import logs
 
-_GIT_TIMEOUT_SECONDS = 300
+_GIT_TIMEOUT_SECONDS: Final = 300
 #: The severity never held as late: a blocking defect is worth a `resume` whenever it was written.
-_NEVER_LATE = "blocking"
+_NEVER_LATE: Final = "blocking"
 
 
 def late(

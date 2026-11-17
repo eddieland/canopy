@@ -3,6 +3,7 @@
 import os
 import sqlite3
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import httpx2
@@ -21,10 +22,10 @@ from tests.canopy.scenario_helpers import Scenario, review_ends, reviews
 from tests.canopy.web_helpers import refused, signed_in_client
 from tests.conftest import CanopyEnv, GitPool
 
-PR = "https://github.com/acme/other/pull/12"
-MODEL = "acme/fake-model-1"
-OTHER = "acme/fake-model-2"
-LOOP_PR = "https://github.com/acme/api/pull/7"
+PR: Final = "https://github.com/acme/other/pull/12"
+MODEL: Final = "acme/fake-model-1"
+OTHER: Final = "acme/fake-model-2"
+LOOP_PR: Final = "https://github.com/acme/api/pull/7"
 
 
 @pytest.fixture

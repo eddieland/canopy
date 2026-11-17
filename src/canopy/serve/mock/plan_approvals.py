@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import db, plans, records, workspace
 from canopy.core.vocab import PlanEffort, PlannerApproval, PlanStatus, RunKind, RunStatus
@@ -48,7 +48,7 @@ class _Planned:
     comment: float | None = None
 
 
-_PLANNED = (
+_PLANNED: Final = (
     _Planned("ABC-076", None, "web", written=3, approved=2.5, size=3_200, effort=PlanEffort.SMALL),
     _Planned("ABC-079", PlannerApproval.OFF, "cli", 5, 2.5, 9_400, PlanEffort.MEDIUM, edited=True),
     _Planned("ABC-082", PlannerApproval.STRICT, plans.PLANNER, 1, 1, 2_100, PlanEffort.SMALL),
@@ -58,7 +58,7 @@ _PLANNED = (
     _Planned("ABC-091", PlannerApproval.STRICT, "web", 6, 2, 14_600, PlanEffort.LARGE),
 )
 # A comment's passage, which each plan's text holds.
-_QUOTE = "the existing patterns"
+_QUOTE: Final = "the existing patterns"
 
 
 def seed(conn: sqlite3.Connection, state_dir: Path, root: Path) -> None:

@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Annotated, Literal
+from typing import Annotated, Final, Literal
 
 import canopy_mcp
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr, ValidationError
@@ -179,11 +179,11 @@ class Resolve(_Request):
 
 
 #: What a tool that writes says of a store it may not write to.
-_READ_ONLY = "A store opened read-only refuses it (read_only)."
+_READ_ONLY: Final = "A store opened read-only refuses it (read_only)."
 #: What a tool that names an artifact or a thread says of an id it cannot serve.
-_UNKNOWN = "An id the store does not have, or another scope's, is refused (not_found, out_of_scope)."
+_UNKNOWN: Final = "An id the store does not have, or another scope's, is refused (not_found, out_of_scope)."
 
-TOOLS = (
+TOOLS: Final = (
     tool(
         "artifact_publish",
         "Publish a page for people to read and comment on: a report, a design, a mock-up. Without artifact_id it makes "

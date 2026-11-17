@@ -6,6 +6,7 @@ only when the operator asks, as `--now` does. It ends only the epic's planning: 
 
 import json
 from pathlib import Path
+from typing import Final
 
 from canopy.core import epics
 from canopy.core.vocab import PlanStatus, RunStatus
@@ -19,7 +20,7 @@ from tests.conftest import CanopyEnv, GitPool
 
 APPROVED, PROPOSED, PLANNING = mock_epics.APPROVED, mock_epics.PROPOSED, mock_epics.PLANNING
 #: A reply's form, with the submission id it drew.
-REPLY = {"body": "Keep the web page's list as it is.", "submission": "form-0001"}
+REPLY: Final = {"body": "Keep the web page's list as it is.", "submission": "form-0001"}
 
 
 def test_a_stop_from_the_web_ends_the_epics_planning_and_leaves_its_plan_and_members(backend: Backend) -> None:

@@ -29,8 +29,8 @@ DESCRIPTIONS: Final[Mapping[str, str | None]] = {
     "write-a-skill": "How to write a skill of your own.",
 }
 #: The made-up digest the mock's definitions snapshot is named for.
-_SNAPSHOT = "definitions-3f9c2a71"
-_TRACKER = """# Jira for canopy agents
+_SNAPSHOT: Final = "definitions-3f9c2a71"
+_TRACKER: Final = """# Jira for canopy agents
 
 What is specific to Jira as canopy's tracker, through its MCP server.
 
@@ -46,7 +46,7 @@ Write a comment in Jira's own markup, not Markdown:
 - `{code}` around code, not backticks.
 - `[text|url]` for a link.
 """
-_ARTIFACTS = """# Artifacts for canopy workers
+_ARTIFACTS: Final = """# Artifacts for canopy workers
 
 An artifact is a page you publish for people to read and comment on: a report, a design, an HTML mock-up.
 
@@ -54,18 +54,18 @@ An artifact is a page you publish for people to read and comment on: a report, a
 2. Name it in your report, so the operator finds it.
 3. Answer its comments as you would a reviewer's.
 """
-_RELEASE_NOTES = """# Release notes
+_RELEASE_NOTES: Final = """# Release notes
 
 When a change is one a user would notice, add a line to `CHANGELOG.md` under `Unreleased`, in the past tense, naming
 the ticket: `Fixed the export's dates (ABC-102).`
 
 Leave the changelog alone for a refactor, a test, or a build change.
 """
-_TERSE = """# Terse
+_TERSE: Final = """# Terse
 
 Say what you did and what is left, in that order, and stop. No preamble, no recap of the ticket, no closing offer.
 """
-_WRITE_A_SKILL = """# Writing a skill
+_WRITE_A_SKILL: Final = """# Writing a skill
 
 Where a skill of your own goes, what its front matter holds, and how to keep its description short enough to be read.
 """

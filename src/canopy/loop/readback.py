@@ -13,7 +13,7 @@ text named, as the commands print it.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Final
 
 from pydantic import AfterValidator, Field, StrictInt, StrictStr
 
@@ -45,7 +45,7 @@ if TYPE_CHECKING:
 
 
 #: How many characters of a commit a range names.
-_SHORT = 12
+_SHORT: Final = 12
 
 
 def _chore_name(value: str) -> str:

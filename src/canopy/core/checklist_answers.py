@@ -23,7 +23,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, assert_never, cast
+from typing import TYPE_CHECKING, Final, Literal, assert_never, cast
 
 from pydantic import BaseModel, ConfigDict, Field, StrictStr
 
@@ -38,15 +38,15 @@ if TYPE_CHECKING:
     from canopy.core.checklists import Checklist
 
 #: The placeholder of the result field's contract, which a run given a list carries, and any other renders empty.
-CHECKLIST = "CHECKLIST"
+CHECKLIST: Final = "CHECKLIST"
 #: How long a `held` item's reason may be.
-MAX_REASON = 1000
+MAX_REASON: Final = 1000
 #: How many dropped answers a note names; the rest are counted.
-MAX_NAMED = 10
+MAX_NAMED: Final = 10
 #: The answers a worker may give: `unanswered` is the harness's alone.
-GIVEN: frozenset[ItemAnswer] = frozenset(ItemAnswer) - {ItemAnswer.UNANSWERED}
+GIVEN: Final[frozenset[ItemAnswer]] = frozenset(ItemAnswer) - {ItemAnswer.UNANSWERED}
 #: How many runs `details` names behind each item's `held` answers, and its `fixed`: the newest, which a page lists.
-MAX_RUNS = 20
+MAX_RUNS: Final = 20
 #: The tables of the runs that answer a checklist: a worker's, and a one-off task's (DESIGN §36).
 type RunTable = Literal["runs", "task_runs"]
 #: Whose run gave an answer, as the API names it: a worker's, or a task's.
@@ -300,7 +300,7 @@ class Group(BaseModel):
 
 
 #: The group's name.
-GROUP = "checklist"
+GROUP: Final = "checklist"
 
 
 def parse(text: str) -> object:

@@ -31,7 +31,7 @@ import json
 import re
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Annotated, Literal, cast
+from typing import TYPE_CHECKING, Annotated, Final, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
@@ -47,13 +47,13 @@ if TYPE_CHECKING:
     from canopy.infra import logs, procs
 
 #: The channel a reply read from Slack is recorded on (DESIGN §22).
-CHANNEL = "slack"
+CHANNEL: Final = "slack"
 #: Why a mention that names no ticket records nothing, as `reply.refused` says it.
-NO_TICKET = "no_ticket"
+NO_TICKET: Final = "no_ticket"
 #: How many unread tickets a run's `missed` names before it counts the rest.
-_NAMED = 5
+_NAMED: Final = 5
 #: A Slack message's `ts`: seconds, a dot, and the microseconds that make it unique in its channel.
-_TS = re.compile(r"\d{1,20}\.\d{1,20}")
+_TS: Final = re.compile(r"\d{1,20}\.\d{1,20}")
 
 
 def read(

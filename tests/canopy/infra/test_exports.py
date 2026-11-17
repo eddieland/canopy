@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import stat
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 from unittest import mock
 
 from canopy.infra import exports
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 #: Where the ledgers in these tests send spans.
-TO = "http://127.0.0.1:4318/v1/traces"
+TO: Final = "http://127.0.0.1:4318/v1/traces"
 
 
 def test_a_refused_export_is_kept_until_one_is_taken(tmp_path: Path) -> None:

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, override
+from typing import TYPE_CHECKING, Any, Final, override
 
 from opentelemetry.sdk.metrics import Counter, Histogram
 from opentelemetry.sdk.metrics.export import (
@@ -33,9 +33,9 @@ if TYPE_CHECKING:
     from opentelemetry.sdk.metrics.export import Metric
 
 #: How each kind of instrument is exported: counts and histograms as deltas, so a collector sums many processes'.
-DELTAS = {Counter: AggregationTemporality.DELTA, Histogram: AggregationTemporality.DELTA}
+DELTAS: Final = {Counter: AggregationTemporality.DELTA, Histogram: AggregationTemporality.DELTA}
 #: The instrumentation scope of canopy's metrics: the meter `metrics` records with, and the counts of exports.
-SCOPE = "canopy"
+SCOPE: Final = "canopy"
 
 
 class MetricFileExporter(MetricExporter):

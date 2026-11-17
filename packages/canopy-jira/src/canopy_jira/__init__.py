@@ -19,18 +19,18 @@ import stat
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TextIO
+from typing import Final, TextIO
 
 import canopy_http
 
 #: How long a read Jira answered with a server error, or whose reply broke off, waits before each new try: one try,
 #: then one more for each pause. Every request this program makes is a read (canopy-http).
-RETRY_PAUSES: Sequence[float] = (1.0, 3.0)
+RETRY_PAUSES: Final[Sequence[float]] = (1.0, 3.0)
 #: How much of a description's or comment's text is printed. canopy bounds what it records again.
-MAX_BODY = 8000
+MAX_BODY: Final = 8000
 #: How deep a document's nodes are read: Jira's own documents nest a few levels, and a deeper one is cut there.
-_MAX_DEPTH = 50
-_HOST = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?(?::[0-9]{1,5})?")
+_MAX_DEPTH: Final = 50
+_HOST: Final = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?(?::[0-9]{1,5})?")
 
 #: The site's host, to the base URL its REST API is under.
 Endpoint = Callable[[str], str]
@@ -249,7 +249,7 @@ def format_time(moment: datetime) -> str:
 
 
 #: The nodes of a document that sit inside a paragraph's line, rather than start a block of their own.
-_INLINE = frozenset(
+_INLINE: Final = frozenset(
     {
         "text",
         "hardBreak",

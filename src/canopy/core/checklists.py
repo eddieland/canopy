@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Final, Literal
 
 from canopy.core import memory_text, workspace
 from canopy.core.vocab import RunKind
@@ -32,29 +32,29 @@ if TYPE_CHECKING:
     from canopy.core.config import Config
 
 #: A list's file is its repository's name with this suffix.
-SUFFIX = ".md"
+SUFFIX: Final = ".md"
 #: The most bytes a list's file may hold: it reaches every worker run in its repository that pushes.
-MAX_BYTES = 16 * 1024
+MAX_BYTES: Final = 16 * 1024
 #: The directory in a run's answers directory that holds its repositories' lists, `<repo>.md` each, for canopy's hook.
-DIR = "checklists"
+DIR: Final = "checklists"
 #: How much an item that fails weighs in the checklist review, as a review's finding does.
 Severity = Literal["blocking", "major", "minor"]
 #: Every severity an item may name, gravest first.
-SEVERITIES: tuple[Severity, ...] = ("blocking", "major", "minor")
+SEVERITIES: Final[tuple[Severity, ...]] = ("blocking", "major", "minor")
 #: An item's severity unless its `severity:` line says another.
-DEFAULT_SEVERITY: Severity = "minor"
+DEFAULT_SEVERITY: Final[Severity] = "minor"
 #: Whether an item is asked: an `active` one is, a `retired` one stays in its file, unasked, so its counts read on.
 Status = Literal["active", "retired"]
 #: Every status an item may name.
-STATUSES: tuple[Status, ...] = ("active", "retired")
+STATUSES: Final[tuple[Status, ...]] = ("active", "retired")
 #: The kinds of worker run that may push, and so hear their repositories' lists; a task's run, of no kind, hears its.
-REMINDED: frozenset[RunKind] = frozenset({RunKind.IMPLEMENT, RunKind.RESUME})
+REMINDED: Final[frozenset[RunKind]] = frozenset({RunKind.IMPLEMENT, RunKind.RESUME})
 #: An item's heading, which names its id.
-_HEADING = re.compile(r"## (.*)")
+_HEADING: Final = re.compile(r"## (.*)")
 #: An item's id: a word of letters, digits, `-`, `_`, and `.`, which a run's answer names as a key.
-_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
+_ID: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
 #: A line an item may open with, before its rule: its key and its value.
-_FIELD = re.compile(r"(paths|severity|status|note):[ \t]*(.*)")
+_FIELD: Final = re.compile(r"(paths|severity|status|note):[ \t]*(.*)")
 
 
 class ChecklistError(Exception):

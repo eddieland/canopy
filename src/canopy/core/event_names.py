@@ -13,23 +13,23 @@ import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Literal
+from typing import Final, Literal
 
 #: The groups an event belongs to, the first segment of its name. `attention` is the attention list's diff.
-GROUPS = ("attention", "loop", "runs", "chores", "reviews", "tasks", "replies")
+GROUPS: Final = ("attention", "loop", "runs", "chores", "reviews", "tasks", "replies")
 #: The subject of an event about nothing its kind names, such as a reply that named no ticket. No ticket key, chore,
 #: repository, or number is spelled so.
-NO_SUBJECT = "-"
+NO_SUBJECT: Final = "-"
 #: What one literal segment of a pattern may hold: what a subject or a kind may.
-SEGMENT_RE = re.compile(r"[A-Za-z0-9_-]+")
+SEGMENT_RE: Final = re.compile(r"[A-Za-z0-9_-]+")
 #: The longest pattern a sink may list.
-MAX_PATTERN = 200
+MAX_PATTERN: Final = 200
 #: How a sink takes events of one name for some subjects: every one, none, or some, by its subject.
 Taken = Literal["all", "some", "none"]
 #: How each kind of subject is spelled, as config and the journal check it: a ticket key (`config.KEY_RE`), a chore's or
 #: a repository's name (`CHORE_NAME_RE`, `REPO_NAME_RE`), and an epic's or a task's id. A pattern naming a subject no
 #: event can have is refused, as `tasks.deploy.ended` is.
-SUBJECTS: Mapping[str, re.Pattern[str]] = {
+SUBJECTS: Final[Mapping[str, re.Pattern[str]]] = {
     "ticket": re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*"),
     "chore": re.compile(r"[a-z][a-z0-9-]*"),
     "repo": re.compile(r"[a-z][a-z0-9-]*"),
@@ -37,9 +37,9 @@ SUBJECTS: Mapping[str, re.Pattern[str]] = {
     "task": re.compile(r"[0-9]+"),
 }
 
-_ONE = "*"
-_ANY = "**"
-_NOT = "!"
+_ONE: Final = "*"
+_ANY: Final = "**"
+_NOT: Final = "!"
 
 
 @dataclass(frozen=True)
@@ -76,7 +76,7 @@ class Spec:
 
 
 #: Every name canopy can send, in the order `canopy notify events` lists them.
-SPECS: tuple[Spec, ...] = (
+SPECS: Final[tuple[Spec, ...]] = (
     Spec("attention", "attention", None, None, None),
     Spec("run.started", "runs", "ticket", "ticket", "started"),
     Spec("run.ended", "runs", "ticket", "ticket", "ended"),
@@ -97,7 +97,7 @@ SPECS: tuple[Spec, ...] = (
     Spec("loop.budget_reached", "loop", None, None, "budget_reached"),
     Spec("ci.kicked", "loop", None, None, "ci_kicked"),
 )
-_BY_KIND = {s.kind: s for s in SPECS}
+_BY_KIND: Final = {s.kind: s for s in SPECS}
 
 
 def name_of(group: str, kind: str, fields: Mapping[str, object]) -> str:

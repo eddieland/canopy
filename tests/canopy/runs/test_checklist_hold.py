@@ -11,7 +11,7 @@ import json
 import shlex
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Final, cast
 
 import pytest
 
@@ -25,18 +25,22 @@ if TYPE_CHECKING:
     from tests.canopy.scenario_helpers import Scenario
     from tests.conftest import GitPool
 
-TRAILER = "Co-authored-by: canopy worker <noreply@canopy.invalid>"
-BRANCH = "agent/PROJ-1-work"
+TRAILER: Final = "Co-authored-by: canopy worker <noreply@canopy.invalid>"
+BRANCH: Final = "agent/PROJ-1-work"
 #: A list of one item, as the operator writes it.
-LIST = "## general-types\npaths: src/\n\nA parameter takes the most general type its body needs.\n"
-COMMIT = ["git", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: the change"]
-PUSH = ["git", "push", "--quiet", "origin", f"HEAD:refs/heads/{BRANCH}"]
+LIST: Final = "## general-types\npaths: src/\n\nA parameter takes the most general type its body needs.\n"
+COMMIT: Final = ["git", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: the change"]
+PUSH: Final = ["git", "push", "--quiet", "origin", f"HEAD:refs/heads/{BRANCH}"]
 #: The fix a worker commits once the list is shown.
-FIX = ["sh", "-c", "echo 'def f(xs: Iterable[str]): ...' >fix.py && git add fix.py && git commit -q -m 'PROJ-1: fix'"]
+FIX: Final = [
+    "sh",
+    "-c",
+    "echo 'def f(xs: Iterable[str]): ...' >fix.py && git add fix.py && git commit -q -m 'PROJ-1: fix'",
+]
 #: The first line of what a held push prints.
-HELD = "[canopy] Push held, not rejected: nothing was sent."
+HELD: Final = "[canopy] Push held, not rejected: nothing was sent."
 #: The first line of what a push in the run's last stretch prints.
-NEAR = "[canopy] Pushed, not held, as this run is near canopy's deadline."
+NEAR: Final = "[canopy] Pushed, not held, as this run is near canopy's deadline."
 
 
 def ran(agent_log: Path) -> list[dict[str, object]]:
@@ -227,7 +231,7 @@ def test_near_the_deadline_what_follows_the_first_list_shown_is_kept(scenario: S
 
 
 #: The run's list, as the hook reads it.
-IN_ANSWERS = f'"${cards.ANSWERS_ENV}/{checklists.DIR}/repo{checklists.SUFFIX}"'
+IN_ANSWERS: Final = f'"${cards.ANSWERS_ENV}/{checklists.DIR}/repo{checklists.SUFFIX}"'
 
 
 @pytest.mark.parametrize(

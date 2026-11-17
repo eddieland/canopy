@@ -7,15 +7,16 @@ import threading
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Final
 
 from canopy.core.context import Context
 from canopy.serve import host, mock
 from canopy.serve.schema.host import CpuTime, HostResources
 from tests.canopy.web_helpers import client, signed_in_client
 
-NOW = datetime(2026, 10, 8, 12, 0, tzinfo=UTC)
-BOOT = 1_791_000_000
-GIB = 1024**3
+NOW: Final = datetime(2026, 10, 8, 12, 0, tzinfo=UTC)
+BOOT: Final = 1_791_000_000
+GIB: Final = 1024**3
 
 
 def fake_proc(root: Path) -> Path:

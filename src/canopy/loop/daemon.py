@@ -20,19 +20,20 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Final
 
 from canopy.core import db
 from canopy.infra import lock, procs
 from canopy.loop import repeat
 
-LOG_FILE_NAME = "daemon.log"
-PID_FILE_NAME = "daemon.pid"
+LOG_FILE_NAME: Final = "daemon.log"
+PID_FILE_NAME: Final = "daemon.pid"
 # How long `start` waits for the loop to take its lock before it reports the loop started anyway: a slow import or
 # migration is not a failure, and the log says what followed.
-START_TIMEOUT_SECONDS = 15.0
+START_TIMEOUT_SECONDS: Final = 15.0
 # How long `stop` waits before saying it waits for the running tick.
-QUIET_STOP_SECONDS = 1.0
-POLL_SECONDS = 0.05
+QUIET_STOP_SECONDS: Final = 1.0
+POLL_SECONDS: Final = 0.05
 
 
 class DaemonError(Exception):

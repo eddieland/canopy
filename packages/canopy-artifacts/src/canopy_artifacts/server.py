@@ -12,6 +12,7 @@ import json
 import sys
 import traceback
 from collections.abc import Callable, Iterable, Mapping
+from typing import Final
 
 import canopy_mcp
 from pydantic import ValidationError
@@ -20,9 +21,9 @@ from canopy_artifacts.store import Code, Refused, Store
 from canopy_artifacts.tools import TOOLS, Answer, Tool
 
 #: The server's name, as `initialize` gives it.
-NAME = "canopy-artifacts"
+NAME: Final = "canopy-artifacts"
 #: How the tools fit together, which `initialize` gives the client.
-INSTRUCTIONS = (
+INSTRUCTIONS: Final = (
     "Pages people read and comment on, and the comments on them. Publish a page with artifact_publish, and a revision "
     "of it as a new version of the same artifact, so its threads carry over. Follow new comments across artifacts with "
     "comment_feed, read one artifact's discussion with thread_list, and answer a comment in its thread with "

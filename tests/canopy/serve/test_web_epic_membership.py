@@ -6,6 +6,7 @@ planner read, by the hash it was approved by, and when a newer one has been appr
 """
 
 from datetime import datetime
+from typing import Final
 
 from canopy.core import db, epics
 from canopy.serve.backend import Backend
@@ -13,7 +14,7 @@ from canopy.serve.mock import epics as mock_epics
 from tests.canopy.helpers import present
 from tests.canopy.web_helpers import replan_epic, signed_in_to
 
-APPROVED = mock_epics.APPROVED
+APPROVED: Final = mock_epics.APPROVED
 
 
 def test_a_member_names_its_epic_and_entries_and_its_plan_the_epic_plan_it_follows(backend: Backend) -> None:

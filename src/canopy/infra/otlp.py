@@ -24,7 +24,7 @@ import uuid
 from collections.abc import Mapping, Sequence
 from importlib.metadata import version
 from pathlib import Path
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING, Final, override
 from urllib.error import HTTPError
 
 # The harness's one network call: this module alone may make it (TRUST_MODEL T2).
@@ -40,18 +40,18 @@ if TYPE_CHECKING:
     from canopy.infra import exports
 
 #: Who may read a telemetry file: the operator alone, as the log (TRUST_MODEL T2).
-FILE_MODE = 0o600
+FILE_MODE: Final = 0o600
 #: The service every signal's resource names.
-SERVICE = "canopy"
+SERVICE: Final = "canopy"
 #: The file in the state directory that keeps the workspace's `service.instance.id`: a random id, made once.
-INSTANCE_FILE_NAME = "instance-id"
+INSTANCE_FILE_NAME: Final = "instance-id"
 #: This process's `service.instance.id` when the workspace's can be neither made nor read: one id, so its spans and
 #: its metrics still name the same instance.
-_PROCESS_INSTANCE = str(uuid.uuid4())
+_PROCESS_INSTANCE: Final = str(uuid.uuid4())
 #: Why a file export failed, for the state file: the line was not written whole.
-UNWRITTEN = "not written"
+UNWRITTEN: Final = "not written"
 #: How long a post may take: the longest an endpoint that is down delays a process's exit, which sends what is left.
-TIMEOUT_SECONDS = 5
+TIMEOUT_SECONDS: Final = 5
 
 
 class FileExporter(SpanExporter):
@@ -254,7 +254,7 @@ class _NoRedirect(HTTPRedirectHandler):
 
 # No proxy, whatever the environment names: a post reaches the endpoint the operator named, a collector on this machine
 # included, or fails.
-_OPENER = build_opener(ProxyHandler({}), _NoRedirect())
+_OPENER: Final = build_opener(ProxyHandler({}), _NoRedirect())
 _LOG = logging.getLogger("canopy")
 
 
@@ -285,7 +285,7 @@ def encoded(spans: Sequence[ReadableSpan]) -> dict[str, object]:
 
 
 # OTLP numbers span kinds from 1, where OpenTelemetry's Python `SpanKind` numbers them from 0.
-_KIND_OFFSET = 1
+_KIND_OFFSET: Final = 1
 
 
 def _span(span: ReadableSpan) -> dict[str, object]:

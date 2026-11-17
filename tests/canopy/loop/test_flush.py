@@ -6,7 +6,7 @@ its first wait begins, as a chore run that ends while the loop idles records one
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import db, outbox
 from canopy.core.vocab import ChoreRunStatus
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from tests.canopy.scenario_helpers import Scenario
 
 #: Ticks thirty minutes apart, idle pacing off.
-PACE = {"interval_minutes": 30, "idle_max_minutes": 30, "min_gap_minutes": 5}
+PACE: Final = {"interval_minutes": 30, "idle_max_minutes": 30, "min_gap_minutes": 5}
 
 
 def listens(scenario: Scenario, cmd: str) -> None:

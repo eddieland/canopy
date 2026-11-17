@@ -8,7 +8,7 @@ during the first wait, from the loop's clock's minute 0 on, so the poll at minut
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import pytest
 
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from tests.canopy.scenario_helpers import Scenario
 
 #: Both sources, the fake connector playing each under its own name.
-SOURCES = {
+SOURCES: Final = {
     "every_minutes": 2,
     "sources": {
         "jira": {"kind": "tracker", "cmd": "connector jira", "timeout_minutes": 1},
@@ -31,9 +31,9 @@ SOURCES = {
     },
 }
 #: Ticks thirty minutes apart, idle pacing off, and at least five minutes between one's end and the next's start.
-PACE = {"interval_minutes": 30, "idle_max_minutes": 30, "min_gap_minutes": 5}
+PACE: Final = {"interval_minutes": 30, "idle_max_minutes": 30, "min_gap_minutes": 5}
 #: An authorized replier's comment on KEY.
-REPLY: dict[str, object] = {
+REPLY: Final[dict[str, object]] = {
     "kind": "comment",
     "ticket": KEY,
     "id": "10001",

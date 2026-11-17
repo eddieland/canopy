@@ -6,6 +6,7 @@ hash first; a plan no longer as approved is left out, and the prompt says so. No
 """
 
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -17,9 +18,9 @@ from tests.canopy.scenario_helpers import PLANNED, Reviewed, Scenario, plan_appr
 from tests.conftest import CanopyEnv, GitPool
 
 #: What the fake reviewer runs in its directory: whether the plan's copy is there, and what it holds.
-LOOKS = (["test", "-e", plans.COPY], ["cat", plans.COPY])
+LOOKS: Final = (["test", "-e", plans.COPY], ["cat", plans.COPY])
 #: The heading the reviewer's prompt gives the plan's section.
-SECTION = "## The approved plan"
+SECTION: Final = "## The approved plan"
 
 
 def reviewed_with_looks(scenario: Scenario, sha: str, pr: str | None = None, *, ticket: str | None = KEY) -> Reviewed:

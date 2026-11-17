@@ -24,25 +24,25 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Final, Literal
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
     from collections.abc import Set as AbstractSet
 
 #: The most ids of one kind a plan may name: a plan is bounded, and an epic's breakdown is shallow by rule.
-MAX_IDS = 200
+MAX_IDS: Final = 200
 #: The longest a trivial entry's reason may be.
-MAX_REASON = 300
+MAX_REASON: Final = 300
 #: An id's kind, the letter it starts with: a requirement, a contract, or a breakdown entry.
 type Kind = Literal["R", "C", "B"]
 
 #: The sections canopy reads, by their headings, lower-cased.
-REQUIREMENTS = "requirements"
-CONTRACTS = "contracts"
-BREAKDOWN = "breakdown"
+REQUIREMENTS: Final = "requirements"
+CONTRACTS: Final = "contracts"
+BREAKDOWN: Final = "breakdown"
 #: The fields of a breakdown entry, each on its own line, in any order, each once.
-FIELDS = ("covers", "provides", "uses", "repositories", "after", "trivial")
+FIELDS: Final = ("covers", "provides", "uses", "repositories", "after", "trivial")
 
 
 class OutlineError(Exception):
@@ -217,17 +217,17 @@ def drift(outline: Outline, named: Iterable[object]) -> list[str]:
 
 
 # The outline's shapes. A fence opens and closes a code block, whose lines are never read as structure.
-_FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+_FENCE: Final = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 # What marks a line of a code block: a character no plan's structure starts with, dropped from the text compared.
-_CODE = "\x00"
-_HEADING = re.compile(r"^ {0,3}(#{1,6})\s+(.*?)\s*#*\s*$")
-_ITEM = re.compile(r"^[-*+]\s+(.*)$")
-_ID_ITEM = re.compile(r"^\*\*([RCB])([1-9][0-9]{0,3})\.?\*\*\.?\s*(.*)$")
-_ENTRY = re.compile(r"^B([1-9][0-9]{0,3})\.?\s+(\S.*)$")
-_FIELD = re.compile(r"^[-*+]\s+([A-Za-z]+)\s*:\s*(.*)$")
-_LIST_SEPARATOR = re.compile(r"\s*,\s*")
-_NONE = frozenset({"none", "-", "—", "n/a"})
-_REPO = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+_CODE: Final = "\x00"
+_HEADING: Final = re.compile(r"^ {0,3}(#{1,6})\s+(.*?)\s*#*\s*$")
+_ITEM: Final = re.compile(r"^[-*+]\s+(.*)$")
+_ID_ITEM: Final = re.compile(r"^\*\*([RCB])([1-9][0-9]{0,3})\.?\*\*\.?\s*(.*)$")
+_ENTRY: Final = re.compile(r"^B([1-9][0-9]{0,3})\.?\s+(\S.*)$")
+_FIELD: Final = re.compile(r"^[-*+]\s+([A-Za-z]+)\s*:\s*(.*)$")
+_LIST_SEPARATOR: Final = re.compile(r"\s*,\s*")
+_NONE: Final = frozenset({"none", "-", "—", "n/a"})
+_REPO: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 
 
 def _sections(text: str) -> dict[str, list[str]]:

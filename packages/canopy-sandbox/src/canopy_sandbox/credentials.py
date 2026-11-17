@@ -32,23 +32,23 @@ import secrets
 import shutil
 import stat
 from pathlib import Path
-from typing import TYPE_CHECKING, TypeGuard
+from typing import TYPE_CHECKING, Final, TypeGuard
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
 # OpenCode's data directory under XDG_DATA_HOME, and the files in it that hold its logins.
-RUNTIME = "opencode"
-AUTH = "auth.json"
-MCP_AUTH = "mcp-auth.json"
-FILES = (AUTH, MCP_AUTH)
+RUNTIME: Final = "opencode"
+AUTH: Final = "auth.json"
+MCP_AUTH: Final = "mcp-auth.json"
+FILES: Final = (AUTH, MCP_AUTH)
 # More than any login file holds, and less than a run could make the host read.
-MAX_FILE = 1 << 20
-MAX_TOKEN = 1 << 16
+MAX_FILE: Final = 1 << 20
+MAX_TOKEN: Final = 1 << 16
 # What `share` and `collect` hold while they read and write, in the directory that holds every role's data directory,
 # which no run can write.
-LOCK = "credentials.lock"
-DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+LOCK: Final = "credentials.lock"
+DIR_FLAGS: Final = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 
 
 @contextlib.contextmanager

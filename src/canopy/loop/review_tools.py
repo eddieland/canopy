@@ -8,7 +8,7 @@ overseer asks for is recorded, and the tick starts it once the overseer's run ha
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Final
 
 from pydantic import ConfigDict, Field, StrictInt, WithJsonSchema
 
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 #: The decision `review end` records: the overseer ended a review request no review of could answer.
-END_ACTION = review_requests.END_ACTION
+END_ACTION: Final = review_requests.END_ACTION
 
 
 class ReviewRun(Request):

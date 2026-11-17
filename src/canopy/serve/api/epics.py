@@ -18,7 +18,7 @@ when they ask, as `--now` ends it.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from fastapi import APIRouter, HTTPException
 
@@ -53,7 +53,7 @@ if TYPE_CHECKING:
 
     from canopy.core import epic_outline
 
-TAG = "epics"
+TAG: Final = "epics"
 router = APIRouter(tags=[TAG])
 _log = logs.for_tick(None)
 

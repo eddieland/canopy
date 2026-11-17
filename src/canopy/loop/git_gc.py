@@ -21,7 +21,7 @@ import time
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, assert_never
+from typing import TYPE_CHECKING, Final, Literal, assert_never
 
 from canopy.core import hostgit, pool, pools, upkeep_runs, workspace
 from canopy.core.vocab import PoolKind, UpkeepKind, UpkeepStatus
@@ -37,19 +37,19 @@ if TYPE_CHECKING:
 Outcome = Literal["packed", "skipped", "failed"]
 
 #: The step that combines packs, which git refuses in a clone with no pack, as an empty repository's is.
-REPACK = ("maintenance", "run", "--quiet", "--task=incremental-repack")
+REPACK: Final = ("maintenance", "run", "--quiet", "--task=incremental-repack")
 #: The steps in each clone, in order: none deletes an object that is not also in a pack.
-STEPS = (("maintenance", "run", "--quiet", "--task=loose-objects"), REPACK, ("prune-packed", "--quiet"))
-_STEP_TIMEOUT_SECONDS = 3600
-_REV_PARSE_TIMEOUT_SECONDS = 30
-_MAINTENANCE_LOCK = "objects/maintenance.lock"
-_PACK_DIR = "objects/pack"
+STEPS: Final = (("maintenance", "run", "--quiet", "--task=loose-objects"), REPACK, ("prune-packed", "--quiet"))
+_STEP_TIMEOUT_SECONDS: Final = 3600
+_REV_PARSE_TIMEOUT_SECONDS: Final = 30
+_MAINTENANCE_LOCK: Final = "objects/maintenance.lock"
+_PACK_DIR: Final = "objects/pack"
 #: The temporary files a fetch or clone writes in the pack directory, and leaves when it is interrupted.
-_TEMP_PACKS = ("tmp_pack_*", "tmp_idx_*")
+_TEMP_PACKS: Final = ("tmp_pack_*", "tmp_idx_*")
 #: How old a temporary pack file must be to be removed: no fetch the harness runs takes that long.
-STALE_TEMP = timedelta(days=1)
+STALE_TEMP: Final = timedelta(days=1)
 #: Each outcome as the journal records it.
-STATUS: dict[Outcome, UpkeepStatus] = {
+STATUS: Final[dict[Outcome, UpkeepStatus]] = {
     "packed": UpkeepStatus.DONE,
     "skipped": UpkeepStatus.SKIPPED,
     "failed": UpkeepStatus.FAILED,

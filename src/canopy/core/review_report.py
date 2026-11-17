@@ -25,7 +25,7 @@ import json
 import statistics
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import db, pr_feedback, records, spend, sql, tracked_prs
 from canopy.core.vocab import (
@@ -47,7 +47,7 @@ if TYPE_CHECKING:
     from canopy.core.vocab import Phase
 
 #: Where the waits chart cuts a first review's wait: under an hour, under four, under a day, and the rest.
-WAIT_BOUNDS = (timedelta(hours=1), timedelta(hours=4), timedelta(days=1))
+WAIT_BOUNDS: Final = (timedelta(hours=1), timedelta(hours=4), timedelta(days=1))
 
 
 @dataclass(frozen=True)

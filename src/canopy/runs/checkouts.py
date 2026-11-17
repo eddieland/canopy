@@ -21,7 +21,7 @@ import shutil
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from pydantic import BaseModel, ConfigDict, StrictStr, ValidationError
 
@@ -32,13 +32,13 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 #: Where the operator's desks live under the workspace: one directory per ticket.
-DIR = "checkouts"
+DIR: Final = "checkouts"
 #: The file in a desk that marks it as one canopy made, holding what close needs.
-MARKER = ".canopy-checkout"
+MARKER: Final = ".canopy-checkout"
 #: The lease holder of a desk's slots, followed by the ticket's key. Not `canopy:`, so no tick returns it.
-HOLDER_PREFIX = "operator:"
+HOLDER_PREFIX: Final = "operator:"
 #: The workspace file an editor opens the desk from, named for the ticket.
-WORKSPACE_SUFFIX = ".code-workspace"
+WORKSPACE_SUFFIX: Final = ".code-workspace"
 
 
 class CheckoutError(Exception):

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import dataclasses
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING, Final, assert_never
 
 import click
 
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 # What sync reports for a repository it could not bring to what is declared; any of them makes it exit 1.
-_UNMET = ("failed", "kept")
+_UNMET: Final = ("failed", "kept")
 
 
 @click.group("workspace")

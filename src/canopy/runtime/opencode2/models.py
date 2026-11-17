@@ -25,7 +25,7 @@ definition's model and variant, so a model chosen in config needs 2.1.4 or later
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from pydantic import BaseModel, ConfigDict, Field, StrictStr
 
@@ -39,13 +39,13 @@ if TYPE_CHECKING:
     from canopy.infra import procs
 
 #: How long the server's plugins may take to load, and how long to wait between two questions of it.
-LOADED_SECONDS = 30
-POLL_SECONDS = 0.25
+LOADED_SECONDS: Final = 30
+POLL_SECONDS: Final = 0.25
 #: How long the list must answer the same to be taken as whole, when no one model is asked about.
-SETTLE_SECONDS = 3.0
+SETTLE_SECONDS: Final = 3.0
 #: How long a list that lacks the model asked about is read again: a provider's fetch of its own models, which
 #: OpenCode itself gives up on after seconds.
-WANTED_SECONDS = 15
+WANTED_SECONDS: Final = 15
 
 
 class _Variant(BaseModel):

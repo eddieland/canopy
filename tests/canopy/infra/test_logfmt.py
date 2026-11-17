@@ -1,6 +1,7 @@
 """`logfmt`: values bare when they can be, quoted and escaped when not, and never a line break."""
 
 import re
+from typing import Final
 
 import pytest
 from hypothesis import given
@@ -9,8 +10,8 @@ from hypothesis import strategies as st
 from canopy.infra import logfmt
 
 #: A quoted value's escapes, as `_read` takes them back.
-_ESCAPE = re.compile(r"\\(U[0-9a-f]{8}|u[0-9a-f]{4}|.)")
-_NAMED = {"n": "\n", "r": "\r", "t": "\t"}
+_ESCAPE: Final = re.compile(r"\\(U[0-9a-f]{8}|u[0-9a-f]{4}|.)")
+_NAMED: Final = {"n": "\n", "r": "\r", "t": "\t"}
 
 
 def test_a_line_holds_the_fields_in_order_and_leaves_out_none() -> None:

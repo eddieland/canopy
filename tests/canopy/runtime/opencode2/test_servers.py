@@ -2,11 +2,12 @@
 
 import json
 from pathlib import Path
+from typing import Final
 
 from canopy.runtime.opencode2 import servers
 
 #: The definition a server of the operator's is turned off with: whole, so it replaces theirs, and never started.
-OFF = {"type": "local", "command": ["true"], "disabled": True}
+OFF: Final = {"type": "local", "command": ["true"], "disabled": True}
 
 
 def test_a_server_is_given_in_the_inline_config_with_its_tools_offered_by_name() -> None:

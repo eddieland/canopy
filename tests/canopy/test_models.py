@@ -1,6 +1,7 @@
 import importlib
 import pkgutil
 import sys
+from typing import Final
 
 import pydantic
 import pytest
@@ -10,7 +11,7 @@ from canopy.infra import procs
 
 # The web server's models stay eager: FastAPI builds every one when it creates the app, so deferring them saves
 # nothing, and only a serving `canopy loop` imports them.
-EAGER = "canopy.serve."
+EAGER: Final = "canopy.serve."
 
 
 def canopy_models() -> list[type[pydantic.BaseModel]]:

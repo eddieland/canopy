@@ -9,11 +9,12 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Final
 
 from canopy.core import db
 
 #: An attention item is a decision whose action is this prefix and its reason (D020).
-ACTION_PREFIX = "attention:"
+ACTION_PREFIX: Final = "attention:"
 
 
 @dataclass(frozen=True)

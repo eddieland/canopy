@@ -13,7 +13,7 @@ reads it, cut and with its control characters dropped.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any, Final
 
 from pydantic import AfterValidator, Field, StrictStr
 
@@ -32,17 +32,17 @@ if TYPE_CHECKING:
     from canopy.core.items import Item
 
 #: How far back the report looks when the request names no time: a day.
-DEFAULT_SINCE = timedelta(days=1)
+DEFAULT_SINCE: Final = timedelta(days=1)
 #: How far back a request may look: as far as a report of days may (`spend.MAX_DAYS`).
-MAX_SINCE = timedelta(days=366)
+MAX_SINCE: Final = timedelta(days=366)
 #: How many characters of a review's body the report carries: enough to say what was asked.
-EXCERPT = 300
+EXCERPT: Final = 300
 #: The most feedback items a PR lists, the newest; the rest it counts.
-MAX_FEEDBACK = 20
+MAX_FEEDBACK: Final = 20
 #: The most replies a thread lists, the newest; the rest it counts.
-MAX_REPLIES = 10
+MAX_REPLIES: Final = 10
 #: A review's states that say where its reviewer stands; any other leaves them where they were, but `dismissed`.
-_STANDINGS = frozenset({ReviewState.APPROVED, ReviewState.CHANGES_REQUESTED})
+_STANDINGS: Final = frozenset({ReviewState.APPROVED, ReviewState.CHANGES_REQUESTED})
 
 
 def _moment(value: str) -> str:

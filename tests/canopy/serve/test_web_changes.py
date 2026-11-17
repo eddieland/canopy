@@ -12,7 +12,7 @@ import json
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 from unittest import mock
 
 from canopy.core import db, gc_passes, records, review_diff, run_changes
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 #: A run's own change, as `runs.changes` keeps it: the branch's text, a control character in its last line.
-CHANGE = """\
+CHANGE: Final = """\
 diff --git a/src/canopy/order.py b/src/canopy/order.py
 index 1111111..2222222 100644
 --- a/src/canopy/order.py
@@ -38,17 +38,17 @@ index 1111111..2222222 100644
 +def main() -> None:\x07 # moved up
 """
 #: The branch against its base, which holds an earlier run's change besides.
-BRANCH = CHANGE + CHANGE.replace("order.py", "earlier.py")
+BRANCH: Final = CHANGE + CHANGE.replace("order.py", "earlier.py")
 START, END, FORK = "a1" * 20, "b2" * 20, "c3" * 20
 #: What git counted of `CHANGE`, and of a logo it renamed, binary.
-COUNTED = run_changes.counted(
+COUNTED: Final = run_changes.counted(
     [
         review_diff.Count("src/canopy/order.py", None, 1, 1),
         review_diff.Count("logo.png", "old-logo.png", None, None),
     ],
 )
 #: The commits a run recorded: one the worker pushed with canopy's marks, and one made around the hooks canopy pushed.
-COMMITS = (
+COMMITS: Final = (
     run_changes.Commit("e5" * 20, "PROJ-1: the change", canopy_trailer=True, prefixed=True),
     run_changes.Commit(
         END,
@@ -59,8 +59,8 @@ COMMITS = (
         harness_pushed=True,
     ),
 )
-PR = "https://github.com/acme/api/pull/7"
-WEB_PR = "https://github.com/acme/web/pull/8"
+PR: Final = "https://github.com/acme/api/pull/7"
+WEB_PR: Final = "https://github.com/acme/web/pull/8"
 
 
 def test_a_runs_page_carries_its_range_and_files_as_counted_and_no_diff(ctx: Context) -> None:

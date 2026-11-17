@@ -1,7 +1,7 @@
 """The web UI's server traces each request as a server span named for its route, holding nothing the client sent."""
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 from fastapi.testclient import TestClient
 from starlette.types import Receive, Scope, Send
@@ -13,7 +13,7 @@ from tests.canopy.helpers import spans
 from tests.canopy.web_helpers import client
 
 #: OTLP's `SPAN_KIND_SERVER`, as the traces file spells a request's span.
-SERVER = 2
+SERVER: Final = 2
 
 
 def served(path: Path, count: int) -> list[dict[str, Any]]:

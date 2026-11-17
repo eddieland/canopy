@@ -2,11 +2,12 @@
 
 import json
 from datetime import UTC, datetime
+from typing import Final
 
 from canopy.runtime.opencode import events, transcript
 from canopy.runtime.report import Called, Returned, Touch
 
-BASH: dict[str, object] = {
+BASH: Final[dict[str, object]] = {
     "status": "completed",
     "input": {"command": "uv run pytest -q", "description": "Run the tests"},
     "output": "3 passed\n",
@@ -14,7 +15,7 @@ BASH: dict[str, object] = {
 }
 
 
-SESSION = "ses_abc123"
+SESSION: Final = "ses_abc123"
 
 
 def event(kind: str, part: object) -> str:

@@ -22,7 +22,7 @@ import statistics
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, LiteralString
+from typing import TYPE_CHECKING, Final, Literal, LiteralString
 
 from canopy.core import cards, db, hostgit, records, spend, sql
 from canopy.core.vocab import RunKind
@@ -38,20 +38,20 @@ if TYPE_CHECKING:
 
 #: The roles that are not a run kind: a review's run, a one-off task's, an epic's planner's, a chore's, and the
 #: overseer's run in a tick.
-REVIEW = "review"
-TASK = "task"
-EPIC_PLAN = "epic-plan"
-CHORE = "chore"
-OVERSEER = "overseer"
+REVIEW: Final = "review"
+TASK: Final = "task"
+EPIC_PLAN: Final = "epic-plan"
+CHORE: Final = "chore"
+OVERSEER: Final = "overseer"
 #: What a shell call's row is named by: this, then the program it runs; `?` for a command with none canopy can read.
-SHELL_ROW = "$ "
-UNREAD_PROGRAM = "?"
+SHELL_ROW: Final = "$ "
+UNREAD_PROGRAM: Final = "?"
 #: The programs a shell command's row names by their subcommands too, and how many words of them at most.
-SUBCOMMAND_WORDS: Mapping[str, int] = {"gh": 2, hostgit.PROGRAM: 1}
+SUBCOMMAND_WORDS: Final[Mapping[str, int]] = {"gh": 2, hostgit.PROGRAM: 1}
 #: The programs of a stage that only moves or sets up the shell, which a row passes over for the stage after it.
-SETUP_PROGRAMS = frozenset({"cd", "pushd", "popd", "export", "set", "source", "."})
+SETUP_PROGRAMS: Final = frozenset({"cd", "pushd", "popd", "export", "set", "source", "."})
 #: A word that is a subcommand: `run` or `log-failed`, not `123`, `main...HEAD`, or a path.
-_SUBCOMMAND_RE = re.compile(r"[a-z][a-z0-9-]*")
+_SUBCOMMAND_RE: Final = re.compile(r"[a-z][a-z0-9-]*")
 
 
 @dataclass(frozen=True)
@@ -233,7 +233,7 @@ class _Ran(records.View):
 
 
 #: A run in the window, by when it started, that has ended.
-_WINDOW: LiteralString = "started_at >= ? AND started_at < ? AND ended_at IS NOT NULL"
+_WINDOW: Final[LiteralString] = "started_at >= ? AND started_at < ? AND ended_at IS NOT NULL"
 #: The tables whose runs are of one role each, with a log of their own.
 type _OneRole = Literal["review_runs", "task_runs", "epic_runs", "chore_runs"]
 

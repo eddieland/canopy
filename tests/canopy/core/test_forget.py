@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 from canopy.core import connector_runs, conversation, db
 from canopy.core.vocab import Decider, StartStatus
@@ -22,14 +22,14 @@ from tests.canopy.helpers import (
 from tests.canopy.scenario_helpers import Scenario, dispatches
 from tests.conftest import GitPool
 
-OLD = f"agent/{KEY}-work"
-NEW = f"agent/{KEY}-again"
-OLD_PR = "https://example.test/pr/1"
-NEW_PR = "https://example.test/pr/2"
+OLD: Final = f"agent/{KEY}-work"
+NEW: Final = f"agent/{KEY}-again"
+OLD_PR: Final = "https://example.test/pr/1"
+NEW_PR: Final = "https://example.test/pr/2"
 #: A key the overseer named before its tools refused one no source returned, which no tracker holds (#1965).
-STRAY = "PROJ-100-placeholder"
+STRAY: Final = "PROJ-100-placeholder"
 #: A tracker and a `vcs` source the fake connector plays, each under its own name.
-SOURCES = {
+SOURCES: Final = {
     "sources": {
         "jira": {"kind": "tracker", "cmd": "connector jira", "timeout_minutes": 1},
         "github": {"kind": "vcs", "cmd": "connector github", "timeout_minutes": 1},

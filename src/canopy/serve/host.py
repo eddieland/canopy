@@ -31,7 +31,7 @@ import threading
 from collections import deque
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.serve.schema.host import (
     Cpu,
@@ -54,17 +54,17 @@ if TYPE_CHECKING:
     from canopy.core.workspace import Workspace
 
 #: Where Linux keeps what the kernel knows of the machine and each process.
-PROC = Path("/proc")
+PROC: Final = Path("/proc")
 #: The unit `/proc/meminfo` and `/proc/self/status` count in.
-_KIB = 1024
+_KIB: Final = 1024
 #: The counts of `/proc/stat`'s `cpu` line the processors' time sums: every one before the guests'.
-_CPU_COUNTS = 8
+_CPU_COUNTS: Final = 8
 #: The uses on a disk the tick's free-space check reads (DESIGN §6).
-_CHECKED: frozenset[DiskUse] = frozenset({"workspace", "journal"})
+_CHECKED: Final[frozenset[DiskUse]] = frozenset({"workspace", "journal"})
 #: Seconds from one reading the server keeps to the next: the page's own pace, so each read it makes finds a new one.
-SAMPLE_SECONDS = 10
+SAMPLE_SECONDS: Final = 10
 #: How many readings the server keeps: an hour's.
-KEPT = 3600 // SAMPLE_SECONDS
+KEPT: Final = 3600 // SAMPLE_SECONDS
 
 _log = logging.getLogger(__name__)
 

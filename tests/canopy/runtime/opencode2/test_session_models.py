@@ -7,7 +7,7 @@ import json
 import os
 import sqlite3
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 from unittest import mock
 
 import pytest
@@ -20,14 +20,14 @@ if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
 
 #: The columns of OpenCode 2.1.4's tables that a sandbox role's database is read by.
-SCHEMA = """
+SCHEMA: Final = """
 CREATE TABLE session_v2 (id text PRIMARY KEY, version text NOT NULL);
 CREATE TABLE session_message (
     id text PRIMARY KEY, session_id text NOT NULL, type text NOT NULL, seq integer NOT NULL, data text NOT NULL
 );
 """
 #: What OpenCode 2.1.2 exported, sanitized, of the recorded run in `recorded/run.jsonl`: five replies of one model.
-RECORDED = Path(__file__).parent / "recorded" / "export.json"
+RECORDED: Final = Path(__file__).parent / "recorded" / "export.json"
 
 
 @pytest.fixture(autouse=True)
@@ -53,7 +53,7 @@ def assistant(
 
 
 #: The prompt and a model switch, which name no model that served.
-OTHERS: tuple[dict[str, object], ...] = (
+OTHERS: Final[tuple[dict[str, object], ...]] = (
     {"id": "msg_0", "type": "model-switched", "model": {"id": "asked", "providerID": "anthropic"}},
     {"id": "msg_1", "type": "user", "text": "[redacted:text]", "files": []},
 )

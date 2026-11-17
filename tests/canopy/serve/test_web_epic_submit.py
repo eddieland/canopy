@@ -4,6 +4,8 @@ A submission writes through the function `canopy epic submit` calls, with channe
 they refuse the CLI's: inside a tick or a run, and, in a workspace of several repositories, for naming none.
 """
 
+from typing import Final
+
 import pytest
 
 from canopy.core import epics
@@ -12,7 +14,7 @@ from canopy.serve.backend import Backend
 from tests.canopy.helpers import in_run, in_tick
 from tests.canopy.web_helpers import refused, signed_in_client, signed_in_to
 
-GOAL = "Let a user sign in on every app with one account, and sign out of all of them at once."
+GOAL: Final = "Let a user sign in on every app with one account, and sign out of all of them at once."
 
 
 def test_an_epic_submitted_from_the_web_is_queued_for_its_plan_run_as_the_operators(backend: Backend) -> None:
