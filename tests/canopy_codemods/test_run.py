@@ -83,6 +83,18 @@ def test_a_file_that_does_not_parse_fails_the_run_by_name_and_the_others_are_sti
     assert broken.read_text() == "LIMIT = (\n"
 
 
+def test_check_fails_on_a_file_that_does_not_parse_though_no_file_would_change(tmp_path: Path) -> None:
+    broken = tmp_path / "broken.py"
+    broken.write_text("LIMIT = (\n")
+    (tmp_path / "clean.py").write_text(AFTER)
+
+    code, output = invoke("--check", tmp_path)
+
+    assert code == 1
+    assert f"{broken}: final-constants: " in output
+    assert "1 file could not be rewritten" in output
+
+
 def test_many_files_are_rewritten_as_few_are(tmp_path: Path) -> None:
     for i in range(20):
         (tmp_path / f"m{i:02}.py").write_text(BEFORE if i % 2 else AFTER)
