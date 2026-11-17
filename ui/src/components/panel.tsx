@@ -320,7 +320,7 @@ export function ThreadScroll({
     return (
         <PanelScroll
             label={label}
-            className={cn('max-h-[max(20rem,60dvh)]', fill && '2xl:max-h-none 2xl:min-h-40 2xl:shrink')}
+            className={cn('max-h-[max(20rem,60dvh)]', fill && '2xl:max-h-none 2xl:shrink')}
             // The compiler keeps this callback until `end` changes, so a re-render leaves the operator's place alone
             // and only a flip attaches it again, at the new end.
             ref={(region) => (region === null ? undefined : keepToEnd(region, end))}

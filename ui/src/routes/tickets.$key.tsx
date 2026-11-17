@@ -225,7 +225,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                     className={cn(
                         '2xl:col-start-2 2xl:row-start-1',
                         grid.span,
-                        '2xl:sticky 2xl:top-6 2xl:flex 2xl:max-h-[max(28rem,calc(100dvh-6.5rem))] 2xl:flex-col',
+                        '2xl:sticky 2xl:top-6 2xl:flex 2xl:max-h-[max(36rem,calc(100dvh-6.5rem))] 2xl:flex-col',
                         '2xl:overflow-y-auto 2xl:print:static 2xl:print:max-h-none',
                     )}
                     data-testid="ticket-conversation"
