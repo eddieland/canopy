@@ -167,6 +167,29 @@ def test_a_tick_asks_each_source_its_own_kind_and_records_what_it_read_whole(sce
     assert asked(watched)[2]["request"]["tickets"][0] == {"key": "PROJ-1", "comments_since": "2026-10-18T10:00:00.000Z"}
 
 
+def test_a_tracker_comment_the_operator_ignores_reaches_neither_the_journal_nor_the_conversation(
+    scenario: Scenario,
+    watched: Path,
+) -> None:
+    scenario.configures("private", connect={"ignore_comments": ["I looked at this"]})
+    said = {"kind": "comment", "ticket": "PROJ-1", "author": "acc-1"}
+    plays(
+        watched,
+        jira={
+            "lines": [
+                ticket("PROJ-1"),
+                said | {"id": "10001", "time": "2026-10-18T10:00Z", "body": "i looked at this"},
+                said | {"id": "10002", "time": "2026-10-18T11:00Z", "body": "Use the retry helper."},
+            ],
+        },
+    )
+    scenario.tick(*waits(*KEYS))
+    [comment] = records.fetch_all(scenario.conn, records.ObservedComment, sql.frag("SELECT * FROM observed_comments"))
+    assert (comment.id, comment.body) == ("10002", "Use the retry helper.")
+    assert scenario.conn.execute("SELECT count(*) FROM messages WHERE comment_id = '10001'").fetchone()[0] == 0
+    assert json.loads(runs(scenario)[0].recorded) == {"comment": 1, "ticket": 1}
+
+
 def test_a_pr_last_seen_open_is_read_after_its_ticket_is_done_until_a_read_sees_it_merged(
     scenario: Scenario,
     watched: Path,

@@ -175,6 +175,8 @@ class Observed:
     #: The lines recorded, and refused, of each kind.
     recorded: Mapping[str, int] = field(default_factory=dict[str, int])
     refused: Mapping[str, int] = field(default_factory=dict[str, int])
+    #: The comments `connect.ignore_comments` named, which were not recorded.
+    ignored: int = 0
     #: The harness's words for what the run did not read; None when it read everything asked.
     missed: str | None = None
     #: The last `MAX_STDERR` characters of its stderr.
@@ -222,7 +224,7 @@ def observe(
             whole = Whole()
         case _:
             assert_never(kind)
-    recorded = _record(conn, config, kind, read, whole, operators=frozenset(source.operators))
+    recorded, ignored = _record(conn, config, kind, read, whole, operators=frozenset(source.operators))
     query = list(read.end.query) if request.query is not None and read.end.query is not None else None
     review = (
         list(read.end.review_query) if request.review_query is not None and read.end.review_query is not None else None
@@ -238,6 +240,7 @@ def observe(
         whole=whole,
         recorded=recorded,
         refused=dict(read.refused),
+        ignored=ignored,
         missed=missed,
         stderr=stderr,
         query_result=query,
@@ -672,15 +675,18 @@ def _record(
     whole: Whole,
     *,
     operators: AbstractSet[str],
-) -> dict[str, int]:
+) -> tuple[dict[str, int], int]:
     """Replace what the journal holds of each subject read whole with what the run read of it, in one transaction.
 
     `operators` are the source's: the tracker accounts whose comments on a private ticket are the operator's messages.
+    A comment `connect.ignore_comments` names is not recorded, so nothing canopy derives or shows rests on it; a
+    review it names keeps its state, an approval's among them, and is recorded with no text, as one that says nothing.
 
     Returns:
-        The lines recorded of each kind.
+        The lines recorded of each kind, and how many comments were ignored.
     """
     recorded: Counter[str] = Counter()
+    ignored = 0
     now = db.now()
     with db.transaction(conn):
         if kind is SourceKind.TRACKER:
@@ -698,9 +704,15 @@ def _record(
         for line in read.lines:
             if line.of not in (whole.tickets | whole.prs | whole.repositories):
                 continue
-            if _insert(conn, config, line, now, known, operators=operators):
+            kept = line
+            if isinstance(line, _Comment | _Review) and config.connect.ignores(line.body):
+                ignored += 1
+                if not (isinstance(line, _Review) and line.item is ReviewItem.REVIEW):
+                    continue
+                kept = line.model_copy(update={"body": ""})
+            if _insert(conn, config, kept, now, known, operators=operators):
                 recorded[line.kind] += 1
-    return dict(recorded)
+    return dict(recorded), ignored
 
 
 def _insert(

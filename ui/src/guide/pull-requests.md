@@ -65,6 +65,20 @@ run's diff they sit on. A thread on a line that's since changed sits under its f
 moved on past the diff the page shows, a warning above the diff says so. Its files fold and filter by type as a
 review's do ([below](#a-reviews-page)).
 
+Some comments are ceremony. If your reviewers must leave an "I looked at this" on every PR, canopy would otherwise
+treat each one as feedback: a new item, a stale plan, a worker politely drafting a reply to a formality. Name it in your
+own config and canopy stops reading it, on PRs and tickets alike:
+
+```toml
+[connect]
+ignore_comments = ['I looked at this\.?']
+```
+
+Each entry is a regular expression that has to match the whole comment, trimmed, in any case. So "I looked at this, and
+the retry is wrong" still gets through, which is the point. An ignored comment never reaches the journal, so it shows
+on no page here; a review whose text is only the sign-off keeps its approval and just has nothing to say. PR comments
+catch up on the next read; a ticket comment canopy recorded before you added the pattern stays recorded.
+
 Not everything has a line to sit on. A thread on a file the diff doesn't show waits in **Not in the diff**, after the
 files; when no run kept a diff at all, every thread is listed whole under **Threads**, and the line at the top says
 why, in the words the latest run's own [Diff panel](runs#a-runs-page) uses: it crashed, say, or garbage collection got
