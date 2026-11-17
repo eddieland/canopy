@@ -70,7 +70,7 @@ edit the copy it starts as, within {{MAX_PLAN_CHARS}} characters:
   change, rename load to fetch`, in the order of your result's `items`: the worker's progress lists the items by these
   headings, so keep each to one short line. Under it, say who wrote it and whether they are trusted, or which check
   failed, what conflicts, or which blocker merged, what it asks, what you propose and why, and for a `change`, which
-  files and tests it touches and the test that proves it. A `change` that touches three files or more lists them in
+  files and tests it touches and the test that proves it. A `change` that touches four files or more lists them in
   a table, and one that moves which part calls which, what a status may become, or how types or tables relate shows
   that in a diagram, as below.
 - `## Risks`: what the changes could break, and what to watch in review.

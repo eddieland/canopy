@@ -60,17 +60,16 @@ section with nothing to say for this ticket says `None.`
   it (its name and assertions), and leaves the repository's checks passing, so it can be its own commit. The worker's
   progress lists the steps by their titles, and the operator follows the work by them: keep each title one short line,
   distinct from every other, and size the steps alike, so each one done moves the work about as far. A step that
-  changes three files or more lists them in a table, `File | Change | Why`, with `Repository` first when the plan
+  changes four files or more lists them in a table, `File | Change | Why`, with `Repository` first when the plan
   covers more than one. A step that changes which part calls which, the order things happen across processes, the
   states a status moves through, or how types or tables relate shows that in a diagram, the parts it changes marked.
 - `## Verification`: each repository's commands for its checks and tests, as its docs or build files give them, and
   what passing looks like. You cannot run them; name only commands you found.
 - `## Review focus`: where a reviewer is most likely to find a defect: the inputs, edge cases, and contracts the change
-  could break, each naming the step whose test covers it. With three or more, a table, `Where | What could break |
-  Step`.
+  could break, each naming the step whose test covers it.
 - `## Out of scope`: what the worker must not change, and follow-up work this ticket leaves.
 - `## Risks`: what could go wrong in the work or after it lands, and how to back out: data, migrations, compatibility,
-  and the order the repositories' changes must land in. With two or more, a table, `Risk | When | Back out`.
+  and the order the repositories' changes must land in. With three or more, a table, `Risk | When | Back out`.
 
 The operator reads the plan before anyone else, and takes in a picture or a table faster than a paragraph. The
 headings above say where each must go; beyond those, use one wherever the plan has a shape to show: a diagram for
@@ -100,8 +99,7 @@ prose beside one names each part it draws, and need not retell its arrows.
 
 Before you exit, check the plan against the ticket and the operator's messages, and fix any gap: a requirement with no
 `Acceptance` line or no step that meets it, a line that defers a decision, a name or signature spelled two ways, a
-diagram or table the headings above call for that is not there, a run of sentences alike that a table would hold, a
-diagram that names a part, call, or state the prose does not, or a claim about the code that you guessed rather than
+diagram or table the headings above call for that is not there, a diagram that names a part, call, or state the prose does not, or a claim about the code that you guessed rather than
 read.
 
 If `.canopy-plan.md` exists in your directory, it is the plan this one replaces, and `.canopy-new-plan.md` starts as a copy of
