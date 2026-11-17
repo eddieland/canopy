@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Annotated, Self
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictInt, model_validator
 
 from canopy.core import chore_result as result
-from canopy.core import chore_runs, config, contract, conversation, reports
+from canopy.core import chore_runs, config, contract, conversation, reports, run_models
 from canopy.core.memory_text import visible
 from canopy.infra import logs
 from canopy.infra.text import one_line
@@ -26,7 +26,7 @@ from canopy.runtime import servers
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
 
     from canopy.core import records
     from canopy.core.context import Context
@@ -117,15 +117,16 @@ def read(ctx: Context, request: History) -> str:
         "chore history read",
         extra={"chore": name, "chore_run_id": run_id, "in_run": in_run, "runs": len(runs)},
     )
+    served = run_models.of_runs(ctx.conn, "chore_runs", [run.id for run in runs])
     lines = [DATA_NOTE] if in_run else []
     if run_id is not None:
-        return "\n".join([*lines, *_run_lines(runs[0], full=True)])
+        return "\n".join([*lines, *_run_lines(runs[0], served[runs[0].id], full=True)])
     page = f" before run {before}" if before is not None else ""
     if not runs:
         return "\n".join([*lines, f"Chore {name} has no runs{page}."])
     lines.append(f"Chore {name}'s runs{page}, newest first; run (--run) ID prints one in full.")
     for run in runs:
-        lines += ["", *_run_lines(run, full=False)]
+        lines += ["", *_run_lines(run, served[run.id], full=False)]
     if len(runs) == request.limit:
         lines += ["", f"Older runs: before (--before) {runs[-1].id}."]
     return "\n".join(lines)
@@ -242,18 +243,19 @@ def _own_chore(conn: sqlite3.Connection, run_env_value: str) -> str | None:
     return run.chore if run is not None else None
 
 
-def _run_lines(run: records.ChoreRun, *, full: bool) -> list[str]:
-    """One chore run as its history says it: how it ended, its summary, and its findings.
+def _run_lines(run: records.ChoreRun, served: Sequence[records.RunModel], *, full: bool) -> list[str]:
+    """One chore run as its history says it: how it ended, its models, its summary, and its findings.
 
-    `full` gives the summary and each finding's detail whole, every hidden character named; otherwise each is cut to
-    one line.
+    Its models are the one canopy asked for, and `served`, those its session says served it (DESIGN §13). `full` gives
+    the summary and each finding's detail whole, every hidden character named; otherwise each is cut to one line.
 
     Returns:
         Its lines, unindented the first, the rest indented beneath it.
     """
     who = "the overseer's" if run.tick_id is not None else "tried by hand"
     ended = f", ended {run.ended_at}" if run.ended_at else ""
-    lines = [f"run {run.id}  {run.status}  started {run.started_at}{ended}  ({who})"]
+    models = (f"  model {run.model}" if run.model is not None else "") + run_models.served_of(served)
+    lines = [f"run {run.id}  {run.status}  started {run.started_at}{ended}  ({who}){models}"]
     harness = contract.stored_object(run.result_json).get("harness")
     if harness:
         lines.append(f"  harness: {one_line(str(harness))}")

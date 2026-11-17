@@ -41,7 +41,6 @@ from canopy.loop.render import (
     prs_of,
     result_of,
     run_kind,
-    served_of,
     spent,
 )
 from canopy.notify import deliver
@@ -399,7 +398,7 @@ def _print_recent_runs(ctx: Context) -> None:
         if said:
             click.echo(f"    {said}")
         session = f"session {r['session_id']}" if r["session_id"] else "no session reported"
-        models = f"{model_of(r)}{served_of(served[int(r['id'])])}"
+        models = f"{model_of(r)}{run_models.served_of(served[int(r['id'])])}"
         click.echo(f"    {session}{spent(r)}{persona_of(r)}{models}  log {r['log_path']}")
     if not runs:
         click.echo("  none")

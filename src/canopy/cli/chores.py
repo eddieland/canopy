@@ -12,10 +12,10 @@ from pathlib import Path
 
 import click
 
-from canopy.chores import execute, history, install, trial
+from canopy.chores import execute, history, install, start, trial
 from canopy.cli.common import CliError, leave_the_tick, open_context
 from canopy.cli.params import CHORE, EXAMPLE_CHORE, TextType, validated
-from canopy.core import conversation, run_spans, workspace
+from canopy.core import conversation, run_models, run_spans, workspace
 from canopy.core.config import ConfigError
 from canopy.infra import logs, procs
 
@@ -34,7 +34,8 @@ def cmd_chore_try(click_ctx: click.Context, name: str, context: str | None, *, n
     """Run chore NAME now, in the foreground, and print its result. No guard applies.
 
     The run is recorded like one the loop started: its findings go on the attention list and `canopy show`, and the
-    chore's next run is due counting from it. With --no-record nothing is written, so a prompt being drafted cannot
+    chore's next run is due counting from it. It names the model canopy asks for, and once a recorded run ends, the
+    models its session says served it. With --no-record nothing is written, so a prompt being drafted cannot
     clear real findings. Works with `capacity.max_chores = 0`, so you can write a chore before the loop runs any. Exits
     0 only when the chore reports `ok`.
     """
@@ -52,7 +53,10 @@ def cmd_chore_try(click_ctx: click.Context, name: str, context: str | None, *, n
     run_id = recorded.run_id if recorded is not None else None
     where = "nothing is recorded" if run_id is None else f"recorded as chore run {run_id}"
     timeout = prepared.chore.timeout_minutes
-    click.echo(f"trying chore {name} in {prepared.cwd} (timeout {timeout} minutes); {where}", err=True)
+    # The model canopy asks for, as a run records it; none for the runtime's default, or an agent of the operator's own.
+    asked = start.asked_model(ctx.config, prepared.chore)
+    model = f", model {asked}" if asked is not None else ""
+    click.echo(f"trying chore {name} in {prepared.cwd} (timeout {timeout} minutes{model}); {where}", err=True)
     try:
         outcome = trial.run_unrecorded(ctx, prepared) if recorded is None else trial.run_recorded(ctx, recorded)
     except (procs.ProcError, execute.ChoreError) as e:
@@ -64,9 +68,10 @@ def cmd_chore_try(click_ctx: click.Context, name: str, context: str | None, *, n
         if printed.stderr.strip():
             click.echo(f"--- agent stderr ---\n{printed.stderr.rstrip()}")
         usage = printed.output.usage
-        click.echo(
-            f"--- agent exit {printed.returncode}{f', cost {usage.describe()}' if usage is not None else ''} ---",
-        )
+        cost = f", cost {usage.describe()}" if usage is not None else ""
+        # A recorded try's session was read as it closed, for the models that served it; one unrecorded is never read.
+        served = run_models.served_of(run_models.of_run(ctx.conn, "chore_runs", run_id)) if run_id is not None else ""
+        click.echo(f"--- agent exit {printed.returncode}{cost}{served} ---")
     if outcome.result is not None:
         click.echo(json.dumps(outcome.result.model_dump(exclude_none=True), indent=2))
     note = f" ({outcome.note})" if outcome.note else ""

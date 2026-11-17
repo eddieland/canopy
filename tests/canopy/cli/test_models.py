@@ -89,3 +89,21 @@ def test_canopy_models_leaves_out_what_hide_models_hides_but_still_checks_it(
         f"OpenCode lists 3 models:\n  {MODEL}  variants: high, xhigh  (runtime.models: reviewer@xhigh)\n"
         f"  {OTHER}\n  {hidden}\n"
     )
+
+
+def test_canopy_models_lists_and_checks_a_chores_own_model(scenario: Scenario, opencode_state: Path) -> None:
+    """A chore's own `model` is named beside `[runtime.models]`' agents, and checked as its runs check it."""
+    opencode_state.write_text(json.dumps({"models": [OTHER, MODEL], "variants": {MODEL: ["high"]}}))
+    prompt = scenario.env.home / "briefing.md"
+    prompt.write_text("Brief me.\n")
+    briefing = {"prompt": str(prompt), "every_minutes": 60, "model": f"{MODEL}@high"}
+    scenario.configures(runtime={"models": {"chore": OTHER}}, chores={"briefing": briefing})
+    assert scenario.operator("models").out == (
+        f"OpenCode lists 2 models:\n  {MODEL}  variants: high  (chores: briefing@high)\n"
+        f"  {OTHER}  (runtime.models: chore)\n"
+    )
+    scenario.configures(runtime={"models": {"chore": MODEL}}, chores={"briefing": {"model": "acme/gone"}})
+    assert scenario.operator("models", code=1).out == (
+        f"OpenCode lists 2 models:\n  {MODEL}  variants: high  (runtime.models: chore)\n  {OTHER}\n"
+        "chores.briefing.model names acme/gone, which OpenCode does not list: its runs refuse (model_missing).\n"
+    )
