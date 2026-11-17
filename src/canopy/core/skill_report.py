@@ -18,9 +18,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Final, LiteralString
 
-from canopy.core import db, records, spend, sql
-from canopy.core.vocab import RunKind
-from canopy.runtime import agents as names
+from canopy.core import agent_runs, db, records, spend, sql
 from canopy.runtime.definitions import MAX_SKILL_NAME, SKILL_NAME_RE
 from canopy.runtime.report import SKILL_PREFIX
 
@@ -28,18 +26,6 @@ if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Iterable, Mapping, Sequence
     from datetime import datetime
-
-    from canopy.core.run_models import RunTable
-
-#: The agents canopy ships, in the order a row per agent lists them; any other follows, by name.
-AGENTS: Final = (
-    names.OVERSEER,
-    names.WORKER,
-    names.PRIVATE_WORKER,
-    names.PLANNER,
-    names.REVIEWER,
-    names.CHORE,
-)
 
 
 @dataclass(frozen=True)
@@ -392,31 +378,6 @@ class _Ran(records.View):
     sent_chars: int
 
 
-#: The run tables whose runs the runtime is asked about as they start (`run_offers.probing`): the rest record no offer.
-_ASKED: Final[tuple[RunTable, ...]] = ("ticks", "runs", "chore_runs", "review_runs")
-#: Every table of agent runs, whose calls of the skill tool are all recorded.
-_TABLES: Final[tuple[RunTable, ...]] = (*_ASKED, "task_runs", "epic_runs")
-#: A run `r` of the window: one that started in it and has ended, so what it called is recorded.
-_WINDOW: LiteralString = "r.started_at >= ? AND r.started_at < ? AND r.ended_at IS NOT NULL"
-#: Which of a table's rows are an agent's runs: every one, but a tick that ran no overseer.
-_EVERY = sql.frag("1")
-_RUNS: Mapping[RunTable, sql.Fragment] = {"ticks": sql.frag("r.overseer_ran IS NOT 0")}
-#: The agent a run `r` of each table ran, where its offer does not name one: the one canopy ships for its kind of run
-#: (DESIGN §13). A plan's is the planner, as a feedback plan's is; a private repository's worker is its own.
-_SHIPPED: Mapping[RunTable, sql.Fragment] = {
-    "ticks": sql.frag("?", names.OVERSEER),
-    "runs": sql.frag(
-        "CASE WHEN {} THEN ? WHEN r.private THEN ? ELSE ? END",
-        sql.in_("r.kind", (RunKind.PLAN, RunKind.FEEDBACK_PLAN)),
-        names.PLANNER,
-        names.PRIVATE_WORKER,
-        names.WORKER,
-    ),
-    "chore_runs": sql.frag("?", names.CHORE),
-    "review_runs": sql.frag("?", names.REVIEWER),
-    "task_runs": sql.frag("?", names.PRIVATE_WORKER),
-    "epic_runs": sql.frag("?", names.PLANNER),
-}
 #: How many model calls a run `r` made, as its session's record says once read: NULL until it is, or when it names no
 #: model. The `?` is the run's table.
 _CALLS: LiteralString = "(SELECT SUM(m.replies) FROM run_models m WHERE m.run_table = ? AND m.run_id = r.id)"
@@ -437,7 +398,7 @@ def _offered(since: str, until: str) -> sql.Select:
         sql.select(
             "coalesce(o.agent, {}) AS agent, s.skill AS skill, r.started_at AS started_at, "
             "s.listing_chars AS chars, {} AS calls, coalesce(t.calls > t.errors, 0) AS loaded",
-            _SHIPPED[table],
+            agent_runs.SHIPPED[table],
             sql.frag(_CALLS, table),
         )
         .from_(
@@ -450,10 +411,10 @@ def _offered(since: str, until: str) -> sql.Select:
             table,
             SKILL_PREFIX,
         )
-        .where(_WINDOW, since, until)
-        .where("{}", _RUNS.get(table, _EVERY))
+        .where(agent_runs.WINDOW, since, until)
+        .where("{}", agent_runs.ran(table))
         .where("o.error IS NULL")
-        for table in _ASKED
+        for table in agent_runs.ASKED
     ]
     return (
         sql.select(
@@ -474,7 +435,7 @@ def _loaded(since: str, until: str) -> sql.Select:
         sql.select(
             "coalesce(o.agent, {}) AS agent, substr(t.tool, ?) AS skill, t.calls - t.errors AS loads, "
             "t.errors AS failed, t.result_chars AS chars, s.run_id IS NULL AS unoffered",
-            _SHIPPED[table],
+            agent_runs.SHIPPED[table],
             after,
         )
         .from_(
@@ -487,10 +448,10 @@ def _loaded(since: str, until: str) -> sql.Select:
             table,
             after,
         )
-        .where(_WINDOW, since, until)
-        .where("{}", _RUNS.get(table, _EVERY))
+        .where(agent_runs.WINDOW, since, until)
+        .where("{}", agent_runs.ran(table))
         .where("t.tool = ? OR substr(t.tool, 1, ?) = ?", _UNNAMED, len(SKILL_PREFIX), SKILL_PREFIX)
-        for table in _TABLES
+        for table in agent_runs.TABLES
     ]
     return (
         sql.select(
@@ -512,16 +473,16 @@ def _ran(since: str, until: str) -> sql.Select:
         sql.select(
             "coalesce(o.agent, {}) AS agent, o.run_id IS NOT NULL AND o.error IS NULL AS said, "
             "o.error IS NOT NULL AS unanswered, {} AS skills, {} AS sized, {} AS calls, {} AS chars",
-            _SHIPPED[table],
+            agent_runs.SHIPPED[table],
             sql.frag(_LIST, sql.frag("count(*)"), table),
             sql.frag(_LIST, sql.frag("count(*) = count(s.listing_chars)"), table),
             sql.frag(_CALLS, table),
             sql.frag(_LIST, sql.frag("coalesce(SUM(s.listing_chars), 0)"), table),
         )
         .from_("{} r LEFT JOIN run_offers o ON o.run_table = ? AND o.run_id = r.id", sql.name(table), table)
-        .where(_WINDOW, since, until)
-        .where("{}", _RUNS.get(table, _EVERY))
-        for table in _TABLES
+        .where(agent_runs.WINDOW, since, until)
+        .where("{}", agent_runs.ran(table))
+        for table in agent_runs.TABLES
     ]
     return (
         sql.select(
@@ -569,7 +530,7 @@ def _uses(offers: Iterable[_Offered], loads: Iterable[_Loaded]) -> dict[str, lis
             result_chars=load.result_chars,
         )
     by_skill: dict[str, list[Use]] = {}
-    for use in sorted(found.values(), key=lambda u: _agent_order(u.agent)):
+    for use in sorted(found.values(), key=lambda u: agent_runs.order(u.agent)):
         by_skill.setdefault(use.skill, []).append(use)
     return by_skill
 
@@ -585,7 +546,7 @@ def _agents(ran: Iterable[_Ran], skills: Sequence[Skill], unnamed: Mapping[str, 
     uses = [u for s in skills for u in s.uses]
     countable = {s.name for s in skills if s.countable}
     found: list[Agent] = []
-    for r in sorted(ran, key=lambda r: _agent_order(r.agent)):
+    for r in sorted(ran, key=lambda r: agent_runs.order(r.agent)):
         own = [u for u in uses if u.agent == r.agent]
         offered = [u for u in own if u.offered]
         found.append(
@@ -613,16 +574,6 @@ def _agents(ran: Iterable[_Ran], skills: Sequence[Skill], unnamed: Mapping[str, 
 def _newest(offers: Iterable[_Offered]) -> int | None:
     stamped = max((o.newest for o in offers if o.newest is not None), default=None)
     return None if stamped is None else int(stamped.rpartition(" ")[2])
-
-
-# Where an agent sits among the rows: canopy's own first, in `AGENTS` order, a chore's copy after the chores', then
-# any other by name.
-def _agent_order(agent: str) -> tuple[int, str]:
-    if agent in AGENTS:
-        return AGENTS.index(agent), ""
-    if agent.startswith(names.CHORE_COPY_PREFIX):
-        return AGENTS.index(names.CHORE), agent
-    return len(AGENTS), agent
 
 
 # Whether a load of a skill is counted under its name, by the rule the runtime's events are read with.

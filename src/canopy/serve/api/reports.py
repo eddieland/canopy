@@ -2,7 +2,8 @@
 
 And how worker runs answered each repository's checklist over the last days, how the last days' runs ended, as
 `canopy health` reads them, what CI did on the PRs canopy observed, where their review feedback came from, how plans
-were approved, how each connector's runs ended, and which skills the agents were offered and loaded. Reads only.
+were approved, how each connector's runs ended, and which skills, MCP servers, and tools the agents were offered and
+used. Reads only.
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from canopy.serve.schema.plan_report import PlansReport
 from canopy.serve.schema.reports import MonthlyReport
 from canopy.serve.schema.review_report import ReviewsReport
 from canopy.serve.schema.skill_report import SkillsReport
+from canopy.serve.schema.tool_report import ToolsReport
 
 TAG = "reports"
 router = APIRouter(tags=[TAG])
@@ -195,3 +197,29 @@ def skills_report(
     """
     with backend.open() as ctx:
         return report_views.skills_report(backend, ctx, days)
+
+
+@router.get(
+    "/reports/tools",
+    operation_id="getToolsReport",
+    summary="Get which MCP servers and tools the last days' agent runs were offered and called",
+)
+def tools_report(
+    backend: BackendDep,
+    days: Annotated[
+        int,
+        Query(
+            ge=1,
+            le=spending.MAX_DAYS,
+            description=f"How many local days to read, today's so far included: 1 to {spending.MAX_DAYS}.",
+        ),
+    ] = spending.DEFAULT_DAYS,
+) -> ToolsReport:
+    """Each MCP server and tool a run was offered or called, by agent, with its calls and what they returned.
+
+    Read from the journal alone: it starts no runtime. A server's tools are in no offer by name, so one is listed once
+    a run calls it. Every count of tokens is an estimate, characters over 4; none is a definition's cost, which is not
+    recorded.
+    """
+    with backend.open() as ctx:
+        return report_views.tools_report(backend, ctx, days)

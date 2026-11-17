@@ -19,8 +19,8 @@ Each feature's fixtures are in a module of their own in this package, named for 
 memory, chore runs, review runs, review replies, feedback plans in each state, personas, one-off tasks, the worker
 runs' answers to the checklists, the PRs' check runs, the connectors' runs, GitHub's times on the PRs, the runs'
 transcripts, epics, the months before T0, whose landed tickets the reports page shows, the machine (a fixed reading),
-the runtime's sessions, canopy's and the operator's, as the loop last read them by their titles, and the skills each
-run was offered and loaded.
+the runtime's sessions, canopy's and the operator's, as the loop last read them by their titles, and the skills, MCP
+servers, and tools each run was offered, with the skills it loaded.
 Times are fixed around 2026-10-08 12:00 UTC, so a test that freezes the browser's clock gets the same page every time.
 `changes` moves the running run's cost now and then, which the event stream then shows.
 """
@@ -76,6 +76,7 @@ from canopy.serve.mock import (
     skill_use,
     skills,
     tasks,
+    tool_use,
     transcripts,
 )
 
@@ -472,6 +473,7 @@ def seed(directory: Path) -> Backend:
             epics.seed(ctx.conn, ws.state_dir, root, at)
             # After every run, which it names: it writes offers and loads alone.
             skill_use.seed(ctx.conn, at)
+            tool_use.seed(ctx.conn)
         reviews.drafts(ctx.conn, at)
         # After every run, whose sessions it records as the loop's read of the runtime's record would.
         sessions.seed(ctx.conn, T0, root)

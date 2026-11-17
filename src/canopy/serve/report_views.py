@@ -2,7 +2,7 @@
 
 What each local calendar month cost and got done, how the last days' runs ended, as `canopy health` reads them, what
 CI did on the PRs canopy observed, where their review feedback came from, how plans were approved, how each
-connector's runs ended, and which skills the agents were offered and loaded.
+connector's runs ended, and which skills, MCP servers, and tools the agents were offered and used.
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ from canopy.core import (
     runtime_sessions,
     skill_report,
     spend,
+    tool_report,
 )
 from canopy.core.config import CANOPY_REVIEWER
 from canopy.core.vocab import ConnectorRunStatus, SourceKind
@@ -94,6 +95,7 @@ from canopy.serve.schema.review_report import (
 )
 from canopy.serve.schema.skill_report import SkillsAgent, SkillsPrevious, SkillsReport, SkillsSkill, SkillsUse
 from canopy.serve.schema.spend import SpendUnpriced
+from canopy.serve.schema.tool_report import ToolsAgent, ToolsPrevious, ToolsReport, ToolsRow, ToolsUse
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -450,6 +452,45 @@ def skills_report(backend: Backend, ctx: Context, days: int) -> SkillsReport:
     )
 
 
+def tools_report(backend: Backend, ctx: Context, days: int) -> ToolsReport:
+    """Which MCP servers and tools the agent runs of the last `days` local days were offered and called.
+
+    By the backend's clock.
+
+    Returns:
+        The report, each count of tokens an estimate, with the window before's headline figures beside it.
+    """
+    now = backend.clock()
+    # One snapshot, so a run recorded between the reads is in both windows' or neither's.
+    with db.read_snapshot(ctx.conn):
+        found = tool_report.report(ctx.conn, now, days)
+        before = tool_report.between(ctx.conn, *spend.window_before(found.since, days))
+    return ToolsReport(
+        days=found.days,
+        since=db.parse_time(found.since),
+        until=db.parse_time(found.until),
+        servers=found.servers,
+        tools=found.tools,
+        unused=found.unused,
+        calls=found.calls,
+        errors=found.errors,
+        runs=found.runs,
+        unanswered=found.unanswered,
+        unasked=found.unasked,
+        rows=[_tool_row(r) for r in found.rows],
+        agents=[_tool_agent(a) for a in found.agents],
+        previous=ToolsPrevious(
+            since=db.parse_time(before.since),
+            until=db.parse_time(before.until),
+            servers=before.servers,
+            tools=before.tools,
+            unused=before.unused,
+            calls=before.calls,
+            errors=before.errors,
+        ),
+    )
+
+
 @dataclass(frozen=True)
 class _Figures:
     """A month's headline figures as the Health, CI, and Reviews pages read them."""
@@ -758,6 +799,53 @@ def _skill_agent(found: skill_report.Agent) -> SkillsAgent:
         unnamed=found.unnamed,
         est_call_tokens=found.call_tokens,
         est_front_matter_tokens=found.sent_tokens,
+    )
+
+
+def _tool_row(found: tool_report.Row) -> ToolsRow:
+    return ToolsRow(
+        kind=found.kind,
+        name=found.name,
+        server=found.server,
+        listed=found.listed,
+        unused=found.unused,
+        offered=found.offered,
+        partial=found.partial,
+        called=found.called,
+        unoffered=found.runs - found.called,
+        calls=found.calls,
+        errors=found.errors,
+        est_result_tokens=found.result_chars // spend.CHARS_PER_TOKEN,
+        uses=[
+            ToolsUse(
+                agent=u.agent,
+                offered=u.offered,
+                partial=u.partial,
+                called=u.called,
+                unoffered=u.unoffered,
+                calls=u.calls,
+                errors=u.errors,
+                est_result_tokens=u.result_chars // spend.CHARS_PER_TOKEN,
+            )
+            for u in found.uses
+        ],
+    )
+
+
+def _tool_agent(found: tool_report.Agent) -> ToolsAgent:
+    # With no run answered for, nothing says what it was offered: not known, where an agent offered none is 0.
+    answered = found.said > 0
+    return ToolsAgent(
+        agent=found.agent,
+        runs=found.runs,
+        unanswered=found.unanswered,
+        unasked=found.unasked,
+        servers=found.servers if answered else None,
+        tools=found.tools if answered else None,
+        unused=found.unused if answered else None,
+        calls=found.calls,
+        errors=found.errors,
+        est_result_tokens=found.result_chars // spend.CHARS_PER_TOKEN,
     )
 
 
