@@ -33,8 +33,8 @@ import pytest
 
 from canopy.core import hostgit, pools, treehouse
 from canopy.core import pool as canopy_pool
-from canopy.infra import procs
-from tests.canopy.helpers import KEY, present
+from canopy.infra import procs, tracing
+from tests.canopy.helpers import KEY, present, spans
 from tests.conftest import HERMETIC_GIT, Journals, git
 
 # Found before any fixture puts the fake first on PATH.
@@ -398,6 +398,22 @@ def test_a_return_needs_the_lease_id_and_holder(pool: Contract, wrong: str) -> N
     assert pool.give_back(lease, **{wrong: "canopy:someone-else"}) is pools.ReturnOutcome.FAILED
     [slot] = pool.status()
     assert (slot.status, slot.lease_id, slot.lease_holder) == ("leased", lease.lease_id, lease.lease_holder)
+
+
+def test_each_lease_and_return_is_a_moment_in_the_span_it_happens_in(pool: Contract) -> None:
+    tracing.configure(pool.tmp, "file")
+    with tracing.span("spawn"):
+        lease = pool.lease()
+        pool.give_back(lease)
+        pool.give_back(lease)
+    [spawn] = [s for s in spans(pool.tmp / tracing.TRACES_FILE_NAME) if s["name"] == "spawn"]
+    # Which pool, and how a return came out; never the slot's path, its holder, or the lease's id.
+    backend = "treehouse" if pool.impl is not Impl.CANOPY else "canopy"
+    assert [(e["name"], e["attributes"]) for e in spawn["events"]] == [
+        ("lease.taken", {"canopy.pool": backend}),
+        ("lease.return", {"canopy.pool": backend, "canopy.outcome": "returned"}),
+        ("lease.return", {"canopy.pool": backend, "canopy.outcome": "failed"}),
+    ]
 
 
 def test_a_lease_returns_once(pool: Contract) -> None:

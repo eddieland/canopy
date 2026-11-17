@@ -3,7 +3,9 @@
 A pool leases slots, git worktrees of one repository's primary clone, to holders: `canopy:<KEY>` for a ticket's run,
 `canopy:review:<id>` for a review, and `canopy-sync` while `canopy workspace sync` makes slots. `Pool` is the operations
 every caller uses; treehouse (`core/treehouse.py`) is one implementation and canopy's own pool (`core/pool.py`) the
-other. `tests/canopy/core/test_pool_contract.py` holds both to the same guarantees.
+other. `tests/canopy/core/test_pool_contract.py` holds both to the same guarantees. Each lease taken and each return is
+an event on the span open now (`taken`, `given_back`), naming the backend and a return's outcome alone, never a path,
+a holder, or a lease id (D132).
 """
 
 from __future__ import annotations
@@ -14,8 +16,12 @@ from typing import TYPE_CHECKING, Annotated, Protocol
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, StrictBool, StrictInt, StrictStr
 
+from canopy.infra import tracing
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+    from canopy.core.vocab import PoolKind
 
 HOLDER_PREFIX = "canopy:"
 # Held only while `canopy workspace sync` makes a pool's slots, which it then returns. Not a `canopy:` holder, so no
@@ -137,3 +143,23 @@ class Pool(Protocol):
 def holder_for(key: str) -> str:
     """Return the lease holder canopy uses for ticket `key`."""
     return f"{HOLDER_PREFIX}{key}"
+
+
+def taken(backend: PoolKind, lease: Lease) -> Lease:
+    """Record `lease`, which pool `backend` just made, as an event, `lease.taken`, on the span open now.
+
+    Returns:
+        The lease.
+    """
+    tracing.event("lease.taken", pool=backend)
+    return lease
+
+
+def given_back(backend: PoolKind, outcome: ReturnOutcome) -> ReturnOutcome:
+    """Record a return of a slot to pool `backend` as an event, `lease.return`, on the span open now, with its outcome.
+
+    Returns:
+        The outcome.
+    """
+    tracing.event("lease.return", pool=backend, outcome=outcome.value)
+    return outcome

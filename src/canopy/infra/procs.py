@@ -291,7 +291,7 @@ class SubprocessRunner:
                     return _bounded(proc, argv, stdin, timeout, max_stdout)
                 stdout, stderr = proc.communicate(stdin, timeout=timeout)
             except subprocess.TimeoutExpired:
-                _kill_group(proc.pid)
+                _kill_group(proc.pid, timed_out=True)
                 stdout, stderr = proc.communicate()
                 return Result(argv, proc.returncode, stdout or "", stderr, timed_out=True)
             except BaseException:
@@ -589,7 +589,7 @@ class _Deadline:
         return None if self.at is None else max(0.0, self.at - time.monotonic())
 
     def expire(self) -> None:
-        _kill_group(self.pgid)
+        _kill_group(self.pgid, timed_out=True)
         self.expired = True
         self.at = None
 
@@ -667,12 +667,13 @@ def alive(pid: int) -> bool:
     return state not in ("Z", "X")
 
 
-def kill_group(pgid: int) -> bool:
+def kill_group(pgid: int, *, timed_out: bool = False) -> bool:
     """SIGKILL process group `pgid`, if any process is still in it. Returns whether one was.
 
     Every child `SubprocessRunner` starts leads its own group, so its pid is the group id. A pid is not reused while a
     group of that id has members, so this reaches only what is left of that child and its descendants, unless the whole
-    group has already exited and the pid has since gone to a new group leader.
+    group has already exited and the pid has since gone to a new group leader. A kill is an event, `process.killed`, on
+    the span open now, saying whether the child's timeout brought it (`timed_out`).
 
     Returns:
         True when the signal was sent. False when the group had no process left, or `pgid` is 0 or 1.
@@ -683,8 +684,9 @@ def kill_group(pgid: int) -> bool:
         os.killpg(pgid, signal.SIGKILL)
     except ProcessLookupError:
         return False
+    tracing.event("process.killed", timed_out=timed_out)
     return True
 
 
-def _kill_group(pgid: int) -> None:
-    kill_group(pgid)
+def _kill_group(pgid: int, *, timed_out: bool = False) -> None:
+    kill_group(pgid, timed_out=timed_out)

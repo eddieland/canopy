@@ -31,7 +31,7 @@ from canopy.core.vocab import (
     StartStatus,
     TickStatus,
 )
-from canopy.infra import procs
+from canopy.infra import procs, tracing
 from canopy.runtime.report import ToolUse, Usage
 
 if TYPE_CHECKING:
@@ -1297,6 +1297,10 @@ def record_decision(
     marks an attention item the overseer keeps, held until what it names ends it, and `item` is the journal number of
     what it names, if it names one (`core.kept_items`). `kind` is the kind of run a refused dispatch asked for.
 
+    It is an event, `decision`, on the span open now: its id, kind, outcome, and decider, the kind of run it asked for,
+    and a refusal's guard, a word of canopy's own; never its ticket or rationale, nor the reason of an attention item,
+    which may be the overseer's word (D132).
+
     Returns:
         The new decision's id.
     """
@@ -1314,7 +1318,19 @@ def record_decision(
         item=item,
         kind=kind,
     )
-    return rowid(decision.run(conn))
+    decision_id = rowid(decision.run(conn))
+    decided, outcome = run_metrics.classified(action, kind)
+    guard = action.partition(":")[2] if outcome is run_metrics.DecisionOutcome.REFUSED else None
+    tracing.event(
+        "decision",
+        decision_id=decision_id,
+        kind=decided,
+        outcome=outcome,
+        guard=guard,
+        decider=decider,
+        run_kind=kind,
+    )
+    return decision_id
 
 
 def record_persona_text(conn: sqlite3.Connection, digest: str | None, text: str | None) -> None:

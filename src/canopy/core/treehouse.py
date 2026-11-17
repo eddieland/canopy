@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, StrictStr, TypeAdapter, ValidationEr
 
 from canopy.core import pools
 from canopy.core.pools import Lease, ReturnOutcome, Slot
+from canopy.core.vocab import PoolKind
 from canopy.infra import procs
 
 ROOT_ENV = "TREEHOUSE_ROOT"
@@ -206,7 +207,7 @@ def lease_as(
     if not result.ok:
         raise TreehouseError(_failure(result))
     try:
-        return Lease.model_validate_json(result.stdout)
+        return pools.taken(PoolKind.TREEHOUSE, Lease.model_validate_json(result.stdout))
     except ValidationError as e:
         returned = _return_unparsed(runner, result.stdout, pool)
         raise TreehouseError(f"treehouse get: unexpected output: {e}; {returned}") from e
@@ -231,7 +232,7 @@ def return_slot(
         TreehouseError: treehouse could not be run, timed out, or exited with any other code.
     """
     args = ["return", "--force", "--if-lease-id", lease_id, "--if-lease-holder", lease_holder, str(path)]
-    return _returned(_run(runner, args, pool))
+    return pools.given_back(PoolKind.TREEHOUSE, _returned(_run(runner, args, pool)))
 
 
 def release(runner: procs.Runner, path: Path, *, pool: Pool = DEFAULT_POOL) -> ReturnOutcome:
@@ -245,7 +246,8 @@ def release(runner: procs.Runner, path: Path, *, pool: Pool = DEFAULT_POOL) -> R
     Raises:
         TreehouseError: treehouse could not be run, timed out, or exited with any other code.
     """
-    return _returned(_run(runner, ["return", "--force", "--if-lease-holder", pools.QUARANTINED, str(path)], pool))
+    returned = _returned(_run(runner, ["return", "--force", "--if-lease-holder", pools.QUARANTINED, str(path)], pool))
+    return pools.given_back(PoolKind.TREEHOUSE, returned)
 
 
 def destroy(runner: procs.Runner, path: Path, *, pool: Pool = DEFAULT_POOL) -> str | None:

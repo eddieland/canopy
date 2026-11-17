@@ -520,4 +520,26 @@ def test_a_traced_command_is_a_span_of_its_exit_and_never_its_arguments_or_outpu
     assert exited["status"] == {"code": 0}
     assert (timed_out["name"], timed_out["attributes"]["canopy.timed_out"]) == ("agent", True)
     assert timed_out["status"] == {"code": 2, "message": "TimeoutExpired"}
+    # The kill is a moment in it, which an exit that needed none lacks.
+    assert [(e["name"], e["attributes"]) for e in timed_out["events"]] == [
+        ("process.killed", {"canopy.timed_out": True}),
+    ]
+    assert exited["events"] == []
     assert "secret" not in (tmp_path / tracing.TRACES_FILE_NAME).read_text()
+
+
+def test_a_streamed_command_that_times_out_and_a_kill_asked_for_are_each_a_moment_in_their_span(tmp_path: Path) -> None:
+    tracing.configure(tmp_path, "file")
+    SubprocessRunner().run(["sh", "-c", "exec sleep 30"], timeout=0.5, on_line=list[str]().append)
+    with tracing.span("reconcile"):
+        pid = SubprocessRunner().spawn(["sh", "-c", "exec sleep 30"], cwd=tmp_path, log_path=tmp_path / "log")
+        assert procs.kill_group(pid)
+        assert not procs.kill_group(1)
+    streamed, reconciled = spans(tmp_path / tracing.TRACES_FILE_NAME)
+    assert [(e["name"], e["attributes"]) for e in streamed["events"]] == [
+        ("process.killed", {"canopy.timed_out": True}),
+    ]
+    # A group with nothing to kill is no moment.
+    assert [(e["name"], e["attributes"]) for e in reconciled["events"]] == [
+        ("process.killed", {"canopy.timed_out": False}),
+    ]
