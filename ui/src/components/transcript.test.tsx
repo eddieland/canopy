@@ -418,7 +418,7 @@ describe('TranscriptPanel', () => {
             at: '2026-10-08T12:00:00Z',
             tool: 'canopy_dispatch',
             input: JSON.stringify({ key: 'ABC-104', kind: 'implement', context: 'Start with the form.' }),
-            output: JSON.stringify({ key: 'ABC-104', recorded: 43, branch: 'agent/ABC-104-sso', dry_run: false }),
+            output: 'recorded dispatch implement for ABC-104 as recorded run 43: agent/ABC-104-sso',
         }
         const diff = {
             ...base,
@@ -432,7 +432,7 @@ describe('TranscriptPanel', () => {
         )
         const dispatched = call('canopy_dispatch')
         expect(within(dispatched).getByText('implement')).toBeDefined()
-        expect(dispatched.textContent).toContain('run 43 on agent/ABC-104-sso')
+        expect(dispatched.textContent).toContain('as recorded run 43: agent/ABC-104-sso')
         expect(within(dispatched).queryByText('context')).toBeNull()
         dispatched.open = true
         fireEvent(dispatched, new Event('toggle'))

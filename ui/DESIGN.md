@@ -1012,8 +1012,8 @@ reader, so no table repeats them.
   (`canopyCall`, `src/lib/canopy-calls.ts`), the overseer's, the git tools, the reports, a chore's history, reads the
   same way: what it is about in monospace, the rest of what it names muted as a command's flags are, what it does as
   a chip (`status-blocked` for an attention item), the first line of what the agent said with it in prose, and under
-  that what canopy answered in a few words (`run 43 on agent/ABC-1`, `12 lines in 3 files`). It opens to what the
-  agent said, whole, as rich text, and to what canopy answered where that reads better laid out: a `git log`'s
+  that what canopy answered: its own words' first line, or how much it found (`12 lines in 3 files`). It opens to what
+  the agent said, whole, as rich text, and to what canopy answered where that reads better laid out: a `git log`'s
   commits, a `git grep`'s lines by file, the items `review-items` read, an untrusted author's marked. A `git diff`'s
   output is tinted in place as a review's diff is, every character as written. A tool this does not know keeps its
   input's values on its line. Each keeps its input and output under, as written. A

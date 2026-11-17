@@ -30,7 +30,7 @@ export function CanopyLine({ call, words }: { call: CanopyCall; words: readonly 
                     {(call.subject !== null || call.detail !== null) && (
                         <span className="text-muted-foreground"> · </span>
                     )}
-                    <MarkedText text={call.said.text.split('\n')[0] ?? ''} words={words} />
+                    <MarkedText text={firstLine(call.said.text)} words={words} />
                 </span>
             )}
         </>
@@ -58,6 +58,16 @@ export function CanopyBody({ entry, call }: { entry: TranscriptTool; call: Canop
             {matches !== null && matches.length > 0 && <Matches files={matches} />}
             {items !== null && items.length > 0 && <Items items={items} />}
         </>
+    )
+}
+
+// The first line of the agent's words that says something.
+function firstLine(text: string): string {
+    return (
+        text
+            .split('\n')
+            .find((line) => line.trim() !== '')
+            ?.trim() ?? ''
     )
 }
 
@@ -137,7 +147,7 @@ function Items({ items }: { items: readonly ReadItem[] }) {
                             {item.author !== '' && <span>{item.author}</span>}
                             {item.state !== null && <Chip word={item.state} />}
                             {item.worker && <Chip>worker</Chip>}
-                            {!item.trusted && !item.worker && <Chip tone="blocked">untrusted</Chip>}
+                            {!item.trusted && <Chip tone="blocked">untrusted</Chip>}
                         </span>
                         <p className="max-w-[96ch] text-sm wrap-break-word whitespace-pre-wrap">{item.body}</p>
                     </li>

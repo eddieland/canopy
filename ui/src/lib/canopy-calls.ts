@@ -27,8 +27,8 @@ export interface CanopyCall {
     detail: string | null
     /** The agent's own words with it; null when it gave none. */
     said: CallSaid | null
-    /** What canopy answered, in a few words: the run it recorded, how much it found; null when the call failed or
-     * its answer is its output whole. */
+    /** What canopy answered, in a few words: its own words' first line, or how much it found; null when the call
+     * failed or its answer is its output whole. */
     told: string | null
 }
 
@@ -45,10 +45,12 @@ export function canopyCall(entry: TranscriptTool): CanopyCall | null {
     if (own === null || input === null) {
         return null
     }
-    const output = entry.status === 'error' ? null : record(parse(entry.output))
+    // What canopy answered, for a call it took: its words, and the record under them where it answered with one.
+    const answer = entry.status === 'error' ? null : entry.output
+    const output = answer === null ? null : record(payload(answer))
     // Its own member alone: a tool named for one every object inherits (`constructor`) has no reader.
     const read = Object.hasOwn(READERS, own) ? READERS[own] : undefined
-    return read === undefined ? null : { ...BLANK, ...read(input, output) }
+    return read === undefined ? null : { ...BLANK, ...read(input, output, answer) }
 }
 
 const BLANK: CanopyCall = { subject: null, action: null, tone: 'plain', detail: null, said: null, told: null }
@@ -72,56 +74,65 @@ function ownName(tool: string): string | null {
 }
 
 type Fields = Record<string, unknown>
-type Reader = (input: Fields, output: Fields | null) => Partial<CanopyCall>
+// What reads a call's line: from its input, the record canopy answered with (null when it answered in words, or
+// refused), and its answer's text (null when it refused).
+type Reader = (input: Fields, output: Fields | null, answer: string | null) => Partial<CanopyCall>
 
 const READERS: Partial<Record<string, Reader>> = {
-    dispatch: (input, output) => ({
+    dispatch: (input, _, answer) => ({
         subject: text(input['key']),
         action: text(input['kind']),
         detail: joined([list(input['repos']).join(', '), prefixed('on ', text(input['base']))]),
         said: said(input, 'context'),
-        told: recorded(output, 'run', text(output?.['branch'])),
+        told: spoken(answer),
     }),
-    attention: (input) => ({
+    attention: (input, _, answer) => ({
         subject: joined([text(input['key']) ?? pr(input['pr']), text(input['repo'])]),
         action: text(input['reason']),
         tone: 'blocked',
         said: said(input, 'detail'),
+        told: spoken(answer),
     }),
     'review-items': (input, output) => ({
         subject: unit(input),
         detail: prefixed('items ', list(input['numbers']).join(', ')),
         told: counted(Array.isArray(output?.['items']) ? output['items'].length : null, 'item'),
     }),
-    'review-run': (input, output) => ({
+    'review-run': (input, _, answer) => ({
         subject: pr(input['pr']),
         action: 'review',
         detail: joined([prefixed('at ', short(input['sha'])), text(input['ticket'])]),
         said: said(input, 'context'),
-        told: reviewsStarted(output),
+        told: spoken(answer),
     }),
-    'review-wait': (input) => ({
+    'review-wait': (input, _, answer) => ({
         subject: joined([pr(input['pr']), text(input['ticket'])]),
         action: 'wait',
         said: said(input, 'rationale'),
+        told: spoken(answer),
     }),
-    'review-end': (input, output) => ({
+    'review-end': (input, _, answer) => ({
         subject: pr(input['pr']),
         action: text(input['reason']),
-        told: output?.['dry_run'] === true ? 'dry run' : null,
+        told: spoken(answer),
     }),
-    'review-revise': (input, output) => ({
+    'review-revise': (input, _, answer) => ({
         subject: prefixed('review ', text(input['run'])),
         action: 'revise',
-        told: recorded(output, 'run', null),
+        told: spoken(answer),
     }),
-    'chore-run': (input, output) => ({
+    'chore-run': (input, _, answer) => ({
         subject: text(input['name']),
         action: 'run',
         said: said(input, 'context'),
-        told: recorded(output, 'chore run', null),
+        told: spoken(answer),
     }),
-    'chore-wait': (input) => ({ subject: text(input['name']), action: 'wait', said: said(input, 'rationale') }),
+    'chore-wait': (input, _, answer) => ({
+        subject: text(input['name']),
+        action: 'wait',
+        said: said(input, 'rationale'),
+        told: spoken(answer),
+    }),
     'chore history': (input) => ({
         subject: text(input['name']),
         detail:
@@ -155,7 +166,15 @@ const READERS: Partial<Record<string, Reader>> = {
     'git grep': (input, output) => ({
         subject: text(input['repo']),
         action: input['count'] === true ? 'count' : null,
-        detail: joined([quoted(input['text']), prefixed('at ', text(input['rev'])), paths(input)]),
+        detail: joined([
+            quoted(input['text']),
+            // What changes how the text is read, so a pattern never passes for the words it holds.
+            input['regex'] === true ? 'as a regex' : null,
+            input['word'] === true ? 'whole words' : null,
+            input['ignore_case'] === true ? 'any case' : null,
+            prefixed('at ', text(input['rev'])),
+            paths(input),
+        ]),
         told: more(found(output), output),
     }),
     'git files': (input) => ({
@@ -205,7 +224,7 @@ function quoted(value: unknown): string | null {
 // The agent's own words in `field`, whole.
 function said(input: Fields, field: string): CallSaid | null {
     const value = input[field]
-    return typeof value === 'string' && value.trim() !== '' ? { label: field, text: value.trim() } : null
+    return typeof value === 'string' && value.trim() !== '' ? { label: field, text: value } : null
 }
 
 // A PR as a row names one, `acme/web#88`, or its address without the scheme (`pullRequestLabel`).
@@ -272,34 +291,10 @@ function found(output: Fields | null): string | null {
     return `${counted(matched, 'line') ?? ''} in ${counted(files, 'file') ?? ''}`
 }
 
-// What canopy recorded for a call that starts a run: its id, where it works, or that it was a dry run.
-function recorded(output: Fields | null, noun: string, where: string | null): string | null {
-    if (output === null) {
-        return null
-    }
-    if (output['dry_run'] === true) {
-        return 'dry run: nothing recorded'
-    }
-    return joined([prefixed(`${noun} `, text(output['recorded'])), prefixed('on ', where)])
-}
-
-// What a `review-run` started: each review, by its persona, and the guard that held one off.
-function reviewsStarted(output: Fields | null): string | null {
-    if (output === null) {
-        return null
-    }
-    const reviews = Array.isArray(output['reviews']) ? output['reviews'].map(record) : []
-    const started = reviews.flatMap((review) => {
-        const id = text(review?.['recorded'])
-        const persona = text(review?.['persona'])
-        return id === null ? [] : [persona === null ? `review ${id}` : `review ${id} (${persona})`]
-    })
-    const guard = text(record(output['waits'])?.['guard'])
-    return joined([
-        output['dry_run'] === true ? 'dry run:' : null,
-        started.length === 0 ? null : started.join(', '),
-        prefixed(started.length === 0 ? 'held: ' : '· held: ', guard),
-    ])
+// What canopy said of a call it took, in its own words: its answer's first line, as the CLI prints it.
+function spoken(answer: string | null): string | null {
+    const line = answer?.split('\n').find((one) => one.trim() !== '')
+    return line === undefined ? null : text(line)
 }
 
 /** A commit `git log` listed, as a row of its list. */
@@ -431,9 +426,12 @@ export function diffLinesOf(entry: TranscriptTool): { kind: DiffLineKind; text: 
         return null
     }
     let inHunk = false
+    // What comes before the first file, canopy's line saying the text is data, is no part of the diff.
+    let inFile = false
     return entry.output.split('\n').map((line) => {
         if (line.startsWith('diff --git ')) {
             inHunk = false
+            inFile = true
             return { kind: 'file', text: line }
         }
         if (line.startsWith('@@')) {
@@ -446,17 +444,25 @@ export function diffLinesOf(entry: TranscriptTool): { kind: DiffLineKind; text: 
         if (inHunk && line.startsWith('-')) {
             return { kind: 'del', text: line }
         }
-        return { kind: inHunk ? 'ctx' : 'file', text: line }
+        return { kind: inHunk || !inFile ? 'ctx' : 'file', text: line }
     })
 }
 
 // What canopy answered a call of the tool `own` names, as an object; null for another tool, or a call that failed.
 function answered(entry: TranscriptTool, own: string): Fields | null {
-    return entry.status === 'error' || ownName(entry.tool) !== own ? null : record(parse(entry.output))
+    return entry.status === 'error' || ownName(entry.tool) !== own ? null : record(payload(entry.output))
 }
 
 function record(value: unknown): Fields | null {
     return typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Fields) : null
+}
+
+// The record in an answer: the answer itself, or what follows the line canopy puts before a repository's or a
+// connector's text to say it is data (`DATA_NOTE` in `canopy.core.git_tools`), a blank line after it.
+function payload(answer: string): unknown {
+    const whole = parse(answer)
+    const after = answer.indexOf('\n\n')
+    return whole === undefined && after !== -1 ? parse(answer.slice(after + 2)) : whole
 }
 
 function parse(json: string): unknown {

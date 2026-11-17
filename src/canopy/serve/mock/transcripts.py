@@ -12,6 +12,7 @@ import json
 from datetime import timedelta
 from typing import TYPE_CHECKING, NamedTuple
 
+from canopy.core import git_tools
 from canopy.infra import logs
 from canopy.serve.mock import reviews
 from canopy.serve.mock.chores import LODASH
@@ -378,7 +379,7 @@ def write(state_dir: Path, t0: datetime, slot: Callable[[str, int], str]) -> Non
             {
                 "status": "completed",
                 "input": {"base": "main", "head": "HEAD", "paths": ["src/search"]},
-                "output": reviews.DIFF_88,
+                "output": f"{git_tools.DATA_NOTE}\n\n{reviews.DIFF_88}",
             },
         ),
         _tool(
@@ -403,7 +404,8 @@ def write(state_dir: Path, t0: datetime, slot: Callable[[str, int], str]) -> Non
             {
                 "status": "completed",
                 "input": {"rev": "HEAD", "text": "_MS =", "paths": ["src/config.ts"], "context": 1},
-                "output": json.dumps(
+                "output": f"{git_tools.DATA_NOTE}\n\n"
+                + json.dumps(
                     {
                         "files": [
                             {
