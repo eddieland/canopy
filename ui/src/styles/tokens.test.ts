@@ -361,6 +361,49 @@ describe('title lettering', () => {
 })
 
 /** The strength `--code-chip` mixes its ink at, as a fraction; a chip written another way fails rather than passes. */
+// Komorebi's leaves shade the canvas, and the guide sets its prose there. Under the deepest shade it casts, a leaf's
+// shadow in the bough, the colors the guide's text is set in still read; the shade over the rest of the canvas is no
+// deeper, and is clear of the bough's corner, so no two shadows deepen each other.
+describe("Komorebi's shade", () => {
+    const body = rule(paletteRule('light', 'komorebi'))
+    const colors = THEMES['komorebi light'] ?? {}
+    const token = (name: string): Rgb => {
+        const value = colors[name]
+        if (value === undefined) {
+            throw new Error(`tokens.css sets no --${name} for Komorebi`)
+        }
+        return srgb(...value)
+    }
+    const strength = (name: string): number => {
+        const alpha = new RegExp(`--${name}: oklch\\(from var\\(--shade\\) l c h / ([\\d.]+)\\);`, 'u').exec(body)?.[1]
+        if (alpha === undefined) {
+            throw new Error(`tokens.css sets --${name} in a form this test does not read`)
+        }
+        return Number(alpha)
+    }
+
+    it("reads the guide's text on the canvas under a leaf's shadow", () => {
+        const shaded = over(token('shade'), strength('leaf-shadow'), token('background'))
+        const low = ['foreground', 'muted-foreground', 'accent']
+            .map((name) => below(`${name} under a leaf's shadow`, token(name), shaded))
+            .filter((line) => line !== null)
+        expect(low).toEqual([])
+    })
+
+    it('shades the rest of the canvas no deeper than the bough, and no leaf falls darker', () => {
+        expect(strength('spray-shadow')).toBeLessThanOrEqual(strength('leaf-shadow'))
+        expect(body).toContain('--bough: var(--leaf-shadow);')
+        expect(body).toContain('--meteor: var(--leaf-shadow);')
+    })
+
+    it('casts no shadow by default', () => {
+        const defaults = rule(':root')
+        expect(defaults).toContain('--bough: none;')
+        expect(defaults).toContain('--bough-mask: none;')
+        expect(defaults).toContain('--meteor-mask: none;')
+    })
+})
+
 function codeChip(): number {
     const percent = /--code-chip: color-mix\(in oklab, currentColor ([\d.]+)%, transparent\);/u.exec(css)?.[1]
     if (percent === undefined) {

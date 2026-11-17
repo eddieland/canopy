@@ -140,6 +140,13 @@ Rules:
   and the header and faded in past a page's title, each layer twinkling on a period of its own, a crescent moon in
   the window's lower right corner, which never moves, and a meteor that crosses the sky along the window's foot now and
   then, all under the panels, so none covers anything. What moves does so by opacity and transform alone.
+  Komorebi, light's own, lays sunlight through leaves on it the same way: flecks of sun on one layer and the shadows
+  of leaves on the other, each dimming on a period of its own, a bough's shadow that sways in that corner, and a
+  leaf's shadow that falls along the window's foot now and then. Its light is lighter than the canvas and its shade
+  darker, so both layers are clear over the rail, the header, and a page's title and description, and its muted text
+  and accent read at 4.5:1 under its deepest shade, which `tokens.test.ts` measures, since the guide sets prose on the
+  canvas. Its leaves are drawn once, as SVG files beside `tokens.css` that only this palette fetches, and painted in
+  a token through a mask, so they hold no color of their own.
   A palette may also give the shell's signature a form of its own, the first place it is felt: the aurora (a gradient
   hairline, a stepped bar of solid blocks, a print strip of those blocks, or a line that blooms), the name (the
   aurora's gradient, on a solid block, on a tilted plate, or glowing), and the nav's highlight (a tint and a bar, a
@@ -430,8 +437,9 @@ holds only the rules it all keeps; what each one does is written in its code. No
 
 Motion says something arrived or changed, and gives the page some life without asking for attention. It is short
 (at most 700ms), eased out (`cubic-bezier(0.2, 0, 0, 1)`), and never loops on anything but the logo, a running run,
-a skeleton, a palette's stars, and fun (Fun, above). A loop is the one exception to the length and the easing: it keeps
-the pace of what it draws, a breath or a star's twinkle, since a 700ms loop eased out would read as a flash. The
+a skeleton, a palette's stars or leaves, and fun (Fun, above). A loop is the one exception to the length and the
+easing: it keeps the pace of what it draws, a breath or a star's twinkle, since a 700ms loop eased out would read as a
+flash. The
 keyframes and utilities are in `src/index.css`.
 
 - Route changes cross-fade through the `<ViewTransition>` around the outlet. The old page stays until the new one is

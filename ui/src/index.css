@@ -52,12 +52,13 @@
     }
 
     /*
-     * A palette's tone over the canvas, which Pulp and Starry Skies print: Pulp's dots (`--canvas-texture`) and,
-     * outside them, the swell they grow into (`--canvas-swell`), or the sky's faint stars and its bright ones, each
-     * where its mask lets it. Fixed to the window and under everything else, so it is painted once, never on a scroll,
-     * and the panels, the header, and the rail sit over it. By default both are none, and the two layers draw nothing.
-     * Each may move (`--canvas-texture-motion`, `--canvas-swell-motion`), by its opacity alone, which the compositor
-     * runs without a repaint.
+     * A palette's tone over the canvas, which Pulp, Starry Skies, and Komorebi print: Pulp's dots
+     * (`--canvas-texture`) and, outside them, the swell they grow into (`--canvas-swell`), the sky's faint stars and
+     * its bright ones, or the flecks of sun through a canopy and the shadows of its leaves, each where its mask lets
+     * it. Fixed to the window and under everything else, so it is painted once, never on a scroll, and the panels,
+     * the header, and the rail sit over it. By default both are none, and the two layers draw nothing. Each may move
+     * (`--canvas-texture-motion`, `--canvas-swell-motion`), by its opacity alone, which the compositor runs without a
+     * repaint.
      */
     html::before,
     html::after {
@@ -97,11 +98,35 @@
     }
 
     /*
-     * A palette's meteors, which only Starry Skies draws: two streaks (`--meteor`, lit by `--meteor-glow`) under the
-     * panels, each crossing the sky now and then on a path of its own (`--meteor-motion`, `--meteor-motion-2`), out of
-     * step, so no rhythm shows. Each falls down and to the left, turned about its head, the streak's bright end, so a
-     * path names where the head runs. They move by transform and opacity alone, and rest unseen, so a still page shows
-     * none. Under reduced motion none of the sky moves, and no meteor is drawn at all.
+     * A palette's bough, whose shadow only Komorebi casts: a box in the same corner, under the panels too, painting
+     * `--bough` through `--bough-mask`, which cuts its leaves. The box is as wide and as tall as the open canvas
+     * allows, short of the rail and of a page's title, so on a small window what is drawn whole inside it shrinks
+     * rather than reach either. It reaches a little past the window's corner, about which it may sway
+     * (`--bough-motion`), so a sway shows no edge. By default both are none, and it draws nothing.
+     */
+    #root::after {
+        content: '';
+        position: fixed;
+        right: -2rem;
+        bottom: -2rem;
+        z-index: -1;
+        width: min(44rem, 100vw - 21rem);
+        height: min(27.25rem, 100vh - 16rem);
+        background: var(--bough);
+        mask: var(--bough-mask);
+        transform-origin: 100% 100%;
+        pointer-events: none;
+    }
+
+    /*
+     * What crosses a palette's canvas now and then, under the panels: two of a kind (`--meteor`, cut to
+     * `--meteor-mask` and lit by `--meteor-glow`), each on a path of its own (`--meteor-motion`, `--meteor-motion-2`),
+     * out of step, so no rhythm shows. Starry Skies draws meteors, each a streak that falls down and to the left,
+     * turned about its head, the streak's bright end, so a path names where the head runs; Komorebi draws the shadows
+     * of falling leaves, each the same box at a leaf's size (`--meteor-length`, `--meteor-girth`), unturned
+     * (`--meteor-turn`), and rocking about its middle (`--meteor-origin`). They move by transform and opacity alone,
+     * and rest unseen, so a still page shows none. Under reduced motion nothing over the canvas moves, and neither is
+     * drawn at all.
      */
     @media (prefers-reduced-motion: no-preference) {
         html::before {
@@ -112,19 +137,24 @@
             animation: var(--canvas-swell-motion);
         }
 
+        #root::after {
+            animation: var(--bough-motion);
+        }
+
         body::before,
         body::after {
             content: '';
             position: fixed;
             top: 0;
-            left: -9rem;
+            left: calc(-1 * var(--meteor-length));
             z-index: -1;
-            width: 9rem;
-            height: 0.1rem;
+            width: var(--meteor-length);
+            height: var(--meteor-girth);
             background: var(--meteor);
+            mask: var(--meteor-mask);
             filter: var(--meteor-glow);
-            transform-origin: 100% 50%;
-            rotate: 162deg;
+            transform-origin: var(--meteor-origin);
+            rotate: var(--meteor-turn);
             opacity: 0;
             pointer-events: none;
         }
@@ -673,6 +703,132 @@ twice in a row. */
     100% {
         opacity: 0;
         translate: 90vw 74vh;
+    }
+}
+
+/* Komorebi's flecks of sun dim and brighten (`--canvas-texture-motion`), unevenly and never out, as leaves crossing
+the sun would make them. */
+@keyframes dapple {
+    24% {
+        opacity: 0.78;
+    }
+    49% {
+        opacity: 0.97;
+    }
+    73% {
+        opacity: 0.68;
+    }
+    90% {
+        opacity: 0.93;
+    }
+}
+
+/* Its leaf shadows do the same on a period of their own (`--canvas-swell-motion`), so light and shade never dim
+together. */
+@keyframes dapple-shade {
+    17% {
+        opacity: 0.62;
+    }
+    38% {
+        opacity: 0.94;
+    }
+    61% {
+        opacity: 0.55;
+    }
+    83% {
+        opacity: 0.88;
+    }
+}
+
+/* Its bough sways about the corner it grows from (`--bough-motion`): a gust, a lull, a longer gust, and back. */
+@keyframes bough-sway {
+    18% {
+        rotate: 1.3deg;
+    }
+    34% {
+        rotate: 0.3deg;
+    }
+    55% {
+        rotate: 1.8deg;
+    }
+    80% {
+        rotate: -0.6deg;
+    }
+}
+
+/* A falling leaf's two passes in a period (`--meteor-motion`), each about seven seconds down the open canvas at the
+window's foot, which a page's panels leave open most often, never nearer the rail than the canvas's tone comes. Unseen
+at rest, its first frame, and while it moves to the next start. */
+@keyframes leaf-fall {
+    0%,
+    6% {
+        opacity: 0;
+        translate: max(27rem, 88vw) 58vh;
+    }
+    7.5% {
+        opacity: 1;
+    }
+    21% {
+        opacity: 1;
+    }
+    23% {
+        opacity: 0;
+        translate: max(25rem, 80vw) 104vh;
+    }
+    23.1%,
+    57% {
+        opacity: 0;
+        translate: max(26rem, 67vw) 66vh;
+    }
+    58.5% {
+        opacity: 1;
+    }
+    70% {
+        opacity: 1;
+    }
+    72% {
+        opacity: 0;
+        translate: max(25rem, 61vw) 104vh;
+    }
+    72.1%,
+    100% {
+        opacity: 0;
+        translate: max(27rem, 88vw) 58vh;
+    }
+}
+
+/* The other leaf's one pass, on a longer period (`--meteor-motion-2`), so the two rarely fall together. */
+@keyframes leaf-fall-2 {
+    0%,
+    30% {
+        opacity: 0;
+        translate: max(27rem, 76vw) 62vh;
+    }
+    31.2% {
+        opacity: 1;
+    }
+    41% {
+        opacity: 1;
+    }
+    42.5% {
+        opacity: 0;
+        translate: max(25rem, 70vw) 104vh;
+    }
+    42.6%,
+    100% {
+        opacity: 0;
+        translate: max(27rem, 76vw) 62vh;
+    }
+}
+
+/* A falling leaf rocks from side to side as it comes down, tipping as it turns back: run back and forth beside its
+fall, which moves it by `translate`, so the two compose. */
+@keyframes leaf-rock {
+    from {
+        transform: translateX(-1.4rem) rotate(-34deg);
+    }
+    to {
+        transform: translateX(1.4rem) rotate(28deg);
     }
 }
 
