@@ -67,6 +67,7 @@ interface SubPage {
         | '/reports/connectors'
         | '/reports/reviews'
         | '/reports/plans'
+        | '/reports/skills'
     label: string
     hint: string
 }
@@ -143,7 +144,8 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string; pages?: SubPage[] }[
         icon: ChartColumn,
         hint:
             'What canopy cost and got done month by month, what agent runs cost each day and how they ended, ' +
-            'how workers answered your checklists, which checks fail, who reviews, and how plans were approved',
+            'how workers answered your checklists, which checks fail, who reviews, how plans were approved, and ' +
+            'which skills the agents load',
         pages: [...REPORT_PAGES],
     },
     {

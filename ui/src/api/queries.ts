@@ -97,6 +97,8 @@ export const keys = {
     reviewsReport: (days: number) => ['spend', 'breakdown', 'reviews', days] as const,
     // Under the breakdowns' key too: a plan, its approval, or a resume changes the report.
     plansReport: (days: number) => ['spend', 'breakdown', 'plans', days] as const,
+    // Under the breakdowns' key too: a run's end records what it was offered and what it loaded.
+    skillsReport: (days: number) => ['spend', 'breakdown', 'skills', days] as const,
     tick: ['tick'] as const,
     // Tick now's request, a mutation's key: every Tick now shares it, so the header sees the one asked for.
     tickNow: ['tick-now'] as const,
@@ -376,6 +378,19 @@ export function plansReportQuery(days: number) {
         queryKey: keys.plansReport(days),
         queryFn: async ({ signal }) =>
             unwrap(await api.GET('/api/reports/plans', { params: { query: { days } }, signal })),
+    })
+}
+
+/**
+ * Which skills the agent runs of the last `days` local days were offered and loaded, by agent, and what each one's
+ * front matter added to the runs' model calls. Read from the journal alone, so it starts no runtime, as the skills
+ * page's list does. Marked stale with the spend breakdowns.
+ */
+export function skillsReportQuery(days: number) {
+    return queryOptions({
+        queryKey: keys.skillsReport(days),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/reports/skills', { params: { query: { days } }, signal })),
     })
 }
 

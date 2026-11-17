@@ -62,6 +62,7 @@ def test_the_skills_report_counts_each_skill_by_agent_and_says_what_it_cannot(ca
     assert (found["runs"], found["said"], found["counted"]) == (2, 2, 1)
     # 400 characters of front matter in each of ten model calls, and five of the other skill's: a thousand tokens.
     assert found["est_sent_tokens"] == (400 * 10 + 5 * 10) // 4
+    assert found["est_call_tokens"] == 405 // 4
     audit, terse = found["skills"]
     assert {k: v for k, v in audit.items() if k != "uses"} == {
         "name": "audit",
@@ -124,6 +125,7 @@ def test_the_skills_report_counts_each_skill_by_agent_and_says_what_it_cannot(ca
         "loads": 0,
         "counted": 0,
         "est_sent_tokens": 0,
+        "est_call_tokens": None,
     }
 
 
@@ -184,6 +186,8 @@ def test_the_skills_report_reads_the_mocks_day_of_offers_and_loads(backend: Back
     assert (found["runs"], found["said"], found["counted"]) == (30, 21, 10)
     # The whole, estimated once: not the agents' estimates summed, each of which rounds down.
     assert found["est_sent_tokens"] == expected.sent_tokens == 88_610
+    # Some 320 tokens of front matter in each of the 279 model calls counted, the overseer's, which carry none, too.
+    assert found["est_call_tokens"] == 317
     # The month reaches the workers' runs of the weeks before, offered with no length kept: counted over no more runs.
     month = c.get("/api/reports/skills", params={"days": 30}).json()
     assert (month["days"], month["said"] > found["said"], month["counted"]) == (30, True, found["counted"])

@@ -103,7 +103,7 @@ async function renderPage(path = '/reports') {
     const root = createRootRoute()
     const page = Route.update({ id: '/reports/', path: '/reports', getParentRoute: () => root } as never)
     // Where the cards go, so the router can build their links.
-    const pages = ['spend', 'checklist', 'health', 'ci', 'connectors', 'reviews', 'plans'].map((name) =>
+    const pages = ['spend', 'checklist', 'health', 'ci', 'connectors', 'reviews', 'plans', 'skills'].map((name) =>
         createRoute({ getParentRoute: () => root, path: `/reports/${name}` }),
     )
     const router = createRouter({
@@ -134,6 +134,7 @@ describe('the reports page', () => {
             '/reports/connectors?days=30',
             '/reports/reviews?days=30',
             '/reports/plans?days=30',
+            '/reports/skills?days=30',
         ])
         const health = screen.getByTestId('reports-card-health')
         expect(health.getAttribute('title')).toBe(

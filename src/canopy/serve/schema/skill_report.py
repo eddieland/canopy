@@ -129,6 +129,9 @@ class SkillsPrevious(Model):
     """The runs a front matter cost is counted over."""
     est_sent_tokens: int
     """About how many tokens the skills' front matter added to those runs' model calls: an estimate."""
+    est_call_tokens: int | None
+    """About how many tokens it added to one of those model calls, their mean: an estimate. None when none is
+    counted."""
 
 
 class SkillsReport(Model):
@@ -157,6 +160,9 @@ class SkillsReport(Model):
     est_sent_tokens: int
     """About how many tokens the skills' front matter added to the counted runs' model calls: an estimate, characters
     over 4."""
+    est_call_tokens: int | None
+    """About how many tokens it added to one of those model calls, their mean, which holds while only some runs are
+    counted: an estimate, characters over 4. None when no model call is counted."""
     skills: list[SkillsSkill]
     """Each skill a run was offered or loaded, by name."""
     agents: list[SkillsAgent]

@@ -239,6 +239,18 @@ class Skills:
         """About how many tokens that is: an estimate."""
         return self.sent_chars // spend.CHARS_PER_TOKEN
 
+    @property
+    def call_chars(self) -> int | None:
+        """What the skills' front matter added to one model call, the counted runs' mean, in characters.
+
+        A mean over the calls counted, so it holds while only some runs are: where `sent_chars` grows with them.
+
+        Returns:
+            The characters; None when no model call is counted.
+        """
+        calls = sum(a.calls for a in self.agents)
+        return round(self.sent_chars / calls) if calls else None
+
 
 def report(conn: sqlite3.Connection, now: datetime, days: int) -> Skills:
     """The skills the runs of the last `days` local days, today's so far included, were offered and loaded.

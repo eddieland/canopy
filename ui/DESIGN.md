@@ -610,7 +610,9 @@ whole either side.
   long enough that a narrow column's still compares, filled in `muted-foreground` or the series' own fill; never a
   state's color, but for a failure rate, in `status-failed`, a share of the whole rather than of the column's largest:
   it says what is broken. It is the eye's, `aria-hidden`. Where a table's rows sum to a whole, a bar is its row's share
-  of the whole too, the percent on the cell's hover.
+  of the whole too, the percent on the cell's hover. A rate that breaks nothing, such as the runs that loaded a skill
+  of those offered it, is a share of its own whole too, in `muted-foreground`. A figure that is a share of nothing
+  draws no bar and keeps its cell: an empty bar says none, which is not the same as nothing to have any of.
 - **A sparkline** (`Sparkline`, `src/components/sparkline.tsx`) is a series drawn as a small `accent` line, where its
   trend is the point and a chart would be too much. Its scale is a chart's, 0 to `HEADROOM` over its largest; a point
   with no value breaks the line, and a lone one is a dot. It is `aria-hidden`: the words or the table beside it say
@@ -843,6 +845,12 @@ reader, so no table repeats them.
   or Escape. A hover leaves the focus where it was.
 - **A table of PRs** (`PullRequestTable`, `src/components/pull-request-table.tsx`) is a report's per-PR table: the PR
   with its unit's phase, its ticket, then the page's own figures.
+- **The skills by agents grid** (the Skills report's By skill and agent) is a `ReportTable` of one bar column per
+  agent, each cell the agent's runs that loaded the skill of its runs offered it. It tells three states apart with no
+  color, since none of them is broken: a filled bar is loaded, an empty bar offered and never loaded, a dash with no
+  bar not offered. A column is headed by the agent's name less canopy's prefix, the whole name in its tip, and the
+  region scrolls sideways once the agents outgrow the panel. Its rows keep the order of the table above it, so a row
+  is one skill in both.
 - **The first-call chart** (the spend page's First calls by week) follows Charts but where a rate needs otherwise: a
   bar per local ISO week of one kind's series, as tall as the share of the week's first calls the cache served, its top
   the whole, so the axis means the same in every window, and every bar's rate over it, since there are few and the eye

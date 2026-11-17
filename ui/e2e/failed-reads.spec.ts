@@ -16,6 +16,7 @@ const PAGES = [
     { page: 'reports', read: '**/api/reports/monthly*' },
     { page: 'reports/spend', read: '**/api/spend/breakdown*' },
     { page: 'reports/checklist', read: '**/api/reports/checklist*' },
+    { page: 'reports/skills', read: '**/api/reports/skills*' },
     { page: 'search?q=web', read: '**/api/search*' },
     { page: 'workspace/worktrees', read: '**/api/worktrees' },
     { page: 'workspace/checklists', read: '**/api/checklists' },

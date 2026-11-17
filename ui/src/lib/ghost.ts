@@ -205,6 +205,13 @@ export const GHOST_TIPS = {
         'Scanning... no resumes after that approval. Clean run, Guardian.',
         'Dear Traveler, a plan sent back twice. Third time, it walked out of the Darkness on its own.',
     ],
+    '/reports/skills': [
+        'Eyes up, Guardian. A skill offered to every run and loaded by none. Dead weight in the pack.',
+        "Field report: the tracker's skill, loaded every run. The prompt gave the order. It was followed.",
+        'Grimoire: front matter rides in every call. Small text, long road. It adds up.',
+        'Scanning... nine hundred characters of description. Somebody loves that skill. Nobody loads it.',
+        "Dear Traveler, an agent denied a skill it never loaded. It hasn't noticed. Neither would I.",
+    ],
     '/workspace/ticks/': [
         "Eyes up, Guardian. Between two ticks there's a tock. Nobody has survived seeing one.",
         'Grimoire: an idle tick is the overseer looking at everything and choosing a nap.',

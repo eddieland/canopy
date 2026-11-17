@@ -433,6 +433,7 @@ def skills_report(backend: Backend, ctx: Context, days: int) -> SkillsReport:
         said=found.said,
         counted=found.counted,
         est_sent_tokens=found.sent_tokens,
+        est_call_tokens=_est_tokens(found.call_chars),
         skills=[_skill(s) for s in found.skills],
         agents=[_skill_agent(a) for a in found.agents],
         previous=SkillsPrevious(
@@ -443,6 +444,7 @@ def skills_report(backend: Backend, ctx: Context, days: int) -> SkillsReport:
             loads=before.loads,
             counted=before.counted,
             est_sent_tokens=before.sent_tokens,
+            est_call_tokens=_est_tokens(before.call_chars),
         ),
     )
 
@@ -695,6 +697,11 @@ def _status(status: ConnectorRunStatus) -> ConnectorStatus:
             assert_never(status)
 
 
+# About how many tokens a count of characters is, an estimate; None where there is no count.
+def _est_tokens(chars: int | None) -> int | None:
+    return None if chars is None else chars // spend.CHARS_PER_TOKEN
+
+
 def _skill(found: skill_report.Skill) -> SkillsSkill:
     chars = found.front_matter_chars
     return SkillsSkill(
@@ -708,7 +715,7 @@ def _skill(found: skill_report.Skill) -> SkillsSkill:
         failed=found.failed,
         est_result_tokens=found.result_chars // spend.CHARS_PER_TOKEN,
         front_matter_chars=chars,
-        est_front_matter_tokens=None if chars is None else chars // spend.CHARS_PER_TOKEN,
+        est_front_matter_tokens=_est_tokens(chars),
         counted=found.counted,
         calls=found.calls,
         est_sent_tokens=found.sent_chars // spend.CHARS_PER_TOKEN,
@@ -732,7 +739,6 @@ def _skill(found: skill_report.Skill) -> SkillsSkill:
 
 
 def _skill_agent(found: skill_report.Agent) -> SkillsAgent:
-    chars = found.call_chars
     return SkillsAgent(
         agent=found.agent,
         runs=found.runs,
@@ -743,7 +749,7 @@ def _skill_agent(found: skill_report.Agent) -> SkillsAgent:
         calls=found.calls,
         skills=found.skills,
         unused=found.unused,
-        est_call_tokens=None if chars is None else chars // spend.CHARS_PER_TOKEN,
+        est_call_tokens=_est_tokens(found.call_chars),
         est_sent_tokens=found.sent_chars // spend.CHARS_PER_TOKEN,
     )
 

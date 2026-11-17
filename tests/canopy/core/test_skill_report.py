@@ -232,6 +232,8 @@ def test_a_skill_is_counted_by_the_runs_offered_it_and_those_that_loaded_it(conn
     assert (worker_agent.call_chars, review_agent.call_chars) == (170, None)
     assert (found.runs, found.said, found.counted) == (3, 3, 2)
     assert (found.sent_chars, found.sent_tokens) == (5100, 5100 // spend.CHARS_PER_TOKEN)
+    # Over the calls counted, the worker's thirty: a mean, so the reviewer's run, not counted, moves it no way.
+    assert found.call_chars == 170
     assert tracker["canopy-worker"].sent_tokens == 92 * 30 // spend.CHARS_PER_TOKEN
     assert tracker["canopy-worker"].result_tokens == 12_100 // spend.CHARS_PER_TOKEN
 
@@ -348,6 +350,7 @@ def test_only_the_window_s_ended_runs_are_read(conn: sqlite3.Connection) -> None
     empty = skill_report.between(conn, NOW - timedelta(days=40), NOW - timedelta(days=30))
     assert (empty.skills, empty.agents, empty.unnamed) == ([], [], 0)
     assert (empty.offered, empty.unused, empty.loads, empty.runs, empty.sent_tokens) == (0, 0, 0, 0, 0)
+    assert empty.call_chars is None
 
 
 def test_each_read_starts_from_the_window_s_runs(tmp_path: Path, journals: Journals) -> None:
