@@ -203,6 +203,10 @@
     --canvas-texture-mask: none;
     --canvas-swell: none;
     --canvas-swell-mask: none;
+    /* A moon over the canvas, which only Starry Skies hangs (src/index.css): what its box paints and the mask that
+     * cuts its phase. None by default, so no moon is drawn. */
+    --moon: none;
+    --moon-mask: none;
     /* What may move in the sky, only while the operator's system allows motion (src/index.css), as Starry Skies's
      * does: each canvas layer's animation, and two meteors, each a streak's image and its animation. None by
      * default, so nothing moves and no meteor is drawn. */
@@ -1085,24 +1089,34 @@
 
     /* The night: soft corners, the panels' hairlines kept so each holds its edge against the dark, the aurora
      * blooming softly as the Milky Way would, the name glowing in starlight, and the active nav icon lit like a star,
-     * on a tint with no hairline. */
+     * on a tint with no hairline. Starlight falls on a panel's top edge, and the primary action glows in it. */
     --radius: 0.625rem;
+    --depth-panel:
+        inset 0 1px 0 oklch(from var(--star) l c h / 0.06),
+        0 10px 24px -16px oklch(from var(--background) calc(l * 0.25) c h);
+    --depth-action:
+        inset 0 1px 0 oklch(1 0 0 / 0.3), 0 0 0 1px oklch(from var(--accent) l c h / 0.2),
+        0 2px 16px -2px oklch(from var(--accent) l c h / 0.55);
     --aurora-bloom: blur(5px);
     --aurora-bloom-opacity: 0.7;
     --wordmark-glow: drop-shadow(0 0 5px oklch(from var(--accent) l c h / 0.5));
     --nav-hairline: 0;
     --nav-on-glow: drop-shadow(0 0 5px currentColor);
 
-    /* The sky, painted on the canvas's two layers: the faint stars and a haze of the Milky Way on the first, the bright
-     * stars on the second, which twinkle. Each layer of stars is a tile of a few, the tiles' sides in rem at lengths
-     * that share no small multiple, so the field repeats nowhere the eye can find. White stars, a few warm and a few
-     * blue, as the sky holds. Both layers are clear over the rail and the header, and fade in past a page's title, so
-     * no star sits behind text that is not on a panel. */
+    /* The sky, painted on the canvas's two layers: the faint stars, a haze of the Milky Way, and two clouds of nebula,
+     * one violet and one teal, low in the sky, on the first, and the bright stars on the second, which twinkle, the
+     * brightest of each tile glinting in four thin rays, as a lens draws a star. Each layer of stars is a tile of a
+     * few, the tiles' sides in rem at lengths that share no small multiple, so the field repeats nowhere the eye can
+     * find. White stars, a few warm and a few blue, as the sky holds. Both layers are clear over the rail and the
+     * header, and fade in past a page's title, so no star sits behind text that is not on a panel, and clear behind
+     * the moon, whose dark side no star shines through. */
     --star: oklch(0.97 0.012 250);
     --star-dim: oklch(0.9 0.02 250 / 0.55);
     --star-warm: oklch(0.93 0.06 80);
     --star-blue: oklch(0.88 0.07 240);
     --star-haze: oklch(0.62 0.07 268 / 0.1);
+    --nebula-violet: oklch(0.55 0.15 305 / 0.16);
+    --nebula-teal: oklch(0.62 0.1 205 / 0.1);
     --canvas-texture:
         radial-gradient(circle at 12% 18%, var(--star-dim) 0 0.05rem, transparent 0.09rem) 0 0 / 9.7rem 8.3rem,
         radial-gradient(circle at 67% 41%, var(--star-dim) 0 0.04rem, transparent 0.08rem) 0 0 / 9.7rem 8.3rem,
@@ -1111,6 +1125,8 @@
         radial-gradient(circle at 74% 12%, var(--star-warm) 0 0.06rem, transparent 0.11rem) 0 0 / 15.1rem 12.7rem,
         radial-gradient(circle at 53% 36%, var(--star-dim) 0 0.04rem, transparent 0.08rem) 0 0 / 15.1rem 12.7rem,
         radial-gradient(circle at 88% 84%, var(--star-blue) 0 0.05rem, transparent 0.1rem) 0 0 / 15.1rem 12.7rem,
+        radial-gradient(ellipse 34rem 19rem at 76% 86%, var(--nebula-violet), transparent),
+        radial-gradient(ellipse 27rem 15rem at 44% 97%, var(--nebula-teal), transparent),
         linear-gradient(
             118deg,
             transparent 20%,
@@ -1127,6 +1143,10 @@
                 transparent 0.32rem
             )
             0 0 / 27.3rem 21.9rem,
+        radial-gradient(ellipse 0.7rem 0.04rem at 31% 27%, oklch(from var(--star) l c h / 0.8), transparent) 0 0 /
+            27.3rem 21.9rem,
+        radial-gradient(ellipse 0.04rem 0.7rem at 31% 27%, oklch(from var(--star) l c h / 0.8), transparent) 0 0 /
+            27.3rem 21.9rem,
         radial-gradient(
                 circle at 79% 71%,
                 var(--star-blue) 0 0.07rem,
@@ -1140,10 +1160,34 @@
                 oklch(from var(--star-warm) l c h / 0.3) 0.14rem,
                 transparent 0.4rem
             )
-            0 0 / 41.9rem 33.1rem;
+            0 0 / 41.9rem 33.1rem,
+        radial-gradient(ellipse 0.9rem 0.045rem at 61% 47%, oklch(from var(--star-warm) l c h / 0.8), transparent) 0 0 /
+            41.9rem 33.1rem,
+        radial-gradient(ellipse 0.045rem 0.9rem at 61% 47%, oklch(from var(--star-warm) l c h / 0.8), transparent) 0 0 /
+            41.9rem 33.1rem;
     --star-clear:
         linear-gradient(90deg, transparent 14rem, oklch(0 0 0) 22rem) intersect,
-        linear-gradient(transparent 5rem, oklch(0 0 0) 13rem);
+        linear-gradient(transparent 5rem, oklch(0 0 0) 13rem) intersect,
+        radial-gradient(circle at right 5.5rem bottom 5rem, transparent 1.3rem, oklch(0 0 0) 1.6rem);
+    /* The moon, a waxing crescent in the window's lower right corner, at the middle of its box (src/index.css), where
+     * `--star-clear` clears the stars: a pale disc over its halo, and a mask whose two discs, the moon's own and one
+     * set off to its upper left, let through only a little of where they overlap, the dark side in earthshine. */
+    --moon-light: oklch(0.95 0.03 95);
+    --moon:
+        radial-gradient(circle, var(--moon-light) calc(1.15rem - 1px), transparent 1.15rem),
+        radial-gradient(
+            circle,
+            oklch(from var(--moon-light) l c h / 0.22) 1.15rem,
+            oklch(from var(--moon-light) l c h / 0.06) 2.1rem,
+            transparent 3.5rem
+        );
+    --moon-mask:
+        radial-gradient(
+            circle at calc(50% - 0.5rem) calc(50% - 0.3rem),
+            oklch(0 0 0 / 0.04) calc(1.15rem - 1px),
+            oklch(0 0 0) 1.15rem
+        ),
+        radial-gradient(circle, oklch(0 0 0 / 0.04) calc(1.15rem - 1px), oklch(0 0 0) 1.15rem);
     --canvas-texture-mask: var(--star-clear);
     --canvas-swell-mask: var(--star-clear);
     /* The sky moves, not much but enough to see: the faint stars shimmer and the bright ones twinkle, out of step,

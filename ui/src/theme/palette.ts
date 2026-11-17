@@ -69,7 +69,7 @@ export const PALETTE_DESCRIPTIONS: { readonly [T in ResolvedTheme]: Readonly<Rec
         forest: 'A deep green canvas, the dark side of Sage, with a heather accent.',
         plum: 'A dark wine purple, warmer than indigo, with an orchid accent and the softest corners.',
         'starry-skies':
-            'A night blue under a field of twinkling stars, a meteor now and then, and starlight for an accent.',
+            'A night blue under twinkling stars and a crescent moon, a meteor now and then, and a starlight accent.',
         solarized: "Solarized's dark base tones and its blue, crisp and flat.",
         gruvbox:
             "Gruvbox's dark tones and its bright purple, in mono with hard shadows, like an editor of the nineties.",

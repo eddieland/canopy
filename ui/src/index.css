@@ -79,6 +79,24 @@
     }
 
     /*
+     * A palette's moon, which only Starry Skies hangs: a box in the window's lower right corner, under the panels as
+     * the canvas's tone is, painting `--moon` through `--moon-mask`, which cuts its phase. It never moves. By default
+     * both are none, and it draws nothing.
+     */
+    #root::before {
+        content: '';
+        position: fixed;
+        right: 2rem;
+        bottom: 1.5rem;
+        z-index: -1;
+        width: 7rem;
+        height: 7rem;
+        background: var(--moon);
+        mask: var(--moon-mask);
+        pointer-events: none;
+    }
+
+    /*
      * A palette's meteors, which only Starry Skies draws: two streaks (`--meteor`, lit by `--meteor-glow`) under the
      * panels, each crossing the sky now and then on a path of its own (`--meteor-motion`, `--meteor-motion-2`), out of
      * step, so no rhythm shows. Each falls down and to the left, turned about its head, the streak's bright end, so a
