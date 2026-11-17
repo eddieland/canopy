@@ -68,6 +68,30 @@ test("a ticket's conversation ends on the run working it now, and only while one
     await expect(page.getByTestId('working-now')).toBeHidden()
 })
 
+test('wide, a long conversation stays put beside the lists, in the window whole, as the page scrolls', async ({
+    page,
+}) => {
+    await page.setViewportSize({ width: 1720, height: 700 })
+    await padMessages(page, 'ABC-103', 30)
+    await page.goto('tickets/ABC-103')
+    await settled(page)
+    const panel = page.getByTestId('ticket-conversation')
+    const reply = panel.getByRole('textbox')
+    // The page scrolls down the lists beside the conversation, past where it began, and it is still in the window.
+    const scroller = page.locator('.page-scroll')
+    await scroller.evaluate((el) => el.scrollTo(0, 300))
+    await expect.poll(() => scroller.evaluate((el) => el.scrollTop)).toBe(300)
+    await expect(reply).toBeInViewport({ ratio: 1 })
+    await expect(panel.getByRole('heading', { name: 'Conversation' })).toBeInViewport({ ratio: 1 })
+    // The plan's card, which trails this page, is the left column's last panel, so the conversation is beside it too.
+    const card = await page.getByTestId('plan-card').boundingBox()
+    const beside = await panel.boundingBox()
+    expect((card?.x ?? 0) + (card?.width ?? 0)).toBeLessThan(beside?.x ?? 0)
+    // Its thread still scrolls in itself, in what the reply and the actions leave it.
+    const region = page.getByRole('region', { name: 'Conversation' })
+    expect(await region.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true)
+})
+
 test('a long conversation scrolls in its panel, opening at its newest end, which a flip moves', async ({ page }) => {
     await padMessages(page, 'ABC-102', 30)
     await page.goto('tickets/ABC-102')

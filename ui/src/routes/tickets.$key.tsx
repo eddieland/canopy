@@ -56,6 +56,18 @@ const HELP =
     "A ticket's page: its work and your actions on it, its conversation and the box to reply in, then its runs and " +
     'the decisions each tick made about it.'
 
+// Wide, the left column's rows, the last taking what the conversation beside them is taller by: Work, Left feedback,
+// Runs, and Decisions, then Memory and the plan's card where the page has them. The conversation spans them all.
+const ROWS = {
+    4: { rows: '2xl:grid-rows-[repeat(3,auto)_1fr]', span: '2xl:row-span-4', last: '2xl:row-start-4' },
+    5: { rows: '2xl:grid-rows-[repeat(4,auto)_1fr]', span: '2xl:row-span-5', last: '2xl:row-start-5' },
+    6: { rows: '2xl:grid-rows-[repeat(5,auto)_1fr]', span: '2xl:row-span-6', last: '2xl:row-start-6' },
+} as const
+
+// A list in the left column scrolls in its panel past this: wide, where the conversation stays beside it, half a tall
+// window's height, so a long history shows more than a handful of rows of it.
+const LIST_HEIGHT = '2xl:max-h-[max(28rem,50dvh)]'
+
 // What a public ticket's chip means, on hover: where its comments and a reply sent here go, as the reply box says it.
 const PUBLIC_HINT =
     'Public: its queue label authorizes it. Its comments stay on the tracker; a reply you send here stays in canopy, ' +
@@ -122,6 +134,8 @@ function Ticket({ detail }: { detail: TicketDetail }) {
     // Ticket notes on, the Memory panel is the left column's last row, which takes what the conversation is taller by.
     const memoryTier = useQuery(loopQuery).data?.memory?.ticket_notes
     const memoryOn = memoryTier !== undefined && memoryTier.mode !== 'off'
+    const planTrails = planned && planLeads === false
+    const grid = ROWS[planTrails ? (memoryOn ? 6 : 5) : memoryOn ? 5 : 4]
     return (
         <>
             <PageHeader
@@ -150,7 +164,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                 className={cn(
                     'flex stagger flex-col gap-6',
                     '2xl:grid 2xl:grid-cols-[minmax(0,36rem)_minmax(0,1fr)] 2xl:items-start',
-                    memoryOn ? '2xl:grid-rows-[auto_auto_auto_auto_1fr]' : '2xl:grid-rows-[auto_auto_auto_1fr]',
+                    grid.rows,
                 )}
             >
                 <Panel className="2xl:col-start-1 2xl:row-start-1">
@@ -204,12 +218,21 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                 </Panel>
                 {/* The answer: the conversation, the reply, then the ticket's verbs, so the keyboard reaches the
                     reply before Stop or Forget, as on its attention item. */}
+                {/* Wide, it stays put while the lists beside it scroll, as tall as the window has room for under the
+                    shell's header and the page's padding, so a ticket with a long history leaves no empty column
+                    under it and the reply stays in reach; the conversation takes what the rest of it leaves. */}
                 <Panel
-                    className={cn('2xl:col-start-2 2xl:row-start-1', memoryOn ? '2xl:row-span-5' : '2xl:row-span-4')}
+                    className={cn(
+                        '2xl:col-start-2 2xl:row-start-1',
+                        grid.span,
+                        '2xl:sticky 2xl:top-6 2xl:flex 2xl:max-h-[max(36rem,calc(100dvh-6.5rem))] 2xl:flex-col',
+                        '2xl:overflow-y-auto 2xl:print:static 2xl:print:max-h-none',
+                    )}
                     data-testid="ticket-conversation"
                 >
                     <TicketAnswer
                         detail={detail}
+                        fill
                         after={
                             <>
                                 <TicketVerbs ticket={ticket} limits={limits} place="after" testId="ticket-actions" />
@@ -240,7 +263,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                     className="2xl:col-start-1 2xl:row-start-3"
                     data-testid="ticket-runs"
                 >
-                    <PanelScroll label="Runs">
+                    <PanelScroll label="Runs" className={LIST_HEIGHT}>
                         <RunsTable runs={ordered('ticket-runs', runsOrder, runs)} ticket={false} />
                     </PanelScroll>
                 </ListPanel>
@@ -251,16 +274,25 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                     className="2xl:col-start-1 2xl:row-start-4"
                     data-testid="ticket-decisions"
                 >
-                    <PanelScroll label="Decisions">
+                    <PanelScroll label="Decisions" className={LIST_HEIGHT}>
                         <Decisions decisions={ordered('ticket-decisions', decisionsOrder, decisions)} byTick />
                     </PanelScroll>
                 </ListPanel>
                 {/* The least read, so last; wide, in the left column under the lists rather than across the page. */}
-                {memoryOn && <TicketMemoryPanel ticketKey={ticket.key} className="2xl:col-start-1 2xl:row-start-5" />}
+                {memoryOn && (
+                    <TicketMemoryPanel
+                        ticketKey={ticket.key}
+                        className={cn('2xl:col-start-1', planTrails ? '2xl:row-start-5' : grid.last)}
+                    />
+                )}
+                {/* What its runs would have said on it, waiting on the operator to send (DESIGN §29). Wide, across
+                    both columns under them, in a row of its own: it is placed after the plan's card, which is the
+                    left column's last. */}
+                <TicketDrafts ticketKey={ticket.key} drafts={detail.drafts} className="2xl:col-span-2" />
+                {planTrails && (
+                    <PlanCard ticketKey={ticket.key} plans={plans} className={cn('2xl:col-start-1', grid.last)} />
+                )}
             </div>
-            {/* What its runs would have said on it, waiting on the operator to send (DESIGN §29). */}
-            <TicketDrafts ticketKey={ticket.key} drafts={detail.drafts} />
-            {planned && planLeads === false && <PlanCard ticketKey={ticket.key} plans={plans} />}
         </>
     )
 }

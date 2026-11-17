@@ -45,16 +45,18 @@ const APPROVE_NOTED_TITLE =
  * and another pick goes with the approval as its note, to the implement; while none is answered the button reads
  * `Approve as planned`, so its own words say whose choices it takes. A ticket's page shows the card, and so does a
  * `plan_review` item on the attention list, `bare` there: its parts without a panel of their own, inside the item's.
- * It imports no editor, so neither page loads one.
+ * It imports no editor, so neither page loads one. `className` places its panel on a page, where it has one.
  */
 export function PlanCard({
     ticketKey,
     plans,
     bare = false,
+    className,
 }: {
     ticketKey: string
     plans: TicketPlans
     bare?: boolean
+    className?: string
 }) {
     const client = useQueryClient()
     const [said, setSaid] = useState<string | null>(null)
@@ -154,7 +156,9 @@ export function PlanCard({
             {parts}
         </div>
     ) : (
-        <Panel data-testid="plan-card">{parts}</Panel>
+        <Panel className={className} data-testid="plan-card">
+            {parts}
+        </Panel>
     )
 }
 

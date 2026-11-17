@@ -34,6 +34,7 @@ export function TicketAnswer({
     after,
     item = false,
     leaf = true,
+    fill = false,
     onReplied,
 }: {
     /** The ticket, its conversation and limits included. */
@@ -44,6 +45,8 @@ export function TicketAnswer({
     item?: boolean
     /** Whether a cleared item drops a leaf off its header. */
     leaf?: boolean
+    /** Whether, wide, the conversation takes the height its panel leaves (`ThreadScroll`), as on the ticket's page. */
+    fill?: boolean
     /** Called once a reply is recorded, with the reply and the line the form shows for it. */
     onReplied?: (replied: Replied, said: string) => void
 }) {
@@ -76,7 +79,12 @@ export function TicketAnswer({
                     </span>
                 </span>
             </PanelHeader>
-            <ThreadScroll key={`thread-${ticket.key}`} label="Conversation" end={order === 'oldest' ? 'bottom' : 'top'}>
+            <ThreadScroll
+                key={`thread-${ticket.key}`}
+                label="Conversation"
+                end={order === 'oldest' ? 'bottom' : 'top'}
+                fill={fill}
+            >
                 <TicketThread detail={detail} order={order} />
             </ThreadScroll>
             <ReplyForm
