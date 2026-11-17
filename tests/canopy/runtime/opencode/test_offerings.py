@@ -118,6 +118,8 @@ def test_each_agent_is_offered_what_its_merged_rules_leave_it() -> None:
         servers=(ServerOffer("github", "none"), ServerOffer("sentry.io", "some", ("deny *create*",))),
         skills=("tracker-github", "tracker-jira"),
         denied_skills=("customize-opencode",),
+        # Each offered skill's description, counted: the stand-in's say `d`.
+        description_chars={"tracker-github": 1, "tracker-jira": 1},
     )
     assert planner.servers[0] == ServerOffer("github", "some", ("offer github_issue_read",))
     # The skill tool denied whole: no skill reaches the agent.
@@ -165,6 +167,19 @@ def test_the_skills_are_listed_as_opencode_read_them_by_one_debug_command() -> N
     assert found.files[1] == SkillFile("terse", None, "/home/me/.config/opencode/skills/terse/SKILL.md", "Be brief.\n")
     # OpenCode started once, with canopy's definitions, and no agent's rules read.
     assert debug.ran == [(("opencode", "debug", "skill"), Path("/ws"), {"OPENCODE_CONFIG_DIR": "/defs"})]
+
+
+def test_an_offer_counts_each_offered_skill_s_description_and_none_as_nothing() -> None:
+    """What rides in every model call beside a skill's name: a denied skill's is not counted, as it is not sent."""
+    files = [
+        {"name": "audit", "description": "Check the books.", "location": "/defs/skills/audit/SKILL.md"},
+        {"name": "terse", "location": "/defs/skills/terse/SKILL.md"},
+        {"name": "report", "description": "Write it up.", "location": "/defs/skills/report/SKILL.md"},
+    ]
+    debug = Debug({"canopy-worker": [rule("skill", pattern="report")]}, skills=files)
+    [worker] = offered(debug, "canopy-worker").agents
+    assert (worker.skills, worker.denied_skills) == (("audit", "terse"), ("report",))
+    assert worker.description_chars == {"audit": len("Check the books."), "terse": 0}
 
 
 def test_skills_opencode_cannot_list_are_the_error() -> None:
@@ -265,6 +280,7 @@ def test_a_run_is_asked_about_as_its_own_command_starts_opencode() -> None:
         servers=(ServerOffer("github", "some", ("offer github_issue_read",)),),
         skills=("customize-opencode",),
         denied_skills=("tracker-github", "tracker-jira"),
+        description_chars={"customize-opencode": 1},
     )
     # `opencode run` and what follows it swapped for each debug command, inside what wraps it, where the run starts.
     assert debug.ran == [

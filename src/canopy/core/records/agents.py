@@ -225,6 +225,9 @@ class RunOfferedSkill(Row):
     run_table: str
     run_id: int
     skill: str
+    #: The characters of its description as the runtime read it then, which with its name ride in every model call of
+    #: the run; None for a skill offered before canopy kept it.
+    description_chars: int | None
 
 
 @dataclass(frozen=True)

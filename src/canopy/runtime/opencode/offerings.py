@@ -131,12 +131,11 @@ def offerings(
         return Offerings(error=str(e))
     typed = {name: server for name, server in config.mcp.items() if server.type is not None}
     servers = tuple(typed)
-    skills = tuple(f.name for f in files)
     return Offerings(
         servers=servers,
         disabled_servers=tuple(name for name, server in typed.items() if not server.enabled),
-        skills=skills,
-        agents=tuple(_offer(ask, agent, servers=servers, skills=skills) for agent in agents),
+        skills=tuple(f.name for f in files),
+        agents=tuple(_offer(ask, agent, servers=servers, files=files) for agent in agents),
     )
 
 
@@ -181,7 +180,7 @@ def offered(runner: procs.Runner, argv: Sequence[str], *, cwd: Path, env: Mappin
     except _FailedError as e:
         return AgentOffer(agent, error=str(e))
     servers = tuple(name for name, server in config.mcp.items() if server.enabled)
-    return _offer(ask, agent, servers=servers, skills=tuple(f.name for f in files))
+    return _offer(ask, agent, servers=servers, files=files)
 
 
 def matches(text: str, pattern: str) -> bool:
@@ -270,18 +269,20 @@ def _read[T](stdout: str, validate: Callable[[str], T], command: str) -> T:
     return read
 
 
-def _offer(ask: _Ask, agent: str, *, servers: Sequence[str], skills: Sequence[str]) -> AgentOffer:
+def _offer(ask: _Ask, agent: str, *, servers: Sequence[str], files: Sequence[SkillFile]) -> AgentOffer:
     try:
         read = _read(ask.run("debug", "agent", agent), _Agent.model_validate_json, "debug agent")
     except _FailedError as e:
         return AgentOffer(agent, error=str(e))
     rules = read.permission
+    skills = tuple(f.name for f in files)
     offered = () if _hidden(SKILL, rules) else tuple(s for s in skills if _action(SKILL, s, rules) != "deny")
     return AgentOffer(
         agent,
         servers=tuple(_server(name, rules) for name in servers),
         skills=offered,
         denied_skills=tuple(s for s in skills if s not in offered),
+        description_chars={f.name: len(f.description or "") for f in files if f.name in offered},
         tools=tuple(sorted(name for name, kept in read.tools.items() if kept and name not in _UNSENT)),
     )
 

@@ -342,6 +342,7 @@ def _offer(loaded: _Loaded, agent: str) -> AgentOffer:
         servers=tuple(_server(name, server, rules, executes=executes) for name, server in loaded.servers.items()),
         skills=offered,
         denied_skills=tuple(s for s in loaded.skills if s not in offered),
+        description_chars={f.name: len(f.description or "") for f in loaded.skill_files if f.name in offered},
         tools=tuple(sorted(tool for tool, permission in _BUILTIN.items() if not _hidden(permission, rules))),
     )
 

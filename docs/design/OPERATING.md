@@ -388,10 +388,10 @@ Either takes the cost its session's record gives once that is read (Each agent's
 since 2 never prints its last call's.
 
 What the run was offered is recorded beside them: MCP servers, with the rules that leave it only some of one's tools,
-skills, and the runtime's own tools. The runtime is asked as `canopy agents` asks it, while the agent starts, by the
-run's own command with its agent's run swapped for the runtime's commands that say what it offers, so it is asked
-where the agent starts and inside any sandbox that wraps it. A run whose command canopy cannot read so, or that the
-runtime could not answer for, records why instead, and the run goes on either way.
+skills, each with the length of its description, and the runtime's own tools. The runtime is asked as `canopy agents`
+asks it, while the agent starts, by the run's own command with its agent's run swapped for the runtime's commands that
+say what it offers, so it is asked where the agent starts and inside any sandbox that wraps it. A run whose command
+canopy cannot read so, or that the runtime could not answer for, records why instead, and the run goes on either way.
 
 The default templates title each session as canopy names it: a worker run by ticket, kind, and title; a tick by its id,
 what woke it, and what it faces; a chore or review by its name or PR. A title never starts like an option.

@@ -179,6 +179,8 @@ def test_each_agent_is_offered_what_its_merged_rules_leave_it() -> None:
         ),
         skills=("opencode", "tracker-github", "tracker-jira"),
         denied_skills=("report",),
+        # Each offered skill's description, counted: the stand-in's say `d`.
+        description_chars={"opencode": 1, "tracker-github": 1, "tracker-jira": 1},
         tools=EVERY_TOOL,
     )
     assert planner.servers[0] == ServerOffer("github", "some", ("offer github_issue_read",))
@@ -243,6 +245,19 @@ def test_what_opencode_prints_past_a_pipes_buffer_is_read() -> None:
     found = offered(Serve({"canopy-worker": []}, skills=[*SKILLS, long]), "canopy-worker")
     assert found.error is None
     assert "long" in found.skills
+
+
+def test_an_offer_counts_each_offered_skill_s_description_and_none_as_nothing() -> None:
+    """What rides in every model call beside a skill's name: a denied skill's is not counted, as it is not sent."""
+    files = [
+        {"id": "audit", "name": "audit", "description": "Check the books."},
+        {"id": "terse", "name": "terse"},
+        {"id": "report", "name": "report", "description": "Write it up."},
+    ]
+    serve = Serve({"canopy-worker": [rule("skill", resource="report")]}, skills=files)
+    [worker] = offered(serve, "canopy-worker").agents
+    assert (worker.skills, worker.denied_skills) == (("audit", "terse"), ("report",))
+    assert worker.description_chars == {"audit": len("Check the books."), "terse": 0}
 
 
 def test_a_tool_is_kept_from_an_agent_only_by_a_deny_of_every_resource() -> None:
@@ -346,6 +361,7 @@ def test_a_run_is_asked_about_as_its_own_command_starts_opencode() -> None:
         ServerOffer("canopy", "all"),
     )
     assert (found.skills, found.denied_skills) == (("opencode", "report"), ("tracker-github", "tracker-jira"))
+    assert found.description_chars == {"opencode": 1, "report": 1}
     # `opencode run` and what follows it swapped for `serve`, then `api`, inside what wraps it, where the run starts.
     launcher = argv[:-1]
     assert [args[: len(launcher)] for args, _, _ in serve.ran] == [launcher] * 4
