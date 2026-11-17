@@ -37,7 +37,7 @@ from collections.abc import Callable, Collection, Iterable, Mapping
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 from canopy.core import records, sql
 from canopy.core.vocab import Decider, OverseerRunStatus, Phase, RunKind, StartStatus, TickStatus
@@ -119,7 +119,7 @@ def _never_raises[**P](record: Callable[P, None]) -> Callable[P, None]:
 
 _LOG = logging.getLogger("canopy")
 #: Each run table's role.
-ROLES: Mapping[RunTable, Role] = {
+ROLES: Final[Mapping[RunTable, Role]] = {
     "runs": Role.WORKER,
     "task_runs": Role.TASK,
     "review_runs": Role.REVIEW,
@@ -218,7 +218,7 @@ def abandoned(conn: sqlite3.Connection, tick_ids: Iterable[int]) -> None:
 
 #: The run tables whose running runs fill each role's capacity: every run that holds a slot fills `max_workers`, a
 #: review's and a task's within it, and a chore runs apart (DESIGN §6, §19, §21, §36). A worker's are `db.SLOT_TABLES`.
-FILLED_BY: Mapping[Role, Collection[RunTable]] = {
+FILLED_BY: Final[Mapping[Role, Collection[RunTable]]] = {
     Role.WORKER: ("runs", "review_runs", "task_runs", "epic_runs"),
     Role.REVIEW: ("review_runs",),
     Role.TASK: ("task_runs",),
@@ -319,9 +319,9 @@ class _InPhase(records.View):
 
 
 #: The word a refusal's action starts with, before the guard that refused it.
-_REFUSED = "refused"
+_REFUSED: Final = "refused"
 #: Each word an action may start with that names its kind.
-_KIND_WORDS = frozenset(kind.value for kind in DecisionKind)
+_KIND_WORDS: Final = frozenset(kind.value for kind in DecisionKind)
 
 
 def _decided(row: records.Decision) -> tuple[DecisionKind, DecisionOutcome, Decider | None]:
@@ -334,7 +334,7 @@ def _decided(row: records.Decision) -> tuple[DecisionKind, DecisionOutcome, Deci
 
 
 #: Each token type, by the column that holds it.
-_TOKEN_COLUMNS: Mapping[TokenType, str] = {
+_TOKEN_COLUMNS: Final[Mapping[TokenType, str]] = {
     TokenType.INPUT: "tokens_input",
     TokenType.OUTPUT: "tokens_output",
     TokenType.REASONING: "tokens_reasoning",

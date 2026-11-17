@@ -8,6 +8,7 @@ from __future__ import annotations
 import contextlib
 import functools
 from collections.abc import Callable
+from typing import Final
 
 from fastapi import APIRouter, HTTPException
 
@@ -35,7 +36,7 @@ from canopy.serve.schema.ticket import (
     TicketDetail,
 )
 
-TAG = "tickets"
+TAG: Final = "tickets"
 router = APIRouter(tags=[TAG])
 _log = logs.for_tick(None)
 

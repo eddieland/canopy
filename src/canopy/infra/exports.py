@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.infra import lock
 
@@ -49,22 +49,22 @@ class Outcome(StrEnum):
 
 #: The counter of exports, by signal and outcome, which the metrics carry: kept here, not by OpenTelemetry, so a count
 #: that rode an export the endpoint did not take rides the next.
-EXPORTS = "canopy.telemetry.exports"
+EXPORTS: Final = "canopy.telemetry.exports"
 #: What `EXPORTS` counts, sent with every export.
-EXPORTS_DESCRIPTION = "Exports of telemetry, by signal and outcome: sent, or failed and dropped."
+EXPORTS_DESCRIPTION: Final = "Exports of telemetry, by signal and outcome: sent, or failed and dropped."
 #: The counter of spans the batch queue had no room for, dropped before any export.
-SPANS_DROPPED = "canopy.telemetry.spans.dropped"
+SPANS_DROPPED: Final = "canopy.telemetry.spans.dropped"
 #: What `SPANS_DROPPED` counts, sent with every export that carries it.
-SPANS_DROPPED_DESCRIPTION = "Spans dropped before any export, the queue of spans waiting to be sent being full."
+SPANS_DROPPED_DESCRIPTION: Final = "Spans dropped before any export, the queue of spans waiting to be sent being full."
 #: The file in the state directory that keeps how each signal's exports last went, for `canopy status`.
-STATE_FILE_NAME = "telemetry.json"
+STATE_FILE_NAME: Final = "telemetry.json"
 #: The lock writers of the state file hold, so two processes never lose each other's update.
-LOCK_FILE_NAME = "telemetry.lock"
+LOCK_FILE_NAME: Final = "telemetry.lock"
 #: How long a ledger leaves the state file as it is while its outcome holds: a file of spans is written to as each span
 #: ends, and the file need only say about when.
-REFRESH_SECONDS = 10.0
+REFRESH_SECONDS: Final = 10.0
 #: Who may read the state file: the operator alone, as the log (TRUST_MODEL T2).
-FILE_MODE = 0o600
+FILE_MODE: Final = 0o600
 
 
 @dataclass(frozen=True)

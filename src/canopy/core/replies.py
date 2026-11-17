@@ -15,7 +15,7 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr
 
@@ -27,15 +27,15 @@ if TYPE_CHECKING:
     from canopy.core.config import Config
 
 # The kinds whose workers comment, and so whose prompts say how (DESIGN §29).
-COMMENTING_KINDS = frozenset({RunKind.IMPLEMENT, RunKind.RESUME})
+COMMENTING_KINDS: Final = frozenset({RunKind.IMPLEMENT, RunKind.RESUME})
 # The result's field and the placeholder that asks for it, which every prompt that drafts must carry under `approve`:
 # an override written before drafts existed would have its worker post in the operator's name.
-DRAFTS = "DRAFTS"
-REQUIRED_APPROVE = (DRAFTS,)
-MAX_DRAFTS = 30
-MAX_DRAFT_CHARS = 4000
+DRAFTS: Final = "DRAFTS"
+REQUIRED_APPROVE: Final = (DRAFTS,)
+MAX_DRAFTS: Final = 30
+MAX_DRAFT_CHARS: Final = 4000
 # Where a mark goes once a worker posts only on the ticket.
-_ON_TICKET = "on the ticket"
+_ON_TICKET: Final = "on the ticket"
 
 
 @dataclass(frozen=True)
@@ -224,7 +224,7 @@ def _ids(ids: Sequence[int]) -> str:
 
 
 #: What the tool says of every draft's text.
-_TEXT = (
+_TEXT: Final = (
     f"At most {MAX_DRAFT_CHARS:,} characters of GitHub Markdown, written as the operator would say it, with no secret "
     "and no hidden characters."
 )
@@ -278,7 +278,7 @@ class TicketDraft(BaseModel):
 
 
 #: What the tool says of the drafts as a whole.
-_DRAFTS = (
+_DRAFTS: Final = (
     "Each comment you would otherwise have posted, which canopy keeps for the operator. They read each one where it "
     "goes, may edit or drop it, and send it as their own words, so post none of them yourself and mark none. Nobody "
     f"but the operator sees a draft until they send it. At most {MAX_DRAFTS}."
@@ -308,9 +308,9 @@ class TicketDraftsGroup(BaseModel):
 
 
 #: The groups' names: the drafts of a run that drafts for its PRs alone, and of one that drafts for its ticket too.
-DRAFTS_GROUP = "drafts"
-TICKET_DRAFTS_GROUP = "ticket_drafts"
-GROUPS: Mapping[str, type[BaseModel]] = {DRAFTS_GROUP: DraftsGroup, TICKET_DRAFTS_GROUP: TicketDraftsGroup}
+DRAFTS_GROUP: Final = "drafts"
+TICKET_DRAFTS_GROUP: Final = "ticket_drafts"
+GROUPS: Final[Mapping[str, type[BaseModel]]] = {DRAFTS_GROUP: DraftsGroup, TICKET_DRAFTS_GROUP: TicketDraftsGroup}
 
 
 def asked_group(rendered: records.RunReplies | None) -> list[str]:

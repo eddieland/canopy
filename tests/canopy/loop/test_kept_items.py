@@ -6,7 +6,7 @@ hand: the overseer's record made through its tool, the ticks around it closed as
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 from unittest import mock
 
 import pytest
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from tests.conftest import CanopyEnv
 
 #: KEY's unit, whose PR is the helpers' PR.
-REPO = "repo"
+REPO: Final = "repo"
 
 
 def records_item(conn: sqlite3.Connection, reason: str, *, key: str = KEY, **more: object) -> int:
@@ -204,7 +204,7 @@ def test_an_item_recorded_every_tick_before_it_was_kept_is_read_as_then_and_not_
 
 
 #: A record of each kept reason that names nothing that could end it, as its tool takes it, and why.
-UNNAMED = {
+UNNAMED: Final = {
     "no ticket": (
         raises(None, "needs_author", "d", pr=PR),
         "needs_author is held until something about its ticket ends it: name the ticket",

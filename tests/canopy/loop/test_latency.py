@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.cli import latency as latency_cli
 from canopy.cli.main import main
@@ -25,8 +25,8 @@ if TYPE_CHECKING:
 
     from tests.conftest import CanopyEnv
 
-NOW = datetime(2026, 10, 8, 12, tzinfo=UTC)
-PR = "https://github.com/acme/api/pull/7"
+NOW: Final = datetime(2026, 10, 8, 12, tzinfo=UTC)
+PR: Final = "https://github.com/acme/api/pull/7"
 
 
 def at(moment: datetime, minutes: float) -> str:

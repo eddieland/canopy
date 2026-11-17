@@ -7,7 +7,7 @@ session said, and a hit's snippet is read from the runtime's record. A title and
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Final
 
 from fastapi import APIRouter, Query
 from fastapi.exceptions import RequestValidationError
@@ -17,9 +17,9 @@ from canopy.serve import search, session_views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.schema.sessions import SessionList, SessionsWhose
 
-TAG = "sessions"
+TAG: Final = "sessions"
 #: The longest directory a list is narrowed to: Linux's longest path.
-MAX_DIRECTORY = 4096
+MAX_DIRECTORY: Final = 4096
 router = APIRouter(tags=[TAG])
 
 

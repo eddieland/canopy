@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import conversation, db
 from canopy.core.vocab import Decider
@@ -28,11 +28,11 @@ if TYPE_CHECKING:
 #: The decision the harness records for a query a source read, as `canopy queried` did before it: the tick ran the
 #: tracker query, and which open tickets it returned. Its rationale is `queried_rationale`'s, which `queried_keys` reads
 #: back.
-QUERIED_ACTION = "queried"
-_QUERIED_NONE = "the query returned no open ticket"
-_QUERIED_SOME = "the query returned these open tickets: "
+QUERIED_ACTION: Final = "queried"
+_QUERIED_NONE: Final = "the query returned no open ticket"
+_QUERIED_SOME: Final = "the query returned these open tickets: "
 #: How many omitted tickets the failure names before it counts the rest.
-_NAMED = 10
+_NAMED: Final = 10
 
 
 @dataclass(frozen=True)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from typing import Final
 
 import pytest
 from hypothesis import assume, given
@@ -22,7 +23,19 @@ from canopy.core.memory_text import (
 
 # Characters a note may not hold, from each category: control but the line feed and tab, format (zero-width, bidi,
 # tag), surrogate, private use, unassigned, and the line and paragraph separators.
-HIDDEN = ["\x00", "\r", "\x1b", "\u200b", "\u200d", "\u202e", "\u2066", "\ufeff", "\U000e0041", "\ue000", "\u2028"]
+HIDDEN: Final = [
+    "\x00",
+    "\r",
+    "\x1b",
+    "\u200b",
+    "\u200d",
+    "\u202e",
+    "\u2066",
+    "\ufeff",
+    "\U000e0041",
+    "\ue000",
+    "\u2028",
+]
 
 
 @pytest.mark.parametrize("char", HIDDEN)

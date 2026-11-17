@@ -4,6 +4,7 @@ import sqlite3
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -13,10 +14,10 @@ from canopy.core.workspace import CheckRole
 from tests.canopy.helpers import check_ran, earlier, in_zone, kicked, worker_ran
 from tests.conftest import Journals
 
-NOW = datetime(2026, 10, 8, 12, tzinfo=UTC)
-PR_1 = "https://github.com/acme/web/pull/1"
-PR_2 = "https://github.com/acme/web/pull/2"
-PR_3 = "https://github.com/acme/web/pull/3"
+NOW: Final = datetime(2026, 10, 8, 12, tzinfo=UTC)
+PR_1: Final = "https://github.com/acme/web/pull/1"
+PR_2: Final = "https://github.com/acme/web/pull/2"
+PR_3: Final = "https://github.com/acme/web/pull/3"
 
 
 S, F, E, T, X, C, K, N = (

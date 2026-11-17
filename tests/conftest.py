@@ -14,7 +14,7 @@ from collections.abc import Mapping
 from contextlib import closing
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 from unittest import mock
 
 import pytest
@@ -32,18 +32,20 @@ if TYPE_CHECKING:
 
     import click
 
-FAKES_DIR = Path(__file__).parent / "fakes"
+FAKES_DIR: Final = Path(__file__).parent / "fakes"
 # Where this interpreter's scripts live, `canopy` among them. A fake agent runs `canopy` the way an overseer does.
-SCRIPTS_DIR = Path(sys.executable).parent
+SCRIPTS_DIR: Final = Path(sys.executable).parent
 # The prefixes tests/fakes/agent records in its log's `env`. Keep in sync with it.
-RECORDED_ENV_PREFIXES = ("CANOPY_", "OPENCODE_")
+RECORDED_ENV_PREFIXES: Final = ("CANOPY_", "OPENCODE_")
 # What tests/fakes/agent reads its behavior from, for each role it plays. Keep in sync with it.
-FAKE_AGENT_PREFIXES = tuple(f"FAKE_{role}_" for role in ("AGENT", "OVERSEER", "WORKER", "PLANNER", "CHORE", "REVIEWER"))
+FAKE_AGENT_PREFIXES: Final = tuple(
+    f"FAKE_{role}_" for role in ("AGENT", "OVERSEER", "WORKER", "PLANNER", "CHORE", "REVIEWER")
+)
 
 # Commits made under test have a fixed author, and git reads no config of the operator's or the machine's. Nor does it
 # start automatic maintenance: newer git (2.55 on CI) runs it in the background after a commit or a fetch, where it
 # can prune a worktree that `git worktree add` has made but not yet locked, or leave a `maintenance.lock` a test sees.
-HERMETIC_GIT = {
+HERMETIC_GIT: Final = {
     "GIT_AUTHOR_NAME": "canopy test",
     "GIT_COMMITTER_NAME": "canopy test",
     "GIT_AUTHOR_EMAIL": "test@example.test",
@@ -55,10 +57,10 @@ HERMETIC_GIT = {
     "GIT_CONFIG_VALUE_0": "false",
 }
 #: What `--shard` takes: the slice to run, counted from 1, and how many slices there are.
-SHARD_RE = re.compile(r"(?P<index>[1-9][0-9]*)/(?P<total>[1-9][0-9]*)")
+SHARD_RE: Final = re.compile(r"(?P<index>[1-9][0-9]*)/(?P<total>[1-9][0-9]*)")
 #: The marker of a test that tells OpenCode 1's own story, such as its commands' names or its events' shape: its
 #: workspace runs OpenCode 1 whatever `--runtime` says. Those left are what keeps OpenCode 1 from being dropped.
-OPENCODE1_MARKER = "opencode1"
+OPENCODE1_MARKER: Final = "opencode1"
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -342,7 +344,7 @@ class CanopyEnv:
 
 
 #: A key TOML writes bare; any other it quotes.
-_BARE_KEY = re.compile(r"[A-Za-z0-9_-]+")
+_BARE_KEY: Final = re.compile(r"[A-Za-z0-9_-]+")
 
 
 def _merged(old: Mapping[str, object], new: Mapping[str, object]) -> dict[str, object]:
@@ -400,8 +402,8 @@ def _toml_value(value: object) -> str:
             raise TypeError(f"no TOML for {value!r} in a test's config")
 
 
-REPO_NAME = "repo"
-SHARED_TOML = f"""\
+REPO_NAME: Final = "repo"
+SHARED_TOML: Final = f"""\
 [workspace]
 name = "acme"
 
@@ -416,12 +418,12 @@ query = "project = PROJ"
 
 
 #: The name of the tests' `tracker` source, which config requires (DESIGN §30).
-TRACKER_SOURCE = "jira"
+TRACKER_SOURCE: Final = "jira"
 #: Its command: the fake connector, holding every ticket it is asked open and labeled with the tests' queue label. A
 #: test that scripts its tracker sets the source's `cmd` to `connector jira` and plays it.
-TRACKER_CMD = f"connector {TRACKER_SOURCE} --labeled agent-ready-tester"
+TRACKER_CMD: Final = f"connector {TRACKER_SOURCE} --labeled agent-ready-tester"
 #: Its table in the user file.
-TRACKER_TOML = f'[connect.sources.{TRACKER_SOURCE}]\nkind = "tracker"\ncmd = "{TRACKER_CMD}"\n'
+TRACKER_TOML: Final = f'[connect.sources.{TRACKER_SOURCE}]\nkind = "tracker"\ncmd = "{TRACKER_CMD}"\n'
 
 
 def user_toml(runtime: Version = Version.TWO) -> str:

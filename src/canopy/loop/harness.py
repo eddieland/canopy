@@ -28,7 +28,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, Final, TypedDict
 
 from canopy.core import connector_runs, conversation, db, kept_items, memory, records
 from canopy.core.vocab import Decider, Phase
@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 
 #: The decision a cursor the harness moved is recorded as (`loop.harness_cursors`): its own, about the ticket, yet no
 #: decision of the ticket's.
-CURSOR_ACTION = "cursor"
+CURSOR_ACTION: Final = "cursor"
 
 
 @dataclass(frozen=True)
@@ -61,7 +61,7 @@ class Row:
 #: The rows the harness decides, each read from its own journal alone. `running`: a worker of the ticket is running,
 #: in `runs`. `needs_human` on a private ticket: its latest run ended `blocked` and no operator message came after,
 #: both in the journal; a public ticket's rests on the tracker's label, which a connector observes.
-ROWS: Mapping[Phase, Row] = {
+ROWS: Final[Mapping[Phase, Row]] = {
     Phase.RUNNING: Row("wait", "a worker of it is running"),
     Phase.NEEDS_HUMAN: Row("wait", "its latest run asked the operator, who has not answered", private_only=True),
 }
@@ -69,13 +69,13 @@ ROWS: Mapping[Phase, Row] = {
 #: stale: marked `done` (§7). Enabled on MEASUREMENTS "2026-11-10: M38, the derivation against the overseer over two
 #: weeks": five situations, no disagreement. One with a worker running, or with a unit's PR holding a row or not read
 #: fresh, stays the overseer's: none was measured.
-CLOSED = Row("done", "the tracker says it is closed")
+CLOSED: Final = Row("done", "the tracker says it is closed")
 #: The row `none` of an open ticket with no queue label, not one the operator started, that the tracker query returned:
 #: `skip` (§7, §17). Enabled on the same measurement: six situations, no disagreement. One with a worker running, or a
 #: unit holding a row or stale, holds a row, and is the overseer's; one the query did not return is let go, unlisted
 #: (`phases.let_go`), so neither decides it; and a candidate no row holds for stays the overseer's, its `wait` or `skip`
 #: judgment.
-UNLABELED = Row("skip", "open, with no queue label")
+UNLABELED: Final = Row("skip", "open, with no queue label")
 
 
 @dataclass(frozen=True)

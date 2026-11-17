@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import re
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import run_offers, spend, sql, tool_report
 from canopy.runtime.agents import AgentOffer, ServerOffer
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from canopy.core.run_models import RunTable
     from tests.conftest import Journals
 
-NOW = datetime(2026, 11, 8, 12, tzinfo=UTC)
+NOW: Final = datetime(2026, 11, 8, 12, tzinfo=UTC)
 
 
 def offered(
@@ -155,6 +155,18 @@ def test_a_tool_is_of_the_server_with_the_longest_name_it_opens_with(conn: sqlit
     assert row(found, "git", "server").unused
 
 
+def test_a_tool_of_the_runtime_s_own_is_no_server_s_whatever_its_name(conn: sqlite3.Connection) -> None:
+    """A tool an offer names stays the runtime's own, in its row and in the runs a server of its prefix counts."""
+    ran = worker(conn, earlier(NOW, 1))
+    offered(conn, "runs", ran, "canopy-worker", ("web_fetch",), web="all")
+    called(conn, "runs", ran, 0, ToolUse("web_fetch", 3, 0, 90))
+    found = tool_report.report(conn, NOW, 7)
+    assert (row(found, "web_fetch").server, row(found, "web_fetch").listed) == (None, True)
+    web = row(found, "web", "server")
+    assert (web.offered, web.called, web.runs, web.calls) == (1, 0, 0, 0)
+    assert web.unused
+
+
 def test_what_the_journal_cannot_say_is_counted_apart(conn: sqlite3.Connection) -> None:
     """A run never asked about, and one the runtime could not answer for, have calls and no offer."""
     day = earlier(NOW, 1)
@@ -235,7 +247,7 @@ def test_each_read_starts_from_the_window_s_runs(tmp_path: Path, journals: Journ
         tool_report._offered(since, until),  # noqa: SLF001
         tool_report._called(since, until),  # noqa: SLF001
         tool_report._servers(since, until),  # noqa: SLF001
-        tool_report._reached("git", prefixes, since, until),  # noqa: SLF001
+        tool_report._reached("git", prefixes, {"git_own"}, since, until),  # noqa: SLF001
     ):
         plan = [str(step[3]) for step in sql.execute(conn, sql.frag("EXPLAIN QUERY PLAN {}", query))]
         runs = [step for step in plan if re.match(r"(SEARCH|SCAN) r\b", step)]

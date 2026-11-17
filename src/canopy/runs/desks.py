@@ -14,10 +14,11 @@ import os
 import shutil
 from collections.abc import Iterable
 from pathlib import Path
+from typing import Final
 
 from canopy.core.workspace import DESKS_DIR
 
-MARKER = ".canopy-desk"
+MARKER: Final = ".canopy-desk"
 
 
 class DeskError(Exception):

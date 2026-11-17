@@ -8,7 +8,7 @@ pushed after the list, the `query-keys` fix it answered, so its page shows the s
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import checklist_answers, checklists, records, review_diff
 from canopy.core.checklist_answers import Answer, Checked, Pushed
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 #: Each list's file, as the operator wrote it: its items in order, each a heading, its optional lines, and its rule.
-LISTS = {
+LISTS: Final = {
     "web": """\
 ## no-fixed-sleeps
 paths: src/**/*.test.ts, e2e/
@@ -69,7 +69,7 @@ Passes: both files in the diff. Fails: a migration alone.
 """,
 }
 #: Each list's items, in its order.
-_ITEMS = {repo: tuple(item.id for item in checklists.parse(repo, text)[0]) for repo, text in LISTS.items()}
+_ITEMS: Final = {repo: tuple(item.id for item in checklists.parse(repo, text)[0]) for repo, text in LISTS.items()}
 _P, _F, _H, _NA, _U = (
     ItemAnswer.PASSED,
     ItemAnswer.FIXED,
@@ -78,7 +78,7 @@ _P, _F, _H, _NA, _U = (
     ItemAnswer.UNANSWERED,
 )
 #: What each run answered of its repository's items, in their order, and why it held one.
-_ANSWERS: tuple[tuple[int, str, tuple[ItemAnswer, ...], str | None], ...] = (
+_ANSWERS: Final[tuple[tuple[int, str, tuple[ItemAnswer, ...], str | None], ...]] = (
     (37, "web", (_F, _P, _P, _NA), None),
     (38, "web", (_P, _F, _H, _NA), "The v1 client's types are generated; typing them by hand is ABC-112."),
     (39, "web", (_P, _P, _P, _F), None),
@@ -87,13 +87,13 @@ _ANSWERS: tuple[tuple[int, str, tuple[ItemAnswer, ...], str | None], ...] = (
 )
 
 #: The run whose push was held.
-HELD_RUN = 38
+HELD_RUN: Final = 38
 #: The commit the held run's list was shown at.
-_SHOWN = "5b1e0c47" + "a" * 32
+_SHOWN: Final = "5b1e0c47" + "a" * 32
 #: The commit it pushed next, which it left on origin.
-PUSHED = "c9d24f83" + "b" * 32
+PUSHED: Final = "c9d24f83" + "b" * 32
 #: The diff between the two: the `query-keys` fix, a part of what the run changed (`run_diffs`).
-STRETCH = """\
+STRETCH: Final = """\
 diff --git a/src/api/queries.ts b/src/api/queries.ts
 index 1f0a3c2..8e4b7d5 100644
 --- a/src/api/queries.ts

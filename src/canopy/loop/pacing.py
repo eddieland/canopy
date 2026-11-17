@@ -15,7 +15,7 @@ The count lives in the loop, not the journal, so a restarted loop starts at `bas
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import chore_view, db, notice
 from canopy.core.items import subject
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
 #: The prefix of a decision that starts a run: a worker's (`dispatch:<kind>`), a review's, or a chore's. A dry run
 #: records these without starting the run, so `idle` reads the decision, not the run.
-DISPATCH_PREFIX = "dispatch:"
+DISPATCH_PREFIX: Final = "dispatch:"
 
 
 @dataclass(frozen=True)

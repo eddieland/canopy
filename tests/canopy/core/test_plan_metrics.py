@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from typing import Final
+
 from canopy.core.plan_metrics import DIAGRAM_LINES, LINE_CHARS, Metrics, measure
 
 # A plan with every kind of block a planner writes, a list's items continued and nested, and a fence left open.
-EVERY_KIND = """\
+EVERY_KIND: Final = """\
 # Plan
 
 Change the **parser** and [its docs](https://example.com/docs).

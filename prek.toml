@@ -14,6 +14,14 @@ default_stages = ["pre-commit"]
 [[repos]]
 repo = "local"
 
+# First, as in `make fmt`: ruff then sorts an import a codemod added.
+[[repos.hooks]]
+id = "codemods"
+name = "canopy-codemods"
+language = "system"
+entry = "uv run --no-sync canopy-codemods"
+types = ["python"]
+
 [[repos.hooks]]
 id = "ruff-fix"
 name = "ruff (imports, trailing commas)"

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.cli import sessions as sessions_cli
 from canopy.cli.main import main
@@ -23,9 +23,9 @@ if TYPE_CHECKING:
     from tests.conftest import CanopyEnv
 
 #: 2026-10-24T12:00:00Z, in milliseconds since the epoch.
-NOON_MS = 1_792_843_200_000
+NOON_MS: Final = 1_792_843_200_000
 #: The workspace's state directory, below which every session is canopy's.
-STATE_DIR = Path("/work/.canopy")
+STATE_DIR: Final = Path("/work/.canopy")
 
 
 def kept(

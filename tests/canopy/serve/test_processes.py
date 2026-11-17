@@ -4,15 +4,16 @@ import os
 import pwd
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Final
 
 from canopy.core.context import Context
 from canopy.serve import mock, processes
 from tests.canopy.web_helpers import client, signed_in_client
 
-NOW = datetime(2026, 10, 8, 12, 0, tzinfo=UTC)
-BOOT = 1_791_000_000
-TICK = os.sysconf("SC_CLK_TCK")
-PAGE = os.sysconf("SC_PAGE_SIZE")
+NOW: Final = datetime(2026, 10, 8, 12, 0, tzinfo=UTC)
+BOOT: Final = 1_791_000_000
+TICK: Final = os.sysconf("SC_CLK_TCK")
+PAGE: Final = os.sysconf("SC_PAGE_SIZE")
 
 
 class FakeClock:

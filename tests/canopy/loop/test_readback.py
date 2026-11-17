@@ -1,16 +1,17 @@
 """What `canopy show run:ID` and `show task:N` print of what a run changed (DESIGN §45), from rows written by hand."""
 
 from pathlib import Path
+from typing import Final
 
 from syrupy.assertion import SnapshotAssertion
 
 from canopy.core import records, review_diff, run_changes
 from canopy.loop import readback
 
-START = "1" * 40
-END = "2" * 40
-FORK = "3" * 40
-LEFT = "4" * 40
+START: Final = "1" * 40
+END: Final = "2" * 40
+FORK: Final = "3" * 40
+LEFT: Final = "4" * 40
 
 
 def change(

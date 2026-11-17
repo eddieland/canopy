@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, ValidationError
 
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 #: The protocol versions a server speaks, newest first: a client that asks for one of them is answered in it, and any
 #: other in the newest.
-PROTOCOL_VERSIONS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
+PROTOCOL_VERSIONS: Final = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
 #: JSON-RPC's error codes for a line that is not JSON, a message that is not a request, a method the server does not
 #: have, parameters it cannot take, and a failure of its own.
 PARSE_ERROR, INVALID_REQUEST, METHOD_NOT_FOUND, INVALID_PARAMS, INTERNAL_ERROR = -32700, -32600, -32601, -32602, -32603
@@ -60,9 +60,9 @@ class Hints:
 
 
 #: A tool that reads and changes nothing.
-READS = Hints(read_only=True)
+READS: Final = Hints(read_only=True)
 #: A tool that adds to what is there and removes nothing.
-WRITES = Hints(read_only=False)
+WRITES: Final = Hints(read_only=False)
 
 
 @dataclass(frozen=True)

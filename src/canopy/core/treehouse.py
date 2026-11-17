@@ -16,6 +16,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
 from pydantic import BaseModel, ConfigDict, StrictStr, TypeAdapter, ValidationError
 
@@ -24,11 +25,11 @@ from canopy.core.pools import Lease, ReturnOutcome, Slot
 from canopy.core.vocab import PoolKind
 from canopy.infra import procs
 
-ROOT_ENV = "TREEHOUSE_ROOT"
+ROOT_ENV: Final = "TREEHOUSE_ROOT"
 # treehouse's own default layout, pinned: a repository's `treehouse.toml` cannot move a workspace's slots, and `return`
 # finds a slot's pool two levels above it even when the repository's clone is gone.
-WORKTREE_PATH = "{pool}/{slot}/{repo}"
-_TIMEOUT_SECONDS = 120
+WORKTREE_PATH: Final = "{pool}/{slot}/{repo}"
+_TIMEOUT_SECONDS: Final = 120
 
 
 class TreehouseError(pools.PoolError):
@@ -45,7 +46,7 @@ class _Held(BaseModel):
     lease_holder: StrictStr
 
 
-_SLOTS = TypeAdapter(list[Slot], config=ConfigDict(defer_build=True))
+_SLOTS: Final = TypeAdapter(list[Slot], config=ConfigDict(defer_build=True))
 
 
 @dataclass(frozen=True)
@@ -65,7 +66,7 @@ class Pool:
     include_file: Path | None = None
 
 
-DEFAULT_POOL = Pool()
+DEFAULT_POOL: Final = Pool()
 
 
 @dataclass(frozen=True)

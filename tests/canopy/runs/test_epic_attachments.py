@@ -5,6 +5,7 @@ each in a group of their own; the epic's planner finds them at the top of its de
 """
 
 from pathlib import Path
+from typing import Final
 
 from canopy.cli.main import main
 from canopy.core import contract, conversation, epics, records
@@ -29,11 +30,11 @@ from tests.canopy.helpers import (
 from tests.canopy.scenario_helpers import Scenario, dispatches
 from tests.conftest import CanopyEnv, GitPool
 
-SPEC = "# Sessions\n\nThe store keeps a session for 30 days.\n"
-DOC = "# PROJ-1\n\nMove the reads first.\n"
-EPIC_COPY = f"{attachments.RUN_DIR}/{attachments.EPIC_DIR}/spec.md"
-OWN_COPY = f"{attachments.RUN_DIR}/design.md"
-EPIC = conversation.Ref(conversation.EPIC, "1")
+SPEC: Final = "# Sessions\n\nThe store keeps a session for 30 days.\n"
+DOC: Final = "# PROJ-1\n\nMove the reads first.\n"
+EPIC_COPY: Final = f"{attachments.RUN_DIR}/{attachments.EPIC_DIR}/spec.md"
+OWN_COPY: Final = f"{attachments.RUN_DIR}/design.md"
+EPIC: Final = conversation.Ref(conversation.EPIC, "1")
 
 
 def attach(scenario: Scenario, ref: str, name: str, text: str) -> Path:

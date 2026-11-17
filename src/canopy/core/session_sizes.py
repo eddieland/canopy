@@ -22,7 +22,7 @@ import time
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Final, Literal
 
 from canopy.core import memory_search, spend, sql
 from canopy.runtime import session_text
@@ -42,28 +42,28 @@ type Cut = Literal["said", "did", "read"]
 type Owner = spend.Kind | Literal["epics", "state_dir"]
 
 #: The parts of a session's text each cut indexes, each wider than the one before.
-CUTS: Mapping[Cut, AbstractSet[TextPart]] = {
+CUTS: Final[Mapping[Cut, AbstractSet[TextPart]]] = {
     "said": frozenset({"title", "sent", "wrote", "summary"}),
     "did": frozenset({"title", "sent", "wrote", "summary", "given"}),
     "read": frozenset({"title", "sent", "wrote", "summary", "given", "reasoning", "returned"}),
 }
 #: The parts of canopy's own sessions no cut indexes: what a run was sent, the journal's text rendered, which §22's
 #: search finds already.
-CANOPY_UNINDEXED: AbstractSet[TextPart] = frozenset({"sent"})
+CANOPY_UNINDEXED: Final[AbstractSet[TextPart]] = frozenset({"sent"})
 #: Each kind of canopy's sessions, in the order the measurement lists them.
-OWNERS: tuple[Owner, ...] = (*spend.KINDS, "epics", "state_dir")
+OWNERS: Final[tuple[Owner, ...]] = (*spend.KINDS, "epics", "state_dir")
 #: How many directories of the sessions outside canopy are listed, those with the most sessions first; the rest are
 #: counted together, under `OTHER_DIRECTORIES`.
-DIRECTORIES = 10
-OTHER_DIRECTORIES = "(other directories)"
+DIRECTORIES: Final = 10
+OTHER_DIRECTORIES: Final = "(other directories)"
 #: The first SQLite that can delete a row from an index that holds no text, which stage 2's index needs.
-CONTENTLESS_DELETE = (3, 43, 0)
+CONTENTLESS_DELETE: Final = (3, 43, 0)
 #: How many rows a trial index takes in one transaction.
-BATCH = 1000
+BATCH: Final = 1000
 # Each trial index's table, by whether it keeps word positions and whether rows can be deleted from it, splitting
 # text into words with memory's tokenizer (`memories_fts`), so a word matches as memory's search matches it. The
 # temporary file is not the journal, but its statements are built as the journal's are (D125).
-_CREATE: Mapping[tuple[bool, bool], sql.Fragment] = {
+_CREATE: Final[Mapping[tuple[bool, bool], sql.Fragment]] = {
     (True, True): sql.frag(
         "CREATE VIRTUAL TABLE idx USING fts5(text, content='', contentless_delete=1, tokenize='porter unicode61')",
     ),
@@ -76,8 +76,8 @@ _CREATE: Mapping[tuple[bool, bool], sql.Fragment] = {
         "CREATE VIRTUAL TABLE idx USING fts5(text, content='', detail=none, tokenize='porter unicode61')",
     ),
 }
-_INSERT = sql.frag("INSERT INTO idx (rowid, text) VALUES (?, ?)", sql.ROW, sql.ROW)
-_OPTIMIZE = sql.frag("INSERT INTO idx (idx) VALUES ('optimize')")
+_INSERT: Final = sql.frag("INSERT INTO idx (rowid, text) VALUES (?, ?)", sql.ROW, sql.ROW)
+_OPTIMIZE: Final = sql.frag("INSERT INTO idx (idx) VALUES ('optimize')")
 
 
 @dataclass(frozen=True)

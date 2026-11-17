@@ -26,6 +26,7 @@ from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
+from typing import Final
 
 from canopy.core import db, hostgit, records
 from canopy.core.pools import (
@@ -43,20 +44,20 @@ from canopy.core.pools import (
 from canopy.core.vocab import PoolKind
 from canopy.infra import cwds, lock, procs
 
-POOLS_DIR = "pools"
+POOLS_DIR: Final = "pools"
 # A pool with no declared size stops here, as treehouse's default `max_trees` does.
-MAX_SLOTS = 16
-LOCK_NAME = ".lock"
-LEASED = "leased"
-IN_USE = "in-use"
-DIRTY = "dirty"
-DAMAGED = "damaged"
-UNVERIFIED = "unverified"
+MAX_SLOTS: Final = 16
+LOCK_NAME: Final = ".lock"
+LEASED: Final = "leased"
+IN_USE: Final = "in-use"
+DIRTY: Final = "dirty"
+DAMAGED: Final = "damaged"
+UNVERIFIED: Final = "unverified"
 # git takes no optional lock, so reading a slot's status never writes its index.
-ENV = {**hostgit.ENV, "GIT_OPTIONAL_LOCKS": "0"}
-_GIT_TIMEOUT_SECONDS = 300
-_FETCH_TIMEOUT_SECONDS = 900
-_WORKTREES = "worktrees"
+ENV: Final = {**hostgit.ENV, "GIT_OPTIONAL_LOCKS": "0"}
+_GIT_TIMEOUT_SECONDS: Final = 300
+_FETCH_TIMEOUT_SECONDS: Final = 900
+_WORKTREES: Final = "worktrees"
 
 
 @dataclass(frozen=True)

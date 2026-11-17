@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, LiteralString, assert_never
+from typing import TYPE_CHECKING, Final, Literal, LiteralString, assert_never
 
 from canopy.core import records, review_diff
 
@@ -26,10 +26,10 @@ if TYPE_CHECKING:
 
 #: Why a run that crashed keeps nothing: no git runs in a slot whose links may point at a git directory the worker made
 #: (§8 step 5), and a setup failure or a signal ends the run before its slot is read.
-CRASHED = "the run crashed, so canopy read nothing of its slot and kept no diff"
+CRASHED: Final = "the run crashed, so canopy read nothing of its slot and kept no diff"
 #: The most commits of a repository's range a run records, the newest: far more than a run makes, and the count names
 #: the rest.
-MAX_COMMITS = 100
+MAX_COMMITS: Final = 100
 #: The tables of the runs that record what they changed: a worker's, and a one-off task's (DESIGN §36).
 type RunTable = Literal["runs", "task_runs"]
 

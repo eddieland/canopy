@@ -30,7 +30,7 @@ import shlex
 import sqlite3
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, NamedTuple
+from typing import TYPE_CHECKING, Annotated, Final, NamedTuple
 
 import canopy_sandbox
 from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, StrictStr, ValidationError
@@ -53,17 +53,17 @@ if TYPE_CHECKING:
     from canopy.runtime.report import SessionCursor
 
 #: How long a read waits for OpenCode to let go of the database, in seconds.
-TIMEOUT_SECONDS = 5.0
+TIMEOUT_SECONDS: Final = 5.0
 #: How long a database may take to answer, in seconds, before canopy stops it: a run can write one that never would.
-READ_SECONDS = 60.0
+READ_SECONDS: Final = 60.0
 #: How many of a session's messages `sandbox_session` reads: more than any run writes, and few enough to hold.
-MAX_MESSAGES = 100_000
+MAX_MESSAGES: Final = 100_000
 #: How many of SQLite's steps go between two looks at the time.
-_STEPS = 10_000
+_STEPS: Final = 10_000
 #: A page of sessions updated after a cursor, the least recently updated first: the cursor's update, twice, its id, and
 #: the page's size. The columns are `_Session`'s, in its order. A row whose update or id is not of its column's type is
 #: never read, since the cursor could not pass it: SQLite stores any type in any column, and a run can write the file.
-SESSIONS_SQL = """
+SESSIONS_SQL: Final = """
 SELECT id, parent_id, directory, time_created, time_updated,
        cost, tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write
 FROM session
@@ -74,7 +74,7 @@ LIMIT ?
 """
 #: Each model's replies in the sessions a JSON array of ids names, and their cost: each assistant message whose JSON
 #: names a provider and a model, by its session, provider, model, and variant.
-MODELS_SQL = """
+MODELS_SQL: Final = """
 SELECT session_id, json_extract(data, '$.providerID'), json_extract(data, '$.modelID'),
        json_extract(data, '$.variant'), count(*), total(json_extract(data, '$.cost'))
 FROM message
@@ -87,18 +87,18 @@ WHERE session_id IN (SELECT value FROM json_each(?))
 GROUP BY 1, 2, 3, 4
 """
 #: The title of each session a JSON array of ids names, and when it was archived, where the table says (`TitleQueries`).
-TITLES_SQL = "SELECT id, title, time_archived FROM session WHERE id IN (SELECT value FROM json_each(?))"
+TITLES_SQL: Final = "SELECT id, title, time_archived FROM session WHERE id IN (SELECT value FROM json_each(?))"
 #: The same, of a table with no column for the archive.
-UNARCHIVED_SQL = "SELECT id, title, NULL FROM session WHERE id IN (SELECT value FROM json_each(?))"
+UNARCHIVED_SQL: Final = "SELECT id, title, NULL FROM session WHERE id IN (SELECT value FROM json_each(?))"
 #: The columns of a table, by its name.
-COLUMNS_SQL = "SELECT name FROM pragma_table_info(?)"
+COLUMNS_SQL: Final = "SELECT name FROM pragma_table_info(?)"
 #: Between a model and its variant, as `canopy.runtime.opencode.session_models` names a model run at one.
-VARIANT_MARK = "@"
+VARIANT_MARK: Final = "@"
 #: Where the read starts when no cursor is given: before every session.
-_FIRST: SessionCursor = (-1, "")
+_FIRST: Final[SessionCursor] = (-1, "")
 
 # Milliseconds since the epoch, as OpenCode stamps a session: up to the year 9999.
-_MAX_MILLIS = 253_402_300_799_999
+_MAX_MILLIS: Final = 253_402_300_799_999
 _Millis = Annotated[StrictInt, Field(ge=0, le=_MAX_MILLIS)]
 _Cost = Annotated[StrictFloat | StrictInt, Field(ge=0, le=MAX_COST_USD, allow_inf_nan=False)]
 
@@ -115,7 +115,7 @@ class TitleQueries(NamedTuple):
 
 
 #: How OpenCode 1's record is asked for its sessions' titles.
-TITLES = TitleQueries("session", TITLES_SQL, UNARCHIVED_SQL)
+TITLES: Final = TitleQueries("session", TITLES_SQL, UNARCHIVED_SQL)
 
 
 class _Session(BaseModel):

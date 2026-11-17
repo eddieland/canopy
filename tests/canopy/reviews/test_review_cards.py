@@ -2,6 +2,7 @@
 
 import json
 import re
+from typing import Final
 
 from canopy.core import cards
 from tests.canopy.helpers import calls, with_events
@@ -9,7 +10,7 @@ from tests.canopy.review_helpers import CLEAN, head, reviewer_reports
 from tests.canopy.scenario_helpers import Scenario, reviews
 from tests.conftest import CanopyEnv, GitPool
 
-CARD = {
+CARD: Final = {
     "summary": "Read the diff; checking the retry loop's exit.",
     "now": "reading retry.py",
     "done": [{"step": "read the diff", "proof": "3 files, 40 lines"}],

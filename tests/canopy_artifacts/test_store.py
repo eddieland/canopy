@@ -9,7 +9,7 @@ import os
 import threading
 from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 from unittest import mock
 
 import canopy_mcp
@@ -30,20 +30,20 @@ from canopy_artifacts.store import (
 
 from tests.conftest import invoke
 
-NAMESPACE = "canopy/operator"
+NAMESPACE: Final = "canopy/operator"
 #: A report as a worker publishes it: the passage people comment on sits in markup.
-REPORT = """<html><head><title>Cache report</title></head><body>
+REPORT: Final = """<html><head><title>Cache report</title></head><body>
 <h1>Cache report</h1>
 <p>The cache is <em>slow</em> under load, because every miss takes the lock.</p>
 <p>We should shard it.</p>
 </body></html>"""
 #: The report's next version: the first passage kept word for word, the second reworded.
-REVISED = """<html><body>
+REVISED: Final = """<html><body>
 <h1>Cache report, revised</h1>
 <p>Measured again: the cache is slow under load, because every miss takes the lock.</p>
 <p>Sharding it is the plan.</p>
 </body></html>"""
-EIGHT = [
+EIGHT: Final = [
     "artifact_publish",
     "artifact_read",
     "artifact_list",
@@ -56,7 +56,9 @@ EIGHT = [
 
 
 #: Each tool's output schema, as it is listed.
-OUTPUT_SCHEMAS = {t.name: canopy_mcp.schema(t.result, "serialization") for t in tools.TOOLS if t.result is not None}
+OUTPUT_SCHEMAS: Final = {
+    t.name: canopy_mcp.schema(t.result, "serialization") for t in tools.TOOLS if t.result is not None
+}
 
 
 class Client:

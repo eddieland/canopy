@@ -8,6 +8,7 @@ there. The page writes text, makes and deletes a default, never a file a key nam
 import hashlib
 import os
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import pytest
@@ -16,7 +17,7 @@ from canopy.core import conversation, prompts, standing
 from canopy.core.config import Config, StandingAgent
 from canopy.core.context import Context
 
-RULES = "Commit review fixes as new commits.\n"
+RULES: Final = "Commit review fixes as new commits.\n"
 
 
 def with_paths(ctx: Context, **paths: Path) -> Config:

@@ -13,6 +13,7 @@ import sys
 import tempfile
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import canopy_sandbox
@@ -25,7 +26,7 @@ from tests.conftest import HERMETIC_GIT, CanopyEnv, executable, git
 
 # Plays curl under srt's proxy: for the host the check expects refused it fails, and says the proxy answered 403 when
 # asked how the CONNECT went ($FAKE_CURL_CONNECT says otherwise, as for a host that is down); it answers any other.
-CURL = """\
+CURL: Final = """\
 #!{python}
 import os, sys
 if sys.argv[-1] != "https://example.com":

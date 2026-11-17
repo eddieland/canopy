@@ -5,6 +5,7 @@ import stat
 import sys
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import pytest
@@ -12,8 +13,8 @@ import pytest
 from canopy.infra import procs, tracing
 from tests.canopy.helpers import spans
 
-TRACE = "0af7651916cd43dd8448eb211c80319c"
-PARENT = "b7ad6b7169203331"
+TRACE: Final = "0af7651916cd43dd8448eb211c80319c"
+PARENT: Final = "b7ad6b7169203331"
 
 
 @pytest.fixture

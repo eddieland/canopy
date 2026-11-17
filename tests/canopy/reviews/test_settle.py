@@ -1,5 +1,7 @@
 """Settling (DESIGN §21): a PR's head commit is reviewed once canopy has seen it for `review.settle_minutes`."""
 
+from typing import Final
+
 import pytest
 
 from canopy.core.config import MAX_SETTLE_MINUTES, ConfigError, load
@@ -9,7 +11,7 @@ from tests.canopy.scenario_helpers import Scenario, reviews
 from tests.conftest import CanopyEnv, GitPool
 
 # A PR the operator names, with no ticket.
-OTHER_PR = f"{PR}0"
+OTHER_PR: Final = f"{PR}0"
 
 
 def test_a_head_is_reviewed_once_it_has_settled_and_a_new_push_starts_over(

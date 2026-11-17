@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import db, records, sql
 from canopy.core.vocab import ReviewItem, ReviewState
@@ -22,9 +22,9 @@ if TYPE_CHECKING:
     from datetime import datetime
 
 #: What counts as a comment: one on a review thread, on a line of the diff, and one on the PR's conversation.
-COMMENTS = (ReviewItem.COMMENT, ReviewItem.PR_COMMENT)
+COMMENTS: Final = (ReviewItem.COMMENT, ReviewItem.PR_COMMENT)
 #: A review that judged the PR, as against one GitHub keeps while its author is still writing it, or one dismissed.
-JUDGED = (ReviewState.APPROVED, ReviewState.CHANGES_REQUESTED, ReviewState.COMMENTED)
+JUDGED: Final = (ReviewState.APPROVED, ReviewState.CHANGES_REQUESTED, ReviewState.COMMENTED)
 
 
 @dataclass(frozen=True)

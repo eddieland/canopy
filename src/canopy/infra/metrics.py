@@ -23,7 +23,7 @@ import threading
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Final, Literal
 
 from canopy.infra import exports
 
@@ -65,11 +65,11 @@ type GaugeName = Literal[
 type MetricName = CounterName | HistogramName | GaugeName
 
 #: The file metrics are appended to, as OTLP JSON, a line per export, in the state directory.
-METRICS_FILE_NAME = "metrics.jsonl"
+METRICS_FILE_NAME: Final = "metrics.jsonl"
 #: Where an OTLP/HTTP endpoint takes metrics, under its base URL.
-METRICS_PATH = "/v1/metrics"
+METRICS_PATH: Final = "/v1/metrics"
 #: How often a process sends what it has recorded; it sends what is left as it exits, whatever the time.
-EXPORT_EVERY_MILLIS = 30_000
+EXPORT_EVERY_MILLIS: Final = 30_000
 
 
 @dataclass(frozen=True)
@@ -84,14 +84,14 @@ class Instrument:
 
 
 #: How long a tick takes, in seconds: a quiet one well under a second, one whose overseer works some minutes.
-_TICK_SECONDS = (0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 120, 300, 600)
+_TICK_SECONDS: Final = (0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 120, 300, 600)
 #: How long a step of a tick takes, in seconds: most some milliseconds, its overseer's some minutes.
-_STEP_SECONDS = (0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 120, 300, 600)
+_STEP_SECONDS: Final = (0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 120, 300, 600)
 #: How long an agent run takes, in seconds: a short chore some seconds, a worker's longest some hours.
-_RUN_SECONDS = (10, 30, 60, 120, 300, 600, 1200, 1800, 3600, 7200, 14400, 28800)
+_RUN_SECONDS: Final = (10, 30, 60, 120, 300, 600, 1200, 1800, 3600, 7200, 14400, 28800)
 
 #: Every metric canopy records, by name.
-INSTRUMENTS: Mapping[MetricName, Instrument] = {
+INSTRUMENTS: Final[Mapping[MetricName, Instrument]] = {
     "canopy.ticks": Instrument("Ticks that closed, by status, and whether each was a dry run."),
     "canopy.tick.duration": Instrument("How long a tick took, from its start to its close, by status.", _TICK_SECONDS),
     "canopy.tick.step.duration": Instrument("How long each step of a tick took, by step.", _STEP_SECONDS),

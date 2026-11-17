@@ -14,6 +14,7 @@ import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import pytest
@@ -518,7 +519,7 @@ def test_a_worker_that_reports_no_result_is_unknown(
     assert json.loads(run.row["result_json"]) == {"harness": "the worker reported no result"}
 
 
-RESULT = "canopy_run_result"
+RESULT: Final = "canopy_run_result"
 
 
 def test_a_result_reported_with_the_result_tool_is_the_runs_result(scenario: Scenario, git_pool: GitPool) -> None:

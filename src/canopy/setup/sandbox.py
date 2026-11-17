@@ -24,6 +24,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from platform import freedesktop_os_release
+from typing import Final
 
 import canopy_sandbox
 from canopy_sandbox import credentials
@@ -32,14 +33,14 @@ from canopy.core import config
 from canopy.infra import procs
 
 # What Linux needs beside srt, each as a command that answers when it is installed, and the package that has it.
-LINUX_TOOLS = (
+LINUX_TOOLS: Final = (
     (("bwrap", "--version"), "bubblewrap"),
     (("socat", "-V"), "socat"),
     (("rg", "--version"), "ripgrep"),
 )
 #: The command that installs a package on each family of Linux distributions, by the IDs its os-release names: the
 #: packages above have these names on each.
-PACKAGE_MANAGERS = (
+PACKAGE_MANAGERS: Final = (
     (("debian", "ubuntu"), "apt-get install"),
     (("fedora", "rhel", "centos"), "dnf install"),
     (("arch",), "pacman -S"),
@@ -47,77 +48,77 @@ PACKAGE_MANAGERS = (
     (("alpine",), "apk add"),
 )
 # The oldest bubblewrap srt fully supports (its OLDEST_FULLY_SUPPORTED_BWRAP_VERSION). An older one still sandboxes.
-OLDEST_BWRAP = (0, 5, 0)
-OLD_BWRAP = """\
+OLDEST_BWRAP: Final = (0, 5, 0)
+OLD_BWRAP: Final = """\
 bubblewrap {version} is older than 0.5.0, the oldest srt fully supports. On it, srt cannot hide a socket, fifo, or
 device that a template denies reading, and leaves on the host the mount points of a sandbox that was killed. Install
 bubblewrap 0.5.0 or later, from your distribution's backports or a newer release of it."""
 # The machines srt ships its seccomp helper for, by the name uname gives them. Without the helper, srt runs with no
 # filter, and logs that only with --debug: nothing stops a sandboxed command making a Unix socket.
-SECCOMP_MACHINES = ("x86_64", "aarch64")
-NO_SECCOMP = """\
+SECCOMP_MACHINES: Final = ("x86_64", "aarch64")
+NO_SECCOMP: Final = """\
 srt has no seccomp filter for {machine}, only for {machines}. Without it, a sandboxed command can connect to any
 Unix socket it can see, such as your SSH agent's or Docker's. Do not rely on the sandbox on this machine."""
 # Ubuntu 24.04 and later set this to 1, which leaves bubblewrap's user namespace without the capabilities it needs.
-APPARMOR_USERNS = Path("/proc/sys/kernel/apparmor_restrict_unprivileged_userns")
+APPARMOR_USERNS: Final = Path("/proc/sys/kernel/apparmor_restrict_unprivileged_userns")
 # srt's bridge listens on IPv6 unless told otherwise. canopy-sandbox tells it, so a kernel without IPv6 is no To do.
-NO_IPV6 = """\
+NO_IPV6: Final = """\
 this kernel has no IPv6, so canopy-sandbox has srt's network bridge inside the sandbox listen on IPv4
 (SOCAT_DEFAULT_LISTEN_IP=4), unless you set that variable yourself."""
 # Ubuntu 26.04 loads this profile at boot; 24.04 ships it unloaded. It lets bubblewrap make its user namespace, but
 # denies every capability to what bubblewrap starts, so srt's seccomp helper cannot make the nested one it needs.
-BWRAP_PROFILE = Path("/etc/apparmor.d/bwrap-userns-restrict")
-BWRAP_PROFILE_DISABLED = Path("/etc/apparmor.d/disable/bwrap-userns-restrict")
+BWRAP_PROFILE: Final = Path("/etc/apparmor.d/bwrap-userns-restrict")
+BWRAP_PROFILE_DISABLED: Final = Path("/etc/apparmor.d/disable/bwrap-userns-restrict")
 # A sandbox with a user namespace of its own inside, as srt's seccomp helper makes one. Writing the inner namespace's
 # setgroups takes a capability in it, which AppArmor can deny even where bubblewrap's own namespace works.
-USERNS_PROBE = (
+USERNS_PROBE: Final = (
     *("bwrap", "--ro-bind", "/", "/", "--dev", "/dev", "--unshare-pid", "--proc", "/proc"),
     *("unshare", "--user", "--map-root-user", "true"),
 )
-LIFT_RESTRICTION = """\
+LIFT_RESTRICTION: Final = """\
     sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
     echo 'kernel.apparmor_restrict_unprivileged_userns = 0' | sudo tee /etc/sysctl.d/60-canopy-sandbox.conf"""
-USERNS_FIX = f"""\
+USERNS_FIX: Final = f"""\
 bubblewrap cannot make a user namespace: AppArmor restricts unprivileged ones. Lift the restriction, now and at boot:
 {LIFT_RESTRICTION}"""
-BWRAP_PROFILE_FIX = f"""\
+BWRAP_PROFILE_FIX: Final = f"""\
 srt cannot make the user namespace it needs inside bubblewrap's: AppArmor's bwrap-userns-restrict profile denies every
 capability to what bubblewrap starts. Disable the profile, and lift the restriction it stood in for, now and at boot:
     sudo ln -sf {BWRAP_PROFILE} {BWRAP_PROFILE_DISABLED.parent}/
     sudo apparmor_parser -R {BWRAP_PROFILE}
 {LIFT_RESTRICTION}"""
-WRAPPER_MISSING = """\
+WRAPPER_MISSING: Final = """\
 canopy-sandbox is not on PATH. It installs with canopy: run the install again, with --reinstall, and put uv's tool
 directory on PATH (`uv tool update-shell`)."""
 # npm ci installs exactly the lockfile, and checks each package's integrity hash. srt has no install scripts, and none
 # of its dependencies may run one. A Node older than a package's `engines` fails the install instead of only warning.
-NPM_CI = ("npm", "ci", "--ignore-scripts", "--engine-strict", "--no-audit", "--no-fund")
+NPM_CI: Final = ("npm", "ci", "--ignore-scripts", "--engine-strict", "--no-audit", "--no-fund")
 # The lockfile of the last install that finished and answered the pinned version, written only then: npm ci needs the
 # lockfile itself in place before it runs, so that copy says nothing about whether the install behind it succeeded.
-INSTALLED_LOCK = "canopy-installed.lock"
-NPM_TIMEOUT = 600
-SHARED_CACHE = """\
+INSTALLED_LOCK: Final = "canopy-installed.lock"
+NPM_TIMEOUT: Final = 600
+SHARED_CACHE: Final = """\
 {template} lets a sandboxed run write {paths}: your own caches, whose packages and programs your tools run outside
 the sandbox, the agent runtime's for the overseer included. Remove them from its allowWrite and allowRead, and
 add @CACHE@ to both, as the shipped template does (docs/SANDBOX.md)."""
-OPERATOR_DATA = """\
+OPERATOR_DATA: Final = """\
 {template} lets a sandboxed run read {paths}: the agent runtime's own data, whose logins and config your runtime, the
 overseer's included, acts on outside the sandbox. Remove them from its allowRead and allowWrite, and add @DATA@ to
 both, as the shipped template does: a run's runtime keeps its data there, with a copy of your logins
 (docs/SANDBOX.md)."""
-NO_DATA = """\
+NO_DATA: Final = """\
 {template} leaves @DATA@ out of its allowRead or allowWrite, so a sandboxed run's runtime finds none of your logins.
 Add it to both, as the shipped template does (docs/SANDBOX.md)."""
 #: Directories under HOME that hold a credential beside what a build reads, each with the file that holds it. A
 #: template that allows reading one whole lets a run read the credential: srt's allowRead outranks its denyRead.
-CREDENTIAL_DIRS = ((".cargo", "credentials.toml"), (".config/git", "credentials"))
-CREDENTIAL_READ = """\
+CREDENTIAL_DIRS: Final = ((".cargo", "credentials.toml"), (".config/git", "credentials"))
+CREDENTIAL_READ: Final = """\
 {template} lets a sandboxed run read {paths}, and with them {files}: tokens of yours, such as crates.io's, or what
 git's store helper saved. Name what a build reads instead, as the shipped template does: ~/.cargo/bin, ~/.cargo/env,
 ~/.cargo/registry, and ~/.cargo/git, and ~/.config/git/config, ~/.config/git/ignore, and ~/.config/git/attributes
 (docs/SANDBOX.md)."""
 # The roles whose command is OpenCode, which keeps its data, logins included, in the run's own data directory.
-RUNTIME_ROLES = ("worker", "chore", "review")
+RUNTIME_ROLES: Final = ("worker", "chore", "review")
 
 
 @dataclass

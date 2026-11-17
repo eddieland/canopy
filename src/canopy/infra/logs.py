@@ -16,17 +16,17 @@ import stat
 from collections.abc import Mapping, MutableMapping
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, TextIO, override
+from typing import Any, Final, TextIO, override
 
 from canopy.infra import tracing
 
-LOG_FILE_NAME = "canopy.log"
+LOG_FILE_NAME: Final = "canopy.log"
 #: A rotated log's name, `canopy.log.1` the newest, and its number.
-ROTATED_RE = re.compile(rf"{re.escape(LOG_FILE_NAME)}\.(\d+)")
-_LOGGER = "canopy"
-_STANDARD_ATTRS = frozenset(vars(logging.makeLogRecord({})))
+ROTATED_RE: Final = re.compile(rf"{re.escape(LOG_FILE_NAME)}\.(\d+)")
+_LOGGER: Final = "canopy"
+_STANDARD_ATTRS: Final = frozenset(vars(logging.makeLogRecord({})))
 #: The keys only the span a record was made in sets, never an `extra`, so a line cannot name a span it was not in.
-_SPAN_KEYS = frozenset({"trace_id", "span_id"})
+_SPAN_KEYS: Final = frozenset({"trace_id", "span_id"})
 
 
 class JsonFormatter(logging.Formatter):

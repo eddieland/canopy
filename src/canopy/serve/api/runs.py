@@ -8,7 +8,7 @@ run:ID "..."` sends one.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Final
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -20,7 +20,7 @@ from canopy.serve.api.refs import REFUSED, WEB, RefusedError, RepoName, RunId, n
 from canopy.serve.schema import Answered, AnswerRequest, ReplyRequest, ReviewDiff, Run, RunMessaged, RunsSince
 from canopy.serve.schema.transcript import RawOutput, Transcript
 
-TAG = "runs"
+TAG: Final = "runs"
 router = APIRouter(tags=[TAG])
 _log = logs.for_tick(None)
 

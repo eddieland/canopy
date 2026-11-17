@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Final, Literal
 
 from canopy.core import conversation, sql
 
@@ -19,15 +19,15 @@ if TYPE_CHECKING:
 
 type Source = Literal["ticket", "task", "message", "chore_run", "decision", "tick"]
 
-MIN_QUERY = 2
-MAX_QUERY = 200
-MAX_WORDS = 8
+MIN_QUERY: Final = 2
+MAX_QUERY: Final = 200
+MAX_WORDS: Final = 8
 # Each source's newest hits; one more is read to learn whether it has more.
-PER_SOURCE = 20
-SNIPPET = 160
+PER_SOURCE: Final = 20
+SNIPPET: Final = 160
 # How much of a snippet comes before its first match, when the text is longer than a snippet.
-_LEAD = 50
-_CUT = "…"
+_LEAD: Final = 50
+_CUT: Final = "…"
 
 
 class BadQueryError(ValueError):
@@ -151,7 +151,7 @@ def _matching(conn: sqlite3.Connection, rows_of: sql.Select, terms: Collection[s
 
 # A ticket's text: its key and title, then its branch and each unit's branch and PR, each once. Ordered by when a tick
 # last saw it, since a ticket's rowid says only when it was first seen.
-_TICKETS = sql.select(
+_TICKETS: Final = sql.select(
     "t.key, t.phase, t.last_seen_at AS at,"
     "  t.key || coalesce(' ' || t.title, '') || coalesce(' ' || (SELECT group_concat(v, ' ') FROM ("
     "    SELECT t.branch AS v UNION SELECT u.branch FROM ticket_units u WHERE u.ticket_key = t.key"
@@ -161,14 +161,14 @@ _TICKETS = sql.select(
 ).from_("tickets t")
 # A task's text: its reference, the operator's words, and the branch its runs push, each once (DESIGN §36). A task
 # is never edited, so its id orders it as when it was submitted.
-_TASKS = sql.select(
+_TASKS: Final = sql.select(
     "t.id, t.stopped_at, t.submitted_at AS at, t.text AS task_text,"
     "  'task:' || t.id || ' ' || t.text || coalesce(' ' || (SELECT group_concat(DISTINCT r.branch)"
     "    FROM task_runs r WHERE r.task_id = t.id), '') AS text",
 ).from_("tasks t")
 # A ticket's, a chore's, or a task's, with the task's text for its first line. A review's are left out, as reviews
 # are.
-_MESSAGES = (
+_MESSAGES: Final = (
     sql.select(
         "id, subject_kind, subject_id, at, kind, run_id, task_run_id, body AS text,"
         "  (SELECT t.text FROM tasks t WHERE subject_kind = 'task' AND t.id = CAST(subject_id AS INTEGER))"
@@ -179,7 +179,7 @@ _MESSAGES = (
 )
 # A chore run's text: the harness's note, its summary, and each finding's title and detail. Only a run whose result
 # is valid JSON has one, and only an object is a finding: the JSON functions fail on anything else.
-_CHORE_RUNS = (
+_CHORE_RUNS: Final = (
     sql.select(
         "id, chore, status, coalesce(ended_at, started_at) AS at,"
         "  coalesce(json_extract(result_json, '$.harness'), '') || char(10)"
@@ -191,10 +191,10 @@ _CHORE_RUNS = (
     .from_("chore_runs")
     .where("json_valid(result_json)")
 )
-_DECISIONS = sql.select("id, tick_id, ticket_key, chore, action, created_at AS at, rationale AS text").from_(
+_DECISIONS: Final = sql.select("id, tick_id, ticket_key, chore, action, created_at AS at, rationale AS text").from_(
     "decisions",
 )
-_TICKS = (
+_TICKS: Final = (
     sql.select("id, status, coalesce(ended_at, started_at) AS at, summary AS text")
     .from_("ticks")
     .where("summary IS NOT NULL")
@@ -273,7 +273,7 @@ def _tick(row: sqlite3.Row, text: str) -> Hit:
     return Hit("tick", str(row["at"]), text, tick_id=int(row["id"]), label=str(row["status"]))
 
 
-_SOURCES: tuple[tuple[Source, sql.Select, Callable[[sqlite3.Row, str], Hit]], ...] = (
+_SOURCES: Final[tuple[tuple[Source, sql.Select, Callable[[sqlite3.Row, str], Hit]], ...]] = (
     ("ticket", _TICKETS, _ticket),
     ("task", _TASKS, _task),
     ("message", _MESSAGES, _message),

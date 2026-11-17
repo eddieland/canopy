@@ -11,6 +11,7 @@ started keeps the prompt it read.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Final
 
 from fastapi import APIRouter
 
@@ -28,7 +29,7 @@ from canopy.serve.schema.instructions import (
     InstructionsVersions,
 )
 
-TAG = "instructions"
+TAG: Final = "instructions"
 router = APIRouter(tags=[TAG])
 _log = logs.for_tick(None)
 

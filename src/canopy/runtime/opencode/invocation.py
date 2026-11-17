@@ -14,31 +14,31 @@ from __future__ import annotations
 import re
 import shlex
 from pathlib import PurePosixPath
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
 #: The runtime, as messages to the operator name it.
-NAME = "OpenCode"
+NAME: Final = "OpenCode"
 #: The variable OpenCode reads its config directory from.
-CONFIG_DIR_ENV = "OPENCODE_CONFIG_DIR"
+CONFIG_DIR_ENV: Final = "OPENCODE_CONFIG_DIR"
 #: The option of `opencode run` that chooses a model, and its short form.
-MODEL_OPTION = "--model"
-SHORT_MODEL_OPTION = "-m"
+MODEL_OPTION: Final = "--model"
+SHORT_MODEL_OPTION: Final = "-m"
 #: The option of `opencode run` that chooses the model's variant, which has no short form.
-VARIANT_OPTION = "--variant"
+VARIANT_OPTION: Final = "--variant"
 
 #: The options of `opencode` that approve every permission an agent's rules leave at `ask`, `--auto` and its hidden
 #: aliases, as OpenCode 1.19.3's `run` takes them; yargs also takes each in camel case.
-APPROVE_OPTIONS = frozenset(
+APPROVE_OPTIONS: Final = frozenset(
     {"--auto", "--yolo", "--dangerously-skip-permissions", "--dangerouslySkipPermissions"},
 )
 #: The option of `opencode run` that chooses what it prints, and its value for one JSON event a line.
-FORMAT_OPTION = "--format"
-EVENTS_FORMAT = "json"
+FORMAT_OPTION: Final = "--format"
+EVENTS_FORMAT: Final = "json"
 # The agent a command runs, as `opencode run` takes it, by a name that is safe as one path component.
-_AGENT_RE = re.compile(r"(--agent[ =])([a-z][a-z0-9-]*)(?=\s|$)")
+_AGENT_RE: Final = re.compile(r"(--agent[ =])([a-z][a-z0-9-]*)(?=\s|$)")
 
 
 def default_template(agent: str, *, definitions_dir: str, title: str) -> str:

@@ -9,7 +9,7 @@ alone, so the cases here write the derivation's observations fresh at `NOW` and 
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import pytest
 
@@ -60,11 +60,11 @@ if TYPE_CHECKING:
     from tests.conftest import CanopyEnv, GitPool
 
 #: What the harness records for a ticket a worker of which is running.
-RUNNING = harness.Decision(KEY, Phase.RUNNING, "wait", "running: a worker of it is running")
+RUNNING: Final = harness.Decision(KEY, Phase.RUNNING, "wait", "running: a worker of it is running")
 #: What the harness records for a ticket the tracker says is closed.
-CLOSED = harness.Decision(KEY, None, "done", "closed: the tracker says it is closed")
+CLOSED: Final = harness.Decision(KEY, None, "done", "closed: the tracker says it is closed")
 #: What the harness records for an open ticket with no queue label that the query returned.
-UNLABELED = harness.Decision(KEY, None, "skip", "not_labeled: open, with no queue label")
+UNLABELED: Final = harness.Decision(KEY, None, "skip", "not_labeled: open, with no queue label")
 
 
 @pytest.fixture
@@ -378,7 +378,7 @@ def test_its_attention_items_are_marked_its_own_and_are_not_its_decisions(scenar
 
 
 #: What the overseer records about a ticket, through each of its tools.
-VERBS = {
+VERBS: Final = {
     "decide": decides(KEY, "wait", "r"),
     "dispatch": dispatches(),
     "attention": raises(KEY, "needs_author", "d"),

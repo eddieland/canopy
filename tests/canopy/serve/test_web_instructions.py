@@ -8,13 +8,14 @@ import dataclasses
 import hashlib
 import os
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 from canopy.core import conversation, prompts, standing
 from canopy.core.context import Context
 from tests.canopy.web_helpers import refused, signed_in_client
 
-RULES = "Commit review fixes as new commits.\n"
+RULES: Final = "Commit review fixes as new commits.\n"
 
 
 def instructed(ctx: Context, worker: Path, defaults: Path) -> Context:

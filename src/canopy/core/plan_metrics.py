@@ -15,27 +15,27 @@ from __future__ import annotations
 import math
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Final, Literal
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
 #: The model's version, kept with each plan's cached measurements (`plan_lengths`): raise it when a change to the model
 #: below, or to where a plan's text is found, would measure a plan differently, and every plan is measured again.
-VERSION = 2
+VERSION: Final = 2
 #: The characters of body text the plan editor fits on a line, at its widest.
-LINE_CHARS = 100
+LINE_CHARS: Final = 100
 #: The characters of a table's row the editor fits on a line: its smaller type takes more.
-TABLE_CHARS = 120
+TABLE_CHARS: Final = 120
 #: How many of the editor's lines a diagram counts, whatever it draws.
-DIAGRAM_LINES = 15
+DIAGRAM_LINES: Final = 15
 
 type _Kind = Literal["para", "quote", "item", "h12", "h34", "code", "diagram", "table", "rule"]
 
 # How tall each kind of block draws, in the editor's lines, per line of its wrapped text, and once per block: fitted to
 # the editor's drawn heights (module docstring). A heading is larger type with space above it; a code block is smaller
 # type in a padded box; an item carries its list's gap.
-_PER_LINE: dict[_Kind, float] = {
+_PER_LINE: Final[dict[_Kind, float]] = {
     "para": 1.05,
     "quote": 1.05,
     "item": 1.15,
@@ -44,7 +44,7 @@ _PER_LINE: dict[_Kind, float] = {
     "code": 0.85,
     "table": 1.1,
 }
-_PER_BLOCK: dict[_Kind, float] = {"code": 1.5, "diagram": DIAGRAM_LINES}
+_PER_BLOCK: Final[dict[_Kind, float]] = {"code": 1.5, "diagram": DIAGRAM_LINES}
 
 
 @dataclass(frozen=True)
@@ -101,13 +101,13 @@ def _width(block: _Block) -> int:
             return LINE_CHARS
 
 
-_FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})\s*([\w+-]*)")
-_HEADING = re.compile(r"^ {0,3}(#{1,6})\s+(.*?)\s*#*\s*$")
-_ITEM = re.compile(r"^(\s*)(?:[-*+]|\d{1,9}[.)])\s+(?:\[[ xX]\]\s+)?(.*)$")
-_RULE = re.compile(r"^ {0,3}([-*_])(?:\s*\1){2,}\s*$")
-_TABLE_SEPARATOR = re.compile(r"^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$")
-_LINK = re.compile(r"!?\[([^\]]*)\]\([^)]*\)")
-_MARKS = re.compile(r"\*\*|__|\*|_|`|~~")
+_FENCE: Final = re.compile(r"^ {0,3}(`{3,}|~{3,})\s*([\w+-]*)")
+_HEADING: Final = re.compile(r"^ {0,3}(#{1,6})\s+(.*?)\s*#*\s*$")
+_ITEM: Final = re.compile(r"^(\s*)(?:[-*+]|\d{1,9}[.)])\s+(?:\[[ xX]\]\s+)?(.*)$")
+_RULE: Final = re.compile(r"^ {0,3}([-*_])(?:\s*\1){2,}\s*$")
+_TABLE_SEPARATOR: Final = re.compile(r"^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$")
+_LINK: Final = re.compile(r"!?\[([^\]]*)\]\([^)]*\)")
+_MARKS: Final = re.compile(r"\*\*|__|\*|_|`|~~")
 
 
 @dataclass(frozen=True)

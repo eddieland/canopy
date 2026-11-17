@@ -13,7 +13,7 @@ the report is right before the tick catches up.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import db, plan_metrics, plans, records
 
@@ -23,9 +23,9 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 #: How many plans one live tick measures at most, so a journal of many plans fills over a few ticks, not in one.
-FILL_LIMIT = 50
+FILL_LIMIT: Final = 50
 #: Why a plan could not be measured when its original is not the file its planner wrote, by its hash.
-CHANGED = "changed"
+CHANGED: Final = "changed"
 
 
 def read(conn: sqlite3.Connection, state_dir: Path, written: Sequence[records.Plan]) -> dict[int, plan_metrics.Metrics]:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 import pytest
 
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 #: OpenTelemetry's status codes, as a span in the traces file carries them.
 UNSET, ERROR = 0, 2
 #: The model the operator chose for workers, which the fake runtime lists.
-MODEL = "acme/fake-model-1"
+MODEL: Final = "acme/fake-model-1"
 
 
 @pytest.mark.usefixtures("git_pool")

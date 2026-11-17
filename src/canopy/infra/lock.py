@@ -11,8 +11,9 @@ import os
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Final
 
-LOCK_FILE_NAME = "lock"
+LOCK_FILE_NAME: Final = "lock"
 
 
 class LockBusyError(Exception):

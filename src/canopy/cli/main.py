@@ -10,7 +10,7 @@ from __future__ import annotations
 import importlib
 import sys
 from collections.abc import Sequence
-from typing import override
+from typing import Final, override
 
 import click
 
@@ -20,7 +20,7 @@ from canopy.infra import procs
 
 # Each top-level command's module under canopy.cli and the attribute that holds it. A new command goes here; a test
 # fails on one defined in a command module but listed nowhere.
-COMMANDS: dict[str, tuple[str, str]] = {
+COMMANDS: Final[dict[str, tuple[str, str]]] = {
     "init": ("setup", "cmd_init"),
     "skill": ("setup", "cmd_skill"),
     "completion": ("setup", "cmd_completion"),

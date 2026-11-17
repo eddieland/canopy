@@ -33,10 +33,10 @@ ASKED: Final[tuple[RunTable, ...]] = ("ticks", "runs", "chore_runs", "review_run
 TABLES: Final[tuple[RunTable, ...]] = (*ASKED, "task_runs", "epic_runs")
 #: A run `r` of the window: one that started in it and has ended, so what it called is recorded. Its two `?` are the
 #: window's start and its end.
-WINDOW: LiteralString = "r.started_at >= ? AND r.started_at < ? AND r.ended_at IS NOT NULL"
+WINDOW: Final[LiteralString] = "r.started_at >= ? AND r.started_at < ? AND r.ended_at IS NOT NULL"
 #: The agent a run `r` of each table ran, where its offer does not name one: the one canopy ships for its kind of run
 #: (DESIGN §13). A plan's is the planner, as a feedback plan's is; a private repository's worker is its own.
-SHIPPED: Mapping[RunTable, sql.Fragment] = {
+SHIPPED: Final[Mapping[RunTable, sql.Fragment]] = {
     "ticks": sql.frag("?", names.OVERSEER),
     "runs": sql.frag(
         "CASE WHEN {} THEN ? WHEN r.private THEN ? ELSE ? END",
@@ -51,8 +51,8 @@ SHIPPED: Mapping[RunTable, sql.Fragment] = {
     "epic_runs": sql.frag("?", names.PLANNER),
 }
 # Which of a table's rows are an agent's runs: every one, but a tick that ran no overseer.
-_EVERY = sql.frag("1")
-_RUNS: Mapping[RunTable, sql.Fragment] = {"ticks": sql.frag("r.overseer_ran IS NOT 0")}
+_EVERY: Final = sql.frag("1")
+_RUNS: Final[Mapping[RunTable, sql.Fragment]] = {"ticks": sql.frag("r.overseer_ran IS NOT 0")}
 
 
 def ran(table: RunTable) -> sql.Fragment:

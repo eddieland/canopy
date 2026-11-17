@@ -5,7 +5,7 @@ import logging
 import os
 from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 from unittest import mock
 
 import pytest
@@ -13,7 +13,7 @@ import pytest
 from canopy.infra import logs, tracing
 from tests.canopy.helpers import spans
 
-NAME = logs.LOG_FILE_NAME
+NAME: Final = logs.LOG_FILE_NAME
 #: Reads each line the log holds.
 type Lines = Callable[[], list[dict[str, Any]]]
 

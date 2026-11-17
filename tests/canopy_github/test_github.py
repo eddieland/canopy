@@ -9,7 +9,7 @@ from collections.abc import Callable, Generator, Mapping
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
-from typing import Any, ClassVar, override
+from typing import Any, ClassVar, Final, override
 from unittest import mock
 
 import canopy_github
@@ -26,11 +26,11 @@ from canopy.infra import logs
 from tests.canopy_github.helpers import InProcess, serving
 from tests.conftest import CanopyEnv, executable, invoke
 
-PR = "https://github.com/acme/api/pull/7"
-HEAD = "9b2f4c6e1a7d"
-PAGE = 2
+PR: Final = "https://github.com/acme/api/pull/7"
+HEAD: Final = "9b2f4c6e1a7d"
+PAGE: Final = 2
 #: What GitHub's GraphQL API answers, with a 200, for a query it failed to run.
-WENT_WRONG = (
+WENT_WRONG: Final = (
     "Something went wrong while executing your query on 2026-11-12T18:00:00Z. "
     "Please include `C0DE:1234:ABCD` when reporting this issue."
 )
@@ -1264,7 +1264,7 @@ def test_endpoints_are_github_coms_api_host_or_the_servers_own() -> None:
 
 # A `gh` logged in to ghe.example.com alone, that answers a token for any host, as it does for every host but
 # github.com while GH_ENTERPRISE_TOKEN is set.
-_GH = """#!/bin/sh
+_GH: Final = """#!/bin/sh
 case "$*" in
   "auth status --json hosts --hostname ghe.example.com") echo '{"hosts":{"ghe.example.com":[]}}' ;;
   "auth status --json hosts --hostname "*) echo '{"hosts":{}}' ;;
@@ -1389,8 +1389,8 @@ def test_a_staged_reply_that_fails_deletes_the_pending_review(github: tuple[Fake
     assert [r.state for r in fake.pulls["acme", "api", 7].reviews] == ["COMMENTED"]
 
 
-SHA = "9b2f4c6e1a7d" * 3 + "9b2f"
-NEW = [
+SHA: Final = "9b2f4c6e1a7d" * 3 + "9b2f"
+NEW: Final = [
     {"path": "src/retry.py", "line": 2, "text": "This loops forever."},
     {"path": "README.md", "line": 1, "text": "?"},
 ]

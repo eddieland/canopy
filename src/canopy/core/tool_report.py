@@ -224,8 +224,10 @@ def between(conn: sqlite3.Connection, start: datetime, end: datetime) -> Tools:
         calls = records.fetch_all(conn, _Called, _called(since, until))
         names = list(starmap(str, sql.execute(conn, _servers(since, until))))
         prefixes = {name: runtime_servers.tool_name(name, "") for name in names}
-        reached = {name: records.fetch_all(conn, _Reached, _reached(name, prefixes, since, until)) for name in names}
-    own = {o.tool for o in offers}
+        own = {o.tool for o in offers}
+        reached = {
+            name: records.fetch_all(conn, _Reached, _reached(name, prefixes, own, since, until)) for name in names
+        }
     placed = {c.tool: _server_of(c.tool, prefixes) for c in calls if c.tool not in own}
     rows = [
         *(_server_row(name, reached[name], [c for c in calls if placed.get(c.tool) == name]) for name in sorted(names)),
@@ -288,7 +290,12 @@ class _Reached(records.View):
 #: The runtime's tool that loads a skill, as an offer names it; its calls are recorded by the skill each loaded.
 _SKILL: Final = SKILL_PREFIX.removesuffix(":")
 #: A recorded call `t`'s tool as an offer would name it: a load of any skill is a call of the skill tool.
-_NAMED = sql.frag("CASE WHEN substr(t.tool, 1, ?) = ? THEN ? ELSE t.tool END", len(SKILL_PREFIX), SKILL_PREFIX, _SKILL)
+_NAMED: Final = sql.frag(
+    "CASE WHEN substr(t.tool, 1, ?) = ? THEN ? ELSE t.tool END",
+    len(SKILL_PREFIX),
+    SKILL_PREFIX,
+    _SKILL,
+)
 
 
 # Each agent's runs, and how many the runtime answered for.
@@ -396,14 +403,14 @@ def _servers(since: str, until: str) -> sql.Fragment:
 
 # Each agent's runs that were offered the server `name` or called a tool of it, in every kind of run. A server's tools
 # are not in an offer by name, so a run called the server when it called a tool named as the runtime names its tools.
-def _reached(name: str, prefixes: Mapping[str, str], since: str, until: str) -> sql.Select:
+def _reached(name: str, prefixes: Mapping[str, str], own: Collection[str], since: str, until: str) -> sql.Select:
     each = [
         sql.select(
             "coalesce(o.agent, {}) AS agent, s.reach AS reach, "
             "EXISTS (SELECT 1 FROM run_tools t WHERE t.run_table = ? AND t.run_id = r.id AND {}) AS called",
             agent_runs.SHIPPED[table],
             table,
-            _of_server(name, prefixes),
+            _of_server(name, prefixes, own),
         )
         .from_(
             "{} r LEFT JOIN run_offers o ON o.run_table = ? AND o.run_id = r.id "
@@ -429,13 +436,15 @@ def _reached(name: str, prefixes: Mapping[str, str], since: str, until: str) -> 
 
 
 # Whether a recorded call `t` is of a tool of the server `name`: its name opens with the server's as the runtime
-# writes it, and with no longer one of another server's, whose tool it would be instead.
-def _of_server(name: str, prefixes: Mapping[str, str]) -> sql.Fragment:
-    own = prefixes[name]
-    found = sql.frag("substr(t.tool, 1, ?) = ?", len(own), own)
-    for longer in sorted(p for p in prefixes.values() if p != own and p.startswith(own)):
+# writes it, and with no longer one of another server's, whose tool it would be instead, and it is none of `own`, the
+# runtime's own tools an offer names, as `_server_of` places none of those.
+def _of_server(name: str, prefixes: Mapping[str, str], own: Collection[str]) -> sql.Fragment:
+    own_prefix = prefixes[name]
+    found = sql.frag("substr(t.tool, 1, ?) = ?", len(own_prefix), own_prefix)
+    for longer in sorted(p for p in prefixes.values() if p != own_prefix and p.startswith(own_prefix)):
         found = sql.frag("{} AND substr(t.tool, 1, ?) <> ?", found, len(longer), longer)
-    return found
+    clashing = sorted(tool for tool in own if tool.startswith(own_prefix))
+    return sql.frag("{} AND NOT {}", found, sql.in_("t.tool", clashing)) if clashing else found
 
 
 # The server a called tool is of, by the longest of the servers' names its own opens with; None when it opens with

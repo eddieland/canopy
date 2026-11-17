@@ -8,6 +8,7 @@ import json
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -32,7 +33,7 @@ from tests.canopy.scenario_helpers import Scenario, asks, dispatches, fails, pus
 from tests.conftest import TRACKER_SOURCE, CanopyEnv, GitPool, git
 
 CI, REVIEW, CONFLICT = ResumeReason.CI, ResumeReason.REVIEW, ResumeReason.CONFLICT
-CHECK = "Check unit-tests failed on run 77: https://example.test/runs/77"
+CHECK: Final = "Check unit-tests failed on run 77: https://example.test/runs/77"
 
 
 def resumes(*reasons: ResumeReason) -> Called:

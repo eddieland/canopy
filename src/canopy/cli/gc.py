@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import canopy_sandbox
 import click
@@ -17,10 +17,10 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
     from canopy.loop.gc import Report
 
-_NAME_WIDTH = 20
-_UNIT_WIDTH = 12
-_COUNT_WIDTH = 9
-_SIZE_WIDTH = 11
+_NAME_WIDTH: Final = 20
+_UNIT_WIDTH: Final = 12
+_COUNT_WIDTH: Final = 9
+_SIZE_WIDTH: Final = 11
 
 
 @click.command("gc")

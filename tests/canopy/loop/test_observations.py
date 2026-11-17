@@ -8,7 +8,7 @@ snapshots` records the ones that differ.
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 import pytest
 
@@ -47,8 +47,8 @@ if TYPE_CHECKING:
     from tests.conftest import CanopyEnv
 
 #: When a person asked for a change on KEY's PR, and when the worker answered.
-ASKED = "2026-10-20T11:00:00.000Z"
-ANSWERED = "2026-10-20T11:20:00.000Z"
+ASKED: Final = "2026-10-20T11:00:00.000Z"
+ANSWERED: Final = "2026-10-20T11:20:00.000Z"
 
 
 @pytest.fixture

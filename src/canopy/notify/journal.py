@@ -11,7 +11,7 @@ import sqlite3
 from collections.abc import Collection, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import db, event_names, records, sql
 from canopy.core.items import Item, fingerprint, subject
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from canopy.core.config import Sink
 
 # Events every sink has passed are deleted once they are this old.
-KEEP_EVENTS = timedelta(days=7)
+KEEP_EVENTS: Final = timedelta(days=7)
 
 
 def newest_event_id(conn: sqlite3.Connection) -> int:

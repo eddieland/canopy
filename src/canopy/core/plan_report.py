@@ -22,7 +22,7 @@ import statistics
 from dataclasses import dataclass
 from datetime import timedelta
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import db, plan_lengths, plan_metrics, plans, records, spend, sql
 from canopy.core.vocab import PlanEffort, PlannerApproval, PlanStatus, ResumeReason, RunKind
@@ -34,11 +34,11 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 #: The kinds that count as a `resume`: the retired `fix-ci` counts as one with the reason `ci` (DESIGN §8).
-RESUMES = (RunKind.RESUME, RunKind.FIX_CI)
+RESUMES: Final = (RunKind.RESUME, RunKind.FIX_CI)
 #: A page of a plan, in the plan editor's lines (`plan_metrics.Metrics.lines`): about a screen at 1440 pixels tall.
-PAGE_LINES = 50
+PAGE_LINES: Final = 50
 #: Where the length table cuts a plan's length, in lines: under a page, under 2, 4, 6, 8, and 10, and the rest.
-LENGTH_BOUNDS = (PAGE_LINES, 2 * PAGE_LINES, 4 * PAGE_LINES, 6 * PAGE_LINES, 8 * PAGE_LINES, 10 * PAGE_LINES)
+LENGTH_BOUNDS: Final = (PAGE_LINES, 2 * PAGE_LINES, 4 * PAGE_LINES, 6 * PAGE_LINES, 8 * PAGE_LINES, 10 * PAGE_LINES)
 
 
 class Outcome(StrEnum):
@@ -60,7 +60,7 @@ class Outcome(StrEnum):
 
 
 #: The outcomes of a plan that was approved, the planner's first.
-APPROVED = (Outcome.PLANNER, Outcome.AS_WRITTEN, Outcome.REVISED)
+APPROVED: Final = (Outcome.PLANNER, Outcome.AS_WRITTEN, Outcome.REVISED)
 
 
 @dataclass(frozen=True)

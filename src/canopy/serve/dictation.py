@@ -19,7 +19,7 @@ import tempfile
 import wave
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import config, conversation, records
 from canopy.infra import procs, text
@@ -29,21 +29,21 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
 #: The sample rate the page records at, which speech models take without resampling.
-SAMPLE_RATE = 16_000
+SAMPLE_RATE: Final = 16_000
 #: The longest recording canopy transcribes, in seconds: a long message, and a bounded body.
-MAX_SECONDS = 300
+MAX_SECONDS: Final = 300
 #: The largest body the dictation route takes: `MAX_SECONDS` of 16-bit mono samples, and room for the WAV's header.
-MAX_AUDIO_BYTES = MAX_SECONDS * SAMPLE_RATE * 2 + 4096
+MAX_AUDIO_BYTES: Final = MAX_SECONDS * SAMPLE_RATE * 2 + 4096
 #: Seconds the command may take before it is killed: a large model on a CPU reads a long recording in less.
-TIMEOUT_SECONDS = 180
+TIMEOUT_SECONDS: Final = 180
 #: The most text a transcription gives the field: far more than `MAX_SECONDS` of speech holds.
-MAX_TEXT = 20_000
+MAX_TEXT: Final = 20_000
 #: The longest `{vocabulary}`: Whisper reads at most 224 tokens of its prompt, and a word is a token or two.
-MAX_VOCABULARY = 600
+MAX_VOCABULARY: Final = 600
 #: How many tickets' keys and titles the vocabulary names, before its bound cuts it.
-VOCABULARY_TICKETS = 30
+VOCABULARY_TICKETS: Final = 30
 #: How much of the command's stderr a failure quotes.
-_STDERR_CHARS = 300
+_STDERR_CHARS: Final = 300
 
 
 @dataclass(frozen=True)

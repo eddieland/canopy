@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import click
 
@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from canopy.core.session_sizes import Found, Group, Sizes
 
 #: What each kind of canopy's sessions is called in the text.
-OWNER_LABELS: dict[session_sizes.Owner, str] = {
+OWNER_LABELS: Final[dict[session_sizes.Owner, str]] = {
     "overseer": "overseer runs",
     "workers": "worker runs",
     "plans": "plan runs",
@@ -47,7 +47,7 @@ OWNER_LABELS: dict[session_sizes.Owner, str] = {
     "state_dir": "in the state directory",
 }
 #: What each table of canopy's runs is called, as a session's run is named.
-RUN_LABELS: dict[str, str] = {
+RUN_LABELS: Final[dict[str, str]] = {
     "ticks": "tick",
     "runs": "run",
     "chore_runs": "chore run",
@@ -56,12 +56,12 @@ RUN_LABELS: dict[str, str] = {
     "epic_runs": "epic run",
 }
 #: What `canopy sessions` says while `sessions.search` keeps no title.
-OFF = (
+OFF: Final = (
     'sessions.search is off: set it to "titles" in your private config, and the loop\'s next wait reads every '
     "session's title"
 )
-_NAME_WIDTH = 28
-_COUNT_WIDTH = 10
+_NAME_WIDTH: Final = 28
+_COUNT_WIDTH: Final = 10
 
 
 @click.command("sessions")

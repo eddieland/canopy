@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import pytest
 
@@ -14,7 +14,7 @@ from tests.canopy.scenario_helpers import Scenario, sets_phase
 from tests.conftest import TRACKER_SOURCE, CanopyEnv
 
 #: A `tracker` source the fake connector plays, so the query is read by a source (DESIGN §30).
-TRACKER = {"sources": {"jira": {"kind": "tracker", "cmd": "connector jira", "timeout_minutes": 1}}}
+TRACKER: Final = {"sources": {"jira": {"kind": "tracker", "cmd": "connector jira", "timeout_minutes": 1}}}
 
 
 @pytest.fixture

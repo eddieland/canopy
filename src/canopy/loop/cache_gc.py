@@ -18,7 +18,7 @@ import sqlite3
 import stat
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Final, Literal
 
 import canopy_sandbox
 
@@ -39,7 +39,7 @@ Outcome = Literal["emptied", "skipped", "failed"]
 #: and its `setup_cmd` as `setup`, a task's or an epic plan's agent as `worker`, a chore's as `chore`, and a
 #: review's as `review`. The
 #: overseer's runs are ticks, in no run table: `TICK_ROLES` says how its cache is held.
-ROLE_TABLES: Mapping[str, tuple[RunTable, ...]] = {
+ROLE_TABLES: Final[Mapping[str, tuple[RunTable, ...]]] = {
     "worker": ("runs", "task_runs", "epic_runs"),
     "setup": ("runs",),
     "chore": ("chore_runs",),
@@ -47,7 +47,7 @@ ROLE_TABLES: Mapping[str, tuple[RunTable, ...]] = {
     "overseer": (),
 }
 #: The roles that run only inside a tick, whose cache goes only while canopy holds the tick lock.
-TICK_ROLES = frozenset({"overseer"})
+TICK_ROLES: Final = frozenset({"overseer"})
 
 
 @dataclass(frozen=True)

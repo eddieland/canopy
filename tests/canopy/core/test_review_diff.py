@@ -2,13 +2,14 @@
 
 import os
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import pytest
 
 from canopy.core import review_diff
 
-DIFF = """\
+DIFF: Final = """\
 diff --git a/src/retry.py b/src/retry.py
 index 1111111..2222222 100644
 --- a/src/retry.py

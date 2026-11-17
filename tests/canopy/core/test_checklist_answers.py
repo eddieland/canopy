@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import pydantic
 import pytest
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
     from tests.conftest import CanopyEnv, Journals
 
-NOW = datetime(2026, 10, 8, 12, tzinfo=UTC)
+NOW: Final = datetime(2026, 10, 8, 12, tzinfo=UTC)
 
 
 def listed(repo: str, *ids: str) -> checklists.Checklist:
@@ -37,8 +37,8 @@ def listed(repo: str, *ids: str) -> checklists.Checklist:
     return checklists.Checklist(repo, *checklists.parse(repo, text))
 
 
-API = listed("api", "general-types", "newspaper", "doc-comments")
-WEB = listed("web", "no-any")
+API: Final = listed("api", "general-types", "newspaper", "doc-comments")
+WEB: Final = listed("web", "no-any")
 
 
 def test_each_item_is_recorded_as_the_run_answered_it() -> None:

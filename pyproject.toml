@@ -128,6 +128,7 @@ cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true 
 
 [tool.uv.sources]
 canopy-artifacts = { workspace = true }
+canopy-codemods = { workspace = true }
 canopy-github = { workspace = true }
 canopy-http = { workspace = true }
 canopy-jira = { workspace = true }
@@ -139,6 +140,9 @@ canopy-sandbox = { workspace = true }
 [dependency-groups]
 dev = [
     "actionlint-py>=1.7.12.25",
+    # The codemods canopy's own code is held to (packages/canopy-codemods): `make fmt` applies them and `make lint`
+    # fails on a file one would change. A program of its own that canopy never runs, so it is here, not a dependency.
+    "canopy-codemods",
     # A program of its own that scores another code review bot on blind PRs (packages/canopy-review-bench); canopy
     # never runs it, so it is here for its tests and type checks, not among canopy's dependencies.
     "canopy-review-bench",
@@ -288,6 +292,8 @@ banned-from = ["unittest.mock"]
 "packages/canopy-review-bench/**" = ["TID251"]
 # Its commands' docstrings are their --help text, so a Raises section would print there.
 "packages/canopy-review-bench/src/canopy_review_bench/__init__.py" = ["DOC501"]
+# The codemods' command's docstring is its --help text too.
+"packages/canopy-codemods/src/canopy_codemods/__init__.py" = ["DOC501"]
 # FastAPI reads a route's annotations at runtime to validate and to build the schema, so its models and dependencies
 # are imported for real (TC001). A route's docstring is its description in the schema, and the errors it answers are
 # its decorator's `responses`, so Returns, Yields, and Raises sections would only repeat them there.
@@ -317,6 +323,7 @@ branch = true
 source_pkgs = [
     "canopy",
     "canopy_artifacts",
+    "canopy_codemods",
     "canopy_github",
     "canopy_jira",
     "canopy_notify_slack",
@@ -345,6 +352,7 @@ project-includes = [
 search-path = [
     "src",
     "packages/canopy-artifacts/src",
+    "packages/canopy-codemods/src",
     "packages/canopy-github/src",
     "packages/canopy-jira/src",
     "packages/canopy-notify-slack/src",

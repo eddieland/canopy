@@ -17,7 +17,7 @@ from contextlib import AbstractContextManager, ExitStack, closing, contextmanage
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Literal, NamedTuple, TypedDict, Unpack, cast
+from typing import Any, Final, Literal, NamedTuple, TypedDict, Unpack, cast
 from unittest import mock
 
 from rich.console import Console
@@ -62,44 +62,44 @@ from canopy.runtime.implementation import Version
 from canopy.runtime.report import SessionPage, SessionSpend
 from tests.conftest import FAKES_DIR, TRACKER_CMD, TRACKER_SOURCE, CanopyEnv, Journals, git
 
-KEY = "PROJ-1"
+KEY: Final = "PROJ-1"
 #: A plan as a planner writes one, for a test that needs any.
-PLAN = "# Plan\n\n## api\n\nAdd the endpoint.\n"
+PLAN: Final = "# Plan\n\n## api\n\nAdd the endpoint.\n"
 #: The prompt `prompted` gives its plan's planner.
-PLAN_PROMPT = "You are planning PROJ-1.\n\nThe operator said: keep it small.\n"
+PLAN_PROMPT: Final = "You are planning PROJ-1.\n\nThe operator said: keep it small.\n"
 # The branch an `implement` of KEY with slug `work` pushes.
-BRANCH = f"agent/{KEY}-work"
+BRANCH: Final = f"agent/{KEY}-work"
 # The label the test operator's tickets carry (`user_toml`).
-LABEL = "agent-ready-tester"
+LABEL: Final = "agent-ready-tester"
 #: The PR WORKER_DONE reports, as a URL that names no PR, so no source reads it.
-WORKER_PR = "https://example.test/pr/1"
+WORKER_PR: Final = "https://example.test/pr/1"
 #: A `done` worker's result in the tests' workspace of one repository, `repo`, as its `result` call reports it.
-WORKER_DONE = json.dumps({"status": "done", "branch": BRANCH, "prs": {"repo": WORKER_PR}, "summary": "did it"})
+WORKER_DONE: Final = json.dumps({"status": "done", "branch": BRANCH, "prs": {"repo": WORKER_PR}, "summary": "did it"})
 #: The PR a worker that sends drafts opens (`sends_drafts`).
-DRAFTS_PR = "https://github.com/acme/api/pull/7"
+DRAFTS_PR: Final = "https://github.com/acme/api/pull/7"
 #: A PR the tests' `vcs` source reads, open with nothing on it, unless a test's GitHub state says otherwise. A ticket
 #: with a unit at it reaches the overseer; one at WORKER_PR is the harness's `wait` instead (DESIGN §39).
-READ_PR = "https://github.com/acme/repo/pull/1"
+READ_PR: Final = "https://github.com/acme/repo/pull/1"
 #: Why the harness waits on a candidate with a unit at WORKER_PR.
-UNOBSERVED = (
+UNOBSERVED: Final = (
     f"unobserved: {WORKER_PR} is not a PR's URL, so it is not observed; no source reads it, so it waits until the "
     "operator forgets the ticket's work"
 )
 #: What the harness's `unobserved_pr` item says of KEY's unit in `repo` at WORKER_PR.
-UNOBSERVED_ITEM = (
+UNOBSERVED_ITEM: Final = (
     f"{KEY} in repo names {WORKER_PR} as its PR, which is not a PR's URL, so no source reads it and the ticket waits; "
     f"`canopy forget {KEY}` drops its work, and its next implement starts over"
 )
 #: The `trust` keys of the private file that hold a worker's drafts for the operator to approve:
 #: `scenario.configures("private", trust=APPROVE)`.
-APPROVE = {"review_replies": "approve"}
+APPROVE: Final = {"review_replies": "approve"}
 #: The tests' `tracker` source, as the user file names it (`tests.conftest.TRACKER_TOML`).
-TRACKER = {"kind": "tracker", "cmd": TRACKER_CMD}
+TRACKER: Final = {"kind": "tracker", "cmd": TRACKER_CMD}
 #: The `connect` keys of a source that posts to the tracker, for drafts on a ticket.
 #: The private file's sources replace the user file's whole, so they name the tests' tracker source again.
-TRACKER_POSTS = {"sources": {TRACKER_SOURCE: {**TRACKER, "post_cmd": "canopy-post-github"}}}
+TRACKER_POSTS: Final = {"sources": {TRACKER_SOURCE: {**TRACKER, "post_cmd": "canopy-post-github"}}}
 #: An epic's plan as its planner writes one: a requirement, a contract, and the one entry that covers and provides them.
-EPIC_PLAN = """\
+EPIC_PLAN: Final = """\
 # Epic: sessions
 
 ## Goal
@@ -130,13 +130,13 @@ Sessions survive a restart.
 ## Out of scope
 """
 # What a blocked worker asks (`blocked_result`).
-QUESTION = "Should the button be red or blue?"
+QUESTION: Final = "Should the button be red or blue?"
 # The last line an overseer prints when it has finished its tick.
-TICK_DONE = "CANOPY_TICK_DONE"
+TICK_DONE: Final = "CANOPY_TICK_DONE"
 # Above Linux's largest pid_max, so never a live process.
-DEAD_PID = 4_194_305
+DEAD_PID: Final = 4_194_305
 # A value for every placeholder the worker prompts take.
-PROMPT_VALUES = {
+PROMPT_VALUES: Final = {
     "KEY": "PROJ-1",
     "SLOT": "/pool/1/repo",
     "BRANCH": "agent/PROJ-1-work",
@@ -172,7 +172,7 @@ PROMPT_VALUES = {
     **replies.posted_values("In every comment and reply you post, start it with `CANOPY:` and a space.", "needs-human"),
 }
 #: A private ticket's worker prompts take the same, but for how they file follow-ups (DESIGN §18, §22).
-PRIVATE_PROMPT_VALUES = {
+PRIVATE_PROMPT_VALUES: Final = {
     **PROMPT_VALUES,
     "FOLLOW_UPS": prompts.follow_ups(
         5,
@@ -750,7 +750,7 @@ def listed(state: Path, *lines: str, variants: Mapping[str, Sequence[str]] | Non
 
 
 #: Where the fake `opencode serve` says it listens.
-FAKE_SERVER = "http://127.0.0.1:41234"
+FAKE_SERVER: Final = "http://127.0.0.1:41234"
 
 
 def model_list(runtime: Version, *, variants: bool = False) -> tuple[list[str], str]:
@@ -979,9 +979,9 @@ def chore_waits(name: str, rationale: str = "not now") -> Called:
 
 #: The overseer's tools whose call names a ticket the state block lists to it: a dispatch, a decision, an attention
 #: item, and a ticket's settings.
-_LISTED = ("canopy_dispatch", "canopy_decide", "canopy_attention", "canopy_ticket-set")
+_LISTED: Final = ("canopy_dispatch", "canopy_decide", "canopy_attention", "canopy_ticket-set")
 #: A ticket's key, as the tests name them.
-_TICKET_KEY = re.compile(r"[A-Z][A-Z0-9]*-[0-9]+")
+_TICKET_KEY: Final = re.compile(r"[A-Z][A-Z0-9]*-[0-9]+")
 
 
 def named_tickets(moves: Iterable[list[str] | Called]) -> list[str]:
@@ -1022,7 +1022,7 @@ class Behavior(TypedDict, total=False):
 
 
 # The fake's name for each of Behavior's keys, after its FAKE_<ROLE>_ prefix.
-BEHAVIOR_SETTINGS = {
+BEHAVIOR_SETTINGS: Final = {
     "says": "SAYS",
     "exit_code": "EXIT",
     "sleep": "SLEEP",
@@ -1470,9 +1470,9 @@ def json_block(text: str) -> dict[str, Any]:
 # The overseer's tools over MCP (DESIGN §27)
 
 #: How a test starts `canopy _mcp`, as the runtime starts it for the overseer: this interpreter's canopy, here.
-MCP_SERVER = (sys.executable, "-m", "canopy", "_mcp")
+MCP_SERVER: Final = (sys.executable, "-m", "canopy", "_mcp")
 #: What a client says first, and the notification it sends once the server has answered.
-MCP_OPENING: tuple[Mapping[str, object], ...] = (
+MCP_OPENING: Final[tuple[Mapping[str, object], ...]] = (
     {
         "jsonrpc": "2.0",
         "id": 0,
@@ -1486,7 +1486,7 @@ MCP_OPENING: tuple[Mapping[str, object], ...] = (
     {"jsonrpc": "2.0", "method": "notifications/initialized"},
 )
 #: A `tools/list` request, for `mcp_session`.
-LIST_TOOLS: Mapping[str, object] = {"method": "tools/list"}
+LIST_TOOLS: Final[Mapping[str, object]] = {"method": "tools/list"}
 
 
 def logged(text: str) -> git_tools.Commits:
@@ -1763,7 +1763,7 @@ def write_file(path: Path, size: int, *, hours_old: float = 0) -> Path:
 
 #: OpenCode 2.1.4's tables of sessions and their messages: the columns `canopy sessions` reads, and those a row must
 #: fill. Its spend's reader reads other columns of the same tables, which its own tests write.
-RUNTIME_RECORD = """
+RUNTIME_RECORD: Final = """
 CREATE TABLE session_v2 (
     id text PRIMARY KEY, project_id text NOT NULL, parent_id text, slug text NOT NULL, directory text NOT NULL,
     title text, version text NOT NULL, time_created integer NOT NULL, time_updated integer NOT NULL,

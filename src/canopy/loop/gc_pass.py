@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import stat
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import db, gc_passes, memory_manage, sql
 from canopy.infra import logs, metrics, tracing
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 #: The least time from one pass's start to the next's.
-PASS_EVERY = timedelta(days=1)
+PASS_EVERY: Final = timedelta(days=1)
 
 
 def run(ctx: Context, tick_id: int, log: logs.TickAdapter) -> int | None:

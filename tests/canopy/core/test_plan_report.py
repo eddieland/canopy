@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.cli import plan_report as plan_report_cli
 from canopy.cli.main import main
@@ -24,13 +24,13 @@ if TYPE_CHECKING:
     from tests.conftest import CanopyEnv
 
 #: When the snapshot's journal is read: its plans are written in the week before.
-NOW = datetime(2026, 10, 8, 12, tzinfo=UTC)
+NOW: Final = datetime(2026, 10, 8, 12, tzinfo=UTC)
 
 # A plan of under a page, one of one to two pages in the plan editor, and one of four to six pages with every kind of
 # block that is not prose (`plan_metrics`).
-SHORT = "# Plan\n\nOne step.\n"
-MEDIUM = "# Plan\n\n" + "\n".join(f"- step {i}" for i in range(60)) + "\n"
-LONG = (
+SHORT: Final = "# Plan\n\nOne step.\n"
+MEDIUM: Final = "# Plan\n\n" + "\n".join(f"- step {i}" for i in range(60)) + "\n"
+LONG: Final = (
     "## Steps\n\n"
     + "\n\n".join("word " * 40 for _ in range(100))
     + "\n\n```python\nprint(1)\n```\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n```mermaid\nflowchart LR\n  A --> B\n```\n"

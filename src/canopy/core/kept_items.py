@@ -25,7 +25,7 @@ tick reads (D036). Before these were kept, the overseer recorded each every tick
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING, Final, assert_never
 
 from canopy.core import conversation, db, item_numbers, records, sql
 from canopy.core.items import ACTION_PREFIX
@@ -35,15 +35,15 @@ if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Collection, Iterable, Mapping, Sequence
 
-NEEDS_AUTHOR = "needs_author"
-MULTI_REPO = "multi_repo"
-NOTICE_RERUN = "notice_rerun"
+NEEDS_AUTHOR: Final = "needs_author"
+MULTI_REPO: Final = "multi_repo"
+NOTICE_RERUN: Final = "notice_rerun"
 #: The reasons the overseer keeps.
-KEPT: frozenset[str] = frozenset({NEEDS_AUTHOR, MULTI_REPO, NOTICE_RERUN})
+KEPT: Final[frozenset[str]] = frozenset({NEEDS_AUTHOR, MULTI_REPO, NOTICE_RERUN})
 #: The reasons whose record may name an item: what a `needs_author` waits on, and the check a `notice_rerun` holds.
-NAMING: frozenset[str] = frozenset({NEEDS_AUTHOR, NOTICE_RERUN})
+NAMING: Final[frozenset[str]] = frozenset({NEEDS_AUTHOR, NOTICE_RERUN})
 #: What a `needs_author` may wait on: a comment on its ticket, or a review item or review run on one of its PRs.
-_AUTHOR_ITEMS: frozenset[NumberedItem] = frozenset(
+_AUTHOR_ITEMS: Final[frozenset[NumberedItem]] = frozenset(
     {
         NumberedItem.COMMENT,
         NumberedItem.REVIEW,

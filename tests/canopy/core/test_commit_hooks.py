@@ -6,6 +6,7 @@ ticket, and a task, which has none, gets none that names it.
 """
 
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import pytest
@@ -15,7 +16,7 @@ from canopy.core.config import ConfigError, load
 from canopy.infra import procs
 from tests.conftest import CanopyEnv, executable
 
-TRAILER = "Co-authored-by: canopy worker <noreply@canopy.invalid>"
+TRAILER: Final = "Co-authored-by: canopy worker <noreply@canopy.invalid>"
 
 
 def test_canopys_entry_comes_after_the_operators_own(tmp_path: Path) -> None:
@@ -163,9 +164,9 @@ def test_with_no_marks_to_add_the_version_is_not_read(canopy_env: CanopyEnv) -> 
     runner.run.assert_not_called()
 
 
-A = "a" * 40
-B = "b" * 40
-C = "c" * 64
+A: Final = "a" * 40
+B: Final = "b" * 40
+C: Final = "c" * 64
 
 
 def test_each_showing_of_the_list_is_paired_with_the_next_push_it_let_through(tmp_path: Path) -> None:

@@ -14,7 +14,7 @@ import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, assert_never
+from typing import TYPE_CHECKING, Any, Final, assert_never
 
 import click
 
@@ -32,8 +32,8 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 #: How many of a slot's processes a line names; a build can start hundreds.
-PROCESSES = 5
-_NO_CLONE = "no clone; run `canopy workspace sync`"
+PROCESSES: Final = 5
+_NO_CLONE: Final = "no clone; run `canopy workspace sync`"
 
 
 @dataclass(frozen=True)

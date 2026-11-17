@@ -7,7 +7,7 @@ menus to leave out, since a model chosen that is hidden is still listed.
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Final
 
 from fastapi import APIRouter, Query
 
@@ -15,7 +15,7 @@ from canopy.core import agent_models
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.schema.model import ModelList
 
-TAG = "models"
+TAG: Final = "models"
 router = APIRouter(tags=[TAG])
 
 

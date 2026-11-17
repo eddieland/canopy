@@ -6,7 +6,7 @@ Reads only.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import pytest
 
@@ -31,9 +31,9 @@ if TYPE_CHECKING:
     from canopy.serve.backend import Backend
     from tests.conftest import CanopyEnv
 
-TIMED = "https://github.com/acme/web/pull/7"
-UNTIMED = "https://github.com/acme/web/pull/8"
-OLD = "https://github.com/acme/web/pull/9"
+TIMED: Final = "https://github.com/acme/web/pull/7"
+UNTIMED: Final = "https://github.com/acme/web/pull/8"
+OLD: Final = "https://github.com/acme/web/pull/9"
 
 
 def test_the_reviews_report_reads_the_mocks_week_and_month(backend: Backend) -> None:

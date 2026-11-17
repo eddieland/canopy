@@ -380,13 +380,13 @@ class _Ran(records.View):
 
 #: How many model calls a run `r` made, as its session's record says once read: NULL until it is, or when it names no
 #: model. The `?` is the run's table.
-_CALLS: LiteralString = "(SELECT SUM(m.replies) FROM run_models m WHERE m.run_table = ? AND m.run_id = r.id)"
+_CALLS: Final[LiteralString] = "(SELECT SUM(m.replies) FROM run_models m WHERE m.run_table = ? AND m.run_id = r.id)"
 #: A figure, the `{}`, over the skills a run `r` was offered. The `?` is the run's table.
-_LIST: LiteralString = "(SELECT {} FROM run_offered_skills s WHERE s.run_table = ? AND s.run_id = r.id)"
+_LIST: Final[LiteralString] = "(SELECT {} FROM run_offered_skills s WHERE s.run_table = ? AND s.run_id = r.id)"
 #: Of the rows `_ran` reads, a run the runtime answered for that was offered a skill, and one of those with every
 #: skill's length on record.
-_LISTED = sql.frag("said AND skills > 0")
-_SIZED = sql.frag("said AND skills > 0 AND sized")
+_LISTED: Final = sql.frag("said AND skills > 0")
+_SIZED: Final = sql.frag("said AND skills > 0 AND sized")
 #: What a call of the skill tool is counted under when canopy cannot read which skill it loaded: the tool's own name.
 _UNNAMED: Final = SKILL_PREFIX.removesuffix(":")
 

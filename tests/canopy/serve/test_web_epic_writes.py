@@ -6,6 +6,7 @@ the page read it, so a file changed since is refused rather than approved unseen
 """
 
 from pathlib import Path
+from typing import Final
 
 import pytest
 from fastapi.testclient import TestClient
@@ -19,7 +20,7 @@ from tests.canopy.web_helpers import client, refused, replan_epic, signed_in_to,
 
 APPROVED, PROPOSED, PLANNING = mock_epics.APPROVED, mock_epics.PROPOSED, mock_epics.PLANNING
 #: A reply's form, with the submission id it drew.
-REPLY = {"body": "Say how the copy is cleared when the app is offline at sign-out.", "submission": "form-0001"}
+REPLY: Final = {"body": "Say how the copy is cleared when the app is offline at sign-out.", "submission": "form-0001"}
 
 
 def test_the_mock_epics_plan_is_approved_from_the_web_and_its_breakdown_is_the_boards(backend: Backend) -> None:

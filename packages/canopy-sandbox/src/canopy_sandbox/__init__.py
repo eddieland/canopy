@@ -118,49 +118,49 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING, Final, NamedTuple
 
 from canopy_sandbox import credentials
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Mapping, MutableMapping, Sequence
 
-ROLES = ("worker", "setup", "chore", "review", "overseer")
+ROLES: Final = ("worker", "setup", "chore", "review", "overseer")
 # The roles that commit, and so get the run's object directory and the run's `git`. A review reads its checkout and
 # writes nothing there; a chore has no worktree.
-COMMITTING = ("worker", "setup")
+COMMITTING: Final = ("worker", "setup")
 # The policy templates `canopy sandbox setup` copies for each role, and the package and lockfile it installs srt from.
-TEMPLATES = Path(__file__).resolve().parent / "templates"
-RUNTIME_SPEC = Path(__file__).resolve().parent / "runtime"
-OBJECTS_ENV = "CANOPY_GIT_OBJECTS"
+TEMPLATES: Final = Path(__file__).resolve().parent / "templates"
+RUNTIME_SPEC: Final = Path(__file__).resolve().parent / "runtime"
+OBJECTS_ENV: Final = "CANOPY_GIT_OBJECTS"
 #: The run's answers directory, which canopy passes a run that keeps its progress, and the roles that run one.
-ANSWERS_ENV = "CANOPY_ANSWERS"
-ANSWERING = ("worker", "review")
+ANSWERS_ENV: Final = "CANOPY_ANSWERS"
+ANSWERING: Final = ("worker", "review")
 #: An answers directory's name: `7.answers`, in `<state>/runs/`, `<state>/reviews/`, or `<state>/task-runs/`.
-ANSWERS_NAME = re.compile(r"[0-9]{1,18}\.answers")
+ANSWERS_NAME: Final = re.compile(r"[0-9]{1,18}\.answers")
 #: Where canopy keeps a one-off task run's files in the state directory, its answers directory among them.
-TASK_RUNS = "task-runs"
+TASK_RUNS: Final = "task-runs"
 # What canopy leaves in a joint run's desk (DESIGN §18); every other entry there links to a worktree.
-DESK_MARKER = ".canopy-desk"
+DESK_MARKER: Final = ".canopy-desk"
 # The workspace's state directory, which holds the run directories canopy passes (D016), and the directories in it
 # that hold one: a run's object directory, a chore's default cwd, and a review's directory.
-STATE_DIR = ".canopy"
-RUN_PARENTS = ("runs", "chores", "reviews")
-PLACEHOLDER = re.compile(r"@[A-Z_]+@")
+STATE_DIR: Final = ".canopy"
+RUN_PARENTS: Final = ("runs", "chores", "reviews")
+PLACEHOLDER: Final = re.compile(r"@[A-Z_]+@")
 #: The workspace file, which marks the root of a workspace, where canopy runs the overseer (DESIGN §18).
-WORKSPACE_FILE = "canopy-workspace.toml"
+WORKSPACE_FILE: Final = "canopy-workspace.toml"
 #: What the overseer writes in the workspace's state directory, through canopy's tools: the journal, its WAL and
 #: shared-memory files, the tick's and the dispatch's locks, and canopy's log, by canopy's names for them, which
 #: `tests/canopy_sandbox` holds to canopy's own. The journal comes first, and must be there.
-JOURNAL = ("canopy.db", "canopy.db-wal", "canopy.db-shm", "lock", "dispatch.lock", "canopy.log")
+JOURNAL: Final = ("canopy.db", "canopy.db-wal", "canopy.db-shm", "lock", "dispatch.lock", "canopy.log")
 #: The locks among them, which canopy makes when it first takes one.
-LOCKS = ("lock", "dispatch.lock")
+LOCKS: Final = ("lock", "dispatch.lock")
 # What a worktree's own git directory holds that git reads as config or as where the rest of the repository is. With
 # `commondir` rewritten, every git on the host in the slot, canopy's and treehouse's, reads a config and hooks the
 # worker wrote (DESIGN §24).
-GIT_OWN_PROTECTED = ("config.worktree", "commondir", "gitdir")
+GIT_OWN_PROTECTED: Final = ("config.worktree", "commondir", "gitdir")
 # The git the wrapper runs reads a slot a worker had, on the host: nothing from it may run (DESIGN §24).
-SAFE_GIT = (
+SAFE_GIT: Final = (
     "git",
     "-c",
     "core.hooksPath=/dev/null",
@@ -173,16 +173,16 @@ SAFE_GIT = (
 )
 # git reads a list of alternates split on colons, and names with a quote or a line break are quoted, so a path that
 # holds one would name a directory of the worker's choosing.
-UNSAFE_PATH = re.compile(r'[:"\n\r\\]')
+UNSAFE_PATH: Final = re.compile(r'[:"\n\r\\]')
 # Read by the shell `srt` runs the command in: a non-interactive bash sources BASH_ENV, and sh in some modes ENV.
-SHELL_STARTUP = ("BASH_ENV", "ENV")
+SHELL_STARTUP: Final = ("BASH_ENV", "ENV")
 # On Linux, srt runs socat inside the sandbox to carry its network to srt's proxy outside. socat listens on IPv6
 # unless this says otherwise, and on a kernel without IPv6 exits at once, which srt does not report: every request from
 # the sandbox then fails to connect.
-SOCAT_LISTEN = "SOCAT_DEFAULT_LISTEN_IP"
+SOCAT_LISTEN: Final = "SOCAT_DEFAULT_LISTEN_IP"
 # The `git` the command finds first on PATH, for a worker or setup (git_shim). POSIX sh, so that a git call costs one
 # more git to find the repository, not a Python start.
-GIT_SHIM = r"""#!/bin/sh
+GIT_SHIM: Final = r"""#!/bin/sh
 # canopy-sandbox's git, first on PATH (DESIGN §24). In the run's worktrees, git writes new objects to the
 # run's object directory and reads each worktree's shared ones as well. Any other repository, such as a cache a tool
 # keeps as a git repository, keeps its objects in its own directory, as it would without a sandbox.
@@ -230,7 +230,7 @@ esac
 exec "$real" "$@"
 """
 # Name a repository other than the one git finds from the cwd, for the wrapper's git and the command's alike.
-GIT_LOCATION = (
+GIT_LOCATION: Final = (
     "GIT_ALTERNATE_OBJECT_DIRECTORIES",
     "GIT_COMMON_DIR",
     "GIT_DIR",
@@ -245,16 +245,16 @@ GIT_LOCATION = (
     "GIT_WORK_TREE",
 )
 # The npm package srt comes in; its `vendor/` holds the seccomp helper the sandbox runs (find_srt, vendor_dirs).
-SRT_PACKAGE = "@anthropic-ai/sandbox-runtime"
+SRT_PACKAGE: Final = "@anthropic-ai/sandbox-runtime"
 # Where srt puts the sandbox's TMPDIR. Unset, it is /tmp/claude, which every sandboxed run shares.
-SRT_TMPDIR = "CLAUDE_CODE_TMPDIR"
+SRT_TMPDIR: Final = "CLAUDE_CODE_TMPDIR"
 # On Linux, srt makes the Unix sockets that carry the sandbox's network in its own TMPDIR, which the wrapper sets to the
 # run's temp directory, under names up to this long (checked at 0.0.79); a socket's path holds at most 107 bytes there.
-SRT_SOCKET_NAME = "claude-socks-0123456789abcdef.sock"
-SOCKET_PATH_MAX = 107
+SRT_SOCKET_NAME: Final = "claude-socks-0123456789abcdef.sock"
+SOCKET_PATH_MAX: Final = 107
 # The cache and data directories each role's runs share, under `$XDG_CACHE_HOME/canopy/sandbox/` and
 # `$XDG_DATA_HOME/canopy/sandbox/`. Setup warms the worker's caches.
-CACHES = {"worker": "worker", "setup": "worker", "chore": "chore", "review": "review", "overseer": "overseer"}
+CACHES: Final = {"worker": "worker", "setup": "worker", "chore": "chore", "review": "review", "overseer": "overseer"}
 # Where the command's tools keep their caches, each relative to the role's cache directory. XDG_CACHE_HOME moves
 # OpenCode's, yarn 1's, and most tools' on Linux; the rest are npm's, which never follows it, Go's and pip's, which do
 # not on macOS, and the homes of the tools that keep their caches in one, under the HOME the templates hide. Each is the
@@ -266,7 +266,7 @@ CACHES = {"worker": "worker", "setup": "worker", "chore": "chore", "review": "re
 #   gradle.properties and init scripts, which the templates already hide.
 # - YARN_GLOBAL_FOLDER holds yarn 2+'s shared cache, under XDG_DATA_HOME otherwise. Never YARN_CACHE_FOLDER: yarn 2+
 #   reads it as the project's own cache, which a repository may commit.
-CACHE_ENV = (
+CACHE_ENV: Final = (
     ("XDG_CACHE_HOME", "."),
     ("npm_config_cache", "npm"),
     ("GOCACHE", "go-build"),
@@ -278,7 +278,7 @@ CACHE_ENV = (
 )
 # What a run reads from the operator's own data directory once XDG_DATA_HOME is the role's: uv's Pythons and tools,
 # which the templates let it read, each relative to the operator's XDG_DATA_HOME. Set only when the operator has not.
-DATA_KEPT = (
+DATA_KEPT: Final = (
     ("UV_PYTHON_INSTALL_DIR", "uv/python"),
     ("UV_TOOL_DIR", "uv/tools"),
 )

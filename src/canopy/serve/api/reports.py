@@ -8,7 +8,7 @@ used. Reads only.
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Final
 
 from fastapi import APIRouter, Query
 
@@ -26,7 +26,7 @@ from canopy.serve.schema.review_report import ReviewsReport
 from canopy.serve.schema.skill_report import SkillsReport
 from canopy.serve.schema.tool_report import ToolsReport
 
-TAG = "reports"
+TAG: Final = "reports"
 router = APIRouter(tags=[TAG])
 
 

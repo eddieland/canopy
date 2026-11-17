@@ -26,7 +26,7 @@ import json
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Literal, NotRequired, TypedDict, assert_never
+from typing import TYPE_CHECKING, Final, Literal, NotRequired, TypedDict, assert_never
 
 from canopy.core import conversation, db, item_numbers, observe, records, sql
 from canopy.core.items import ACTION_PREFIX
@@ -45,7 +45,7 @@ if TYPE_CHECKING:
 #: reviews and review comments together. The rest stay new, so a later tick shows them. Chosen conservatively, for the
 #: operator to set from the measurement's ticks (ROADMAP M37, Open): ten comments at their bound are about
 #: 5,000 tokens, and a busier subject waits a tick rather than swelling every tick's block.
-MAX_NEW_ITEMS = 10
+MAX_NEW_ITEMS: Final = 10
 #: The harness's attention reasons that hold a ticket, or with a repository one unit, for a person (DESIGN §30): while
 #: one is recorded this tick, no decision rests on the unit's review items, so their text is left out. The rows of §7
 #: that allow a `wait` alone hold the same way: `needs_human` and `running` the ticket, `ci_running` its unit, and so
@@ -53,7 +53,7 @@ MAX_NEW_ITEMS = 10
 #: `untrusted_review` holds only the untrusted items of its unit, since a trusted reviewer's feedback on the same unit
 #: still goes to a worker (D089); one that comes after the first untrusted item is shown, and so spent, though no
 #: `resume` covers it until the operator answers, which is when the overseer judges it either way.
-HOLD_REASONS: frozenset[str] = frozenset(
+HOLD_REASONS: Final[frozenset[str]] = frozenset(
     {attention.AWAITING_REPLY, harness_items.ATTEMPT_LIMIT, harness_items.PLAN_REVIEW},
 )
 #: How fresh a subject's observation is (DESIGN §35).
@@ -424,7 +424,7 @@ class Holds:
 
 
 #: No hold: what a read outside a tick takes, such as the loop's poll and a dispatch's claims, which read no text.
-NO_HOLDS = Holds(tickets=frozenset(), units=frozenset(), untrusted=frozenset())
+NO_HOLDS: Final = Holds(tickets=frozenset(), units=frozenset(), untrusted=frozenset())
 
 
 @dataclass(frozen=True)

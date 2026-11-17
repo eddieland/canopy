@@ -18,7 +18,7 @@ from collections.abc import Collection, Iterable, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING, Final, assert_never
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, StrictInt, StrictStr
 
@@ -32,57 +32,57 @@ if TYPE_CHECKING:
 
 # What each tier is called wherever memory shows: `memory.ticket_notes` and `memory.proposals`, whose lessons are what
 # a run reads.
-NOTES_TIER = "ticket notes"
-LESSONS_TIER = "lessons"
+NOTES_TIER: Final = "ticket notes"
+LESSONS_TIER: Final = "lessons"
 # The kinds whose prompts carry a ticket's notes and the whole memory contract; a review and a chore get no memory, and
 # a plan and a feedback plan hear lessons and may cite them, but write none: a planner pushes nothing a merge can check
 # (DESIGN §28).
-NOTE_KINDS = frozenset({RunKind.IMPLEMENT, RunKind.RESUME})
-LESSON_KINDS = frozenset({*NOTE_KINDS, RunKind.PLAN, RunKind.FEEDBACK_PLAN})
+NOTE_KINDS: Final = frozenset({RunKind.IMPLEMENT, RunKind.RESUME})
+LESSON_KINDS: Final = frozenset({*NOTE_KINDS, RunKind.PLAN, RunKind.FEEDBACK_PLAN})
 # Bounds on what a run may write (DESIGN §28, Writing).
-MAX_NOTE_CHARS = 400
-MAX_NOTES_PER_RUN = 5
+MAX_NOTE_CHARS: Final = 400
+MAX_NOTES_PER_RUN: Final = 5
 # The ticket's notes in a prompt, in UTF-8 bytes; past it the least recently used are left out of the prompt.
-MAX_TICKET_DIGEST = 3 * 1024
-MAX_PROPOSAL_CHARS = 600
+MAX_TICKET_DIGEST: Final = 3 * 1024
+MAX_PROPOSAL_CHARS: Final = 600
 # Fewer than notes', so one run cannot fill the queue: past `MAX_PENDING` pending, a new proposal is refused.
-MAX_PROPOSALS_PER_RUN = 3
-MAX_PENDING = 20
+MAX_PROPOSALS_PER_RUN: Final = 3
+MAX_PENDING: Final = 20
 # A proposal nobody reviews expires; a lesson comes up for review this long after it was promoted or last used.
-PROPOSAL_DAYS = 14
-REVIEW_DAYS = 90
+PROPOSAL_DAYS: Final = 14
+REVIEW_DAYS: Final = 90
 # The lessons in a prompt, in UTF-8 bytes; past it the rest are left out, in key order, and counted. Room for a dozen
 # lessons at `MAX_PROPOSAL_CHARS`, twice that at a usual length: they are the operator's own words, so a lesson left out
 # is one the operator promoted for nothing.
-MAX_LESSONS_DIGEST = 8 * 1024
+MAX_LESSONS_DIGEST: Final = 8 * 1024
 # The runs a memory names as having relied on it, the latest first; its use count counts every one.
-USED_BY_SHOWN = 5
+USED_BY_SHOWN: Final = 5
 # The memories `reads` asks of the journal at once, well under SQLite's limit on a statement's parameters.
-_READS_BATCH = 500
+_READS_BATCH: Final = 500
 # The most proposals or lessons no longer pending or in force a history lists: the latest to leave, enough to look back
 # a few weeks without sending a busy workspace's whole past.
-HISTORY_SHOWN = 50
+HISTORY_SHOWN: Final = 50
 # The attention reasons memory raises (DESIGN §14, §28): the harness's, and the operator's alone.
-PROPOSAL_REASON = "memory_proposal"
-REVIEW_REASON = "lesson_review"
-WRONG_REASON = "lesson_wrong"
-HARNESS_REASONS = frozenset({PROPOSAL_REASON, REVIEW_REASON, WRONG_REASON})
+PROPOSAL_REASON: Final = "memory_proposal"
+REVIEW_REASON: Final = "lesson_review"
+WRONG_REASON: Final = "lesson_wrong"
+HARNESS_REASONS: Final = frozenset({PROPOSAL_REASON, REVIEW_REASON, WRONG_REASON})
 # The placeholders a prompt carries memory in (`prompts.MEMORY_PARTS`).
-TICKET_MEMORY = "TICKET_MEMORY"
-WORKSPACE_LESSONS = "WORKSPACE_LESSONS"
+TICKET_MEMORY: Final = "TICKET_MEMORY"
+WORKSPACE_LESSONS: Final = "WORKSPACE_LESSONS"
 # What a run is told to run to search its memory past its digest (`canopy memory search`).
-SEARCH_COMMAND = "canopy memory search WORDS"
-_NOTES_HEADING = "## Notes from earlier runs"
-_LESSONS_HEADING = "## Lessons from the operator"
+SEARCH_COMMAND: Final = "canopy memory search WORDS"
+_NOTES_HEADING: Final = "## Notes from earlier runs"
+_LESSONS_HEADING: Final = "## Lessons from the operator"
 # Every memory's whole row, for each reader to finish.
-_MEMORIES = records.select(records.Memory)
+_MEMORIES: Final = records.select(records.Memory)
 # The step of a walk back through `supersedes` from the ids in `back`.
-_EARLIER = (
+_EARLIER: Final = (
     sql.select("m.supersedes").from_("memories m").join("back b ON m.id = b.id").where("m.supersedes IS NOT NULL")
 )
 #: The version each lesson in `same(id, root)` was renamed from, its words and repository unchanged: the rows whose
 #: reads count as the root's (`renamed_from`). A forgotten version's text is gone, so it ends the walk.
-_SAME_WORDS = (
+_SAME_WORDS: Final = (
     sql.select("p.id, s.root")
     .from_("same s")
     .join("memories m ON m.id = s.id")
@@ -306,7 +306,7 @@ class Proposal(BaseModel):
 
 
 #: What the tool says of every memory field: who reads it.
-_KEPT = "Kept by canopy, never posted, and read by the operator: mention none of it on the ticket or a PR."
+_KEPT: Final = "Kept by canopy, never posted, and read by the operator: mention none of it on the ticket or a PR."
 
 
 class NotesGroup(BaseModel):
@@ -370,7 +370,7 @@ class CitedGroup(BaseModel):
 
 
 #: The groups of a result's fields memory asks for, by name (`core.run_result`).
-GROUPS: Mapping[str, type[BaseModel]] = {
+GROUPS: Final[Mapping[str, type[BaseModel]]] = {
     "notes": NotesGroup,
     "drop_notes": DropNotesGroup,
     "proposals": ProposalsGroup,

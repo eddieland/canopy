@@ -6,14 +6,14 @@ cannot decode, and the whole of `mcp-auth.json` for one bad entry.
 """
 
 import math
-from typing import Any
+from typing import Any, Final
 
 import pytest
 from canopy_sandbox import credentials
 from hypothesis import given
 from hypothesis import strategies as st
 
-OAUTH = {
+OAUTH: Final = {
     "type": "oauth",
     "refresh": "refresh-1",
     "access": "access-1",
@@ -21,24 +21,24 @@ OAUTH = {
     "accountId": "mine",
     "enterpriseUrl": "https://ghe.example.com",
 }
-MCP = {
+MCP: Final = {
     "tokens": {"accessToken": "mcp-1", "refreshToken": "mcp-refresh-1", "expiresAt": 100.5, "scope": "read"},
     "clientInfo": {"clientId": "mine"},
     "serverUrl": "https://mcp.example.com/mcp",
 }
-REFRESH = {"refresh": "refresh-2", "access": "access-2", "expires": 2_000}
-TOKENS = {"accessToken": "mcp-2", "refreshToken": "mcp-refresh-2", "expiresAt": 200, "scope": "write"}
+REFRESH: Final = {"refresh": "refresh-2", "access": "access-2", "expires": 2_000}
+TOKENS: Final = {"accessToken": "mcp-2", "refreshToken": "mcp-refresh-2", "expiresAt": 200, "scope": "write"}
 
-JSON = st.recursive(
+JSON: Final = st.recursive(
     st.none() | st.booleans() | st.integers() | st.floats() | st.text(max_size=5),
     lambda inner: st.lists(inner, max_size=3) | st.dictionaries(st.text(max_size=5), inner, max_size=3),
     max_leaves=10,
 )
 # Near enough to a login that the checks are reached, with any field of any type.
-SOME_TEXT = st.text(min_size=1, max_size=3)
-TOKEN = SOME_TEXT | st.just("") | JSON
-STAMP = st.integers(-1, 3_000) | st.floats(allow_nan=True) | st.booleans() | JSON
-LOGIN = st.fixed_dictionaries(
+SOME_TEXT: Final = st.text(min_size=1, max_size=3)
+TOKEN: Final = SOME_TEXT | st.just("") | JSON
+STAMP: Final = st.integers(-1, 3_000) | st.floats(allow_nan=True) | st.booleans() | JSON
+LOGIN: Final = st.fixed_dictionaries(
     {
         "type": st.sampled_from(["oauth", "api", "wellknown"]) | JSON,
         "refresh": TOKEN,
@@ -48,22 +48,22 @@ LOGIN = st.fixed_dictionaries(
     optional={"accountId": JSON, "enterpriseUrl": JSON, "key": JSON, "token": JSON},
 )
 # A refresh, and whatever else a run puts beside its tokens.
-REFRESHED = st.fixed_dictionaries(
+REFRESHED: Final = st.fixed_dictionaries(
     {"type": st.just("oauth"), "refresh": SOME_TEXT, "access": SOME_TEXT, "expires": st.integers(1_001, 10**15)},
     optional={"accountId": JSON, "enterpriseUrl": JSON, "key": JSON, "metadata": JSON},
 )
-MCP_TOKENS = st.fixed_dictionaries(
+MCP_TOKENS: Final = st.fixed_dictionaries(
     {"accessToken": TOKEN, "expiresAt": STAMP},
     optional={"refreshToken": TOKEN | st.none(), "scope": TOKEN},
 )
-MCP_LOGIN = st.fixed_dictionaries(
+MCP_LOGIN: Final = st.fixed_dictionaries(
     {
         "tokens": MCP_TOKENS | JSON,
         "serverUrl": st.sampled_from([MCP["serverUrl"], "https://evil.example.com/mcp"]) | JSON,
     },
     optional={"clientInfo": JSON, "codeVerifier": JSON},
 )
-MCP_REFRESHED = st.fixed_dictionaries(
+MCP_REFRESHED: Final = st.fixed_dictionaries(
     {
         "tokens": st.fixed_dictionaries(
             {"accessToken": SOME_TEXT, "expiresAt": st.integers(101, 10**12) | st.floats(100.6, 1e12)},

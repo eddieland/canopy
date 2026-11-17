@@ -21,7 +21,7 @@ import re
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy_review_bench import command
 from canopy_review_bench.bench import BenchError, Case, Side, Spot
@@ -30,11 +30,11 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
 #: The message of a base commit the bench writes: an `undo_fix`'s, or a `replay`'s with an overlay laid on it.
-BASE_MESSAGE = "Update repository settings"
+BASE_MESSAGE: Final = "Update repository settings"
 #: Git's settings for every command here: no paths quoted in a diff, and no driver or filter a repository can name.
-_GIT = ("git", "-c", "core.quotePath=off", "-c", "diff.noprefix=false", "-c", "diff.mnemonicPrefix=false")
-_HUNK = re.compile(r"^@@ -(?P<a>\d+)(?:,(?P<b>\d+))? \+(?P<c>\d+)(?:,(?P<d>\d+))? @@")
-_PUSH_TIMEOUT_SECONDS = 1800
+_GIT: Final = ("git", "-c", "core.quotePath=off", "-c", "diff.noprefix=false", "-c", "diff.mnemonicPrefix=false")
+_HUNK: Final = re.compile(r"^@@ -(?P<a>\d+)(?:,(?P<b>\d+))? \+(?P<c>\d+)(?:,(?P<d>\d+))? @@")
+_PUSH_TIMEOUT_SECONDS: Final = 1800
 
 
 @dataclass(frozen=True)
@@ -65,7 +65,7 @@ class Overlay:
 
 
 #: No overlay: the trees as the source has them.
-NO_OVERLAY = Overlay({})
+NO_OVERLAY: Final = Overlay({})
 
 
 @dataclass(frozen=True)

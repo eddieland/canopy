@@ -6,12 +6,13 @@ model. It exits 1 when an agent's runs would be refused their model.
 
 import json
 from pathlib import Path
+from typing import Final
 
 from tests.canopy.helpers import model_list
 from tests.canopy.scenario_helpers import Scenario
 
-MODEL = "acme/fake-model-1"
-OTHER = "acme/fake-model-2"
+MODEL: Final = "acme/fake-model-1"
+OTHER: Final = "acme/fake-model-2"
 
 
 def test_canopy_models_lists_each_model_and_the_agents_config_gives_it(

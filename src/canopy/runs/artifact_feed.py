@@ -25,7 +25,7 @@ import json
 import re
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Annotated, Literal, cast
+from typing import TYPE_CHECKING, Annotated, Final, Literal, cast
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, ValidationError, model_validator
 
@@ -40,33 +40,35 @@ if TYPE_CHECKING:
     from canopy.infra import logs, procs
 
 #: The kinds of change the feed prints: a line of any other kind is skipped, as an unknown kind is (DESIGN §30).
-CHANGES = frozenset({"comment_created", "comment_edited", "comment_deleted", "thread_resolved", "thread_reopened"})
+CHANGES: Final = frozenset(
+    {"comment_created", "comment_edited", "comment_deleted", "thread_resolved", "thread_reopened"},
+)
 #: The changes to a comment, which carry the comment; a thread's carry none.
-COMMENT_CHANGES = frozenset({"comment_created", "comment_edited", "comment_deleted"})
+COMMENT_CHANGES: Final = frozenset({"comment_created", "comment_edited", "comment_deleted"})
 #: The origin key whose value names the ticket an artifact is for.
-TICKET_KEY = "canopy.ticket"
+TICKET_KEY: Final = "canopy.ticket"
 #: The origin keys whose values name the workspace and the run an artifact was made in.
-WORKSPACE_KEY = "canopy.workspace"
-RUN_KEY = "canopy.run"
+WORKSPACE_KEY: Final = "canopy.workspace"
+RUN_KEY: Final = "canopy.run"
 #: The variable a publishing run's agent is given its origin pairs in, a JSON object, which its store's MCP server
 #: inherits and sets over the worker's: so the worker does not choose the ticket its artifact's comments reach.
-ORIGIN_ENV = "CANOPY_ARTIFACT_ORIGIN"
+ORIGIN_ENV: Final = "CANOPY_ARTIFACT_ORIGIN"
 #: The most origin pairs, and characters of a pair's key and value, as the contract bounds them: past them, a line is
 #: refused rather than cut, since a pair cut short would name another origin.
-MAX_ORIGIN = 16
-MAX_ORIGIN_KEY = 64
-MAX_ORIGIN_VALUE = 256
+MAX_ORIGIN: Final = 16
+MAX_ORIGIN_KEY: Final = 64
+MAX_ORIGIN_VALUE: Final = 256
 #: The most characters kept of a passage, cut and marked as a tracker comment's body is, and of the text either side.
-MAX_PASSAGE = conversation.MAX_COMMENT
-MAX_CONTEXT = 200
+MAX_PASSAGE: Final = conversation.MAX_COMMENT
+MAX_CONTEXT: Final = 200
 #: The most characters kept of an author's name, on one line.
-MAX_AUTHOR_NAME = 200
+MAX_AUTHOR_NAME: Final = 200
 #: The most characters of its passage a comment's message quotes: enough to find it, short of the comment it heads.
-MAX_QUOTE = 300
+MAX_QUOTE: Final = 300
 #: The source of a comment's message in its ticket's conversation, unless it carries the workers' marks.
-SOURCE = "artifact"
+SOURCE: Final = "artifact"
 #: What starts a comment's id in its ticket's conversation, so it never meets a tracker comment's id.
-COMMENT_ID_PREFIX = "artifact:"
+COMMENT_ID_PREFIX: Final = "artifact:"
 
 
 def read(

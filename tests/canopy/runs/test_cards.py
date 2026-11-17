@@ -3,7 +3,7 @@
 import json
 import re
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, Final
 
 from canopy.core import cards
 from canopy.core.vocab import RunKind
@@ -12,9 +12,9 @@ from tests.canopy.helpers import agent_runs, calls, context, planner_does, with_
 from tests.canopy.scenario_helpers import Scenario, dispatches
 from tests.conftest import GitPool
 
-STATUS = cards.tool_name()
-FIRST: Mapping[str, object] = {"summary": "Reading the ticket.", "now": "reading the code", "next": ["fix it"]}
-LATER: Mapping[str, object] = {
+STATUS: Final = cards.tool_name()
+FIRST: Final[Mapping[str, object]] = {"summary": "Reading the ticket.", "now": "reading the code", "next": ["fix it"]}
+LATER: Final[Mapping[str, object]] = {
     "summary": "The fix is in and its tests pass; pushing next.",
     "now": "pushing",
     "done": [{"step": "fix the parser", "proof": "tests pass: 42/42"}],
@@ -22,7 +22,7 @@ LATER: Mapping[str, object] = {
     "stuck": "CI is down; running the tests here instead",
 }
 #: A call the server refuses: it says nothing of what the agent does now.
-REFUSED: Mapping[str, object] = {"summary": "No now."}
+REFUSED: Final[Mapping[str, object]] = {"summary": "No now."}
 
 
 def test_a_worker_shows_its_card_while_it_runs_and_keeps_its_last_once_it_ends(
@@ -141,7 +141,7 @@ def test_the_report_a_chores_agent_reads_of_a_run_leaves_its_card_out(scenario: 
     working.finishes()
 
 
-ASKING: Mapping[str, Any] = {
+ASKING: Final[Mapping[str, Any]] = {
     **FIRST,
     "question": {
         "ask": "Keep the old endpoint for the mobile app, or remove it?",

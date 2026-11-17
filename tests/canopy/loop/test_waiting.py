@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 from unittest import mock
 
 import pytest
@@ -20,8 +20,8 @@ if TYPE_CHECKING:
 
     from tests.conftest import CanopyEnv
 
-PR = "https://github.com/acme/web/pull/7"
-MERGED = "https://github.com/acme/web/pull/8"
+PR: Final = "https://github.com/acme/web/pull/7"
+MERGED: Final = "https://github.com/acme/web/pull/8"
 
 
 def ago(hours: float) -> str:

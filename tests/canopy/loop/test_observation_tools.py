@@ -7,7 +7,7 @@ records nothing, and neither does a refusal a guard makes, unlike a verb's: a re
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import pytest
 
@@ -26,12 +26,12 @@ if TYPE_CHECKING:
 
 
 #: What a ticket the journal has no record of is refused with: as the verbs say it, and nothing is recorded.
-UNKNOWN = (
+UNKNOWN: Final = (
     "review-items refused (unknown): canopy has no record of PROJ-9: the tracker query did not return it, and the "
     "operator did not start it; name only tickets the state block lists"
 )
 #: What a number below 1 is refused with: the item, then the tuple left empty without it.
-ZERO = (
+ZERO: Final = (
     "numbers.0: Input should be greater than or equal to 1\n"
     "numbers: Tuple should have at least 1 item after validation, not 0"
 )

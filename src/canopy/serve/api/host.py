@@ -6,13 +6,15 @@ graphs' readings are kept by the server in memory (`host.Samples`).
 
 from __future__ import annotations
 
+from typing import Final
+
 from fastapi import APIRouter
 
 from canopy.serve import process_work
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.schema.host import HostHistory, HostProcesses, HostResources
 
-TAG = "host"
+TAG: Final = "host"
 router = APIRouter(tags=[TAG])
 
 

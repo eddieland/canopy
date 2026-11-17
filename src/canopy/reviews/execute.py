@@ -23,7 +23,7 @@ import shutil
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, TextIO
+from typing import TYPE_CHECKING, Final, TextIO
 
 from canopy.core import (
     agent_models,
@@ -59,7 +59,7 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
     from canopy.runtime.agents import Model
 
-_GIT_TIMEOUT_SECONDS = 300
+_GIT_TIMEOUT_SECONDS: Final = 300
 
 
 class ReviewError(Exception):

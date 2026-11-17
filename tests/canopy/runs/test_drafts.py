@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import pydantic
 import pytest
@@ -22,19 +22,19 @@ if TYPE_CHECKING:
 
     from tests.canopy.scenario_helpers import Ran, Scenario
 
-PR = DRAFTS_PR
-ISSUE = "https://github.com/acme/api/issues/1"
-REPLY = "Renamed it.\n\n```python\nretries = 3\n```"
-THREAD = {"on": "thread", "pr": PR, "comment": 501, "did": "changed", "text": REPLY}
+PR: Final = DRAFTS_PR
+ISSUE: Final = "https://github.com/acme/api/issues/1"
+REPLY: Final = "Renamed it.\n\n```python\nretries = 3\n```"
+THREAD: Final = {"on": "thread", "pr": PR, "comment": 501, "did": "changed", "text": REPLY}
 #: KEY's run on its `work` branch, as each drafting run here is.
-WORK = dispatches(slug="work")
+WORK: Final = dispatches(slug="work")
 #: Workers post their own replies, as before drafts (DESIGN §29); APPROVE has them draft replies for the operator.
-POST = {"review_replies": "post"}
+POST: Final = {"review_replies": "post"}
 #: What the run's note says when its `result` tool took no result.
-NO_RESULT = "the worker reported no result"
+NO_RESULT: Final = "the worker reported no result"
 #: Drafts of the wrong shape, each with what the write behind the tool says of it, and a ticket's draft from a run
 #: asked for none.
-MISSHAPEN: list[tuple[JsonValue, str]] = [
+MISSHAPEN: Final[list[tuple[JsonValue, str]]] = [
     ("a reply", "it is not an object"),
     ({"on": "review", "pr": PR, "text": "x"}, "its `on` is not thread, pr, or ticket"),
     ({**THREAD, "comment": "501"}, "its `comment` is not a review comment's id"),

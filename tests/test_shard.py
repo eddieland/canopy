@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import sys
+from typing import Final
 
 import pytest
 
 from canopy.infra import procs
 
 #: A package whose tests collect in well under a second, so collecting it a few times stays quick.
-TARGET = "tests/canopy/infra"
+TARGET: Final = "tests/canopy/infra"
 
 
 def test_the_slices_together_are_every_test_once() -> None:

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Callable, Mapping, Sequence
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, Final, TypedDict
 
 from canopy.core import chore_result, contract, epic_outline, review_result
 from canopy.core.db import Event
@@ -21,25 +21,25 @@ if TYPE_CHECKING:
     from canopy.core.vocab import ChoreRunStatus, ReviewRunStatus, RunStatus
 
 #: The attention list's diff: a group, and the name a sink takes it by, with no events of its own in the outbox.
-ATTENTION = "attention"
-RUNS = "runs"
-LOOP = "loop"
-CHORES = "chores"
-REVIEWS = "reviews"
+ATTENTION: Final = "attention"
+RUNS: Final = "runs"
+LOOP: Final = "loop"
+CHORES: Final = "chores"
+REVIEWS: Final = "reviews"
 #: A one-off task's runs (DESIGN §36): a group of its own, which no sink takes unless the operator lists it.
-TASKS = "tasks"
+TASKS: Final = "tasks"
 #: What canopy did with a reply it read from Slack (DESIGN §20): a mention it recorded, and any reply it refused.
-REPLIES = "replies"
+REPLIES: Final = "replies"
 #: The kind of the event that says the month's spend reached one of its budget's alerts.
-BUDGET_REACHED = "loop.budget_reached"
-SUMMARY_LIMIT = 300
-DETAIL_LIMIT = 500
+BUDGET_REACHED: Final = "loop.budget_reached"
+SUMMARY_LIMIT: Final = 300
+DETAIL_LIMIT: Final = 500
 #: How many follow-ups a `follow_ups.filed` event names; the rest are counted.
-MAX_FOLLOW_UPS = 20
+MAX_FOLLOW_UPS: Final = 20
 #: How many ids an `epic.changed` event names; the rest are counted.
-MAX_EPIC_IDS = 40
+MAX_EPIC_IDS: Final = 40
 #: What ends text `cut` shortened.
-_ELLIPSIS = "..."
+_ELLIPSIS: Final = "..."
 
 
 class RunStarted(TypedDict):
@@ -290,7 +290,7 @@ class BudgetReached(TypedDict):
 
 
 #: An example of each event's fields, by kind, for `canopy notify events`: what a sink's command reads.
-EXAMPLES: Mapping[str, Mapping[str, object]] = {
+EXAMPLES: Final[Mapping[str, Mapping[str, object]]] = {
     "run.started": RunStarted(
         ticket="PROJ-1",
         run=12,

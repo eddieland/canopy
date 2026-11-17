@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Final
 
 from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, StrictStr, ValidationError
 
@@ -50,17 +50,17 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 #: How long one export may take: it starts OpenCode, which reads its config and plugins, then the session.
-TIMEOUT_SECONDS = 60
+TIMEOUT_SECONDS: Final = 60
 #: The command, as canopy's words for a failure name it.
-COMMAND = "opencode export --sanitize"
+COMMAND: Final = "opencode export --sanitize"
 #: What OpenCode prints on stderr for a session it does not have.
-NOT_FOUND = "Session not found"
+NOT_FOUND: Final = "Session not found"
 #: In a sandbox role's database, the version of OpenCode that made a session, by its id.
-SESSION_SQL = "SELECT version FROM session WHERE id = ?"
+SESSION_SQL: Final = "SELECT version FROM session WHERE id = ?"
 #: Its messages, by its id and at most how many, in the order OpenCode wrote them: each one's id, and of its info, as
 #: JSON, only the fields `_Info` reads. The run wrote the database, so SQLite takes those out of each message, and a
 #: message whose id or fields are longer than any OpenCode writes is left out, so the rows canopy holds stay small.
-MESSAGES_SQL = """
+MESSAGES_SQL: Final = """
 SELECT id, info FROM (
     SELECT id, time_created, json_object(
         'role', json_extract(data, '$.role'),
@@ -77,7 +77,7 @@ ORDER BY time_created, id
 LIMIT ?
 """
 # Where a JSON object starts a line.
-_OBJECT_RE = re.compile(r"^\{", re.MULTILINE)
+_OBJECT_RE: Final = re.compile(r"^\{", re.MULTILINE)
 
 
 class _Info(BaseModel):

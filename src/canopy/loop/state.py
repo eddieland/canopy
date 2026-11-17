@@ -8,7 +8,7 @@ import sqlite3
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, NotRequired, TypedDict, cast
+from typing import TYPE_CHECKING, Final, NotRequired, TypedDict, cast
 
 from canopy.core import contract, conversation, db, item_numbers, plans, pools
 from canopy.core.vocab import FlakyCause, ResumeReason
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from canopy.runs.reconcile import Capacity
 
 #: A time as the journal writes it (`db.format_time`): a value that is one, and nothing else, shows its minute.
-_JOURNAL_TIME = re.compile(r"([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}):[0-9]{2}\.[0-9]{3}Z")
+_JOURNAL_TIME: Final = re.compile(r"([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}):[0-9]{2}\.[0-9]{3}Z")
 
 
 class OverseerState(TypedDict):

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Collection
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import db, pools
 from canopy.runs import checkouts
@@ -21,10 +21,10 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 #: The ticket whose desk is open from the start, and the slot of web's pool it holds.
-SEEDED = "ABC-103"
-SEEDED_SLOT = 6
+SEEDED: Final = "ABC-103"
+SEEDED_SLOT: Final = 6
 #: What the seeded desk holds that origin lacks, until a close discards it.
-SEEDED_CHANGES = 2
+SEEDED_CHANGES: Final = 2
 
 
 class Desks:

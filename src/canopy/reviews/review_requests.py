@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import agent_models, contract, conversation, db, personas, records, sql, ticket_models
 from canopy.runtime import agents, invocation
@@ -33,26 +33,26 @@ if TYPE_CHECKING:
     from canopy.runtime.report import ModelList
 
 #: `review_runs.purpose` of a review that answers the operator's request, rather than one the loop started on its own.
-PURPOSE = "request"
+PURPOSE: Final = "request"
 
 # Why a request ended: a `done` review of its PR; the PR merged or closed before one, or is in none of the
 # workspace's repositories (the overseer's reading); or the operator stopped it.
-REVIEWED = "reviewed"
-MERGED = "merged"
-CLOSED = "closed"
-UNKNOWN_REPO = "unknown_repo"
-STOPPED = "stopped"
+REVIEWED: Final = "reviewed"
+MERGED: Final = "merged"
+CLOSED: Final = "closed"
+UNKNOWN_REPO: Final = "unknown_repo"
+STOPPED: Final = "stopped"
 # The reasons the overseer may give the `review-end` tool: what it read on the PR, never the operator's own.
-OVERSEER_REASONS = (MERGED, CLOSED, UNKNOWN_REPO)
+OVERSEER_REASONS: Final = (MERGED, CLOSED, UNKNOWN_REPO)
 #: The most characters a request's notes may hold, after stripping: the operator's bound on what they write (§22).
-MAX_NOTES = conversation.MAX_OPERATOR
+MAX_NOTES: Final = conversation.MAX_OPERATOR
 #: The decision that records a request ended before a review of its PR: the overseer's `review-end`, or the harness's.
-END_ACTION = "review:end"
+END_ACTION: Final = "review:end"
 #: A PR's URL, `https://HOST/OWNER/REPO/pull/N`, as `conversation.PR_URL_RE` takes it: its host and repository.
-_PR_URL_RE = re.compile(r"https://(?P<host>[^\s/]+)/(?P<path>[^\s/]+/[^\s/]+)/pull/[0-9]+/?")
+_PR_URL_RE: Final = re.compile(r"https://(?P<host>[^\s/]+)/(?P<path>[^\s/]+/[^\s/]+)/pull/[0-9]+/?")
 #: A clone URL as `git clone` takes it: https (credentials allowed), ssh://, or scp-style SSH, with an optional `.git`
 #: and trailing slash. An SSH URL's port is the SSH server's, so it is not part of the host.
-_CLONE_RE = re.compile(
+_CLONE_RE: Final = re.compile(
     r"(?:https://(?:[^@/\s]+@)?(?P<https>[^/\s]+)/|ssh://(?:[^@/\s]+@)?(?P<ssh>[^/\s:]+)(?::[0-9]+)?/|"
     r"[^@/\s:]+@(?P<scp>[^/\s:]+):)(?P<path>[^\s/]+/[^\s/]+?)(?:\.git)?/?",
 )

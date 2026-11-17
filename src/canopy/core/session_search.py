@@ -18,7 +18,7 @@ from __future__ import annotations
 import contextlib
 import sqlite3
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import session_index, sql
 from canopy.runtime import indexed_text
@@ -30,18 +30,18 @@ if TYPE_CHECKING:
     from canopy.runtime.implementation import Version
 
 #: How much a word in a session's title weighs, against 1 for one in a message: a title names what a session is about.
-TITLE_WEIGHT = 4.0
+TITLE_WEIGHT: Final = 4.0
 #: How many sessions a search finds at most, and how many rows of the index it reads for them.
-MAX_FOUND = 1000
-MAX_ROWS = 20_000
+MAX_FOUND: Final = 1000
+MAX_ROWS: Final = 20_000
 #: How many words a snippet holds around the words found, and how many characters at most.
-SNIPPET_WORDS = 24
-MAX_SNIPPET = 400
+SNIPPET_WORDS: Final = 24
+MAX_SNIPPET: Final = 400
 # What `snippet()` marks a word found with: characters a snippet's text never holds, since every one that is not
 # printable is dropped first.
 _START, _END = "\x01", "\x02"
 # A message's row, found when its title and text hold every word between them and its text holds one.
-_MESSAGE_MATCH = "{cols} : ({every}) AND {text} : ({any})"
+_MESSAGE_MATCH: Final = "{cols} : ({every}) AND {text} : ({any})"
 
 
 @dataclass(frozen=True)

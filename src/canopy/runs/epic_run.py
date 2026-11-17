@@ -17,7 +17,7 @@ import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Literal, TextIO
+from typing import TYPE_CHECKING, Annotated, Final, Literal, TextIO
 
 from pydantic import BaseModel, ConfigDict, Field, StrictStr
 
@@ -52,9 +52,9 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 #: The most a plan run's summary or question holds, as a worker's does.
-MAX_TEXT = 2000
+MAX_TEXT: Final = 2000
 #: The run's id as its agent's environment names it, so the operator's commands refuse inside it (DESIGN §22).
-RUN_ID_PREFIX = "epic-"
+RUN_ID_PREFIX: Final = "epic-"
 
 Text = Annotated[StrictStr, contract.bounded(MAX_TEXT)]
 
@@ -97,7 +97,7 @@ class Report(BaseModel):
 
 
 #: What an epic's planner reports.
-CONTRACT = run_result.Contract(
+CONTRACT: Final = run_result.Contract(
     "epic_plan",
     f"Report how planning the epic ended, once your plan is written to its file. {run_result.REPORTING}",
     Report,

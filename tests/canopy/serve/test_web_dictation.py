@@ -9,6 +9,7 @@ import errno
 import io
 import wave
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import pytest
@@ -21,7 +22,7 @@ from canopy.serve import dictation, guard
 from tests.canopy.web_helpers import refused, signed_in_client, signed_in_to
 from tests.conftest import executable
 
-SPOKEN = "  Ship the importer\n by tenant, PROJ-7 first.\n"
+SPOKEN: Final = "  Ship the importer\n by tenant, PROJ-7 first.\n"
 
 
 def recording(seconds: float = 1.0, *, channels: int = 1, rate: int = dictation.SAMPLE_RATE) -> bytes:

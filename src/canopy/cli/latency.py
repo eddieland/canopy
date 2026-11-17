@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import click
 
@@ -17,11 +17,11 @@ if TYPE_CHECKING:
     from canopy.loop.latency import KindLatency, Latencies
 
 #: The table's columns after the kind, each right-aligned to the widest of its heading and its values.
-_COLUMNS = ("items", "acted", "by poll", "not acted", "median", "p90", "from observed")
+_COLUMNS: Final = ("items", "acted", "by poll", "not acted", "median", "p90", "from observed")
 #: The seconds in a minute and in an hour.
 _MINUTE, _HOUR = 60, 3600
 #: How the table names each kind of item.
-_KIND_NAMES = {"review_comment": "review comment", "pr_comment": "PR comment", "check_run": "check run"}
+_KIND_NAMES: Final = {"review_comment": "review comment", "pr_comment": "PR comment", "check_run": "check run"}
 
 
 @click.command("latency")

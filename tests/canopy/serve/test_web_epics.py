@@ -4,6 +4,8 @@ What `canopy epic list` and `canopy show epic:N` print, the outline read by the 
 or, while none is approved, the proposed one's, and a plan that will not read served as its problem, never in part.
 """
 
+from typing import Final
+
 from canopy.core import conversation, db, epics, records
 from canopy.core.vocab import RunStatus
 from canopy.serve.backend import Backend
@@ -12,7 +14,7 @@ from tests.canopy.helpers import present
 from tests.canopy.web_helpers import client, replan_epic, start_epic_run
 
 APPROVED, PROPOSED, PLANNING = mock_epics.APPROVED, mock_epics.PROPOSED, mock_epics.PLANNING
-STOPPED = mock_epics.STOPPED
+STOPPED: Final = mock_epics.STOPPED
 
 
 def test_the_mock_epics_are_listed_newest_first_each_where_it_stands(backend: Backend) -> None:

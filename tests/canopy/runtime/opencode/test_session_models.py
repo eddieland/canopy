@@ -8,7 +8,7 @@ import os
 import sqlite3
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 from unittest import mock
 
 import pytest
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping, Sequence
 
 #: The columns of OpenCode 1.19.3's tables that a sandbox role's database is read by.
-SCHEMA = """
+SCHEMA: Final = """
 CREATE TABLE session (id text PRIMARY KEY, version text NOT NULL);
 CREATE TABLE message (id text PRIMARY KEY, session_id text NOT NULL, time_created integer NOT NULL, data text NOT NULL);
 """
@@ -61,7 +61,7 @@ def assistant(
 
 
 #: The user's message, which names the model it asked for rather than one that served.
-USER: dict[str, object] = {
+USER: Final[dict[str, object]] = {
     "info": {"id": "msg_1", "role": "user", "model": {"providerID": "anthropic", "modelID": "asked"}},
     "parts": [],
 }
@@ -238,7 +238,7 @@ def test_a_read_that_cannot_be_trusted_fails_in_canopy_s_words(export: Export, e
 
 
 #: The export as OpenCode prints it, indented, of a session one model served.
-PRETTY = json.dumps(json.loads(exported(assistant("anthropic", "claude-haiku", 0.5))), indent=2)
+PRETTY: Final = json.dumps(json.loads(exported(assistant("anthropic", "claude-haiku", 0.5))), indent=2)
 
 
 @pytest.mark.parametrize(
@@ -300,7 +300,7 @@ def sandboxed(data_home: Path, *messages: tuple[str, object], role: str = "worke
     return path
 
 
-NOT_FOUND = printing(code=1, stderr="Error: Session not found: ses_1\n")
+NOT_FOUND: Final = printing(code=1, stderr="Error: Session not found: ses_1\n")
 
 
 def test_a_sandboxed_runs_session_is_read_from_its_roles_database(data_home: Path) -> None:

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import re
 import secrets
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from pydantic import ValidationError
 
@@ -24,15 +24,15 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 #: How long the server may take to say where it listens, and to answer every question once it has.
-TIMEOUT_SECONDS = 120
+TIMEOUT_SECONDS: Final = 120
 #: How long one question of the server may take.
-ASK_SECONDS = 30
+ASK_SECONDS: Final = 30
 #: The variable a server takes its password from, and a client the password it sends.
-PASSWORD_ENV = "OPENCODE_PASSWORD"  # noqa: S105 - a variable's name, not a password
+PASSWORD_ENV: Final = "OPENCODE_PASSWORD"  # noqa: S105 - a variable's name, not a password
 #: The words that start OpenCode, as canopy's own questions run it.
-OPENCODE = ("opencode",)
+OPENCODE: Final = ("opencode",)
 # Where the server says it listens.
-LISTENING_RE = re.compile(r"server listening on (http://127\.0\.0\.1:\d{1,5})\b")
+LISTENING_RE: Final = re.compile(r"server listening on (http://127\.0\.0\.1:\d{1,5})\b")
 
 
 class FailedError(Exception):

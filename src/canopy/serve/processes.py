@@ -27,7 +27,7 @@ import threading
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.serve import host
 from canopy.serve.schema.host import HostProcess, HostProcesses, ProcessState
@@ -37,19 +37,19 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 #: The most of a command line kept: enough to tell one build from another, not a whole generated argument list.
-COMMAND_CHARS = 400
+COMMAND_CHARS: Final = 400
 #: Seconds between the two reads of a first answer, or of one after the page was closed for a while.
-BASELINE_SECONDS = 1.0
+BASELINE_SECONDS: Final = 1.0
 #: Seconds after which the last read is too old to measure against: the page was closed, and a share over minutes would
 #: hide what is busy now.
-STALE_SECONDS = 60.0
+STALE_SECONDS: Final = 60.0
 #: Seconds within which another ask is answered with the last answer: two tabs open, or a page and its refetch, would
 #: otherwise measure over a moment too short to mean anything.
-FRESH_SECONDS = 1.0
+FRESH_SECONDS: Final = 1.0
 #: The flag `/proc/<pid>/stat` sets on a kernel thread (`PF_KTHREAD`).
-_KERNEL_THREAD = 0x00200000
+_KERNEL_THREAD: Final = 0x00200000
 #: `/proc/<pid>/stat`'s state letters, as the page names them; any other is `other`.
-_STATES: Mapping[str, ProcessState] = {
+_STATES: Final[Mapping[str, ProcessState]] = {
     "R": "running",
     "D": "disk",
     "S": "sleeping",

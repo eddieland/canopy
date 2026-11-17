@@ -6,7 +6,7 @@ it, for the UI to show as plain text.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Final, cast
 
 from canopy.core import db, records, sql
 from canopy.core.vocab import DraftKind
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     import sqlite3
 
 # How many of a ticket's own drafts its page carries, the newest runs' first.
-TICKET_DRAFTS = 10
+TICKET_DRAFTS: Final = 10
 
 
 def draft(conn: sqlite3.Connection, found: records.Draft) -> Draft:

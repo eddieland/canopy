@@ -9,7 +9,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import override
+from typing import Final, override
 from unittest import mock
 
 import pytest
@@ -69,18 +69,18 @@ from tests.canopy.scenario_helpers import Scenario
 from tests.conftest import CanopyEnv, GitPool, git
 
 #: The branch task 1 works on, under the test operator's `agent/` prefix.
-BRANCH = "agent/task/1"
-TEXT = "Find out why the build is slow, and push a fix if one is small."
-DONE: dict[str, object] = {"status": "done", "summary": "found it", "branch": BRANCH, "prs": []}
+BRANCH: Final = "agent/task/1"
+TEXT: Final = "Find out why the build is slow, and push a fix if one is small."
+DONE: Final[dict[str, object]] = {"status": "done", "summary": "found it", "branch": BRANCH, "prs": []}
 #: The task's repository's checklist, of two items, as the operator writes it (DESIGN §42).
-CHECKLIST = (
+CHECKLIST: Final = (
     "## general-types\npaths: src/\n\nA parameter takes the most general type its body needs.\n\n"
     "## newspaper\n\nPublic names first.\n"
 )
 #: What the fake worker runs to show the list it was handed, where canopy's `pre-push` reads it.
-SHOW_LIST = ["sh", "-c", f'cat "${cards.ANSWERS_ENV}/{checklists.DIR}/repo{checklists.SUFFIX}"']
+SHOW_LIST: Final = ["sh", "-c", f'cat "${cards.ANSWERS_ENV}/{checklists.DIR}/repo{checklists.SUFFIX}"']
 #: What a task's run writes nothing to: every table a ticket's work is recorded in.
-TICKETS_WORK = (
+TICKETS_WORK: Final = (
     sql.select("count(*)").from_("tickets"),
     sql.select("count(*)").from_("runs"),
     sql.select("count(*)").from_("run_slots"),
@@ -969,8 +969,8 @@ def test_a_later_run_s_prompt_carries_the_conversation(
 
 # The conversation
 
-QUESTION = "Cache the dependencies, or split the job in two?"
-BLOCKED: dict[str, object] = {
+QUESTION: Final = "Cache the dependencies, or split the job in two?"
+BLOCKED: Final[dict[str, object]] = {
     "status": "blocked",
     "summary": "two ways to fix it",
     "question": QUESTION,
@@ -1164,7 +1164,7 @@ def test_no_row_a_replied_task_writes_names_a_ticket(inline: Context) -> None:
 
 # What a task leaves: its report and its tickets
 
-REPORT_TEXT = "# The slow build\n\nThe dependencies are fetched on every job.\n"
+REPORT_TEXT: Final = "# The slow build\n\nThe dependencies are fetched on every job.\n"
 
 
 def writes_report(text: str, *, append: bool = False) -> list[str]:

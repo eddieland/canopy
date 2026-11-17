@@ -7,6 +7,7 @@ import json
 import sqlite3
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
+from typing import Final
 
 import pytest
 
@@ -19,7 +20,7 @@ from tests.canopy.web_helpers import client, signed_in_client
 from tests.conftest import TRACKER_SOURCE, CanopyEnv
 
 #: The source no longer configured, whose runs the journal keeps.
-GONE = "linear"
+GONE: Final = "linear"
 
 
 def ran(

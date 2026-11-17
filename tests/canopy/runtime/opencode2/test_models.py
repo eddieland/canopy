@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 from unittest import mock
 
 import pytest
@@ -19,12 +19,12 @@ if TYPE_CHECKING:
 
 #: What OpenCode 2.1.4 listed in a workspace whose config adds a provider, `stub`, cut to three of its models: one of
 #: its own with no variants, one whose `id` is not its `modelID`, and the config's, its key in its `settings`.
-RECORDED = Path(__file__).parent / "recorded" / "model-list.json"
-URL = "http://127.0.0.1:41234"
+RECORDED: Final = Path(__file__).parent / "recorded" / "model-list.json"
+URL: Final = "http://127.0.0.1:41234"
 #: The models of OpenCode's catalog, which it lists until a provider has fetched its own, and the provider's own: the
 #: models the account has, and its router, which no catalog names.
-CATALOG = ("github-copilot/gpt-5", "github-copilot/claude-x")
-FETCHED = ("github-copilot/gpt-5", "github-copilot/auto")
+CATALOG: Final = ("github-copilot/gpt-5", "github-copilot/claude-x")
+FETCHED: Final = ("github-copilot/gpt-5", "github-copilot/auto")
 
 
 def listing(*entries: object) -> str:

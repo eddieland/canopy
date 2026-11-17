@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Final
 
 from canopy_github import (
     Client,
@@ -52,39 +53,39 @@ class Pages:
 
 
 #: The pages a PR is read in.
-PAGES = Pages(threads=50, comments=100)
+PAGES: Final = Pages(threads=50, comments=100)
 #: The pages a PR is read in once GitHub could not answer a query of it alone in `PAGES`, as it cannot one too heavy to
 #: run within its time limit: some 240 comments and reviews a query rather than 5,200. Later pages bring the rest, so
 #: the PR is read as whole.
-SMALL_PAGES = Pages(threads=10, comments=20)
+SMALL_PAGES: Final = Pages(threads=10, comments=20)
 #: PRs one query reads: GitHub refuses a query that could return more than 500,000 nodes, and each PR asks for some
 #: 5,500 (`PAGES`' 50 threads of 100 comments, and a page each of reviews, conversation comments, labels, checks, and
 #: timeline events).
-BATCH = 20
+BATCH: Final = 20
 #: The most labels a PR's line carries: canopy refuses a line with more, so a PR with more is not read whole.
-MAX_LABELS = 100
+MAX_LABELS: Final = 100
 #: The longest link a `check` line carries: canopy refuses a line with a longer one.
-MAX_URL = 2000
+MAX_URL: Final = 2000
 
-_REVIEW = """
+_REVIEW: Final = """
 fragment Review on PullRequestReview {
   id fullDatabaseId state submittedAt createdAt body url author { __typename login }
 }
 """
 
-_COMMENT = """
+_COMMENT: Final = """
 fragment ThreadComment on PullRequestReviewComment {
   id fullDatabaseId body createdAt url author { __typename login } pullRequestReview { fullDatabaseId }
 }
 """
 
-_PR_COMMENT = """
+_PR_COMMENT: Final = """
 fragment PrComment on IssueComment {
   id fullDatabaseId body createdAt url author { __typename login }
 }
 """
 
-_THREAD = (
+_THREAD: Final = (
     """
 fragment Thread on PullRequestReviewThread {
   id path line diffSide isOutdated isResolved
@@ -95,7 +96,7 @@ fragment Thread on PullRequestReviewThread {
 )
 
 # Every named context, a check run or a commit status: never the combined status, which stops at 30 (DESIGN §30).
-_CONTEXTS = """
+_CONTEXTS: Final = """
 fragment Contexts on StatusCheckRollupContextConnection {
   pageInfo { hasNextPage endCursor }
   nodes {
@@ -108,15 +109,15 @@ fragment Contexts on StatusCheckRollupContextConnection {
 
 # The timeline events a PR's ready and review-requested times are read from, read from the newest, as the latest ready
 # event matters and nothing before it does.
-_EVENTS = "itemTypes: [READY_FOR_REVIEW_EVENT, REVIEW_REQUESTED_EVENT], last: 100"
-_TIMELINE = """
+_EVENTS: Final = "itemTypes: [READY_FOR_REVIEW_EVENT, REVIEW_REQUESTED_EVENT], last: 100"
+_TIMELINE: Final = """
 fragment Timeline on PullRequestTimelineItemsConnection {
   pageInfo { hasPreviousPage startCursor }
   nodes { __typename ... on ReadyForReviewEvent { createdAt } ... on ReviewRequestedEvent { createdAt } }
 }
 """
 
-_PULL = (
+_PULL: Final = (
     f"""
 fragment Pull on PullRequest {{
   id url number title state isDraft headRefOid baseRefName mergeable mergeStateStatus createdAt mergedAt closedAt
@@ -136,7 +137,7 @@ fragment Pull on PullRequest {{
     + _TIMELINE
 )
 
-_REVIEWS = (
+_REVIEWS: Final = (
     """
 query Reviews($id: ID!, $after: String) {
   node(id: $id) {
@@ -147,7 +148,7 @@ query Reviews($id: ID!, $after: String) {
     + _REVIEW
 )
 
-_PR_COMMENTS = (
+_PR_COMMENTS: Final = (
     """
 query PrComments($id: ID!, $after: String) {
   node(id: $id) {
@@ -160,7 +161,7 @@ query PrComments($id: ID!, $after: String) {
     + _PR_COMMENT
 )
 
-_THREADS = (
+_THREADS: Final = (
     """
 query Threads($owner: String!, $name: String!, $number: Int!, $after: String, $threads: Int!, $comments: Int!) {
   repository(owner: $owner, name: $name) {
@@ -173,7 +174,7 @@ query Threads($owner: String!, $name: String!, $number: Int!, $after: String, $t
     + _THREAD
 )
 
-_THREAD_COMMENTS = (
+_THREAD_COMMENTS: Final = (
     """
 query ThreadComments($id: ID!, $after: String) {
   node(id: $id) {
@@ -186,7 +187,7 @@ query ThreadComments($id: ID!, $after: String) {
     + _COMMENT
 )
 
-_MORE_CONTEXTS = (
+_MORE_CONTEXTS: Final = (
     """
 query Contexts($id: ID!, $after: String) {
   node(id: $id) { ... on Commit { statusCheckRollup { contexts(first: 100, after: $after) { ...Contexts } } } }
@@ -195,7 +196,7 @@ query Contexts($id: ID!, $after: String) {
     + _CONTEXTS
 )
 
-_MORE_TIMELINE = (
+_MORE_TIMELINE: Final = (
     f"""
 query Timeline($id: ID!, $before: String) {{
   node(id: $id) {{ ... on PullRequest {{ timelineItems({_EVENTS}, before: $before) {{ ...Timeline }} }} }}
@@ -205,7 +206,7 @@ query Timeline($id: ID!, $before: String) {{
 )
 
 #: A commit status's state, as a check's status and conclusion: one expected is one no context has written yet.
-_STATUS_STATES: Mapping[str, tuple[str, str | None]] = {
+_STATUS_STATES: Final[Mapping[str, tuple[str, str | None]]] = {
     "EXPECTED": ("pending", None),
     "PENDING": ("pending", None),
     "SUCCESS": ("completed", "success"),

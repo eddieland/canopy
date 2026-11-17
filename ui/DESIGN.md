@@ -230,6 +230,10 @@ Rules:
   content beside the rest. The source keeps the narrow order, which is the reading order; the grid only places that
   content in a second column, over rows whose last is `1fr`, so a long thread leaves no gaps between the panels beside
   it.
+  A ticket's conversation is `sticky` there, as tall as the window has room for, its thread taking what the reply and
+  the actions leave: the lists beside it scroll past, so a long history leaves no empty column under it.
+  A plan's card that trails the page is the left column's last panel there, and the ticket's drafts a row across both
+  columns under them; Runs and Decisions scroll in their panels past half the window's height.
 - **The header** carries, after its name, the stream's state (and `mock`) and the ticker (Fun, below); then at its end
   the loop's pause and Tick now, the readouts, and the theme toggle, in three groups with a hairline rule between each.
   Every readout that opens a page has a hover card of it; the theme toggle has one of the shown theme's palettes,
@@ -1083,8 +1087,10 @@ reader, so no table repeats them.
   on the left, the pages by group (`SOURCES`), the page shown in the accent, once the pane holds it and the article's
   whole measure, else folded into a `Guide pages` toggle above the page; in the middle, the article at `max-w-3xl`, in
   a document's type (Primitives), each `##` a section under a hairline and each heading a link to itself on hover, and
-  at its foot Previous and Next; on the right, once the pane holds that too, `On this page`. So the article never
-  narrows as the window widens: a column comes in only where the article keeps its measure. It reads what rich text
+  at its foot Previous and Next; on the right, once the pane holds that too, `On this page`, the section being read in
+  the accent. So the article never narrows as the window widens: a column comes in only where the article keeps its
+  measure. Both side columns stay under the header as the page scrolls, and one taller than the window scrolls on its
+  own, so its last entry is always in reach. It reads what rich text
   reads, headings as real headings with their anchors as ids, and labelled links in the accent: to a guide page, a
   heading, a section of the UI, or the web in a new tab. A link to anything else stays characters, and `guide.test.ts`
   fails on it. A page opens with `# Title` and then a lead, says what the operator sees and does in the UI's own words

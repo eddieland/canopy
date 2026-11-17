@@ -1,6 +1,7 @@
 """When an epic's plan changes (DESIGN §43): each member it reaches met where it stands, and the operator told once."""
 
 import json
+from typing import Final
 
 from canopy.core import epic_changes, plans
 from canopy.core.vocab import PlanStatus, ResumeReason, RunKind, RunStatus
@@ -10,12 +11,12 @@ from tests.canopy.scenario_helpers import Printed, Scenario, dispatches, pushes
 from tests.conftest import GitPool
 
 #: A second member, which fulfils `B1`.
-OTHER = "PROJ-2"
-PLAN = dispatches(kind=RunKind.PLAN)
-IMPLEMENT = dispatches(slug="work")
-RESUME = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CONFLICT])
-TEXT = "# Plan for PROJ-1\n\n## Goal\n\nRead sessions from the store.\n\n## Epic\n\nCovers R2; uses C1.\n"
-EPIC_PLAN = """\
+OTHER: Final = "PROJ-2"
+PLAN: Final = dispatches(kind=RunKind.PLAN)
+IMPLEMENT: Final = dispatches(slug="work")
+RESUME: Final = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CONFLICT])
+TEXT: Final = "# Plan for PROJ-1\n\n## Goal\n\nRead sessions from the store.\n\n## Epic\n\nCovers R2; uses C1.\n"
+EPIC_PLAN: Final = """\
 # Epic: sessions
 
 ## Goal
@@ -56,9 +57,9 @@ Sessions survive a restart.
 ## Out of scope
 """
 #: `EPIC_PLAN` with its contract's text changed: it reaches `B1`, which provides it, and `B2`, which uses it.
-C1_CHANGED = EPIC_PLAN.replace("The store's read interface.", "The store's read and write interface.")
+C1_CHANGED: Final = EPIC_PLAN.replace("The store's read interface.", "The store's read and write interface.")
 #: `C1_CHANGED` with `R1`'s text changed too: it reaches `B1` alone.
-R1_CHANGED = C1_CHANGED.replace("a restart of the API.", "a restart of the API and of its workers.")
+R1_CHANGED: Final = C1_CHANGED.replace("a restart of the API.", "a restart of the API and of its workers.")
 
 
 def approved_epic(scenario: Scenario, *members: tuple[str, str]) -> None:

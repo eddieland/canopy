@@ -22,7 +22,7 @@ import dataclasses
 import json
 import re
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, StrictFloat, StrictInt, StrictStr, ValidationError
 
@@ -35,16 +35,16 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping
 
 # Milliseconds since the epoch, as OpenCode stamps events: up to the year 9999.
-_MAX_MS = 253_402_300_799_999
+_MAX_MS: Final = 253_402_300_799_999
 
 #: The tools that read one file, that edit one, that edit those a patch names, and that search, and the shell.
-_READS = frozenset({"read"})
-_EDITS = frozenset({"edit", "write"})
-_PATCHES = frozenset({"apply_patch"})
-_SEARCHES = frozenset({"grep", "glob"})
-_SHELL = "bash"
+_READS: Final = frozenset({"read"})
+_EDITS: Final = frozenset({"edit", "write"})
+_PATCHES: Final = frozenset({"apply_patch"})
+_SEARCHES: Final = frozenset({"grep", "glob"})
+_SHELL: Final = "bash"
 #: A patch's line naming a file it changes: `*** Update File: src/a.py`, and the path it moves one to.
-_PATCH_FILE_RE = re.compile(r"^\*\*\* (?:Add File|Update File|Delete File|Move to): (.+?)\s*$", re.MULTILINE)
+_PATCH_FILE_RE: Final = re.compile(r"^\*\*\* (?:Add File|Update File|Delete File|Move to): (.+?)\s*$", re.MULTILINE)
 
 Millis = Annotated[StrictInt, Field(ge=0, le=_MAX_MS)]
 

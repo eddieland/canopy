@@ -1,12 +1,14 @@
 """`runtime.allow_bash`: the commands the operator lets an agent run beyond its own bash rules, and what is refused."""
 
+from typing import Final
+
 import pytest
 
 from canopy.core import bash_allows, config
 from canopy.runtime import agents
 from tests.conftest import CanopyEnv
 
-JIRA = ["jira issue list *", "jira issue view *"]
+JIRA: Final = ["jira issue list *", "jira issue view *"]
 
 
 def _load(canopy_env: CanopyEnv, allow_bash: dict[str, object]) -> config.Config:

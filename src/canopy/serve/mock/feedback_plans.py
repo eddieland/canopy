@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import plans, records, review_diff, run_changes
 from canopy.core.vocab import (
@@ -48,15 +48,15 @@ if TYPE_CHECKING:
 
     from canopy.core.config import Trust
 
-RUN = 46
-_KEY = "ABC-099"
+RUN: Final = 46
+_KEY: Final = "ABC-099"
 _STARTED, _ENDED = -16, -12
-_REVIEW = 4_102_337_001
-_ALICE = 2_468_013_579
-_BOB = 2_468_013_601
+_REVIEW: Final = 4_102_337_001
+_ALICE: Final = 2_468_013_579
+_BOB: Final = 2_468_013_601
 # carol's review, after the plan was written: what makes it stale.
-_CAROL = 4_102_337_050
-_TEXT = """# Feedback plan: ABC-099
+_CAROL: Final = 4_102_337_050
+_TEXT: Final = """# Feedback plan: ABC-099
 
 The round after run 45's push to acme/web#88: alice's review and its two threads. Run 45 already drafted a reply to
 each; they wait on you, and this plan changes none of them but bob's.
@@ -92,7 +92,7 @@ flowchart LR
 
 No check has run at the head yet.
 """
-_ITEMS = (
+_ITEMS: Final = (
     # item, id, proposal, reply
     (ReviewItem.REVIEW, _REVIEW, Proposal.LEAVE, None),
     (ReviewItem.COMMENT, _ALICE, Proposal.LEAVE, None),
@@ -105,11 +105,11 @@ _ITEMS = (
 )
 #: The run that planned the round run 45 answered, and when it ran, in minutes after T0: after alice's and bob's
 #: feedback, before run 45 started.
-ANSWERED_RUN = 47
+ANSWERED_RUN: Final = 47
 _ANSWERED_STARTED, _ANSWERED_ENDED = -45, -42
 #: When its planner's approval was recorded, in minutes after T0.
-_ANSWERED_APPROVED = -41
-_ANSWERED_TEXT = """# Feedback plan: ABC-099
+_ANSWERED_APPROVED: Final = -41
+_ANSWERED_TEXT: Final = """# Feedback plan: ABC-099
 
 alice's review of acme/web#88, her two threads, and bob's question.
 
@@ -135,24 +135,24 @@ Import `Result` as a type.
 
 Every check passed at the head.
 """
-_ANSWERED_ITEMS = (
+_ANSWERED_ITEMS: Final = (
     # item, id, proposal, reply
     (ReviewItem.REVIEW, _REVIEW, Proposal.LEAVE, None),
     (ReviewItem.COMMENT, _ALICE, Proposal.CHANGE, "Moved `setLoading(false)` into a `finally`."),
     (ReviewItem.COMMENT, _BOB, Proposal.DECLINE, "250 ms is what the ticket asks for."),
     (ReviewItem.COMMENT, 2_468_013_644, Proposal.CHANGE, None),
 )
-_DAY = 24 * 60
+_DAY: Final = 24 * 60
 #: How long a state's plan run ran, in minutes.
-_PLANNING = 6
+_PLANNING: Final = 6
 #: How long the `resume` that spent a state's plan ran, in minutes.
-_RESUMING = 22
+_RESUMING: Final = 22
 #: How long after that `resume` ended its push's checks were observed, in minutes.
-_CHECKING = 4
+_CHECKING: Final = 4
 #: The checks a spent state's push ran, each passing.
-_PUSH_CHECKS = ("lint", "ios-unit")
+_PUSH_CHECKS: Final = ("lint", "ios-unit")
 #: The reviewer with the longest name GitHub allows but one, for the stress case's rows.
-LONG_AUTHOR = "maximiliana-vanderberghe-okonkwo-smith"
+LONG_AUTHOR: Final = "maximiliana-vanderberghe-okonkwo-smith"
 
 
 @dataclass(frozen=True)
@@ -253,7 +253,7 @@ class _State:
         return self.resumed + _RESUMING if self.spent is not None else self.approved
 
 
-_SPENT = _State(
+_SPENT: Final = _State(
     key="ABC-130",
     title="Retry failed push notifications",
     slug="push-retry",
@@ -347,7 +347,7 @@ index 3c1e8a0..b75d2f4 100644
  }
 """,
 )
-_BY_THE_PLANNER = _State(
+_BY_THE_PLANNER: Final = _State(
     key="ABC-131",
     title="Rename the billing settings tab",
     slug="billing-tab",
@@ -415,7 +415,7 @@ Every check passed at the head.
         reason="every item is a decline, an ask, or a leave: it changes no code, and its replies wait on you",
     ),
 )
-_LEFT_OUT = _State(
+_LEFT_OUT: Final = _State(
     key="ABC-132",
     title="Paginate the order history",
     slug="order-history",
@@ -490,7 +490,7 @@ Every check passed at the head.
         words="Keep the offsets for now; cursors can have a ticket of their own.",
     ),
 )
-_GONE = _State(
+_GONE: Final = _State(
     key="ABC-133",
     title="Drop the legacy coupon codes",
     slug="coupons",
@@ -530,7 +530,7 @@ Say an old code has expired, rather than `invalid`.
     summary="Planned the round on PR 64: change gina's thread, a friendlier error for an old code.",
     gone=True,
 )
-_NO_ITEMS = _State(
+_NO_ITEMS: Final = _State(
     key="ABC-134",
     title="Cache product images for offline browsing",
     slug="image-cache",
@@ -558,7 +558,7 @@ by `MAX_ENTRIES` rather than a number of its own, and leave the cache as it is.
     summary="Planned the round on PR 65: no review item, and ios-unit's failure, a test bound to the old size.",
     failed="ios-unit",
 )
-_STRESS = _State(
+_STRESS: Final = _State(
     key="ABC-135",
     title="Move the checkout to the new payments SDK",
     slug="payments-sdk",
@@ -767,7 +767,7 @@ Add a declined card and an expired one to `PaymentSheet.test.tsx`.
     summary="Planned the round on PR 66: ten items, six to change, two to decline, one to ask about, one to leave.",
     failed="android-e2e",
 )
-_WAITING = _State(
+_WAITING: Final = _State(
     key="ABC-136",
     title="Show the cart's total before tax",
     slug="cart-total",
@@ -823,7 +823,7 @@ Every check passed at the head.
     summary="Planned the round on PR 67: change dana's thread, the total's label.",
 )
 #: Each state but PR 88's stale one, by its name, and the PR whose page shows it.
-STATES: Mapping[str, _State] = {
+STATES: Final[Mapping[str, _State]] = {
     "waiting": _WAITING,
     "approved": _LEFT_OUT,
     "approved-by-planner": _BY_THE_PLANNER,

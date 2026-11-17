@@ -9,7 +9,7 @@ one duty no ticket is needed for.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import pytest
 
@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 MINE, THEIRS = "deps", "build-health"
 #: Idle pacing on: a minute after a tick, doubling per idle tick in a row up to eight.
 # Short, since each tick and each half-second step of a wait take real time: a long timeline overran CI's timeout.
-PACED = {"interval_minutes": 1, "idle_max_minutes": 8, "min_gap_minutes": 1}
+PACED: Final = {"interval_minutes": 1, "idle_max_minutes": 8, "min_gap_minutes": 1}
 
 
 @pytest.fixture

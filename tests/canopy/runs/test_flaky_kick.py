@@ -5,7 +5,7 @@ import os
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 from unittest import mock
 
 from canopy.core import contract
@@ -15,11 +15,11 @@ from tests.canopy.helpers import KEY, READ_PR, WORKER_DONE, Called, messages, ra
 from tests.canopy.scenario_helpers import Ran, Scenario, dispatches, pushes
 from tests.conftest import GitPool, git
 
-BRANCH = "agent/PROJ-1-work"
+BRANCH: Final = "agent/PROJ-1-work"
 #: The PR a worker's result names, `WORKER_DONE`'s.
-PR = "https://example.test/pr/1"
+PR: Final = "https://example.test/pr/1"
 #: A `resume` worker's result that leaves a failed check as flaky, changing nothing.
-LEAVES_FLAKY = json.dumps(
+LEAVES_FLAKY: Final = json.dumps(
     json.loads(WORKER_DONE) | {"branch": BRANCH, "summary": "unit-tests lost its runner", "flaky": True},
 )
 

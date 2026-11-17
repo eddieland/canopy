@@ -7,6 +7,7 @@ the run's harness note, never rewritten.
 import json
 import shutil
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -15,10 +16,10 @@ from tests.canopy.helpers import commit_and_push, trailers_on, worker_does
 from tests.canopy.scenario_helpers import Scenario, pushes
 from tests.conftest import GitPool, executable, git
 
-TRAILER = "Co-authored-by: canopy worker <noreply@canopy.invalid>"
-BRANCH = "agent/PROJ-1-work"
+TRAILER: Final = "Co-authored-by: canopy worker <noreply@canopy.invalid>"
+BRANCH: Final = "agent/PROJ-1-work"
 #: prek, a dev dependency for canopy's own hooks (prek.toml), found before a fixture puts the fakes first on PATH.
-PREK = shutil.which("prek")
+PREK: Final = shutil.which("prek")
 
 
 def test_git_adds_canopys_trailer_to_each_commit_a_worker_makes(scenario: Scenario, git_pool: GitPool) -> None:

@@ -31,7 +31,7 @@ import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import TextIO
+from typing import Final, TextIO
 
 import click
 
@@ -60,30 +60,30 @@ from canopy_github import (
 from canopy_github.repository import MAX_SEARCH
 
 #: A ticket's key is this, a hyphen, and its issue's number: issue 12 is `GH-12` (DESIGN §17).
-PREFIX = "GH"
+PREFIX: Final = "GH"
 #: The host `--repo` is on when it names none.
-DEFAULT_HOST = "github.com"
+DEFAULT_HOST: Final = "github.com"
 #: More than any one request needs: canopy asks for the tickets its state block lists.
-MAX_TICKETS = 1000
+MAX_TICKETS: Final = 1000
 #: Issues one query reads: each asks for some 400 nodes (a page each of labels, blockers, label events, and comments).
-BATCH = 25
+BATCH: Final = 25
 #: The most labels or blockers a ticket's line carries: canopy refuses a line with more, so a ticket with more is not
 #: read whole.
-MAX_LIST = 100
+MAX_LIST: Final = 100
 #: A ticket's key as canopy sends one, and as this tracker gives one: a number GraphQL's 32-bit `Int` holds.
-_ASKED = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}")
-_KEY = re.compile(rf"{PREFIX}-([1-9][0-9]{{0,8}})")
+_ASKED: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}")
+_KEY: Final = re.compile(rf"{PREFIX}-([1-9][0-9]{{0,8}})")
 #: `--repo`: `OWNER/NAME`, or `HOST/OWNER/NAME` for GitHub Enterprise.
-_REPO = re.compile(
+_REPO: Final = re.compile(
     r"(?:([A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?(?::[0-9]{1,5})?)/)?"
     r"([A-Za-z0-9_.-]{1,100})/([A-Za-z0-9_.-]{1,100})",
 )
 #: A line of an issue's body naming a blocker in the same repository (`tracker-github`).
-_BLOCKED_BY = re.compile(r"^[ \t]*blocked by #([1-9][0-9]{0,8})\b", re.IGNORECASE | re.MULTILINE)
+_BLOCKED_BY: Final = re.compile(r"^[ \t]*blocked by #([1-9][0-9]{0,8})\b", re.IGNORECASE | re.MULTILINE)
 #: The login GitHub shows for an account since deleted, which no one can hold: a comment with no author is its.
-_GHOST = "ghost"
+_GHOST: Final = "ghost"
 
-_TICKET = """
+_TICKET: Final = """
 fragment Ticket on Issue {
   number title body state updatedAt
   repository { nameWithOwner }
@@ -93,18 +93,18 @@ fragment Ticket on Issue {
 """
 
 # What an asked ticket is read with besides: read from the newest, as the newest label event and comment matter most.
-_LABELED = "pageInfo { hasPreviousPage startCursor } nodes { ... on LabeledEvent { createdAt label { name } } }"
-_COMMENTS = (
+_LABELED: Final = "pageInfo { hasPreviousPage startCursor } nodes { ... on LabeledEvent { createdAt label { name } } }"
+_COMMENTS: Final = (
     "pageInfo { hasPreviousPage startCursor } nodes { fullDatabaseId createdAt body author { __typename login } }"
 )
-_HISTORY = f"""
+_HISTORY: Final = f"""
 fragment History on Issue {{
   timelineItems(itemTypes: [LABELED_EVENT], last: 100) {{ {_LABELED} }}
   comments(last: 100) {{ {_COMMENTS} }}
 }}
 """
 
-_MORE_LABELED = f"""
+_MORE_LABELED: Final = f"""
 query Labeled($owner: String!, $name: String!, $number: Int!, $before: String) {{
   repository(owner: $owner, name: $name) {{
     issue(number: $number) {{ timelineItems(itemTypes: [LABELED_EVENT], last: 100, before: $before) {{ {_LABELED} }} }}
@@ -112,7 +112,7 @@ query Labeled($owner: String!, $name: String!, $number: Int!, $before: String) {
 }}
 """
 
-_MORE_COMMENTS = f"""
+_MORE_COMMENTS: Final = f"""
 query IssueComments($owner: String!, $name: String!, $number: Int!, $before: String) {{
   repository(owner: $owner, name: $name) {{
     issue(number: $number) {{ comments(last: 100, before: $before) {{ {_COMMENTS} }} }}
@@ -120,7 +120,7 @@ query IssueComments($owner: String!, $name: String!, $number: Int!, $before: Str
 }}
 """
 
-_SEARCH = (
+_SEARCH: Final = (
     """
 query IssueSearch($query: String!, $after: String) {
   search(query: $query, type: ISSUE, first: 100, after: $after) {

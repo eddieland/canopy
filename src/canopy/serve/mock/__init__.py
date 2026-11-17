@@ -30,7 +30,7 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, LiteralString
+from typing import TYPE_CHECKING, Final, LiteralString
 
 from canopy.core import (
     cards,
@@ -86,11 +86,11 @@ if TYPE_CHECKING:
 
     from canopy.core.context import Context
 
-T0 = datetime(2026, 10, 8, 12, 0, tzinfo=UTC)
+T0: Final = datetime(2026, 10, 8, 12, 0, tzinfo=UTC)
 # The run whose cost `changes` moves.
-LIVE_RUN = 41
+LIVE_RUN: Final = 41
 
-_MAP_TOML = """\
+_MAP_TOML: Final = """\
 [workspace]
 name = "acme"
 
@@ -116,7 +116,7 @@ max_resume_attempts = 1
 max_reviews_per_pr = 2
 """
 
-_USER_TOML = """\
+_USER_TOML: Final = """\
 [tracker]
 labels = ["agent-ready-mock"]
 
@@ -186,11 +186,11 @@ search = "titles"
 exclude = ["{excluded}"]
 """
 # The chore whose finding the attention list shows.
-CHORE = "deps"
+CHORE: Final = "deps"
 # Each cloned repository's pool directory, as treehouse names it: the clone's name and a short hash of its remote.
-_POOLS = {"mobile": "mobile-8e41d0c7", "web": "web-3f9c2a1b"}
+_POOLS: Final = {"mobile": "mobile-8e41d0c7", "web": "web-3f9c2a1b"}
 # The variants the mock's runtime lists for each provider's models, which a ticket's page may choose one at.
-_VARIANTS = {"anthropic": ("high", "max"), "openai": ("minimal", "low", "medium", "high")}
+_VARIANTS: Final = {"anthropic": ("high", "max"), "openai": ("minimal", "low", "medium", "high")}
 
 
 def at(minutes: int) -> str:
@@ -202,7 +202,7 @@ def at(minutes: int) -> str:
     return db.format_time(T0 + timedelta(minutes=minutes))
 
 
-ATTENTION: tuple[Item, ...] = (
+ATTENTION: Final[tuple[Item, ...]] = (
     Item(
         "ABC-100",
         "worker_failed",
@@ -329,7 +329,7 @@ def _pools(root: Path) -> dict[str, list[pools.Slot]]:
 
 
 #: The operator's standing instructions to every worker, as the settings page shows them.
-_WORKER_INSTRUCTIONS = """\
+_WORKER_INSTRUCTIONS: Final = """\
 ## Commits
 
 - Commit a review's fixes as new commits; never squash a branch a reviewer has read.
@@ -341,13 +341,13 @@ Keep the description to what a reviewer needs at a glance: what changed, and why
 """
 
 #: The operator's standing instructions to every reviewer.
-_REVIEWER_INSTRUCTIONS = """\
+_REVIEWER_INSTRUCTIONS: Final = """\
 Flag a behavior change that has no test. Leave formatting to the linters: a finding about it is noise.
 """
 
 
 # The worker's file as it read before its last two saves, each kept as a version, so the page has some to list.
-_WORKER_VERSIONS = (
+_WORKER_VERSIONS: Final = (
     (timedelta(days=-6), "## Commits\n\n- Commit a review's fixes as new commits.\n"),
     (
         timedelta(days=-2, hours=-3),
@@ -482,7 +482,7 @@ def seed(directory: Path) -> Backend:
 
 
 #: The review comments on ABC-103's PR 91 tick 2 passed with no worker: id, author, path, line, why, and the words.
-_LEFT = (
+_LEFT: Final = (
     (2_468_020_011, "carol", "src/billing/client.ts", 42, PassReason.OPTIONAL, "Nit: `fetchInvoices` could be `list`."),
     (
         2_468_020_037,
@@ -1322,7 +1322,7 @@ def _models(conn: sqlite3.Connection) -> None:
 
 # What each kind's first model call was sent on T0's day, before the run's id adds a little, and the share of it read
 # from the cache. A table's name here is fixed, never input (D125).
-_FIRST_CALLS: tuple[tuple[LiteralString, int, float], ...] = (
+_FIRST_CALLS: Final[tuple[tuple[LiteralString, int, float], ...]] = (
     # table, sent, share read from the cache
     ("ticks", 31_800, 0.86),
     ("runs", 22_400, 0.88),
