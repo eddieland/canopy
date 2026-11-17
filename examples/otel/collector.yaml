@@ -1,0 +1,114 @@
+# An OpenTelemetry Collector for canopy's telemetry: the guide's Telemetry page walks through it. It reads the traces
+# and metrics a workspace appends with `traces = "file"` and `metrics = "file"`, takes those it posts with "otlp", and
+# reads canopy.log, then sends traces and logs on over OTLP and serves metrics for Prometheus to scrape.
+#
+#   CANOPY_STATE_DIR=/path/to/workspace/.canopy otelcol-contrib --config examples/otel/collector.yaml
+#
+# Run it as yourself: canopy makes its files readable by you alone. The components are otelcol-contrib's, spelled as
+# v0.158 and later spell them; an older collector knows them as otlpjsonfile, filelog, deltatocumulative, and otlp
+# (the exporter). Where each signal goes is an environment variable, with a default for a backend on this machine.
+
+extensions:
+  # How far each receiver has read each file, so a restarted collector neither drops nor repeats a line.
+  file_storage:
+    directory: "${env:CANOPY_COLLECTOR_DIR:-/tmp/canopy-otelcol}"
+    create_directory: true
+
+receivers:
+  # What canopy appends with "file": a line of OTLP JSON per export. canopy rotates these files as it rotates
+  # canopy.log, by renaming them, and a receiver reads a renamed file to its end, so only the live name is listed.
+  otlp_json_file/traces:
+    include:
+      - "${env:CANOPY_STATE_DIR}/traces.jsonl"
+    start_at: beginning
+    # Else every span gains a `log.file.name` attribute.
+    include_file_name: false
+    storage: file_storage
+  otlp_json_file/metrics:
+    include:
+      - "${env:CANOPY_STATE_DIR}/metrics.jsonl"
+    start_at: beginning
+    include_file_name: false
+    storage: file_storage
+  # What canopy posts with "otlp" and `endpoint = "http://127.0.0.1:4318"`: OTLP/HTTP, as JSON. Leave it in for a
+  # workspace that sends, or remove it and the file receivers above take a workspace that writes.
+  otlp:
+    protocols:
+      http:
+        endpoint: 127.0.0.1:4318
+  # canopy.log, a JSON object a line. canopy never sends its log itself: a line can hold text canopy read, which it
+  # keeps on this machine (TRUST_MODEL T2). You choose to send it, here, to a backend of your own.
+  file_log:
+    include:
+      - "${env:CANOPY_STATE_DIR}/canopy.log"
+    start_at: beginning
+    include_file_name: false
+    storage: file_storage
+    operators:
+      - type: json_parser
+        timestamp:
+          parse_from: attributes.ts
+          layout_type: gotime
+          layout: "2006-01-02T15:04:05.000Z07:00"
+        severity:
+          parse_from: attributes.level
+          # Python's word for the worst level, which the collector's own mapping lacks.
+          mapping:
+            fatal: critical
+        # A line logged inside a span names it, so a backend links the line to its trace.
+        trace:
+          trace_id:
+            parse_from: attributes.trace_id
+          span_id:
+            parse_from: attributes.span_id
+      - type: move
+        from: attributes.msg
+        to: body
+      - type: add
+        field: 'resource["service.name"]'
+        value: canopy
+
+processors:
+  # canopy sends counts and times as deltas, what changed since its last export, from many short processes at once.
+  # Prometheus wants one running total per series: this adds every process's deltas into it. The prometheus
+  # exporter adds deltas up itself only from one writer, each point starting where the last ended. A series is
+  # forgotten after `max_stale` without a point, and starts again from its next delta, which Prometheus reads as a
+  # counter reset; a quiet loop ticks every two hours at most, so a day.
+  delta_to_cumulative:
+    max_stale: 24h
+
+exporters:
+  # Metrics at http://127.0.0.1:8889/metrics, for Prometheus to scrape (prometheus.yaml beside this file). A name is
+  # translated as the guide's table shows: each dot an underscore, then the unit (`s` as `_seconds`, `By` as `_bytes`,
+  # `USD` as it is, `{token}` dropped), then `_total` on a counter and `_ratio` on a gauge whose unit is `1`. So
+  # `canopy.cost` is `canopy_cost_USD_total` and `canopy.runs.active` is `canopy_runs_active_ratio`. The resource's
+  # `service.name`, canopy, becomes `job`, and `service.instance.id`, the workspace's random id, `instance`.
+  prometheus:
+    endpoint: 127.0.0.1:8889
+    # Stated, so a later collector's default cannot rename every metric under the dashboard and the alerts.
+    translation_strategy: UnderscoreEscapingWithSuffixes
+    # canopy sets its gauges as each tick closes, and a quiet loop's ticks are up to two hours apart: kept a day, so
+    # a dashboard shows what the last tick set rather than a gap.
+    metric_expiration: 24h
+  # Traces to an OTLP/gRPC backend, such as Tempo or Jaeger.
+  otlp_grpc/traces:
+    endpoint: "${env:CANOPY_TRACES_TO:-127.0.0.1:4317}"
+    tls:
+      insecure: true
+  # Logs to an OTLP/HTTP backend, such as Loki's OTLP endpoint. Without one, remove the logs pipeline below.
+  otlp_http/logs:
+    endpoint: "${env:CANOPY_LOGS_TO:-http://127.0.0.1:3100/otlp}"
+
+service:
+  extensions: [file_storage]
+  pipelines:
+    traces:
+      receivers: [otlp_json_file/traces, otlp]
+      exporters: [otlp_grpc/traces]
+    metrics:
+      receivers: [otlp_json_file/metrics, otlp]
+      processors: [delta_to_cumulative]
+      exporters: [prometheus]
+    logs:
+      receivers: [file_log]
+      exporters: [otlp_http/logs]

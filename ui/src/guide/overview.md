@@ -24,7 +24,7 @@ The guide comes in four parts, in the order you'll need them.
   otherwise keep writing in review comments, and [Personas](personas) for the voice your agents write in.
 - **The loop**: the pages where you watch it work. [Runs and worktrees](runs), [Ticks](ticks), [Reports](reports),
   [Chores](chores), [Memory](memory), [Notifications](notifications) and [Slack](slack) for hearing about it away
-  from this page, and [Settings](settings).
+  from this page, [Telemetry](telemetry) for watching it from your own dashboards, and [Settings](settings).
 - **Reference**: [Config files](config-files), the examples canopy ships, and the [Glossary](glossary), every word the
   other pages assume you know, for when one of them does.
 

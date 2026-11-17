@@ -269,6 +269,18 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
   repository leasing, committing, and pushing as before. With a run live, expect its repository `skipped` and the
   others `packed`. Run it again after a git upgrade.
 
+### Telemetry
+
+- **S83. The example collector takes a real tick** (taken on request 2026-11-17, #2301). With `traces = "file"` and
+  `metrics = "file"`, run `otelcol-contrib` on `examples/otel/collector.yaml`, Prometheus on `prometheus.yaml`, a
+  trace backend on 4317, and Grafana with `dashboard.json`, then a live tick that dispatches a worker. Expect the
+  collector to start with no error, the tick's trace in the backend with its steps and the run's trace linked to its
+  `spawn`, and `curl 127.0.0.1:8889/metrics` to show each name the guide's table lists for what the tick did, under
+  `job="canopy"` and the workspace's `instance`. A second tick's `canopy_ticks_total` adds to the first's rather than
+  replacing it. Expect every dashboard panel to draw, `promtool check rules alerts.yaml` to pass, and
+  CanopyLoopStalled to fire once the loop has been stopped three hours. Switch both signals to `otlp` with
+  `endpoint = "http://127.0.0.1:4318"` and expect the same. Run it again after a collector upgrade.
+
 ## Measurements
 
 Each records its numbers in `MEASUREMENTS.md`, as a dated section.

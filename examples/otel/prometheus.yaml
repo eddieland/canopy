@@ -1,0 +1,21 @@
+# A Prometheus that scrapes the example collector (collector.yaml) and evaluates the alerts beside this file:
+#
+#   prometheus --config.file=examples/otel/prometheus.yaml
+#
+# Add the scrape job and the rule file to a Prometheus you already run instead, if you have one.
+
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+# Read from this file's directory.
+rule_files:
+  - alerts.yaml
+
+scrape_configs:
+  - job_name: canopy
+    # Keeps the `job` and `instance` the collector gives each series, canopy and the workspace's id, rather than this
+    # job's name and the collector's address.
+    honor_labels: true
+    static_configs:
+      - targets: ["127.0.0.1:8889"]

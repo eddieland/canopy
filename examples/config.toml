@@ -356,7 +356,8 @@ cmd = "canopy-connect-jira --site acme.atlassian.net"
 # Collector's or Grafana Alloy's, the one network call canopy itself makes. A span holds ids, statuses, counts, and
 # cost, never text canopy read. `metrics` sends counts of runs and ticks, their times, cost, and tokens the same way,
 # labelled only by canopy's own words and your configured models, as deltas for a collector to add up (an
-# OpenTelemetry Collector's `deltatocumulative` processor, before Prometheus).
+# OpenTelemetry Collector's `delta_to_cumulative` processor, before Prometheus). The guide's Telemetry page names every
+# span and metric; examples/otel has a collector that reads these files and canopy.log, a dashboard, and alerts.
 # [telemetry]
 # traces = "off"                         # or "file", or "otlp"
 # metrics = "off"                        # or "file" (.canopy/metrics.jsonl), or "otlp"
