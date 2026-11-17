@@ -33,13 +33,13 @@ class SkillsUse(Model):
     est_body_tokens: int
     """About how many tokens its loads returned into the runs' context, its text: an estimate, characters over 4."""
     front_matter_chars: int | None
-    """Its front matter at the agent's newest offer that recorded it, in characters: its name and its description.
-    None when no offer of the window did."""
+    """Its front matter at the agent's newest offer that recorded it, in characters: its entry in the runtime's list of
+    skills. None when no offer of the window did."""
     est_call_tokens: int | None
     """About how many tokens that adds to each model call of a run of the agent's offered it: an estimate, characters
     over 4. None where `front_matter_chars` is."""
     counted: int
-    """The offered runs its front matter's cost is counted over: those whose offer recorded its description's length
+    """The offered runs its front matter's cost is counted over: those whose offer recorded its entry's length
     and whose session, read, says how many model calls the run made."""
     calls: int
     """The model calls those runs made, each of which carried its front matter."""
@@ -71,7 +71,7 @@ class SkillsSkill(Model):
     est_body_tokens: int
     """About how many tokens its loads returned into the runs' context: an estimate, characters over 4."""
     front_matter_chars: int | None
-    """Its front matter at the newest offer that recorded it, in characters: its name and its description. None when
+    """Its front matter at the newest offer that recorded it, in characters: its entry in the runtime's list. None when
     no offer of the window did."""
     est_call_tokens: int | None
     """About how many tokens that adds to each model call of a run offered it: an estimate, characters over 4. None
@@ -102,9 +102,10 @@ class SkillsAgent(Model):
     listed: int
     """The runs the runtime answered for that were offered a skill: what a front matter cost could be counted over."""
     unsized: int
-    """Of those, the runs whose offer is from before canopy kept a description's length."""
+    """Of those, the runs whose offer is from before canopy kept an entry's length."""
     unread: int
-    """Of those, the runs whose lengths are on record and whose session, which says its model calls, is not read."""
+    """Of those, the runs whose lengths are on record and whose session, which says its model calls, names none:
+    not read yet, gone, or never opened."""
     counted: int
     """The rest of them: the runs a front matter cost is counted over."""
     calls: int
@@ -169,9 +170,9 @@ class SkillsReport(Model):
     """The runs the runtime answered for that were offered a skill: what a front matter cost could be counted over.
     A run offered none, as the overseer's are, carries none and is not among them."""
     unsized: int
-    """Of those, the runs whose offer is from before canopy kept a description's length."""
+    """Of those, the runs whose offer is from before canopy kept an entry's length."""
     unread: int
-    """Of those, the runs whose lengths are on record and whose session is not read."""
+    """Of those, the runs whose lengths are on record and whose session names no model call."""
     counted: int
     """The rest of them: the runs a front matter cost is counted over."""
     est_front_matter_tokens: int | None

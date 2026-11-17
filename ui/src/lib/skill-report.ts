@@ -133,23 +133,28 @@ export function loadRate(row: Pick<SkillRow, 'countable' | 'offered' | 'loaded'>
 }
 
 /**
- * A row's load rate as its cell says it: `63%`; `never` for a skill offered and loaded in no run, which a muted `0%`
- * would bury; a dash where there is no rate to say.
+ * A row's load rate as its cell says it: `63%`, or `<1%` for one loaded too seldom to round to 1; `never` for a skill
+ * offered and loaded in no run, which a muted `0%` would bury; a dash where there is no rate to say.
  */
 export function rateText(row: Pick<SkillRow, 'countable' | 'unused' | 'offered' | 'loaded'>): string {
     const rate = loadRate(row)
     if (rate === null) {
         return '–'
     }
-    return row.unused ? 'never' : shareText(rate)
+    if (row.unused) {
+        return 'never'
+    }
+    // A skill a run in hundreds loaded is not one none did.
+    const said = shareText(rate)
+    return rate > 0 && said === '0%' ? '<1%' : said
 }
 
 // The one phrase for a run nothing says what it was offered, wherever the page says it.
 const NO_OFFER = 'no offer on record'
 
 /**
- * What a row's load rate counts, on its tip: `12 of 19 runs offered it`, the runs that loaded it with no offer on
- * record after; or why it has no rate.
+ * What a row's load rate counts, on its tip: `loaded in 12 of the 19 runs offered it`, the runs that loaded it with
+ * no offer on record after; or why it has no rate.
  */
 export function rateTip(row: Pick<SkillRow, 'countable' | 'offered' | 'loaded' | 'unoffered'>): string {
     if (!row.countable) {
@@ -159,7 +164,7 @@ export function rateTip(row: Pick<SkillRow, 'countable' | 'offered' | 'loaded' |
         )
     }
     const unoffered = row.unoffered === 0 ? [] : [`loaded in ${runsText(row.unoffered)} with ${NO_OFFER}`]
-    const loaded = `${row.loaded} of ${runsText(row.offered)} offered it`
+    const loaded = `loaded in ${row.loaded} of the ${runsText(row.offered)} offered it`
     return [row.offered === 0 ? `${NO_OFFER} names it` : loaded, ...unoffered].join(' · ')
 }
 
@@ -172,7 +177,7 @@ export function frontMatterTip(row: Pick<SkillRow, 'offered' | 'counted' | 'call
         return undefined
     }
     return row.counted === 0
-        ? `none of the ${runsText(row.offered)} offered it is counted: no length on record, or no session read`
+        ? `none of the ${runsText(row.offered)} offered it is counted: no length on record, or no model calls on record`
         : `over ${counted(row.calls, 'model call')}, in ${row.counted} of ${runsText(row.offered)} offered it`
 }
 
@@ -194,7 +199,7 @@ export function loadsTip(row: Pick<SkillRow, 'unoffered'>): string | undefined {
 export function skillsLine(
     found: Pick<
         SkillsReport,
-        'days' | 'offered' | 'unused' | 'loads' | 'listed' | 'counted' | 'est_front_matter_tokens'
+        'days' | 'offered' | 'unused' | 'loads' | 'listed' | 'counted' | 'est_front_matter_tokens' | 'skills'
     >,
 ): string {
     const over = windowName(found)
@@ -204,9 +209,14 @@ export function skillsLine(
     }
     return [
         `${counted(found.offered, 'skill')} offered over ${over}`,
-        found.unused === 0 ? 'each one loaded' : `${found.unused} never loaded`,
+        found.unused === 0 ? everyLoaded(found.skills) : `${found.unused} never loaded`,
         frontMatterWords(found),
     ].join(' · ')
+}
+
+// No skill is known never loaded: each was loaded, unless the loads of one the runtime cannot name are not counted.
+function everyLoaded(skills: readonly Pick<SkillsSkill, 'countable' | 'offered'>[]): string {
+    return skills.some((s) => !s.countable && s.offered > 0) ? 'none known never loaded' : 'each one loaded'
 }
 
 function frontMatterWords(found: Pick<SkillsReport, 'listed' | 'counted' | 'est_front_matter_tokens'>): string {
@@ -267,8 +277,8 @@ function frontMatterCoverage(found: Pick<SkillsReport, 'listed' | 'unsized' | 'u
 // The runs offered a skill that a cost is not counted over, by what each lacks.
 function uncounted(found: Pick<SkillsReport, 'unsized' | 'unread'>): string[] {
     return [
-        ...(found.unsized === 0 ? [] : [`${found.unsized} from before canopy kept a description's length`]),
-        ...(found.unread === 0 ? [] : [`${found.unread} with no session read yet`]),
+        ...(found.unsized === 0 ? [] : [`${found.unsized} from before canopy kept a skill's length`]),
+        ...(found.unread === 0 ? [] : [`${found.unread} with no model calls on record`]),
     ]
 }
 

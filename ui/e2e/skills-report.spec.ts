@@ -18,7 +18,7 @@ test('the nav opens Skills under Reports: each agent by what its list costs a ca
     await expect(page).toHaveURL(/\/reports\/skills$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Skills')
     // The mock's day of offers and loads on the runs it has (canopy/serve/mock/skill_use.py): the cost with the runs
-    // it is counted in, since the rest have no session read.
+    // it is counted in, since the rest have no model calls on record.
     await expect(page.locator('main header p')).toHaveText(
         '8 skills offered over 7 days · 4 never loaded · front matter ~88.6k tokens in 8 of 19 runs offered a skill',
     )
@@ -40,9 +40,9 @@ test('the nav opens Skills under Reports: each agent by what its list costs a ca
         '0',
         '7',
         '3',
+        '11',
         '387',
         '49.6k',
-        '11',
     ])
     await expect(page.getByTestId('skills-agent-canopy-planner').locator(READ)).toHaveText([
         'canopy-planner',
@@ -50,9 +50,9 @@ test('the nav opens Skills under Reports: each agent by what its list costs a ca
         '3',
         '7',
         '6',
-        '–',
-        '–',
         '5',
+        '–',
+        '–',
     ])
     await expect(page.getByTestId('skills-agent-canopy-overseer').locator(READ)).toHaveText([
         'canopy-overseer',
@@ -122,8 +122,8 @@ test('the skills open on the costliest front matter, a skill no run loaded readi
     await expect(page.getByTestId('skills-scope')).toHaveText('every agent')
     await expect(page.getByTestId('skills-count')).toHaveText('9')
     await expect(page.getByTestId('skills-coverage')).toHaveText(
-        'Front matter is counted over 8 of the 19 runs offered a skill: 11 with no session read yet. 1 load named ' +
-            'no skill canopy could read: any skill here may be the one it loaded.',
+        'Front matter is counted over 8 of the 19 runs offered a skill: 11 with no model calls on record. 1 load ' +
+            'named no skill canopy could read: any skill here may be the one it loaded.',
     )
 })
 
@@ -178,8 +178,8 @@ test('the window is kept in the address beside the order, and 30 days say what t
     )
     // The workers' runs of the weeks before were offered skills with no length kept: more runs, no more counted.
     await expect(page.getByTestId('skills-coverage')).toContainText(
-        "Front matter is counted over 8 of the 24 runs offered a skill: 5 from before canopy kept a description's " +
-            'length, 11 with no session read yet.',
+        "Front matter is counted over 8 of the 24 runs offered a skill: 5 from before canopy kept a skill's " +
+            'length, 11 with no model calls on record.',
     )
 })
 

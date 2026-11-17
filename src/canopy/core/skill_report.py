@@ -1,14 +1,14 @@
 """Which skills the agent runs of a window were offered, which they loaded, and what each one's front matter cost.
 
 For the web UI's Skills report (DESIGN §13). A skill an agent is offered rides in every model call of its runs, by its
-name and its description, loaded or not; one it loads puts its text into the run's context besides. Both are in the
-journal, by run: what the runtime said it offered each run it was asked about (`canopy.core.run_offers`), and each
-run's calls of the skill tool, by the skill they loaded (`run_tools`). This reads them over the runs that started in a
-window and have ended, by the agent each ran and the skill.
+entry in the runtime's list of skills, loaded or not; one it loads puts its text into the run's context besides. Both
+are in the journal, by run: what the runtime said it offered each run it was asked about (`canopy.core.run_offers`),
+and each run's calls of the skill tool, by the skill they loaded (`run_tools`). This reads them over the runs that
+started in a window and have ended, by the agent each ran and the skill.
 
 What the journal cannot say is counted apart, never as nothing: a run the runtime was not asked about (a task's, an
-epic's plan, or one from before canopy asked), one it could not answer for, an offer from before canopy kept a
-description's length, and a run whose session, which says how many model calls it made, is not read. A front matter
+epic's plan, or one from before canopy asked), one it could not answer for, an offer from before canopy kept an
+entry's length, and a run whose session, which says how many model calls it made, is not read. A front matter
 cost is counted only over the runs offered a skill where the length and the model calls are both known; a run offered
 none, as the overseer's are, carries none and is no part of what a cost is counted over.
 """
@@ -61,10 +61,10 @@ class Use:
     failed: int = 0
     #: The characters its loads returned into the runs' context: its text, as the skill tool gave it.
     result_chars: int = 0
-    #: Its front matter at the newest offer that recorded it, in characters: its name and its description. None when
+    #: Its front matter at the newest offer that recorded it, in characters: its entry in the runtime's list. None when
     #: no offer of the window did.
     front_matter_chars: int | None = None
-    #: The offered runs its front matter's cost is counted over: those whose offer recorded its description's length
+    #: The offered runs its front matter's cost is counted over: those whose offer recorded its entry's length
     #: and whose session, read, says how many model calls the run made.
     counted: int = 0
     #: The model calls those runs made, each of which carried its front matter.
@@ -165,9 +165,10 @@ class Agent:
     #: Of the runs it answered for, those offered a skill: what a front matter cost could be counted over. A run
     #: offered none carries none.
     listed: int
-    #: Of those, the runs whose offer is from before canopy kept a description's length.
+    #: Of those, the runs whose offer is from before canopy kept an entry's length.
     unsized: int
-    #: Of those, the runs whose lengths are on record and whose session, which says its model calls, is not read.
+    #: Of those, the runs whose lengths are on record and whose session, which says its model calls, names none:
+    #: not read yet, gone, or never opened.
     unread: int
     #: The rest of them: the runs a front matter cost is counted over.
     counted: int
@@ -269,12 +270,12 @@ class Skills:
 
     @property
     def unsized(self) -> int:
-        """Of those, the runs whose offer has no description's length."""
+        """Of those, the runs whose offer has no entry's length."""
         return sum(a.unsized for a in self.agents)
 
     @property
     def unread(self) -> int:
-        """Of those, the runs whose session is not read."""
+        """Of those, the runs whose session names no model call."""
         return sum(a.unread for a in self.agents)
 
     @property
@@ -357,7 +358,7 @@ class _Offered(records.View):
     counted: int
     calls: int
     sent_chars: int
-    #: The newest offer that recorded its description's length: when the run started, a space, and the front matter's
+    #: The newest offer that recorded its entry's length: when the run started, a space, and the front matter's
     #: characters; None when none did.
     newest: str | None
 
@@ -435,7 +436,7 @@ def _offered(since: str, until: str) -> sql.Select:
     each = [
         sql.select(
             "coalesce(o.agent, {}) AS agent, s.skill AS skill, r.started_at AS started_at, "
-            "length(s.skill) + s.description_chars AS chars, {} AS calls, coalesce(t.calls > t.errors, 0) AS loaded",
+            "s.listing_chars AS chars, {} AS calls, coalesce(t.calls > t.errors, 0) AS loaded",
             _SHIPPED[table],
             sql.frag(_CALLS, table),
         )
@@ -503,7 +504,7 @@ def _loaded(since: str, until: str) -> sql.Select:
 
 
 # Each agent's runs, and how far the journal says what they were offered and how often they called a model. A run is
-# `sized` when every skill it was offered has its description's length. Its skills are summed run by run rather than
+# `sized` when every skill it was offered has its entry's length. Its skills are summed run by run rather than
 # joined and grouped, which would have SQLite walk the run table whole, by its key. A cost is counted over the runs
 # offered a skill alone: one offered none carries none, and its calls would only thin the mean of a call.
 def _ran(since: str, until: str) -> sql.Select:
@@ -513,9 +514,9 @@ def _ran(since: str, until: str) -> sql.Select:
             "o.error IS NOT NULL AS unanswered, {} AS skills, {} AS sized, {} AS calls, {} AS chars",
             _SHIPPED[table],
             sql.frag(_LIST, sql.frag("count(*)"), table),
-            sql.frag(_LIST, sql.frag("count(*) = count(s.description_chars)"), table),
+            sql.frag(_LIST, sql.frag("count(*) = count(s.listing_chars)"), table),
             sql.frag(_CALLS, table),
-            sql.frag(_LIST, sql.frag("coalesce(SUM(length(s.skill) + s.description_chars), 0)"), table),
+            sql.frag(_LIST, sql.frag("coalesce(SUM(s.listing_chars), 0)"), table),
         )
         .from_("{} r LEFT JOIN run_offers o ON o.run_table = ? AND o.run_id = r.id", sql.name(table), table)
         .where(_WINDOW, since, until)

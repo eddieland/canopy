@@ -282,7 +282,7 @@ def _offer(ask: _Ask, agent: str, *, servers: Sequence[str], files: Sequence[Ski
         servers=tuple(_server(name, rules) for name in servers),
         skills=offered,
         denied_skills=tuple(s for s in skills if s not in offered),
-        description_chars={f.name: len(f.description or "") for f in files if f.name in offered},
+        listing_chars={f.name: _listed(f) for f in files if f.name in offered},
         tools=tuple(sorted(name for name, kept in read.tools.items() if kept and name not in _UNSENT)),
     )
 
@@ -324,3 +324,18 @@ def _server(name: str, rules: Sequence[_Rule]) -> ServerOffer:
 def _may_match(prefix: str, pattern: str) -> bool:
     literal = re.split(r"[*?]", pattern, maxsplit=1)[0]
     return literal.startswith(prefix) or prefix.startswith(literal)
+
+
+# The characters of a skill's entry in the list OpenCode 1 writes into the system prompt of every model call: its
+# name, description, and location, each in a tag, one to a line. It leaves out a skill with no description.
+def _listed(file: SkillFile) -> int:
+    if file.description is None:
+        return 0
+    location = f"file://{file.path}" if file.path.startswith("/") else file.path
+    return len(
+        "  <skill>\n"
+        f"    <name>{file.name}</name>\n"
+        f"    <description>{file.description}</description>\n"
+        f"    <location>{location}</location>\n"
+        "  </skill>\n",
+    )

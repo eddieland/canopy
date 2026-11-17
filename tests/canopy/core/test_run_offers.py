@@ -61,11 +61,11 @@ def test_a_run_keeps_only_what_it_was_offered_and_the_latest_ask(conn: sqlite3.C
 
 def test_each_offered_skill_keeps_how_long_its_description_was(conn: sqlite3.Connection) -> None:
     """The front matter a run's every model call carried, beside the skill's name: unknown where the offer has none."""
-    offer = AgentOffer("canopy-worker", skills=("audit", "pdf", "terse"), description_chars={"audit": 16, "terse": 0})
+    offer = AgentOffer("canopy-worker", skills=("audit", "pdf", "terse"), listing_chars={"audit": 16, "terse": 0})
     run_offers.record(conn, "runs", 1, offer)
     found = run_offers.of_run(conn, "runs", 1)
     assert found is not None
-    assert [(s.skill, s.description_chars) for s in found.skills] == [("audit", 16), ("pdf", None), ("terse", 0)]
+    assert [(s.skill, s.listing_chars) for s in found.skills] == [("audit", 16), ("pdf", None), ("terse", 0)]
 
 
 def test_an_agent_that_could_not_start_still_has_its_ask_recorded(conn: sqlite3.Connection) -> None:

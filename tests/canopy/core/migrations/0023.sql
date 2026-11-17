@@ -1,3 +1,3 @@
--- sha256 of 0023_offered_skill_descriptions.sql: 85476f364e1976abd57174da094c3ae9995bedba2a8f6c6126e34e5e2648768b
+-- sha256 of 0023_offered_skill_listings.sql: d61471e13ad543c1b62eb7a6d99075f9bff2bcd995a9944dfd6a626ba1347b31
 
 -- Creates no table, so seeds no row.

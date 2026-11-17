@@ -6,12 +6,13 @@ most runs do; `release-notes`, which only workers load; and `terse` and `write-a
 shared worker is offered `canopy-artifacts` too, and never loads it. A run in `web`'s worktrees is offered the two
 skills that repository keeps for itself, which the skills page does not list: `design-system`, whose long description
 rides in every call and which one run loaded, and `e2e-playwright`. One in `mobile`'s is offered `store-listing`, and
-none loads it. Each offer records its skills' descriptions' lengths, the five the page lists at what it says of them.
+none loads it. Each offer records the length of each skill's entry in the runtime's list, the five the page lists
+at their names and what it says of them.
 
 What the journal cannot say is there too: a review run the runtime did not answer for, the tasks' and the epics' plan
 runs, which are never asked about and loaded the tracker's skill all the same, a call that named no skill, a call for
 the operator's own skill, which every agent is denied, and the workers' runs of the weeks before, whose offers are
-from before canopy kept a description's length. A front matter's cost is counted over the runs whose sessions `_models`
+from before canopy kept an entry's length. A front matter's cost is counted over the runs whose sessions `_models`
 read: the planner's are not, so its list has no cost yet.
 """
 
@@ -37,13 +38,13 @@ _DEPS: Final = agents.chore_agent("deps")
 _EVERYWHERE: Final = ("release-notes", "terse", "tracker-jira", "write-a-skill")
 _WEB: Final = ("design-system", "e2e-playwright")
 _MOBILE: Final = ("store-listing",)
-#: How long each skill's description is, in characters: the listed skills' as the skills page says them, then the
-#: repositories' own.
-_DESCRIBED: Final[Mapping[str, int]] = {
-    **{name: len(said or "") for name, said in skills.DESCRIPTIONS.items()},
-    "design-system": 913,
-    "e2e-playwright": 248,
-    "store-listing": 382,
+#: How long each skill's entry in the runtime's list is, in characters: the listed skills' names and what the skills
+#: page says of them, then the repositories' own.
+_LISTED: Final[Mapping[str, int]] = {
+    **{name: len(name) + len(said or "") for name, said in skills.DESCRIPTIONS.items()},
+    "design-system": 926,
+    "e2e-playwright": 262,
+    "store-listing": 395,
 }
 #: Each run the runtime answered for: its table and id, the agent its command runs, and the skills it was offered.
 _OFFERS: Final[tuple[tuple[RunTable, int, str, tuple[str, ...]], ...]] = (
@@ -120,10 +121,10 @@ def seed(conn: sqlite3.Connection, at: Callable[[int], str]) -> None:
     old = [("runs", run.id, agents.WORKER, _EVERYWHERE) for run in before]
     offers = records.insert_rows(records.RunOffer, ("run_table", "run_id", "agent", "error", "asked_at"))
     offers.many(conn, [(table, run_id, agent, None, asked) for table, run_id, agent, _ in (*_OFFERS, *old)])
-    offered = records.insert_rows(records.RunOfferedSkill, ("run_table", "run_id", "skill", "description_chars"))
+    offered = records.insert_rows(records.RunOfferedSkill, ("run_table", "run_id", "skill", "listing_chars"))
     offered.many(
         conn,
-        [(table, run_id, skill, _DESCRIBED[skill]) for table, run_id, _, listed in _OFFERS for skill in listed],
+        [(table, run_id, skill, _LISTED[skill]) for table, run_id, _, listed in _OFFERS for skill in listed],
     )
     # The weeks before: offered the same, with no length kept, and each loaded the tracker's skill.
     offered.many(conn, [(table, run_id, skill, None) for table, run_id, _, listed in old for skill in listed])

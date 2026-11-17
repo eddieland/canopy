@@ -53,7 +53,8 @@ interface SkillsSearch {
 // What the page shows on every visit, on its title's hover: its description is the window's state.
 const HELP =
     'Which skills the agents were offered and which they loaded, over the last days. A skill an agent is offered ' +
-    'rides in each of its model calls by its front matter, its name and description, loaded or not; one it loads ' +
+    'rides in each of its model calls by its front matter, the name and description the runtime lists it by, ' +
+    'loaded or not; one it loads ' +
     "puts its text into the run's context besides. Each agent, by what its whole list adds to a model call: pick " +
     'one for its own skills. Then each skill, by what its front matter came to and how often a run offered it ' +
     'loaded it. Every count of tokens is an estimate, characters over 4, and a short window cannot tell a skill ' +
@@ -85,8 +86,8 @@ const RATE_HINT =
     'The runs that loaded it, as a share of the runs offered it. A skill a prompt says to load first, as the ' +
     "tracker's is, is loaded by most runs: that is the prompt at work"
 const CALL_HINT =
-    'About how many tokens its front matter, its name and description, adds to each model call of a run offered ' +
-    `it, at its newest offer on record: ${EST}`
+    'About how many tokens its front matter, its entry in the list of skills the runtime sends, adds to each model ' +
+    `call of a run offered it, at its newest offer on record: ${EST}`
 const SENT_HINT =
     'About how many tokens its front matter added to the model calls of the runs counted, its length at each run ' +
     `for each of the run's model calls. ${CARRIED}`
@@ -97,7 +98,7 @@ const BODY_HINT =
     `reads again: ${EST}`
 
 // A figure the journal cannot say, and why, on its tip.
-const UNSIZED = "no offer in this window recorded its description's length"
+const UNSIZED = 'no offer in this window recorded its length'
 const UNNAMED = 'its loads are among those that named no skill'
 
 /**
@@ -215,7 +216,7 @@ function skillsTiles(found: SkillsReport | undefined): ReadoutTile[] {
             delta: readoutDelta(figures?.unused, before?.unused, wholeChange),
         },
     ]
-    if (found?.est_front_matter_tokens === null) {
+    if (found?.est_front_matter_tokens === null || found?.est_call_tokens === null) {
         return counts
     }
     return [
@@ -224,7 +225,7 @@ function skillsTiles(found: SkillsReport | undefined): ReadoutTile[] {
             key: 'call',
             label: '~tokens a call',
             hint: CALL_TILE_HINT,
-            value: found === undefined ? undefined : tokenCount(found.est_call_tokens ?? 0),
+            value: found === undefined ? undefined : tokenCount(found.est_call_tokens),
             delta: readoutDelta(figures?.call, before?.call, tokensChange),
         },
         {
@@ -243,9 +244,9 @@ function countText(listed: number, all: number): string {
 
 /**
  * Each agent that ran, the heaviest list a call first: its runs, those with no offer on record, the skills it was
- * offered and how many of those none of its runs loaded, what their front matter adds to one of its model calls,
- * with a bar of the most's, and what that came to. An agent's name picks it for the skills table under it. Under the
- * table, the runs nothing says what they were offered, split by why.
+ * offered, how many of those none of its runs loaded, and its loads, then what their front matter adds to one of
+ * its model calls, with a bar of the most's, and what that came to. An agent's name picks it for the skills table
+ * under it. Under the table, the runs nothing says what they were offered, split by why.
  */
 function Agents({ found, span }: { found: SkillsReport; span: string }) {
     if (found.agents.length === 0) {
@@ -303,6 +304,15 @@ function agentColumns(agents: readonly SkillsAgent[]): ReportColumn<SkillsAgent>
             tone: (a) => (a.unused ?? 0) === 0 && 'text-muted-foreground',
         },
         {
+            key: 'loads',
+            kind: 'figure',
+            label: 'loads',
+            hint: AGENT_LOADS_HINT,
+            cell: (a) => a.loads,
+            tip: agentLoadsTip,
+            tone: (a) => a.loads === 0 && 'text-muted-foreground',
+        },
+        {
             key: 'call',
             kind: 'bar',
             label: '~tokens a call',
@@ -319,15 +329,6 @@ function agentColumns(agents: readonly SkillsAgent[]): ReportColumn<SkillsAgent>
             hint: AGENT_SENT_HINT,
             cell: (a) => (a.est_front_matter_tokens === null ? '–' : tokenCount(a.est_front_matter_tokens)),
             tone: (a) => (a.est_front_matter_tokens ?? 0) === 0 && 'text-muted-foreground',
-        },
-        {
-            key: 'loads',
-            kind: 'figure',
-            label: 'loads',
-            hint: AGENT_LOADS_HINT,
-            cell: (a) => a.loads,
-            tip: agentLoadsTip,
-            tone: (a) => a.loads === 0 && 'text-muted-foreground',
         },
     ]
 }
@@ -444,13 +445,13 @@ function Skills({
                     columns={skillColumns(rows)}
                     rowKey={(r) => r.name}
                     label="Skills"
-                    className="max-h-[36rem] px-3"
+                    className="max-h-none px-3"
                     testId="skills-skill-table"
                     rowTestId={(r) => `skills-skill-${r.name}`}
                 />
             )}
             <p className="max-w-prose px-3 text-xs text-muted-foreground" data-testid="skills-coverage">
-                {coverageText(found)}
+                {coverageText(picked ?? found)}
             </p>
         </div>
     )
@@ -496,7 +497,7 @@ function skillColumns(rows: readonly SkillRow[]): ReportColumn<SkillRow>[] {
                     ? r.offered === 0
                         ? undefined
                         : UNSIZED
-                    : `${r.front_matter_chars} characters of name and description`,
+                    : `${r.front_matter_chars} characters in the runtime's list of skills`,
             tone: (r) => r.est_call_tokens === null && 'text-muted-foreground',
         },
         {
@@ -523,8 +524,9 @@ function skillColumns(rows: readonly SkillRow[]): ReportColumn<SkillRow>[] {
             kind: 'figure',
             label: 'failed',
             hint: FAILED_HINT,
-            cell: (r) => r.failed,
-            tone: (r) => r.failed === 0 && 'text-muted-foreground',
+            cell: (r) => (r.countable ? r.failed : '–'),
+            tip: (r) => (r.countable ? undefined : UNNAMED),
+            tone: (r) => (!r.countable || r.failed === 0) && 'text-muted-foreground',
         },
         {
             key: 'body',

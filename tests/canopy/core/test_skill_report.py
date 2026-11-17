@@ -25,8 +25,8 @@ if TYPE_CHECKING:
     from tests.conftest import Journals
 
 NOW = datetime(2026, 11, 8, 12, tzinfo=UTC)
-#: The descriptions' lengths the tests offer each skill with: its front matter is its name's and this.
-SIZES = {"tracker-jira": 80, "release-notes": 60, "terse": 0}
+#: How long the tests' offers say each skill's entry in the runtime's list is: its front matter, as a call carries it.
+SIZES = {"tracker-jira": 92, "release-notes": 73, "terse": 5}
 
 
 def tick(conn: sqlite3.Connection, started: str, *, overseer_ran: int = 1) -> int:
@@ -126,8 +126,8 @@ def offered(
     *,
     sized: bool = True,
 ) -> None:
-    """What the runtime said it offered a run: the skills of `sizes`, each with its description's length if `sized`."""
-    offer = AgentOffer(agent, skills=tuple(sizes), description_chars=sizes if sized else {})
+    """What the runtime said it offered a run: the skills of `sizes`, each with its entry's length if `sized`."""
+    offer = AgentOffer(agent, skills=tuple(sizes), listing_chars=sizes if sized else {})
     run_offers.record(conn, table, run_id, offer)
 
 
@@ -160,7 +160,7 @@ def test_a_skill_is_counted_by_the_runs_offered_it_and_those_that_loaded_it(conn
     first, second, reviewer = worker(conn, day), worker(conn, day), review(conn, day)
     offered(conn, "runs", first, "canopy-worker")
     offered(conn, "runs", second, "canopy-worker")
-    offered(conn, "review_runs", reviewer, "canopy-reviewer", {"tracker-jira": 80, "terse": 0})
+    offered(conn, "review_runs", reviewer, "canopy-reviewer", {"tracker-jira": 92, "terse": 5})
     called(conn, "runs", first, 20, ToolUse("skill:tracker-jira", 1, 0, 4000), ToolUse("bash", 9, 0, 700))
     # Two loads and a call that failed; and a call for another skill that only failed, which loaded nothing.
     called(
@@ -184,7 +184,7 @@ def test_a_skill_is_counted_by_the_runs_offered_it_and_those_that_loaded_it(conn
         loads=3,
         failed=1,
         result_chars=12_100,
-        front_matter_chars=len("tracker-jira") + 80,
+        front_matter_chars=92,
         counted=2,
         calls=30,
         sent_chars=92 * 30,
@@ -198,8 +198,7 @@ def test_a_skill_is_counted_by_the_runs_offered_it_and_those_that_loaded_it(conn
     notes = uses(found, "release-notes")["canopy-worker"]
     assert (notes.offered, notes.loaded, notes.loads, notes.failed, notes.result_chars) == (2, 0, 0, 1, 0)
     assert (notes.front_matter_chars, notes.sent_chars) == (73, 73 * 30)
-    # A skill that says nothing of itself still rides by its name.
-    assert uses(found, "terse")["canopy-worker"].front_matter_chars == len("terse")
+    assert uses(found, "terse")["canopy-worker"].front_matter_chars == 5
     assert (found.offered, found.unused, found.loads) == (3, 2, 3)
     assert [s.name for s in found.skills if s.unused] == ["release-notes", "terse"]
     assert found.agents == [
@@ -252,7 +251,7 @@ def test_what_the_journal_cannot_say_is_counted_apart(conn: sqlite3.Connection) 
     """A run not asked about, one not answered for, an offer with no length, and a session not read: none is a zero."""
     day = earlier(NOW, 1)
     old, failed, unasked = worker(conn, day), worker(conn, day), worker(conn, day)
-    # An offer from before canopy kept a description's length: offered, and its cost unknown.
+    # An offer from before canopy kept an entry's length: offered, and its cost unknown.
     offered(conn, "runs", old, "canopy-worker", sized=False)
     called(conn, "runs", old, 5)
     run_offers.record(conn, "runs", failed, AgentOffer("canopy-worker", error="the runtime had not answered"))
@@ -324,7 +323,7 @@ def test_the_overseer_offered_no_skill_is_an_agent_that_carries_none(conn: sqlit
     assert (found.listed, found.counted, found.sent_tokens, found.call_tokens) == (0, 0, None, None)
     # Beside a worker's run, its calls thin no mean: the mean of a call is over the runs offered a skill.
     run = worker(conn, day)
-    offered(conn, "runs", run, "canopy-worker", {"audit": 395})
+    offered(conn, "runs", run, "canopy-worker", {"audit": 400})
     called(conn, "runs", run, 6)
     found = skill_report.report(conn, NOW, 7)
     assert (found.listed, found.counted) == (1, 1)
@@ -335,13 +334,13 @@ def test_the_overseer_offered_no_skill_is_an_agent_that_carries_none(conn: sqlit
 def test_a_skill_s_front_matter_is_its_newest_offer_s(conn: sqlite3.Connection) -> None:
     """A description shortened since: the row says what it costs now, and the sum what each run was sent."""
     before, after = worker(conn, earlier(NOW, 3)), worker(conn, earlier(NOW, 1))
-    offered(conn, "runs", before, "canopy-worker", {"audit": 400})
-    offered(conn, "runs", after, "canopy-worker", {"audit": 95})
+    offered(conn, "runs", before, "canopy-worker", {"audit": 405})
+    offered(conn, "runs", after, "canopy-worker", {"audit": 100})
     called(conn, "runs", before, 10)
     called(conn, "runs", after, 10)
     # A chore's copy of the agent, on a model of its own, sits after the chores' own agent, and has its own offers.
     copy = chore(conn, earlier(NOW, 2))
-    offered(conn, "chore_runs", copy, "canopy-chore-deps", {"audit": 250})
+    offered(conn, "chore_runs", copy, "canopy-chore-deps", {"audit": 255})
     found = skill_report.report(conn, NOW, 7)
     [audit] = found.skills
     assert [u.agent for u in audit.uses] == ["canopy-worker", "canopy-chore-deps"]
@@ -355,7 +354,7 @@ def test_a_skill_s_front_matter_is_its_newest_offer_s(conn: sqlite3.Connection) 
 def test_a_skill_the_runtime_names_outside_its_rule_is_not_called_unused(conn: sqlite3.Connection) -> None:
     """A load is counted under a name of the runtime's rule alone, so one named otherwise only looks never loaded."""
     ran = worker(conn, earlier(NOW, 1))
-    offered(conn, "runs", ran, "canopy-worker", {"My_Skill": 10, "terse": 0})
+    offered(conn, "runs", ran, "canopy-worker", {"My_Skill": 18, "terse": 5})
     called(conn, "runs", ran, 2, ToolUse("skill", 1, 0, 900))
     found = skill_report.report(conn, NOW, 7)
     rows = [(s.name, s.countable, s.unused) for s in found.skills]
@@ -369,9 +368,9 @@ def test_only_the_window_s_ended_runs_are_read(conn: sqlite3.Connection) -> None
     """By when a run started, in whole local days; a run still running has recorded nothing to read."""
     for started in (earlier(NOW, 9), earlier(NOW, 1)):
         ran = worker(conn, started)
-        offered(conn, "runs", ran, "canopy-worker", {"terse": 0})
+        offered(conn, "runs", ran, "canopy-worker", {"terse": 5})
     running = worker(conn, earlier(NOW, 0), ended=False)
-    offered(conn, "runs", running, "canopy-worker", {"terse": 0})
+    offered(conn, "runs", running, "canopy-worker", {"terse": 5})
     found = skill_report.report(conn, NOW, 7)
     assert (found.since, found.until, found.days) == ("2026-11-02T00:00:00.000Z", "2026-11-09T00:00:00.000Z", 7)
     assert [(s.name, s.offered) for s in found.skills] == [("terse", 1)]

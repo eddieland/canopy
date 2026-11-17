@@ -99,10 +99,10 @@ def record(conn: sqlite3.Connection, table: RunTable, run_id: int, offer: AgentO
         )
         records.insert_rows(
             records.RunOfferedSkill,
-            ("run_table", "run_id", "skill", "description_chars"),
+            ("run_table", "run_id", "skill", "listing_chars"),
         ).many(
             conn,
-            [(table, run_id, skill, offer.description_chars.get(skill)) for skill in offer.skills],
+            [(table, run_id, skill, offer.listing_chars.get(skill)) for skill in offer.skills],
         )
         records.insert(
             records.RunOffer,

@@ -503,15 +503,17 @@ tokens in 8 of 19 runs offered a skill`, and the figures under it are its headli
 run loaded, and what their front matter adds to a model call and came to over the window.
 
 Three words do the work. A skill is **offered** to a run when it is in the list the runtime sends it: its name and
-description, its **front matter**, ride in every model call of that run whether the agent wants them or not. A skill
-is **loaded** when the agent calls the skill tool and reads its text. Offering is cheap and paid on every call;
-loading is dear and paid once, and then each later call of the run reads the text again.
+description, its **front matter**, ride in every model call of that run whether the agent wants them or not. That is all
+of the front matter that travels: the runtime lists a skill by those two, in a few tags of its own, and keeps a license
+or metadata to itself. The page counts the entry as the runtime writes it, tags and all. A skill is **loaded** when the
+agent calls the skill tool and reads its text. Offering is cheap and paid on every call; loading is dear and paid once,
+and then each later call of the run reads the text again.
 
 - **Agents**: each agent that ran, the heaviest list first. Its runs, how many have no offer on record, the skills
-  it was offered and how many of those none of its runs loaded, then what the whole list adds to one of its model
-  calls and what that came to. The overseer shows zeros, on purpose: its skill tool is denied, since it reads no
-  tracker. Click an agent's name and the table under it becomes that agent's own; **every agent**, in that table's
-  header, widens it again.
+  it was offered, how many of those none of its runs loaded, and its loads, then what the whole list adds to one of
+  its model calls and what that came to. The overseer shows zeros, on purpose: its skill tool is denied, since it
+  reads no tracker. Click an agent's name and the table under it becomes that agent's own; **every agent**, in that
+  table's header, widens it again.
 - **Skills**: a row per skill, over every agent or the one you picked. The runs offered it and the share that loaded
   it, its front matter in tokens a call and over the window, its loads, the calls for it that failed, and what its
   text put into context. A skill offered and loaded in no run says `never` where its rate would be. The toggle orders
@@ -539,7 +541,7 @@ What the page can't see, it counts apart rather than as zero, and says so under 
   are never asked, and a run from before canopy asked has nothing on record. Those runs count under the agent canopy
   ships for their kind, and their loads count all the same.
 - Front matter is a skill's length at each run for each of that run's model calls, so it is counted over the runs
-  whose offer recorded the descriptions' lengths and whose session canopy has read. A run from before canopy kept the
+  whose offer recorded the skills' lengths and whose session names its model calls. A run from before canopy kept the
   length is left out, the figures show a dash until one is counted, and the line under the title says how many runs
   they cover.
 - The runtime counts a load under a name of lowercase letters, digits, and single hyphens. A skill named any other way

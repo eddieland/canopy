@@ -122,6 +122,7 @@ describe('the Skills report', () => {
             listed: 19,
             counted: 8,
             est_front_matter_tokens: 88_610,
+            skills: [],
         }
         expect(skillsLine(found)).toBe(
             '8 skills offered over 7 days · 4 never loaded · ' +
@@ -131,6 +132,15 @@ describe('the Skills report', () => {
         expect(skillsLine({ ...found, offered: 1, unused: 0, counted: 19 })).toBe(
             '1 skill offered over 7 days · each one loaded · front matter ~88.6k tokens',
         )
+        // A skill the runtime cannot name has loads nothing counts: not known loaded.
+        expect(
+            skillsLine({
+                ...found,
+                offered: 1,
+                unused: 0,
+                skills: [{ countable: false, offered: 2 }] as SkillsSkill[],
+            }),
+        ).toContain('1 skill offered over 7 days · none known never loaded')
         // No run counted yet: not known, which is not a cost of nothing.
         expect(skillsLine({ ...found, counted: 0, est_front_matter_tokens: null })).toBe(
             '8 skills offered over 7 days · 4 never loaded · front matter not counted yet',
@@ -238,15 +248,18 @@ describe('the Skills report', () => {
         expect(rateText({ countable: true, unused: true, offered: 19, loaded: 0 })).toBe('never')
         // Loaded by a run with no offer on record: no run offered it loaded it, which is not never.
         expect(rateText({ countable: true, unused: false, offered: 5, loaded: 0 })).toBe('0%')
+        expect(rateText({ countable: true, unused: false, offered: 286, loaded: 1 })).toBe('<1%')
         expect(rateText({ countable: true, unused: false, offered: 0, loaded: 0 })).toBe('–')
         expect(rateText({ countable: false, unused: false, offered: 10, loaded: 0 })).toBe('–')
     })
 
     it('says what a rate counts on its tip, and why a row has none', () => {
         expect(rateTip({ countable: true, offered: 19, loaded: 12, unoffered: 3 })).toBe(
-            '12 of 19 runs offered it · loaded in 3 runs with no offer on record',
+            'loaded in 12 of the 19 runs offered it · loaded in 3 runs with no offer on record',
         )
-        expect(rateTip({ countable: true, offered: 1, loaded: 0, unoffered: 0 })).toBe('0 of 1 run offered it')
+        expect(rateTip({ countable: true, offered: 1, loaded: 0, unoffered: 0 })).toBe(
+            'loaded in 0 of the 1 run offered it',
+        )
         expect(rateTip({ countable: true, offered: 0, loaded: 0, unoffered: 2 })).toBe(
             'no offer on record names it · loaded in 2 runs with no offer on record',
         )
@@ -260,7 +273,7 @@ describe('the Skills report', () => {
             'over 234 model calls, in 6 of 11 runs offered it',
         )
         expect(frontMatterTip({ offered: 3, counted: 0, calls: 0 })).toBe(
-            'none of the 3 runs offered it is counted: no length on record, or no session read',
+            'none of the 3 runs offered it is counted: no length on record, or no model calls on record',
         )
         expect(frontMatterTip({ offered: 0, counted: 0, calls: 0 })).toBeUndefined()
         expect(loadsTip({ unoffered: 3 })).toBe('3 of the runs that loaded it have no offer on record')
@@ -271,7 +284,7 @@ describe('the Skills report', () => {
     it('says what the front matter is counted over, split by why the rest is left out, on every visit', () => {
         expect(coverageText({ listed: 19, unsized: 5, unread: 6, counted: 8, unnamed: 0 })).toBe(
             'Front matter is counted over 8 of the 19 runs offered a skill: 5 from before canopy kept a ' +
-                "description's length, 6 with no session read yet.",
+                "skill's length, 6 with no model calls on record.",
         )
         expect(coverageText({ listed: 1, unsized: 0, unread: 0, counted: 1, unnamed: 2 })).toBe(
             'Front matter is counted over each of the 1 run offered a skill. 2 loads named no skill canopy could ' +
@@ -336,8 +349,8 @@ describe('the Skills report', () => {
         const counted = { skills: 7, listed: 4, unsized: 0, unread: 2, counted: 2, calls: 128 }
         expect(agentCallTip(counted)).toBe('over 128 model calls, in 2 of 4 runs offered a skill')
         expect(agentCallTip({ ...counted, counted: 0, calls: 0, unsized: 1, unread: 3 })).toBe(
-            "none of its 4 runs offered a skill is counted: 1 from before canopy kept a description's length, 3 " +
-                'with no session read yet',
+            "none of its 4 runs offered a skill is counted: 1 from before canopy kept a skill's length, 3 " +
+                'with no model calls on record',
         )
         // Known to carry none, which is a zero, against nothing known, which is a dash.
         expect(agentCallTip({ ...counted, skills: 0, listed: 0 })).toBe('offered no skill, so its calls carry none')

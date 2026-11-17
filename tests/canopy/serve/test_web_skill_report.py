@@ -41,14 +41,14 @@ def test_the_skills_report_counts_each_skill_by_agent_and_says_what_it_cannot(ca
         assert run.lastrowid is not None
         runs.append(run.lastrowid)
     first, second, before = runs
-    sizes = {"audit": 395, "terse": 0}
+    sizes = {"audit": 400, "terse": 5}
     run_offers.record(
         ctx.conn,
         "runs",
         first,
-        AgentOffer("canopy-worker", skills=tuple(sizes), description_chars=sizes),
+        AgentOffer("canopy-worker", skills=tuple(sizes), listing_chars=sizes),
     )
-    # The second run's offer is from before canopy kept a description's length, and its session is not read.
+    # The second run's offer is from before canopy kept an entry's length, and its session is not read.
     run_offers.record(ctx.conn, "runs", second, AgentOffer("canopy-worker", skills=tuple(sizes)))
     run_offers.record(ctx.conn, "runs", before, AgentOffer("canopy-worker", skills=("audit",)))
     db.set_run_report(ctx.conn, "runs", first, "s", None, tools=[ToolUse("skill:audit", 2, 1, 8_000)])
@@ -165,7 +165,7 @@ def test_the_skills_report_reads_the_mocks_day_of_offers_and_loads(backend: Back
         "terse",
         "write-a-skill",
     ]
-    # The skills the skills page lists are costed at what it says of them: the name, and the description.
+    # The skills the skills page lists are costed at the mock's entry for each: its name and what the page says of it.
     by_name = {s["name"]: s for s in found["skills"]}
     assert {f.name: by_name[f.name]["front_matter_chars"] for f in listed} == {
         f.name: len(f.name) + len(f.description or "") for f in listed
