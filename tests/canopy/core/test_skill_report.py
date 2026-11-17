@@ -208,19 +208,25 @@ def test_a_skill_is_counted_by_the_runs_offered_it_and_those_that_loaded_it(conn
             runs=2,
             said=2,
             unanswered=0,
-            sized=2,
+            listed=2,
+            unsized=0,
+            unread=0,
             counted=2,
             calls=30,
             sent_chars=(92 + 73 + 5) * 30,
             skills=3,
             unused=2,
+            loads=3,
         ),
         skill_report.Agent(
             agent="canopy-reviewer",
             runs=1,
             said=1,
             unanswered=0,
-            sized=1,
+            listed=1,
+            unsized=0,
+            # Its lengths are on record; its session, which says its model calls, is not read.
+            unread=1,
             counted=0,
             calls=0,
             sent_chars=0,
@@ -229,13 +235,17 @@ def test_a_skill_is_counted_by_the_runs_offered_it_and_those_that_loaded_it(conn
         ),
     ]
     worker_agent, review_agent = found.agents
-    assert (worker_agent.call_chars, review_agent.call_chars) == (170, None)
-    assert (found.runs, found.said, found.counted) == (3, 3, 2)
-    assert (found.sent_chars, found.sent_tokens) == (5100, 5100 // spend.CHARS_PER_TOKEN)
+    tokens = spend.CHARS_PER_TOKEN
+    assert (worker_agent.call_tokens, worker_agent.sent_tokens) == (170 // tokens, 5100 // tokens)
+    # Offered skills, and no run counted: what its list costs is not known, which is not nothing.
+    assert (review_agent.call_tokens, review_agent.sent_tokens) == (None, None)
+    assert (found.runs, found.listed, found.unread, found.counted) == (3, 3, 1, 2)
+    assert found.sent_tokens == 5100 // tokens
     # Over the calls counted, the worker's thirty: a mean, so the reviewer's run, not counted, moves it no way.
-    assert found.call_chars == 170
-    assert tracker["canopy-worker"].sent_tokens == 92 * 30 // spend.CHARS_PER_TOKEN
-    assert tracker["canopy-worker"].result_tokens == 12_100 // spend.CHARS_PER_TOKEN
+    assert found.call_tokens == 170 // tokens
+    assert tracker["canopy-worker"].sent_tokens == 92 * 30 // tokens
+    assert tracker["canopy-reviewer"].sent_tokens is None
+    assert tracker["canopy-worker"].result_tokens == 12_100 // tokens
 
 
 def test_what_the_journal_cannot_say_is_counted_apart(conn: sqlite3.Connection) -> None:
@@ -257,8 +267,15 @@ def test_what_the_journal_cannot_say_is_counted_apart(conn: sqlite3.Connection) 
     assert list(by_agent) == ["canopy-worker", "canopy-worker-private", "canopy-planner"]
     shared = by_agent["canopy-worker"]
     assert (shared.runs, shared.said, shared.unanswered, shared.unasked) == (3, 1, 1, 1)
-    assert (shared.sized, shared.counted, shared.calls, shared.sent_chars, shared.call_chars) == (0, 0, 0, 0, None)
-    assert (by_agent["canopy-worker-private"].runs, by_agent["canopy-worker-private"].unasked) == (2, 2)
+    # The one run answered for was offered skills with no length on record: nothing to count a cost over.
+    assert (shared.listed, shared.unsized, shared.unread, shared.counted) == (1, 1, 0, 0)
+    assert (shared.calls, shared.call_tokens, shared.sent_tokens) == (0, None, None)
+    # Its loads canopy could name, and the one it could not, which may be of any skill of its.
+    assert (shared.loads, shared.unnamed) == (1, 1)
+    private = by_agent["canopy-worker-private"]
+    assert (private.runs, private.unasked, private.said, private.loads) == (2, 2, 0, 1)
+    # Never asked about, so not known to be offered none: no cost of nothing.
+    assert (private.carries_none, private.call_tokens, private.sent_tokens) == (False, None, None)
     assert (by_agent["canopy-planner"].runs, by_agent["canopy-planner"].unasked) == (1, 1)
     tracker = uses(found, "tracker-jira")
     assert (tracker["canopy-worker"].offered, tracker["canopy-worker"].front_matter_chars) == (1, None)
@@ -274,11 +291,13 @@ def test_what_the_journal_cannot_say_is_counted_apart(conn: sqlite3.Connection) 
     assert tracker_row.front_matter_chars is None
     # A call canopy could not read the skill of counts under no skill; the one that failed loaded nothing.
     assert found.unnamed == 1
-    assert (found.runs, found.said, found.counted, found.sent_chars) == (6, 1, 0, 0)
+    assert (found.runs, found.unanswered, found.unasked) == (6, 1, 4)
+    assert (found.listed, found.unsized, found.unread, found.counted) == (1, 1, 0, 0)
+    assert (found.sent_tokens, found.call_tokens) == (None, None)
 
 
 def test_the_overseer_offered_no_skill_is_an_agent_that_carries_none(conn: sqlite3.Connection) -> None:
-    """Its skill tool denied, it is sent no list: answered for, sized, and counted at nothing a call."""
+    """Its skill tool denied, it is sent no list: a known nothing a call, and no part of what a cost is counted over."""
     day = earlier(NOW, 1)
     ran = tick(conn, day)
     offered(conn, "ticks", ran, "canopy-overseer", {})
@@ -292,13 +311,25 @@ def test_the_overseer_offered_no_skill_is_an_agent_that_carries_none(conn: sqlit
         runs=1,
         said=1,
         unanswered=0,
-        sized=1,
-        counted=1,
-        calls=4,
+        listed=0,
+        unsized=0,
+        unread=0,
+        counted=0,
+        calls=0,
         sent_chars=0,
     )
-    assert overseer.call_chars == 0
+    assert (overseer.carries_none, overseer.call_tokens, overseer.sent_tokens) == (True, 0, 0)
     assert found.skills == []
+    # No run offered a skill, so none is counted: the window has no cost to say, not a cost of nothing.
+    assert (found.listed, found.counted, found.sent_tokens, found.call_tokens) == (0, 0, None, None)
+    # Beside a worker's run, its calls thin no mean: the mean of a call is over the runs offered a skill.
+    run = worker(conn, day)
+    offered(conn, "runs", run, "canopy-worker", {"audit": 395})
+    called(conn, "runs", run, 6)
+    found = skill_report.report(conn, NOW, 7)
+    assert (found.listed, found.counted) == (1, 1)
+    assert found.call_tokens == 400 // spend.CHARS_PER_TOKEN
+    assert found.sent_tokens == 400 * 6 // spend.CHARS_PER_TOKEN
 
 
 def test_a_skill_s_front_matter_is_its_newest_offer_s(conn: sqlite3.Connection) -> None:
@@ -349,8 +380,8 @@ def test_only_the_window_s_ended_runs_are_read(conn: sqlite3.Connection) -> None
     assert [(s.name, s.offered) for s in before.skills] == [("terse", 1)]
     empty = skill_report.between(conn, NOW - timedelta(days=40), NOW - timedelta(days=30))
     assert (empty.skills, empty.agents, empty.unnamed) == ([], [], 0)
-    assert (empty.offered, empty.unused, empty.loads, empty.runs, empty.sent_tokens) == (0, 0, 0, 0, 0)
-    assert empty.call_chars is None
+    assert (empty.offered, empty.unused, empty.loads, empty.runs) == (0, 0, 0, 0)
+    assert (empty.sent_tokens, empty.call_tokens) == (None, None)
 
 
 def test_each_read_starts_from_the_window_s_runs(tmp_path: Path, journals: Journals) -> None:

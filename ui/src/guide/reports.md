@@ -498,48 +498,53 @@ The Skills page, **Skills** under [Reports](/reports) in the nav, says what your
 earn it: which skills each agent was offered over the last **7 days** or **30 days**, which it loaded, and what each
 one's front matter added to every model call along the way. It is not [Settings' Skills page](settings#skills), which
 lists the skills the runtime finds now and what each says of itself; this one counts what the runs did with them. The
-line under the title is the window at a glance, `8 skills offered over 7 days · 4 never loaded · ~88.6k tokens of
-front matter`, and the figures under it are its headline: the skills offered, how many no run loaded, the loads, and
-what the front matter adds to a model call and came to over the window.
+line under the title is the window at a glance, `8 skills offered over 7 days · 4 never loaded · front matter ~88.6k
+tokens in 8 of 19 runs offered a skill`, and the figures under it are its headline: the skills offered, how many no
+run loaded, and what their front matter adds to a model call and came to over the window.
 
 Three words do the work. A skill is **offered** to a run when it is in the list the runtime sends it: its name and
 description, its **front matter**, ride in every model call of that run whether the agent wants them or not. A skill
 is **loaded** when the agent calls the skill tool and reads its text. Offering is cheap and paid on every call;
 loading is dear and paid once, and then each later call of the run reads the text again.
 
-- **By skill**: a row per skill, opening on the one whose front matter cost the most. The runs offered it, the runs
-  that loaded it and their share as a bar; then its front matter, in tokens a call and over the window; then its loads
-  and what their text put into context. `never loaded` marks a skill no run of any agent loaded: its front matter rode
-  along all the same. The toggle in the header orders the rows by front matter, by the lowest load rate, by the most
-  loads, or by name.
-- **By skill and agent**: the same skills in the same order, a column per agent. Each cell is the agent's runs that
-  loaded the skill of its runs offered it, `1/4`, with a bar of that share. An empty bar is a skill the agent was
-  offered and never loaded, which is a line of your runtime config waiting to be written; a dash is one it was never
-  offered. Hover a cell for what that pairing's front matter came to.
-- **By agent**: each agent's runs, the skills they were offered and how many of those none of them loaded, and what
-  the whole list adds to one of its model calls. The overseer is offered no skill, on purpose: its skill tool is
-  denied, since it reads no tracker.
+- **Agents**: each agent that ran, the heaviest list first. Its runs, how many have no offer on record, the skills
+  it was offered and how many of those none of its runs loaded, then what the whole list adds to one of its model
+  calls and what that came to. The overseer shows zeros, on purpose: its skill tool is denied, since it reads no
+  tracker. Click an agent's name and the table under it becomes that agent's own; **every agent**, in that table's
+  header, widens it again.
+- **Skills**: a row per skill, over every agent or the one you picked. The runs offered it and the share that loaded
+  it, its front matter in tokens a call and over the window, its loads, the calls for it that failed, and what its
+  text put into context. A skill offered and loaded in no run says `never` where its rate would be. The toggle orders
+  the rows: **front matter** is the costliest first, **least loaded** the never-loaded first with the costliest
+  leading, **most loaded** the other end. Pick an agent and press **least loaded**, and you are looking at the list of
+  skills to deny it, in the order that saves the most.
 
-Read a high load rate with care. Every worker, plan, and review prompt tells its agent to load the tracker's skill
-first, so that one is loaded by nearly every run because it was told to be. That is the prompt at work, not a skill
-with boundary issues.
+Read both ends of the load rate with care. Every worker, plan, and review prompt tells its agent to load the
+tracker's skill first, so that one is loaded by nearly every run because it was told to be: the prompt at work, not a
+skill with boundary issues. And `never` over a week is thinner than it sounds. The page can't tell a skill nobody
+needs from one whose kind of work didn't come up, so check how many runs it was offered to, and try 30 days, before
+you deny anything on the strength of a quiet Tuesday. A failed call is usually good news: it is what an agent asking
+for a skill you denied looks like.
 
 Every count of tokens here is an estimate, characters over four, and a count of front matter is not a bill: most of
 those tokens are read from the model's cache, which is cheaper than sending them fresh. They are context carried all
 the same, in every call, so a long description on a skill nobody loads is worth a second look. The remedy is the one
 [Settings](settings#skills) names: deny the skill to the agent, by name, in your runtime config, or shorten what it
-says of itself.
+says of itself. A deny shows here slowly, since the runs from before it stay in the window; `canopy agents` says what
+an agent is offered right now.
 
-What the page can't see, it counts apart rather than as zero:
+What the page can't see, it counts apart rather than as zero, and says so under each table:
 
 - A skill counts as offered to a run only when the runtime answered for that run. A task's run and an epic's plan run
-  are never asked, and a run from before canopy asked has nothing on record. Their loads count all the same.
-- Front matter is its length at each run times the run's model calls, so it is counted over the runs whose offer
-  recorded each description's length and whose session canopy has read. A run from before canopy kept the length
-  shows a dash, and the line under the table says how many runs the figures cover.
+  are never asked, and a run from before canopy asked has nothing on record. Those runs count under the agent canopy
+  ships for their kind, and their loads count all the same.
+- Front matter is a skill's length at each run for each of that run's model calls, so it is counted over the runs
+  whose offer recorded the descriptions' lengths and whose session canopy has read. A run from before canopy kept the
+  length is left out, the figures show a dash until one is counted, and the line under the title says how many runs
+  they cover.
 - The runtime counts a load under a name of lowercase letters, digits, and single hyphens. A skill named any other way
-  shows `loads not counted`, rather than being accused of never loading.
+  has its loads counted under no name, so its row shows dashes rather than accuse it of never loading. A load that
+  named no skill at all could be of any of them, which the line under the table admits.
 
 A day runs midnight to midnight on the clock of the machine canopy runs on, and a run counts on the day it started,
-once it has ended. The page reads the journal alone: it starts no runtime and changes no skill. What an agent is
-offered right now is `canopy agents`.
+once it has ended. The page reads the journal alone: it starts no runtime and changes no skill.

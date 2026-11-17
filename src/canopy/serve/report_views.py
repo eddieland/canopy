@@ -430,10 +430,14 @@ def skills_report(backend: Backend, ctx: Context, days: int) -> SkillsReport:
         loads=found.loads,
         unnamed=found.unnamed,
         runs=found.runs,
-        said=found.said,
+        unanswered=found.unanswered,
+        unasked=found.unasked,
+        listed=found.listed,
+        unsized=found.unsized,
+        unread=found.unread,
         counted=found.counted,
-        est_sent_tokens=found.sent_tokens,
-        est_call_tokens=_est_tokens(found.call_chars),
+        est_front_matter_tokens=found.sent_tokens,
+        est_call_tokens=found.call_tokens,
         skills=[_skill(s) for s in found.skills],
         agents=[_skill_agent(a) for a in found.agents],
         previous=SkillsPrevious(
@@ -441,10 +445,7 @@ def skills_report(backend: Backend, ctx: Context, days: int) -> SkillsReport:
             until=db.parse_time(before.until),
             offered=before.offered,
             unused=before.unused,
-            loads=before.loads,
-            counted=before.counted,
-            est_sent_tokens=before.sent_tokens,
-            est_call_tokens=_est_tokens(before.call_chars),
+            est_call_tokens=before.call_tokens,
         ),
     )
 
@@ -703,7 +704,6 @@ def _est_tokens(chars: int | None) -> int | None:
 
 
 def _skill(found: skill_report.Skill) -> SkillsSkill:
-    chars = found.front_matter_chars
     return SkillsSkill(
         name=found.name,
         countable=found.countable,
@@ -713,12 +713,12 @@ def _skill(found: skill_report.Skill) -> SkillsSkill:
         unoffered=found.unoffered,
         loads=found.loads,
         failed=found.failed,
-        est_result_tokens=found.result_chars // spend.CHARS_PER_TOKEN,
-        front_matter_chars=chars,
-        est_front_matter_tokens=_est_tokens(chars),
+        est_body_tokens=found.result_chars // spend.CHARS_PER_TOKEN,
+        front_matter_chars=found.front_matter_chars,
+        est_call_tokens=_est_tokens(found.front_matter_chars),
         counted=found.counted,
         calls=found.calls,
-        est_sent_tokens=found.sent_chars // spend.CHARS_PER_TOKEN,
+        est_front_matter_tokens=found.sent_chars // spend.CHARS_PER_TOKEN if found.counted else None,
         uses=[
             SkillsUse(
                 agent=u.agent,
@@ -727,11 +727,12 @@ def _skill(found: skill_report.Skill) -> SkillsSkill:
                 unoffered=u.unoffered,
                 loads=u.loads,
                 failed=u.failed,
-                est_result_tokens=u.result_tokens,
+                est_body_tokens=u.result_tokens,
                 front_matter_chars=u.front_matter_chars,
+                est_call_tokens=_est_tokens(u.front_matter_chars),
                 counted=u.counted,
                 calls=u.calls,
-                est_sent_tokens=u.sent_tokens,
+                est_front_matter_tokens=u.sent_tokens,
             )
             for u in found.uses
         ],
@@ -739,18 +740,24 @@ def _skill(found: skill_report.Skill) -> SkillsSkill:
 
 
 def _skill_agent(found: skill_report.Agent) -> SkillsAgent:
+    # With no run answered for, nothing says what it was offered: not known, where an agent offered none is 0.
+    answered = found.said > 0
     return SkillsAgent(
         agent=found.agent,
         runs=found.runs,
-        said=found.said,
         unanswered=found.unanswered,
         unasked=found.unasked,
+        listed=found.listed,
+        unsized=found.unsized,
+        unread=found.unread,
         counted=found.counted,
         calls=found.calls,
-        skills=found.skills,
-        unused=found.unused,
-        est_call_tokens=_est_tokens(found.call_chars),
-        est_sent_tokens=found.sent_chars // spend.CHARS_PER_TOKEN,
+        skills=found.skills if answered else None,
+        unused=found.unused if answered else None,
+        loads=found.loads,
+        unnamed=found.unnamed,
+        est_call_tokens=found.call_tokens,
+        est_front_matter_tokens=found.sent_tokens,
     )
 
 

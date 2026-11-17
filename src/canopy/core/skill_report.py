@@ -9,7 +9,8 @@ window and have ended, by the agent each ran and the skill.
 What the journal cannot say is counted apart, never as nothing: a run the runtime was not asked about (a task's, an
 epic's plan, or one from before canopy asked), one it could not answer for, an offer from before canopy kept a
 description's length, and a run whose session, which says how many model calls it made, is not read. A front matter
-cost is counted only over the runs where the length and the model calls are both known.
+cost is counted only over the runs offered a skill where the length and the model calls are both known; a run offered
+none, as the overseer's are, carries none and is no part of what a cost is counted over.
 """
 
 from __future__ import annotations
@@ -72,14 +73,18 @@ class Use:
     sent_chars: int = 0
 
     @property
-    def sent_tokens(self) -> int:
-        """About how many tokens its front matter added to the counted runs' model calls: an estimate."""
-        return self.sent_chars // spend.CHARS_PER_TOKEN
+    def sent_tokens(self) -> int | None:
+        """About how many tokens its front matter added to the counted runs' model calls: an estimate.
+
+        Returns:
+            The tokens; None when no run is counted, which is not known and not none.
+        """
+        return _tokens(self.sent_chars) if self.counted else None
 
     @property
     def result_tokens(self) -> int:
         """About how many tokens its loads returned: an estimate."""
-        return self.result_chars // spend.CHARS_PER_TOKEN
+        return _tokens(self.result_chars)
 
 
 @dataclass(frozen=True)
@@ -142,7 +147,7 @@ class Skill:
 
     @property
     def unused(self) -> bool:
-        """Whether it was offered and never loaded, by any agent, where a load of it would have been counted."""
+        """Whether it was offered and never loaded, in any run of any agent's, where a load would have been counted."""
         return self.countable and self.offered > 0 and self.loads == 0
 
 
@@ -157,9 +162,14 @@ class Agent:
     said: int
     #: The runs the runtime was asked about and could not answer for.
     unanswered: int
-    #: Of the runs it answered for, those whose offer recorded every offered skill's description length.
-    sized: int
-    #: Of those, the runs whose session, read, says how many model calls they made: what a cost is counted over.
+    #: Of the runs it answered for, those offered a skill: what a front matter cost could be counted over. A run
+    #: offered none carries none.
+    listed: int
+    #: Of those, the runs whose offer is from before canopy kept a description's length.
+    unsized: int
+    #: Of those, the runs whose lengths are on record and whose session, which says its model calls, is not read.
+    unread: int
+    #: The rest of them: the runs a front matter cost is counted over.
     counted: int
     #: The model calls the counted runs made.
     calls: int
@@ -169,6 +179,10 @@ class Agent:
     skills: int = 0
     #: Of those, the ones none of its runs loaded, where a load would have been counted.
     unused: int = 0
+    #: Its loads, of every skill canopy could name, in every run.
+    loads: int = 0
+    #: Its loads canopy could not read the skill of: any of its skills may be among them.
+    unnamed: int = 0
 
     @property
     def unasked(self) -> int:
@@ -176,13 +190,29 @@ class Agent:
         return self.runs - self.said - self.unanswered
 
     @property
-    def call_chars(self) -> int | None:
-        """What the skills' front matter added to one of its model calls, the counted runs' mean, in characters.
+    def carries_none(self) -> bool:
+        """Whether its runs are known to be offered no skill: the runtime answered for some, and offered none one."""
+        return self.said > 0 and self.listed == 0
+
+    @property
+    def sent_tokens(self) -> int | None:
+        """About how many tokens its skills' front matter added to its counted runs' model calls: an estimate.
 
         Returns:
-            The characters; None when no model call is counted.
+            The tokens, 0 for an agent offered no skill; None when it was offered some and no run is counted.
         """
-        return round(self.sent_chars / self.calls) if self.calls else None
+        return _tokens(self.sent_chars) if self.counted or self.carries_none else None
+
+    @property
+    def call_tokens(self) -> int | None:
+        """About how many tokens its skills' front matter added to one of its model calls, the counted runs' mean.
+
+        Returns:
+            The tokens, 0 for an agent offered no skill; None when it was offered some and no model call is counted.
+        """
+        if self.calls:
+            return _tokens(round(self.sent_chars / self.calls))
+        return 0 if self.carries_none else None
 
 
 @dataclass(frozen=True)
@@ -196,8 +226,6 @@ class Skills:
     skills: Sequence[Skill] = ()
     #: A row per agent that ran, in `AGENTS` order, then any other by name.
     agents: Sequence[Agent] = ()
-    #: The loads canopy could not read the skill of, which count under no skill.
-    unnamed: int = 0
 
     @property
     def offered(self) -> int:
@@ -215,14 +243,39 @@ class Skills:
         return sum(s.loads for s in self.skills)
 
     @property
+    def unnamed(self) -> int:
+        """The loads canopy could not read the skill of, which count under no skill."""
+        return sum(a.unnamed for a in self.agents)
+
+    @property
     def runs(self) -> int:
         """The window's runs, of every agent."""
         return sum(a.runs for a in self.agents)
 
     @property
-    def said(self) -> int:
-        """Of those, the runs the runtime said what it offered."""
-        return sum(a.said for a in self.agents)
+    def unanswered(self) -> int:
+        """Of those, the runs the runtime was asked about and could not answer for."""
+        return sum(a.unanswered for a in self.agents)
+
+    @property
+    def unasked(self) -> int:
+        """Of those, the runs the runtime was never asked about."""
+        return sum(a.unasked for a in self.agents)
+
+    @property
+    def listed(self) -> int:
+        """Of the runs the runtime answered for, those offered a skill."""
+        return sum(a.listed for a in self.agents)
+
+    @property
+    def unsized(self) -> int:
+        """Of those, the runs whose offer has no description's length."""
+        return sum(a.unsized for a in self.agents)
+
+    @property
+    def unread(self) -> int:
+        """Of those, the runs whose session is not read."""
+        return sum(a.unread for a in self.agents)
 
     @property
     def counted(self) -> int:
@@ -230,26 +283,26 @@ class Skills:
         return sum(a.counted for a in self.agents)
 
     @property
-    def sent_chars(self) -> int:
-        """What the skills' front matter added to the counted runs' model calls, in characters."""
-        return sum(a.sent_chars for a in self.agents)
-
-    @property
-    def sent_tokens(self) -> int:
-        """About how many tokens that is: an estimate."""
-        return self.sent_chars // spend.CHARS_PER_TOKEN
-
-    @property
-    def call_chars(self) -> int | None:
-        """What the skills' front matter added to one model call, the counted runs' mean, in characters.
-
-        A mean over the calls counted, so it holds while only some runs are: where `sent_chars` grows with them.
+    def sent_tokens(self) -> int | None:
+        """About how many tokens the skills' front matter added to the counted runs' model calls: an estimate.
 
         Returns:
-            The characters; None when no model call is counted.
+            The tokens; None when no run offered a skill is counted, which is not known and not none.
+        """
+        return _tokens(sum(a.sent_chars for a in self.agents)) if self.counted else None
+
+    @property
+    def call_tokens(self) -> int | None:
+        """About how many tokens it added to one model call of a run offered a skill, the counted runs' mean.
+
+        A mean over the calls counted, so it holds while only some runs are, where the sum grows with them. The calls
+        of a run offered no skill are no part of it: how many ticks ran would move it otherwise.
+
+        Returns:
+            The tokens; None when no model call is counted.
         """
         calls = sum(a.calls for a in self.agents)
-        return round(self.sent_chars / calls) if calls else None
+        return _tokens(round(sum(a.sent_chars for a in self.agents) / calls)) if calls else None
 
 
 def report(conn: sqlite3.Connection, now: datetime, days: int) -> Skills:
@@ -283,13 +336,13 @@ def between(conn: sqlite3.Connection, start: datetime, end: datetime) -> Skills:
         )
         for name, by_agent in sorted(uses.items())
     ]
+    unnamed = {load.agent: load.loads for load in loads if not load.skill}
     return Skills(
         since=since,
         until=until,
         days=spend.days_between(start, end),
         skills=skills,
-        agents=_agents(ran, skills),
-        unnamed=sum(load.loads for load in loads if not load.skill),
+        agents=_agents(ran, skills, unnamed),
     )
 
 
@@ -330,7 +383,9 @@ class _Ran(records.View):
     runs: int
     said: int
     unanswered: int
-    sized: int
+    listed: int
+    unsized: int
+    unread: int
     counted: int
     calls: int
     sent_chars: int
@@ -366,6 +421,10 @@ _SHIPPED: Mapping[RunTable, sql.Fragment] = {
 _CALLS: LiteralString = "(SELECT SUM(m.replies) FROM run_models m WHERE m.run_table = ? AND m.run_id = r.id)"
 #: A figure, the `{}`, over the skills a run `r` was offered. The `?` is the run's table.
 _LIST: LiteralString = "(SELECT {} FROM run_offered_skills s WHERE s.run_table = ? AND s.run_id = r.id)"
+#: Of the rows `_ran` reads, a run the runtime answered for that was offered a skill, and one of those with every
+#: skill's length on record.
+_LISTED = sql.frag("said AND skills > 0")
+_SIZED = sql.frag("said AND skills > 0 AND sized")
 #: What a call of the skill tool is counted under when canopy cannot read which skill it loaded: the tool's own name.
 _UNNAMED: Final = SKILL_PREFIX.removesuffix(":")
 
@@ -444,14 +503,16 @@ def _loaded(since: str, until: str) -> sql.Select:
 
 
 # Each agent's runs, and how far the journal says what they were offered and how often they called a model. A run is
-# `sized` when every skill it was offered has its description's length, as one offered none does. Its skills are
-# summed run by run rather than joined and grouped, which would have SQLite walk the run table whole, by its key.
+# `sized` when every skill it was offered has its description's length. Its skills are summed run by run rather than
+# joined and grouped, which would have SQLite walk the run table whole, by its key. A cost is counted over the runs
+# offered a skill alone: one offered none carries none, and its calls would only thin the mean of a call.
 def _ran(since: str, until: str) -> sql.Select:
     each = [
         sql.select(
             "coalesce(o.agent, {}) AS agent, o.run_id IS NOT NULL AND o.error IS NULL AS said, "
-            "o.error IS NOT NULL AS unanswered, {} AS sized, {} AS calls, {} AS chars",
+            "o.error IS NOT NULL AS unanswered, {} AS skills, {} AS sized, {} AS calls, {} AS chars",
             _SHIPPED[table],
+            sql.frag(_LIST, sql.frag("count(*)"), table),
             sql.frag(_LIST, sql.frag("count(*) = count(s.description_chars)"), table),
             sql.frag(_CALLS, table),
             sql.frag(_LIST, sql.frag("coalesce(SUM(length(s.skill) + s.description_chars), 0)"), table),
@@ -463,10 +524,16 @@ def _ran(since: str, until: str) -> sql.Select:
     ]
     return (
         sql.select(
-            "agent, count(*) AS runs, SUM(said) AS said, SUM(unanswered) AS unanswered, "
-            "SUM(said AND sized) AS sized, SUM(said AND sized AND calls IS NOT NULL) AS counted, "
-            "coalesce(SUM(CASE WHEN said AND sized THEN calls END), 0) AS calls, "
-            "coalesce(SUM(CASE WHEN said AND sized THEN chars * calls END), 0) AS sent_chars",
+            "agent, count(*) AS runs, SUM(said) AS said, SUM(unanswered) AS unanswered, SUM({}) AS listed, "
+            "SUM({} AND NOT sized) AS unsized, SUM({} AND calls IS NULL) AS unread, "
+            "SUM({} AND calls IS NOT NULL) AS counted, coalesce(SUM(CASE WHEN {} THEN calls END), 0) AS calls, "
+            "coalesce(SUM(CASE WHEN {} THEN chars * calls END), 0) AS sent_chars",
+            _LISTED,
+            _LISTED,
+            _SIZED,
+            _SIZED,
+            _SIZED,
+            _SIZED,
         )
         .from_("({}) AS u", sql.union(*each, every=True))
         .group_by("agent")
@@ -506,29 +573,39 @@ def _uses(offers: Iterable[_Offered], loads: Iterable[_Loaded]) -> dict[str, lis
     return by_skill
 
 
-def _agents(ran: Iterable[_Ran], skills: Sequence[Skill]) -> list[Agent]:
-    """Each agent that ran, with how many skills its runs were offered and how many of those none of them loaded.
+def _agents(ran: Iterable[_Ran], skills: Sequence[Skill], unnamed: Mapping[str, int]) -> list[Agent]:
+    """Each agent that ran: the skills its runs were offered, those none of them loaded, and its loads.
+
+    `unnamed` is each agent's loads canopy could not read the skill of.
 
     Returns:
         The agents, in their order.
     """
-    uses = [u for s in skills for u in s.uses if u.offered]
+    uses = [u for s in skills for u in s.uses]
     countable = {s.name for s in skills if s.countable}
-    return [
-        Agent(
-            agent=r.agent,
-            runs=r.runs,
-            said=r.said,
-            unanswered=r.unanswered,
-            sized=r.sized,
-            counted=r.counted,
-            calls=r.calls,
-            sent_chars=r.sent_chars,
-            skills=sum(1 for u in uses if u.agent == r.agent),
-            unused=sum(1 for u in uses if u.agent == r.agent and u.loads == 0 and u.skill in countable),
+    found: list[Agent] = []
+    for r in sorted(ran, key=lambda r: _agent_order(r.agent)):
+        own = [u for u in uses if u.agent == r.agent]
+        offered = [u for u in own if u.offered]
+        found.append(
+            Agent(
+                agent=r.agent,
+                runs=r.runs,
+                said=r.said,
+                unanswered=r.unanswered,
+                listed=r.listed,
+                unsized=r.unsized,
+                unread=r.unread,
+                counted=r.counted,
+                calls=r.calls,
+                sent_chars=r.sent_chars,
+                skills=len(offered),
+                unused=sum(1 for u in offered if u.loads == 0 and u.skill in countable),
+                loads=sum(u.loads for u in own),
+                unnamed=unnamed.get(r.agent, 0),
+            ),
         )
-        for r in sorted(ran, key=lambda r: _agent_order(r.agent))
-    ]
+    return found
 
 
 # The front matter's characters at the newest of the offers that recorded it, by when each one's run started.
@@ -550,3 +627,8 @@ def _agent_order(agent: str) -> tuple[int, str]:
 # Whether a load of a skill is counted under its name, by the rule the runtime's events are read with.
 def _countable(skill: str) -> bool:
     return len(skill) <= MAX_SKILL_NAME and SKILL_NAME_RE.fullmatch(skill) is not None
+
+
+# About how many tokens a count of characters is: an estimate, as wherever canopy counts a tool's result.
+def _tokens(chars: int) -> int:
+    return chars // spend.CHARS_PER_TOKEN

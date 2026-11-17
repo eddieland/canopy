@@ -59,9 +59,11 @@ def test_the_skills_report_counts_each_skill_by_agent_and_says_what_it_cannot(ca
     found = c.get("/api/reports/skills").json()
     assert (found["days"], found["since"], found["until"]) == (7, "2026-11-02T00:00:00Z", "2026-11-09T00:00:00Z")
     assert (found["offered"], found["unused"], found["loads"], found["unnamed"]) == (2, 1, 1, 0)
-    assert (found["runs"], found["said"], found["counted"]) == (2, 2, 1)
+    assert (found["runs"], found["unanswered"], found["unasked"]) == (2, 0, 0)
+    # Both runs were offered skills: one is counted, and the other's offer has no length on record.
+    assert (found["listed"], found["unsized"], found["unread"], found["counted"]) == (2, 1, 0, 1)
     # 400 characters of front matter in each of ten model calls, and five of the other skill's: a thousand tokens.
-    assert found["est_sent_tokens"] == (400 * 10 + 5 * 10) // 4
+    assert found["est_front_matter_tokens"] == (400 * 10 + 5 * 10) // 4
     assert found["est_call_tokens"] == 405 // 4
     audit, terse = found["skills"]
     assert {k: v for k, v in audit.items() if k != "uses"} == {
@@ -73,12 +75,12 @@ def test_the_skills_report_counts_each_skill_by_agent_and_says_what_it_cannot(ca
         "unoffered": 0,
         "loads": 1,
         "failed": 1,
-        "est_result_tokens": 2_000,
+        "est_body_tokens": 2_000,
         "front_matter_chars": 400,
-        "est_front_matter_tokens": 100,
+        "est_call_tokens": 100,
         "counted": 1,
         "calls": 10,
-        "est_sent_tokens": 1_000,
+        "est_front_matter_tokens": 1_000,
     }
     assert audit["uses"] == [
         {
@@ -88,14 +90,15 @@ def test_the_skills_report_counts_each_skill_by_agent_and_says_what_it_cannot(ca
             "unoffered": 0,
             "loads": 1,
             "failed": 1,
-            "est_result_tokens": 2_000,
+            "est_body_tokens": 2_000,
             "front_matter_chars": 400,
+            "est_call_tokens": 100,
             "counted": 1,
             "calls": 10,
-            "est_sent_tokens": 1_000,
+            "est_front_matter_tokens": 1_000,
         },
     ]
-    assert (terse["name"], terse["unused"], terse["front_matter_chars"], terse["est_front_matter_tokens"]) == (
+    assert (terse["name"], terse["unused"], terse["front_matter_chars"], terse["est_call_tokens"]) == (
         "terse",
         True,
         5,
@@ -105,26 +108,28 @@ def test_the_skills_report_counts_each_skill_by_agent_and_says_what_it_cannot(ca
         {
             "agent": "canopy-worker",
             "runs": 2,
-            "said": 2,
             "unanswered": 0,
             "unasked": 0,
+            "listed": 2,
+            "unsized": 1,
+            "unread": 0,
             "counted": 1,
             "calls": 10,
             "skills": 2,
             "unused": 1,
+            "loads": 1,
+            "unnamed": 0,
             "est_call_tokens": 405 // 4,
-            "est_sent_tokens": 4_050 // 4,
+            "est_front_matter_tokens": 4_050 // 4,
         },
     ]
-    # The window before ends where this one starts: its run was offered one skill, with no length, and loaded none.
+    # The window before ends where this one starts: its run was offered one skill, with no length, and loaded none,
+    # so it has no cost to compare with: not known, never a cost of nothing.
     assert found["previous"] == {
         "since": "2026-10-26T00:00:00Z",
         "until": found["since"],
         "offered": 1,
         "unused": 1,
-        "loads": 0,
-        "counted": 0,
-        "est_sent_tokens": 0,
         "est_call_tokens": None,
     }
 
@@ -165,31 +170,38 @@ def test_the_skills_report_reads_the_mocks_day_of_offers_and_loads(backend: Back
     assert {f.name: by_name[f.name]["front_matter_chars"] for f in listed} == {
         f.name: len(f.name) + len(f.description or "") for f in listed
     }
-    assert [
-        (a["agent"], a["runs"], a["said"], a["unanswered"], a["unasked"], a["counted"]) for a in found["agents"]
-    ] == [
-        ("canopy-overseer", 2, 2, 0, 0, 2),
-        ("canopy-worker", 4, 4, 0, 0, 2),
-        # Its two runs of tickets, and five tasks' runs the runtime is never asked about.
-        ("canopy-worker-private", 7, 2, 0, 5, 1),
-        # Five plans' runs, none with its session read, and three epics' plan runs never asked about.
-        ("canopy-planner", 8, 5, 0, 3, 0),
-        ("canopy-reviewer", 6, 5, 1, 0, 3),
-        ("canopy-chore", 1, 1, 0, 0, 1),
-        ("canopy-chore-deps", 2, 2, 0, 0, 1),
+    agents = [
+        (a["agent"], a["runs"], a["unanswered"], a["unasked"], a["listed"], a["counted"]) for a in found["agents"]
     ]
-    overseer, worker, _, planner = found["agents"][:4]
-    # The overseer is sent no list; the worker's costs each call some 390 tokens; the planner's has no call counted.
-    assert (overseer["skills"], overseer["est_call_tokens"]) == (0, 0)
-    assert (worker["skills"], worker["unused"], worker["est_call_tokens"]) == (7, 3, 387)
-    assert (planner["counted"], planner["est_call_tokens"], planner["est_sent_tokens"]) == (0, None, 0)
-    assert (found["runs"], found["said"], found["counted"]) == (30, 21, 10)
+    assert agents == [
+        # Offered no skill: its runs are answered for, and no part of what a cost is counted over.
+        ("canopy-overseer", 2, 0, 0, 0, 0),
+        ("canopy-worker", 4, 0, 0, 4, 2),
+        # Its two runs of tickets, and five tasks' runs the runtime is never asked about.
+        ("canopy-worker-private", 7, 0, 5, 2, 1),
+        # Five plans' runs, none with its session read, and three epics' plan runs never asked about.
+        ("canopy-planner", 8, 0, 3, 5, 0),
+        ("canopy-reviewer", 6, 1, 0, 5, 3),
+        ("canopy-chore", 1, 0, 0, 1, 1),
+        ("canopy-chore-deps", 2, 0, 0, 2, 1),
+    ]
+    overseer, worker, private, planner = found["agents"][:4]
+    # The overseer is sent no list, a known nothing; the worker's costs each call some 390 tokens; the planner's has
+    # no call counted, so nothing says what its list costs.
+    assert (overseer["skills"], overseer["est_call_tokens"], overseer["est_front_matter_tokens"]) == (0, 0, 0)
+    assert (worker["skills"], worker["unused"], worker["loads"], worker["est_call_tokens"]) == (7, 3, 11, 387)
+    assert (planner["counted"], planner["est_call_tokens"], planner["est_front_matter_tokens"]) == (0, None, None)
+    # The call that named no skill was the private worker's: any skill of its may be the one it loaded.
+    assert (private["unnamed"], found["unnamed"]) == (1, 1)
+    assert (found["runs"], found["unanswered"], found["unasked"]) == (30, 1, 8)
+    # Nineteen runs were offered a skill, the overseer's two none: eight are counted, the rest have no session read.
+    assert (found["listed"], found["unsized"], found["unread"], found["counted"]) == (19, 0, 11, 8)
     # The whole, estimated once: not the agents' estimates summed, each of which rounds down.
-    assert found["est_sent_tokens"] == expected.sent_tokens == 88_610
-    # Some 320 tokens of front matter in each of the 279 model calls counted, the overseer's, which carry none, too.
-    assert found["est_call_tokens"] == 317
+    assert found["est_front_matter_tokens"] == expected.sent_tokens == 88_610
+    # Some 350 tokens of front matter in each of the 254 model calls counted: the overseer's calls are not among them.
+    assert found["est_call_tokens"] == 348
     # The month reaches the workers' runs of the weeks before, offered with no length kept: counted over no more runs.
     month = c.get("/api/reports/skills", params={"days": 30}).json()
-    assert (month["days"], month["said"] > found["said"], month["counted"]) == (30, True, found["counted"])
+    assert (month["days"], month["listed"], month["unsized"], month["counted"]) == (30, 24, 5, found["counted"])
     assert c.get("/api/reports/skills", params={"days": 0}).status_code == 422
     assert c.get("/api/reports/skills", params={"days": spend.MAX_DAYS + 1}).status_code == 422

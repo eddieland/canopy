@@ -3,23 +3,27 @@ import { describe, expect, it } from 'vitest'
 import type { SkillsAgent, SkillsSkill, SkillsUse } from '@/api/types'
 
 import {
-    agentNote,
-    agentUse,
-    cellBar,
-    cellText,
-    cellTip,
+    agentCallTip,
+    agentLoadsTip,
     coverageText,
+    frontMatterTip,
     loadRate,
     loadsTip,
-    sentTip,
-    shortAgent,
+    noOffer,
+    noOfferTip,
+    offersText,
+    pickedAgent,
+    rateText,
+    rateTip,
+    skillRows,
+    skillsAgent,
     skillsFigures,
     skillsLine,
     skillsSort,
     skillsWindow,
-    sortedSkills,
+    sortedAgents,
+    sortedRows,
     tokensChange,
-    unaskedText,
 } from './skill-report'
 
 function used(by: string, counts: Partial<SkillsUse> = {}): SkillsUse {
@@ -30,11 +34,12 @@ function used(by: string, counts: Partial<SkillsUse> = {}): SkillsUse {
         unoffered: 0,
         loads: 0,
         failed: 0,
-        est_result_tokens: 0,
+        est_body_tokens: 0,
         front_matter_chars: 100,
+        est_call_tokens: 25,
         counted: 4,
         calls: 40,
-        est_sent_tokens: 1_000,
+        est_front_matter_tokens: 1_000,
         ...counts,
     }
 }
@@ -49,12 +54,12 @@ function skill(name: string, counts: Partial<SkillsSkill> = {}): SkillsSkill {
         unoffered: 0,
         loads: 5,
         failed: 0,
-        est_result_tokens: 2_000,
+        est_body_tokens: 2_000,
         front_matter_chars: 100,
-        est_front_matter_tokens: 25,
+        est_call_tokens: 25,
         counted: 10,
         calls: 100,
-        est_sent_tokens: 2_500,
+        est_front_matter_tokens: 2_500,
         uses: [],
         ...counts,
     }
@@ -64,15 +69,19 @@ function agent(name: string, counts: Partial<SkillsAgent> = {}): SkillsAgent {
     return {
         agent: name,
         runs: 4,
-        said: 4,
         unanswered: 0,
         unasked: 0,
+        listed: 4,
+        unsized: 0,
+        unread: 0,
         counted: 4,
         calls: 40,
         skills: 6,
         unused: 2,
+        loads: 3,
+        unnamed: 0,
         est_call_tokens: 300,
-        est_sent_tokens: 12_000,
+        est_front_matter_tokens: 12_000,
         ...counts,
     }
 }
@@ -86,164 +95,254 @@ describe('the Skills report', () => {
     })
 
     it('keeps an order it offers, and spells the one it opens on as none', () => {
-        expect(skillsSort({ order: 'rate' })).toBe('rate')
-        expect(skillsSort({ order: 'loads' })).toBe('loads')
+        expect(skillsSort({ order: 'least' })).toBe('least')
+        expect(skillsSort({ order: 'most' })).toBe('most')
         expect(skillsSort({ order: 'cost' })).toBeUndefined()
-        expect(skillsSort({ order: 'offered' })).toBeUndefined()
+        expect(skillsSort({ order: 'name' })).toBeUndefined()
         expect(skillsSort({})).toBeUndefined()
     })
 
-    it("says the window's state: the skills offered, those never loaded, and the front matter once counted", () => {
-        const found = { days: 7, offered: 8, unused: 4, counted: 10, est_sent_tokens: 88_610 }
-        expect(skillsLine(found)).toBe('8 skills offered over 7 days · 4 never loaded · ~88.6k tokens of front matter')
-        expect(skillsLine({ ...found, offered: 1, unused: 0 })).toBe(
-            '1 skill offered over 7 days · each one loaded · ~88.6k tokens of front matter',
-        )
-        // No run counted yet: the cost is left out, not said as nothing.
-        expect(skillsLine({ ...found, counted: 0, est_sent_tokens: 0 })).toBe(
-            '8 skills offered over 7 days · 4 never loaded',
-        )
-        expect(skillsLine({ ...found, days: 30, offered: 0, unused: 0 })).toBe('no skill offered over 30 days')
+    it("keeps any agent's name from the search, and holds it to the agents the window has", () => {
+        expect(skillsAgent({ agent: 'canopy-reviewer' })).toBe('canopy-reviewer')
+        expect(skillsAgent({ agent: '' })).toBeUndefined()
+        expect(skillsAgent({ agent: 7 })).toBeUndefined()
+        const agents = [agent('canopy-worker'), agent('canopy-reviewer')]
+        expect(pickedAgent(agents, 'canopy-reviewer')?.agent).toBe('canopy-reviewer')
+        // An agent the window does not have reads as every agent.
+        expect(pickedAgent(agents, 'canopy-planner')).toBeUndefined()
+        expect(pickedAgent(agents, undefined)).toBeUndefined()
     })
 
-    it('has no front matter figure while no run is counted for one, in the window or the one before', () => {
-        const found = { offered: 8, unused: 4, loads: 24, counted: 10, est_sent_tokens: 88_610, est_call_tokens: 317 }
-        expect(skillsFigures(found)).toEqual({ offered: 8, unused: 4, loads: 24, sent: 88_610, call: 317 })
-        expect(skillsFigures({ ...found, counted: 0, est_sent_tokens: 0, est_call_tokens: null })).toEqual({
+    it("says the window's state: the skills offered, those never loaded, and the front matter with its cover", () => {
+        const found = {
+            days: 7,
             offered: 8,
             unused: 4,
             loads: 24,
-            sent: null,
-            call: null,
+            listed: 19,
+            counted: 8,
+            est_front_matter_tokens: 88_610,
+        }
+        expect(skillsLine(found)).toBe(
+            '8 skills offered over 7 days · 4 never loaded · ' +
+                'front matter ~88.6k tokens in 8 of 19 runs offered a skill',
+        )
+        // Counted whole, the cost needs no cover beside it.
+        expect(skillsLine({ ...found, offered: 1, unused: 0, counted: 19 })).toBe(
+            '1 skill offered over 7 days · each one loaded · front matter ~88.6k tokens',
+        )
+        // No run counted yet: not known, which is not a cost of nothing.
+        expect(skillsLine({ ...found, counted: 0, est_front_matter_tokens: null })).toBe(
+            '8 skills offered over 7 days · 4 never loaded · front matter not counted yet',
+        )
+        expect(skillsLine({ ...found, days: 30, offered: 0, unused: 0, loads: 0 })).toBe(
+            'no skill offered over 30 days',
+        )
+        // Loaded by runs nothing says what they were offered.
+        expect(skillsLine({ ...found, offered: 0, unused: 0, loads: 12 })).toBe(
+            'no skill offered over 7 days · 12 loads',
+        )
+    })
+
+    it('compares a window with the one before by its counts and the mean of a call', () => {
+        expect(skillsFigures({ offered: 8, unused: 4, est_call_tokens: 348 })).toEqual({
+            offered: 8,
+            unused: 4,
+            call: 348,
         })
+        expect(skillsFigures({ offered: 4, unused: 3, est_call_tokens: null }).call).toBeNull()
         expect(tokensChange(1_234.4)).toBe('1.2k')
     })
 
-    it('opens on the most front matter sent, then the largest a call, a skill with none on record last', () => {
+    it('lists each skill over every agent, or the skills one agent was offered or loaded, by its own runs', () => {
         const skills = [
-            skill('alpha', { est_sent_tokens: 0, front_matter_chars: null, counted: 0 }),
-            skill('bravo', { est_sent_tokens: 0, front_matter_chars: 400, counted: 0 }),
-            skill('charlie', { est_sent_tokens: 9_000 }),
-            skill('delta', { est_sent_tokens: 9_000, front_matter_chars: 900 }),
+            skill('audit', {
+                uses: [used('canopy-worker', { loaded: 2, loads: 2 }), used('canopy-reviewer', { offered: 3 })],
+            }),
+            skill('terse', { uses: [used('canopy-worker')] }),
+            skill('My_Skill', { countable: false, uses: [used('canopy-reviewer')] }),
         ]
-        expect(sortedSkills(skills).map((s) => s.name)).toEqual(['delta', 'charlie', 'bravo', 'alpha'])
-        expect(sortedSkills(skills, 'name').map((s) => s.name)).toEqual(['alpha', 'bravo', 'charlie', 'delta'])
+        expect(skillRows(skills, undefined).map((r) => r.name)).toEqual(['audit', 'terse', 'My_Skill'])
+        const reviewer = skillRows(skills, 'canopy-reviewer')
+        expect(reviewer.map((r) => [r.name, r.offered, r.unused])).toEqual([
+            // Loaded by the worker, never by the reviewer: unused for this agent, whatever another did.
+            ['audit', 3, true],
+            // A load of it is counted under no name, so it cannot be said never to load.
+            ['My_Skill', 4, false],
+        ])
+        expect(skillRows(skills, 'canopy-worker').map((r) => [r.name, r.unused])).toEqual([
+            ['audit', false],
+            ['terse', true],
+        ])
+    })
+
+    it('opens on the most front matter, then the largest a call, a skill with none on record last', () => {
+        const rows = [
+            skill('alpha', { est_front_matter_tokens: null, front_matter_chars: null, counted: 0 }),
+            skill('bravo', { est_front_matter_tokens: null, front_matter_chars: 400, counted: 0 }),
+            skill('charlie', { est_front_matter_tokens: 9_000 }),
+            skill('delta', { est_front_matter_tokens: 9_000, front_matter_chars: 900 }),
+            skill('echo', { est_front_matter_tokens: 0 }),
+        ]
+        // A cost of nothing is known, and sorts before one that is not.
+        expect(sortedRows(rows).map((r) => r.name)).toEqual(['delta', 'charlie', 'echo', 'bravo', 'alpha'])
     })
 
     it('opens on the most runs offered while no size is on record, as in the first days it is kept', () => {
-        const unsized = { est_sent_tokens: 0, front_matter_chars: null, counted: 0 }
-        const skills = [
+        const unsized = { est_front_matter_tokens: null, front_matter_chars: null, counted: 0 }
+        const rows = [
             skill('alpha', { ...unsized, offered: 2 }),
             skill('bravo', { ...unsized, offered: 19 }),
             skill('charlie', { ...unsized, offered: 19 }),
         ]
-        expect(sortedSkills(skills).map((s) => s.name)).toEqual(['bravo', 'charlie', 'alpha'])
+        expect(sortedRows(rows).map((r) => r.name)).toEqual(['bravo', 'charlie', 'alpha'])
     })
 
-    it('orders by the lowest load rate, the most runs offered first among equals, one never offered last', () => {
-        const skills = [
+    it('orders the least loaded by those never loaded, the costliest first, then the lowest rate', () => {
+        const rows = [
             skill('often', { offered: 10, loaded: 9 }),
-            skill('never-few', { offered: 3, loaded: 0 }),
-            skill('never-many', { offered: 19, loaded: 0 }),
+            skill('rarely', { offered: 10, loaded: 1 }),
+            skill('never-cheap', { unused: true, offered: 19, loaded: 0, loads: 0, est_front_matter_tokens: 300 }),
+            skill('never-dear', { unused: true, offered: 3, loaded: 0, loads: 0, est_front_matter_tokens: 9_000 }),
+            // No run offered it loaded it, and a run with no offer on record did: not a skill to deny.
+            skill('elsewhere', { offered: 5, loaded: 0, loads: 2, unoffered: 2 }),
+            skill('unasked', { offered: 0, loaded: 0 }),
+            skill('Odd_Name', { countable: false, offered: 10, loaded: 0 }),
+        ]
+        expect(sortedRows(rows, 'least').map((r) => r.name)).toEqual([
+            'never-dear',
+            'never-cheap',
+            'elsewhere',
+            'rarely',
+            'often',
+            'Odd_Name',
+            'unasked',
+        ])
+    })
+
+    it('orders the most loaded by the highest rate, the most runs offered among equals, no rate last', () => {
+        const rows = [
+            skill('half', { offered: 10, loaded: 5 }),
+            skill('all-few', { offered: 2, loaded: 2 }),
+            skill('all-many', { offered: 19, loaded: 19 }),
             skill('unasked', { offered: 0, loaded: 0 }),
         ]
-        expect(sortedSkills(skills, 'rate').map((s) => s.name)).toEqual(['never-many', 'never-few', 'often', 'unasked'])
-        expect(loadRate({ offered: 10, loaded: 9 })).toBe(0.9)
-        expect(loadRate({ offered: 0, loaded: 0 })).toBeNull()
+        expect(sortedRows(rows, 'most').map((r) => r.name)).toEqual(['all-many', 'all-few', 'half', 'unasked'])
     })
 
-    it('orders by the most loads, by name among equals', () => {
-        const skills = [skill('b', { loads: 2 }), skill('a', { loads: 2 }), skill('c', { loads: 15 })]
-        expect(sortedSkills(skills, 'loads').map((s) => s.name)).toEqual(['c', 'a', 'b'])
+    it('says never for a skill no run loaded, where a muted zero would bury it, and a dash for no rate', () => {
+        expect(loadRate({ countable: true, offered: 10, loaded: 9 })).toBe(0.9)
+        expect(loadRate({ countable: true, offered: 0, loaded: 0 })).toBeNull()
+        expect(loadRate({ countable: false, offered: 10, loaded: 0 })).toBeNull()
+        expect(rateText({ countable: true, unused: false, offered: 19, loaded: 12 })).toBe('63%')
+        expect(rateText({ countable: true, unused: true, offered: 19, loaded: 0 })).toBe('never')
+        // Loaded by a run with no offer on record: no run offered it loaded it, which is not never.
+        expect(rateText({ countable: true, unused: false, offered: 5, loaded: 0 })).toBe('0%')
+        expect(rateText({ countable: true, unused: false, offered: 0, loaded: 0 })).toBe('–')
+        expect(rateText({ countable: false, unused: false, offered: 10, loaded: 0 })).toBe('–')
     })
 
-    it('says what the front matter is counted over, and why the rest is left out', () => {
-        expect(coverageText({ said: 21, counted: 10, unnamed: 0 })).toBe(
-            'Front matter is counted over 10 of the 21 runs the runtime answered for: a run whose offer is from ' +
-                "before canopy kept a description's length, or whose session is not read yet, is left out.",
+    it('says what a rate counts on its tip, and why a row has none', () => {
+        expect(rateTip({ countable: true, offered: 19, loaded: 12, unoffered: 3 })).toBe(
+            '12 of 19 runs offered it · loaded in 3 runs with no offer on record',
         )
-        expect(coverageText({ said: 1, counted: 1, unnamed: 2 })).toBe(
-            'Front matter is counted over each of the 1 run the runtime answered for. 2 loads named no skill canopy ' +
-                'could read, and count under none.',
+        expect(rateTip({ countable: true, offered: 1, loaded: 0, unoffered: 0 })).toBe('0 of 1 run offered it')
+        expect(rateTip({ countable: true, offered: 0, loaded: 0, unoffered: 2 })).toBe(
+            'no offer on record names it · loaded in 2 runs with no offer on record',
         )
-        expect(coverageText({ said: 0, counted: 0, unnamed: 1 })).toBe(
-            'The runtime answered for no run, so no skill is counted as offered. 1 load named no skill canopy could ' +
-                'read, and counts under none.',
+        expect(rateTip({ countable: false, offered: 4, loaded: 0, unoffered: 0 })).toContain(
+            'its loads are among those that named no skill',
         )
     })
 
-    it('counts the runs no offer is on record for, apart, and says nothing when there are none', () => {
-        expect(unaskedText([agent('a', { unasked: 5 }), agent('b', { unasked: 3, unanswered: 1 })])).toBe(
-            "8 runs were never asked what they were offered: a task's, an epic's plan, or one from before canopy " +
-                'asked. The runtime could not answer for 1 run. Their loads are counted all the same.',
+    it("gives a cost's parts on its tip, never as a product, and says when none is counted", () => {
+        expect(frontMatterTip({ offered: 11, counted: 6, calls: 234 })).toBe(
+            'over 234 model calls, in 6 of 11 runs offered it',
         )
-        expect(unaskedText([agent('a', { unasked: 1 })])).toBe(
-            "1 run was never asked what it was offered: a task's, an epic's plan, or one from before canopy asked. " +
-                'Their loads are counted all the same.',
+        expect(frontMatterTip({ offered: 3, counted: 0, calls: 0 })).toBe(
+            'none of the 3 runs offered it is counted: no length on record, or no session read',
         )
-        expect(unaskedText([agent('a')])).toBe('')
+        expect(frontMatterTip({ offered: 0, counted: 0, calls: 0 })).toBeUndefined()
+        expect(loadsTip({ unoffered: 3 })).toBe('3 of the runs that loaded it have no offer on record')
+        expect(loadsTip({ unoffered: 1 })).toBe('1 of the runs that loaded it has no offer on record')
+        expect(loadsTip({ unoffered: 0 })).toBeUndefined()
     })
 
-    it("heads a column with an agent's name less canopy's prefix, and leaves another's whole", () => {
-        expect(shortAgent('canopy-worker-private')).toBe('worker-private')
-        expect(shortAgent('canopy-chore-deps')).toBe('chore-deps')
-        expect(shortAgent('my-own-agent')).toBe('my-own-agent')
-        expect(shortAgent('canopy-')).toBe('canopy-')
+    it('says what the front matter is counted over, split by why the rest is left out, on every visit', () => {
+        expect(coverageText({ listed: 19, unsized: 5, unread: 6, counted: 8, unnamed: 0 })).toBe(
+            'Front matter is counted over 8 of the 19 runs offered a skill: 5 from before canopy kept a ' +
+                "description's length, 6 with no session read yet.",
+        )
+        expect(coverageText({ listed: 1, unsized: 0, unread: 0, counted: 1, unnamed: 2 })).toBe(
+            'Front matter is counted over each of the 1 run offered a skill. 2 loads named no skill canopy could ' +
+                'read: any skill here may be among them.',
+        )
+        expect(coverageText({ listed: 0, unsized: 0, unread: 0, counted: 0, unnamed: 1 })).toBe(
+            'No run was offered a skill on record, so no front matter is counted. 1 load named no skill canopy ' +
+                'could read: any skill here may be the one it loaded.',
+        )
     })
 
-    it('reads a cell of the grid: loaded of offered, a dash where not offered, and a load with no offer', () => {
-        const row = skill('audit', { uses: [used('canopy-worker', { loaded: 1 }), used('canopy-planner')] })
-        expect(agentUse(row, 'canopy-worker')?.loaded).toBe(1)
-        expect(agentUse(row, 'canopy-reviewer')).toBeUndefined()
-        expect(cellText(agentUse(row, 'canopy-worker'))).toBe('1/4')
-        expect(cellText(agentUse(row, 'canopy-planner'))).toBe('0/4')
-        expect(cellText(undefined)).toBe('–')
-        expect(cellText(used('a', { offered: 0, unoffered: 2 }))).toBe('2 loaded')
-        // A call for it that failed, and nothing else: nothing was offered and nothing loaded.
-        expect(cellText(used('a', { offered: 0, failed: 1 }))).toBe('–')
-        expect(cellBar(agentUse(row, 'canopy-worker'))).toBe(25)
-        expect(cellBar(agentUse(row, 'canopy-planner'))).toBe(0)
-        // Not offered is a share of nothing: no bar, where never loaded is an empty one.
-        expect(cellBar(undefined)).toBeNull()
-        expect(cellBar(used('a', { offered: 0, unoffered: 2 }))).toBeNull()
+    it('counts the runs with no offer on record apart, by why, and says so when every run has one', () => {
+        expect(offersText({ runs: 30, unanswered: 1, unasked: 8 })).toBe(
+            'No offer on record for 9 of 30 runs: the runtime could not answer for 1, and canopy never asked ' +
+                "about 8, a task's, an epic's plan, or one from before it asked. They count under the agent canopy " +
+                'ships for their kind of run, and their loads are counted.',
+        )
+        expect(offersText({ runs: 4, unanswered: 2, unasked: 0 })).toBe(
+            'No offer on record for 2 of 4 runs: the runtime could not answer for 2. They count under the agent ' +
+                'canopy ships for their kind of run, and their loads are counted.',
+        )
+        expect(offersText({ runs: 21, unanswered: 0, unasked: 0 })).toBe('Each of the 21 runs has its offer on record.')
+        expect(offersText({ runs: 0, unanswered: 0, unasked: 0 })).toBe('')
     })
 
-    it('says a cell in words on its tip, with what its front matter cost where that is counted', () => {
-        expect(cellTip(used('canopy-reviewer', { offered: 5, loaded: 2, est_sent_tokens: 656 }))).toBe(
-            'canopy-reviewer: offered in 5 runs, loaded in 2 · ~656 tokens of front matter sent',
-        )
-        expect(cellTip(used('canopy-planner', { offered: 5, counted: 0, est_sent_tokens: 0 }))).toBe(
-            'canopy-planner: offered in 5 runs, loaded in none',
-        )
-        expect(cellTip(used('canopy-worker-private', { offered: 2, loaded: 2, unoffered: 2, counted: 0 }))).toBe(
-            'canopy-worker-private: offered in 2 runs, loaded in 2 · loaded in 2 runs with no offer on record',
-        )
-        expect(cellTip(used('a', { offered: 0, unoffered: 1, counted: 0 }))).toBe(
-            'a: loaded in 1 run with no offer on record',
-        )
-        expect(cellTip(undefined)).toBeUndefined()
-        expect(cellTip(used('a', { offered: 0, failed: 1 }))).toBeUndefined()
+    it('lists the agents by the heaviest list a call, then those not counted, offered none, and unknown', () => {
+        const agents = [
+            agent('canopy-overseer', {
+                skills: 0,
+                unused: 0,
+                listed: 0,
+                est_call_tokens: 0,
+                est_front_matter_tokens: 0,
+            }),
+            agent('canopy-worker', { est_call_tokens: 387 }),
+            agent('canopy-worker-private', { skills: null, unused: null, est_call_tokens: null }),
+            agent('canopy-planner', { counted: 0, est_call_tokens: null, est_front_matter_tokens: null }),
+            agent('canopy-reviewer', { est_call_tokens: 900 }),
+            agent('canopy-chore', { est_call_tokens: 387 }),
+        ]
+        expect(sortedAgents(agents).map((a) => a.agent)).toEqual([
+            'canopy-reviewer',
+            // Equal lists keep the server's order.
+            'canopy-worker',
+            'canopy-chore',
+            'canopy-planner',
+            'canopy-overseer',
+            'canopy-worker-private',
+        ])
     })
 
-    it("says what a skill's loads and its front matter's cost hold besides the figure", () => {
-        expect(loadsTip({ unoffered: 3, failed: 1 })).toBe('loaded in 3 runs with no offer on record · 1 call failed')
-        expect(loadsTip({ unoffered: 0, failed: 2 })).toBe('2 calls failed')
-        expect(loadsTip({ unoffered: 0, failed: 0 })).toBeUndefined()
-        expect(sentTip({ offered: 11, counted: 6, calls: 234 })).toBe('over 6 of 11 runs offered it, 234 model calls')
-        expect(sentTip({ offered: 3, counted: 0, calls: 0 })).toBe('counted over none of the 3 runs offered it')
-        expect(sentTip({ offered: 0, counted: 0, calls: 0 })).toBeUndefined()
+    it("splits an agent's runs with no offer on record by why, on the figure's tip", () => {
+        expect(noOffer({ unasked: 5, unanswered: 1 })).toBe(6)
+        expect(noOfferTip({ unasked: 5, unanswered: 1 })).toBe(
+            'canopy never asked about 5 · the runtime could not answer for 1',
+        )
+        expect(noOfferTip({ unasked: 0, unanswered: 2 })).toBe('the runtime could not answer for 2')
+        expect(noOfferTip({ unasked: 0, unanswered: 0 })).toBeUndefined()
     })
 
-    it("notes what an agent's figures leave out, and nothing for one counted whole", () => {
-        expect(agentNote(agent('canopy-overseer', { skills: 0, unused: 0 }))).toBe('offered no skill')
-        expect(agentNote(agent('canopy-worker-private', { said: 2, unasked: 5, counted: 1 }))).toBe(
-            '5 never asked about · cost counted over 1 of 2',
+    it("says what an agent's cost of a call is a mean over, or why it has none", () => {
+        const counted = { skills: 7, listed: 4, unsized: 0, unread: 2, counted: 2, calls: 128 }
+        expect(agentCallTip(counted)).toBe('over 128 model calls, in 2 of 4 runs offered a skill')
+        expect(agentCallTip({ ...counted, counted: 0, calls: 0, unsized: 1, unread: 3 })).toBe(
+            "none of its 4 runs offered a skill is counted: 1 from before canopy kept a description's length, 3 " +
+                'with no session read yet',
         )
-        expect(agentNote(agent('canopy-reviewer', { said: 5, unanswered: 1, counted: 3 }))).toBe(
-            '1 not answered for · cost counted over 3 of 5',
-        )
-        // A run never asked about has no skills on record: that is not being offered none.
-        expect(agentNote(agent('a', { said: 0, skills: 0, unasked: 3, counted: 0 }))).toBe('3 never asked about')
-        expect(agentNote(agent('canopy-worker'))).toBe('')
+        // Known to carry none, which is a zero, against nothing known, which is a dash.
+        expect(agentCallTip({ ...counted, skills: 0, listed: 0 })).toBe('offered no skill, so its calls carry none')
+        expect(agentCallTip({ ...counted, skills: null, listed: 0 })).toBe('no offer on record for any of its runs')
+        expect(agentLoadsTip({ unnamed: 1 })).toBe('and 1 load that named no skill: any skill of its may be among them')
+        expect(agentLoadsTip({ unnamed: 0 })).toBeUndefined()
     })
 })
