@@ -987,16 +987,29 @@ reader, so no table repeats them.
   the header's tick colors (`src/lib/ticks.ts`), then its id as a link, a `dry run` chip, how many decisions, its cost,
   tokens, and peak context, and when it ended; its summary under, from its id.
 - **A transcript** (`TranscriptPanel`) is a session's events as rows, in the order the runtime printed them, each with
-  its time from the session's first event. The agent's text keeps its line breaks, its reasoning muted and italic
+  its time from the session's first event. The rows hang on a thread, a hairline down the column of their marks, and
+  have no hairlines between them: a tool call's mark is its `RunDot`, the agent's words a ring, its reasoning a small
+  dot, a model call a diamond. A model call's line sits in a band of the canvas's color, so the rows between two bands
+  read as one turn. The agent's text keeps its line breaks, held to a paragraph's measure, and text that is JSON whole,
+  as a worker's result is, is colored as a call's output is; its reasoning is muted and italic
   under a `thinking` label, folded past four lines as rich text folds. A tool call is a native `<details>` whose line
-  says what it did and how it ended (`src/lib/transcript.ts`): a `RunDot` in `done` or `failed`, the tool's name, and in
+  says what it did and how it ended (`src/lib/transcript.ts`): a `RunDot` in `done` or `failed`, a muted icon for its
+  kind, read from its input's keys and never from its name (`toolKind`), the tool's name in medium weight, and in
   monospace a shell call's command after the directory it ran in, muted: on a run's page named from its repository
   inside the run's worktrees (`web $`, `web/src $`), whole in `status-blocked` outside them, so a call that wandered
   off stands out; the line whole on hover. Else the runtime's title, else its input's short values; under that, muted,
   its error's first line in `status-failed` or an output of one short line; then how long it took. A canopy command that
   printed a refusal is `failed`, with a `refused: <guard>` chip. It opens to its input and its output, JSON colored as
-  a tick's output is, every value as written. A model call is a muted line with its number, its tokens `in · out`, and
-  its cost, opening to its tokens by kind and the input and output sections By call shows, built only when opened. A
+  a tick's output is, every value as written. A model call is a muted line with its number, a short bar of what it was
+  sent beside the session's peak in the context chart's fills, its tokens `in · out`, and its cost, opening to its
+  tokens by kind and the input and output sections By call shows, built only when opened.
+  A call of canopy's own tools (`canopy_run_status`, a run's `result`, `messages`) reads as what it was, in prose where
+  another's line is monospace: a progress update's line is its summary, then what it did now, its steps done, and
+  `asks the operator` in `status-blocked`, and it opens to the card as it stood at that call (`RunProgress`), its
+  question's options lettered and none a button, since the record of a call answers nothing; a result's line is its
+  status as a chip and its summary's first line, opening to the summary as rich text, its question, and each
+  repository's PR; a messages call says how many of the operator's messages it heard. Each keeps its input and
+  output under, as written. A
   runtime error is tinted `status-failed`. The header has the session id, then a hairline rule and the modes: the
   order, By call, and All open, a `Toggle` that opens every call. Above the rows, how many tool calls, failed and
   refused ones, and model calls, and at that line's end a search field (`Find lines`), which keeps only the rows with

@@ -181,8 +181,16 @@ test("a failed run's Run panel names the error it ended on, and a running one's 
     // Its latest tool call is on its row, and the calls so far in its transcript.
     await expect(page.getByTestId('run-doing')).toContainText('bashnpm test -- login')
     const tools = page.getByTestId('transcript').getByTestId('transcript-tool')
-    await expect(tools).toHaveCount(2)
+    await expect(tools).toHaveCount(3)
     await expect(tools.last()).toContainText('npm test -- login')
+    // Its progress update, canopy's own call, opens to the card it posted then, its question unanswerable there.
+    const posted = tools.filter({ hasText: 'canopy_run_status' })
+    await expect(posted).toContainText('0/4 steps done')
+    await posted.locator('summary').click()
+    const card = posted.getByTestId('transcript-card')
+    await expect(card).toContainText('Add the SSO callback route')
+    await expect(card).toContainText('hide the form behind a link')
+    await expect(card.getByRole('button', { name: /hide the form/u })).toHaveCount(0)
 })
 
 test("a run's page names the worktrees it worked in, and a shell call's line its directory from them", async ({

@@ -1,4 +1,16 @@
-import { ChevronRight, ChevronsUpDown, Rows3 } from 'lucide-react'
+import {
+    ChevronRight,
+    ChevronsUpDown,
+    FilePen,
+    FileText,
+    Globe,
+    Rows3,
+    Search,
+    Sprout,
+    SquareTerminal,
+    Wrench,
+} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 
@@ -17,11 +29,15 @@ import { Cost } from '@/components/cost'
 import { FoldButton } from '@/components/fold-button'
 import { SearchField } from '@/components/input'
 import { JsonTokens } from '@/components/json-text'
+import { LetteredOption } from '@/components/lettered-option'
+import { LinkedText } from '@/components/linked-text'
 import { MarkedText } from '@/components/marked-text'
 import { MoreLines } from '@/components/more-lines'
 import { OrderToggle } from '@/components/order-toggle'
 import { Empty, Panel, PanelHeader, PanelScroll, PanelSkeleton } from '@/components/panel'
+import { RichText } from '@/components/rich-text'
 import { RowGrid, RowLine } from '@/components/rows'
+import { RunProgress } from '@/components/run-progress'
 import { Chip, RunDot } from '@/components/status'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Toggle } from '@/components/ui/toggle'
@@ -32,6 +48,7 @@ import { useClock } from '@/lib/clock'
 import { setContextChartOpen, useContextChartOpen } from '@/lib/context-chart-open'
 import type { TranscriptPage } from '@/lib/context-chart-open'
 import { tokenize } from '@/lib/json-lines'
+import { LETTERS } from '@/lib/lettered-options'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { removedAfter } from '@/lib/retention'
 import { rowLineFrom } from '@/lib/rows'
@@ -40,6 +57,7 @@ import { localTime } from '@/lib/time'
 import {
     byCall,
     callLine,
+    cardOf,
     contextShape,
     decisionsOf,
     drawnRows,
@@ -47,10 +65,12 @@ import {
     elapsed,
     findQueryOf,
     foldText,
+    heardOf,
     hitsIn,
     moreLabel,
     namedModels,
     outcome,
+    resultOf,
     sentTokens,
     settingsOf,
     settingSubject,
@@ -64,10 +84,21 @@ import {
     THINKING_LINES,
     THIS_TICK,
     tokenCount,
+    toolKind,
     TRANSCRIPT_BUDGET,
     wroteTokens,
 } from '@/lib/transcript'
-import type { CallDecision, CallSetting, ModelCall as Call, ShellCall } from '@/lib/transcript'
+import type {
+    CallCard,
+    CallContext,
+    CallDecision,
+    CallResult,
+    CallSetting,
+    ContextShape,
+    ModelCall as Call,
+    ShellCall,
+    ToolKind,
+} from '@/lib/transcript'
 import { cn } from '@/lib/utils'
 
 // What a row marks with no search: one stable value, as a default prop must be.
@@ -315,7 +346,7 @@ export function TranscriptPanel({
                             ) : shown.length === 0 ? (
                                 <Empty>no line holds “{query}”</Empty>
                             ) : (
-                                <ol className="divide-y" data-testid="transcript-entries">
+                                <ol data-testid="transcript-entries">
                                     {shown.slice(0, drawn).map(({ entry, i, hits }) => {
                                         const targeted = target?.i === i
                                         // A row whose place changes remounts to it, as does the one the chart shows.
@@ -331,6 +362,7 @@ export function TranscriptPanel({
                                                 calls={calls.calls}
                                                 models={models}
                                                 prompt={transcript.prompt}
+                                                shape={shape}
                                             />
                                         )
                                     })}
@@ -441,6 +473,7 @@ function Entry({
     calls = NO_CALLS,
     models = NO_MODELS,
     prompt = null,
+    shape = null,
 }: {
     entry: TranscriptEntry
     start: string | null
@@ -450,17 +483,16 @@ function Entry({
     calls?: readonly Call[]
     models?: ReadonlyMap<number, string>
     prompt?: TranscriptPrompt | null
+    shape?: ContextShape | null
 }) {
     switch (entry.kind) {
         case 'text': {
             return (
-                <Row at={entry.at} start={start} targeted={targeted}>
+                <Row at={entry.at} start={start} targeted={targeted} mark={entry.reasoning ? 'thinking' : 'said'}>
                     {entry.reasoning ? (
                         <Thinking text={entry.text} open={open} words={words} />
                     ) : (
-                        <p className="min-w-0 flex-1 text-sm wrap-break-word whitespace-pre-wrap">
-                            <MarkedText text={entry.text} words={words} />
-                        </p>
+                        <Said text={entry.text} words={words} />
                     )}
                     {entry.cut && <Chip>cut</Chip>}
                 </Row>
@@ -472,11 +504,30 @@ function Entry({
         case 'step': {
             const call = calls.find((c) => c.n === entry.call) ?? null
             const model = entry.call === null ? null : (models.get(entry.call) ?? null)
-            return <ModelCall entry={entry} start={start} call={call} model={model} prompt={prompt} />
+            const context = shape?.calls.find((c) => c.n === entry.call) ?? null
+            // One call's bar says nothing its tokens do not, as one bar of the chart does not.
+            const metered = (shape?.calls.filter((c) => c.sent !== null).length ?? 0) > 1
+            return (
+                <ModelCall
+                    entry={entry}
+                    start={start}
+                    call={call}
+                    model={model}
+                    prompt={prompt}
+                    context={context}
+                    peak={metered ? (shape?.peak?.sent ?? null) : null}
+                />
+            )
         }
         case 'error': {
             return (
-                <Row at={entry.at} start={start} targeted={targeted} className={cn(!targeted && 'bg-status-failed/8')}>
+                <Row
+                    at={entry.at}
+                    start={start}
+                    targeted={targeted}
+                    mark="error"
+                    className={cn(!targeted && 'bg-status-failed/8')}
+                >
                     <span className="font-mono text-xs text-status-failed">
                         <MarkedText text={entry.name} words={words} />
                     </span>
@@ -487,6 +538,28 @@ function Entry({
             )
         }
     }
+}
+
+/**
+ * What the agent said, its line breaks kept, held to a measure a paragraph reads at. Text that is JSON whole, as a
+ * worker's final result is, is colored as a call's output is, every value as written.
+ */
+function Said({ text, words }: { text: string; words: readonly string[] }) {
+    const tokens = tokenize(text)
+    if (tokens.some((token) => token.kind !== 'text')) {
+        return (
+            <p className="min-w-0 flex-1 font-mono text-xs/5 wrap-break-word whitespace-pre-wrap">
+                <JsonTokens tokens={markedTokens(tokens, words)} />
+            </p>
+        )
+    }
+    return (
+        <p className="min-w-0 flex-1 text-sm wrap-break-word whitespace-pre-wrap">
+            <span className="block max-w-[96ch]">
+                <MarkedText text={text} words={words} />
+            </span>
+        </p>
+    )
 }
 
 /**
@@ -503,7 +576,7 @@ function Thinking({ text, open, words }: { text: string; open: boolean; words: r
     const whole = toggled ?? (open || matches(said, words) > matches(shown, words))
     return (
         <div className="flex min-w-0 flex-1 flex-col gap-1.5 text-muted-foreground italic">
-            <p className="text-sm wrap-break-word whitespace-pre-wrap">
+            <p className="max-w-[96ch] text-sm wrap-break-word whitespace-pre-wrap">
                 <span className="mr-2 panel-label not-italic">thinking</span>
                 <MarkedText text={whole ? said : shown} words={words} />
             </p>
@@ -518,19 +591,22 @@ function matches(text: string, words: readonly string[]): number {
 }
 
 /**
- * An entry's line: when it was printed, from the session's first event, then the entry. The one last shown, by the
- * context chart or the Run panel's `ended on`, sits on the accent's tint, scrolled to and focused.
+ * An entry's line: when it was printed, from the session's first event, its `mark` on the thread, then the entry. The
+ * one last shown, by the context chart or the Run panel's `ended on`, sits on the accent's tint, scrolled to and
+ * focused.
  */
 function Row({
     at,
     start,
     targeted = false,
+    mark,
     className,
     children,
 }: {
     at: string | null
     start: string | null
     targeted?: boolean
+    mark: 'said' | 'thinking' | 'error'
     className?: string
     children: ReactNode
 }) {
@@ -538,11 +614,63 @@ function Row({
         <li
             ref={targeted ? reveal : undefined}
             tabIndex={targeted ? -1 : undefined}
-            className={cn('flex items-baseline gap-3 px-3 py-2 outline-none', targeted && 'bg-accent/14', className)}
+            className={cn(
+                'group/row flex items-baseline gap-3 px-3 py-2 outline-none',
+                targeted && 'bg-accent/14',
+                className,
+            )}
         >
             <When at={at} start={start} />
+            <Thread from="first line" className="-my-2">
+                {mark === 'error' ? (
+                    <RunDot state="failed" />
+                ) : (
+                    <span className="flex size-2 items-center justify-center">
+                        <span
+                            className={cn(
+                                'rounded-full',
+                                mark === 'said' ? 'size-2 border border-foreground/70' : 'size-1 bg-muted-foreground',
+                            )}
+                        />
+                    </span>
+                )}
+            </Thread>
             {children}
         </li>
+    )
+}
+
+/**
+ * The thread the rows hang on: a hairline down the mark's column, from the row above to the row below, broken around
+ * the row's own mark, so a session reads as one line of events. The mark sits beside the row's first line of text,
+ * or at its middle; the thread starts at the first row's mark and ends at the last's. `className` takes back the
+ * row's own padding, so the hairline meets the next row's.
+ */
+function Thread({
+    from = 'middle',
+    className,
+    children,
+}: {
+    from?: 'first line' | 'middle'
+    className?: string
+    children: ReactNode
+}) {
+    return (
+        <span aria-hidden className={cn('flex w-2 shrink-0 flex-col items-center gap-1 self-stretch', className)}>
+            <span className={cn('w-px bg-border group-first/row:invisible', from === 'middle' ? 'flex-1' : 'h-2.5')} />
+            {children}
+            <span className="w-px flex-1 bg-border group-last/row:invisible" />
+        </span>
+    )
+}
+
+/** The thread under a row's line, beside what the row opens to: a cell of the mark's column in the body's grid. */
+function ThreadOn({ className }: { className?: string }) {
+    return (
+        <span
+            aria-hidden
+            className={cn('col-[mark] w-px justify-self-center bg-border group-last/row:invisible', className)}
+        />
     )
 }
 
@@ -590,9 +718,19 @@ function Tool({
     const shell = shellCall(entry, worktrees)
     const decisions = decisionsOf(entry)
     const settings = decisions === null ? settingsOf(entry) : null
+    const card = cardOf(entry)
+    const result = card === null ? resultOf(entry) : null
+    const heard = heardOf(entry)
+    // A call of canopy's that says something in prose, where another's line is a command or its input's values.
+    const prose = card !== null || result !== null
+    // A call of canopy's that worked says its own line under its summary, in place of what the tool answers every
+    // such call; one that failed says its error, as any call does.
+    const said = failed ? null : ownLine(card, result, heard)
+    // What canopy lays out of its own call is built only once opened, as a model call's body is.
+    const [shown, setShown] = useState(open)
     return (
-        <li data-testid="transcript-tool" className={cn(targeted && 'bg-accent/14')}>
-            <details open={open} className="group">
+        <li data-testid="transcript-tool" className={cn('group/row', targeted && 'bg-accent/14')}>
+            <details open={open} className="group/tool" onToggle={(e) => setShown(e.currentTarget.open)}>
                 <summary
                     ref={targeted ? reveal : undefined}
                     className={cn(
@@ -601,28 +739,38 @@ function Tool({
                     )}
                 >
                     <When at={entry.at} start={start} />
-                    <RunDot state={failed ? 'failed' : 'done'} />
+                    <Thread className="-my-2">
+                        <RunDot state={failed ? 'failed' : 'done'} />
+                    </Thread>
                     {/* The name takes its own width up to 14rem and gives way first; the command takes the rest. */}
-                    <span className="max-w-56 truncate font-mono text-xs" title={entry.tool}>
-                        <MarkedText text={entry.tool} words={words} />
+                    <span className="flex max-w-56 min-w-0 items-center gap-1.5" title={entry.tool}>
+                        <ToolIcon kind={toolKind(entry)} />
+                        <span className="truncate font-mono text-xs font-medium">
+                            <MarkedText text={entry.tool} words={words} />
+                        </span>
                     </span>
+                    {result !== null && <Chip tone={RESULT_TONE[result.status] ?? 'plain'} word={result.status} />}
                     <span className="flex min-w-40 flex-1 flex-col">
                         {/* A shell call's title is what the agent said it was for: the command is what it did. Its
                             hover is the line whole, as the call named its directory, then that title. */}
-                        <span className="truncate font-mono text-xs" title={summaryTitle(entry)}>
+                        <span className={cn('truncate text-xs', !prose && 'font-mono')} title={summaryTitle(entry)}>
                             {shell === null ? (
                                 <MarkedText text={did} words={words} />
                             ) : (
                                 <ShellLine call={shell} words={words} />
                             )}
                         </span>
-                        {line !== null && (
+                        {line !== null && said === null && (
                             <span
                                 className={cn('truncate text-xs text-muted-foreground', failed && 'text-status-failed')}
                                 title={line}
                             >
                                 <MarkedText text={line} words={words} />
                             </span>
+                        )}
+                        {said === 'card' && card !== null && <CardLine call={card} words={words} />}
+                        {said === 'heard' && heard !== null && (
+                            <span className="truncate text-xs text-muted-foreground">{heard}</span>
                         )}
                     </span>
                     {verdict === 'refused' && (
@@ -635,12 +783,15 @@ function Tool({
                     <ChevronRight
                         className={cn(
                             'size-3 shrink-0 text-muted-foreground',
-                            'transition-transform group-open:rotate-90',
+                            'transition-transform group-open/tool:rotate-90',
                         )}
                     />
                 </summary>
-                <RowGrid kind="transcript" alone className="pb-3">
-                    <RowLine from="text" className="flex flex-col gap-2">
+                <RowGrid kind="transcript" alone>
+                    <ThreadOn />
+                    <RowLine from="text" className="flex flex-col gap-2 pt-1 pb-3">
+                        {shown && card !== null && <Posted call={card} />}
+                        {shown && result !== null && <Reported result={result} />}
                         {decisions !== null && <Decisions decisions={decisions} words={words} />}
                         {settings !== null && <Settings settings={settings} words={words} />}
                         <Block label="input" words={words}>
@@ -657,6 +808,151 @@ function Tool({
 }
 
 /**
+ * Which line of canopy's own a call says under its summary: its card's, what it heard, nothing for a result, whose
+ * summary and status are its line; null for any other call, which says how it ended.
+ */
+function ownLine(
+    card: CallCard | null,
+    result: CallResult | null,
+    heard: string | null,
+): 'card' | 'result' | 'heard' | null {
+    if (card !== null) {
+        return 'card'
+    }
+    if (result !== null) {
+        return 'result'
+    }
+    return heard === null ? null : 'heard'
+}
+
+/** A result's status as its chip's tone: what waits on the operator, what failed, and plain for the rest. */
+const RESULT_TONE: Partial<Record<string, 'blocked' | 'failed'>> = { blocked: 'blocked', failed: 'failed' }
+
+/** Under a progress update's summary: what the agent said it was doing, and how many of its steps were done. */
+function CardLine({ call, words }: { call: CallCard; words: readonly string[] }) {
+    const counted = call.card.steps.filter((step) => step.status !== 'skipped')
+    const done = counted.filter((step) => step.status === 'done').length
+    return (
+        <span className="truncate text-xs text-muted-foreground" title={call.card.now}>
+            now{' '}
+            <span className="text-foreground">
+                <MarkedText text={call.card.now} words={words} />
+            </span>
+            {counted.length > 0 && (
+                <span>
+                    {' '}
+                    ·{' '}
+                    <span className="readout">
+                        {done}/{counted.length}
+                    </span>{' '}
+                    steps done
+                </span>
+            )}
+            {call.question !== null && <span className="text-status-blocked"> · asks the operator</span>}
+        </span>
+    )
+}
+
+/**
+ * A progress update as the operator read it: the run's card as it stood at that call (`RunProgress`), then the
+ * question it asked, each option by its letter, the one the agent recommends marked. It is the record of one call, so
+ * it answers nothing: the run's page has the card as it stands.
+ */
+function Posted({ call }: { call: CallCard }) {
+    const question = call.question
+    return (
+        <div className="flex flex-col gap-1" data-testid="transcript-card">
+            <span className="panel-label">progress posted</span>
+            <div className="flex flex-col gap-3 rounded-sm border bg-background p-3">
+                <RunProgress card={call.card} running={false} freshness={false} />
+                {question !== null && (
+                    <div className="flex max-w-3xl flex-col gap-2">
+                        <p className="text-xs text-status-blocked">asks the operator</p>
+                        <p className="text-sm font-medium text-pretty">
+                            <LinkedText text={question.ask} />
+                        </p>
+                        <ol className="flex flex-col gap-1">
+                            {/* A question's options never reorder. */}
+                            {question.options.map((option, i) => (
+                                <li key={i} className="flex gap-2 text-sm">
+                                    <LetteredOption
+                                        letter={LETTERS[i] ?? '?'}
+                                        chosen={false}
+                                        recommended={LETTERS[i] === question.recommend}
+                                    >
+                                        <LinkedText text={option} />
+                                    </LetteredOption>
+                                </li>
+                            ))}
+                        </ol>
+                    </div>
+                )}
+            </div>
+        </div>
+    )
+}
+
+/**
+ * A run's result as it reported it: its summary laid out as the agent wrote it, what it asks the operator, and each
+ * repository's PR. Its status is on the call's line; the rest of what it reports is in its input.
+ */
+function Reported({ result }: { result: CallResult }) {
+    return (
+        <div className="flex flex-col gap-1" data-testid="transcript-result">
+            <span className="panel-label">result reported</span>
+            <div className="flex flex-col gap-3 rounded-sm border bg-background p-3">
+                {result.summary === '' ? (
+                    <p className="text-xs text-muted-foreground">no summary</p>
+                ) : (
+                    <RichText text={result.summary} pullRequests className="max-w-[96ch]" />
+                )}
+                {result.question !== null && (
+                    <div className="flex flex-col gap-1">
+                        <p className="text-xs text-status-blocked">asks the operator</p>
+                        <RichText text={result.question} className="max-w-[96ch]" />
+                    </div>
+                )}
+                {result.prs.length > 0 && (
+                    <ul className="flex flex-col gap-1 text-xs">
+                        {result.prs.map(([repo, url]) => (
+                            <li key={repo} className="flex items-baseline gap-2">
+                                <span className="shrink-0 font-mono">{repo}</span>
+                                {url === null ? (
+                                    <span className="text-muted-foreground">no PR</span>
+                                ) : (
+                                    <span className="min-w-0 wrap-break-word">
+                                        <LinkedText text={url} pullRequests />
+                                    </span>
+                                )}
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </div>
+        </div>
+    )
+}
+
+/** What a kind of tool call does, as the small icon before its name. */
+const TOOL_ICONS: Record<ToolKind, LucideIcon> = {
+    shell: SquareTerminal,
+    write: FilePen,
+    read: FileText,
+    search: Search,
+    web: Globe,
+    canopy: Sprout,
+    other: Wrench,
+}
+
+/** A tool call's kind (`toolKind`), as an icon before its name: decoration, since the name says it. */
+function ToolIcon({ kind }: { kind: ToolKind }) {
+    const Icon = TOOL_ICONS[kind]
+    // The narrowest panel, a window under the rail's step, keeps the room for the command, which its line holds at
+    // 300px there: the icon shows from just past that width, under any the whole rail leaves.
+    return <Icon aria-hidden className="hidden size-3.5 shrink-0 text-muted-foreground @[45rem]:block" />
+}
+
+/**
  * A model call's end: one muted line, its number, the `model` that made it where the line names one, its reason,
  * its tokens in and out as By call says them, and its cost, that opens to its tokens by kind and then to what the
  * call was sent and what it did, as By call shows them. The body is built only once opened, as By call's is: a long
@@ -668,22 +964,33 @@ function ModelCall({
     call,
     model,
     prompt,
+    context,
+    peak,
 }: {
     entry: TranscriptStep
     start: string | null
     call: Call | null
     model: string | null
     prompt: TranscriptPrompt | null
+    context: CallContext | null
+    peak: number | null
 }) {
     const [open, setOpen] = useState(false)
     const line = (
         <>
             <When at={entry.at} start={start} />
+            <Thread className="-my-1.5">
+                <span className="flex size-2 items-center justify-center">
+                    <span className="size-1.5 rotate-45 border border-muted-foreground" />
+                </span>
+            </Thread>
             <span>model call{entry.call === null ? '' : ` ${entry.call}`}</span>
             <CallModel model={model} />
             {/* Every call but the last ends in tool calls: only another reason says something. */}
             {entry.reason && entry.reason !== 'tool-calls' && <Chip word={entry.reason} />}
-            <span className="ml-auto readout">
+            <span className="ml-auto" />
+            <ContextMeter context={context} peak={peak} />
+            <span className="readout">
                 {entry.split === null
                     ? ''
                     : `${tokenCount(sentTokens(entry.split))} in · ${tokenCount(wroteTokens(entry.split))} out`}
@@ -691,19 +998,20 @@ function ModelCall({
             <Cost usd={entry.cost_usd} className="w-14 shrink-0 text-right" />
         </>
     )
-    const muted = 'flex items-center gap-3 px-3 py-1 font-mono text-xs text-muted-foreground'
+    // A turn's end sits in a groove of the canvas's color, so the rows between two read as one turn.
+    const muted = 'flex items-center gap-3 bg-background/60 px-3 py-1.5 font-mono text-xs text-muted-foreground'
     const split = entry.split
     if (split === null && call === null) {
         return (
-            <li className={muted}>
+            <li className={cn('group/row', muted)}>
                 {line}
                 <span className="size-3 shrink-0" />
             </li>
         )
     }
     return (
-        <li data-testid="transcript-step">
-            <details className="group" onToggle={(e) => setOpen(e.currentTarget.open)}>
+        <li data-testid="transcript-step" className="group/row">
+            <details className="group/step" onToggle={(e) => setOpen(e.currentTarget.open)}>
                 <summary
                     className={cn(
                         muted,
@@ -715,13 +1023,16 @@ function ModelCall({
                     <ChevronRight
                         className={cn(
                             'size-3 shrink-0 text-muted-foreground',
-                            'transition-transform group-open:rotate-90',
+                            'transition-transform group-open/step:rotate-90',
                         )}
                     />
                 </summary>
                 {open && split !== null && (
-                    <RowGrid kind="transcript" alone className="pb-2">
-                        <dl className={cn(rowLineFrom('text'), 'flex flex-wrap gap-x-6 gap-y-1 font-mono text-xs')}>
+                    <RowGrid kind="transcript" alone>
+                        <ThreadOn />
+                        <dl
+                            className={cn(rowLineFrom('text'), 'flex flex-wrap gap-x-6 gap-y-1 py-2 font-mono text-xs')}
+                        >
                             {TOKEN_KINDS.map(([key, label]) => (
                                 <div key={key} className="flex items-baseline gap-2">
                                     <dt className="panel-label">{label}</dt>
@@ -733,9 +1044,32 @@ function ModelCall({
                         </dl>
                     </RowGrid>
                 )}
-                {open && call !== null && <CallBody call={call} prompt={prompt} start={start} split={split} />}
+                {open && call !== null && <CallBody call={call} prompt={prompt} start={start} split={split} thread />}
             </details>
         </li>
+    )
+}
+
+/**
+ * What a model call was sent beside the session's peak, on its line: a short bar in the context chart's fills, what
+ * it carried and then what it added, so the context's growth reads down the transcript without the chart. Nothing
+ * where the runtime counted no tokens.
+ */
+function ContextMeter({ context, peak }: { context: CallContext | null; peak: number | null }) {
+    const sent = context?.sent ?? null
+    if (context === null || sent === null || peak === null || peak <= 0) {
+        return null
+    }
+    const share = (n: number) => `${Math.max(0, Math.min(100, (n / peak) * 100))}%`
+    return (
+        <span
+            className="hidden h-1.5 w-20 shrink-0 overflow-hidden rounded-full bg-border/60 @lg:flex"
+            title={`sent ${tokenCount(sent)}, ${Math.round((sent / peak) * 100)}% of the peak`}
+            data-testid="transcript-context-meter"
+        >
+            <span className="bg-context-carried" style={{ width: share(context.carried) }} />
+            <span className="bg-context-added" style={{ width: share(context.added) }} />
+        </span>
     )
 }
 
@@ -835,16 +1169,19 @@ function CallBody({
     prompt,
     start,
     split,
+    thread = false,
 }: {
     call: Call
     prompt: TranscriptPrompt | null
     start: string | null
     split: TranscriptTokens | null
+    thread?: boolean
 }) {
     return (
         // In a narrow panel the body takes the row's whole width; in a wider one it starts under the text.
-        <RowGrid kind="transcript" alone className="pb-3" data-testid="transcript-call-body">
-            <RowLine from="text" className="flex flex-col gap-3 @max-lg:col-[time/end]">
+        <RowGrid kind="transcript" alone data-testid="transcript-call-body">
+            {thread && <ThreadOn className="@max-lg:hidden" />}
+            <RowLine from="text" className="flex flex-col gap-3 pt-1 pb-3 @max-lg:col-[time/end]">
                 <section className="flex flex-col gap-2" aria-label={`call ${call.n} input`}>
                     <Heading
                         label="input"
@@ -888,7 +1225,7 @@ function CallBody({
                     {call.output.length === 0 ? (
                         <p className="text-xs text-muted-foreground">nothing printed</p>
                     ) : (
-                        <ol className="divide-y rounded-sm border">
+                        <ol className="overflow-hidden rounded-sm border">
                             {call.output.map((entry, i) => (
                                 // oxlint-disable-next-line react/no-array-index-key -- a call's entries never reorder
                                 <Entry key={i} entry={entry} start={start} open={false} />
