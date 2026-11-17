@@ -100,7 +100,7 @@ def test_a_runtime_error_ends_a_failed_runs_transcript(backend: Backend) -> None
 def test_a_running_runs_transcript_is_what_its_worker_printed_so_far(backend: Backend) -> None:
     found = client(None, backend).get("/api/runs/41/transcript").json()
     assert (found["status"], found["session_id"]) == ("read", "ses_mock41")
-    assert [e["kind"] for e in found["entries"]] == ["text", "tool", "step", "tool", "step"]
+    assert [e["kind"] for e in found["entries"]] == ["text", "tool", "tool", "step", "tool", "step"]
     assert found["entries"][-2]["title"] == "Run the login tests"
 
 

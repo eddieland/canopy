@@ -363,6 +363,54 @@ describe('TranscriptPanel', () => {
         expect(within(second).getByText('length')).toBeDefined()
     })
 
+    it('draws each model call’s context beside the session’s peak, named on hover', () => {
+        render(<TranscriptPanel transcript={transcript()} running={false} page="run" />)
+        const meters = screen.getAllByTestId('transcript-context-meter')
+        expect(meters.length).toBeGreaterThan(1)
+        expect(meters.some((meter) => meter.title.endsWith('100% of the peak'))).toBe(true)
+    })
+
+    it('opens a progress update to the card it posted and a result to what it reported, built once opened', () => {
+        const base = { kind: 'tool', status: 'completed', title: null, duration_ms: 1000, cut: false, call: 1 } as const
+        const status = {
+            ...base,
+            at: '2026-10-08T12:00:00Z',
+            tool: 'canopy_run_status',
+            input: JSON.stringify({
+                summary: 'Callback in.',
+                now: 'wiring the button',
+                steps: [{ title: 'Wire the button', status: 'working' }],
+                question: { ask: 'Keep the form?', options: ['keep it', 'hide it'], recommend: 'B' },
+            }),
+            output: 'Shown to the operator.',
+        }
+        const result = {
+            ...base,
+            at: '2026-10-08T12:01:00Z',
+            tool: 'canopy_run_result',
+            input: JSON.stringify({ status: 'blocked', summary: 'Pushed the fix.', question: 'Rerun CI?' }),
+            output: 'Taken.',
+        }
+        render(
+            <TranscriptPanel transcript={{ ...transcript(), entries: [status, result] }} running={false} page="run" />,
+        )
+        const posted = call('canopy_run_status')
+        expect(posted.textContent).toContain('Callback in.')
+        expect(posted.textContent).toContain('0/1 steps done')
+        expect(within(posted).queryByText('Keep the form?')).toBeNull()
+        posted.open = true
+        fireEvent(posted, new Event('toggle'))
+        expect(within(posted).getByText('Keep the form?')).toBeDefined()
+        expect(within(posted).getByText('recommended')).toBeDefined()
+        expect(within(posted).queryByRole('button')).toBeNull()
+
+        const reported = call('canopy_run_result')
+        expect(within(reported).getByText('blocked')).toBeDefined()
+        reported.open = true
+        fireEvent(reported, new Event('toggle'))
+        expect(within(reported).getByText('Rerun CI?')).toBeDefined()
+    })
+
     it('opens a model call in order to what it was sent and what it did, built only once opened', () => {
         render(<TranscriptPanel transcript={transcript()} running={false} page="run" />)
         const second = call('1.5k in · 60 out')

@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest'
 import type { RunWorktree, TranscriptEntry, TranscriptStep, TranscriptTool } from '@/api/types'
 
 import {
+    cardOf,
+    heardOf,
+    resultOf,
     byCall,
     contextShape,
     callLine,
@@ -32,6 +35,7 @@ import {
     tally,
     tokenCount,
     tokensCell,
+    toolKind,
     TRANSCRIPT_BUDGET,
     wroteTokens,
 } from './transcript'
@@ -197,6 +201,105 @@ describe('shownDir', () => {
         expect(shownDir(`${WEB.absolute}-old/src`, [WEB])).toBeNull()
         expect(shownDir('src', [WEB])).toBeNull()
         expect(shownDir(WEB.absolute, [])).toBeNull()
+    })
+})
+
+// The kind of a tool call given `input`.
+const kind = (input: unknown) => toolKind(tool('completed', { input: JSON.stringify(input) }))
+
+describe('toolKind', () => {
+    it('reads a call’s kind from its input’s keys, whatever the tool is named', () => {
+        expect(kind({ command: 'npm test' })).toBe('shell')
+        expect(kind({ filePath: 'a.ts' })).toBe('read')
+        expect(kind({ filePath: 'a.ts', content: 'x' })).toBe('write')
+        expect(kind({ filePath: 'a.ts', oldString: 'x', newString: 'y' })).toBe('write')
+        expect(kind({ pattern: 'TODO', path: 'src' })).toBe('search')
+        expect(kind({ query: 'debounce' })).toBe('search')
+        expect(kind({ url: 'https://example.com' })).toBe('web')
+        expect(kind({ decisions: [{ key: 'ABC-1', action: 'wait', rationale: 'ci' }] })).toBe('canopy')
+    })
+
+    it('is other for anything else, an input that is no object among it', () => {
+        expect(kind({ issue_key: 'ABC-1' })).toBe('other')
+        expect(kind(['a'])).toBe('other')
+        expect(toolKind(tool('completed', { input: 'not json' }))).toBe('other')
+    })
+})
+
+// A call of canopy's `status` tool with `input`.
+const status = (input: unknown) => tool('completed', { tool: 'canopy_run_status', input: JSON.stringify(input) })
+
+// What a call of canopy's `messages` tool that answered `output` heard.
+const heard = (output: string) => heardOf(tool('completed', { tool: 'canopy_run_messages', input: '{}', output }))
+
+// A progress update that asks a question of two options and recommends the one `recommend` names.
+const asks = (recommend: string) => ({ summary: 'x', now: 'y', question: { ask: 'q', options: ['a', 'b'], recommend } })
+
+describe('cardOf, resultOf, and heardOf', () => {
+    it('reads a progress update as the card it posted, its question apart', () => {
+        const entry = status({
+            summary: 'Callback in.',
+            now: 'wiring the button',
+            done: [{ step: 'add the callback', proof: 'tests pass: 12/12' }],
+            next: 'push',
+            steps: [{ title: 'Wire the button', status: 'working' }],
+            question: { ask: 'Keep the form?', options: ['keep', 'hide'], recommend: 'B' },
+        })
+        const found = cardOf(entry)
+        expect(found?.card).toMatchObject({
+            summary: 'Callback in.',
+            now: 'wiring the button',
+            done: [{ step: 'add the callback', proof: 'tests pass: 12/12' }],
+            next: ['push'],
+            steps: [{ title: 'Wire the button', status: 'working', stage: null }],
+            question: null,
+            stale: false,
+        })
+        expect(found?.question).toEqual({ ask: 'Keep the form?', options: ['keep', 'hide'], recommend: 'B' })
+        expect(summary(entry)).toBe('Callback in.')
+        expect(toolKind(entry)).toBe('canopy')
+    })
+
+    it('reads no card from an input the tool would refuse, or another tool’s', () => {
+        expect(cardOf(status({ summary: 'x' }))).toBeNull()
+        expect(cardOf(status({ summary: 'x', now: 'y', priority: 'high' }))).toBeNull()
+        const card = JSON.stringify({ summary: 'x', now: 'y' })
+        expect(cardOf(tool('completed', { tool: 'canopy_run_status', input: card }))).not.toBeNull()
+        expect(cardOf(tool('completed', { tool: 'notes_add', input: card }))).toBeNull()
+        // A call the tool refused posted nothing.
+        expect(cardOf(tool('error', { tool: 'canopy_run_status', input: card }))).toBeNull()
+        expect(cardOf(status(asks('B')))).not.toBeNull()
+        expect(cardOf(status(asks('C')))).toBeNull()
+        expect(cardOf(status({ summary: 'x', now: 'y', steps: [{ title: 't', status: 'soon' }] }))).toBeNull()
+    })
+
+    it('reads a result from canopy’s result tool alone: its status, summary, question, and PRs', () => {
+        const input = JSON.stringify({
+            status: 'blocked',
+            summary: 'Pushed the fix.\nCI is red.',
+            question: 'Rerun CI?',
+            prs: { web: 'https://github.com/acme/web/pull/88', api: null },
+        })
+        const entry = tool('completed', { tool: 'canopy_run_result', input })
+        expect(resultOf(entry)).toEqual({
+            status: 'blocked',
+            summary: 'Pushed the fix.\nCI is red.',
+            question: 'Rerun CI?',
+            prs: [
+                ['web', 'https://github.com/acme/web/pull/88'],
+                ['api', null],
+            ],
+        })
+        expect(summary(entry)).toBe('Pushed the fix.')
+        expect(resultOf(tool('completed', { tool: 'jira_update_issue', input }))).toBeNull()
+        expect(resultOf(tool('error', { tool: 'canopy_run_result', input }))).toBeNull()
+    })
+
+    it('says how many of the operator’s messages a messages call heard', () => {
+        expect(heard('2 messages from the operator to this run, oldest first.')).toBe('2 messages from the operator')
+        expect(heard('1 message from the operator to this run, oldest first.')).toBe('1 message from the operator')
+        expect(heard('No message from the operator has been sent to this run.')).toBe('no message from the operator')
+        expect(heard('something else')).toBeNull()
     })
 })
 

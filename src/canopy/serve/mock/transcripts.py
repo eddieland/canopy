@@ -261,6 +261,37 @@ def write(state_dir: Path, t0: datetime, slot: Callable[[str, int], str]) -> Non
                 "title": "src/login/LoginForm.tsx",
             },
         ),
+        # Its first update of where it stands, canopy's own tool's call (DESIGN §41): the card it posted then.
+        _tool(
+            s41,
+            1.05,
+            "canopy_run_status",
+            {
+                "status": "completed",
+                "input": {
+                    "summary": "Read the login form; adding the SSO callback first, then the button.",
+                    "now": "adding the SSO callback route",
+                    "next": ["wire the login button", "push", "open the PR"],
+                    "steps": [
+                        {"title": "Add the SSO callback route", "status": "working", "stage": "API"},
+                        {"title": "Wire the login button", "status": "not_started", "stage": "Web"},
+                        {"title": "Remember the last provider", "status": "not_started", "stage": "Web"},
+                        {"title": "Push and open the PR", "status": "not_started"},
+                    ],
+                    "question": {
+                        "ask": "Keep the password form beside the SSO button, or hide it behind a link?",
+                        "options": [
+                            "keep both side by side",
+                            "hide the form behind a link",
+                            "drop the password form",
+                        ],
+                        "recommend": "B",
+                    },
+                },
+                "output": "Shown to the operator. Post another update, with your whole progress, when where you "
+                "stand changes.",
+            },
+        ),
         _step(s41, 1.1, 0.2),
         _start(s41, 1.2),
         _done(s41, 27, "Run the login tests", "npm test -- login", "Tests: 4 passed, 4 total\n", seconds=12),
