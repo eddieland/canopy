@@ -1575,12 +1575,12 @@ def answered_lines(stdout: str) -> list[Said]:
 
 def inline_servers(run: Mapping[str, Any]) -> dict[str, list[str]]:
     """The servers of canopy's that a fake agent run's inline config (FAKE_AGENT_LOG's `env`) gave it, with commands."""
-    return {name: entry["command"] for name, entry in _inline_entries(run).items() if "command" in entry}
+    return {name: entry["command"] for name, entry in _inline_entries(run).items() if _is_on(entry)}
 
 
 def turned_off_servers(run: Mapping[str, Any]) -> set[str]:
-    """The operator's servers a fake agent run's inline config turned off, each by an entry of `enabled` false alone."""
-    return {name for name, entry in _inline_entries(run).items() if entry == {"enabled": False}}
+    """The operator's servers a fake agent run's inline config turned off, as its runtime's version turns one off."""
+    return {name for name, entry in _inline_entries(run).items() if not _is_on(entry)}
 
 
 def given_server(run: Mapping[str, Any], server: str, runtime: Version) -> dict[str, Any]:
@@ -1604,6 +1604,11 @@ def given_server(run: Mapping[str, Any], server: str, runtime: Version) -> dict[
 
 # The servers a run's inline config names, by name, in either runtime's shape: OpenCode 1's under `mcp`, OpenCode 2's
 # under `mcp.servers`.
+def _is_on(entry: Mapping[str, Any]) -> bool:
+    # OpenCode 1 is given `enabled` false alone; 2 a definition of its own, `disabled`.
+    return "command" in entry and not entry.get("disabled")
+
+
 def _inline_entries(run: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
     inline: dict[str, Any] = json.loads(run["env"].get("OPENCODE_CONFIG_CONTENT", "{}")).get("mcp", {})
     servers = inline.get("servers")
