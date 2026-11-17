@@ -61,6 +61,17 @@ def env(
     return {INLINE_CONFIG_ENV: json.dumps({"mcp": {"servers": {**turned_off, **entries}}})}
 
 
+def turned_off(env: Mapping[str, str]) -> frozenset[str]:
+    """The servers of the operator's that the environment `env` of a run turns off.
+
+    Returns:
+        The name of each server its inline config gives the definition a server is turned off with; none without one.
+    """
+    inline = json.loads(env.get(INLINE_CONFIG_ENV) or "{}")
+    given = inline.get("mcp", {}).get("servers", {})
+    return frozenset(name for name, entry in given.items() if entry == _OFF)
+
+
 def tool_name(server: str, tool: str) -> str:
     """The name OpenCode gives tool `tool` of MCP server `server`, as permission rules name it.
 

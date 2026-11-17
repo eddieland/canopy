@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 import re
 import time
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -33,11 +34,13 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import BaseModel, ConfigDict, StrictBool, StrictStr
 
 from canopy.runtime.agents import AgentOffer, Offerings, Reach, ServerOffer, SkillFile, Skills
+from canopy.runtime.opencode2 import servers
 from canopy.runtime.opencode2.invocation import CONFIG_DIR_ENV
 from canopy.runtime.opencode2.serve import OPENCODE, Client, FailedError, Serve, read
 
 if TYPE_CHECKING:
     from collections.abc import Collection
+    from collections.abc import Set as AbstractSet
 
     from canopy.infra import procs
 
@@ -265,14 +268,18 @@ def _load(
     Raises:
         FailedError: The server could not be started, did not load in time, or said what canopy cannot read.
     """
-    return Serve(runner, launcher, cwd, env).ask(lambda client: _loaded(client, agents))
+    off = servers.turned_off(env)
+    return Serve(runner, launcher, cwd, env).ask(lambda client: _loaded(client, agents, off))
 
 
-def _loaded(client: Client, wanted: Collection[str]) -> _Loaded:
+def _loaded(client: Client, wanted: Collection[str], off: AbstractSet[str]) -> _Loaded:
     """Ask the server for its agents once its plugins have loaded `wanted`, then its skills and its MCP servers.
 
     OpenCode lists its own agents before the plugins have loaded the definitions, canopy's among them, so it waits for
     the agents asked about, at most `LOADED_SECONDS`; one still missing then is one whose definition did not load.
+
+    A server `off` names, which the inline config turned off, is no server unless another document defines it too:
+    the definition that turns it off stands for the operator's, and alone is canopy's, not theirs.
 
     Returns:
         Each agent's rules by its name, the skills sorted by id, the first of an id kept, and the MCP servers in
@@ -293,18 +300,24 @@ def _loaded(client: Client, wanted: Collection[str]) -> _Loaded:
         time.sleep(POLL_SECONDS)
     skills = read(client.get("skill.list"), _Skills.model_validate_json, "skill.list").data
     entries = read(client.get("config.get"), _entries, "config.get")
-    servers: dict[str, _McpServer] = {}
+    found: dict[str, _McpServer] = {}
+    defined: Counter[str] = Counter()
     for entry in entries:
         mcp = entry.info.mcp if entry.info is not None else None
         for name, server in (mcp.servers if mcp is not None else {}).items():
-            merged = _merged(servers.get(name), server)
+            defined[name] += server.type is not None
+            merged = _merged(found.get(name), server)
             if merged is not None:
-                servers[name] = merged
+                found[name] = merged
+    # canopy's definition is one of them; with no other, the operator has no such server.
+    for name in off:
+        if defined[name] <= 1:
+            found.pop(name, None)
     files = {s.id: SkillFile(s.id, s.description, s.path, s.content) for s in reversed(skills)}
     return _Loaded(
         agents={agent.id: agent.permissions for agent in agents},
         skill_files=tuple(files[name] for name in sorted(files)),
-        servers=servers,
+        servers=found,
     )
 
 

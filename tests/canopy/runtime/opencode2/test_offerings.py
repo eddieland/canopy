@@ -12,7 +12,7 @@ import pytest
 
 from canopy.infra import procs
 from canopy.runtime.agents import AgentOffer, ServerOffer, SkillFile
-from canopy.runtime.opencode2 import offerings
+from canopy.runtime.opencode2 import offerings, servers
 from canopy.runtime.opencode2 import serve as server
 from canopy.runtime.opencode2.offerings import matches
 
@@ -234,6 +234,21 @@ def test_an_entry_without_a_type_is_ignored() -> None:
     inline = {"type": "document", "info": {"mcp": {"servers": {"github": {"enabled": False}, "x": {"enabled": False}}}}}
     found = offered(Serve({"canopy-worker": []}, config=[*CONFIG, inline]), "canopy-worker")
     assert (found.servers, found.disabled_servers) == (("github", "sentry.io", "canopy"), ("sentry.io",))
+
+
+def test_a_server_turned_off_that_the_operator_never_defined_is_no_server() -> None:
+    """Canopy's own definition stands alone for it, so `canopy agents` can say the name is nothing to turn off."""
+    env = servers.env({}, cwd=Path("/ws"), disabled=("github", "slack"))
+    given = json.loads(env["OPENCODE_CONFIG_CONTENT"])["mcp"]["servers"]
+    config = [*CONFIG, {"type": "document", "info": {"mcp": {"servers": given}}}]
+    found = offerings.offerings(
+        Serve({"canopy-worker": []}, config=config),
+        cwd=Path("/ws"),
+        definitions_dir=Path("/defs"),
+        agents=["canopy-worker"],
+        env=env,
+    )
+    assert (found.servers, found.disabled_servers) == (("github", "sentry.io", "canopy"), ("github", "sentry.io"))
 
 
 def test_the_server_is_started_with_the_environment_it_is_given() -> None:
