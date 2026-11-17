@@ -2,7 +2,7 @@
 
 And how worker runs answered each repository's checklist over the last days, how the last days' runs ended, as
 `canopy health` reads them, what CI did on the PRs canopy observed, where their review feedback came from, how plans
-were approved, and how each connector's runs ended. Reads only.
+were approved, how each connector's runs ended, and which skills the agents were offered and loaded. Reads only.
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ from canopy.serve.schema.health import HealthReport
 from canopy.serve.schema.plan_report import PlansReport
 from canopy.serve.schema.reports import MonthlyReport
 from canopy.serve.schema.review_report import ReviewsReport
+from canopy.serve.schema.skill_report import SkillsReport
 
 TAG = "reports"
 router = APIRouter(tags=[TAG])
@@ -169,3 +170,28 @@ def connectors_report(
     """
     with backend.open() as ctx:
         return report_views.connectors_report(backend, ctx, days)
+
+
+@router.get(
+    "/reports/skills",
+    operation_id="getSkillsReport",
+    summary="Get which skills the last days' agent runs were offered and loaded",
+)
+def skills_report(
+    backend: BackendDep,
+    days: Annotated[
+        int,
+        Query(
+            ge=1,
+            le=spending.MAX_DAYS,
+            description=f"How many local days to read, today's so far included: 1 to {spending.MAX_DAYS}.",
+        ),
+    ] = spending.DEFAULT_DAYS,
+) -> SkillsReport:
+    """Each skill a run was offered or loaded, by agent, and what its front matter added to the runs' model calls.
+
+    Read from the journal alone: it starts no runtime. Every count of tokens is an estimate, characters over 4, and a
+    cost is counted only over the runs whose offer recorded the descriptions' lengths and whose session is read.
+    """
+    with backend.open() as ctx:
+        return report_views.skills_report(backend, ctx, days)

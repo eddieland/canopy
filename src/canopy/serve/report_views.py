@@ -1,8 +1,8 @@
 """The reports, as the API sends them (DESIGN §11), by the backend's clock.
 
 What each local calendar month cost and got done, how the last days' runs ended, as `canopy health` reads them, what
-CI did on the PRs canopy observed, where their review feedback came from, how plans were approved, and how each
-connector's runs ended.
+CI did on the PRs canopy observed, where their review feedback came from, how plans were approved, how each
+connector's runs ended, and which skills the agents were offered and loaded.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ from canopy.core import (
     plan_report,
     review_report,
     runtime_sessions,
+    skill_report,
     spend,
 )
 from canopy.core.config import CANOPY_REVIEWER
@@ -91,6 +92,7 @@ from canopy.serve.schema.review_report import (
     ReviewsRunCount,
     ReviewsTurnaround,
 )
+from canopy.serve.schema.skill_report import SkillsAgent, SkillsPrevious, SkillsReport, SkillsSkill, SkillsUse
 from canopy.serve.schema.spend import SpendUnpriced
 
 if TYPE_CHECKING:
@@ -408,6 +410,43 @@ def plans_report(backend: Backend, ctx: Context, days: int) -> PlansReport:
     )
 
 
+def skills_report(backend: Backend, ctx: Context, days: int) -> SkillsReport:
+    """Which skills the agent runs of the last `days` local days were offered and loaded, by the backend's clock.
+
+    Returns:
+        The report, each count of tokens an estimate, with the window before's headline figures beside it.
+    """
+    now = backend.clock()
+    # One snapshot, so a run recorded between the reads is in both windows' or neither's.
+    with db.read_snapshot(ctx.conn):
+        found = skill_report.report(ctx.conn, now, days)
+        before = skill_report.between(ctx.conn, *spend.window_before(found.since, days))
+    return SkillsReport(
+        days=found.days,
+        since=db.parse_time(found.since),
+        until=db.parse_time(found.until),
+        offered=found.offered,
+        unused=found.unused,
+        loads=found.loads,
+        unnamed=found.unnamed,
+        runs=found.runs,
+        said=found.said,
+        counted=found.counted,
+        est_sent_tokens=found.sent_tokens,
+        skills=[_skill(s) for s in found.skills],
+        agents=[_skill_agent(a) for a in found.agents],
+        previous=SkillsPrevious(
+            since=db.parse_time(before.since),
+            until=db.parse_time(before.until),
+            offered=before.offered,
+            unused=before.unused,
+            loads=before.loads,
+            counted=before.counted,
+            est_sent_tokens=before.sent_tokens,
+        ),
+    )
+
+
 @dataclass(frozen=True)
 class _Figures:
     """A month's headline figures as the Health, CI, and Reviews pages read them."""
@@ -654,6 +693,59 @@ def _status(status: ConnectorRunStatus) -> ConnectorStatus:
             return "failed"
         case _:
             assert_never(status)
+
+
+def _skill(found: skill_report.Skill) -> SkillsSkill:
+    chars = found.front_matter_chars
+    return SkillsSkill(
+        name=found.name,
+        countable=found.countable,
+        unused=found.unused,
+        offered=found.offered,
+        loaded=found.loaded,
+        unoffered=found.unoffered,
+        loads=found.loads,
+        failed=found.failed,
+        est_result_tokens=found.result_chars // spend.CHARS_PER_TOKEN,
+        front_matter_chars=chars,
+        est_front_matter_tokens=None if chars is None else chars // spend.CHARS_PER_TOKEN,
+        counted=found.counted,
+        calls=found.calls,
+        est_sent_tokens=found.sent_chars // spend.CHARS_PER_TOKEN,
+        uses=[
+            SkillsUse(
+                agent=u.agent,
+                offered=u.offered,
+                loaded=u.loaded,
+                unoffered=u.unoffered,
+                loads=u.loads,
+                failed=u.failed,
+                est_result_tokens=u.result_tokens,
+                front_matter_chars=u.front_matter_chars,
+                counted=u.counted,
+                calls=u.calls,
+                est_sent_tokens=u.sent_tokens,
+            )
+            for u in found.uses
+        ],
+    )
+
+
+def _skill_agent(found: skill_report.Agent) -> SkillsAgent:
+    chars = found.call_chars
+    return SkillsAgent(
+        agent=found.agent,
+        runs=found.runs,
+        said=found.said,
+        unanswered=found.unanswered,
+        unasked=found.unasked,
+        counted=found.counted,
+        calls=found.calls,
+        skills=found.skills,
+        unused=found.unused,
+        est_call_tokens=None if chars is None else chars // spend.CHARS_PER_TOKEN,
+        est_sent_tokens=found.sent_chars // spend.CHARS_PER_TOKEN,
+    )
 
 
 def _fix(found: ci.Fix) -> CiFix:
