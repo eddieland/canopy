@@ -189,6 +189,16 @@ A run that finds every slot busy is refused `no_slot` and tried again on a later
 the size. Set it in `~/.config/treehouse/config.toml`, unless the repository commits a `treehouse.toml`, whose
 `max_trees` wins.
 
+A slot nobody uses still keeps its output base. To free it once a slot has sat idle a few days, name a command for the
+repository in the same file; a live tick runs it in such a slot, never in a leased one, once each idle spell:
+
+```toml
+[pools.idle_cmd]
+api = "bazel clean --expunge"   # in a slot no lease has held for pools.idle_after_days, 3 by default
+```
+
+The next run there builds cold. It runs on your machine in the slot's checkout, as `setup_cmd` does.
+
 ## Check that it works
 
 In a workspace, after `canopy workspace sync`:

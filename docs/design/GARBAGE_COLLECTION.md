@@ -24,7 +24,8 @@ keeps. Sections are numbered across the whole design; the [README](README.md) ha
 | Check runs a `vcs` source keeps (§7) | each completed check run of a PR | once off its PR's head (below) |
 | Commit status runs a `vcs` source keeps | each run of a commit status canopy tells apart | once off its PR's head (below) |
 | Free pages and the WAL in the journal | deletes, and checkpoints held back by readers | checkpointed each pass; `canopy gc --vacuum` |
-| Loose objects and packs in a primary clone | every worker's fetches and commits | by hand, `canopy gc --git` (below) |
+| Loose objects and packs in a primary clone | every worker's fetches and commits | by a live tick while its pool is idle, or `canopy gc --git` (below) |
+| A slot's build outputs outside it, such as bazel's output base | every build in the slot | by `pools.idle_cmd`, in a slot long unleased (below) |
 | `$XDG_CACHE_HOME/canopy/sandbox/<role>/` | every sandboxed run's tool caches | by hand, `canopy gc --caches` |
 | A run's lock, object directory, desk, and review checkout | one per run | when the run ends, or by reconcile |
 | `runtime/<digest>/` | one per definitions change | by reconcile when no run is live (§13) |
@@ -37,10 +38,11 @@ keeps. Sections are numbered across the whole design; the [README](README.md) ha
 
 - A record a guard counts: runs, their slots, review runs, attempt and review grants, and dismissals. Limits count
   over all time, and a guard that history can reset is not a guard (D030, D086).
-- Ticks, tickets, messages, units, forgets, starts, notices, ended review requests, chore runs, the web UI's record of
-  its writes, and the overseer's own decisions, the audit log and prompt-evaluation corpus (§11, §19, §21, §22); plan
-  files, the operator's to remove, and their runs' prompts, which the plan archive carries (§25); and what each run
-  changed, its range of commits, by which a later run, a kick, or the operator tells which commits were whose (§45).
+- Ticks, tickets, messages, units, forgets, starts, notices, ended review requests, chore runs, the pools' upkeep
+  runs, the web UI's record of its writes, and the overseer's own decisions, the audit log and prompt-evaluation corpus
+  (§11, §19, §21, §22); plan files, the operator's to remove, and their runs' prompts, which the plan archive carries
+  (§25); and what each run changed, its range of commits, by which a later run, a kick, or the operator tells which
+  commits were whose (§45).
 - Anything a live run uses, or a run's lifelock holds; remote branches, which `canopy gc` lists and deletes none of,
   since deleting one is outward-facing and may lose work (§22); and what is not canopy's: a chore's working
   directory (§19), ignored files in a pool slot (§18), the runtime's own data.
@@ -50,9 +52,9 @@ keeps. Sections are numbered across the whole design; the [README](README.md) ha
 Reconcile runs the pass on a live tick, never a dry run, at most once a day, under the tick lock. A pass that fails
 logs it and the tick goes on: a full disk is the pass's reason to run, and must not stop the loop that would free it.
 `canopy gc` runs it by hand; `--dry-run` changes nothing and reports what a pass would remove, and `--vacuum`, `--git`,
-and `--caches` add steps the loop never runs on its own. It refuses inside a tick or a run (TRUST_MODEL T1), and no
-flag shortens retention; only the operator's config does. An agent that could remove history early could remove the
-transcript that shows what it did.
+and `--caches` add steps; of them the loop runs only `--git`'s, as the pools' upkeep (below). It refuses inside a
+tick or a run (TRUST_MODEL T1), and no flag shortens retention; only the operator's config does. An agent that could
+remove history early could remove the transcript that shows what it did.
 
 Files go only by the paths the journal records, or as orphans an hour old, and only regular files inside the state
 directory, never a symlink. A tick not `ok` keeps its files as long as a run, since the operator debugs those. Reconcile
@@ -75,19 +77,29 @@ writes a whole copy first.
 
 `canopy gc --git` runs only git's `loose-objects` and `incremental-repack` maintenance, then `prune-packed`, none of
 which deletes an object no pack holds or prunes a worktree, what made automatic maintenance unsafe for slots in use
-(§18). It holds the dispatch lock for each repository in turn, skips one with a leased slot or with git's own
-maintenance under way, and runs git as the harness always does (D107). `canopy gc --caches` empties a
-role's sandbox cache (§24) while no run of that role is live.
+(§18), and removes the temporary pack files an interrupted fetch left a day ago. It holds the dispatch lock for each
+repository in turn, skips one with a leased slot or with git's own maintenance under way, and runs git as the harness
+always does (D107). `canopy gc --caches` empties a role's sandbox cache (§24) while no run of that role is live.
+
+### The pools' upkeep
+
+A live tick, after starting its runs, runs at most one upkeep job, recorded in the journal, taking the dispatch lock
+without waiting; a lease waits for the job no longer than its timeout. With `pools.git_maintenance`, the default, it
+runs `--git`'s steps in a clone whose pool has no leased slot, once git counts more than `git_max_packs` packs or
+`git_max_loose` loose objects, looking once in `git_every_hours`; a `--git` by hand counts as a look. Cron cannot tell
+an idle pool from a busy one, and git's own maintenance is what §18 turned off. `pools.idle_cmd`, private as
+`setup_cmd` is (TRUST_MODEL T7), runs in a slot not leased now and idle `idle_after_days`, since its newest recorded
+lease or its directory's last change, once each idle spell: it frees what builds keep outside the slot, such as
+bazel's output base. A job that fails raises `upkeep_failed` until a newer one there does not, and blocks no dispatch.
 
 ### Configuration
 
-`[retention]` is personal, in the user file (§12): the keys the table names, and `log_keep`, the rotated logs kept.
-Each is a non-negative integer, and `0` keeps that kind forever. The defaults are a proposal until measured live.
+`[retention]` and `[pools]` are personal, in the user file (§12). Each `[retention]` key is a non-negative integer,
+and `0` keeps that kind forever. The defaults are a proposal until measured live.
 
 ### Open
 
-- The defaults, from the measurement.
+- The defaults, retention's and the upkeep's thresholds and pace, from the measurement.
 - Whether the overseer's own attention rows, also recorded every tick an item stays open, need a rule of their own.
   They are the evaluation corpus, so not until the measurement shows their share.
 - Whether connector runs and derivations need a key of their own rather than `journal_days`.
-- Whether the pass runs `--git` on its own, weekly, once the command has run live (SCENARIOS).

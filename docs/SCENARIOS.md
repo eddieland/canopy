@@ -268,6 +268,11 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
   run and its packs fewer or the same; the slot's commit still there (`git cat-file -t`); and the next run on that
   repository leasing, committing, and pushing as before. With a run live, expect its repository `skipped` and the
   others `packed`. Run it again after a git upgrade.
+- **S84. The pools' upkeep on a large clone** (#2396, #2398). With a clone past `pools.git_max_packs` and its pool
+  idle, let the loop tick: expect one tick to pack it (`upkeep` in `canopy.log`, `canopy gc --dry-run` showing its
+  packs and loose objects down) and how long that tick's `upkeep` step took, then no look again within
+  `git_every_hours`. With `[pools.idle_cmd]` naming `bazel clean --expunge`, and a slot idle `idle_after_days`, expect
+  its output base gone and the next run there building cold; a leased slot's untouched.
 
 ### Telemetry
 

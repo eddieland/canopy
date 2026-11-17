@@ -799,13 +799,28 @@ class Capacity(Section):
 
 
 class Pools(Section):
-    """The `[pools]` table: which pool makes a workspace's worktrees (DESIGN §18, ROADMAP M45).
+    """The `[pools]` table: which pool makes a workspace's worktrees, and their upkeep (DESIGN §18, §26, ROADMAP M45).
 
     Private, as the pools' sizes are: it decides what runs on the operator's machine. Switching is safe with runs in
     flight, since a lease always goes back to the pool that made it.
     """
 
     backend: Annotated[PoolKind, Scope.PRIVATE] = PoolKind.TREEHOUSE
+    #: Whether a live tick runs `canopy gc --git`'s maintenance in a repository's primary clone while no slot of its
+    #: pool is leased, once git counts more than `git_max_packs` packs or `git_max_loose` loose objects there, looking
+    #: at most once in `git_every_hours` (DESIGN §26).
+    git_maintenance: Annotated[StrictBool, Scope.PRIVATE] = True
+    git_max_packs: Annotated[Count, Scope.PRIVATE] = 50
+    git_max_loose: Annotated[Count, Scope.PRIVATE] = 10_000
+    git_every_hours: Annotated[Annotated[StrictInt, Field(ge=1)], Scope.PRIVATE] = 24
+    #: A command, by repository, a live tick runs in each slot of its pool no lease has held for `idle_after_days`,
+    #: such as `bazel clean --expunge` to free a slot's build outputs, under `idle_timeout_minutes`; once per idle
+    #: spell, and again `idle_after_days` after one that failed (DESIGN §26). No shell runs it, as `setup_cmd`. It runs
+    #: on this machine in the slot's checkout, whose code a worker may have written. Names need not be in this
+    #: workspace's map: the user file serves every workspace.
+    idle_cmd: Annotated[dict[RepoName, SetupCommand], Scope.PRIVATE] = {}
+    idle_after_days: Annotated[Annotated[StrictInt, Field(ge=1)], Scope.PRIVATE] = 3
+    idle_timeout_minutes: Annotated[Minutes, Scope.PRIVATE] = 30
 
 
 def _default_cmd(agent: str, version: Version = Version.TWO) -> str:

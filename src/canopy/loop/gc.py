@@ -30,7 +30,7 @@ from canopy.reviews import start as review_start
 from canopy.runs import dispatch
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Iterable, Mapping, Sequence
     from datetime import datetime
 
     from canopy.core.config import Retention
@@ -674,7 +674,8 @@ def _journal_space(conn: sqlite3.Connection, journal: Path) -> list[Kind]:
 def _git_objects(ctx: Context, notes: list[str]) -> list[Kind]:
     """The loose objects and the packs in each primary clone, from `git count-objects -v`, which changes nothing.
 
-    A clone git cannot read is left out, with a note saying so.
+    Each clone's own numbers are a note, so a clone drifting past `pools.git_max_packs` shows before it costs a fetch;
+    a clone git cannot read is left out, with a note saying so.
 
     Returns:
         The loose objects' kind, then the packs'.
@@ -688,11 +689,25 @@ def _git_objects(ctx: Context, notes: list[str]) -> list[Kind]:
         if counts is None:
             notes.append(f"{repo.name}: git count-objects failed in {repo.path}")
             continue
+        notes.append(_clone_note(repo.name, counts))
         loose.count += counts.get("count", 0)
         loose.size += counts.get("size", 0) * KIB
         packs.count += counts.get("packs", 0)
         packs.size += counts.get("size-pack", 0) * KIB
     return [loose.kind("git loose objects", "objects", "--git"), packs.kind("git packs", "packs", "--git")]
+
+
+def _clone_note(name: str, counts: Mapping[str, int]) -> str:
+    """One clone's loose objects, packs, and garbage, as `--dry-run` notes them.
+
+    Returns:
+        The note.
+    """
+    loose = f"{counts.get('count', 0)} loose objects ({counts.get('size', 0) / KIB:.1f} MiB)"
+    packs = f"{counts.get('packs', 0)} packs ({counts.get('size-pack', 0) / KIB:.1f} MiB)"
+    garbage = counts.get("garbage", 0)
+    left = f", and {garbage} garbage files an interrupted fetch may have left" if garbage else ""
+    return f"{name}: {loose} and {packs}{left}"
 
 
 def count_objects(runner: procs.Runner, clone: Path) -> dict[str, int] | None:

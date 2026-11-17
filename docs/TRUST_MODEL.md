@@ -690,6 +690,11 @@ Controls now:
   later; with the sandbox below, it runs in one too, under the `setup` role (HOST_ISOLATION §4.4). treehouse's
   `post_create` hooks run on the base, and its seeding copies only ignored files from the operator's primary clone,
   chosen by the committed `.worktreeinclude` or the operator's own (`paths.worktree_include`, private).
+- `pools.idle_cmd` (DESIGN §26), per repository, runs on the host in a slot no lease holds and none has held for
+  `idle_after_days`, under the dispatch lock, so no lease takes the slot while it runs. Like `setup_cmd` it runs in a
+  checkout whose code a worker may have written, as the slot's build tool reads it; it is private (T7), and with the
+  sandbox below it runs in one under the `setup` role. The loop's git maintenance in an idle clone runs only
+  `canopy gc --git`'s steps, which prune nothing a slot reads (§18).
 - A review checks out code the loop did not write. The harness runs nothing from it, and the reviewer's working
   directory is a directory of canopy's outside the checkout, holding one link to it, so the runtime loads no
   configuration from the checkout. The shipped `canopy-reviewer` cannot run commands or edit, and reads only through

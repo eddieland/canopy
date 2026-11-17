@@ -714,6 +714,26 @@ class GcPassStatus(StrEnum):
     FAILED = "failed"
 
 
+class UpkeepKind(StrEnum):
+    """What a run of the pools' upkeep did, `upkeep_runs.kind` (DESIGN §26)."""
+
+    #: git's maintenance in a primary clone, as `canopy gc --git` runs it: it packs loose objects and small packs.
+    PACK = "pack"
+    #: The operator's `pools.idle_cmd`, in a slot long unleased.
+    IDLE = "idle"
+
+
+class UpkeepStatus(StrEnum):
+    """How a run of the pools' upkeep ended, `upkeep_runs.status` (DESIGN §26)."""
+
+    #: It ran, and git or the command exited 0.
+    DONE = "done"
+    #: It had nothing to do, or could not run now: a clone under its thresholds, or git's own maintenance under way.
+    SKIPPED = "skipped"
+    #: git or the command failed, timed out, or could not start; it raises `upkeep_failed`.
+    FAILED = "failed"
+
+
 class RecordedKind(StrEnum):
     """What a run the overseer asked for is, `recorded_runs.kind` (DESIGN §40): the verb that recorded it."""
 

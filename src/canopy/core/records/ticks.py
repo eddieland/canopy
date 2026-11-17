@@ -1,7 +1,7 @@
 """The loop's tables: its ticks and what each one ran, decided, and asked for.
 
 Each tick, its overseer's runs, the decisions it recorded, the runs it was asked for, what it derived in shadow,
-and garbage collection's passes (DESIGN §6, §26, §30, §40).
+garbage collection's passes, and the pools' upkeep (DESIGN §6, §26, §30, §40).
 """
 
 from __future__ import annotations
@@ -23,6 +23,8 @@ from canopy.core.vocab import (
     RequestAction,
     RunKind,
     TickStatus,
+    UpkeepKind,
+    UpkeepStatus,
 )
 
 
@@ -223,3 +225,23 @@ class GcPass(Row):
     failures: int
     #: What it raised; None for an `ok` pass.
     error: str | None
+
+
+@dataclass(frozen=True)
+class UpkeepRun(Row):
+    """A run of the pools' upkeep (DESIGN §26): git maintenance in a primary clone, or `pools.idle_cmd` in a slot."""
+
+    TABLE: ClassVar[LiteralString] = "upkeep_runs"
+
+    id: int
+    #: The tick that ran it; None for `canopy gc --git` by hand.
+    tick_id: int | None
+    kind: UpkeepKind
+    repo: str
+    #: The slot an `idle` run ran in; None for `pack`, git's maintenance in the primary clone.
+    slot_path: str | None
+    started_at: str
+    ended_at: str
+    status: UpkeepStatus
+    #: The harness's words for the operator: the objects before and after, why it was skipped, or why it failed.
+    detail: str
