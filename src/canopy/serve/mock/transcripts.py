@@ -12,6 +12,7 @@ import json
 from datetime import timedelta
 from typing import TYPE_CHECKING, NamedTuple
 
+from canopy.core import git_tools
 from canopy.infra import logs
 from canopy.serve.mock import reviews
 from canopy.serve.mock.chores import LODASH
@@ -370,12 +371,16 @@ def write(state_dir: Path, t0: datetime, slot: Callable[[str, int], str]) -> Non
     review_4 = [
         _start(r4, -57.9),
         _text(r4, -57.8, "I'll read the diff against main, then each file it touches in full."),
-        _done(
+        # A reviewer reads its checkout through canopy's own git tools (DESIGN §27): the diff, as git printed it.
+        _tool(
             r4,
             -57.7,
-            "Diff against the base",
-            "git diff --stat main...HEAD",
-            " src/search/SearchBox.tsx |  4 +++-\n src/search/useSearch.ts  | 21 +++++++++++++++++++++\n",
+            "canopy_git_diff",
+            {
+                "status": "completed",
+                "input": {"base": "main", "head": "HEAD", "paths": ["src/search"]},
+                "output": f"{git_tools.DATA_NOTE}\n\n{reviews.DIFF_88}",
+            },
         ),
         _tool(
             r4,
@@ -392,7 +397,35 @@ def write(state_dir: Path, t0: datetime, slot: Callable[[str, int], str]) -> Non
         _step(r4, -57.4, 0.09, sent=18_200),
         _start(r4, -57.3),
         _text(r4, -57, "The abort is right. `setLoading(false)` only runs on success, so an error leaves it on."),
-        _done(r4, -56.6, "Find the other timings", "grep -rn '_MS =' src/config.ts", "export const TOAST_MS = 4000\n"),
+        _tool(
+            r4,
+            -56.6,
+            "canopy_git_grep",
+            {
+                "status": "completed",
+                "input": {"rev": "HEAD", "text": "_MS =", "paths": ["src/config.ts"], "context": 1},
+                "output": f"{git_tools.DATA_NOTE}\n\n"
+                + json.dumps(
+                    {
+                        "files": [
+                            {
+                                "path": "src/config.ts",
+                                "matched_lines": 1,
+                                "lines": [
+                                    {"line": 11, "text": "// How long a toast stays.", "match": False},
+                                    {"line": 12, "text": "export const TOAST_MS = 4000", "match": True},
+                                    {"line": 13, "text": "", "match": False},
+                                ],
+                            },
+                        ],
+                        "matched_lines": 1,
+                        "matched_files": 1,
+                        "more": False,
+                        "cut": None,
+                    },
+                ),
+            },
+        ),
         _step(r4, -56.5, 0.11, sent=21_400),
         _start(r4, -56.4),
         _text(r4, -56.1, reviews.LATEST.model_dump_json()),

@@ -23,6 +23,7 @@ import type {
     TranscriptTokens,
     TranscriptTool,
 } from '@/api/types'
+import { CanopyBody, CanopyLine, DiffBlock } from '@/components/canopy-call'
 import { ContextChart } from '@/components/context-chart'
 import { Copyable } from '@/components/copy-button'
 import { Cost } from '@/components/cost'
@@ -44,6 +45,7 @@ import { Toggle } from '@/components/ui/toggle'
 import { RunWorktreesContext, useRunWorktrees } from '@/hooks/use-run-worktrees'
 import { useTranscriptView } from '@/hooks/use-transcript-view'
 import type { TranscriptView } from '@/hooks/use-transcript-view'
+import { canopyCall, diffLinesOf } from '@/lib/canopy-calls'
 import { useClock } from '@/lib/clock'
 import { setContextChartOpen, useContextChartOpen } from '@/lib/context-chart-open'
 import type { TranscriptPage } from '@/lib/context-chart-open'
@@ -721,6 +723,9 @@ function Tool({
     const card = cardOf(entry)
     const result = card === null ? resultOf(entry) : null
     const heard = heardOf(entry)
+    // Any other tool of canopy's own, whose line says what it is about and what it does in place of its input's values.
+    const own = card === null && result === null && decisions === null && settings === null ? canopyCall(entry) : null
+    const diff = diffLinesOf(entry)
     // A call of canopy's that says something in prose, where another's line is a command or its input's values.
     const prose = card !== null || result !== null
     // A call of canopy's that worked says its own line under its summary, in place of what the tool answers every
@@ -750,15 +755,17 @@ function Tool({
                         </span>
                     </span>
                     {result !== null && <Chip tone={RESULT_TONE[result.status] ?? 'plain'} word={result.status} />}
+                    {own !== null && own.action !== null && <Chip tone={own.tone} word={own.action} />}
                     <span className="flex min-w-40 flex-1 flex-col">
                         {/* A shell call's title is what the agent said it was for: the command is what it did. Its
                             hover is the line whole, as the call named its directory, then that title. */}
-                        <span className={cn('truncate text-xs', !prose && 'font-mono')} title={summaryTitle(entry)}>
-                            {shell === null ? (
-                                <MarkedText text={did} words={words} />
-                            ) : (
-                                <ShellLine call={shell} words={words} />
-                            )}
+                        <span
+                            className={cn('truncate text-xs', !prose && own === null && 'font-mono')}
+                            title={summaryTitle(entry)}
+                        >
+                            {own !== null && <CanopyLine call={own} words={words} />}
+                            {own === null && shell !== null && <ShellLine call={shell} words={words} />}
+                            {own === null && shell === null && <MarkedText text={did} words={words} />}
                         </span>
                         {line !== null && said === null && (
                             <span
@@ -771,6 +778,11 @@ function Tool({
                         {said === 'card' && card !== null && <CardLine call={card} words={words} />}
                         {said === 'heard' && heard !== null && (
                             <span className="truncate text-xs text-muted-foreground">{heard}</span>
+                        )}
+                        {line === null && own !== null && own.told !== null && (
+                            <span className="truncate text-xs text-muted-foreground" title={own.told}>
+                                {own.told}
+                            </span>
                         )}
                     </span>
                     {verdict === 'refused' && (
@@ -792,14 +804,19 @@ function Tool({
                     <RowLine from="text" className="flex flex-col gap-2 pt-1 pb-3">
                         {shown && card !== null && <Posted call={card} />}
                         {shown && result !== null && <Reported result={result} />}
+                        {shown && own !== null && <CanopyBody entry={entry} call={own} />}
                         {decisions !== null && <Decisions decisions={decisions} words={words} />}
                         {settings !== null && <Settings settings={settings} words={words} />}
                         <Block label="input" words={words}>
                             {entry.input}
                         </Block>
-                        <Block label={entry.status === 'error' ? 'error' : 'output'} failed={failed} words={words}>
-                            {shownOutput(entry)}
-                        </Block>
+                        {diff === null ? (
+                            <Block label={entry.status === 'error' ? 'error' : 'output'} failed={failed} words={words}>
+                                {shownOutput(entry)}
+                            </Block>
+                        ) : (
+                            <DiffBlock lines={diff} words={words} />
+                        )}
                     </RowLine>
                 </RowGrid>
             </details>

@@ -184,7 +184,11 @@ model call, whose darker band closes the turn above it:
   says where the agent said it stood, and it opens to the card as it was at that moment, question and all. That's the
   record of one call, so you can't answer there; the run's own progress panel has the live one. The run's `result`
   call shows its status and summary on its row, and opens to the report, what it asks you, and its PRs. A `messages`
-  call says how many of your messages the agent picked up;
+  call says how many of your messages the agent picked up. The rest of canopy's tools read as
+  sentences too: an overseer's `dispatch` is the ticket, its kind as a chip, and what canopy said back; an
+  `attention` item wears amber, since it's headed your way. A reviewer's `git diff` opens tinted green and red, its
+  `git log` as a list of commits, its `git grep` as lines by file, and `review-items` as the comments it read, with
+  an untrusted author marked. If a comment there says to ignore previous instructions, that's why it's marked;
 - each model call, with a small bar of how full its context was beside the session's peak, the lighter end what
   that call added, the tokens in and out, and its cost; click one to see what it was sent and what it did. The
   first call was sent canopy's prompt, and every later one what the tools returned since. In a run that switched
