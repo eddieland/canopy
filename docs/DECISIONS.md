@@ -211,7 +211,7 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 ## D035. Notification sinks are commands fed from the journal
 
-- One message on stdin per tick, derived with no model; an outbox cursor per sink lets a failing sink retry alone.
+- One message on stdin per delivery, derived with no model; an outbox cursor per sink lets a failing sink retry alone.
 - Presentation is the sink's: canopy sends fields, and each sink renders them in its channel's native form.
 - The harness makes no network call but its opt-in OTLP export (D132); Slack is a separate process with its own secret
   file. The desktop sink, holding no secret and needing no network, ships inside canopy.

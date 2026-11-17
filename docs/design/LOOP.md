@@ -123,6 +123,8 @@ records the poll as what woke it. Rejected: a tick on every poll, which writes a
 comparison answers. A reply a `slack` source records is the operator's message, not an observation, and ends the wait as
 any does (§20). A hand-run `canopy tick` runs the sources as any tick does, and nothing polls without the loop.
 
+The wait also delivers to the notification sinks, every half minute, which ends no wait and runs no overseer (§20).
+
 ### Idle pacing
 
 A tick that finds nothing new costs a full overseer run and buys nothing. So the loop waits longer after each idle tick
