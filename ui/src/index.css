@@ -1647,6 +1647,12 @@ twice in a row. */
     }
 }
 
+@keyframes ghost-prism {
+    to {
+        filter: hue-rotate(360deg);
+    }
+}
+
 @utility animate-ghost-glow {
     transform-box: fill-box;
     transform-origin: center;
@@ -1709,6 +1715,12 @@ twice in a row. */
 @utility animate-ghost-talk {
     @media (prefers-reduced-motion: no-preference) {
         animation: ghost-talk 700ms cubic-bezier(0.2, 0, 0, 1) 600ms backwards;
+    }
+}
+
+@utility animate-ghost-prism {
+    @media (prefers-reduced-motion: no-preference) {
+        animation: ghost-prism 16s linear infinite;
     }
 }
 

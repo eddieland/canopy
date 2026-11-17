@@ -8,7 +8,16 @@ import { storedSetting, useStoredSetting } from '@/lib/stored-setting'
  */
 
 /** A shell the Ghost can own. */
-export type ShellId = 'generalist' | 'sprig' | 'canopy' | 'pumpkin' | 'starry' | 'gilded' | 'terminal' | 'vex'
+export type ShellId =
+    | 'generalist'
+    | 'sprig'
+    | 'canopy'
+    | 'pumpkin'
+    | 'starry'
+    | 'gilded'
+    | 'terminal'
+    | 'vex'
+    | 'prismatic'
 
 /** One shell in the shop. */
 export interface Shell {
@@ -25,7 +34,7 @@ export interface Shell {
 /** The shell every Ghost comes in, owned from the start. */
 export const FREE_SHELL: ShellId = 'generalist'
 
-/** The shop, cheapest first, priced among the hats (`HATS` in src/lib/hats.ts). */
+/** The shop, cheapest first, priced among the hats (`HATS` in src/lib/hats.ts), the one to chase last and dearest. */
 export const SHELLS: readonly Shell[] = [
     { id: 'generalist', name: 'Generalist Shell', price: 0, blurb: 'Standard issue. Every Ghost starts somewhere.' },
     { id: 'sprig', name: 'Sprig Shell', price: 100, blurb: 'Sprig, brought back by the Traveler. Still has notes.' },
@@ -50,6 +59,12 @@ export const SHELLS: readonly Shell[] = [
         blurb: 'Beige box, green phosphor. It has never once crashed.',
     },
     { id: 'vex', name: 'Vex Shell', price: 5000, blurb: 'Its eye is red now. It says that is fine.' },
+    {
+        id: 'prismatic',
+        name: 'Prismatic Shell',
+        price: 10_000,
+        blurb: 'Every hue at once. It never dropped, so here it is at retail.',
+    },
 ]
 
 /** The shells owned, and the one worn. */

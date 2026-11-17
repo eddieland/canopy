@@ -29,6 +29,7 @@ describe('SHELLS', () => {
             'gilded',
             'terminal',
             'vex',
+            'prismatic',
         ])
     })
 

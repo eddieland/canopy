@@ -45,6 +45,11 @@ interface Look {
     eye: string
     /** The eye's bright core, its pupil. */
     core: string
+    /**
+     * Whether each plate takes a hue of its own, its colors turned around the wheel as far as the plate is turned
+     * about the eye, and the whole shell drifts through the hues while the Ghost is awake.
+     */
+    prism?: boolean
     /** What it wears over the top plate, outside the turning shell: none for most. */
     crest?: React.JSX.Element
 }
@@ -182,6 +187,19 @@ const LOOKS: Record<ShellId, Look> = {
         eye: 'fill-buddy-ghost-vex-eye',
         core: 'fill-buddy-ghost-vex-core',
     },
+    // The one to chase: the Generalist's plates, each in a hue of its own, eight around a white eye.
+    prismatic: {
+        ...FACETED,
+        prism: true,
+        lit: 'fill-buddy-ghost-prism',
+        shaded: 'fill-buddy-ghost-prism-shade',
+        edge: 'stroke-buddy-ghost-prism-shade',
+        ring: 'fill-buddy-ghost-housing stroke-buddy-hat-cloth',
+        body: 'fill-buddy-ghost-housing',
+        glint: 'stroke-buddy-ghost-core',
+        eye: 'fill-buddy-hat-cloth',
+        core: 'fill-buddy-ghost-core',
+    },
 }
 
 /** The four lesser plates' turns, on the diagonals, and the four great plates', square to the eye. */
@@ -189,6 +207,9 @@ const SPIKE_TURNS = [45, 135, 225, 315]
 const PLATE_TURNS = [0, 90, 180, 270]
 /** A plate's place: turned about the eye. */
 const at = (turn: number) => `translate(${GHOST_CENTER.x} ${GHOST_CENTER.y}) rotate(${turn})`
+/** A prism's plate's hue: its colors turned around the wheel as far as the plate is turned; any other's, its own. */
+const hueAt = (look: Look, turn: number): CSSProperties | undefined =>
+    look.prism === true && turn !== 0 ? { filter: `hue-rotate(${turn}deg)` } : undefined
 
 /** Where the light comes from, as a unit vector from the eye: the top left. */
 const LIGHT = { x: -Math.SQRT1_2, y: -Math.SQRT1_2 }
@@ -226,7 +247,7 @@ function shadesAt(turn: number, behind = 0): { left: Shade; right: Shade } {
 
 /**
  * A shell's plates, about the eye. With a `cue`, the great plates spread a little each time it changes, as a Ghost's do
- * when it talks; while `rave` is on, the shell turns a quarter on each beat of the lights.
+ * when it talks, and a prism's hues drift; while `rave` is on, the shell turns a quarter on each beat of the lights.
  */
 export function ShellPlates({ id, cue, rave = false }: { id: ShellId; cue?: number; rave?: boolean }) {
     const look = LOOKS[id]
@@ -235,53 +256,55 @@ export function ShellPlates({ id, cue, rave = false }: { id: ShellId; cue?: numb
             {look.body === undefined ? null : (
                 <circle cx={GHOST_CENTER.x} cy={GHOST_CENTER.y} r="13" className={look.body} />
             )}
-            {SPIKE_TURNS.map((turn) => (
-                <g key={turn} transform={at(turn)}>
-                    {'leaf' in look.spike ? (
-                        <path
-                            d={look.spike.leaf}
-                            strokeWidth="0.6"
-                            strokeLinejoin="round"
-                            className={cn(look.shaded, look.edge)}
-                        />
-                    ) : (
-                        <Facets look={look} facets={look.spike} shades={shadesAt(turn, BEHIND)} />
-                    )}
-                </g>
-            ))}
-            {PLATE_TURNS.map((turn, n) => (
-                <g key={turn} transform={at(turn)}>
-                    <g
-                        className={cn(cue !== undefined && 'animate-ghost-breathe')}
-                        style={cue === undefined ? undefined : breathing(n)}
-                    >
-                        <g key={cue} className={cn(cue !== undefined && 'animate-ghost-talk')}>
-                            {'wire' in look.plate ? (
-                                <path
-                                    d={look.plate.wire}
-                                    fill="none"
-                                    strokeWidth="1.5"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    className={look.lit}
-                                />
-                            ) : (
-                                <Facets look={look} facets={look.plate} shades={shadesAt(turn)} />
-                            )}
-                            {look.groove === undefined ? null : (
-                                <path
-                                    d={look.groove}
-                                    fill="none"
-                                    strokeWidth="0.45"
-                                    strokeLinecap="round"
-                                    strokeOpacity="0.45"
-                                    className="stroke-buddy-ghost-housing"
-                                />
-                            )}
+            <g className={cn(look.prism === true && cue !== undefined && 'animate-ghost-prism')}>
+                {SPIKE_TURNS.map((turn) => (
+                    <g key={turn} transform={at(turn)} style={hueAt(look, turn)}>
+                        {'leaf' in look.spike ? (
+                            <path
+                                d={look.spike.leaf}
+                                strokeWidth="0.6"
+                                strokeLinejoin="round"
+                                className={cn(look.shaded, look.edge)}
+                            />
+                        ) : (
+                            <Facets look={look} facets={look.spike} shades={shadesAt(turn, BEHIND)} />
+                        )}
+                    </g>
+                ))}
+                {PLATE_TURNS.map((turn, n) => (
+                    <g key={turn} transform={at(turn)} style={hueAt(look, turn)}>
+                        <g
+                            className={cn(cue !== undefined && 'animate-ghost-breathe')}
+                            style={cue === undefined ? undefined : breathing(n)}
+                        >
+                            <g key={cue} className={cn(cue !== undefined && 'animate-ghost-talk')}>
+                                {'wire' in look.plate ? (
+                                    <path
+                                        d={look.plate.wire}
+                                        fill="none"
+                                        strokeWidth="1.5"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        className={look.lit}
+                                    />
+                                ) : (
+                                    <Facets look={look} facets={look.plate} shades={shadesAt(turn)} />
+                                )}
+                                {look.groove === undefined ? null : (
+                                    <path
+                                        d={look.groove}
+                                        fill="none"
+                                        strokeWidth="0.45"
+                                        strokeLinecap="round"
+                                        strokeOpacity="0.45"
+                                        className="stroke-buddy-ghost-housing"
+                                    />
+                                )}
+                            </g>
                         </g>
                     </g>
-                </g>
-            ))}
+                ))}
+            </g>
         </g>
     )
 }

@@ -165,8 +165,9 @@
     /* The Ghost's other shells (src/lib/shells.ts): the Sprig Shell's leaves in shade, a pumpkin's rind lit and in
      * shade (the jack-o'-lantern beside Sprig at Halloween wears them too), a gilded shell's shaded gold beside the
      * hats' lit one, a Vex shell's bronze, its red eye and the eye's hot core, a starry shell's night sky lit and in
-     * shade, and a terminal shell's beige case, its green phosphor eye and the eye's core. The Canopy Shell is
-     * Sprig's leaf, lit and in shade. */
+     * shade, a terminal shell's beige case, its green phosphor eye and the eye's core, and a prismatic shell's first
+     * hue, lit and in shade, which each of its plates turns around the wheel. The Canopy Shell is Sprig's leaf, lit
+     * and in shade. */
     --buddy-leaf-shade: oklch(0.45 0.12 145);
     --buddy-ghost-pumpkin: oklch(0.72 0.17 55);
     --buddy-ghost-pumpkin-shade: oklch(0.55 0.15 45);
@@ -181,6 +182,8 @@
     --buddy-ghost-terminal-shade: oklch(0.66 0.035 85);
     --buddy-ghost-terminal-eye: oklch(0.7 0.2 145);
     --buddy-ghost-terminal-core: oklch(0.96 0.09 145);
+    --buddy-ghost-prism: oklch(0.74 0.17 20);
+    --buddy-ghost-prism-shade: oklch(0.56 0.17 20);
 
     /* The lightswitch rave's dark, when The Cheat flips the lights off: a near black, a touch of the indigo. */
     --rave-dark: oklch(0.16 0.03 275);
@@ -428,6 +431,8 @@
     --buddy-ghost-terminal-shade: oklch(0.62 0.035 85);
     --buddy-ghost-terminal-eye: oklch(0.8 0.2 145);
     --buddy-ghost-terminal-core: oklch(0.97 0.08 145);
+    --buddy-ghost-prism: oklch(0.78 0.16 20);
+    --buddy-ghost-prism-shade: oklch(0.6 0.17 20);
 
     --rave-dark: oklch(0.08 0.02 275);
 
@@ -1354,6 +1359,8 @@
     --color-buddy-ghost-terminal-shade: var(--buddy-ghost-terminal-shade);
     --color-buddy-ghost-terminal-eye: var(--buddy-ghost-terminal-eye);
     --color-buddy-ghost-terminal-core: var(--buddy-ghost-terminal-core);
+    --color-buddy-ghost-prism: var(--buddy-ghost-prism);
+    --color-buddy-ghost-prism-shade: var(--buddy-ghost-prism-shade);
 
     --color-rave-dark: var(--rave-dark);
 
