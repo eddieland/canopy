@@ -558,12 +558,11 @@ function questionIn(value: unknown): CardQuestion | null | undefined {
     if (
         typeof ask !== 'string' ||
         typeof recommend !== 'string' ||
+        !Array.isArray(options) ||
+        !options.every((option) => typeof option === 'string') ||
         // The letter of one of its options, as the tool holds it to.
-        !Array.isArray(options) ||
-        !'ABCDE'.slice(0, options.length).includes(recommend) ||
         recommend.length !== 1 ||
-        !Array.isArray(options) ||
-        !options.every((option) => typeof option === 'string')
+        !'ABCDE'.slice(0, options.length).includes(recommend)
     ) {
         return undefined
     }
