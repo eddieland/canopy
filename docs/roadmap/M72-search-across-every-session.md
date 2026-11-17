@@ -181,4 +181,16 @@ unread, and the section does not give the count, so this was settled without it.
 runtime's own list: the Sessions page opens on the operator's own, with canopy's a filter away. What would thin the
 runtime's list changes what canopy does with the runtime's data and logins (§26, T2, T4): a record of its own for an
 unsandboxed run, as a sandboxed role has (§24), or archiving canopy's sessions through the runtime. That is a milestone
-of its own, on the roadmap's deferred list with its trigger.
+of its own, on the roadmap's deferred list with its trigger. Stage 2's backend built 2026-11-17 against the fakes:
+`sessions.search = "text"`, the index at `.canopy/sessions.db` (FTS5 that keeps no content, a row per message with
+the session's title beside it and a row for the title alone), kept in step in the loop's waits, the snippets read from
+the record, `canopy sessions WORDS` and the API's `/sessions?q=` searching it, `canopy gc --dry-run` reporting its
+size, and TRUST_MODEL T1, T3, T4, T6, and T8 for it. Chosen conservatively, for the operator to change: a step takes
+new sessions for 1 s, each session's read bounded at 5 s, 2 s apart while behind and 60 s once caught up; a message is
+indexed up to 64 KiB, a session up to 4 MiB and 10,000 messages; a word in a title weighs 4 against a message's 1; a
+search ranks at most 1,000 sessions; the daily drop of the sessions the runtime no longer keeps runs in the loop's wait
+with the index's other upkeep, not inside the tick's pass, so no tick reads the record; a change to `sessions.exclude`
+builds the index again whole, as a change of shape or cut does; and a sandbox role's record that canopy cannot read
+keeps what the index already holds of it. Left of stage 2: the web UI showing a hit's snippet, how many more messages
+hold the words, and the index's progress on the Sessions page and the search's panels (the API serves them; the
+panels show the hits' titles, best match first), with `ui/DESIGN.md` for it; and the live checks of the Accept.

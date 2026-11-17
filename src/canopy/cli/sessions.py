@@ -3,7 +3,9 @@
 The record is every session the agent runtime keeps, canopy's runs' and the operator's own. While `sessions.search` is
 `titles`, the loop's read of it keeps each one's title, and this lists them from the journal, newest first, or finds
 the newest whose title holds every word (`canopy.core.session_list`): those outside canopy, each with the command
-that reopens it in the runtime, or, with `--canopy`, canopy's, each with the run that made it.
+that reopens it in the runtime, or, with `--canopy`, canopy's, each with the run that made it. At `text`, words are
+found by the index of what each session said, did, and read, which the loop's wait keeps (`canopy.core.session_index`),
+the best match first, each hit with a snippet of the message that held them.
 
 `--sizes` measures the record instead, stage 0 of ROADMAP M72: its sessions, its text by part, and, for each cut of the
 text, a trial index's size, build time, and search time beside a plain scan's (`canopy.core.session_sizes`).
@@ -21,7 +23,7 @@ from typing import TYPE_CHECKING
 import click
 
 from canopy.cli.common import CliError, open_context
-from canopy.core import conversation, db, session_list, session_sizes
+from canopy.core import conversation, db, session_index, session_list, session_search, session_sizes
 from canopy.runtime import sessions as runtime_sessions
 from canopy.runtime.report import count_text
 
@@ -29,6 +31,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from canopy.core.context import Context
+    from canopy.core.session_index import Progress as IndexProgress
     from canopy.core.session_list import Listed, Listing, MadeBy, Progress
     from canopy.core.session_sizes import Found, Group, Sizes
 
@@ -96,7 +99,9 @@ def cmd_sessions(
     with --canopy, canopy's runs' instead, each with the run that made it. A subagent's session is listed under the
     one it ran for; one the runtime archived only with --archived; and one in a directory sessions.exclude names never.
     The loop's wait between ticks reads each session's title while sessions.search is "titles", and this says how far
-    that read has come.
+    that read has come. At "text", the wait also keeps an index of what each session said, did, and read, and WORDS
+    finds the sessions whose title and one message hold every word, the best match first, each with a snippet of the
+    message read from the runtime's record, and how many more messages hold them.
 
     With --sizes, measures the runtime's whole record instead, read-only: how many sessions it keeps, canopy's by kind
     of run and the rest by directory; how many characters each part of their text holds; and, for each cut a search
@@ -132,17 +137,27 @@ def cmd_sessions(
     return 0
 
 
-def listed_lines(listing: Listing, *, ours: bool, words: Sequence[str], reopen: dict[str, str]) -> list[str]:
+def listed_lines(
+    listing: Listing,
+    *,
+    ours: bool,
+    words: Sequence[str],
+    reopen: dict[str, str],
+    text: bool = False,
+) -> list[str]:
     """The list as `canopy sessions` prints it: a line for each session, and a line under it for its run or command.
 
-    `reopen` is the command that reopens each session outside canopy, by its id.
+    `reopen` is the command that reopens each session outside canopy, by its id. With `text`, the words were found by
+    the index of what sessions said, and each hit has its snippet.
 
     Returns:
         Its lines, without line ends, how far the read has come last.
     """
     whose = "canopy's sessions" if ours else "Sessions outside canopy"
-    heading = f"{whose} whose title holds {' '.join(words)}" if words else whose
-    lines = [f"{heading}, newest first:" if listing.sessions else f"{heading}: none.", ""]
+    holds = "that hold" if text else "whose title holds"
+    heading = f"{whose} {holds} {' '.join(words)}" if words else whose
+    order = "best match first" if text and words else "newest first"
+    lines = [f"{heading}, {order}:" if listing.sessions else f"{heading}: none.", ""]
     for session in listing.sessions:
         lines.extend([*_session_lines(session, reopen, depth=0, flat=bool(words)), ""])
     if listing.more:
@@ -165,6 +180,30 @@ def progress_line(progress: Progress) -> str:
         said += f", which failed: {progress.error}"
     if not progress.current:
         said += ". Titles are not yet read as sessions.exclude says: the loop's next wait reads them from the first"
+    return f"{said}."
+
+
+def index_line(progress: IndexProgress | None) -> str:
+    """How far the index of what sessions said has read the runtime's record, in a line.
+
+    Returns:
+        The line.
+    """
+    if progress is None:
+        return "The index of sessions' text is not built yet: the loop's waits between ticks build it."
+    if progress.read_at is None:
+        return "The index of sessions' text is new: the loop's next wait reads the runtime's sessions into it."
+    held = f"The index holds {_count(progress.sessions, 'session')}, {_bytes(progress.size_bytes)}"
+    through = f"read up to {_when(progress.through)}" if progress.through else "none read yet"
+    said = f"{held}, {through}; last read {_when(progress.read_at)}"
+    if not progress.built:
+        said += f"; still building, back to {_when(progress.back_to)}" if progress.back_to else "; still building"
+    if progress.error is not None:
+        said += f", which failed: {progress.error}"
+    if progress.passed_over:
+        said += f"; {_count(progress.passed_over, 'sandbox record')} passed over, canopy cannot read it"
+    if not progress.current:
+        said += ". It is not yet built as sessions.exclude says: the loop's next wait builds it again"
     return f"{said}."
 
 
@@ -225,6 +264,9 @@ def _list(ctx: Context, words: Sequence[str], *, ours: bool, archived: bool, lim
     search = ctx.config.sessions
     if search.search == "off":
         raise CliError(OFF)
+    version = ctx.config.runtime.version
+    text = session_index.effective(search.search, version=version) == "text"
+    why = session_index.why_titles(version=version) if search.search == "text" else None
     listing = session_list.listing(
         ctx.conn,
         whose="canopy" if ours else "outside",
@@ -233,8 +275,9 @@ def _list(ctx: Context, words: Sequence[str], *, ours: bool, archived: bool, lim
         words=words,
         archived=archived,
         limit=limit,
+        text=version if text else None,
     )
-    version = ctx.config.runtime.version
+    index = session_index.progress(ctx.state_dir, search.exclude) if text else None
     reopen = {
         s.session_id: runtime_sessions.reopen(s.session_id, s.directory, version=version)
         for s in _every(listing.sessions)
@@ -242,14 +285,21 @@ def _list(ctx: Context, words: Sequence[str], *, ours: bool, archived: bool, lim
     }
     if as_json:
         found = {
+            "search": "text" if text else "titles",
+            "why_titles": why,
             "sessions": [_as_json(s, reopen) for s in listing.sessions],
             "more": listing.more,
             "progress": dataclasses.asdict(listing.progress),
+            "index": dataclasses.asdict(index) if index is not None else None,
         }
         click.echo(json.dumps(found, indent=2))
     else:
-        for line in listed_lines(listing, ours=ours, words=words, reopen=reopen):
+        for line in listed_lines(listing, ours=ours, words=words, reopen=reopen, text=text):
             click.echo(line)
+        if text:
+            click.echo(index_line(index))
+        if why is not None:
+            click.echo(f"{why}.")
     return 0
 
 
@@ -264,6 +314,7 @@ def _as_json(session: Listed, reopen: dict[str, str]) -> dict[str, object]:
     return {
         **shown,
         "made_by": {"table": made.table, "run_id": made.run_id} if made is not None else None,
+        "hit": dataclasses.asdict(session.hit) if session.hit is not None else None,
         "reopen": reopen.get(session.session_id),
         "subagents": [_as_json(s, reopen) for s in session.subagents],
     }
@@ -276,6 +327,8 @@ def _session_lines(session: Listed, reopen: dict[str, str], *, depth: int, flat:
     title = session.title or "(no title)"
     archived = " (archived)" if session.archived else ""
     lines = [f"{indent}{_when(session.started_at)}  ${session.cost_usd:.2f}  {title}{archived}"]
+    if session.hit is not None:
+        lines.extend(f"{indent}    {line}" for line in _hit_lines(session.hit))
     if session.session_id in reopen:
         lines.append(f"{indent}    {reopen[session.session_id]}")
     else:
@@ -285,6 +338,20 @@ def _session_lines(session: Listed, reopen: dict[str, str], *, depth: int, flat:
         lines.append(f"{indent}    a subagent's, for session {session.parent_id}")
     for below in session.subagents:
         lines.extend(_session_lines(below, reopen, depth=depth + 1, flat=flat))
+    return lines
+
+
+# A hit's snippet, its words marked, and what else it says: how many more messages hold the words, and whether the
+# session was indexed in part.
+def _hit_lines(hit: session_search.Hit) -> list[str]:
+    lines = [f'"{session_search.marked_text(hit.snippet)}"'] if hit.snippet else []
+    said = []
+    if hit.more:
+        said.append(f"{_count(hit.more, 'more message')} {'holds' if hit.more == 1 else 'hold'} them")
+    if hit.cut:
+        said.append("indexed in part: past its bound, words are not found")
+    if said:
+        lines.append(f"({'; '.join(said)})")
     return lines
 
 

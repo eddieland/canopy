@@ -305,6 +305,77 @@ class TextRow:
 
 
 @dataclass(frozen=True)
+class SessionHead:
+    """A session as an index of the runtime's text reads it before its messages (ROADMAP M72, stage 2)."""
+
+    session_id: str
+    #: The session it ran for, as a subagent; None for a session of its own.
+    parent_id: str | None
+    #: Where it ran, printable, at most `MAX_DIRECTORY` characters.
+    directory: str
+    #: Its title, as `session_title` keeps it; None when it has none.
+    title: str | None
+    #: When the runtime last updated it, in milliseconds since the epoch.
+    updated_ms: int
+    #: Which of the runtime's records keeps it, the operator's or a sandbox role's, as the implementation names it: the
+    #: name its messages and a snippet are read back by.
+    record: str
+
+
+@dataclass(frozen=True)
+class HeadPage:
+    """The sessions updated after, or before, a cursor, in the order read, and how reading them ended."""
+
+    outcome: SessionsRead
+    #: Each row read, where it sorts and the session, or None for a row canopy cannot read, which the cursor passes;
+    #: empty unless `found`.
+    rows: Sequence[tuple[SessionCursor, SessionHead | None]] = ()
+    #: How many sandbox roles' records canopy could not read, and passed over whole.
+    passed_over: int = 0
+    #: Why it `failed`, in canopy's words, never what the runtime wrote.
+    error: str | None = None
+
+
+@dataclass(frozen=True)
+class MessageText:
+    """One part of one of a session's messages, as an index reads it: its message, which part, and its text."""
+
+    message_id: str
+    part: TextPart
+    #: The text, cut to the bound the read was given.
+    text: str
+    #: Whether the part held more than `text`.
+    cut: bool = False
+
+
+#: How reading a session's text ended: read; its record no longer keeps it; or its record could not be read.
+type TextRead = Literal["found", "missing", "failed"]
+
+
+@dataclass(frozen=True)
+class SessionTexts:
+    """The text of one session's messages, in their order, within the bounds the read was given."""
+
+    outcome: TextRead
+    #: Each part of each message, a message's parts together; empty unless `found`.
+    parts: Sequence[MessageText] = ()
+    #: Whether the session held more than was read: more messages, or more text, than the bounds, or more than its
+    #: read's time allowed.
+    cut: bool = False
+
+
+@dataclass(frozen=True)
+class KeptIds:
+    """Every session the runtime's records keep, by record, for an index to drop the sessions they no longer keep."""
+
+    outcome: SessionsRead
+    #: Each record read, by its name, and the sessions it keeps.
+    records: Mapping[str, AbstractSet[str]] = field(default_factory=dict)
+    #: The records that could not be read, by name: what an index holds of them is kept.
+    unread: AbstractSet[str] = frozenset()
+
+
+@dataclass(frozen=True)
 class ModelList:
     """The models the runtime lists to run an agent on, the list it looks a run's model up in, or why it listed none."""
 

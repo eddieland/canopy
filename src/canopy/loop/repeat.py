@@ -365,7 +365,8 @@ class _Polls:
     """When the wait after a tick polls the connectors (`poll.run`): `connect.every_minutes` after the last read.
 
     What a poll read can end the wait (`woke`, DESIGN §39). The wait also reads which models served the runs left
-    unread, through `backlog`, and records every session the runtime keeps, through `recorder`, between its polls.
+    unread, through `backlog`, records every session the runtime keeps, through `recorder`, and keeps the index of what
+    they said, through `indexer`, between its polls.
     """
 
     settings: _Settings
@@ -375,6 +376,8 @@ class _Polls:
     backlog: models.Backlog | None
     #: The runtime's sessions, canopy's and not; None in a dry run, which records none.
     recorder: sessions.Recorder | None = None
+    #: The index of what those sessions said; None in a dry run, which indexes none.
+    indexer: sessions.Indexer | None = None
     #: Whether the loop is a dry run, whose polls record no operator message (D036).
     dry_run: bool = False
     #: When the connectors last ran, a tick's or a poll's, on `clock`.
@@ -414,7 +417,8 @@ class _Polls:
         """Read the config again if asked to, as every step of a wait does, then poll if one is due and not paused.
 
         Before the poll, deliver to the sinks if that is due, paused or not (`flush.run`), read a run's session if
-        one is due (`models.Backlog.step`), and the runtime's sessions if their read is due (`sessions.Recorder.step`).
+        one is due (`models.Backlog.step`), the runtime's sessions if their read is due (`sessions.Recorder.step`),
+        and the index of what they said if its step is due (`sessions.Indexer.step`).
         """
         self.settings.apply()
         ctx = self.settings.ctx
@@ -425,6 +429,8 @@ class _Polls:
             self.backlog.step(ctx)
         if self.recorder is not None:
             self.recorder.step(ctx)
+        if self.indexer is not None:
+            self.indexer.step(ctx)
         if self.clock() - self.last < ctx.config.connect.every_minutes * 60 or pause.paused(ctx.conn) is not None:
             return
         self.last = self.clock()
@@ -521,6 +527,7 @@ def _ticks(
         log,
         None if dry_run else models.Backlog(clock, log),
         recorder=None if dry_run else sessions.Recorder(clock, log),
+        indexer=None if dry_run else sessions.Indexer(clock, log),
         dry_run=dry_run,
     )
     while not stop.requested:

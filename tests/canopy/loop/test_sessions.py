@@ -9,13 +9,14 @@ from unittest import mock
 
 import pytest
 
-from canopy.core import pause, runtime_sessions
+from canopy.core import pause, runtime_sessions, session_index
 from canopy.core.vocab import SessionsRead
 from canopy.infra import logs
 from canopy.loop import repeat, sessions
 from canopy.runtime import sessions as runtime
+from canopy.runtime.implementation import Version
 from canopy.runtime.report import MAX_SESSIONS, SessionPage, SessionSpend
-from tests.canopy.helpers import FakeTime, console, context, overseer_does
+from tests.canopy.helpers import FakeTime, Kept, console, context, overseer_does, runtime_record
 
 if TYPE_CHECKING:
     from canopy.core.context import Context
@@ -115,3 +116,78 @@ def test_the_recorder_reads_titles_only_while_sessions_search_keeps_them(canopy_
     assert read_now is not None
     assert read.call_args.kwargs["titles"] is (search == "titles")
     assert read_now.titles == (json.dumps([str(Path.home() / "clients")]) if search == "titles" else None)
+
+
+def test_the_indexer_builds_the_index_at_text_and_removes_it_when_the_key_is_lowered(canopy_env: CanopyEnv) -> None:
+    runtime_record(Kept("ses_a", "/home/me", title="The dipper", updated=10))
+    canopy_env.journal()
+    canopy_env.append_user("\n[sessions]\nsearch = 'text'\n")
+    time = FakeTime()
+    indexer = sessions.Indexer(time.clock, logs.for_tick(None))
+
+    stepped = indexer.step(context(canopy_env))
+
+    index = session_index.size(canopy_env.state_dir)
+    if canopy_env.runtime is Version.ONE:
+        # Under OpenCode 1, text is titles: nothing is indexed.
+        assert (stepped, index) == (None, None)
+        return
+    assert stepped is not None
+    assert (stepped.indexed, stepped.behind) == (1, False)
+    assert index
+    time.sleep(sessions.INDEX_EVERY_SECONDS - 1)
+    assert indexer.step(context(canopy_env)) is None
+
+    canopy_env.write_user(canopy_env.user_file.read_text().replace("search = 'text'", "search = 'titles'"))
+    time.sleep(1)
+    assert indexer.step(context(canopy_env)) is None
+    assert session_index.size(canopy_env.state_dir) is None
+
+
+def test_the_indexer_steps_soon_after_while_behind_and_never_while_the_loop_is_paused(ctx: Context) -> None:
+    time = FakeTime()
+    indexer = sessions.Indexer(time.clock, logs.for_tick(None))
+    behind = session_index.Stepped(indexed=1, behind=True)
+    with (
+        mock.patch.object(session_index, "effective", autospec=True, return_value="text"),
+        mock.patch.object(session_index, "step", autospec=True, return_value=behind) as step,
+    ):
+        pause.pause(ctx.conn, channel=pause.LOOP)
+        assert indexer.step(ctx) is None
+        pause.resume(ctx.conn)
+        assert indexer.step(ctx) is behind
+        time.sleep(sessions.INDEX_GAP_SECONDS)
+        assert indexer.step(ctx) is behind
+        step.side_effect = RuntimeError("boom")
+        time.sleep(sessions.INDEX_GAP_SECONDS)
+        assert indexer.step(ctx) is None
+
+    assert step.call_count == 3
+
+
+def test_a_live_loop_keeps_the_index_and_a_dry_run_none(
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
+) -> None:
+    canopy_env.append_user("\n[sessions]\nsearch = 'text'\n")
+    for dry_run in (True, False):
+        time = FakeTime()
+        term, _ = console()
+        with (
+            overseer_does(),
+            mock.patch.object(runtime, "updated_after", autospec=True, return_value=page(0)),
+            mock.patch.object(session_index, "effective", autospec=True, return_value="text"),
+            mock.patch.object(session_index, "step", autospec=True, return_value=session_index.Stepped()) as step,
+        ):
+            repeat.run(
+                context(canopy_env),
+                dry_run=dry_run,
+                interval_minutes=1,
+                max_ticks=2,
+                console=term,
+                stop=repeat.Stop(),
+                sleep=time.sleep,
+                clock=time.clock,
+            )
+        assert step.called is not dry_run

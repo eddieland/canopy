@@ -146,8 +146,9 @@ and its controls TRUST_MODEL T8's.
 
 One box finds a ticket or a task, or the run or tick that said something, by substring over the journal's text. It
 serves only what the other pages serve, so T8 is unchanged. While `sessions.search` is `titles`, two more panels find
-the runtime's sessions by their titles (§13), the operator's own and canopy's apart, as the Sessions page lists them.
-Rejected for now: SQLite's FTS5, whose index is three times the text.
+the runtime's sessions by their titles (§13), the operator's own and canopy's apart, as the Sessions page lists them;
+at `text`, by what they said too, through an FTS5 index that holds words and no text, the best match first. The
+journal's own search still scans: rejected for it, an FTS5 index that keeps its text, three times the text's size.
 
 ### Trust model changes
 

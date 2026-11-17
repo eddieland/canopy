@@ -3,7 +3,8 @@
 `canopy sessions` lists the same, through the same read of the journal (`canopy.core.session_list`): while
 `sessions.search` is `titles`, every session the loop's read kept, but those in a directory `sessions.exclude` names.
 At `off` it serves none. Each of canopy's names the run that made it, with what its page needs, and each outside canopy
-the command that reopens it in the runtime. A title is untrusted text, which the UI renders as text.
+the command that reopens it in the runtime. At `text`, words are found by the index of what sessions said, each hit
+with a snippet read from the runtime's record. A title and a snippet are untrusted text, which the UI renders as text.
 """
 
 from __future__ import annotations
@@ -11,10 +12,17 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
-from canopy.core import db, records, session_list
+from canopy.core import db, records, session_index, session_list
 from canopy.runtime import sessions as runtime_sessions
 from canopy.serve import search
-from canopy.serve.schema.sessions import RuntimeSession, SessionList, SessionRun, SessionsProgress
+from canopy.serve.schema.sessions import (
+    RuntimeSession,
+    SessionList,
+    SessionRun,
+    SessionsIndex,
+    SessionsProgress,
+    SnippetPart,
+)
 
 if TYPE_CHECKING:
     import sqlite3
@@ -64,6 +72,9 @@ def listed(
     setting = ctx.config.sessions
     if setting.search == "off":
         return SessionList(search="off", whose=whose, words=list(words), sessions=[], more=False)
+    version = ctx.config.runtime.version
+    search_in_force = session_index.effective(setting.search, version=version)
+    text = search_in_force == "text"
     # One snapshot, so a run each session names is in the journal the list was read from.
     with db.read_snapshot(ctx.conn):
         found = session_list.listing(
@@ -75,16 +86,19 @@ def listed(
             archived=archived,
             directory=directory,
             limit=limit,
+            text=version if text else None,
         )
         runs = _runs(ctx.conn, [s.made_by for s in _every(found.sessions) if s.made_by is not None])
-    version = ctx.config.runtime.version
+    index = session_index.progress(ctx.state_dir, setting.exclude) if text else None
     return SessionList(
-        search=setting.search,
+        search=search_in_force,
         whose=whose,
         words=list(words),
         sessions=[_session(s, runs, version=version, outside=whose == "outside") for s in found.sessions],
         more=found.more,
         progress=_progress(found.progress),
+        index=_index(index) if index is not None else None,
+        why_titles=session_index.why_titles(version=version) if setting.search == "text" else None,
     )
 
 
@@ -124,6 +138,7 @@ def _session(
     outside: bool,
 ) -> RuntimeSession:
     made = session.made_by
+    hit = session.hit
     return RuntimeSession(
         session_id=session.session_id,
         parent_id=session.parent_id,
@@ -136,6 +151,24 @@ def _session(
         made_by=runs.get((made.table, made.run_id)) if made is not None else None,
         reopen=runtime_sessions.reopen(session.session_id, session.directory, version=version) if outside else None,
         subagents=[_session(s, runs, version=version, outside=outside) for s in session.subagents],
+        snippet=[SnippetPart(text=m.text, marked=m.marked) for m in hit.snippet]
+        if hit is not None and hit.snippet is not None
+        else None,
+        more_messages=hit.more if hit is not None else 0,
+        cut=hit.cut if hit is not None else False,
+    )
+
+
+def _index(index: session_index.Progress) -> SessionsIndex:
+    return SessionsIndex(
+        sessions=index.sessions,
+        through=db.parse_time(index.through) if index.through is not None else None,
+        back_to=db.parse_time(index.back_to) if index.back_to is not None else None,
+        built=index.built,
+        read_at=db.parse_time(index.read_at) if index.read_at is not None else None,
+        error=index.error,
+        current=index.current,
+        size_bytes=index.size_bytes,
     )
 
 

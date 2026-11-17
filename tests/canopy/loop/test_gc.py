@@ -11,11 +11,12 @@ from syrupy.assertion import SnapshotAssertion
 
 from canopy.cli import gc as gc_cli
 from canopy.cli.main import main
-from canopy.core import conversation, db, plans, records
+from canopy.core import conversation, db, plans, records, session_index
 from canopy.core.vocab import Decider, RequestAction
 from canopy.infra import lock, logs
 from canopy.loop import attention, gc
-from tests.canopy.helpers import KEY, PLAN, earlier, ended_tick, run_with_files, write_file
+from canopy.runtime.implementation import Version
+from tests.canopy.helpers import KEY, PLAN, Kept, earlier, ended_tick, run_with_files, runtime_record, write_file
 from tests.conftest import CanopyEnv
 
 MIB = 1024 * 1024
@@ -294,6 +295,21 @@ def test_a_kept_check_run_goes_after_journal_days_once_its_pr_is_seen_past_its_h
     # a PR no read recorded, and the recent ones stay. A commit status's runs go by the same rule.
     assert (kinds["check runs"]["count"], kinds["check runs"]["removable"]) == (8, 3)
     assert (kinds["status runs"]["count"], kinds["status runs"]["removable"]) == (8, 3)
+
+
+def test_a_dry_run_reports_the_index_of_sessions_text_which_no_pass_removes(
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert removes(dry_run(capsys)["sessions index"]) == (0, 0, 0, 0)
+    runtime_record(Kept("ses_a", "/home/me", title="A session"))
+    session_index.step(canopy_env.journal(), canopy_env.state_dir, version=Version.TWO, exclude=())
+
+    found = dry_run(capsys)["sessions index"]
+
+    assert removes(found)[0] == 1
+    assert removes(found)[1] == session_index.size(canopy_env.state_dir)
+    assert removes(found)[2:] == (0, 0)
 
 
 @pytest.mark.parametrize("env", [conversation.TICK_ID_ENV, conversation.RUN_ID_ENV])

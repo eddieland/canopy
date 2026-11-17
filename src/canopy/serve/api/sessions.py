@@ -1,7 +1,8 @@
-"""Every session the agent runtime keeps (DESIGN §13), listed and found by its title, as `canopy sessions` lists them.
+"""Every session the agent runtime keeps (DESIGN §13), listed and found by its words, as `canopy sessions` lists them.
 
 Reads only, and only what the loop's read of the runtime's record kept while the private `sessions.search` is
-`titles`: at `off`, the default, it serves no session. A title is untrusted text.
+`titles` or `text`: at `off`, the default, it serves no session. At `text`, words are found by the index of what each
+session said, and a hit's snippet is read from the runtime's record. A title and a snippet are untrusted text.
 """
 
 from __future__ import annotations
@@ -35,7 +36,8 @@ def sessions(
         Query(
             min_length=search.MIN_QUERY,
             max_length=search.MAX_QUERY,
-            description="The words every title holds, as the search of the journal takes them; none lists every one.",
+            description="The words every session found holds, as the search of the journal takes them: in its "
+            "title, or at `text` in its title and one message between them; none lists every one.",
         ),
     ] = None,
     archived: Annotated[bool, Query(description="List the sessions the runtime archived too.")] = False,
@@ -54,7 +56,8 @@ def sessions(
 ) -> SessionList:
     """The sessions `whose` names, newest first, a subagent's under the one it ran for, as `canopy sessions` lists them.
 
-    With `q`, the newest whose title holds every word, subagents' among them. With `directory`, only those that ran in
+    With `q`, the newest whose title holds every word, subagents' among them; at `text`, those whose title and one
+    message hold every word, the best match first, each with a snippet. With `directory`, only those that ran in
     it; one `sessions.exclude` names lists none. Each outside canopy carries the command that reopens it in the runtime,
     and each of canopy's the run that made it. While `sessions.search` is `off` it lists none. A query of too many words
     is a 422, as the search's is.

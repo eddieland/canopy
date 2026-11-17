@@ -7,15 +7,20 @@ one it ran for, and an archived one is left out unless asked for, as the runtime
 narrowed to a directory holds only the sessions that ran in that one, not below it. None in a directory
 `sessions.exclude` names is ever listed. With words, it finds the newest whose title holds every one, a
 subagent's among them. It reads the journal alone, never the runtime's record, so it serves only what the read kept.
+
+While `sessions.search` is `text`, words are found instead by the index of what each session said, did, and read
+(`canopy.core.session_search`), ranked as it ranks them, each hit with a snippet read from the runtime's record; the
+journal still says which sessions are listed, so the index never lists one the list would not.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, cast
 
-from canopy.core import db, records, runtime_sessions, sql
+from canopy.core import db, memory_search, records, runtime_sessions, session_search, sql
 
 if TYPE_CHECKING:
     import sqlite3
@@ -23,7 +28,9 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from canopy.core.run_models import RunTable
+    from canopy.core.session_search import Hit
     from canopy.core.vocab import SessionsRead
+    from canopy.runtime.implementation import Version
 
 #: Whose sessions a list holds: those outside canopy, the operator's own and other workspaces' runs; or canopy's, this
 #: journal's runs' and their subagents'.
@@ -67,6 +74,9 @@ class Listed:
     made_by: MadeBy | None
     #: The sessions that ran for it as subagents, oldest first, each with its own; empty for a list found by words.
     subagents: Sequence[Listed] = ()
+    #: Found by the index of what sessions said: its snippet, and how many more of its messages hold the words; None
+    #: for a list not found so.
+    hit: Hit | None = None
 
 
 @dataclass(frozen=True)
@@ -106,6 +116,7 @@ def listing(
     archived: bool = False,
     directory: str | None = None,
     limit: int = LISTED,
+    text: Version | None = None,
 ) -> Listing:
     """List the runtime's sessions `whose` names, newest first, or find the newest whose title holds every word.
 
@@ -113,12 +124,25 @@ def listing(
     directories' sessions are never listed. Without `words`, each session a subagent's ran for is listed with its
     subagents' under it. A word is found anywhere in a title, its case aside for ASCII letters, as `LIKE` finds it.
     `archived` lists the sessions the runtime archived too, and `directory` narrows the list to the sessions that ran in
-    that directory exactly, their subagents' among them, none in one `exclude` names all the same.
+    that directory exactly, their subagents' among them, none in one `exclude` names all the same. With `text`, the
+    runtime that keeps the record, words are found by the index of what sessions said, the best match first.
 
     Returns:
         At most `limit` sessions, within `MAX_LISTED`, and how far the read has come.
     """
     limit = max(1, min(limit, MAX_LISTED))
+    if text is not None and words:
+        return _found(
+            conn,
+            whose=whose,
+            state_dir=state_dir,
+            exclude=exclude,
+            words=words,
+            archived=archived,
+            directory=directory,
+            limit=limit,
+            version=text,
+        )
     with db.read_snapshot(conn):
         query = _matching(whose, state_dir, exclude, archived=archived, directory=directory)
         for word in words:
@@ -171,6 +195,43 @@ def progress(conn: sqlite3.Connection, exclude: Sequence[str]) -> Progress:
         through=through,
         current=read.titles == runtime_sessions.titles_setting(exclude),
     )
+
+
+# The sessions found by the index of what sessions said, of those the list would hold, the best match first, each with
+# its hit.
+def _found(
+    conn: sqlite3.Connection,
+    *,
+    whose: Whose,
+    state_dir: Path,
+    exclude: Sequence[str],
+    words: Sequence[str],
+    archived: bool,
+    directory: str | None,
+    limit: int,
+    version: Version,
+) -> Listing:
+    ours = whose == "canopy"
+    # Each a word as memory's search reads it, never the index's query syntax.
+    words = memory_search.words(" ".join(words))
+    ranked = session_search.found(state_dir, words, canopy=ours)
+    with db.read_snapshot(conn):
+        query = _matching(whose, state_dir, exclude, archived=archived, directory=directory).where(
+            "session_id IN (SELECT value FROM json_each(?))",
+            json.dumps([f.session_id for f in ranked]),
+        )
+        listed = {s.session_id: s for s in records.fetch_all(conn, _Session, query)}
+        kept = [f for f in ranked if f.session_id in listed]
+        shown = kept[:limit]
+        made = _made_by(conn, [f.session_id for f in shown]) if ours else {}
+        found = [
+            dataclasses.replace(
+                _tree([listed[f.session_id]], [], made)[0],
+                hit=session_search.hit(f, words, canopy=ours, version=version),
+            )
+            for f in shown
+        ]
+        return Listing(found, more=len(kept) > limit, progress=progress(conn, exclude))
 
 
 @dataclass(frozen=True)

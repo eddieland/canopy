@@ -1,7 +1,8 @@
-"""The API's types for the runtime's sessions (DESIGN §13): every session it keeps, listed and found by its title.
+"""The API's types for the runtime's sessions (DESIGN §13): every session it keeps, listed and found by its words.
 
 Built on `schema.Model`, as every API type is (schema/__init__.py). A title is untrusted text, whatever the runtime
-made of a session's first words or a run named it: the UI renders it as text.
+made of a session's first words or a run named it, and a snippet is too, whatever an agent wrote or a tool read: the UI
+renders both as text.
 """
 
 from __future__ import annotations
@@ -21,8 +22,11 @@ type SessionsWhose = Annotated[
     ),
 ]
 type SessionsSearch = Annotated[
-    Literal["off", "titles"],
-    Field(description="What `sessions.search` keeps: `off`, no title, so nothing is listed; `titles`, every title."),
+    Literal["off", "titles", "text"],
+    Field(
+        description="What `sessions.search` keeps, as it is in force: `off`, no title, so nothing is listed; "
+        "`titles`, every title; `text`, every title and an index of what each session said, did, and read.",
+    ),
 ]
 type SessionRunKind = Annotated[
     Literal["tick", "run", "chore_run", "review", "task_run", "epic_run"],
@@ -57,6 +61,15 @@ class SessionRun(Model):
     """An epic run's epic, whose page lists it."""
 
 
+class SnippetPart(Model):
+    """A piece of a snippet: its text, and whether it is one of the words searched for."""
+
+    text: str
+    """Untrusted text, on one line, nothing hidden in it."""
+    marked: bool
+    """Whether it is a word the query looked for."""
+
+
 class RuntimeSession(Model):
     """A session the runtime keeps, as the list shows it."""
 
@@ -83,6 +96,14 @@ class RuntimeSession(Model):
     """For one outside canopy, the shell line that reopens it in the runtime, in its directory, to copy."""
     subagents: list[RuntimeSession] = []
     """The sessions that ran for it as subagents, oldest first, each with its own; empty in a list found by words."""
+    snippet: list[SnippetPart] | None = None
+    """Found by its words at `text`: the words of the message that matched best around those found, read from the
+    runtime's record as the search was made; None when its title held them, the record no longer keeps the message, or
+    the list was not found so."""
+    more_messages: int = 0
+    """Found by its words at `text`: how many more of its messages hold them."""
+    cut: bool = False
+    """Found by its words at `text`: it was indexed in part, past a bound, so words past it are not found."""
 
 
 class SessionsProgress(Model):
@@ -99,6 +120,27 @@ class SessionsProgress(Model):
     current: bool
     """Whether the read keeps titles as `sessions.exclude` now says: false until the loop's next read starts again
     from the first session under it."""
+
+
+class SessionsIndex(Model):
+    """How far the index of what sessions said has read the runtime's record, while `sessions.search` is `text`."""
+
+    sessions: int
+    """How many sessions it holds."""
+    through: datetime | None = None
+    """The update of the newest session read; None before the first."""
+    back_to: datetime | None = None
+    """While the first build goes on, the update of the oldest session read so far; None once it is done."""
+    built: bool
+    """Whether the first build has read every session."""
+    read_at: datetime | None = None
+    """When the loop's wait last read the record into it; None before the first."""
+    error: str | None = None
+    """canopy's words for why the last read failed; None unless it did."""
+    current: bool
+    """Whether it was built as `sessions.exclude` now says: false until the loop's next wait builds it again."""
+    size_bytes: int
+    """Its files' size."""
 
 
 class SessionList(Model):
@@ -119,3 +161,7 @@ class SessionList(Model):
     """Whether more sessions matched than it holds."""
     progress: SessionsProgress | None = None
     """How far the loop's read of the runtime's record has come; None while `sessions.search` is `off`."""
+    index: SessionsIndex | None = None
+    """How far the index of what sessions said has come; None unless `search` is `text` and the index is built."""
+    why_titles: str | None = None
+    """Why `sessions.search = "text"` finds sessions by their titles: the runtime or SQLite cannot keep the index."""

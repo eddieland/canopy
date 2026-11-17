@@ -1339,8 +1339,9 @@ ResourceKey = Annotated[StrictStr, AfterValidator(_resource_key)]
 ResourceValue = Annotated[StrictStr, AfterValidator(_resource_value)]
 
 
-#: How much of the runtime's sessions canopy lists and finds (ROADMAP M72): none; or each one's title.
-type SessionSearch = Literal["off", "titles"]
+#: How much of the runtime's sessions canopy lists and finds (ROADMAP M72): none; each one's title; or its title and
+#: what it said, did, and read, through an index of its words.
+type SessionSearch = Literal["off", "titles", "text"]
 
 
 def _directory_glob(value: str) -> str:
@@ -1359,9 +1360,12 @@ class Sessions(Section):
 
     #: `off`, the default: no title is read, and no page or command lists a session. `titles`: the read that records
     #: every session's spend (DESIGN §13) keeps its title and archive too, for `canopy sessions` and the web UI to list.
+    #: `text`: that, and the loop's wait keeps an index of what each session said, did, and read, in `sessions.db` in
+    #: the state directory, so a search finds a session by its words; under runtime 1, or a SQLite before 3.43, `text`
+    #: searches titles, and says why.
     search: Annotated[SessionSearch, Scope.PRIVATE] = "off"
-    #: Globs of directories, such as `~/clients/*`, whose sessions canopy neither lists nor keeps a title of: one
-    #: matches a session's directory or a directory above it, as SQLite's GLOB reads it, `*` across a `/` too.
+    #: Globs of directories, such as `~/clients/*`, whose sessions canopy neither lists, indexes, nor keeps a title of:
+    #: one matches a session's directory or a directory above it, as SQLite's GLOB reads it, `*` across a `/` too.
     exclude: Annotated[tuple[Annotated[NonBlank, AfterValidator(_directory_glob)], ...], Scope.PRIVATE] = ()
 
 
