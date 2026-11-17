@@ -42,6 +42,9 @@ function session(id: string, title: string | null, at: string, more: Partial<Run
         made_by: null,
         reopen: `cd /home/op/acme/infra && opencode --session ${id}`,
         subagents: [],
+        snippet: null,
+        more_messages: 0,
+        cut: false,
         ...more,
     }
 }
@@ -61,6 +64,8 @@ const OUTSIDE: SessionList = {
     words: [],
     more: false,
     progress: READ,
+    index: null,
+    why_titles: null,
     sessions: [
         session('ses_deploy', 'Why does the deploy script hang on staging?', '2026-10-08T11:12:00Z', {
             subagents: [
@@ -197,6 +202,8 @@ describe('the sessions page', () => {
             sessions: [],
             more: false,
             progress: null,
+            index: null,
+            why_titles: null,
         }
         await renderPage('/workspace/sessions', { outside: off })
         expect(await screen.findByText(/in your private config/u)).toBeTruthy()

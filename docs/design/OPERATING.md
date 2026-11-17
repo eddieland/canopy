@@ -521,6 +521,17 @@ or served; a directory the private
 either drops, on the loop's next read, every title kept that the setting now keeps none of, and starts the read again
 from the first session, so every session is read as the setting now says.
 
+At `text`, the loop's wait between live ticks also keeps an index of what every session said, did, and read, in
+`sessions.db` in the state directory: a cache, never the journal, dropped and built again whole when its shape, its cut,
+or `sessions.exclude` changes, and removed below `text`. It holds words and no text: a hit's snippet is read from the
+runtime's record when the search is made, so the index shows nothing the runtime no longer keeps. Of canopy's sessions
+it never holds what one was sent, the journal's text rendered, which the journal's search finds already. Each step of
+keeping it is bounded in time, never in a tick, a dry run, or a pause: what changed since the last read, then, until the
+first build is done, older sessions newest first; once a day it drops the sessions the runtime no longer keeps. Each
+message and session is indexed up to a bound, and a hit past one says so. A session is found when its title and one
+message hold every word between them, each matched as a word, so no query is an error; a word in a title weighs more.
+Under OpenCode 1, or a SQLite too old to delete from an index of no text, `text` searches titles and says why.
+
 ### The operator's skill
 
 `canopy skill` prints a skill that teaches an agent in the operator's own session the canopy CLI and how to read the

@@ -71,7 +71,10 @@ Controls:
 - A session's title, which `sessions.search` keeps (DESIGN §13), is whatever the runtime made of the session's first
   words or a run named it, ticket and PR text among them: data, kept on one line, bounded, with every control and
   hidden character dropped, rendered as text, and put in no prompt. A search of titles is words found as text, never
-  a pattern, and no agent canopy runs can list or search them.
+  a pattern, and no agent canopy runs can list or search them. At `text`, a hit's snippet is the same: whatever an
+  agent wrote or a tool read, ticket and PR text among it, read from the runtime's record when the search is made,
+  on one line, bounded, nothing hidden in it, its words marked as data beside the text, never markup, rendered as text,
+  and put in no prompt. A query is words, each matched as a word, never the index's query syntax.
 - Workers can push only to `trust.branch_prefix` branches, with one exception: the head branch of an open PR the
   operator authored and labeled with one of `tracker.labels` (PR-scoped work, ROADMAP M14, D056). Enforced by the
   worker prompt and by repository branch protection, which the operator must configure. canopy `init` prints the
@@ -617,6 +620,10 @@ Controls in code, not prompts:
   run that rewrote its slot's git reported, is not recorded, and the harness raises `follow_up_unrecorded` naming it.
   None of them starts a run: each waits for a human's label or start, so the bounds only keep the operator's list
   short.
+- The index of sessions' words (DESIGN §13), at `sessions.search = "text"`: each step of keeping it takes new sessions
+  for a bounded time and reads each session's text within a bound of its own, so the loop's wait still ends when it is
+  due; each message and each session is indexed up to a bound in size, and a hit past one says it was cut, so no
+  session a run wrote fills the disk. `canopy gc --dry-run` reports the index's size.
 
 ### T4. Damage to the operator's machine
 
@@ -743,6 +750,11 @@ Controls now:
 - The sandbox canary (`tests/canopy_sandbox/test_sandbox_canary.py`, HOST_ISOLATION §6) runs a plain script, no model,
   through the real prefix and the shipped templates, and checks every sandbox denial above on the host, with positive controls
   so that a sandbox that refuses everything fails. CI runs it on Linux.
+- The runtime's record, which the index of sessions' words reads (DESIGN §13), is what runs write: an unsandboxed
+  run's the operator's own, a sandboxed one's its role's. It is opened as the spend's read opens it, read-only,
+  defensively, time-bounded, as one made to harm its reader, and each row is validated (D026); a role's record canopy
+  cannot read is passed over whole, and a record is opened by name only when it is one the runtime's own paths list.
+  The loop alone writes the index, in the state directory, which a sandboxed worker neither reads nor writes (§24).
 
 Residual: an unsandboxed run has a filesystem-wide shell as the operator, and the sandbox is opt-in; such a run could
 give the snapshot its write permission back, as it could do anything else the operator can. A sandboxed one
@@ -958,6 +970,13 @@ Controls:
   loop's next read drops it, which it does before it reads anything; until then nothing lists it, since the command
   and the web UI list by the config in force, and the command refuses and the web UI serves none at `off`. An
   unsandboxed run could already read the runtime's record itself, the standing residual.
+- Every session's words (DESIGN §13): while `sessions.search` is `text`, the loop keeps an index of what every session
+  said, did, and read, `sessions.db` in the state directory, derived from the same text: a private ticket's runs' and
+  the operator's own in other directories among it. It is kept as that text is: operator-only, in the state directory
+  (D053), on the machine, sent nowhere, served as the titles are and to no one else, and a snippet is read from the
+  record only for a hit shown. The index holds words and no text. A directory `sessions.exclude` names is indexed
+  nowhere, a change to it builds the index again, and a setting below `text` removes the file on the loop's next wait;
+  until then nothing reads it, since the command and the web UI search by the config in force.
 - Opt-in: a sandboxed run (T4) reads none of the operator's secrets under `$HOME` but what its template re-allows, and
   reaches the network only through `srt`'s proxy, which connects to the hosts on the operator's allowlist and to no
   other, and to no loopback, link-local, or cloud metadata address, nor the host's own, whatever name resolves there.
@@ -1180,7 +1199,11 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   nothing hidden in it, rendered as text; a search is words found as text, never a pattern. Beside it, the session's
   directory, cost, and the command that reopens it in the runtime, for the operator to copy; the page runs nothing. It
   lists none in a directory `sessions.exclude` names, and at `off`, the default, it serves no session at all, whatever
-  the journal still holds. It reads, and writes nothing.
+  the journal still holds. It reads, and writes nothing. At `text`, a search there also serves snippets of what those
+  sessions said, did, and read, read from the runtime's record for the hits it shows: an agent's words, a tool's
+  output, a file a run read, the operator's own sessions' among them, past their logs' retention. To the secret's
+  holder alone, read-only, bounded, as text; over plain HTTP on a private address they cross the network as
+  transcripts do (D076). A stolen session reads them, the residual; below `text` it serves none.
 - It serves the models the runtime lists (DESIGN §13), read when the operator opens a ticket's Model menu: it runs
   the runtime's list command, as `canopy models` does, through the process seam in the workspace root with a 30-second
   timeout, taking nothing from the request, and serves only the lines that are model ids. A choice of model is looked

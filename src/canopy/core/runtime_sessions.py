@@ -27,12 +27,12 @@ from canopy.runtime.report import MAX_SESSIONS
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Collection, Sequence
+    from collections.abc import Collection, Iterable, Sequence
     from pathlib import Path
 
     from canopy.core.run_models import RunTable
     from canopy.runtime.implementation import Version
-    from canopy.runtime.report import SessionCursor, SessionPage, SessionSpend
+    from canopy.runtime.report import SessionCursor, SessionHead, SessionPage, SessionSpend
 
 #: How many directories `spend` lists of the sessions outside canopy, the costliest first.
 DIRECTORIES = 10
@@ -274,6 +274,49 @@ def models_of(conn: sqlite3.Connection, session_id: str) -> list[records.Runtime
         records.select(records.RuntimeSessionModel).where("session_id = ?", session_id).order_by("cost_usd DESC, model")
     )
     return query.all(conn)
+
+
+def canopy_among(conn: sqlite3.Connection, sessions: Iterable[SessionHead], state_dir: Path) -> set[str]:
+    """Which of `sessions`, read from the runtime's record, are canopy's, as `sessions_in` tells them apart.
+
+    A session is canopy's when one of this journal's runs names it, when it ran in or below `state_dir`, or when one it
+    ran for, as a subagent, however deep, is: the one it ran for among `sessions`, or as the journal recorded it.
+
+    Returns:
+        The ids of canopy's.
+    """
+    given = json.dumps([[s.session_id, s.parent_id, s.directory] for s in sessions])
+    ran = sql.any_of(*(sql.frag("EXISTS (SELECT 1 FROM {} WHERE session_id = u.at)", sql.name(t)) for t in RUN_TABLES))
+    home = str(state_dir.resolve())
+    below = f"{home.rstrip('/')}/"
+    query = (
+        sql.select("DISTINCT u.origin")
+        .with_(
+            "given(session_id, parent_id, directory) AS (SELECT json_extract(value, '$[0]'),"
+            " json_extract(value, '$[1]'), json_extract(value, '$[2]') FROM json_each(?))",
+            given,
+        )
+        # Each session, and each it ran for, however deep, within a bound on a parent chain a run wrote into a loop.
+        .with_(
+            "up(origin, at, depth) AS (SELECT session_id, session_id, 0 FROM given"
+            " UNION SELECT u.origin, coalesce(g.parent_id, s.parent_id), u.depth + 1 FROM up u"
+            " LEFT JOIN given g ON g.session_id = u.at LEFT JOIN runtime_sessions s ON s.session_id = u.at"
+            " WHERE coalesce(g.parent_id, s.parent_id) IS NOT NULL AND u.depth < ?)",
+            MAX_DEPTH,
+            recursive=True,
+        )
+        .from_("up u")
+        .left_join("given g ON g.session_id = u.at")
+        .left_join("runtime_sessions h ON h.session_id = u.at")
+        .where(
+            "coalesce(g.directory, h.directory) = ? OR substr(coalesce(g.directory, h.directory), 1, ?) = ? OR {}",
+            home,
+            len(below),
+            below,
+            ran,
+        )
+    )
+    return {str(row[0]) for row in sql.execute(conn, query)}
 
 
 def sessions_in(since: str, until: str | None, state_dir: Path) -> sql.Select:

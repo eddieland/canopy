@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from canopy.core import db, records, runtime_sessions, session_list
+from canopy.core import db, records, runtime_sessions, session_index, session_list
 from canopy.infra import resources
+from canopy.runtime.implementation import Version
 from canopy.runtime.report import SessionPage, SessionSpend
 from canopy.serve.mock import T0
 from canopy.serve.mock import sessions as mock_sessions
-from tests.canopy.helpers import context
+from tests.canopy.helpers import Kept, context, recorded, runtime_record, sent
 from tests.canopy.web_helpers import client, signed_in_client
 
 if TYPE_CHECKING:
@@ -171,3 +172,31 @@ def kept_titles(ctx: Context) -> None:
         titles=runtime_sessions.titles_setting([]),
         restarted=True,
     )
+
+
+def test_at_text_a_search_finds_a_session_by_what_it_said_with_its_snippet_marked(canopy_env: CanopyEnv) -> None:
+    canopy_env.append_user("\n[sessions]\nsearch = 'text'\n")
+    ctx = context(canopy_env)
+    db.migrate(ctx.conn, resources.migrations_dir())
+    mine = Kept("ses_mine", "/home/me/notes", title="Notes", messages=[sent("where the <b>bittern</b> nests")])
+    runtime_record(mine)
+    recorded(ctx.conn, mine)
+    session_index.step(ctx.conn, ctx.state_dir, version=Version.TWO, exclude=())
+    c, _ = signed_in_client(ctx)
+
+    found = c.get("/api/sessions", params={"q": "bittern"}).json()
+
+    if canopy_env.runtime is Version.ONE:
+        assert (found["search"], found["sessions"], found["index"]) == ("titles", [], None)
+        assert "runtime.version 1 is deprecated" in found["why_titles"]
+        return
+    assert (found["search"], found["why_titles"], found["index"]["sessions"]) == ("text", None, 1)
+    [hit] = found["sessions"]
+    # The snippet is text, its markup as it was written, the word found marked.
+    assert hit["snippet"] == [
+        {"text": "where the <b>", "marked": False},
+        {"text": "bittern", "marked": True},
+        {"text": "</b> nests", "marked": False},
+    ]
+    assert (hit["title"], hit["more_messages"], hit["cut"]) == ("Notes", 0, False)
+    assert c.get("/api/sessions", params={"q": "bittern", "whose": "canopy"}).json()["sessions"] == []

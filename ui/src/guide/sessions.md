@@ -27,6 +27,11 @@ canopy never lists, by title or otherwise: another client's work, say. Both keys
 workspace file can't set them, and the page can't change them either. Setting it back to `off` drops every title kept
 on the loop's next read, and the page lists nothing meanwhile.
 
+Set it to `"text"` and the loop also keeps an index of what each session said, did, and read, in
+`.canopy/sessions.db`: words only, no copy of the text, built newest first in the waits between ticks, so last week's
+sessions are findable long before last year's. Going back below `text` deletes the file on the loop's next wait. Under
+runtime version 1, `text` behaves as `titles`, and says so.
+
 ## The list
 
 Each row is a session: where it opens, its title, what it cost, and when it started. A subagent's session sits under
@@ -59,13 +64,16 @@ sits in the address with the other filters, so you can link to a narrowed list, 
 
 ## Finding one
 
-Search, the box at the top of every page, finds sessions by their titles: see [Search](overview#search). The command
-line has the same list, `canopy sessions` for yours and `canopy sessions --canopy` for canopy's, with words to find
-one and `--json` for scripts.
+Search, the box at the top of every page, finds sessions by their titles, or at `text` by what they said too: see
+[Search](overview#search). The command line has the same list, `canopy sessions` for yours and
+`canopy sessions --canopy` for canopy's, with words to find one and `--json` for scripts; at `text` it also prints each
+hit's snippet, the words marked, and how many more of its messages hold them.
 
 ## What it never shows
 
-A title is all canopy reads of a session for this page. It doesn't index what a session said or did, and it has no
-reader for one: yours reopens in the runtime, and canopy's has its run's transcript. A title is whatever the runtime
-made of the first words, ticket text among them, so it's shown as text and nothing in it is a link. No agent canopy
-runs can list or search these: a worker never reads your other sessions through canopy.
+At `titles`, a title is all canopy reads of a session for this page; at `text`, the index knows its words, but canopy
+still has no reader for a session: yours reopens in the runtime, and canopy's has its run's transcript. canopy's own
+sessions are never found by what canopy sent them, a prompt being the journal's text, which Search finds already. A
+title is whatever the runtime made of the first words, ticket text among them, so it's shown as text and nothing in it
+is a link; a snippet is the same. No agent canopy runs can list or search these: a worker never reads your other
+sessions through canopy.

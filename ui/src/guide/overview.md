@@ -161,8 +161,9 @@ one's results stay, dimmed, so the page never blanks between keystrokes. The box
 
 With `sessions.search` set to `titles`, two more panels follow the journal's: the agent runtime's sessions outside
 canopy, yours, and canopy's own, each the newest 20 whose title holds every word. A subagent's is found too, marked as
-one. Yours carries the command that reopens it; canopy's opens the run that made it. The search reads titles only,
-never what a session said, so a session called `fix it` is found by `fix` and by nothing it fixed. The whole list is on
+one. Yours carries the command that reopens it; canopy's opens the run that made it. At `titles` the search reads
+titles only, so a session called `fix it` is found by `fix` and by nothing it fixed; at `text` it finds a session whose
+title and one message hold every word between them, the best match first. The whole list is on
 [Sessions](sessions).
 
 A task's reference alone, `task:4`, opens that task on Enter instead of searching for it: faster than remembering

@@ -11,6 +11,7 @@ and reuses its definitions' format.
 from canopy.runtime.opencode import (
     definitions,
     events,
+    indexed_text,
     invocation,
     models,
     offerings,
@@ -26,6 +27,7 @@ from canopy.runtime.opencode import (
 __all__ = [
     "definitions",
     "events",
+    "indexed_text",
     "invocation",
     "models",
     "offerings",

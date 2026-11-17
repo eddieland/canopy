@@ -36,6 +36,7 @@ from canopy.core import (
     recorded_runs,
     records,
     replies,
+    runtime_sessions,
     sql,
     workspace,
 )
@@ -58,6 +59,7 @@ from canopy.infra import logs, procs, resources
 from canopy.loop import connectors, mcp, spawns
 from canopy.runs import drafted, epic_starts
 from canopy.runtime.implementation import Version
+from canopy.runtime.report import SessionPage, SessionSpend
 from tests.conftest import FAKES_DIR, TRACKER_CMD, TRACKER_SOURCE, CanopyEnv, Journals, git
 
 KEY = "PROJ-1"
@@ -1773,8 +1775,11 @@ class Kept(NamedTuple):
     title: str | None = None
     parent_id: str | None = None
     archived: bool = False
-    #: Its messages, each a type and its data, as JSON or as text that may not be JSON.
+    #: Its messages, each a type and its data, as JSON or as text that may not be JSON, each with the id
+    #: `msg_<session>_<n>`, `n` its place among them.
     messages: Sequence[tuple[str, Mapping[str, object] | str]] = ()
+    #: When the runtime last updated it, in milliseconds since the epoch.
+    updated: int = 1
 
 
 def runtime_database(home: Path | None = None) -> Path:
@@ -1783,14 +1788,20 @@ def runtime_database(home: Path | None = None) -> Path:
 
 
 def runtime_record(*sessions: Kept, path: Path | None = None) -> Path:
-    """Write a runtime record that keeps `sessions`, at `path` or the operator's (`runtime_database`), closed after."""
+    """Write a runtime record that keeps `sessions`, at `path` or the operator's (`runtime_database`), closed after.
+
+    A record already there keeps its sessions, and each of `sessions` replaces its own, as the runtime updates one.
+    """
     at = path or runtime_database()
     at.parent.mkdir(parents=True, exist_ok=True)
     with closing(sqlite3.connect(at)) as conn, conn:
-        conn.executescript(RUNTIME_RECORD)
+        conn.executescript(RUNTIME_RECORD.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"))
+        for s in sessions:
+            conn.execute("DELETE FROM session_v2 WHERE id = ?", (s.session_id,))
+            conn.execute("DELETE FROM session_message WHERE session_id = ?", (s.session_id,))
         conn.executemany(
-            "INSERT INTO session_v2 VALUES (?, 'p', ?, 's', ?, ?, '2.1.4', 1, 1, ?)",
-            [(s.session_id, s.parent_id, s.directory, s.title, 2 if s.archived else None) for s in sessions],
+            "INSERT INTO session_v2 VALUES (?, 'p', ?, 's', ?, ?, '2.1.4', 1, ?, ?)",
+            [(s.session_id, s.parent_id, s.directory, s.title, s.updated, 2 if s.archived else None) for s in sessions],
         )
         conn.executemany(
             "INSERT INTO session_message VALUES (?, ?, ?, ?, 1, 1, ?)",
@@ -1801,6 +1812,39 @@ def runtime_record(*sessions: Kept, path: Path | None = None) -> Path:
             ],
         )
     return at
+
+
+def recorded(conn: sqlite3.Connection, *sessions: Kept, exclude: Sequence[str] = ()) -> None:
+    """Record `sessions` in the journal as the loop's read that keeps titles under `exclude` records them."""
+    spent = tuple(
+        SessionSpend(
+            s.session_id,
+            s.parent_id,
+            s.directory,
+            s.updated,
+            s.updated,
+            0.0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            title=s.title,
+            archived_ms=2 if s.archived else None,
+        )
+        for s in sessions
+    )
+    last = max(spent, key=lambda s: (s.updated_ms, s.session_id))
+    page = SessionPage("found", spent, cursor=(last.updated_ms, last.session_id))
+    runtime_sessions.record(conn, page, titles=runtime_sessions.titles_setting(exclude), restarted=True)
+
+
+def runtime_forgets(*session_ids: str, path: Path | None = None) -> None:
+    """Delete `session_ids` and their messages from a record `runtime_record` wrote, as the runtime deletes one."""
+    with closing(sqlite3.connect(path or runtime_database())) as conn, conn:
+        for session_id in session_ids:
+            conn.execute("DELETE FROM session_v2 WHERE id = ?", (session_id,))
+            conn.execute("DELETE FROM session_message WHERE session_id = ?", (session_id,))
 
 
 def sent(text: str) -> tuple[str, Mapping[str, object]]:

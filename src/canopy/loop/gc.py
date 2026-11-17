@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Literal
 import canopy_sandbox
 
 from canopy.chores import start as chore_start
-from canopy.core import checklist_answers, db, hostgit, memory_manage, records, run_changes, sql
+from canopy.core import checklist_answers, db, hostgit, memory_manage, records, run_changes, session_index, sql
 from canopy.core.context import db_path
 from canopy.core.vocab import Decider, PrState, TickStatus
 from canopy.infra import lock, logs, procs
@@ -203,6 +203,7 @@ def measure(ctx: Context, now: datetime) -> Report:
         *_git_objects(ctx, notes),
         _sandbox_caches(),
         memory_text(ctx.conn, now, retention),
+        _sessions_index(ctx.state_dir),
     ]
     branches = gc_branches.unnamed(ctx, notes)
     size = _regular_size(journal) or 0
@@ -738,6 +739,17 @@ def _sandbox_caches() -> Kind:
         if _is_dir(role):
             tally.add(tree_size(role), removable=False)
     return tally.kind("sandbox caches", "directories", "--caches")
+
+
+def _sessions_index(state_dir: Path) -> Kind:
+    """The index of what the runtime's sessions said (ROADMAP M72), a cache the loop's wait keeps at `text`.
+
+    Returns:
+        The kind, counting the index's database: the loop's wait, not a pass, removes it below `text`.
+    """
+    size = session_index.size(state_dir)
+    count = int(size is not None)
+    return Kind("sessions index", "files", count, size or 0, 0, 0, 'kept at sessions.search = "text"')
 
 
 def _regular_stat(path: Path) -> os.stat_result | None:

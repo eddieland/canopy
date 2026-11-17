@@ -31,6 +31,7 @@ keeps. Sections are numbered across the whole design; the [README](README.md) ha
 | `plan-exports/<digest>.json`, what an export last found as it stands (§25) | a line per plan, per destination | never |
 | Notification events | each event | after 7 days once every sink has passed them (§20) |
 | Agent memory's notes and proposals no longer in force (§28) | each one replaced, dropped, or retired | text after `memory_days`, the row kept; `canopy memory forget` and `purge` delete it |
+| `sessions.db`, the index of every session's words (§13) | every session the runtime keeps, while `sessions.search` is `text` | rebuilt whole when its shape, cut, or exclude changes; removed below `text`; a session the runtime dropped, daily |
 
 ### What it never removes
 
