@@ -315,12 +315,13 @@ test.describe("Starry Skies's stars", () => {
             image: expect.stringMatching(/^radial-gradient\(/u),
             mask: expect.stringMatching(/^radial-gradient\(/u),
             zIndex: '-1',
+            drawn: true,
         })
 
         await storePalette(page, 'dark', 'black')
         await page.reload()
         await settled(page)
-        expect(await moon(page)).toEqual({ image: 'none', mask: 'none', zIndex: '-1' })
+        expect(await moon(page)).toEqual({ image: 'none', mask: 'none', zIndex: '-1', drawn: true })
     })
 
     test('holds its stars still and draws no meteor under reduced motion', async ({ page }) => {
@@ -351,15 +352,20 @@ function skyMotion(page: Page): Promise<string[]> {
     )
 }
 
-/** What the moon's box paints, the mask that cuts its phase, and where it sits in the stack. */
-function moon(page: Page): Promise<{ image: string; mask: string; zIndex: string }> {
+/** What the moon's box paints, the mask that cuts its phase, where it sits in the stack, and whether it has a box. */
+function moon(page: Page): Promise<{ image: string; mask: string; zIndex: string; drawn: boolean }> {
     return page.evaluate(() => {
         const root = document.querySelector('#root')
         if (!root) {
             throw new Error('the page has no #root')
         }
         const style = getComputedStyle(root, '::before')
-        return { image: style.backgroundImage, mask: style.maskImage, zIndex: style.zIndex }
+        return {
+            image: style.backgroundImage,
+            mask: style.maskImage,
+            zIndex: style.zIndex,
+            drawn: style.content !== 'none' && Number.parseFloat(style.width) > 0,
+        }
     })
 }
 
