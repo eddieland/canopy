@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
-    from canopy.runtime.agents import Rules
+    from canopy.runtime.agents import Model, Rules
     from canopy.runtime.implementation import Version
 
 # Both versions read the first's format of definitions, so what it says of them is the first's.
@@ -66,6 +66,18 @@ def links(*, version: Version) -> dict[str, Path]:
         Each link's target by its path in the snapshot; empty when the runtime reads its own config beside it.
     """
     return pick(version, one.definitions, two.definitions).links()
+
+
+def set_model(text: str, name: str, model: Model | None) -> str:
+    """Return definition `name`, an agent's as the runtime reads it, with `model` in place of any canopy wrote before.
+
+    None writes none, and takes out the one written. A definition with no line marked for its model, and none to
+    write, is returned as it is.
+
+    Raises:
+        DefinitionsError: `text` has no line marked for its model, or `model` is not one canopy renders.
+    """
+    return _shared.set_model(text, name, model)
 
 
 def render(files: Mapping[str, bytes], rules: Rules) -> dict[str, bytes]:
