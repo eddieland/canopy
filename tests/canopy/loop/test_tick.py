@@ -702,8 +702,8 @@ def test_an_overseers_model_the_runtime_does_not_list_closes_the_tick_without_it
     failed = scenario.tick(*waits(KEY), dry_run=True, code=1)
     assert failed.tick.status == TickStatus.MODEL_LIST_FAILED
     assert failed.tick.summary == (
-        f"could not look up the model {model} chosen in runtime.models: `{model_list(scenario.env.runtime)[1]}` "
-        "exited 1. Nothing ran on another model; the work resumes once the list can be read"
+        f"could not look up the model {model} chosen in runtime.models: {model_list(scenario.env.runtime)[1]}. "
+        "Nothing ran on another model; the work resumes once the list can be read"
     )
     assert scenario.attention() == [(None, "model_list_failed")]
 

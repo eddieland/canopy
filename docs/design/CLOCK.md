@@ -66,6 +66,16 @@ prompt while a server is still connecting, at most 30 seconds, then while a conn
 at most 2 seconds more, since one may have none; then the prompt goes on as it would have. It reads the servers' names
 and states and the tools' names, changes none of them, and catches every error, as the clock does.
 
+### The agent's model on the first call
+
+OpenCode lists its catalog's models when it starts, and a provider that fetches its own, as GitHub Copilot does,
+replaces them only once the fetch ends: a model the provider alone names, its router `github-copilot/auto` among them,
+is listed only then. A prompt's model is picked as the prompt goes on, and an agent whose model is not listed yet runs
+on OpenCode's default without a word, which §13 promises never happens. So the plugin also holds a session's first
+prompt while the model its agent names is not listed, at most 15 seconds; then the prompt goes on as it would have.
+It reads the session's agent, that agent's model, and the listed models' ids, and changes none of them
+(MEASUREMENTS 2026-11-17).
+
 These rest on OpenCode's source at 2.1.2, read 2026-10-22 and read again on an upgrade: OpenCode loads plugins from
 every config directory, the snapshot's last, so a repository's own plugins already run in the agent's process (T7);
 it loads a plugin file only by a default export with an id and a `setup` that registers hooks, and logs any other and

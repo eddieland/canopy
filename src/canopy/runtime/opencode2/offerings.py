@@ -1,12 +1,9 @@
 """What OpenCode 2 offers canopy's agents (DESIGN §13), asked of a private server of its own.
 
 OpenCode merges the operator's config into canopy's definitions, so what an agent is offered is not what canopy's
-definitions say alone. OpenCode 2 has no command that prints the merge reliably: its debug commands attach to the shared
-background service, and a private server answers before its plugins, canopy's definitions among them, have loaded, with
-no agent and no skill. So canopy starts `opencode serve` itself, on a port of the system's choosing, with a password of
-its own, and asks it through `opencode api --server`: `agent.list` until the agents have loaded, then `skill.list`,
-and `config.get` for the MCP servers, of which only their names, `type`, `disabled`, `enabled`, and `codemode` are
-read, since the rest may hold a secret. Then it stops the server.
+definitions say alone. canopy asks a server it starts for the questions (`canopy.runtime.opencode2.serve`):
+`agent.list` until the agents have loaded, then `skill.list`, and `config.get` for the MCP servers, of which only their
+names, `type`, `disabled`, `enabled`, and `codemode` are read, since the rest may hold a secret.
 
 From those this applies OpenCode's own rules, read from its source at 2.1.2: an agent's rules are `{action, resource,
 effect}`, the last whose action and resource both match decides, and only a deny with the resource `*` keeps a tool from
@@ -27,35 +24,29 @@ from __future__ import annotations
 
 import json
 import re
-import secrets
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
-from pydantic import BaseModel, ConfigDict, StrictBool, StrictStr, ValidationError
+from pydantic import BaseModel, ConfigDict, StrictBool, StrictStr
 
-from canopy.infra import procs
 from canopy.runtime.agents import AgentOffer, Offerings, Reach, ServerOffer, SkillFile, Skills
 from canopy.runtime.opencode2.invocation import CONFIG_DIR_ENV
+from canopy.runtime.opencode2.serve import OPENCODE, Client, FailedError, Serve, read
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection
+    from collections.abc import Collection
 
-#: How long the server may take to say where it listens, and its plugins to load once it has.
-TIMEOUT_SECONDS = 120
+    from canopy.infra import procs
+
+#: How long the server's plugins may take to load, and how long to wait between asking whether they have.
 LOADED_SECONDS = 30
-#: How long one question of the server may take, and how long to wait between asking whether its plugins have loaded.
-ASK_SECONDS = 30
 POLL_SECONDS = 0.25
-#: The variable a server takes its password from, and a client the password it sends.
-PASSWORD_ENV = "OPENCODE_PASSWORD"  # noqa: S105 - a variable's name, not a password
 #: OpenCode's tool that loads a skill, the permission its rules name, and the tool that runs code calling other tools.
 SKILL = "skill"
 EXECUTE = "execute"
-# The words that start OpenCode, as canopy's own questions run it.
-_OPENCODE = ("opencode",)
 # Each built-in tool OpenCode 2.1.2 sends a primary agent, and the permission it asks under: the file tools that
 # write share `edit`. `patch` stands in for `edit` on some models only, and `todowrite` is an experiment off by default.
 _BUILTIN = {
@@ -72,8 +63,6 @@ _BUILTIN = {
     "subagent": "subagent",
     EXECUTE: EXECUTE,
 }
-# Where the server says it listens.
-_LISTENING_RE = re.compile(r"server listening on (http://127\.0\.0\.1:\d{1,5})\b")
 # An agent's name, as one path component could hold it.
 _AGENT_RE = re.compile(r"[a-z][a-z0-9-]*")
 # What OpenCode makes of a server's name in its tools' names: anything but a letter, a digit, `_`, or `-` is `_`.
@@ -164,10 +153,6 @@ class _Loaded:
         return tuple(f.name for f in self.skill_files)
 
 
-class _FailedError(Exception):
-    """The server could not be started, asked, or understood."""
-
-
 def offerings(
     runner: procs.Runner,
     *,
@@ -185,8 +170,8 @@ def offerings(
         else, when they could not be listed, and an agent's `error` set when OpenCode has no such agent.
     """
     try:
-        loaded = _load(runner, _OPENCODE, cwd, {**(env or {}), CONFIG_DIR_ENV: str(definitions_dir)}, agents)
-    except _FailedError as e:
+        loaded = _load(runner, OPENCODE, cwd, {**(env or {}), CONFIG_DIR_ENV: str(definitions_dir)}, agents)
+    except FailedError as e:
         return Offerings(error=str(e))
     return Offerings(
         servers=tuple(loaded.servers),
@@ -213,8 +198,8 @@ def skills(
         Each skill as the server read it; only `error` when it could not list them.
     """
     try:
-        loaded = _load(runner, _OPENCODE, cwd, {**(env or {}), CONFIG_DIR_ENV: str(definitions_dir)}, agents)
-    except _FailedError as e:
+        loaded = _load(runner, OPENCODE, cwd, {**(env or {}), CONFIG_DIR_ENV: str(definitions_dir)}, agents)
+    except FailedError as e:
         return Skills(error=str(e))
     return Skills(loaded.skill_files)
 
@@ -235,7 +220,7 @@ def offered(runner: procs.Runner, argv: Sequence[str], *, cwd: Path, env: Mappin
         return AgentOffer("", error="its command names no agent")
     try:
         loaded = _load(runner, words[: start + 1], cwd, env, (agent,))
-    except _FailedError as e:
+    except FailedError as e:
         return AgentOffer(agent, error=str(e))
     on = {name: server for name, server in loaded.servers.items() if not server.disabled}
     return _offer(_Loaded(agents=loaded.agents, skill_files=loaded.skill_files, servers=on), agent)
@@ -280,87 +265,12 @@ def _load(
         canopy's agents' rules, the skills, and the MCP servers, as the server loaded them.
 
     Raises:
-        _FailedError: The server could not be started, did not load in time, or said what canopy cannot read.
+        FailedError: The server could not be started, did not load in time, or said what canopy cannot read.
     """
-    serve = _Serve(runner, launcher, cwd, {**env, PASSWORD_ENV: secrets.token_urlsafe(24)})
-    return serve.ask(lambda client: _loaded(client, agents))
+    return Serve(runner, launcher, cwd, env).ask(lambda client: _loaded(client, agents))
 
 
-class _Serve:
-    """`opencode serve`, started with `launcher` in `cwd` with `env`, for the questions of one function."""
-
-    def __init__(self, runner: procs.Runner, launcher: Sequence[str], cwd: Path, env: Mapping[str, str]) -> None:
-        self.runner = runner
-        self.launcher = tuple(launcher)
-        self.cwd = cwd
-        self.env = env
-
-    def ask[T](self, questions: Callable[[_Client], T]) -> T:
-        """Start the server, put `questions` to it once it listens, and stop it.
-
-        Returns:
-            What `questions` returned.
-
-        Raises:
-            _FailedError: The server could not start, or exited or timed out before it listened, or `questions` did.
-        """
-        argv = [*self.launcher, "serve", "--hostname", "127.0.0.1", "--port", "0"]
-        answers: list[T] = []
-
-        def listening(line: str) -> None:
-            found = _LISTENING_RE.search(line)
-            if found is None:
-                return
-            answers.append(questions(_Client(self, found[1])))
-            # Raised from here, it stops the server.
-            raise _Answered
-
-        try:
-            result = self.runner.run(argv, cwd=self.cwd, env=self.env, timeout=TIMEOUT_SECONDS, on_line=listening)
-        except _Answered:
-            return answers[0]
-        except procs.CommandNotFoundError:
-            raise _FailedError(f"{self.launcher[0]} is not on PATH") from None
-        except procs.ProcError as e:
-            raise _FailedError(f"`opencode serve` could not start: {e}") from None
-        if result.timed_out:
-            raise _FailedError(f"`opencode serve` did not listen within {TIMEOUT_SECONDS} seconds")
-        raise _FailedError(f"`opencode serve` exited {result.returncode}; run it to see why")
-
-
-class _Answered(Exception):  # noqa: N818 - it is no error: it ends the server once the questions are answered.
-    """The questions were answered, so the server may stop."""
-
-
-class _Client:
-    """`opencode api --server`, asking the server at `url` with the server's own launcher and environment."""
-
-    def __init__(self, server: _Serve, url: str) -> None:
-        self.server = server
-        self.url = url
-
-    def get(self, operation: str) -> str:
-        """Return what operation `operation` answered.
-
-        Raises:
-            _FailedError: It could not start, timed out, or failed.
-        """
-        server = self.server
-        argv = [*server.launcher, "api", "--server", self.url, operation]
-        try:
-            # Through a file, not a pipe: OpenCode exits having written only what a pipe's buffer holds, 64 KiB.
-            result = server.runner.run(argv, cwd=server.cwd, env=server.env, timeout=ASK_SECONDS, stdout_to_file=True)
-        except procs.ProcError as e:
-            raise _FailedError(f"`opencode api {operation}` could not start: {e}") from None
-        if result.timed_out:
-            raise _FailedError(f"`opencode api {operation}` took over {ASK_SECONDS} seconds")
-        if not result.ok:
-            # Not what it printed: an error about the config may quote a value of it, and an agent reads this.
-            raise _FailedError(f"`opencode api {operation}` exited {result.returncode}")
-        return result.stdout
-
-
-def _loaded(client: _Client, wanted: Collection[str]) -> _Loaded:
+def _loaded(client: Client, wanted: Collection[str]) -> _Loaded:
     """Ask the server for its agents once its plugins have loaded `wanted`, then its skills and its MCP servers.
 
     OpenCode lists its own agents before the plugins have loaded the definitions, canopy's among them, so it waits for
@@ -371,20 +281,20 @@ def _loaded(client: _Client, wanted: Collection[str]) -> _Loaded:
         config's order.
 
     Raises:
-        _FailedError: An answer could not be read, or no agent had loaded within `LOADED_SECONDS`.
+        FailedError: An answer could not be read, or no agent had loaded within `LOADED_SECONDS`.
     """
     deadline = time.monotonic() + LOADED_SECONDS
     while True:
-        agents = _read(client.get("agent.list"), _Agents.model_validate_json, "agent.list").data
+        agents = read(client.get("agent.list"), _Agents.model_validate_json, "agent.list").data
         if set(wanted) <= {agent.id for agent in agents}:
             break
         if time.monotonic() >= deadline:
             if not agents:
-                raise _FailedError(f"`opencode serve` had loaded no agent after {LOADED_SECONDS} seconds")
+                raise FailedError(f"`opencode serve` had loaded no agent after {LOADED_SECONDS} seconds")
             break
         time.sleep(POLL_SECONDS)
-    skills = _read(client.get("skill.list"), _Skills.model_validate_json, "skill.list").data
-    entries = _read(client.get("config.get"), _entries, "config.get")
+    skills = read(client.get("skill.list"), _Skills.model_validate_json, "skill.list").data
+    entries = read(client.get("config.get"), _entries, "config.get")
     servers: dict[str, _McpServer] = {}
     for entry in entries:
         mcp = entry.info.mcp if entry.info is not None else None
@@ -419,14 +329,6 @@ def _merged(earlier: _McpServer | None, later: _McpServer) -> _McpServer | None:
 
 def _entries(printed: str) -> tuple[_Entry, ...]:
     return tuple(_Entry.model_validate(entry) for entry in json.loads(printed))
-
-
-def _read[T](printed: str, validate: Callable[[str], T], operation: str) -> T:
-    try:
-        return validate(printed)
-    except (ValidationError, ValueError, TypeError):
-        # Not the error itself: it quotes what was printed, which for the config may hold a secret.
-        raise _FailedError(f"`opencode api {operation}` printed what canopy cannot read") from None
 
 
 def _offer(loaded: _Loaded, agent: str) -> AgentOffer:

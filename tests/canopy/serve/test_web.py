@@ -759,7 +759,7 @@ def test_a_model_chosen_from_the_web_is_the_tickets_override_as_canopy_model_mak
         "models": [],
         "variants": {},
         "hidden": [],
-        "error": f"`{model_list(ctx.config.runtime.version, variants=True)[1]}` exited 1",
+        "error": f"{model_list(ctx.config.runtime.version, variants=True)[1]}",
     }
     assert refused(choose({"model": "acme/fake-model-1"})).startswith("model_list_failed: ")
 

@@ -438,7 +438,8 @@ chores, which write nothing, may also read the files beside it.
 `runtime.pr_skill` names a skill workers open PRs with (§8); prefer that to a prompt override.
 
 canopy ships one plugin, `canopy.js`, whose jobs include a clock that tells a running agent the minutes left, holding
-a session's first prompt until its MCP tools are registered, and explaining a call its permission rules refuse; they,
+a session's first prompt until its MCP tools are registered and its agent's model is listed, and explaining a call
+its permission rules refuse; they,
 and what OpenCode does with a plugin, are §33.
 
 ### Each agent's model
@@ -482,6 +483,10 @@ promises:
   variant, or a list that cannot be read, refuses the run with an attention item, spending no attempt and leasing no
   slot, so the work resumes once the model is back: a task waits, and a tick closes without its overseer (§6 step 5).
   It never falls back to the default, since a run on a model nobody chose would read as the one the operator chose.
+  The list is OpenCode's once its providers have listed their own models, which one that fetches them, such as
+  GitHub Copilot with its router `github-copilot/auto`, does only after it starts: canopy gives a model it looks up
+  seconds to be listed, and a run's first prompt waits the same way (§33). A run on a router records the models it was
+  routed to, as any run records what served.
 - **Hiding narrows only what is shown.** `runtime.hide_models` leaves models and variants matching its globs out of the
   lists canopy shows, `canopy models` and the web UI's menus, never out of the check above: config or a ticket may
   still name a hidden one, and its runs run.

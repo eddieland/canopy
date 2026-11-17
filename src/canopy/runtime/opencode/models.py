@@ -48,7 +48,13 @@ class _Model(BaseModel):
     variants: Mapping[StrictStr, object] | None = None
 
 
-def listed(runner: procs.Runner, *, cwd: Path, variants: bool = False) -> ModelList:
+def listed(
+    runner: procs.Runner,
+    *,
+    cwd: Path,
+    variants: bool = False,
+    wanted: str | None = None,  # noqa: ARG001 - OpenCode 1 prints its list once, whole.
+) -> ModelList:
     """Ask OpenCode, started in `cwd`, which models it can run an agent on, and with `variants` each one's variants.
 
     Returns:

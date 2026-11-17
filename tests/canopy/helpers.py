@@ -749,16 +749,20 @@ def listed(state: Path, *lines: str, variants: Mapping[str, Sequence[str]] | Non
     state.write_text(json.dumps({"models": list(lines), "variants": dict(variants or {})}))
 
 
+#: Where the fake `opencode serve` says it listens.
+FAKE_SERVER = "http://127.0.0.1:41234"
+
+
 def model_list(runtime: Version, *, variants: bool = False) -> tuple[list[str], str]:
-    """How canopy asks runtime `runtime` for its models: the fake `opencode`'s argv, and the command a failure names.
+    """How canopy asks runtime `runtime` for its models: the fake `opencode`'s argv, and what canopy says when it fails.
 
     OpenCode 1 lists a model's variants only with `--verbose`, which canopy asks for when a run is at one; OpenCode 2's
-    one list holds them.
+    one list holds them, and is asked of a server canopy starts, which is what a failing fake fails to start.
     """
     if runtime == Version.TWO:
-        return ["api", "--standalone", "model.list"], "opencode api model.list"
+        return ["api", "--server", FAKE_SERVER, "model.list"], "`opencode serve` exited 1; run it to see why"
     argv = ["models", "--verbose"] if variants else ["models"]
-    return argv, f"opencode {' '.join(argv)}"
+    return argv, f"`opencode {' '.join(argv)}` exited 1"
 
 
 def pool_statuses(treehouse_state: Path) -> list[str]:

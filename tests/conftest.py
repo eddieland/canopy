@@ -24,6 +24,7 @@ from canopy.core import db
 from canopy.infra import metrics, resources, tracing
 from canopy.infra.procs import SubprocessRunner
 from canopy.runtime.implementation import Version
+from canopy.runtime.opencode2 import models
 
 if TYPE_CHECKING:
     import sqlite3
@@ -134,6 +135,17 @@ def hermetic_agent_env() -> Iterator[None]:
             yield
     finally:
         time.tzset()
+
+
+@pytest.fixture(autouse=True)
+def model_list_at_once() -> Iterator[None]:
+    """Take the runtime's first list of its models as whole, so no test waits for a provider's fetch that no fake makes.
+
+    OpenCode 2's list fills as its providers answer, and canopy waits for it (`canopy.runtime.opencode2.models`); the
+    tests of that wait set their own times.
+    """
+    with mock.patch.object(models, "SETTLE_SECONDS", 0), mock.patch.object(models, "WANTED_SECONDS", 0):
+        yield
 
 
 @pytest.fixture(autouse=True)
