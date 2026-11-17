@@ -106,6 +106,7 @@ describe('canopyCall', () => {
     it('reads no other tool’s call, nor one of canopy’s it does not know', () => {
         expect(canopyCall(call('github_dispatch', { key: 'ABC-1', kind: 'implement' }))).toBeNull()
         expect(canopyCall(call('canopy_new-tool', { key: 'ABC-1' }))).toBeNull()
+        expect(canopyCall(call('canopy_constructor', { key: 'ABC-1' }))).toBeNull()
         expect(canopyCall(call('canopy_dispatch', ['ABC-1']))).toBeNull()
     })
 })

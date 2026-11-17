@@ -1,7 +1,7 @@
 import type { TranscriptTool } from '@/api/types'
 import { pullRequestLabel } from '@/lib/pull-request-label'
 
-/** The color a call's action wears on its line: plain, what waits on the operator, or what failed. */
+/** The color a call's action wears on its line: plain, or that of what waits on the operator. */
 export type CallTone = 'plain' | 'blocked'
 
 /** Words of the agent's own a call carries, under the name of the field that held them. */
@@ -46,7 +46,8 @@ export function canopyCall(entry: TranscriptTool): CanopyCall | null {
         return null
     }
     const output = entry.status === 'error' ? null : record(parse(entry.output))
-    const read = READERS[own]
+    // Its own member alone: a tool named for one every object inherits (`constructor`) has no reader.
+    const read = Object.hasOwn(READERS, own) ? READERS[own] : undefined
     return read === undefined ? null : { ...BLANK, ...read(input, output) }
 }
 
