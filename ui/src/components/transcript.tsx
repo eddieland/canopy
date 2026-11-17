@@ -29,11 +29,15 @@ import { Cost } from '@/components/cost'
 import { FoldButton } from '@/components/fold-button'
 import { SearchField } from '@/components/input'
 import { JsonTokens } from '@/components/json-text'
+import { LetteredOption } from '@/components/lettered-option'
+import { LinkedText } from '@/components/linked-text'
 import { MarkedText } from '@/components/marked-text'
 import { MoreLines } from '@/components/more-lines'
 import { OrderToggle } from '@/components/order-toggle'
 import { Empty, Panel, PanelHeader, PanelScroll, PanelSkeleton } from '@/components/panel'
+import { RichText } from '@/components/rich-text'
 import { RowGrid, RowLine } from '@/components/rows'
+import { RunProgress } from '@/components/run-progress'
 import { Chip, RunDot } from '@/components/status'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Toggle } from '@/components/ui/toggle'
@@ -44,6 +48,7 @@ import { useClock } from '@/lib/clock'
 import { setContextChartOpen, useContextChartOpen } from '@/lib/context-chart-open'
 import type { TranscriptPage } from '@/lib/context-chart-open'
 import { tokenize } from '@/lib/json-lines'
+import { LETTERS } from '@/lib/lettered-options'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { removedAfter } from '@/lib/retention'
 import { rowLineFrom } from '@/lib/rows'
@@ -52,6 +57,7 @@ import { localTime } from '@/lib/time'
 import {
     byCall,
     callLine,
+    cardOf,
     contextShape,
     decisionsOf,
     drawnRows,
@@ -59,10 +65,12 @@ import {
     elapsed,
     findQueryOf,
     foldText,
+    heardOf,
     hitsIn,
     moreLabel,
     namedModels,
     outcome,
+    resultOf,
     sentTokens,
     settingsOf,
     settingSubject,
@@ -81,8 +89,10 @@ import {
     wroteTokens,
 } from '@/lib/transcript'
 import type {
+    CallCard,
     CallContext,
     CallDecision,
+    CallResult,
     CallSetting,
     ContextShape,
     ModelCall as Call,
@@ -708,9 +718,19 @@ function Tool({
     const shell = shellCall(entry, worktrees)
     const decisions = decisionsOf(entry)
     const settings = decisions === null ? settingsOf(entry) : null
+    const card = cardOf(entry)
+    const result = card === null ? resultOf(entry) : null
+    const heard = heardOf(entry)
+    // A call of canopy's that says something in prose, where another's line is a command or its input's values.
+    const prose = card !== null || result !== null
+    // A call of canopy's that worked says its own line under its summary, in place of what the tool answers every
+    // such call; one that failed says its error, as any call does.
+    const said = failed ? null : ownLine(card, result, heard)
+    // What canopy lays out of its own call is built only once opened, as a model call's body is.
+    const [shown, setShown] = useState(open)
     return (
         <li data-testid="transcript-tool" className={cn('group/row', targeted && 'bg-accent/14')}>
-            <details open={open} className="group/tool">
+            <details open={open} className="group/tool" onToggle={(e) => setShown(e.currentTarget.open)}>
                 <summary
                     ref={targeted ? reveal : undefined}
                     className={cn(
@@ -729,23 +749,28 @@ function Tool({
                             <MarkedText text={entry.tool} words={words} />
                         </span>
                     </span>
+                    {result !== null && <Chip tone={RESULT_TONE[result.status] ?? 'plain'} word={result.status} />}
                     <span className="flex min-w-40 flex-1 flex-col">
                         {/* A shell call's title is what the agent said it was for: the command is what it did. Its
                             hover is the line whole, as the call named its directory, then that title. */}
-                        <span className="truncate font-mono text-xs" title={summaryTitle(entry)}>
+                        <span className={cn('truncate text-xs', !prose && 'font-mono')} title={summaryTitle(entry)}>
                             {shell === null ? (
                                 <MarkedText text={did} words={words} />
                             ) : (
                                 <ShellLine call={shell} words={words} />
                             )}
                         </span>
-                        {line !== null && (
+                        {line !== null && said === null && (
                             <span
                                 className={cn('truncate text-xs text-muted-foreground', failed && 'text-status-failed')}
                                 title={line}
                             >
                                 <MarkedText text={line} words={words} />
                             </span>
+                        )}
+                        {said === 'card' && card !== null && <CardLine call={card} words={words} />}
+                        {said === 'heard' && heard !== null && (
+                            <span className="truncate text-xs text-muted-foreground">{heard}</span>
                         )}
                     </span>
                     {verdict === 'refused' && (
@@ -765,6 +790,8 @@ function Tool({
                 <RowGrid kind="transcript" alone>
                     <ThreadOn />
                     <RowLine from="text" className="flex flex-col gap-2 pt-1 pb-3">
+                        {shown && card !== null && <Posted call={card} />}
+                        {shown && result !== null && <Reported result={result} />}
                         {decisions !== null && <Decisions decisions={decisions} words={words} />}
                         {settings !== null && <Settings settings={settings} words={words} />}
                         <Block label="input" words={words}>
@@ -777,6 +804,132 @@ function Tool({
                 </RowGrid>
             </details>
         </li>
+    )
+}
+
+/**
+ * Which line of canopy's own a call says under its summary: its card's, what it heard, nothing for a result, whose
+ * summary and status are its line; null for any other call, which says how it ended.
+ */
+function ownLine(
+    card: CallCard | null,
+    result: CallResult | null,
+    heard: string | null,
+): 'card' | 'result' | 'heard' | null {
+    if (card !== null) {
+        return 'card'
+    }
+    if (result !== null) {
+        return 'result'
+    }
+    return heard === null ? null : 'heard'
+}
+
+/** A result's status as its chip's tone: what waits on the operator, what failed, and plain for the rest. */
+const RESULT_TONE: Partial<Record<string, 'blocked' | 'failed'>> = { blocked: 'blocked', failed: 'failed' }
+
+/** Under a progress update's summary: what the agent said it was doing, and how many of its steps were done. */
+function CardLine({ call, words }: { call: CallCard; words: readonly string[] }) {
+    const counted = call.card.steps.filter((step) => step.status !== 'skipped')
+    const done = counted.filter((step) => step.status === 'done').length
+    return (
+        <span className="truncate text-xs text-muted-foreground" title={call.card.now}>
+            now{' '}
+            <span className="text-foreground">
+                <MarkedText text={call.card.now} words={words} />
+            </span>
+            {counted.length > 0 && (
+                <span>
+                    {' '}
+                    ·{' '}
+                    <span className="readout">
+                        {done}/{counted.length}
+                    </span>{' '}
+                    steps done
+                </span>
+            )}
+            {call.question !== null && <span className="text-status-blocked"> · asks the operator</span>}
+        </span>
+    )
+}
+
+/**
+ * A progress update as the operator read it: the run's card as it stood at that call (`RunProgress`), then the
+ * question it asked, each option by its letter, the one the agent recommends marked. It is the record of one call, so
+ * it answers nothing: the run's page has the card as it stands.
+ */
+function Posted({ call }: { call: CallCard }) {
+    const question = call.question
+    return (
+        <div className="flex flex-col gap-1" data-testid="transcript-card">
+            <span className="panel-label">progress posted</span>
+            <div className="flex flex-col gap-3 rounded-sm border bg-background p-3">
+                <RunProgress card={call.card} running={false} freshness={false} />
+                {question !== null && (
+                    <div className="flex max-w-3xl flex-col gap-2">
+                        <p className="text-xs text-status-blocked">asks the operator</p>
+                        <p className="text-sm font-medium text-pretty">
+                            <LinkedText text={question.ask} />
+                        </p>
+                        <ol className="flex flex-col gap-1">
+                            {/* A question's options never reorder. */}
+                            {question.options.map((option, i) => (
+                                <li key={i} className="flex gap-2 text-sm">
+                                    <LetteredOption
+                                        letter={LETTERS[i] ?? '?'}
+                                        chosen={false}
+                                        recommended={LETTERS[i] === question.recommend}
+                                    >
+                                        <LinkedText text={option} />
+                                    </LetteredOption>
+                                </li>
+                            ))}
+                        </ol>
+                    </div>
+                )}
+            </div>
+        </div>
+    )
+}
+
+/**
+ * A run's result as it reported it: its summary laid out as the agent wrote it, what it asks the operator, and each
+ * repository's PR. Its status is on the call's line; the rest of what it reports is in its input.
+ */
+function Reported({ result }: { result: CallResult }) {
+    return (
+        <div className="flex flex-col gap-1" data-testid="transcript-result">
+            <span className="panel-label">result reported</span>
+            <div className="flex flex-col gap-3 rounded-sm border bg-background p-3">
+                {result.summary === '' ? (
+                    <p className="text-xs text-muted-foreground">no summary</p>
+                ) : (
+                    <RichText text={result.summary} pullRequests className="max-w-[96ch]" />
+                )}
+                {result.question !== null && (
+                    <div className="flex flex-col gap-1">
+                        <p className="text-xs text-status-blocked">asks the operator</p>
+                        <RichText text={result.question} className="max-w-[96ch]" />
+                    </div>
+                )}
+                {result.prs.length > 0 && (
+                    <ul className="flex flex-col gap-1 text-xs">
+                        {result.prs.map(([repo, url]) => (
+                            <li key={repo} className="flex items-baseline gap-2">
+                                <span className="shrink-0 font-mono">{repo}</span>
+                                {url === null ? (
+                                    <span className="text-muted-foreground">no PR</span>
+                                ) : (
+                                    <span className="min-w-0 wrap-break-word">
+                                        <LinkedText text={url} pullRequests />
+                                    </span>
+                                )}
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </div>
+        </div>
     )
 }
 

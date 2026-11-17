@@ -1,4 +1,5 @@
 import type {
+    RunCard,
     RunWorktree,
     TranscriptEntry,
     TranscriptError,
@@ -392,6 +393,14 @@ export function summary(entry: TranscriptTool, worktrees: readonly RunWorktree[]
             .join(', ')
             .slice(0, MAX_LINE)
     }
+    const card = cardIn(input, entry.at)
+    if (card !== null) {
+        return card.card.summary.slice(0, MAX_LINE)
+    }
+    const result = resultOf(entry)
+    if (result !== null) {
+        return firstLine(result.summary) ?? ''
+    }
     if (entry.title !== null) {
         return entry.title
     }
@@ -426,24 +435,211 @@ export function summaryTitle(entry: TranscriptTool): string {
     return entry.title === null || entry.title === '' ? whole : `${whole}\n${entry.title}`
 }
 
+// What the name of every tool of canopy's own servers starts with: canopy names the servers, the runtime joins the
+// tool's name to it.
+const CANOPY = 'canopy'
+
+/** A question a progress update asks the operator, as the call wrote it. */
+export interface CardQuestion {
+    /** What it asks. */
+    ask: string
+    /** Its options, in order: the first is A. */
+    options: string[]
+    /** The letter of the option the agent recommends, and works toward meanwhile. */
+    recommend: string
+}
+
+/** A progress update, canopy's `status` tool's call: the agent's whole progress as it stood at that call. */
+export interface CallCard {
+    /** The progress, as a run's page draws its card: written at the call's time, never stale, its question apart. */
+    card: RunCard
+    /** The question it asks the operator; null when it asks none. */
+    question: CardQuestion | null
+}
+
+/**
+ * The progress a call to canopy's `status` tool posts, read from its input: its summary and what it does now, what is
+ * done with the proof of each, what is next, its steps, what it works around, and its question. Null for any other
+ * call, and for an input the tool would refuse, which opens to its input alone.
+ */
+export function cardOf(entry: TranscriptTool): CallCard | null {
+    return cardIn(parsed(entry.input), entry.at)
+}
+
+// The fields a progress update may hold; an input with any other is some other tool's.
+const CARD_FIELDS = new Set(['summary', 'now', 'done', 'next', 'stuck', 'steps', 'question'])
+// A step's statuses, as the tool takes them.
+const STEP_STATUSES = new Set(['not_started', 'working', 'blocked', 'done', 'skipped'])
+
+function cardIn(input: Record<string, unknown> | null, at: string | null): CallCard | null {
+    if (input === null || !Object.keys(input).every((name) => CARD_FIELDS.has(name))) {
+        return null
+    }
+    const { summary: said, now, stuck } = input
+    const done = listIn(input['done'], (item) => {
+        const { step, proof } = item
+        return typeof step === 'string' && typeof proof === 'string' ? { step, proof } : null
+    })
+    const steps = listIn(input['steps'], (item) => {
+        const { title, status, stage } = item
+        if (typeof title !== 'string' || typeof status !== 'string' || !STEP_STATUSES.has(status)) {
+            return null
+        }
+        const stands = status as RunCard['steps'][number]['status']
+        return { title, status: stands, stage: typeof stage === 'string' ? stage : null, stuck_at: null }
+    })
+    // A lone line where the list of what is next goes is a list of one, as the tool takes it.
+    const next = typeof input['next'] === 'string' ? [input['next']] : (input['next'] ?? [])
+    const question = questionIn(input['question'])
+    if (
+        typeof said !== 'string' ||
+        typeof now !== 'string' ||
+        done === null ||
+        steps === null ||
+        question === undefined ||
+        !Array.isArray(next) ||
+        !next.every((line) => typeof line === 'string')
+    ) {
+        return null
+    }
+    return {
+        card: {
+            summary: said,
+            now,
+            done,
+            next,
+            stuck: typeof stuck === 'string' ? stuck : null,
+            at: at ?? '',
+            calls_since: 0,
+            stale: false,
+            stale_at: null,
+            steps,
+            percent: null,
+            stage: null,
+            question: null,
+        },
+        question,
+    }
+}
+
+// A list of objects, each read by `read`: empty when left out, null when it is no list or `read` refuses an item.
+function listIn<T>(value: unknown, read: (item: Record<string, unknown>) => T | null): T[] | null {
+    if (value === undefined || value === null) {
+        return []
+    }
+    if (!Array.isArray(value)) {
+        return null
+    }
+    const found: T[] = []
+    for (const item of value as unknown[]) {
+        const one = typeof item === 'object' && item !== null ? read(item as Record<string, unknown>) : null
+        if (one === null) {
+            return null
+        }
+        found.push(one)
+    }
+    return found
+}
+
+// A card's question: null when left out, undefined when it is not one.
+function questionIn(value: unknown): CardQuestion | null | undefined {
+    if (value === undefined || value === null) {
+        return null
+    }
+    if (typeof value !== 'object') {
+        return undefined
+    }
+    const { ask, options, recommend } = value as Record<string, unknown>
+    if (
+        typeof ask !== 'string' ||
+        typeof recommend !== 'string' ||
+        !Array.isArray(options) ||
+        !options.every((option) => typeof option === 'string')
+    ) {
+        return undefined
+    }
+    return { ask, options, recommend }
+}
+
+/** A run's result, canopy's `result` tool's call: how the run says it ended. */
+export interface CallResult {
+    /** How it ended, as the call wrote it: `done`, `blocked`, `failed`, or a contract's own word. */
+    status: string
+    /** Its report to the operator, Markdown; empty when it wrote none. */
+    summary: string
+    /** What it needs the operator to answer; null when it asks nothing. */
+    question: string | null
+    /** Each repository it names with its PR's address, in the order given; null where it has none. */
+    prs: [string, string | null][]
+}
+
+/**
+ * The result a call to canopy's `result` tool reports, read from its input: its status, its summary, its question,
+ * and its PRs. The rest of what it reports, which differs by the run's kind, stays in its input. Null for any other
+ * call: the fields are common ones, so the tool's name says it is canopy's.
+ */
+export function resultOf(entry: TranscriptTool): CallResult | null {
+    const input = parsed(entry.input)
+    const status = input?.['status']
+    if (input === null || typeof status !== 'string' || !/^canopy.*result$/u.test(entry.tool)) {
+        return null
+    }
+    const { summary: said, question, prs } = input
+    const named =
+        typeof prs === 'object' && prs !== null && !Array.isArray(prs)
+            ? Object.entries(prs as Record<string, unknown>)
+            : []
+    const pairs: [string, string | null][] = []
+    for (const [repo, url] of named) {
+        if (typeof url === 'string' || url === null) {
+            pairs.push([repo, url])
+        }
+    }
+    return {
+        status,
+        summary: typeof said === 'string' ? said : '',
+        question: typeof question === 'string' && question !== '' ? question : null,
+        prs: pairs,
+    }
+}
+
+/**
+ * What a call to canopy's `messages` tool heard, in a few words for its line: how many of the operator's messages it
+ * read, or that there was none. Null for any other call, and for one that failed.
+ */
+export function heardOf(entry: TranscriptTool): string | null {
+    if (entry.status === 'error' || !/^canopy.*messages$/u.test(entry.tool)) {
+        return null
+    }
+    const count = /^(\d+) messages? from the operator/u.exec(entry.output)?.[1]
+    if (count !== undefined) {
+        return `${count} ${count === '1' ? 'message' : 'messages'} from the operator`
+    }
+    return entry.output.startsWith('No message from the operator') ? 'no message from the operator' : null
+}
+
 /** What a tool call does, in the few kinds its line draws an icon for. */
 export type ToolKind = 'shell' | 'write' | 'read' | 'search' | 'web' | 'canopy' | 'other'
 
 /**
- * A tool call's kind, read from its input's keys as `shellCall` reads a command, never from its name, which is the
- * runtime's or a server's own: a command is a shell call; canopy's decisions and settings are canopy's; a file with
+ * A tool call's kind, read from its input's keys as `shellCall` reads a command, not from its name, which is the
+ * runtime's or a server's own, but for canopy's, whose servers canopy names (`canopy_run_status`): a command is a
+ * shell call; canopy's decisions, settings, and progress are canopy's, however named; a file with
  * content or a replacement is a write, and a file alone a read; a pattern or a query is a search; an address is the
  * web's. Anything else, an input that is not an object among it, is `other`.
  */
 export function toolKind(entry: TranscriptTool): ToolKind {
     const input = parsed(entry.input)
+    if (entry.tool.startsWith(CANOPY)) {
+        return 'canopy'
+    }
     if (input === null) {
         return 'other'
     }
     if (typeof input['command'] === 'string') {
         return 'shell'
     }
-    if (decisionsIn(input) !== null || settingsIn(input) !== null) {
+    if (decisionsIn(input) !== null || settingsIn(input) !== null || cardIn(input, null) !== null) {
         return 'canopy'
     }
     const has = (...keys: string[]) => keys.some((key) => typeof input[key] === 'string')
