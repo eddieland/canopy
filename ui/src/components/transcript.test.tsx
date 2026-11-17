@@ -363,6 +363,13 @@ describe('TranscriptPanel', () => {
         expect(within(second).getByText('length')).toBeDefined()
     })
 
+    it('draws each model call’s context beside the session’s peak, named on hover', () => {
+        render(<TranscriptPanel transcript={transcript()} running={false} page="run" />)
+        const meters = screen.getAllByTestId('transcript-context-meter')
+        expect(meters.length).toBeGreaterThan(1)
+        expect(meters.some((meter) => meter.title.endsWith('100% of the peak'))).toBe(true)
+    })
+
     it('opens a model call in order to what it was sent and what it did, built only once opened', () => {
         render(<TranscriptPanel transcript={transcript()} running={false} page="run" />)
         const second = call('1.5k in · 60 out')

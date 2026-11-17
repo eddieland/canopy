@@ -161,12 +161,15 @@ as one reconcile closed, says that too. None of them shows a blank panel and let
 run pushes nothing and has no Diff panel; nor does a run still working. `canopy show run:ID --diff` prints the same diff
 for your pager.
 
-The **Transcript** is the run's session, from its log, oldest first:
+The **Transcript** is the run's session, from its log, oldest first, strung on one thread down its left edge. A ring
+is something the agent said, a dot a tool call, cyan when it worked and red when it didn't, and a diamond the end of a
+model call, whose darker band closes the turn above it:
 
 - its text, with its reasoning set in italics and marked `thinking`. Long thinking shows its first four lines and
   **show N more lines** for the rest, since a model that thinks out loud rarely thinks briefly. **All open**, or a
   search that finds a line in the folded part, shows it whole;
-- each tool call, with what it did and how long it took; click one to see its input and output. A shell command that
+- each tool call, with an icon for the kind of thing it did (ran a command, read, wrote, searched), what it did, and
+  how long it took; click one to see its input and output. A shell command that
   names the directory it ran in shows it first, dimmed, so you read the command and still know where it ran. A
   directory in one of the run's worktrees is named from its repository, `web $ git status` or `web/src $ npm test`,
   not the forty characters of `.treehouse` before it. Anything else stays whole and turns amber: a command that
@@ -177,7 +180,8 @@ The **Transcript** is the run's session, from its log, oldest first:
   you reading them out of a JSON array. Its `ticket-set` does the same: each ticket, or `ABC-1 (web)` for a unit, with
   what it sets on the row, and opened, each on a line with its phase, `done`, every cursor and the item it passes, and
   the title;
-- each model call, with the tokens in and out, and its cost; click one to see what it was sent and what it did. The
+- each model call, with a small bar of how full its context was beside the session's peak, the lighter end what
+  that call added, the tokens in and out, and its cost; click one to see what it was sent and what it did. The
   first call was sent canopy's prompt, and every later one what the tools returned since. In a run that switched
   models, the first call names its model, and so does each call where the model changed, By call too, so you can see
   where the switch happened. A run on one model names none: **model** already said it. A split run from before canopy

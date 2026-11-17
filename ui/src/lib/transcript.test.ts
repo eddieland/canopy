@@ -32,6 +32,7 @@ import {
     tally,
     tokenCount,
     tokensCell,
+    toolKind,
     TRANSCRIPT_BUDGET,
     wroteTokens,
 } from './transcript'
@@ -197,6 +198,28 @@ describe('shownDir', () => {
         expect(shownDir(`${WEB.absolute}-old/src`, [WEB])).toBeNull()
         expect(shownDir('src', [WEB])).toBeNull()
         expect(shownDir(WEB.absolute, [])).toBeNull()
+    })
+})
+
+// The kind of a tool call given `input`.
+const kind = (input: unknown) => toolKind(tool('completed', { input: JSON.stringify(input) }))
+
+describe('toolKind', () => {
+    it('reads a call’s kind from its input’s keys, whatever the tool is named', () => {
+        expect(kind({ command: 'npm test' })).toBe('shell')
+        expect(kind({ filePath: 'a.ts' })).toBe('read')
+        expect(kind({ filePath: 'a.ts', content: 'x' })).toBe('write')
+        expect(kind({ filePath: 'a.ts', oldString: 'x', newString: 'y' })).toBe('write')
+        expect(kind({ pattern: 'TODO', path: 'src' })).toBe('search')
+        expect(kind({ query: 'debounce' })).toBe('search')
+        expect(kind({ url: 'https://example.com' })).toBe('web')
+        expect(kind({ decisions: [{ key: 'ABC-1', action: 'wait', rationale: 'ci' }] })).toBe('canopy')
+    })
+
+    it('is other for anything else, an input that is no object among it', () => {
+        expect(kind({ issue_key: 'ABC-1' })).toBe('other')
+        expect(kind(['a'])).toBe('other')
+        expect(toolKind(tool('completed', { input: 'not json' }))).toBe('other')
     })
 })
 

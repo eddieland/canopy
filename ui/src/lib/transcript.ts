@@ -426,6 +426,36 @@ export function summaryTitle(entry: TranscriptTool): string {
     return entry.title === null || entry.title === '' ? whole : `${whole}\n${entry.title}`
 }
 
+/** What a tool call does, in the few kinds its line draws an icon for. */
+export type ToolKind = 'shell' | 'write' | 'read' | 'search' | 'web' | 'canopy' | 'other'
+
+/**
+ * A tool call's kind, read from its input's keys as `shellCall` reads a command, never from its name, which is the
+ * runtime's or a server's own: a command is a shell call; canopy's decisions and settings are canopy's; a file with
+ * content or a replacement is a write, and a file alone a read; a pattern or a query is a search; an address is the
+ * web's. Anything else, an input that is not an object among it, is `other`.
+ */
+export function toolKind(entry: TranscriptTool): ToolKind {
+    const input = parsed(entry.input)
+    if (input === null) {
+        return 'other'
+    }
+    if (typeof input['command'] === 'string') {
+        return 'shell'
+    }
+    if (decisionsIn(input) !== null || settingsIn(input) !== null) {
+        return 'canopy'
+    }
+    const has = (...keys: string[]) => keys.some((key) => typeof input[key] === 'string')
+    if (has('filePath', 'file_path', 'path')) {
+        return has('content', 'newString', 'new_string', 'patch') ? 'write' : has('pattern') ? 'search' : 'read'
+    }
+    if (has('pattern', 'query')) {
+        return 'search'
+    }
+    return has('url') ? 'web' : 'other'
+}
+
 /** A shell call as its line shows it: the directory it ran in, then its command. */
 export interface ShellCall {
     /** The directory as the line names it (`shownDir`), whole when it is outside the run's worktrees; null when the
