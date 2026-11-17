@@ -76,6 +76,21 @@ def with_config_dir(directory: str, command: str) -> str:
     return f"env {CONFIG_DIR_ENV}={directory} {command}"
 
 
+def config_dir_of(command: str) -> str | None:
+    """Return the directory `command` points OpenCode at for its config, as `with_config_dir` writes it, or None.
+
+    Returns:
+        The directory as the command spells it, a placeholder of canopy's included; None when it sets none, or cannot
+        be split into words.
+    """
+    try:
+        words = shlex.split(command)
+    except ValueError:
+        return None
+    prefix = f"{CONFIG_DIR_ENV}="
+    return next((word.removeprefix(prefix) for word in words if word.startswith(prefix)), None)
+
+
 def on_private_server(command: str) -> str:
     """Return `command` running `opencode run` with `--standalone`, as the defaults do, unless it already does.
 

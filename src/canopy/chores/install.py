@@ -7,6 +7,8 @@ private file: `prompt` names the copy, `cmd` starts by pointing the runtime's co
 the agent apart from any service the runtime shares, so that directory reaches it, and `cwd`, where the example has
 one, is the workspace root. All are the workspace's own: another workspace's copy of the
 same example is filled in apart from it, and an upgraded canopy changes none of them until the chore is installed again.
+The one thing canopy writes into an installed agent afterwards is its model, each time the chore runs (`write_model`),
+so the chore runs on the model config chooses for it, as canopy's own agents do (DESIGN §13).
 The state directory is the operator's alone, as a prompt file must be (TRUST_MODEL T7), and neither copy is in
 `chores/`, under which a chore with no `cwd` runs.
 
@@ -30,20 +32,22 @@ import tomllib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import config
+from canopy.core import agent_models, config
 from canopy.infra import logs, resources
 from canopy.runtime import definitions, invocation
+from canopy.runtime.agents import DefinitionsError
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
     from canopy.core.workspace import Workspace
+    from canopy.runtime.agents import Model
 
 #: The directory of the state directory installed prompts are copied into.
 PROMPTS_DIR = "chore-prompts"
 #: The directory of the state directory each installed chore's runtime config directory is in, by the chore's name.
-AGENTS_DIR = "chore-agents"
+AGENTS_DIR = agent_models.CHORE_AGENTS_DIR
 #: The comment above an installed table, which says who owns it.
 MARKER = "# Written by `canopy chore install {name}`, which replaces this table whole when run again."
 # A line that starts a table or an array of tables, and so ends the one before it.
@@ -141,6 +145,27 @@ def install(ws: Workspace, name: str) -> Installed:
     copied = _copy_agent(agent, agent_dir)
     _write(private, new_text)
     return Installed(name, prompt, copied, private, replaced, _next_steps(shipped_text))
+
+
+def write_model(definition: Path, model: Model | None) -> None:
+    """Write `model` into `definition`, a chore's installed agent, in place of the one canopy wrote there before.
+
+    None writes none, and takes out the one written, for the runtime's default. The file is replaced in one step, and
+    only when its text changes, so a run of the chore never reads a partial one.
+
+    Raises:
+        InstallError: the definition cannot be read or written, or has no line marked for its model, as one installed
+            by an earlier canopy has none.
+    """
+    try:
+        text = definition.read_text(encoding="utf-8")
+        new = definitions.set_model(text, definition.name, model)
+        if new != text:
+            _write(definition, new)
+    except OSError as e:
+        raise InstallError(f"cannot write the chore's model into its agent, {definition}: {e.strerror}") from e
+    except DefinitionsError as e:
+        raise InstallError(f"cannot write the chore's model into its agent, {definition}: {e}") from e
 
 
 def _read(path: Path) -> dict[str, object]:

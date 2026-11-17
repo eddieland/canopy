@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
 
-from canopy.chores import history, start
+from canopy.chores import history, install, start
 from canopy.core import (
     agent_models,
     chore_runs,
@@ -126,7 +126,8 @@ def prepare(ctx: Context, name: str, chore: Chore, prompt: str) -> tuple[Path, R
     """Return where chore `name` runs, the command that runs it with `prompt`, and the definitions snapshot's digest.
 
     Raises:
-        SetupError: its `cwd` is not a directory, or OpenCode config there or above shadows one of canopy's agents.
+        SetupError: its `cwd` is not a directory, OpenCode config there or above shadows one of canopy's agents, or
+            its model cannot be written into the agent installed with it.
     """
     cwd = _cwd(ctx, name, chore)
     # The shipped `canopy-chore` is merged with whatever runtime config its working directory has (D044), and the
@@ -136,8 +137,17 @@ def prepare(ctx: Context, name: str, chore: Chore, prompt: str) -> tuple[Path, R
     if refused is not None:
         raise SetupError(refused)
     template = chore.cmd if chore.cmd is not None else ctx.config.runtime.chore_cmd
-    # A chore with a model of its own runs the copy of the chore's agent canopy renders for it (DESIGN §19).
-    template = agent_models.chore_template(template, name, chore.model)
+    installed = agent_models.installed_agent(chore.cmd)
+    if installed is None:
+        # A chore with a model of its own runs the copy of the chore's agent canopy renders for it (DESIGN §19).
+        template = agent_models.chore_template(template, name, chore.model)
+    else:
+        # One that runs the agent installed with it has its model written into that copy, now rather than at install,
+        # so a change of config needs no reinstall.
+        try:
+            install.write_model(installed, agent_models.of_chore(ctx.config, chore).model)
+        except install.InstallError as e:
+            raise SetupError(f"{e}. `canopy chore install {name}` copies the agent afresh") from e
     snapshot = definitions.ensure(ctx.state_dir, ctx.config)
     return cwd, render_command(template, prompt, snapshot, f"chore:{name}"), snapshot.name
 

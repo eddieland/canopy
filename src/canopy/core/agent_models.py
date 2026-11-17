@@ -11,7 +11,9 @@ effort, as canopy names a model a session ran at a variant. A model's own id may
 the runtime names does: `vendor/claude-x@20250101@high` is that model at `high`.
 
 A chore with a `model` of its own runs a copy of the chore's agent made for it, `canopy-chore-<name>`, with that
-model, since one definition holds one model; every other chore runs the chore's agent, on `runtime.models.chore`.
+model, since one definition holds one model; every other chore runs the chore's agent, on `runtime.models.chore`. A
+chore that runs the agent `canopy chore install` copied for it takes the same two, its own `model` or else
+`runtime.models.chore`, which canopy writes into that copy each time the chore runs (`installed_agent`).
 
 Before a worker run on a chosen model starts, the model is looked up in the list the runtime would look it up in,
 read in the workspace root, since a repository's own runtime config could change the list; with a variant, the
@@ -25,16 +27,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from fnmatch import fnmatchcase
+from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from canopy.runtime import agents, invocation
 from canopy.runtime import models as runtime_models
 from canopy.runtime.agents import Model
-from canopy.runtime.definitions import MODEL_RE, VARIANT_RE
+from canopy.runtime.definitions import AGENTS_SUBDIR, MODEL_RE, VARIANT_RE
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
-    from pathlib import Path
 
     from canopy.core.config import Chore, Config
     from canopy.infra import procs
@@ -52,6 +54,9 @@ AGENTS: Mapping[Role, tuple[str, ...]] = {
     "overseer": (agents.OVERSEER,),
     "chore": (agents.CHORE,),
 }
+#: The directory of a workspace's state directory that holds each installed chore's runtime config directory, by the
+#: chore's name, with the agent `canopy chore install` copied for it (DESIGN §19).
+CHORE_AGENTS_DIR = "chore-agents"
 #: The guard and attention reason of a run whose model, or the variant of it, the runtime does not list.
 MISSING = "model_missing"
 #: The guard and attention reason of a run whose model could not be looked up, the list not read.
@@ -134,13 +139,40 @@ def chore_template(template: str, chore: str, model: str | None) -> str:
     return template if model is None else invocation.with_agent(template, agents.chore_agent(chore))
 
 
+def installed_agent(cmd: str | None) -> Path | None:
+    """Return the definition of the agent `canopy chore install` copied for the chore `cmd` runs, or None.
+
+    Such a command points the runtime at a config directory of the chore's own under `CHORE_AGENTS_DIR`, and runs an
+    agent there that is not canopy's. canopy writes that definition, so it writes the chore's model into it, where an
+    agent of the operator's own, in their runtime config, chooses its model itself. Nothing is read: the file may be
+    gone.
+
+    Returns:
+        The path of the agent's definition in that directory, as the command spells the directory.
+    """
+    if cmd is None:
+        return None
+    directory = invocation.config_dir_of(cmd)
+    agent = invocation.agent_of(cmd)
+    if directory is None or agent is None or agent == agents.CHORE:
+        return None
+    path = Path(directory)
+    return path / AGENTS_SUBDIR / f"{agent}.md" if path.parent.name == CHORE_AGENTS_DIR else None
+
+
 def chores(config: Config) -> dict[str, str]:
-    """Return each chore's own `model`, by the chore's name, for the chores that have one.
+    """Return each chore's own `model`, by the chore's name, for the chores that run a copy of the chore's agent on it.
+
+    A chore that runs the agent installed with it has its model written into that agent, and takes no copy.
 
     Returns:
         The models, as config spells them.
     """
-    return {name: chore.model for name, chore in config.chores.items() if chore.model is not None}
+    return {
+        name: chore.model
+        for name, chore in config.chores.items()
+        if chore.model is not None and installed_agent(chore.cmd) is None
+    }
 
 
 def configured(config: Config) -> dict[Role, Chosen]:
@@ -155,7 +187,8 @@ def configured(config: Config) -> dict[Role, Chosen]:
 def of_chore(config: Config, chore: Chore) -> Chosen:
     """Return the model `chore` runs on as `config` chooses it.
 
-    Its own `model` on its own copy of the chore's agent, else `runtime.models.chore` on that agent. A chore whose
+    Its own `model` on its own copy of the chore's agent, else `runtime.models.chore` on that agent; a chore that
+    runs the agent installed with it (`installed_agent`) takes the same, written into that agent. A chore whose
     command, its `cmd` or `runtime.chore_cmd`, runs an agent of the operator's own takes neither, as config refuses a
     `model` for it: that agent's definition chooses, which canopy does not write.
 
@@ -163,7 +196,7 @@ def of_chore(config: Config, chore: Chore) -> Chosen:
         The model and where it comes from, naming the operator's agent for `agent`.
     """
     agent = invocation.agent_of(chore.cmd if chore.cmd is not None else config.runtime.chore_cmd)
-    if agent != agents.CHORE:
+    if agent != agents.CHORE and installed_agent(chore.cmd) is None:
         return Chosen(None, "agent", agent)
     if chore.model is not None:
         return Chosen(parse(chore.model), "chore")

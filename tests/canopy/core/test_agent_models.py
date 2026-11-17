@@ -214,6 +214,11 @@ def test_a_model_not_listed_or_a_list_not_read_is_refused(opencode_state: Path, 
 
 CHORE_CMD = "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore --format json {prompt}"
 OWN_CMD = "opencode run --agent sentry-triage --format json {prompt}"
+#: A command as `canopy chore install` writes one for a chore that comes with its agent.
+INSTALLED_CMD = (
+    "env OPENCODE_CONFIG_DIR=/ws/.canopy/chore-agents/briefing opencode run --agent canopy-briefing --format json "
+    "{prompt}"
+)
 
 
 def chore(**keys: object) -> dict[str, object]:
@@ -254,6 +259,8 @@ def test_a_chore_with_a_model_of_its_own_runs_its_own_copy_of_the_chore_agent(ca
         ),
         # The chore's agent's model is canopy's to choose, `runtime.models.chore`, whether or not it chooses one.
         ({"cmd": f"{CHORE_CMD} -m {MODEL}"}, "Set model in this table instead"),
+        # So is the model of the agent installed with a chore.
+        ({"cmd": f"{INSTALLED_CMD} -m {MODEL}"}, "Set model in this table instead"),
     ],
 )
 def test_a_chore_whose_model_and_command_could_disagree_is_refused(
@@ -313,6 +320,36 @@ def test_config_names_each_roles_model_and_each_chores_and_where_it_comes_from(c
         # Its agent's own definition chooses, which canopy does not write: `runtime.models.chore` does not reach it.
         "sentry": agent_models.Chosen(None, "agent", "sentry-triage"),
     }
+
+
+def test_a_chore_that_runs_the_agent_installed_with_it_takes_its_model_or_the_chores(canopy_env: CanopyEnv) -> None:
+    """Config's models reach that agent, whose definition canopy writes, with no copy of the chore's agent made."""
+    canopy_env.configure(
+        canopy_env.user_file,
+        {
+            "runtime": {"models": {"chore": MODEL}},
+            "chores": {
+                "briefing": {"prompt": "~/briefing.md", "every_minutes": 60, "cmd": INSTALLED_CMD},
+                "health": {
+                    "prompt": "~/health.md",
+                    "every_minutes": 60,
+                    "cmd": INSTALLED_CMD.replace("briefing", "health"),
+                    "model": f"{OTHER}@low",
+                },
+                # In a config directory of the operator's own, the agent is theirs.
+                "mine": {"prompt": "~/mine.md", "every_minutes": 60, "cmd": INSTALLED_CMD.replace("chore-agents/", "")},
+            },
+        },
+    )
+    cfg = config.load(canopy_env.root, canopy_env.user_file)
+    installed = agent_models.installed_agent(cfg.chores["briefing"].cmd)
+    assert installed == Path("/ws/.canopy/chore-agents/briefing/agents/canopy-briefing.md")
+    assert {name: agent_models.of_chore(cfg, c) for name, c in cfg.chores.items()} == {
+        "briefing": agent_models.Chosen(Model(MODEL), "config"),
+        "health": agent_models.Chosen(Model(OTHER, "low"), "chore"),
+        "mine": agent_models.Chosen(None, "agent", "canopy-briefing"),
+    }
+    assert agent_models.chores(cfg) == {}
 
 
 def test_every_chore_runs_an_agent_of_the_operators_own_when_the_chore_command_does(canopy_env: CanopyEnv) -> None:

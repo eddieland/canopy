@@ -9,6 +9,9 @@
 # only output is its result line. Everything but the report it allows is `canopy-chore`'s; keep the two in step.
 description: canopy chore that briefs the operator on what waits on them. Reports a summary, changes nothing.
 mode: primary
+# canopy writes the chore's model below the next line each time the chore runs: its own `model`, else
+# `runtime.models.chore`. A model set anywhere else in this file would disagree with it.
+# canopy: model
 permission:
   edit: deny
   # It reads its history and canopy's reports through canopy's tools, below, not a shell.

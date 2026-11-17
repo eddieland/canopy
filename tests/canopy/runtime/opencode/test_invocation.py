@@ -34,6 +34,19 @@ def test_with_config_dir_runs_the_command_with_the_directory_set() -> None:
 
 
 @pytest.mark.parametrize(
+    ("command", "directory"),
+    [
+        (invocation.with_config_dir(shlex.quote("/state/my dir"), "opencode run --agent x {prompt}"), "/state/my dir"),
+        ("env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent x", "{definitions_dir}"),
+        ("opencode run --agent x {prompt}", None),
+        ("env OPENCODE_CONFIG_DIR='/unclosed opencode run", None),
+    ],
+)
+def test_config_dir_of_names_the_directory_a_command_points_opencode_at(command: str, directory: str | None) -> None:
+    assert invocation.config_dir_of(command) == directory
+
+
+@pytest.mark.parametrize(
     ("command", "agent"),
     [
         ("opencode run --agent=canopy-chore {prompt}", "canopy-chore"),

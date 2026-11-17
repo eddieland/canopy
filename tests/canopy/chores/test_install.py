@@ -9,13 +9,13 @@ from unittest import mock
 
 import pytest
 
-from canopy.chores import install
+from canopy.chores import execute, install, start
 from canopy.cli.main import main
 from canopy.core import config, workspace
 from canopy.infra import resources
 from canopy.runtime import definitions
 from canopy.runtime.implementation import Version
-from tests.canopy.helpers import in_run
+from tests.canopy.helpers import context, in_run
 from tests.conftest import CanopyEnv
 
 PRIVATE = """\
@@ -147,6 +147,47 @@ def test_the_agents_copy_stays_as_installed_until_the_chore_is_installed_again(
         assert install.install(ws, "memory-tickets").replaced
     assert "changes nothing. Upgraded." in agent.read_text()
     assert sorted(p.name for p in agent.parent.iterdir()) == [agent.name]
+
+
+def test_an_installed_chores_agent_gets_the_model_config_chooses_each_time_the_chore_runs(
+    canopy_env: CanopyEnv,
+) -> None:
+    """Its own `model`, else `runtime.models.chore`, as `canopy-chore` runs: never the runtime's default unasked."""
+    canopy_env.write_private(PRIVATE)
+    agent = install.install(workspace.find(canopy_env.root), "briefing").agent
+    assert agent is not None
+    shipped = agent.read_text()
+
+    def prepared(shared: str | None, own: str | None) -> tuple[str | None, list[str]]:
+        """Set both models, get the chore ready to run, and return the model it asks for and its command."""
+        canopy_env.configure(canopy_env.user_file, {"runtime": {"models": {"chore": shared}}})
+        canopy_env.configure(canopy_env.private_file, {"chores": {"briefing": {"model": own}}})
+        ctx = context(canopy_env)
+        chore = ctx.config.chores["briefing"]
+        _, command, _ = execute.prepare(ctx, "briefing", chore, "prompt")
+        return start.asked_model(ctx.config, chore), list(command.argv)
+
+    asked, argv = prepared("acme/fake-model-1", None)
+    assert asked == "acme/fake-model-1"
+    assert agent.read_text() == shipped.replace("# canopy: model\n", '# canopy: model\nmodel: "acme/fake-model-1"\n')
+    assert agent.stat().st_mode & 0o777 == 0o600
+    # Its own model beats the chores', on the same agent: no copy of canopy's chore agent runs in its place.
+    asked, own_argv = prepared("acme/fake-model-1", "acme/fake-model-2@high")
+    assert asked == "acme/fake-model-2@high"
+    assert '\n# canopy: model\nmodel: "acme/fake-model-2"\nvariant: "high"\npermission:' in agent.read_text()
+    assert own_argv == argv
+    assert argv[argv.index("--agent") + 1] == "canopy-briefing"
+    # With neither, it is the runtime's default again, by the operator's choice.
+    assert prepared(None, None) == (None, argv)
+    assert agent.read_text() == shipped
+    # A copy an earlier canopy installed has no line for it: it runs as it did until a model is chosen, then says how.
+    agent.write_text(shipped.replace("# canopy: model\n", ""))
+    prepared(None, None)
+    with pytest.raises(execute.SetupError, match=r"has no line '# canopy: model'.*`canopy chore install briefing`"):
+        prepared("acme/fake-model-1", None)
+    agent.unlink()
+    with pytest.raises(execute.SetupError, match="cannot write the chore's model into its agent"):
+        prepared("acme/fake-model-1", None)
 
 
 def test_install_refuses_to_hide_the_user_files_chores(
