@@ -83,6 +83,10 @@ test('wide, a long conversation stays put beside the lists, in the window whole,
     await expect.poll(() => scroller.evaluate((el) => el.scrollTop)).toBe(300)
     await expect(reply).toBeInViewport({ ratio: 1 })
     await expect(panel.getByRole('heading', { name: 'Conversation' })).toBeInViewport({ ratio: 1 })
+    // The plan's card, which trails this page, is the left column's last panel, so the conversation is beside it too.
+    const card = await page.getByTestId('plan-card').boundingBox()
+    const beside = await panel.boundingBox()
+    expect((card?.x ?? 0) + (card?.width ?? 0)).toBeLessThan(beside?.x ?? 0)
     // Its thread still scrolls in itself, in what the reply and the actions leave it.
     const region = page.getByRole('region', { name: 'Conversation' })
     expect(await region.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true)

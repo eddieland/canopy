@@ -232,6 +232,8 @@ Rules:
   it.
   A ticket's conversation is `sticky` there, as tall as the window has room for, its thread taking what the reply and
   the actions leave: the lists beside it scroll past, so a long history leaves no empty column under it.
+  A plan's card that trails the page is the left column's last panel there, and the ticket's drafts a row across both
+  columns under them; Runs and Decisions scroll in their panels past half the window's height.
 - **The header** carries, after its name, the stream's state (and `mock`) and the ticker (Fun, below); then at its end
   the loop's pause and Tick now, the readouts, and the theme toggle, in three groups with a hairline rule between each.
   Every readout that opens a page has a hover card of it; the theme toggle has one of the shown theme's palettes,

@@ -107,9 +107,9 @@ Below:
   you. See [The feedback plan](pull-requests#the-feedback-plan).
 
 A list with nothing in it is its header alone, counting `0`: a ticket no tick has decided anything about yet doesn't
-spend a panel telling you so. On a wide screen the conversation moves to the right, beside Work, Runs, Decisions, and
-Memory. It stays put there while they scroll, as tall as the window allows, so on a ticket with forty runs behind it the
-reply box is still where you left it.
+spend a panel telling you so. On a wide screen the conversation moves to the right, beside Work, Runs, Decisions,
+Memory, and the plan's card. It stays put there while they scroll, as tall as the window allows, so on a ticket with
+forty runs behind it the reply box is still where you left it.
 
 A key canopy has never seen gets a page too, saying so, with the form to start it.
 
