@@ -12,7 +12,7 @@ import pytest
 
 from canopy.infra import procs
 from canopy.runtime.agents import AgentOffer, ServerOffer, SkillFile
-from canopy.runtime.opencode2 import offerings
+from canopy.runtime.opencode2 import offerings, servers
 from canopy.runtime.opencode2 import serve as server
 from canopy.runtime.opencode2.offerings import matches
 
@@ -230,17 +230,40 @@ def test_the_skills_are_listed_as_the_server_read_them_once_canopy_s_agents_load
     assert serve.loading == 0  # asked only once the agents had loaded
 
 
-def test_an_entry_of_enabled_alone_turns_off_the_definition_before_it_and_is_no_server_alone() -> None:
-    """As a run's inline config turns off the operator's servers: OpenCode merges it into their definitions."""
+def test_a_later_disabled_definition_turns_off_the_one_before_it() -> None:
+    """As a run's inline config turns off the operator's servers: its definition replaces theirs whole."""
+    off = {"type": "local", "command": ["true"], "disabled": True}
+    inline = {"type": "document", "info": {"mcp": {"servers": {"github": off}}}}
+    found = offered(Serve({"canopy-worker": []}, config=[*CONFIG, inline]), "canopy-worker")
+    assert (found.servers, found.disabled_servers) == (("github", "sentry.io", "canopy"), ("github", "sentry.io"))
+
+
+def test_an_entry_without_a_type_is_ignored() -> None:
+    """OpenCode 2.3.0 drops it, so it neither turns off the definition before it nor is a server alone (#2402)."""
     inline = {"type": "document", "info": {"mcp": {"servers": {"github": {"enabled": False}, "x": {"enabled": False}}}}}
     found = offered(Serve({"canopy-worker": []}, config=[*CONFIG, inline]), "canopy-worker")
+    assert (found.servers, found.disabled_servers) == (("github", "sentry.io", "canopy"), ("sentry.io",))
+
+
+def test_a_server_turned_off_that_the_operator_never_defined_is_no_server() -> None:
+    """Canopy's own definition stands alone for it, so `canopy agents` can say the name is nothing to turn off."""
+    env = servers.env({}, cwd=Path("/ws"), disabled=("github", "slack"))
+    given = json.loads(env["OPENCODE_CONFIG_CONTENT"])["mcp"]["servers"]
+    config = [*CONFIG, {"type": "document", "info": {"mcp": {"servers": given}}}]
+    found = offerings.offerings(
+        Serve({"canopy-worker": []}, config=config),
+        cwd=Path("/ws"),
+        definitions_dir=Path("/defs"),
+        agents=["canopy-worker"],
+        env=env,
+    )
     assert (found.servers, found.disabled_servers) == (("github", "sentry.io", "canopy"), ("github", "sentry.io"))
 
 
 def test_the_server_is_started_with_the_environment_it_is_given() -> None:
     """The operator's servers that config turns off for canopy's runs are off in the server asked too."""
     serve = Serve({"canopy-worker": []})
-    env = {"OPENCODE_CONFIG_CONTENT": '{"mcp": {"servers": {"slack": {"enabled": false}}}}'}
+    env = {"OPENCODE_CONFIG_CONTENT": '{"mcp": {"servers": {"slack": {"type": "local", "disabled": true}}}}'}
     offerings.skills(serve, cwd=Path("/ws"), definitions_dir=Path("/defs"), agents=["canopy-worker"], env=env)
     offerings.offerings(serve, cwd=Path("/ws"), definitions_dir=Path("/defs"), agents=["canopy-worker"], env=env)
     assert {ran[2]["OPENCODE_CONFIG_CONTENT"] for ran in serve.ran} == {env["OPENCODE_CONFIG_CONTENT"]}

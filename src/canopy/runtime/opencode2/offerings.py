@@ -3,7 +3,7 @@
 OpenCode merges the operator's config into canopy's definitions, so what an agent is offered is not what canopy's
 definitions say alone. canopy asks a server it starts for the questions (`canopy.runtime.opencode2.serve`):
 `agent.list` until the agents have loaded, then `skill.list`, and `config.get` for the MCP servers, of which only their
-names, `type`, `disabled`, `enabled`, and `codemode` are read, since the rest may hold a secret.
+names, `type`, `disabled`, and `codemode` are read, since the rest may hold a secret.
 
 From those this applies OpenCode's own rules, read from its source at 2.1.2: an agent's rules are `{action, resource,
 effect}`, the last whose action and resource both match decides, and only a deny with the resource `*` keeps a tool from
@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 import re
 import time
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -33,11 +34,13 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import BaseModel, ConfigDict, StrictBool, StrictStr
 
 from canopy.runtime.agents import AgentOffer, Offerings, Reach, ServerOffer, SkillFile, Skills
+from canopy.runtime.opencode2 import servers
 from canopy.runtime.opencode2.invocation import CONFIG_DIR_ENV
 from canopy.runtime.opencode2.serve import OPENCODE, Client, FailedError, Serve, read
 
 if TYPE_CHECKING:
     from collections.abc import Collection
+    from collections.abc import Set as AbstractSet
 
     from canopy.infra import procs
 
@@ -111,11 +114,9 @@ class _Skills(BaseModel):
 class _McpServer(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
 
-    #: None for an entry that only turns a server on or off (`_merged`), which alone is no server.
+    #: None for an entry that is no definition, which OpenCode ignores (`_merged`).
     type: StrictStr | None = None
     disabled: StrictBool = False
-    #: OpenCode 1's shape of the switch, which such an entry may set alone; None when it does not.
-    enabled: StrictBool | None = None
     codemode: StrictBool = True
 
 
@@ -267,14 +268,18 @@ def _load(
     Raises:
         FailedError: The server could not be started, did not load in time, or said what canopy cannot read.
     """
-    return Serve(runner, launcher, cwd, env).ask(lambda client: _loaded(client, agents))
+    off = servers.turned_off(env)
+    return Serve(runner, launcher, cwd, env).ask(lambda client: _loaded(client, agents, off))
 
 
-def _loaded(client: Client, wanted: Collection[str]) -> _Loaded:
+def _loaded(client: Client, wanted: Collection[str], off: AbstractSet[str]) -> _Loaded:
     """Ask the server for its agents once its plugins have loaded `wanted`, then its skills and its MCP servers.
 
     OpenCode lists its own agents before the plugins have loaded the definitions, canopy's among them, so it waits for
     the agents asked about, at most `LOADED_SECONDS`; one still missing then is one whose definition did not load.
+
+    A server `off` names, which the inline config turned off, is no server unless another document defines it too:
+    the definition that turns it off stands for the operator's, and alone is canopy's, not theirs.
 
     Returns:
         Each agent's rules by its name, the skills sorted by id, the first of an id kept, and the MCP servers in
@@ -295,36 +300,38 @@ def _loaded(client: Client, wanted: Collection[str]) -> _Loaded:
         time.sleep(POLL_SECONDS)
     skills = read(client.get("skill.list"), _Skills.model_validate_json, "skill.list").data
     entries = read(client.get("config.get"), _entries, "config.get")
-    servers: dict[str, _McpServer] = {}
+    found: dict[str, _McpServer] = {}
+    defined: Counter[str] = Counter()
     for entry in entries:
         mcp = entry.info.mcp if entry.info is not None else None
         for name, server in (mcp.servers if mcp is not None else {}).items():
-            merged = _merged(servers.get(name), server)
+            defined[name] += server.type is not None
+            merged = _merged(found.get(name), server)
             if merged is not None:
-                servers[name] = merged
+                found[name] = merged
+    # canopy's definition is one of them; with no other, the operator has no such server.
+    for name in off:
+        if defined[name] <= 1:
+            found.pop(name, None)
     files = {s.id: SkillFile(s.id, s.description, s.path, s.content) for s in reversed(skills)}
     return _Loaded(
         agents={agent.id: agent.permissions for agent in agents},
         skill_files=tuple(files[name] for name in sorted(files)),
-        servers=servers,
+        servers=found,
     )
 
 
 def _merged(earlier: _McpServer | None, later: _McpServer) -> _McpServer | None:
     """The server that a later document's entry `later` leaves, over `earlier`, as OpenCode merges them.
 
-    A definition, with its type, replaces an earlier one whole: each document's is lowered with its own `enabled`. An
-    entry of `enabled` alone, as a run's inline config turns off a server of the operator's, is merged into the
-    definition before it; with none before it, OpenCode ignores it, an entry without a type, and it is no server.
+    A definition, with its type, replaces an earlier one whole, as the one a run's inline config turns off a server of
+    the operator's with replaces theirs. An entry without a type is no definition: OpenCode ignores it, and what came
+    before it stands.
 
     Returns:
         The server as merged, or None when there is still none.
     """
-    if later.type is not None:
-        return later
-    if earlier is None or later.enabled is None:
-        return earlier
-    return earlier.model_copy(update={"disabled": not later.enabled})
+    return later if later.type is not None else earlier
 
 
 def _entries(printed: str) -> tuple[_Entry, ...]:
