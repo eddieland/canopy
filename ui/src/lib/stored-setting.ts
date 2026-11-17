@@ -23,6 +23,13 @@ export interface StoredSetting<T> {
     /** Stores `next` and applies it now; where storage is unavailable, it still applies to this page. */
     set: (next: T) => void
     /**
+     * Stores what `change` makes of what is stored now, read afresh rather than taken from this tab's value, so what
+     * another tab stored since this one last heard, and anything this build cannot read, is kept; then applies it, as
+     * `set` does. Where nothing is stored, or storage is unavailable, `change` starts from this tab's value as stored.
+     * Returns the value applied.
+     */
+    edit: (change: (stored: string) => string) => T
+    /**
      * Calls `listener` each time the setting changes, from this tab or another, as useSyncExternalStore does. Returns
      * the function that stops it.
      */
@@ -77,12 +84,15 @@ export function storedSetting<T>({ key, parse, serialize }: StoredSettingOptions
     return {
         get,
         set: (next) => {
-            try {
-                globalThis.localStorage.setItem(key, serialize(next))
-            } catch {
-                // Not persisted, but still applied for this page.
-            }
+            writeRaw(key, serialize(next))
             announce(next)
+        },
+        edit: (change) => {
+            const raw = change(readRaw(key) ?? stored)
+            const next = parse(raw)
+            writeRaw(key, raw)
+            announce(next)
+            return next
         },
         subscribe,
     }
@@ -99,5 +109,13 @@ function readRaw(key: string): string | null {
     } catch {
         // Storage can be unavailable (privacy modes).
         return null
+    }
+}
+
+function writeRaw(key: string, raw: string): void {
+    try {
+        globalThis.localStorage.setItem(key, raw)
+    } catch {
+        // Not persisted, but still applied for this page.
     }
 }

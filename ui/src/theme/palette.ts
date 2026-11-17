@@ -144,11 +144,25 @@ export function getPalettes(): Palettes {
     return setting.get()
 }
 
-/** Picks `palette` for `theme` and applies it now, synchronously, so a view transition can snapshot the result. */
+/**
+ * Picks `palette` for `theme` and applies it now, synchronously, so a view transition can snapshot the result. Only
+ * `theme`'s field is written, into what is stored now: the other theme's stays as stored, whether another tab picked
+ * it a moment ago and this one has not heard yet, or a newer build stored a palette this one does not know.
+ */
 export function setPalette<T extends ResolvedTheme>(theme: T, palette: Palette<T>): void {
-    const next: Palettes = { ...setting.get(), [theme]: palette }
-    setting.set(next)
-    apply(next)
+    apply(setting.edit((stored) => JSON.stringify({ ...storedFields(stored), [theme]: palette })))
+}
+
+/** What is stored, as its fields, whatever their values: none for anything but a JSON object. */
+function storedFields(raw: string): Record<string, unknown> {
+    try {
+        const stored: unknown = JSON.parse(raw)
+        return typeof stored === 'object' && stored !== null && !Array.isArray(stored)
+            ? Object.fromEntries(Object.entries(stored))
+            : {}
+    } catch {
+        return {}
+    }
 }
 
 /** Puts each theme's palette on <html>, where tokens.css reads it. */
