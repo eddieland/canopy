@@ -9,6 +9,7 @@ import {
     healthReportQuery,
     monthlyReportQuery,
     plansReportQuery,
+    skillsReportQuery,
     reviewsReportQuery,
     spendBreakdownQuery,
 } from '@/api/queries'
@@ -69,6 +70,7 @@ import {
     wroteTokens,
 } from '@/lib/reports'
 import { reviewsLine } from '@/lib/review-report'
+import { skillsLine } from '@/lib/skill-report'
 import { modelKey, SERIES, shareText, spendLine } from '@/lib/spend'
 import { tokenCount } from '@/lib/transcript'
 import { cn } from '@/lib/utils'
@@ -284,7 +286,9 @@ function ReportCards() {
     const connectors = useQuery(connectorsReportQuery(CARD_DAYS))
     const reviews = useQuery(reviewsReportQuery(CARD_DAYS))
     const plans = useQuery(plansReportQuery(CARD_DAYS))
-    const [spendPage, checklistPage, healthPage, ciPage, connectorsPage, reviewsPage, plansPage] = REPORT_PAGES
+    const skills = useQuery(skillsReportQuery(CARD_DAYS))
+    const [spendPage, checklistPage, healthPage, ciPage, connectorsPage, reviewsPage, plansPage, skillsPage] =
+        REPORT_PAGES
     return (
         <nav aria-label="Report pages" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" data-testid="reports-cards">
             <ReportCard
@@ -323,6 +327,7 @@ function ReportCards() {
                 series={(found) => found.per_day.map((day) => ({ key: day.day, value: sum(day.first_reviews) }))}
             />
             <ReportCard page={plansPage} query={plans} line={plansLine} />
+            <ReportCard page={skillsPage} query={skills} line={skillsLine} />
         </nav>
     )
 }

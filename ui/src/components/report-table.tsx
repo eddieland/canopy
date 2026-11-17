@@ -33,8 +33,11 @@ export interface ReportColumn<T> {
     muted?: boolean
     /** A row's own classes for its cell, such as a failure's color. */
     tone?: (row: T) => string | false | undefined
-    /** For a `bar`: a row's figure as a share of the column's largest, 0 to 100 (`barPercent`). */
-    bar?: (row: T) => number
+    /**
+     * For a `bar`: a row's figure as a share of the column's largest, 0 to 100 (`barPercent`), or null for a row whose
+     * figure is a share of nothing, which draws no bar.
+     */
+    bar?: (row: T) => number | null
     /** For a `bar`: the bar's fill, `muted-foreground` unless the series has its own, or a row's own series'. */
     fill?: string | ((row: T) => string | undefined)
     /** What sits over its head, in a head row of its own, such as a sparkline of its figures across the rows. */
@@ -277,7 +280,7 @@ function ColumnCell<T>({
     if (column.kind === 'bar') {
         return (
             <CellBar
-                percent={column.bar?.(row) ?? 0}
+                percent={column.bar === undefined ? 0 : column.bar(row)}
                 fill={typeof column.fill === 'function' ? column.fill(row) : column.fill}
                 className={cn('readout', tone)}
             >

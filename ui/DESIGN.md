@@ -610,7 +610,8 @@ whole either side.
   long enough that a narrow column's still compares, filled in `muted-foreground` or the series' own fill; never a
   state's color, but for a failure rate, in `status-failed`, a share of the whole rather than of the column's largest:
   it says what is broken. It is the eye's, `aria-hidden`. Where a table's rows sum to a whole, a bar is its row's share
-  of the whole too, the percent on the cell's hover.
+  of the whole too, the percent on the cell's hover. A figure the page cannot say, a dash, is a share of nothing: it
+  draws no bar and keeps its cell, where a known zero keeps its empty bar.
 - **A sparkline** (`Sparkline`, `src/components/sparkline.tsx`) is a series drawn as a small `accent` line, where its
   trend is the point and a chart would be too much. Its scale is a chart's, 0 to `HEADROOM` over its largest; a point
   with no value breaks the line, and a lone one is a dot. It is `aria-hidden`: the words or the table beside it say
@@ -843,6 +844,10 @@ reader, so no table repeats them.
   or Escape. A hover leaves the focus where it was.
 - **A table of PRs** (`PullRequestTable`, `src/components/pull-request-table.tsx`) is a report's per-PR table: the PR
   with its unit's phase, its ticket, then the page's own figures.
+- **A pick in a table** (the checklist page's items, the Skills report's agents) is a row's name that narrows the
+  panel under it to that row: an accent link, the picked one on the accent's tint (`aria-current`), kept in the search
+  with `replace` and the scroll held, so the change is in view. The narrowed panel's header names what is picked and
+  links back to the whole; a table narrowed so keeps its columns, which mean what they did.
 - **The first-call chart** (the spend page's First calls by week) follows Charts but where a rate needs otherwise: a
   bar per local ISO week of one kind's series, as tall as the share of the week's first calls the cache served, its top
   the whole, so the axis means the same in every window, and every bar's rate over it, since there are few and the eye

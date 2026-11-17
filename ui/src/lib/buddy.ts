@@ -269,6 +269,13 @@ export const TIPS = {
         'Hot take: the fastest code review is a plan review. The second fastest is LGTM.',
         'Haiku: plan says two files / the diff touches eleven / resume, resume, done',
     ],
+    '/reports/skills': [
+        "It looks like you're counting skills. I have one. It is leaning. Nobody loads it.",
+        'Unhelpful tip: a skill never loaded is never wrong. It still rides along in every call.',
+        'Dear diary, I read a description. All of it. Every call. Nobody asked if I wanted to.',
+        'Hot take: a description is a pitch. Most skills here are still waiting for the callback.',
+        'Haiku: offered every time / the front matter rides along / loaded? Not this week',
+    ],
     '/workspace/ticks/': [
         "It looks like you're counting ticks. I counted one, then lost my place.",
         'Unhelpful tip: every tick has an id. I have an id too. It is Sprig.',

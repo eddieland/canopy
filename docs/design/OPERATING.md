@@ -75,7 +75,10 @@ offered (§25), which the run keeps, with the time to approve against the plan's
 needed after, so the key is loosened on what each level let through. A length is measured from the plan's file as its
 planner wrote it, never the operator's edit: its words, and the lines it fills in the plan editor, an estimate fitted
 to what the editor draws. It is measured once and kept in the journal, when its run records it or, for a plan without,
-by a live tick, a few a tick; the page measures what is not kept yet, so a read never writes.
+by a live tick, a few a tick; the page measures what is not kept yet, so a read never writes. The Skills page reads
+what each run was offered and its calls of the skill tool (§13), by agent and skill: a skill's entry in the list rides
+in every model call, so its cost is that length for each call, counted only over the runs where both are on record.
+What the journal cannot say, a run not asked about or an offer with no length, is counted apart, never as nothing.
 
 `spend.monthly_budget_usd` is what the operator means a local calendar month of agent spend to cost: canopy's runs and
 the runtime's sessions outside canopy (§13, Every session's spend), canopy's share shown beside the whole. `canopy
@@ -388,10 +391,11 @@ Either takes the cost its session's record gives once that is read (Each agent's
 since 2 never prints its last call's.
 
 What the run was offered is recorded beside them: MCP servers, with the rules that leave it only some of one's tools,
-skills, and the runtime's own tools. The runtime is asked as `canopy agents` asks it, while the agent starts, by the
-run's own command with its agent's run swapped for the runtime's commands that say what it offers, so it is asked
-where the agent starts and inside any sandbox that wraps it. A run whose command canopy cannot read so, or that the
-runtime could not answer for, records why instead, and the run goes on either way.
+skills, each with the length of its entry in the runtime's list of them, and the runtime's own tools. The runtime is
+asked as `canopy agents` asks it, while the agent starts, by the run's own command with its agent's run swapped for the
+runtime's commands that say what it offers, so it is asked where the agent starts and inside any sandbox that wraps it.
+A run whose command canopy cannot read so, or that the runtime could not answer for, records why instead, and the run
+goes on either way.
 
 The default templates title each session as canopy names it: a worker run by ticket, kind, and title; a tick by its id,
 what woke it, and what it faces; a chore or review by its name or PR. A title never starts like an option.

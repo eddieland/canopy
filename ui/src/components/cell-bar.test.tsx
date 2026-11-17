@@ -45,6 +45,13 @@ describe('CellBar', () => {
         expect(widths).toEqual(['25%', '100%', '0%'])
     })
 
+    it('draws no bar for a share of nothing, and keeps the cell a bar would sit in', () => {
+        const { container } = renderRow(<CellBar percent={null}>–</CellBar>)
+        expect(screen.getByRole('cell', { name: '–' })).toBeTruthy()
+        expect(screen.queryByTestId('cell-bar')).toBeNull()
+        expect(container.querySelectorAll('td')).toHaveLength(2)
+    })
+
     it('heads its column with as many cells as a row has', () => {
         renderRow(<CellBar percent={50}>$2.00</CellBar>, <CellBarHead>spent</CellBarHead>)
         const [head, body] = screen.getAllByRole('row')

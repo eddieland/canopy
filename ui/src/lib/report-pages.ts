@@ -11,6 +11,7 @@ export interface ReportPage {
         | '/reports/connectors'
         | '/reports/reviews'
         | '/reports/plans'
+        | '/reports/skills'
     /** Its name. */
     label: string
     /** What it holds, for an operator who does not know it yet. */
@@ -53,5 +54,10 @@ export const REPORT_PAGES = [
         to: '/reports/plans',
         label: 'Plans',
         hint: 'How plans were approved, by the planner or by you, and whether their PRs needed a resume',
+    },
+    {
+        to: '/reports/skills',
+        label: 'Skills',
+        hint: 'Which skills each agent is offered, which it loads, and what their front matter costs every call',
     },
 ] as const satisfies readonly ReportPage[]

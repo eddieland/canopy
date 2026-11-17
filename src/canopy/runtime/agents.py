@@ -7,7 +7,7 @@ offered once the runtime has merged the operator's own config into canopy's (`ca
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
@@ -149,6 +149,10 @@ class AgentOffer:
     #: The skills it is offered, and those it is denied, by name.
     skills: Sequence[str] = ()
     denied_skills: Sequence[str] = ()
+    #: The characters of each offered skill's entry in the list of skills the runtime writes into every model call,
+    #: by the skill's name: its name and description and whatever else the runtime lists it with, in the list's own
+    #: markup. The rest of a skill's front matter is not sent, so not counted. A skill the list leaves out counts 0.
+    listing_chars: Mapping[str, int] = field(default_factory=dict)
     #: The runtime's own tools it is offered, by name: its MCP servers' are in `servers`.
     tools: Sequence[str] = ()
     #: Why the runtime could not say what the agent is offered, or None when it said.

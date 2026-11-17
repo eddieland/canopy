@@ -176,6 +176,7 @@ export const PAGE_GUIDES = {
     '/reports/connectors': 'reports#the-connectors-page',
     '/reports/reviews': 'reports#the-reviews-page',
     '/reports/plans': 'reports#the-plans-page',
+    '/reports/skills': 'reports#the-skills-page',
     '/memory': 'memory',
     '/search': 'overview#search',
     '/system': 'overview#system-resources',

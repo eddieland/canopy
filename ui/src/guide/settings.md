@@ -269,7 +269,9 @@ Where a file is, on its chip:
 The runtime is asked as a run asks it, in the workspace root, so a skill a repository keeps for itself is missing here;
 its runs, started in its worktrees, still get it. Every skill an agent is offered costs each of its model calls,
 loaded or not, so one an agent never uses is cheaper denied to it, by name, in your runtime config. Which agent gets
-which is `canopy agents`, which asks the runtime once for each agent and takes its time about it.
+which is `canopy agents`, which asks the runtime once for each agent and takes its time about it. Which agent was
+offered each skill over the last days, how often it loaded it, and what its front matter cost is the
+[Skills page under Reports](reports#the-skills-page), which reads what the runs recorded and asks nothing.
 
 The page asks the runtime for its skills alone, once, when it opens, not on a timer; **Read again** asks afresh after
 you've added one. The filter narrows the list by name or description. Nothing here changes a skill: add, edit, or deny

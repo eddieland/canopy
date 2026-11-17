@@ -295,6 +295,16 @@ export type ConnectorsRun = Schemas['ConnectorsRun']
 export type ConnectorsRefusal = Schemas['ConnectorsRefusal']
 /** The window before a Connectors report's: its runs, the short ones, and the lines refused. */
 export type ConnectorsPrevious = Schemas['ConnectorsPrevious']
+/** Which skills a window's agent runs were offered and loaded, and what each one's front matter cost. */
+export type SkillsReport = Schemas['SkillsReport']
+/** One skill over a window: its figures over every agent, then each agent's own. */
+export type SkillsSkill = Schemas['SkillsSkill']
+/** One agent's use of one skill over a window: the runs offered it, those that loaded it, and what it cost. */
+export type SkillsUse = Schemas['SkillsUse']
+/** One agent's runs over a window: how many the runtime answered for, and what their lists of skills cost. */
+export type SkillsAgent = Schemas['SkillsAgent']
+/** The window before a Skills report's: the skills offered, those never loaded, the loads, and the front matter. */
+export type SkillsPrevious = Schemas['SkillsPrevious']
 /** Where a window's review feedback came from, how long it took, and what answering it cost. */
 export type ReviewsReport = Schemas['ReviewsReport']
 /** A PR in a window: its feedback, how soon its first review came, and what answering cost. */

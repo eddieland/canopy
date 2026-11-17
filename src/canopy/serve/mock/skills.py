@@ -8,13 +8,26 @@ itself.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.runtime.agents import SkillFile, Skills
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from canopy.core.context import Context
 
+#: What each skill's front matter says it is for, by the skill's name; None for the one that says nothing. The runs'
+#: offers record these lengths (`skill_use`), so the Skills report costs the skills this page lists.
+DESCRIPTIONS: Final[Mapping[str, str | None]] = {
+    "canopy-artifacts": (
+        "How canopy workers publish artifacts people comment on, and answer comments. Load before any artifact tool."
+    ),
+    "release-notes": "When and how to add a line to the changelog. Load before opening a PR.",
+    "terse": None,
+    "tracker-jira": "How canopy agents use Jira as the tracker via its MCP server. Load when the provider is jira.",
+    "write-a-skill": "How to write a skill of your own.",
+}
 #: The made-up digest the mock's definitions snapshot is named for.
 _SNAPSHOT = "definitions-3f9c2a71"
 _TRACKER = """# Jira for canopy agents
@@ -65,27 +78,11 @@ def listed(ctx: Context) -> Skills:
         Its skills, sorted by name.
     """
     root, snapshot = ctx.ws.root, ctx.ws.state_dir / _SNAPSHOT
-    files = (
-        SkillFile(
-            "canopy-artifacts",
-            "How canopy workers publish artifacts people comment on, and answer comments. Load before any artifact "
-            "tool.",
-            str(snapshot / "skills" / "canopy-artifacts" / "SKILL.md"),
-            _ARTIFACTS,
-        ),
-        SkillFile(
-            "release-notes",
-            "When and how to add a line to the changelog. Load before opening a PR.",
-            str(root / ".agents" / "skills" / "release-notes" / "SKILL.md"),
-            _RELEASE_NOTES,
-        ),
-        SkillFile("terse", None, str(Path.home() / ".agents" / "skills" / "terse" / "SKILL.md"), _TERSE),
-        SkillFile(
-            "tracker-jira",
-            "How canopy agents use Jira as the tracker via its MCP server. Load when the provider is jira.",
-            str(snapshot / "skills" / "tracker-jira" / "SKILL.md"),
-            _TRACKER,
-        ),
-        SkillFile("write-a-skill", "How to write a skill of your own.", "<built-in>", _WRITE_A_SKILL),
-    )
-    return Skills(files)
+    where = {
+        "canopy-artifacts": (str(snapshot / "skills" / "canopy-artifacts" / "SKILL.md"), _ARTIFACTS),
+        "release-notes": (str(root / ".agents" / "skills" / "release-notes" / "SKILL.md"), _RELEASE_NOTES),
+        "terse": (str(Path.home() / ".agents" / "skills" / "terse" / "SKILL.md"), _TERSE),
+        "tracker-jira": (str(snapshot / "skills" / "tracker-jira" / "SKILL.md"), _TRACKER),
+        "write-a-skill": ("<built-in>", _WRITE_A_SKILL),
+    }
+    return Skills(tuple(SkillFile(name, DESCRIPTIONS[name], *where[name]) for name in sorted(where)))

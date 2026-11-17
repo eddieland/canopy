@@ -281,8 +281,9 @@ test("the tools whose calls returned the most, every kind's summed, or one kind'
     await page.goto('reports/spend')
     await settled(page)
     const tools = page.getByTestId('spend-tool-table').getByTestId('spend-tool')
-    // Five tools, each once whatever kinds called it.
-    await expect(tools).toHaveCount(5)
+    // Five tools, each once whatever kinds called it, then the skill tool's calls: a row for each of the four skills
+    // loaded, one for the skill a call was refused, and one for the call that named none.
+    await expect(tools).toHaveCount(11)
     // The PR reads lead, the overseer's over both mock ticks and a worker's, then every kind's shell calls.
     await expect(tools.first().getByRole('rowheader')).toHaveText('github_pull_request_read')
     await expect(tools.first().getByRole('cell')).toHaveText(['27', '0', '346.0k', '86.5k'])

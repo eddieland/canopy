@@ -349,6 +349,7 @@ def _offer(loaded: _Loaded, agent: str) -> AgentOffer:
         servers=tuple(_server(name, server, rules, executes=executes) for name, server in loaded.servers.items()),
         skills=offered,
         denied_skills=tuple(s for s in loaded.skills if s not in offered),
+        listing_chars={f.name: _listed(f) for f in loaded.skill_files if f.name in offered},
         tools=tuple(sorted(tool for tool, permission in _BUILTIN.items() if not _hidden(permission, rules))),
     )
 
@@ -392,3 +393,15 @@ def _server(name: str, server: _McpServer, rules: Sequence[_Rule], *, executes: 
 def _may_match(prefix: str, pattern: str) -> bool:
     literal = re.split(r"[*?]", pattern, maxsplit=1)[0]
     return literal.startswith(prefix) or prefix.startswith(literal)
+
+
+# The characters of a skill's entry in the list OpenCode 2 writes into the system prompt of every model call: its id,
+# name, and description, each in a tag, one to a line. Its name is counted as its id, which is made from it.
+def _listed(file: SkillFile) -> int:
+    return len(
+        "  <skill>\n"
+        f"    <id>{file.name}</id>\n"
+        f"    <name>{file.name}</name>\n"
+        f"    <description>{file.description or ''}</description>\n"
+        "  </skill>\n",
+    )
