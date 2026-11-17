@@ -1,9 +1,10 @@
-import { createFileRoute, Link, notFound } from '@tanstack/react-router'
+import { createFileRoute, Link, notFound, useLocation } from '@tanstack/react-router'
 import { ChevronDown } from 'lucide-react'
 
 import { GuideLines, GuideText } from '@/components/guide-text'
 import { PageHeader } from '@/components/panel'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { useSectionRead } from '@/hooks/use-section-read'
 import { GUIDE_GROUPS, guideNeighbours, guidePage } from '@/lib/guide'
 import type { GuidePage } from '@/lib/guide'
 import { cn } from '@/lib/utils'
@@ -25,6 +26,14 @@ export const Route = createFileRoute('/guide/$page')({
     },
     component: GuidePageView,
 })
+
+// A column beside the article: it stays under the header as the page scrolls, a little clear of it, and is never
+// taller than the window, so a list too long for it scrolls on its own and its last entry is always in reach. The
+// padding, taken back by the margin, is the room a link's focus ring needs inside what clips it.
+const BESIDE = cn(
+    'sticky top-6 -m-1 max-h-[calc(100dvh-6rem)] scrollbar-thin self-start overflow-y-auto p-1',
+    'print:static print:max-h-none',
+)
 
 function GuidePageView() {
     const page = Route.useLoaderData()
@@ -57,7 +66,8 @@ function GuidePageView() {
 
 /**
  * The guide's pages, by group, this one marked. Beside the page once the pane has room for it and the article's whole
- * measure, sticking as it scrolls; short of that, a toggle above the page that opens the same list.
+ * measure, staying put as the page scrolls and scrolling on its own when it is taller than the window; short of that,
+ * a toggle above the page that opens the same list.
  */
 function GuideSidebar({ page }: { page: GuidePage }) {
     return (
@@ -79,7 +89,7 @@ function GuideSidebar({ page }: { page: GuidePage }) {
                     <GuideTree page={page} />
                 </CollapsibleContent>
             </Collapsible>
-            <aside className="sticky top-0 hidden self-start @min-[62.5rem]:block">
+            <aside className={cn(BESIDE, 'hidden @min-[62.5rem]:block')}>
                 <GuideTree page={page} />
             </aside>
         </>
@@ -101,6 +111,7 @@ function GuideTree({ page }: { page: GuidePage }) {
                                     params={{ page: other.slug }}
                                     activeOptions={{ includeHash: false }}
                                     aria-current={other.slug === page.slug ? 'page' : undefined}
+                                    ref={other.slug === page.slug ? showInList : undefined}
                                     className={cn(
                                         '-ml-px block border-l border-transparent py-1 pl-3 text-sm',
                                         'text-muted-foreground hover:border-muted-foreground hover:text-foreground',
@@ -119,13 +130,24 @@ function GuideTree({ page }: { page: GuidePage }) {
     )
 }
 
-/** The page's `##` headings, beside it once the pane has room for them too, sticking as it scrolls. */
+// Brings the page shown into view in the list of pages, which may be scrolled past it. The nearest edge, so a link
+// already in view moves nothing, the page least of all.
+function showInList(link: HTMLAnchorElement | null) {
+    link?.scrollIntoView({ block: 'nearest' })
+}
+
+/**
+ * The page's `##` headings, beside it once the pane has room for them too, staying put as the page scrolls, with the
+ * section being read marked.
+ */
 function OnThisPage({ page }: { page: GuidePage }) {
+    const hash = useLocation({ select: (location) => location.hash })
+    const read = useSectionRead(page.headings.map((heading) => heading.id).join(' '), hash)
     if (page.headings.length === 0) {
         return null
     }
     return (
-        <nav aria-label="On this page" className="sticky top-0 hidden flex-col gap-2 self-start @min-[76.5rem]:flex">
+        <nav aria-label="On this page" className={cn(BESIDE, 'hidden flex-col gap-2 @min-[76.5rem]:flex')}>
             <h2 className="text-sm font-semibold">On this page</h2>
             <ul className="flex flex-col gap-1">
                 {page.headings.map((heading) => (
@@ -134,7 +156,14 @@ function OnThisPage({ page }: { page: GuidePage }) {
                             to="/guide/$page"
                             params={{ page: page.slug }}
                             hash={heading.id}
-                            className="block py-0.5 text-sm text-muted-foreground hover:text-foreground"
+                            // Only the heading the address names is the link to where you are, not every one: they
+                            // share a path. The mark follows the page instead, however far it has scrolled since.
+                            activeOptions={{ includeHash: true }}
+                            data-current={heading.id === read || undefined}
+                            className={cn(
+                                'block py-0.5 text-sm text-muted-foreground hover:text-foreground',
+                                'data-current:text-accent',
+                            )}
                         >
                             {heading.text}
                         </Link>

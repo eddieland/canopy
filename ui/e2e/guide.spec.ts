@@ -59,6 +59,32 @@ test('in a narrow pane, the guide pages fold into a toggle above the page', asyn
     await expect(page).toHaveURL(/\/guide\/signing-in$/u)
 })
 
+test("the guide's side columns stay in the window as the page scrolls, the section read marked", async ({ page }) => {
+    // Wide enough for On this page, and too short for the whole list of pages.
+    await page.setViewportSize({ width: 1600, height: 600 })
+    await page.goto('guide/glossary')
+    const pages = page.getByRole('navigation', { name: 'Guide' })
+    // The page shown is the list's last, past the window's foot: the list opens scrolled to it.
+    await expect(pages.getByRole('link', { name: 'Glossary' })).toBeInViewport({ ratio: 1 })
+
+    // The list scrolls on its own, so its first page is in reach from the middle of a long one.
+    await pages.getByRole('link', { name: 'Tickets', exact: true }).click()
+    const headings = page.getByRole('navigation', { name: 'On this page' })
+    const marked = headings.locator('[data-current]')
+    await expect(marked).toHaveText('The list')
+    await page.getByRole('heading', { level: 2, name: 'Acting on a ticket' }).scrollIntoViewIfNeeded()
+    await pages.getByRole('link', { name: 'The web UI' }).scrollIntoViewIfNeeded()
+    await expect(pages.getByRole('link', { name: 'The web UI' })).toBeInViewport({ ratio: 1 })
+    await expect(page.getByRole('heading', { level: 2, name: 'Acting on a ticket' })).toBeInViewport()
+
+    // On this page marks the section the page has scrolled to, and the last one at the page's end.
+    await headings.getByRole('link', { name: 'Acting on a ticket' }).click()
+    await expect(marked).toHaveText('Acting on a ticket')
+    await page.getByRole('navigation', { name: 'Previous and next' }).scrollIntoViewIfNeeded()
+    await expect(marked).toHaveText('Attaching files')
+    await expect(headings).toBeInViewport({ ratio: 1 })
+})
+
 test("the guide's columns come in by the pane's width, and never take the article's measure", async ({ page }) => {
     await page.goto('guide/overview')
     await settled(page)
