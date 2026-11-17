@@ -38,6 +38,8 @@ def test_with_config_dir_runs_the_command_with_the_directory_set() -> None:
     [
         (invocation.with_config_dir(shlex.quote("/state/my dir"), "opencode run --agent x {prompt}"), "/state/my dir"),
         ("env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent x", "{definitions_dir}"),
+        # `env` takes the last of several.
+        ("env OPENCODE_CONFIG_DIR=/first OPENCODE_CONFIG_DIR=/last opencode run --agent x", "/last"),
         ("opencode run --agent x {prompt}", None),
         ("env OPENCODE_CONFIG_DIR='/unclosed opencode run", None),
     ],

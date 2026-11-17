@@ -26,6 +26,7 @@ import copy
 import json
 import os
 import re
+import secrets
 import shlex
 import shutil
 import tomllib
@@ -164,6 +165,8 @@ def write_model(definition: Path, model: Model | None) -> None:
             _write(definition, new)
     except OSError as e:
         raise InstallError(f"cannot write the chore's model into its agent, {definition}: {e.strerror}") from e
+    except UnicodeDecodeError as e:
+        raise InstallError(f"cannot write the chore's model into its agent, {definition}: it is not UTF-8") from e
     except DefinitionsError as e:
         raise InstallError(f"cannot write the chore's model into its agent, {definition}: {e}") from e
 
@@ -287,7 +290,8 @@ def _check(private: Path, old: Mapping[str, object], new_text: str, name: str, t
 
 def _write(path: Path, text: str) -> None:
     """Replace `path` with `text` in one step, readable only by the operator, as the private file must be."""
-    temporary = path.with_name(f".{path.name}.tmp-{os.getpid()}")
+    # Named apart from any other write of it, another thread's of this process included.
+    temporary = path.with_name(f".{path.name}.tmp-{os.getpid()}-{secrets.token_hex(4)}")
     try:
         logs.write_private(temporary, text)
         temporary.replace(path)

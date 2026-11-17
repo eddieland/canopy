@@ -185,6 +185,9 @@ def test_an_installed_chores_agent_gets_the_model_config_chooses_each_time_the_c
     prepared(None, None)
     with pytest.raises(execute.SetupError, match=r"has no line '# canopy: model'.*`canopy chore install briefing`"):
         prepared("acme/fake-model-1", None)
+    agent.write_bytes(b"\xff")
+    with pytest.raises(execute.SetupError, match="it is not UTF-8"):
+        prepared("acme/fake-model-1", None)
     agent.unlink()
     with pytest.raises(execute.SetupError, match="cannot write the chore's model into its agent"):
         prepared("acme/fake-model-1", None)
