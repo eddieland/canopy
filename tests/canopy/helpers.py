@@ -606,6 +606,22 @@ def spans(path: Path) -> list[dict[str, Any]]:
     ]
 
 
+def points(path: Path) -> list[tuple[str, dict[str, object], dict[str, Any]]]:
+    """Each point in a metrics file, in the order written: its metric's name, its labels, and the point."""
+    found: list[tuple[str, dict[str, object], dict[str, Any]]] = []
+    if not path.exists():
+        return found
+    for line in path.read_text().splitlines():
+        for resource in json.loads(line)["resourceMetrics"]:
+            for scope in resource["scopeMetrics"]:
+                for metric in scope["metrics"]:
+                    data = metric.get("sum") or metric.get("gauge") or metric.get("histogram") or {}
+                    for point in data["dataPoints"]:
+                        labels = {a["key"]: next(iter(a["value"].values())) for a in point["attributes"]}
+                        found.append((metric["name"], labels, point))
+    return found
+
+
 def _attribute_values(listed: Iterable[dict[str, Any]]) -> dict[str, Any]:
     """OTLP JSON's list of attributes, as a plain dict of their values."""
     return {a["key"]: next(iter(a["value"].values()), None) for a in listed}

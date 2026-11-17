@@ -27,6 +27,7 @@ import settings from '@/guide/settings.md?raw'
 import signingIn from '@/guide/signing-in.md?raw'
 import slack from '@/guide/slack.md?raw'
 import tasks from '@/guide/tasks.md?raw'
+import telemetry from '@/guide/telemetry.md?raw'
 import tickets from '@/guide/tickets.md?raw'
 import ticks from '@/guide/ticks.md?raw'
 import { INLINE, inlineWith, parseWith, runPieces } from '@/lib/rich-text'
@@ -37,6 +38,7 @@ import type { FileRoutesById } from '@/routeTree.gen'
 
 import exampleWorkspace from '../../../examples/canopy-workspace.toml?raw'
 import exampleConfig from '../../../examples/config.toml?raw'
+import exampleCollector from '../../../examples/otel/collector.yaml?raw'
 
 /** Where a link in the guide goes: a page of it (at a heading, with `hash`), a section of the app, or the web. */
 export type GuideTarget =
@@ -118,6 +120,7 @@ const SOURCES: readonly { title: string; pages: readonly (readonly [string, stri
             ['memory', memory],
             ['notifications', notifications],
             ['slack', slack],
+            ['telemetry', telemetry],
             ['settings', settings],
         ],
     },
@@ -212,6 +215,7 @@ export const PAGE_GUIDES = {
 export const EMBEDS: Readonly<Record<string, string>> = {
     'examples/canopy-workspace.toml': exampleWorkspace,
     'examples/config.toml': exampleConfig,
+    'examples/otel/collector.yaml': exampleCollector,
 }
 
 const SLUGS: ReadonlySet<string> = new Set(SOURCES.flatMap(({ pages }) => pages.map(([slug]) => slug)))

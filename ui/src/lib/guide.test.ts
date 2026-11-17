@@ -39,10 +39,11 @@ describe('the guide', () => {
     })
 
     it('shows each example file whole, as a code block of its lines, and the rest of the page after it', () => {
-        const code = guidePage('config-files')?.body.flatMap((block) => (block.kind === 'code' ? [block.lines] : []))
+        const code = GUIDE.flatMap((page) => page.body.flatMap((block) => (block.kind === 'code' ? [block.lines] : [])))
         const files = Object.values(EMBEDS).map((file) => file.replace(/\n$/u, '').split('\n'))
-        expect(code).toEqual(files)
+        expect(code).toEqual(expect.arrayContaining(files))
         expect(guidePage('config-files')?.body.at(-1)?.kind).toBe('paragraph')
+        expect(guidePage('telemetry')?.body.at(-1)?.kind).toBe('table')
     })
 
     it('has diagrams mermaid reads as a kind it draws, each named for a screen reader', async () => {

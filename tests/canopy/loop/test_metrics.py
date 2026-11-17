@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import json
 import shutil
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 from unittest import mock
 
 from canopy.core import db, overseer_runs, run_metrics
@@ -15,7 +14,7 @@ from canopy.core.vocab import Decider, Phase, RunKind, TickStatus
 from canopy.infra import metrics
 from canopy.loop.tick import Step
 from canopy.notify.deliver import Delivered
-from tests.canopy.helpers import KEY, in_tick, raises, waits
+from tests.canopy.helpers import KEY, in_tick, points, raises, waits
 from tests.canopy.scenario_helpers import dispatches
 
 if TYPE_CHECKING:
@@ -32,22 +31,6 @@ LOOP_GAUGES = {
     "canopy.attention.open",
     "canopy.disk.free",
 }
-
-
-def points(path: Path) -> list[tuple[str, dict[str, object], dict[str, Any]]]:
-    """Each point in the metrics file: its metric's name, its labels, and the point."""
-    found: list[tuple[str, dict[str, object], dict[str, Any]]] = []
-    if not path.exists():
-        return found
-    for line in path.read_text().splitlines():
-        for resource in json.loads(line)["resourceMetrics"]:
-            for scope in resource["scopeMetrics"]:
-                for metric in scope["metrics"]:
-                    data = metric.get("sum") or metric.get("gauge") or metric.get("histogram") or {}
-                    for point in data["dataPoints"]:
-                        labels = {a["key"]: next(iter(a["value"].values())) for a in point["attributes"]}
-                        found.append((metric["name"], labels, point))
-    return found
 
 
 def worker_run_counted(path: Path) -> list[dict[str, object]]:

@@ -1,0 +1,53 @@
+# Prometheus alerting rules for canopy, over the metrics the example collector (collector.yaml) serves. Check them
+# with `promtool check rules examples/otel/alerts.yaml`. Each alert is per workspace: `instance` is its random id.
+# The thresholds are a starting point; the spend's is a placeholder for yours.
+
+groups:
+  - name: canopy
+    rules:
+      # No tick of any status has closed in three hours, so `canopy loop` is stopped, paused, or stuck. A quiet loop
+      # still ticks every two hours at most (`loop.idle_max_minutes`): raise this if you raised that. Taken over two
+      # days, so the alert holds after the collector stops serving the last tick's gauge.
+      - alert: CanopyLoopStalled
+        expr: time() - max by (job, instance) (max_over_time(canopy_tick_last_seconds[2d])) > 3 * 3600
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "canopy has closed no tick in {{ $value | humanizeDuration }}"
+
+      # Half of the last six hours' agent runs ended without doing their work, out of four or more. The statuses are
+      # those a run's span ends failed in: blocked, stopped, and done are not failures.
+      - alert: CanopyRunsFailing
+        expr: |
+          sum by (job, instance) (increase(canopy_runs_total{status=~"failed|unknown|unpushed|crashed|timeout"}[6h]))
+            / sum by (job, instance) (increase(canopy_runs_total[6h])) >= 0.5
+          and sum by (job, instance) (increase(canopy_runs_total[6h])) >= 4
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of canopy's runs in the last six hours failed"
+
+      # Half of the last six hours' ticks did not close ok, out of four or more: the overseer failing, the disk low, a
+      # model missing. `canopy status` and the Ticks page say which.
+      - alert: CanopyTicksFailing
+        expr: |
+          sum by (job, instance) (increase(canopy_ticks_total{status!="ok"}[6h]))
+            / sum by (job, instance) (increase(canopy_ticks_total[6h])) >= 0.5
+          and sum by (job, instance) (increase(canopy_ticks_total[6h])) >= 4
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of canopy's ticks in the last six hours did not close ok"
+
+      # Agent runs cost more than 5 USD in the last hour, as the runtime reported it. 5 is a placeholder: an hour of
+      # `spend.monthly_budget_usd`, times a few, is a fair start.
+      - alert: CanopySpendHigh
+        expr: sum by (job, instance) (increase(canopy_cost_USD_total[1h])) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "canopy's runs cost {{ $value | printf \"%.2f\" }} USD in the last hour"
