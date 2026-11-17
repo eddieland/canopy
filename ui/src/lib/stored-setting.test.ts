@@ -23,6 +23,11 @@ function words() {
     })
 }
 
+// An edit adding `word` to the stored list.
+function add(word: string) {
+    return (stored: string) => JSON.stringify([...(JSON.parse(stored) as string[]), word])
+}
+
 describe('storedSetting', () => {
     beforeEach(() => localStorage.clear())
 
@@ -85,6 +90,32 @@ describe('storedSetting', () => {
         setting.set(['c'])
         otherTab(KEY, '["d"]')
         expect(heard).toHaveBeenCalledTimes(1)
+    })
+
+    it("edits what is stored now, keeping another tab's change this one has not heard of", () => {
+        const setting = words()
+        const stop = setting.subscribe(() => {})
+        // Stored by another tab, its `storage` event not yet delivered here.
+        localStorage.setItem(KEY, '["theirs"]')
+
+        setting.edit(add('mine'))
+
+        expect(localStorage.getItem(KEY)).toBe('["theirs","mine"]')
+        expect(setting.get()).toEqual(['theirs', 'mine'])
+        stop()
+    })
+
+    it('edits from its own value where nothing is stored or storage is unavailable, and returns it', () => {
+        const setting = words()
+        const stop = setting.subscribe(() => {})
+        setting.set(['a'])
+        localStorage.clear()
+        expect(setting.edit(add('b'))).toEqual(['a', 'b'])
+
+        breakStorage()
+        expect(setting.edit(add('c'))).toEqual(['a', 'b', 'c'])
+        expect(setting.get()).toEqual(['a', 'b', 'c'])
+        stop()
     })
 
     it('reads nothing where storage is unavailable, and still applies a change to this page', () => {

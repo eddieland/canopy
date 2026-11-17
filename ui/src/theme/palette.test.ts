@@ -42,6 +42,33 @@ describe('palettes', () => {
         expect(root.dataset.lightPalette).toBe('lavender')
     })
 
+    it("keeps the other theme's pick from another tab this one has not heard of yet", async () => {
+        const palette = await load()
+        const { result } = renderHook(() => palette.usePalettes())
+        // Picked in another tab, its `storage` event not yet delivered here.
+        localStorage.setItem(palette.STORAGE_KEY, '{"light":"lavender","dark":"plum"}')
+
+        act(() => palette.setPalette('light', 'sage'))
+
+        expect(JSON.parse(localStorage.getItem(palette.STORAGE_KEY) ?? '')).toEqual({ light: 'sage', dark: 'plum' })
+        expect(result.current).toEqual({ light: 'sage', dark: 'plum' })
+        expect(root.dataset.darkPalette).toBe('plum')
+    })
+
+    it('keeps a palette a newer build stored, which this one does not know, as stored', async () => {
+        localStorage.setItem('canopy-palette', '{"light":"lavender","dark":"a-newer-palette"}')
+        const palette = await load()
+        expect(palette.getPalettes().dark).toBe('indigo')
+
+        palette.setPalette('light', 'nord')
+
+        expect(JSON.parse(localStorage.getItem(palette.STORAGE_KEY) ?? '')).toEqual({
+            light: 'nord',
+            dark: 'a-newer-palette',
+        })
+        expect(root.dataset.darkPalette).toBe('indigo')
+    })
+
     it('still applies where storage is unavailable', async () => {
         breakStorage()
         const palette = await load()

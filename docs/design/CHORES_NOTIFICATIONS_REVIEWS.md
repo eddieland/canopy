@@ -30,13 +30,16 @@ prompt file, and these keys turn behavior on:
   `workspaces` (§18) limits where a chore runs.
 - `model` runs the chore on a model of its own rather than `runtime.models.chore` (§13, Each agent's model), through
   a copy of `canopy-chore` made for it, `canopy-chore-<name>`, since one definition holds one model. Its command must
-  run `canopy-chore`; a chore with an agent of the operator's own sets the model in that agent's definition.
+  run `canopy-chore`, or the agent installed with the chore (below), into which canopy writes the chore's model, its
+  own or `runtime.models.chore`, each time it runs; a chore with an agent of the operator's own sets the model in
+  that agent's definition.
 
 `capacity.max_chores` caps chore runs at once, apart from `max_workers`.
 
 `canopy chore install NAME` sets up one of the example chores canopy ships in a workspace: its prompt, and the agent it
 comes with if any, in the state directory, which its table in the private file names. They stay as installed when
-canopy is upgraded. The command owns them, so installing again replaces them whole with the shipped ones, and leaves
+canopy is upgraded, but for the agent's model. The command owns them, so installing again replaces them whole with the
+shipped ones, and leaves
 every other line of the file as it was or writes nothing.
 
 canopy ships `canopy-chore` (§13): no edits, no subagents, no bash, one tool of canopy's, which reads its own chore's

@@ -42,8 +42,10 @@ when a due chore runs, each tick, within the hours you allowed it. The schedule 
 every 120 minutes" means no sooner, not on the dot.
 
 A chore runs on `runtime.models.chore` unless its table sets a `model` of its own, spelled the same way,
-`provider/model@variant` included; canopy runs it on a copy of its chore agent made for that model. A chore whose
-command runs an agent of your own can't take one: canopy doesn't write that agent's definition, so the model goes
+`provider/model@variant` included; canopy runs it on a copy of its chore agent made for that model. A chore that came
+with its own agent, as some `canopy chore install` sets up do, takes both the same way: canopy writes the model into
+the installed agent each time the chore runs. A chore whose command runs an agent of your own can't take one: canopy
+doesn't write that agent's definition, so the model goes
 there, and config refuses a `model` beside it rather than let two places disagree. [Settings](settings#models) shows
 which model each chore ends up on, and each run's page names the one it asked for, then the one that served it.
 

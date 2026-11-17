@@ -366,6 +366,22 @@ def test_a_variant_is_rendered_beside_its_model() -> None:
     assert '\nmodel: "acme/fake-model-1"\nvariant: "high"\n' in frontmatter
 
 
+def test_a_model_is_set_in_place_of_the_one_written_before_and_taken_out_again() -> None:
+    """What a chore's installed agent gets each time the chore runs (DESIGN §19)."""
+    shipped = (resources.agents_dir() / "canopy-chore.md").read_text()
+    first = definitions.set_model(shipped, "x", agents.Model("acme/fake-model-1", "high"))
+    assert '\n# canopy: model\nmodel: "acme/fake-model-1"\nvariant: "high"\npermission:\n' in first
+    second = definitions.set_model(first, "x", agents.Model("acme/fake-model-2"))
+    assert second == shipped.replace("# canopy: model\n", '# canopy: model\nmodel: "acme/fake-model-2"\n')
+    assert definitions.set_model(second, "x", agents.Model("acme/fake-model-2")) == second
+    assert definitions.set_model(second, "x", None) == shipped
+    # A definition with no marked line takes none, and is left alone while there is none to write.
+    unmarked = shipped.replace("# canopy: model\n", "")
+    assert definitions.set_model(unmarked, "x", None) == unmarked
+    with pytest.raises(agents.DefinitionsError, match="x has no line '# canopy: model'"):
+        definitions.set_model(unmarked, "x", agents.Model("acme/fake-model-1"))
+
+
 @pytest.mark.parametrize("variant", ['high"\npermission: allow', "1high", "hi gh", ""])
 def test_a_variant_canopy_would_not_render_is_refused(variant: str) -> None:
     model = agents.Model("acme/fake-model-1", variant)

@@ -417,6 +417,29 @@ def render_model(text: str, name: str, model: Model) -> str:
     return text.replace(_MODEL_MARKER, f"{_MODEL_MARKER}{lines}", 1)
 
 
+def set_model(text: str, name: str, model: Model | None) -> str:
+    """Return definition `name` with `model` at its marked line in place of any written there before, or with none.
+
+    For a definition canopy writes a model into again and again, a chore's installed agent (DESIGN §19), where
+    `render_model` writes once into a shipped file. The lines canopy wrote are the `model` and `variant` right below
+    the marked line. A definition with no marked line, and none to write, is returned as it is.
+
+    Raises:
+        DefinitionsError: `text` has no marked line to render a model at, or `model` is not one canopy renders.
+    """
+    head, marker, rest = text.partition(_MODEL_MARKER)
+    if not marker:
+        if model is None:
+            return text
+        raise DefinitionsError(f"{name} has no line {_MODEL_MARKER.strip()!r} to render the model at")
+    lines = rest.splitlines(keepends=True)
+    written = 0
+    while written < len(lines) and lines[written].startswith(("model: ", "variant: ")):
+        written += 1
+    cleared = head + marker + "".join(lines[written:])
+    return cleared if model is None else render_model(cleared, name, model)
+
+
 def render_bash_allows(text: str, name: str, allows: Sequence[str]) -> str:
     """Return definition `name` with each of `allows` allowed at its marked line, the last of its bash rules.
 

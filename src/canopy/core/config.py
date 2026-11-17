@@ -1883,7 +1883,8 @@ class Chore(Section):
     cmd: CommandTemplate | None = None
     #: Its own model, spelled as a `runtime.models` value, in place of `runtime.models.chore`: canopy runs it on a copy
     #: of the chore's agent made for it, `canopy-chore-<name>`, with this model (DESIGN §13, §19). Its command, its
-    #: `cmd` or `runtime.chore_cmd`, must run the chore's agent; one of the operator's own takes its model in its own
+    #: `cmd` or `runtime.chore_cmd`, must run the chore's agent, or the agent `canopy chore install` copied for the
+    #: chore, into which canopy writes it; one of the operator's own takes its model in its own
     #: definition.
     model: ModelId | None = None
     every_minutes: Annotated[StrictInt, Field(ge=MIN_CHORE_EVERY_MINUTES)]
@@ -1906,22 +1907,23 @@ class Chore(Section):
     @model_validator(mode="after")
     def _model_and_cmd(self) -> Chore:
         # A model on the command line would beat the one canopy writes, so it is refused wherever canopy chooses one:
-        # with `model`, or on the chore's agent, whose model is `runtime.models.chore`. An agent of the operator's own
-        # is the operator's to run on any model, as before.
+        # with `model`, or on the chore's agent or the one installed with the chore, whose model is
+        # `runtime.models.chore`. An agent of the operator's own is the operator's to run on any model, as before.
         if self.cmd is None:
             return self
         runs_chore = invocation.agent_of(self.cmd) == agents.CHORE
-        if self.model is not None and not runs_chore:
+        installed = agent_models.installed_agent(self.cmd) is not None
+        if self.model is not None and not runs_chore and not installed:
             raise ValueError(
                 f"model needs cmd to run canopy's chore agent, {agents.CHORE}, which canopy copies for this chore "
-                "with its model; an agent of your own takes its model in its own definition. Drop model, or run "
-                f"--agent {agents.CHORE}",
+                "with its model, or the agent `canopy chore install` copied for it; an agent of your own takes its "
+                f"model in its own definition. Drop model, or run --agent {agents.CHORE}",
             )
-        if self.model is not None and DEFINITIONS_DIR not in self.cmd:
+        if self.model is not None and runs_chore and DEFINITIONS_DIR not in self.cmd:
             raise ValueError(
                 f"with model, cmd must contain {DEFINITIONS_DIR}, where the chore's copy of {agents.CHORE} is (D040)",
             )
-        if self.model is not None or runs_chore:
+        if self.model is not None or runs_chore or installed:
             try:
                 _refuse_model_option(self.cmd, "Set model in this table instead")
                 _refuse_approve_option(self.cmd)

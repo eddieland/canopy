@@ -51,6 +51,15 @@ def with_config_dir(directory: str, command: str) -> str:
     return _shared.with_config_dir(directory, command)
 
 
+def config_dir_of(command: str) -> str | None:
+    """Return the directory `command` points the runtime at for its config, as `with_config_dir` writes it, or None.
+
+    Returns:
+        The directory as the command spells it, a placeholder of canopy's included; None when it sets none.
+    """
+    return _shared.config_dir_of(command)
+
+
 def on_private_server(command: str, *, version: Version) -> str:
     """Return `command`, run by the runtime `version` runs, with its agent's run in the command's own process.
 

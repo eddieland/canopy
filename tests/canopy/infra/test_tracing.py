@@ -128,3 +128,30 @@ def test_a_tally_while_tracing_is_off_is_kept_nowhere() -> None:
     with tracing.span("tick") as tick:
         tracing.tally(queries=1)
     assert not tick.tallies
+
+
+def test_an_event_is_a_moment_in_its_span_named_as_its_attributes_are(traced: Path) -> None:
+    tracing.event("lost")
+    with tracing.span("overseer") as overseer:
+        overseer.event("decision", decision_id=3, kind="dispatch", guard=None)
+        with tracing.span("spawn"):
+            tracing.event("lease.taken", pool="canopy")
+        tracing.event("decision", outcome="refused")
+    spawn, overseer_span = spans(traced)
+    assert [(e["name"], e["attributes"]) for e in overseer_span["events"]] == [
+        ("decision", {"canopy.decision_id": "3", "canopy.kind": "dispatch"}),
+        ("decision", {"canopy.outcome": "refused"}),
+    ]
+    # On the span open when it happened, alone, and within that span's time.
+    [(name, at)] = [(e["name"], int(e["timeUnixNano"])) for e in spawn["events"]]
+    assert name == "lease.taken"
+    assert int(spawn["startTimeUnixNano"]) <= at <= int(spawn["endTimeUnixNano"])
+    # Outside every span, an event has nowhere to be.
+    assert "lost" not in traced.read_text()
+
+
+def test_an_event_while_tracing_is_off_records_nothing(tmp_path: Path) -> None:
+    with tracing.span("tick") as tick:
+        tick.event("decision", kind="wait")
+        tracing.event("decision", kind="wait")
+    assert not (tmp_path / tracing.TRACES_FILE_NAME).exists()
