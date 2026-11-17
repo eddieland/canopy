@@ -393,7 +393,7 @@ export function summary(entry: TranscriptTool, worktrees: readonly RunWorktree[]
             .join(', ')
             .slice(0, MAX_LINE)
     }
-    const card = cardIn(input, entry.at)
+    const card = cardOf(entry)
     if (card !== null) {
         return card.card.summary.slice(0, MAX_LINE)
     }
@@ -437,7 +437,7 @@ export function summaryTitle(entry: TranscriptTool): string {
 
 // What the name of every tool of canopy's own servers starts with: canopy names the servers, the runtime joins the
 // tool's name to it.
-const CANOPY = 'canopy'
+const CANOPY = 'canopy_'
 
 /** A question a progress update asks the operator, as the call wrote it. */
 export interface CardQuestion {
@@ -460,9 +460,14 @@ export interface CallCard {
 /**
  * The progress a call to canopy's `status` tool posts, read from its input: its summary and what it does now, what is
  * done with the proof of each, what is next, its steps, what it works around, and its question. Null for any other
- * call, and for an input the tool would refuse, which opens to its input alone.
+ * tool's call, for one the tool refused, which posted nothing, and for an input it would refuse; each opens to its
+ * input alone.
  */
 export function cardOf(entry: TranscriptTool): CallCard | null {
+    // A call the tool refused posted nothing, and its fields are common ones in another tool's input.
+    if (entry.status === 'error' || !/^canopy_.*status$/u.test(entry.tool)) {
+        return null
+    }
     return cardIn(parsed(entry.input), entry.at)
 }
 
@@ -553,6 +558,10 @@ function questionIn(value: unknown): CardQuestion | null | undefined {
     if (
         typeof ask !== 'string' ||
         typeof recommend !== 'string' ||
+        // The letter of one of its options, as the tool holds it to.
+        !Array.isArray(options) ||
+        !'ABCDE'.slice(0, options.length).includes(recommend) ||
+        recommend.length !== 1 ||
         !Array.isArray(options) ||
         !options.every((option) => typeof option === 'string')
     ) {
@@ -581,7 +590,9 @@ export interface CallResult {
 export function resultOf(entry: TranscriptTool): CallResult | null {
     const input = parsed(entry.input)
     const status = input?.['status']
-    if (input === null || typeof status !== 'string' || !/^canopy.*result$/u.test(entry.tool)) {
+    // A call the tool refused reported nothing: the agent is told what is wrong, and calls again.
+    const taken = entry.status !== 'error' && /^canopy_.*result$/u.test(entry.tool)
+    if (input === null || typeof status !== 'string' || !taken) {
         return null
     }
     const { summary: said, question, prs } = input
@@ -608,7 +619,7 @@ export function resultOf(entry: TranscriptTool): CallResult | null {
  * read, or that there was none. Null for any other call, and for one that failed.
  */
 export function heardOf(entry: TranscriptTool): string | null {
-    if (entry.status === 'error' || !/^canopy.*messages$/u.test(entry.tool)) {
+    if (entry.status === 'error' || !/^canopy_.*messages$/u.test(entry.tool)) {
         return null
     }
     const count = /^(\d+) messages? from the operator/u.exec(entry.output)?.[1]
@@ -624,7 +635,7 @@ export type ToolKind = 'shell' | 'write' | 'read' | 'search' | 'web' | 'canopy' 
 /**
  * A tool call's kind, read from its input's keys as `shellCall` reads a command, not from its name, which is the
  * runtime's or a server's own, but for canopy's, whose servers canopy names (`canopy_run_status`): a command is a
- * shell call; canopy's decisions, settings, and progress are canopy's, however named; a file with
+ * shell call; canopy's decisions and settings are canopy's, however named; a file with
  * content or a replacement is a write, and a file alone a read; a pattern or a query is a search; an address is the
  * web's. Anything else, an input that is not an object among it, is `other`.
  */
@@ -639,7 +650,7 @@ export function toolKind(entry: TranscriptTool): ToolKind {
     if (typeof input['command'] === 'string') {
         return 'shell'
     }
-    if (decisionsIn(input) !== null || settingsIn(input) !== null || cardIn(input, null) !== null) {
+    if (decisionsIn(input) !== null || settingsIn(input) !== null) {
         return 'canopy'
     }
     const has = (...keys: string[]) => keys.some((key) => typeof input[key] === 'string')

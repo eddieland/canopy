@@ -232,6 +232,9 @@ const status = (input: unknown) => tool('completed', { tool: 'canopy_run_status'
 // What a call of canopy's `messages` tool that answered `output` heard.
 const heard = (output: string) => heardOf(tool('completed', { tool: 'canopy_run_messages', input: '{}', output }))
 
+// A progress update that asks a question of two options and recommends the one `recommend` names.
+const asks = (recommend: string) => ({ summary: 'x', now: 'y', question: { ask: 'q', options: ['a', 'b'], recommend } })
+
 describe('cardOf, resultOf, and heardOf', () => {
     it('reads a progress update as the card it posted, its question apart', () => {
         const entry = status({
@@ -260,6 +263,13 @@ describe('cardOf, resultOf, and heardOf', () => {
     it('reads no card from an input the tool would refuse, or another tool’s', () => {
         expect(cardOf(status({ summary: 'x' }))).toBeNull()
         expect(cardOf(status({ summary: 'x', now: 'y', priority: 'high' }))).toBeNull()
+        const card = JSON.stringify({ summary: 'x', now: 'y' })
+        expect(cardOf(tool('completed', { tool: 'canopy_run_status', input: card }))).not.toBeNull()
+        expect(cardOf(tool('completed', { tool: 'notes_add', input: card }))).toBeNull()
+        // A call the tool refused posted nothing.
+        expect(cardOf(tool('error', { tool: 'canopy_run_status', input: card }))).toBeNull()
+        expect(cardOf(status(asks('B')))).not.toBeNull()
+        expect(cardOf(status(asks('C')))).toBeNull()
         expect(cardOf(status({ summary: 'x', now: 'y', steps: [{ title: 't', status: 'soon' }] }))).toBeNull()
     })
 
@@ -282,6 +292,7 @@ describe('cardOf, resultOf, and heardOf', () => {
         })
         expect(summary(entry)).toBe('Pushed the fix.')
         expect(resultOf(tool('completed', { tool: 'jira_update_issue', input }))).toBeNull()
+        expect(resultOf(tool('error', { tool: 'canopy_run_result', input }))).toBeNull()
     })
 
     it('says how many of the operator’s messages a messages call heard', () => {
