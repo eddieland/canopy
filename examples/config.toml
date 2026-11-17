@@ -277,6 +277,13 @@ cmd = "canopy-connect-jira --site acme.atlassian.net"
 # post_cmd = "canopy-post-github"
 # timeout_minutes = 2
 
+# Optional: comments canopy takes no notice of, on a ticket or a PR, such as a sign-off your reviewers must leave on
+# every PR. Each is a regular expression that must match a comment's whole text, trimmed, whatever its case, so a
+# comment that also says something else is still read. An ignored comment is still recorded, and marked on its PR's
+# page; it is no feedback, and no agent is shown it. A review that says only this keeps its approval.
+# [connect]
+# ignore_comments = ['I looked at this\.?']
+
 # Optional: recurring chores the overseer runs when due (DESIGN §19). The prompt is your own file. A chore that runs
 # your own tools sets `cmd` to an agent of yours, defined in ~/.config/opencode/agent/, that allows exactly those tools.
 # examples/chores/build-health.md is a prompt to start from: it needs only the shipped agent and a GitHub MCP server.

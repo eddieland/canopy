@@ -490,6 +490,7 @@ class Reader:
             sql.select("*")
             .from_("observed_comments")
             .where_in("ticket", keys)
+            .where("ignored = 0")
             .order_by("number IS NULL, number, commented_at, id")
         )
         for c in records.fetch_all(conn, records.ObservedComment, query):
@@ -499,7 +500,7 @@ class Reader:
             checks.setdefault(c.pr_url, []).append(c)
         reviews: dict[str, list[records.ObservedReview]] = {}
         query = sql.select("*").from_("observed_reviews").order_by("pr_url, created_at, id")
-        for r in records.fetch_all(conn, records.ObservedReview, query):
+        for r in observe.heeded(records.fetch_all(conn, records.ObservedReview, query)):
             reviews.setdefault(r.pr_url, []).append(r)
         branches: dict[str, list[records.ObservedBranch]] = {}
         for b in records.select(records.ObservedBranch).all(conn):

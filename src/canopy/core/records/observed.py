@@ -88,8 +88,11 @@ class ObservedReview(Row):
     outdated: bool | None
     resolved: bool | None
     observed_at: str
-    #: Its journal number, taken when a source first observed it (DESIGN §35).
+    #: Its journal number, taken when a source first observed it (DESIGN §35); None for an ignored comment.
     number: int | None
+    #: Whether `connect.ignore_comments` names its text (DESIGN §30): no feedback, whatever it says. A review so
+    #: marked still holds its state.
+    ignored: bool = False
 
 
 @dataclass(frozen=True)
@@ -166,8 +169,10 @@ class ObservedComment(Row):
     #: `worker` when it carries the workers' marks (D069), else `tracker`.
     source: str
     observed_at: str
-    #: Its journal number, taken when a source first observed it (DESIGN §35).
+    #: Its journal number, taken when a source first observed it not ignored (DESIGN §35); None while it is ignored.
     number: int | None
+    #: Whether `connect.ignore_comments` names its text (DESIGN §30): it is in no conversation and is shown to no agent.
+    ignored: bool = False
 
 
 @dataclass(frozen=True)

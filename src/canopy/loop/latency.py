@@ -182,6 +182,8 @@ def _items(since: str, until: str) -> sql.Select:
         .left_join("item_numbers n ON n.number = c.number")
         # A comment carrying the workers' marks is canopy's own (D069), no external event.
         .where("c.source != ?", "worker")
+        # An ignored comment has no number, so no first observation to measure from.
+        .where("c.ignored = 0")
     )
     reviews = (
         sql.select(
@@ -197,6 +199,8 @@ def _items(since: str, until: str) -> sql.Select:
         .from_("observed_reviews r")
         .left_join("item_numbers n ON n.number = r.number")
         .where("r.created_at IS NOT NULL")
+        # An ignored comment has no number, so no first observation to measure from.
+        .where("r.ignored = 0 OR r.number IS NOT NULL")
     )
     checks = (
         sql.select(

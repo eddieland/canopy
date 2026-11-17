@@ -92,6 +92,15 @@ def comment(
     return number
 
 
+def ignored_comment(conn: sqlite3.Connection, ident: str, author: str, at: str, body: str) -> None:
+    """Record a tracker comment on KEY that `connect.ignore_comments` names: marked ignored, with no journal number."""
+    conn.execute(
+        "INSERT INTO observed_comments (ticket, id, author, commented_at, body, truncated, source, observed_at, "
+        "ignored) VALUES (?, ?, ?, ?, ?, 0, 'tracker', ?, 1)",
+        (KEY, ident, author, at, body, FRESH),
+    )
+
+
 def number_of(conn: sqlite3.Connection, kind: NumberedItem, ident: str | int, *, subject: str | None = None) -> int:
     """The journal number of an item the helpers recorded: a comment on KEY, or another kind on PR by default.
 

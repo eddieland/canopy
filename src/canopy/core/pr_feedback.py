@@ -58,7 +58,9 @@ def feedback(conn: sqlite3.Connection, urls: Collection[str]) -> dict[str, list[
         .where("r.pr_url IN (SELECT value FROM json_each(?))", json.dumps(sorted(urls)))
         .where("r.bot = 0 AND (p.author IS NULL OR r.author IS NOT p.author)")
         .where(
-            "(r.item IN (SELECT value FROM json_each(?)) OR r.state IN (SELECT value FROM json_each(?)))",
+            # A comment the operator ignores is no feedback; an ignored review still judges (DESIGN §30).
+            "((r.item IN (SELECT value FROM json_each(?)) AND r.ignored = 0) "
+            "OR r.state IN (SELECT value FROM json_each(?)))",
             json.dumps(COMMENTS),
             json.dumps(JUDGED),
         )

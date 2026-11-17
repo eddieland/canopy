@@ -68,7 +68,7 @@ describe('ThreadCard', () => {
         const hidden = reviewThread({
             outdated: true,
             resolved: true,
-            comments: comment === undefined ? [] : [{ ...comment, body, operator_sent: true }],
+            comments: comment === undefined ? [] : [{ ...comment, body, operator_sent: true, ignored: true }],
         })
         await renderRouted(<ThreadCard thread={hidden} onChange={changed} />)
         const card = screen.getByTestId('review-thread')
@@ -76,6 +76,7 @@ describe('ThreadCard', () => {
         expect(within(card).getByText('outdated')).toBeTruthy()
         expect(within(card).getByText('resolved')).toBeTruthy()
         expect(within(card).getByText('sent by you')).toBeTruthy()
+        expect(within(card).getByText('ignored')).toBeTruthy()
         // A hidden character is named, never kept hidden.
         expect(within(card).getByText('<U+200B>')).toBeTruthy()
         expect(within(card).getByRole('link', { name: 'The comment on its host' }).getAttribute('href')).toBe(

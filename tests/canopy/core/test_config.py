@@ -123,6 +123,8 @@ def test_needs_human_label_is_set_by_the_workspace_and_overridden_by_the_user(ca
         ("sessions", "search = 'titles'"),
         # A shared file could bring an excluded directory's sessions back.
         ("sessions", "exclude = []"),
+        # It picks whose comments canopy never reads.
+        ("connect", "ignore_comments = ['Please .+']"),
     ],
 )
 def test_the_workspace_file_may_not_set_user_only_keys(canopy_env: CanopyEnv, section_key: tuple[str, str]) -> None:
@@ -418,6 +420,9 @@ def test_required_keys_name_both_files(canopy_env: CanopyEnv) -> None:
         ("[trust]\ncomment_prefix = '`CANOPY`'\n", "no backtick"),
         ("[trust]\ncomment_prefix = '>'\n", "with a letter or digit"),
         ("[trust]\ncomment_prefix = 'CANOPY: '\n", "no surrounding spaces"),
+        ("[connect]\nignore_comments = ['(looked']\n", "is not a regular expression"),
+        ("[connect]\nignore_comments = ['.*']\n", "matches an empty comment"),
+        (f"[connect]\nignore_comments = ['{'x' * 201}']\n", "at most 200 characters"),
         ('[trust]\ncomment_suffix = "by\\ncanopy"\n', "one line"),
         (f"[trust]\ncomment_suffix = '{'x' * 81}'\n", "at most 80 characters"),
         ("[trust]\ncommit_trailer_name = ''\n", "with a letter or digit"),
@@ -965,6 +970,8 @@ def test_review_replies_and_the_vcs_source_default_to_drafting_and_canopys_own_p
     assert cfg.connect.vcs() == config.Source(kind="vcs", cmd="canopy-connect-github", post_cmd="canopy-post-github")
     assert list(cfg.connect.named()) == [TRACKER_SOURCE, config.DEFAULT_SOURCE]
     assert (cfg.connect.max_age_minutes, cfg.connect.every_minutes) == (30, 2)
+    assert cfg.connect.ignore_comments == ()
+    assert not cfg.connect.ignores("I looked at this")
 
 
 def test_review_replies_and_sources_are_set_in_the_operators_files(canopy_env: CanopyEnv) -> None:
@@ -1300,3 +1307,13 @@ def test_a_directory_sessions_exclude_names_is_expanded_from_home_without_a_trai
     listed = load(canopy_env.root, canopy_env.user_file).sessions
 
     assert (listed.search, listed.exclude) == ("titles", (f"{Path.home()}/clients", "/srv/*/scratch", "/"))
+
+
+def test_an_ignored_comment_is_one_a_pattern_matches_whole_whatever_its_case(canopy_env: CanopyEnv) -> None:
+    canopy_env.append_user("\n[connect]\nignore_comments = ['I looked at this[.!]?', 'ack(nowledged)?']\n")
+    connect = load(canopy_env.root, canopy_env.user_file).connect
+    assert connect.ignores("  i looked at this!\n")
+    assert connect.ignores("Ack")
+    assert not connect.ignores("I looked at this, and the retry is wrong.")
+    assert not connect.ignores("I looked at this\nThe retry is wrong.")
+    assert not connect.ignores("")

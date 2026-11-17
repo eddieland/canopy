@@ -8,15 +8,17 @@ from unittest import mock
 
 import pytest
 
-from canopy.core import observe, records, sql
+from canopy.core import db, observe, records, sql
 from canopy.core.config import Source
 from canopy.core.vocab import ConnectorRunStatus
-from canopy.infra import logs
+from canopy.infra import logs, resources
+from tests.canopy.helpers import context
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from canopy.core.context import Context
+    from tests.conftest import CanopyEnv
 
 PR = "https://github.com/acme/api/pull/7"
 VCS = Source(kind="vcs", cmd="connector github")
@@ -117,6 +119,53 @@ def test_a_comment_on_the_prs_conversation_is_numbered_as_its_own_kind_and_on_no
     assert [(r.item, r.id, r.thread_id) for r in found] == [("comment", 5, "PRRT_1"), ("pr_comment", 5, None)]
     numbered = records.select(records.ItemNumber).order_by("number").all(ctx.conn)
     assert [(n.kind, n.id) for n in numbered] == [("pr_comment", "5"), ("review_comment", "5")]
+
+
+def ignoring(env: CanopyEnv, *patterns: str) -> Context:
+    """The workspace's context, migrated, with `connect.ignore_comments` set to `patterns` in the user file."""
+    before = env.user_file.read_text().split("\n[connect]\n")[0]
+    env.write_user(f"{before}\n[connect]\nignore_comments = {json.dumps(patterns)}\n")
+    ctx = context(env)
+    db.migrate(ctx.conn, resources.migrations_dir())
+    return ctx
+
+
+def test_a_comment_the_operator_ignores_is_recorded_marked_and_unnumbered_and_heeded_leaves_it_out(
+    canopy_env: CanopyEnv,
+    connector_state: Path,
+) -> None:
+    ctx = ignoring(canopy_env, "I looked at this\\.?")
+    thread = {"id": "PRRT_1", "path": "a.py", "line": 1}
+    signed = {"kind": "review", "pr": PR, "author": "carol", "body": "I looked at this."}
+    prints(
+        connector_state,
+        {"kind": "pr", "url": PR, "repository": "acme/api", "number": 7},
+        signed | {"item": "pr_comment", "id": 5},
+        signed | {"item": "comment", "id": 6, "thread": thread},
+        signed | {"item": "review", "id": 7, "state": "approved"},
+        signed | {"item": "pr_comment", "id": 8, "body": "I looked at this. Why a retry?"},
+    )
+    ran = run(ctx)
+    assert (ran.status, ran.ignored, ran.recorded) == (ConnectorRunStatus.OK, 3, {"pr": 1, "review": 4})
+    found = records.fetch_all(ctx.conn, records.ObservedReview, sql.frag(REVIEWS + " ORDER BY id"))
+    assert [(r.id, r.ignored, r.number is not None, r.body) for r in found] == [
+        (5, True, False, "I looked at this."),
+        (6, True, False, "I looked at this."),
+        # A review is numbered for its state, which it keeps.
+        (7, True, True, "I looked at this."),
+        (8, False, True, "I looked at this. Why a retry?"),
+    ]
+    assert [(r.id, r.state, r.body) for r in observe.heeded(found)] == [
+        (7, "approved", ""),
+        (8, None, "I looked at this. Why a retry?"),
+    ]
+
+    # Once no pattern names them, the next read takes them up, numbered after what any cursor has passed.
+    ctx = ignoring(canopy_env)
+    run(ctx)
+    found = records.fetch_all(ctx.conn, records.ObservedReview, sql.frag(REVIEWS + " ORDER BY id"))
+    assert [r.ignored for r in found] == [False] * 4
+    assert sorted(r.number or 0 for r in found if r.id in (5, 6)) > sorted(r.number or 0 for r in found if r.id == 8)
 
 
 @pytest.mark.parametrize(

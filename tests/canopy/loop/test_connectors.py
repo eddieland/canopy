@@ -167,6 +167,47 @@ def test_a_tick_asks_each_source_its_own_kind_and_records_what_it_read_whole(sce
     assert asked(watched)[2]["request"]["tickets"][0] == {"key": "PROJ-1", "comments_since": "2026-10-18T10:00:00.000Z"}
 
 
+def test_a_tracker_comment_the_operator_ignores_is_kept_out_of_the_conversation_until_no_pattern_names_it(
+    scenario: Scenario,
+    watched: Path,
+) -> None:
+    scenario.configures("private", connect={"ignore_comments": ["I looked at this.*"]})
+    said = {"kind": "comment", "ticket": "PROJ-1", "author": "acc-1"}
+    plays(
+        watched,
+        jira={
+            "lines": [
+                ticket("PROJ-1"),
+                said | {"id": "10001", "time": "2026-10-18T10:00Z", "body": "i looked at this"},
+                said | {"id": "10002", "time": "2026-10-18T09:00Z", "body": "Use the retry helper."},
+                # One too long to record whole is read, though a pattern names it: its row could not say so again.
+                said | {"id": "10003", "time": "2026-10-18T08:00Z", "body": "I looked at this" + "!" * 3000},
+            ],
+        },
+    )
+    scenario.tick(*waits(*KEYS))
+    comments = records.select(records.ObservedComment).order_by("id")
+    assert [(c.id, c.ignored, c.number is not None) for c in comments.all(scenario.conn)] == [
+        ("10001", True, False),
+        ("10002", False, True),
+        ("10003", False, True),
+    ]
+    in_conversation = "SELECT comment_id FROM messages WHERE comment_id IS NOT NULL ORDER BY id"
+    assert [r[0] for r in scenario.conn.execute(in_conversation)] == ["10002", "10003"]
+    assert json.loads(runs(scenario)[0].recorded) == {"comment": 3, "ticket": 1}
+
+    # The ignored comment is the newest the journal holds, so the source is not asked for it again; and with the
+    # pattern gone, the next run takes it up from its row, though the source prints it no more.
+    scenario.configures("private", connect={"ignore_comments": []})
+    plays(watched, jira={"lines": [ticket("PROJ-1")]})
+    scenario.tick(*waits(*KEYS))
+    assert asked(watched)[2]["request"]["tickets"][0] == {"key": "PROJ-1", "comments_since": "2026-10-18T10:00:00.000Z"}
+    taken = comments.all(scenario.conn)
+    assert [(c.id, c.ignored) for c in taken] == [("10001", False), ("10002", False), ("10003", False)]
+    assert (taken[0].number or 0) > (taken[1].number or 0)
+    assert [r[0] for r in scenario.conn.execute(in_conversation)] == ["10002", "10003", "10001"]
+
+
 def test_a_pr_last_seen_open_is_read_after_its_ticket_is_done_until_a_read_sees_it_merged(
     scenario: Scenario,
     watched: Path,

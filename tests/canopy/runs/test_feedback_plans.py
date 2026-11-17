@@ -1153,7 +1153,10 @@ def test_a_persons_comment_on_the_prs_conversation_is_an_item_and_a_bots_or_the_
     summary = {"item": "pr_comment", "id": 702, "author": "codecov[bot]", "bot": True, "time": at, "body": "Cov 91%."}
     # The PR's author is `me` in the fake GitHub: the loop reads no feedback in their own words.
     own = {"item": "pr_comment", "id": 703, "author": "me", "time": at, "body": "@carol PTAL"}
-    github_shows(github_state, ALICE, asked, summary, own, checks=())
+    # Nor in a sign-off the operator's config ignores, whoever wrote it (DESIGN §30).
+    scenario.configures("private", connect={"ignore_comments": ["I looked at this"]})
+    signed = {"item": "pr_comment", "id": 704, "author": "carol", "time": at, "body": "I looked at this"}
+    github_shows(github_state, ALICE, asked, summary, own, signed, checks=())
     items = [
         {"id": 501, "proposal": "change", "reply": "Renamed."},
         {"id": 701, "proposal": "change", "reply": "Added."},

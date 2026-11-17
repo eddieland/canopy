@@ -1665,6 +1665,23 @@ def _slack_user(value: str) -> str:
     return value
 
 
+#: The longest pattern `connect.ignore_comments` takes.
+MAX_IGNORE_PATTERN = 200
+
+
+def _ignore_pattern(value: str) -> str:
+    try:
+        pattern = re.compile(value) if len(value) <= MAX_IGNORE_PATTERN else None
+    except re.error as e:
+        raise ValueError(f"{value!r} is not a regular expression: {e}") from e
+    if pattern is None:
+        raise ValueError(f"must be a regular expression of at most {MAX_IGNORE_PATTERN} characters")
+    # One that matches no text at all, such as `.*`, would match every one-line comment.
+    if pattern.fullmatch(""):
+        raise ValueError(f"{value!r} matches an empty comment: name the text a comment to ignore holds")
+    return value
+
+
 def _source_name(value: str) -> str:
     if not SOURCE_NAME_RE.fullmatch(value):
         raise ValueError(f"source name {value!r} must match {SOURCE_NAME_RE.pattern}")
@@ -1725,6 +1742,10 @@ class Connect(Section):
     max_age_minutes: Annotated[Minutes, Scope.PRIVATE] = 30
     #: How often `canopy loop` polls the connectors between ticks, apart from how often it ticks (DESIGN §6).
     every_minutes: Annotated[Minutes, Scope.PRIVATE] = 2
+    #: The comments canopy takes no notice of, such as a reviewer's required sign-off (DESIGN §30): regular
+    #: expressions, a comment ignored when one matches its whole text, trimmed, whatever its case. Private, as the
+    #: workers' marks are: a shared file must not pick whose comments go unread.
+    ignore_comments: Annotated[tuple[Annotated[StrictStr, AfterValidator(_ignore_pattern)], ...], Scope.PRIVATE] = ()
 
     @model_validator(mode="after")
     def _one_per_kind(self) -> Connect:
@@ -1737,6 +1758,15 @@ class Connect(Section):
         if self.max_age_minutes < self.every_minutes:
             raise ValueError("max_age_minutes must be at least every_minutes")
         return self
+
+    def ignores(self, body: str) -> bool:
+        """Whether `ignore_comments` names a comment whose text is `body`.
+
+        Returns:
+            True when one of its patterns matches the whole of `body`, trimmed, whatever its case.
+        """
+        text = body.strip()
+        return any(re.fullmatch(pattern, text, re.IGNORECASE) for pattern in self.ignore_comments)
 
     def named(self) -> dict[str, Source]:
         """Each source that reads, by name, in the order a tick runs them: `tracker`, `vcs`, `artifacts`, `slack`.

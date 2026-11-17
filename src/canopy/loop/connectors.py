@@ -86,7 +86,7 @@ def run(ctx: Context, tick_id: int | None, log: logs.TickAdapter, *, dry_run: bo
             why = f"its output was not recorded: {type(e).__name__}: {e}"
             observed = observe.Observed(ConnectorRunStatus.FAILED, started, db.now(), missed=why)
         connector_runs.record(ctx.conn, tick_id, name=name, source=source, request=request, observed=observed)
-        counts = {"recorded": observed.recorded, "refused": observed.refused}
+        counts = {"recorded": observed.recorded, "refused": observed.refused, "ignored": observed.ignored}
         log.info("connector ran", extra={"source": name, "status": observed.status, **counts})
         observed_by[name] = observed
         # Config allows one source of each kind (`Connect._one_per_kind`), so this is the one `vcs` read.

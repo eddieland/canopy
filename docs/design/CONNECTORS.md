@@ -59,6 +59,11 @@ and a dry run records none (D036). A `tracker` source's `operators` are tracker 
 wrote on a private ticket since its latest start, without the workers' marks, is recorded the same way when the source
 first observes it (§22), in a dry run too, since the source reads each comment once.
 
+A comment whose whole text a pattern of `connect.ignore_comments` matches, such as a sign-off required of every
+reviewer, is observed and marked ignored, on a ticket or a PR: no feedback, in no conversation, and shown to no agent,
+until no pattern names it; a review so marked still holds its state. The key is private, as the workers' marks are
+(§8): a shared file must not pick whose words go unread.
+
 In §6 step 3, after the reconciles, the tick runs each source once, the `vcs` source's run being §29's reconcile read;
 a tick whose reconcile failed runs none, and a dry run observes as a live tick does. A source that fails, or reads less
 than it was asked, keeps its previous observations and raises the harness's `connector_failed` (§14), naming what was

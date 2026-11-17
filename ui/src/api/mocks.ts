@@ -982,6 +982,7 @@ export function reviewThread(fields: Partial<ReviewThread> = {}): ReviewThread {
                 body: 'Can it move into a `finally`?',
                 url: 'https://github.com/acme/web/pull/88#discussion_r2468013579',
                 operator_sent: false,
+                ignored: false,
             },
         ],
         drafts: [draft()],
