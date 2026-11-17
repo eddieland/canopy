@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Annotated
 
 from pydantic import Field, StrictInt
 
-from canopy.core import conversation, db, records
+from canopy.core import conversation, db, overseer_runs, records
 from canopy.core.vocab import ReviewItem, TicketState
 from canopy.infra import logs
 from canopy.loop import harness, harness_dispatches, phases
@@ -103,13 +103,15 @@ def read_review_items(ctx: Context, request: ReviewItems) -> Outcome[ReviewItems
 
     Raises:
         Refused: Outside a running tick; the ticket is one the journal has no record of, one the harness decided this
-            tick, or one the block shows no text of; the repository is not in the map, or no unit of the ticket with a
-            PR; or a number names no review item observed on that PR. None is recorded.
+            tick, another than the subject the run is given, or one the block shows no text of; the repository is not
+            in the map, or no unit of the ticket with a PR; or a number names no review item observed on that PR. None
+            is recorded.
     """
     current = running_tick(ctx)
     key = request.key
     _refuse_unknown(ctx, current.id, key)
     _refuse_decided(ctx, current.id, key)
+    _refuse_other_subject(ctx, current.id, key)
     _refuse_unlisted(ctx, current.id, key)
     repo = mapped_repo(ctx, request.repo) or request.repo
     url = _pr_of(ctx, key, repo)
@@ -158,6 +160,22 @@ def _refuse_decided(ctx: Context, tick_id: int, key: str) -> None:
         f"{TOOL} refused ({DECIDED}): the harness {where} {key} this tick (the state block's `{shown}`); read nothing "
         "of it",
     )
+
+
+def _refuse_other_subject(ctx: Context, tick_id: int, key: str) -> None:
+    """Refuse the read of ticket `key` in a run of tick `tick_id` given another subject (DESIGN §40).
+
+    With `loop.overseer_per_subject` on, a run's message holds its one subject, and a read would hand it another
+    ticket's text (TRUST_MODEL T1). A run given the whole state block is refused nothing here.
+
+    Raises:
+        Refused: The run is given another subject than `key`.
+    """
+    run = overseer_runs.running(ctx.conn, tick_id)
+    if run is None or run.subject is None or run.subject == key:
+        return
+    logs.for_tick(tick_id).info("refused: another subject", extra={"subject": run.subject, "ticket": key, "verb": TOOL})
+    raise Refused(f"{TOOL} refused ({DECIDED}): this run is given {run.subject} alone; read nothing of {key}")
 
 
 def _refuse_unlisted(ctx: Context, tick_id: int, key: str) -> None:

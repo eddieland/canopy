@@ -10,7 +10,7 @@ from unittest import mock
 
 import pytest
 
-from canopy.core import cards, db, review_runs
+from canopy.core import cards, db, overseer_runs, review_runs
 from canopy.core.config import ConfigError, load
 from canopy.core.vocab import Decider, ReviewRunStatus
 from canopy.infra import logs
@@ -263,6 +263,19 @@ def test_an_overseer_item_about_a_pr_goes_the_next_tick_the_overseer_ran_without
         db.record_decision(conn, tick_id, None, "attention:needs_author", "run 3", pr="https://example.test/pr/3")
     assert open_items(conn) == [("pr:https://example.test/pr/3", "needs_author")]
     ok_tick(conn)
+    assert open_items(conn) == []
+
+
+def test_a_pr_item_is_held_through_a_tick_whose_runs_were_given_other_subjects(conn: sqlite3.Connection) -> None:
+    pr = "https://example.test/pr/3"
+    with in_tick(conn, ends_ok=True) as tick_id:
+        db.record_decision(conn, tick_id, None, "attention:needs_author", "run 3", pr=pr)
+    # Run once per subject, a tick no run of which was given the PR could not record it again (DESIGN §40).
+    with in_tick(conn, ends_ok=True) as tick_id:
+        overseer_runs.end(conn, overseer_runs.start(conn, tick_id, subject=KEY), None)
+    assert open_items(conn) == [(f"pr:{pr}", "needs_author")]
+    with in_tick(conn, ends_ok=True) as tick_id:
+        overseer_runs.end(conn, overseer_runs.start(conn, tick_id, subject=f"pr:{pr}"), None)
     assert open_items(conn) == []
 
 

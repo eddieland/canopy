@@ -338,7 +338,7 @@ def test_a_stale_request_is_counted_apart_from_the_stale_tickets(ctx: Context) -
     with in_tick(conn) as tick_id:
         stale = requested_reviews.Derived(1, PR, RequestAction.WAIT, stale=f"{PR} never observed")
         requested_reviews.record(conn, tick_id, [stale])
-        db.set_tick_overseer(conn, tick_id, ran=True)
+        db.set_tick_overseer(conn, tick_id, runs=1)
         db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     found = agreement.agreement(conn, datetime.now(UTC), 1)
     assert (found.stale, found.stale_tickets, found.stale_requests) == (1, 0, 1)

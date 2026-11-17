@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from canopy.core import db
+from canopy.core import db, overseer_runs
 from canopy.core.vocab import Decider
 from canopy.loop import observation_tools, tools
 from tests.canopy.helpers import KEY, in_tick, operator, overseer_calls, reads_items
@@ -140,6 +140,31 @@ def test_a_ticket_the_harness_decided_this_tick_is_refused(canopy_env: CanopyEnv
     )
     assert "Rename" not in said.text
     assert [d.action for d in db.decisions_for_tick(observed, tick_id)] == ["wait"]
+
+
+def test_a_ticket_in_a_run_given_another_subject_is_refused(observed: sqlite3.Connection) -> None:
+    """Run once per subject, a run's message holds its subject alone, so the read hands it no other's (DESIGN §40)."""
+    asked = review(observed, 2, "octocat", "changes_requested", "2026-10-20T11:00:00.000Z", "Rename the helper.")
+    observed.commit()
+    with in_tick(observed) as tick_id:
+        overseer_runs.start(observed, tick_id, subject="PROJ-2")
+        observed.commit()
+        said = overseer_calls(reads_items(KEY, asked))
+    assert said.error
+    assert said.text == "review-items refused (decided): this run is given PROJ-2 alone; read nothing of PROJ-1"
+    assert db.decisions_for_tick(observed, tick_id) == []
+
+
+def test_its_own_ticket_in_a_run_given_it_is_read(observed: sqlite3.Connection) -> None:
+    """The run given the ticket reads its items as a run given the whole block does."""
+    asked = review(observed, 2, "octocat", "changes_requested", "2026-10-20T11:00:00.000Z", "Rename the helper.")
+    observed.commit()
+    with in_tick(observed) as tick_id:
+        overseer_runs.start(observed, tick_id, subject=KEY)
+        observed.commit()
+        said = overseer_calls(reads_items(KEY, asked))
+    assert not said.error, said.text
+    assert "Rename the helper." in said.text
 
 
 def stopped(env: CanopyEnv, conn: sqlite3.Connection) -> None:

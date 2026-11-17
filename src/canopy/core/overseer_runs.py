@@ -1,8 +1,11 @@
 """A tick's runs of the overseer (DESIGN §40): the subject each was given, how it ended, its session, and its cost.
 
 A tick that runs its overseer records the run as it starts, and what the runtime reported and how it ended once it
-ends, beside what `ticks` keeps of it. A tick makes one run today, given the whole state block, its subject None. One
-still running when its tick closes failed with the tick; one a dead tick left running is closed `abandoned` by the next.
+ends, beside what `ticks` keeps of it. A tick makes one run, given the whole state block, its subject None, unless
+`loop.overseer_per_subject` is on: then it makes one for each subject left to the overseer, one at a time, each given
+that subject alone: a ticket, by its key; a PR to review, `pr:<url>`; or the due chores together, `CHORES`. No ticket
+key holds a `:`, so no subject's name is another's. One still running when its tick closes failed with the tick; one a
+dead tick left running is closed `abandoned` by the next.
 """
 
 from __future__ import annotations
@@ -14,8 +17,14 @@ from canopy.core.vocab import OverseerRunStatus
 
 if TYPE_CHECKING:
     import sqlite3
+    from collections.abc import Collection
 
     from canopy.runtime.report import Usage
+
+#: What a PR's subject starts with, before its URL, as the attention list names a PR with no ticket.
+PR_PREFIX = "pr:"
+#: The subject of the run given the due chores with a `when`, together.
+CHORES = "chore:*"
 
 
 def start(conn: sqlite3.Connection, tick_id: int, *, subject: str | None = None) -> int:
@@ -39,10 +48,40 @@ def report(conn: sqlite3.Connection, run_id: int, session_id: str | None, usage:
     update.where("id = ?", run_id).run(conn)
 
 
-def end(conn: sqlite3.Connection, run_id: int, failure: str | None) -> None:
-    """Close run `run_id`: `ok` with no `failure`, else `failed` with it. Nothing changes for one already closed."""
-    status = OverseerRunStatus.OK if failure is None else OverseerRunStatus.FAILED
+def end(conn: sqlite3.Connection, run_id: int, failure: str | None, *, undone: bool = False) -> None:
+    """Close run `run_id`: `ok` with no `failure`, else `failed` with it. Nothing changes for one already closed.
+
+    With `undone`, it ended well and left a duty undone, `failure` naming them (DESIGN §6 step 5).
+    """
+    if failure is None:
+        status = OverseerRunStatus.OK
+    else:
+        status = OverseerRunStatus.UNDONE if undone else OverseerRunStatus.FAILED
     _closing(status, failure).where("id = ?", run_id).run(conn)
+
+
+def running(conn: sqlite3.Connection, tick_id: int) -> records.OverseerRun | None:
+    """Tick `tick_id`'s run of the overseer still running: its runs go one at a time, so there is at most one.
+
+    Returns:
+        The run, or None between runs and outside them.
+    """
+    query = records.select(records.OverseerRun).where("tick_id = ? AND status = ?", tick_id, OverseerRunStatus.RUNNING)
+    return query.order_by("id DESC").limit(1).one(conn)
+
+
+def subjects(conn: sqlite3.Connection, ticks: Collection[int]) -> dict[int, set[str | None]]:
+    """The subject each run of each of `ticks` was given, None for a run given the whole state block.
+
+    Returns:
+        By tick, its runs' subjects; a tick that made no run has no entry.
+    """
+    found: dict[int, set[str | None]] = {}
+    if not ticks:
+        return found
+    for run in records.select(records.OverseerRun).where_in("tick_id", ticks).all(conn):
+        found.setdefault(run.tick_id, set()).add(run.subject)
+    return found
 
 
 def left_undone(conn: sqlite3.Connection, tick_id: int, undone: str) -> None:

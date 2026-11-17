@@ -44,7 +44,7 @@ def ticked(
     """
     with in_tick(conn, dry_run=dry_run) as tick_id:
         phases.record(conn, tick_id, derived)
-        db.set_tick_overseer(conn, tick_id, ran=ran)
+        db.set_tick_overseer(conn, tick_id, runs=int(ran))
         for key, decisions in decided.items():
             for action, rationale, by in decisions:
                 db.record_decision(conn, tick_id, key, action, rationale, decider=by)

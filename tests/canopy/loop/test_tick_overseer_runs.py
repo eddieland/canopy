@@ -53,7 +53,7 @@ def test_an_overseer_that_could_not_start_is_a_failed_run(scenario: Scenario) ->
     # The runtime would read the workspace's own definition of the overseer, so canopy starts none (D044).
     (scenario.env.root / "opencode.json").write_text('{"agent": {"canopy-overseer": {}}}')
     ticked = scenario.tick(*waits(KEY), code=1)
-    assert ticked.tick.overseer_ran is True
+    assert ticked.tick.overseer_ran == 1
     [run] = runs_of(scenario.conn, ticked)
     assert run.status == OverseerRunStatus.FAILED
     assert "defines one of canopy's agents" in present(run.failure)
@@ -74,7 +74,7 @@ def test_a_run_that_leaves_a_duty_undone_says_which(scenario: Scenario) -> None:
 def test_a_tick_that_runs_no_overseer_records_no_run(scenario: Scenario) -> None:
     # No ticket listed, and the query the `tracker` source's to read: nothing is left to judge (DESIGN §39).
     quiet = scenario.tick()
-    assert quiet.tick.overseer_ran is False
+    assert quiet.tick.overseer_ran == 0
     assert runs_of(scenario.conn, quiet) == []
 
 
