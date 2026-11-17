@@ -308,6 +308,22 @@ test.describe("Starry Skies's stars", () => {
         expect(await skyMotion(page)).toEqual(['star-shimmer', 'twinkle', 'meteor', 'meteor-2'])
     })
 
+    test('hangs its moon under the panels, its phase cut by a mask, and no other palette does', async ({ page }) => {
+        await page.goto('workspace/runs')
+        await settled(page)
+        expect(await moon(page)).toEqual({
+            image: expect.stringMatching(/^radial-gradient\(/u),
+            mask: expect.stringMatching(/^radial-gradient\(/u),
+            zIndex: '-1',
+            drawn: true,
+        })
+
+        await storePalette(page, 'dark', 'black')
+        await page.reload()
+        await settled(page)
+        expect(await moon(page)).toEqual({ image: 'none', mask: 'none', zIndex: '-1', drawn: true })
+    })
+
     test('holds its stars still and draws no meteor under reduced motion', async ({ page }) => {
         await page.emulateMedia({ reducedMotion: 'reduce' })
         await page.goto('workspace/runs')
@@ -334,6 +350,23 @@ function skyMotion(page: Page): Promise<string[]> {
             [document.body, '::after'],
         ].map(([element, layer]) => getComputedStyle(element as Element, layer as string).animationName),
     )
+}
+
+/** What the moon's box paints, the mask that cuts its phase, where it sits in the stack, and whether it has a box. */
+function moon(page: Page): Promise<{ image: string; mask: string; zIndex: string; drawn: boolean }> {
+    return page.evaluate(() => {
+        const root = document.querySelector('#root')
+        if (!root) {
+            throw new Error('the page has no #root')
+        }
+        const style = getComputedStyle(root, '::before')
+        return {
+            image: style.backgroundImage,
+            mask: style.maskImage,
+            zIndex: style.zIndex,
+            drawn: style.content !== 'none' && Number.parseFloat(style.width) > 0,
+        }
+    })
 }
 
 /** What the canvas's two tone layers paint, the dots and their swell: each one's background and mask. */

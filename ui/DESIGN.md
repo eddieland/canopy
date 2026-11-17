@@ -137,9 +137,9 @@ Rules:
   list's cell does, still paints the few pixels past its edge that the ink and a focus ring reach (`clip-reach`), so
   neither is cut. Pulp, a comic in four-color print, takes them all; both its sides ink by the same rings, dark's line
   its cream. Starry Skies prints a sky on the canvas instead: tiles of stars on the two layers, cleared over the rail
-  and the header and faded in past a page's title, each layer twinkling on a period of its own, and a meteor that
-  crosses the sky along the window's foot now and then, under the panels, so it covers nothing. All of it moves by
-  opacity and transform alone.
+  and the header and faded in past a page's title, each layer twinkling on a period of its own, a crescent moon in
+  the window's lower right corner, which never moves, and a meteor that crosses the sky along the window's foot now and
+  then, all under the panels, so none covers anything. What moves does so by opacity and transform alone.
   A palette may also give the shell's signature a form of its own, the first place it is felt: the aurora (a gradient
   hairline, a stepped bar of solid blocks, a print strip of those blocks, or a line that blooms), the name (the
   aurora's gradient, on a solid block, on a tilted plate, or glowing), and the nav's highlight (a tint and a bar, a
