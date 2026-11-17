@@ -257,8 +257,8 @@ class Plans:
 def report(conn: sqlite3.Connection, state_dir: Path, now: datetime, days: int) -> Plans:
     """How the plans written over the last `days` local days were approved, today's so far included.
 
-    Each plan's measurements are the journal's (`plan_lengths`), or measured from its original under `state_dir`,
-    as its planner wrote it, where the journal has none yet.
+    Each plan's measurements are the journal's (`plan_lengths`), or measured from its file under `state_dir`, as its
+    planner wrote it, where the journal has none yet.
 
     Returns:
         The report; a window with no plan has no rows, groups, or lengths.

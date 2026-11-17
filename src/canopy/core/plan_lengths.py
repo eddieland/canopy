@@ -2,8 +2,10 @@
 
 A plan is measured once, from its original, the copy kept as its planner wrote it (`plans`), by `plan_metrics`: when
 its run records it (`keep`), and for any plan without a row of the current model's version, by the live tick, a few
-at a time (`fill`): plans recorded before the cache, and every plan again when the model changes. A plan that cannot be
-measured, its original gone or not the file written, keeps a row saying why, so it is not tried again.
+at a time (`fill`): plans recorded before the cache, and every plan again when the model changes. A plan from before
+canopy kept originals has none, and is measured from its own file while that is still the file its planner wrote, by
+its hash. A plan that cannot be measured, no file of it left as written, keeps a row saying why, so it is not tried
+again.
 
 A read never writes: `read` measures a plan with no current row from its file, as `fill` would, without keeping it, so
 the report is right before the tick catches up.
@@ -80,10 +82,13 @@ def fill(conn: sqlite3.Connection, state_dir: Path, *, limit: int = FILL_LIMIT) 
     return len(due)
 
 
-# A plan measured from its original; else why it could not be: its original's problem, or `CHANGED`.
+# A plan measured from its original, or with none from its own file, which the operator may have edited since; else
+# why it could not be: the file's problem, or `CHANGED` when it is not the file its planner wrote.
 def _measure(state_dir: Path, plan: records.Plan) -> plan_metrics.Metrics | str:
-    path = plans.path_for(state_dir, plan.ticket_key, plan.run_id).with_name(plans.original_name(plan.run_id))
-    reading = plans.read(path)
+    path = plans.path_for(state_dir, plan.ticket_key, plan.run_id)
+    reading = plans.read(path.with_name(plans.original_name(plan.run_id)))
+    if reading.problem == "missing":
+        reading = plans.read(path)
     if reading.text is None:
         return reading.problem or "unreadable"
     if reading.sha256 != plan.sha256:

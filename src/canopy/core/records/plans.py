@@ -70,8 +70,8 @@ class PlanMetric(Row):
     #: The measuring model's version (`plan_metrics.VERSION`) when it was measured; a row of an older one is not read.
     version: int
     measured_at: str
-    #: Why it could not be measured: its original's problem, or `changed` when that is not the file written. Its
-    #: measurements are then None.
+    #: Why it could not be measured: the problem of its original, or with none of its own file, or `changed` when that
+    #: is not the file written. Its measurements are then None.
     problem: str | None
     #: Its words outside code blocks and diagrams.
     words: int | None

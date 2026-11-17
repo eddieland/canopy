@@ -47,12 +47,13 @@ def test_the_tick_fills_the_newest_first_and_keeps_why_a_plan_could_not_be_measu
     conn: sqlite3.Connection,
     canopy_env: CanopyEnv,
 ) -> None:
-    """A fill measures up to its limit, newest first; a plan whose original is gone or changed is not tried again."""
+    """A fill measures up to its limit, newest first; a plan whose files are gone or changed is not tried again."""
     state = canopy_env.state_dir
     oldest = recorded(conn, state, "PROJ-1", TEXT)
     gone = recorded(conn, state, "PROJ-2", TEXT)
     changed = recorded(conn, state, "PROJ-3", TEXT)
     original(state, gone).unlink()
+    plans.path_for(state, gone.ticket_key, gone.run_id).unlink()
     original(state, changed).write_text("# Not the plan written\n")
 
     assert plan_lengths.fill(conn, state, limit=2) == 2
@@ -65,6 +66,26 @@ def test_the_tick_fills_the_newest_first_and_keeps_why_a_plan_could_not_be_measu
     assert plan_lengths.read(conn, state, [oldest, gone, changed]) == {oldest.id: MEASURED}
 
 
+def test_a_plan_with_no_original_is_measured_from_its_own_file_until_it_is_edited(
+    conn: sqlite3.Connection,
+    canopy_env: CanopyEnv,
+) -> None:
+    """A plan from before canopy kept originals is measured from its file while that is the file its planner wrote."""
+    state = canopy_env.state_dir
+    unedited = recorded(conn, state, "PROJ-1", TEXT)
+    edited = recorded(conn, state, "PROJ-2", TEXT)
+    original(state, unedited).unlink()
+    original(state, edited).unlink()
+    plans.path_for(state, edited.ticket_key, edited.run_id).write_text("# The operator's edit\n")
+
+    assert plan_lengths.read(conn, state, [unedited, edited]) == {unedited.id: MEASURED}
+    assert plan_lengths.fill(conn, state) == 2
+    assert [(r.plan_id, r.problem, r.lines) for r in rows(conn)] == [
+        (unedited.id, None, MEASURED.lines),
+        (edited.id, plan_lengths.CHANGED, None),
+    ]
+
+
 def test_a_row_of_an_older_model_is_measured_again(conn: sqlite3.Connection, canopy_env: CanopyEnv) -> None:
     """Raising the model's version makes every row stale: not read, and measured again by the next fill."""
     state = canopy_env.state_dir
@@ -73,6 +94,7 @@ def test_a_row_of_an_older_model_is_measured_again(conn: sqlite3.Connection, can
 
     with mock.patch.object(plan_metrics, "VERSION", plan_metrics.VERSION + 1):
         original(state, plan).unlink()
+        plans.path_for(state, plan.ticket_key, plan.run_id).unlink()
         assert plan_lengths.read(conn, state, [plan]) == {}
         assert plan_lengths.fill(conn, state) == 1
         [row] = rows(conn)
