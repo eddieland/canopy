@@ -45,6 +45,11 @@ interface Look {
     eye: string
     /** The eye's bright core, its pupil. */
     core: string
+    /**
+     * Whether each plate takes a hue of its own, its colors turned around the wheel as far as the plate is turned
+     * about the eye, and the whole shell drifts through the hues while the Ghost is awake.
+     */
+    prism?: boolean
     /** What it wears over the top plate, outside the turning shell: none for most. */
     crest?: React.JSX.Element
 }
@@ -93,6 +98,20 @@ const LOOKS: Record<ShellId, Look> = {
             </g>
         ),
     },
+    // A leaf for each plate, pointed where a pumpkin's is round, its veins pressed in either side of the midrib.
+    canopy: {
+        plate: { lit: 'M0 -24 Q-9 -19 -8 -10 L0 -12.5 Z', shaded: 'M0 -24 L0 -12.5 L8 -10 Q9 -19 0 -24 Z' },
+        groove: 'M0 -19.5 L-4 -16.5 M0 -16 L-4.4 -13 M0 -19.5 L4 -16.5 M0 -16 L4.4 -13',
+        spike: { lit: 'M0 -20 Q-5.5 -15 -4.5 -9 L0 -10.5 Z', shaded: 'M0 -20 L0 -10.5 L4.5 -9 Q5.5 -15 0 -20 Z' },
+        lit: 'fill-buddy-leaf',
+        shaded: 'fill-buddy-leaf-shade',
+        edge: 'stroke-buddy-leaf-shade',
+        ring: 'fill-buddy-ghost-housing stroke-buddy-leaf-shade',
+        body: 'fill-buddy-ghost-housing',
+        glint: 'stroke-buddy-ghost-core',
+        eye: 'fill-buddy-ghost-eye',
+        core: 'fill-buddy-ghost-core',
+    },
     pumpkin: {
         plate: { lit: 'M0 -23 Q-10 -21 -9 -10 L0 -12.5 Z', shaded: 'M0 -23 L0 -12.5 L9 -10 Q10 -21 0 -23 Z' },
         groove: 'M-4.2 -21.4 Q-6.4 -16.5 -5 -11.6 M4.2 -21.4 Q6.4 -16.5 5 -11.6',
@@ -116,6 +135,20 @@ const LOOKS: Record<ShellId, Look> = {
             />
         ),
     },
+    // An eight-pointed star: slim plates of night sky, rimmed in the gold its eye burns, to stand off a dark
+    // canvas.
+    starry: {
+        plate: { lit: 'M0 -25 L-5.5 -10.6 L0 -12.5 Z', shaded: 'M0 -25 L0 -12.5 L5.5 -10.6 Z' },
+        spike: { lit: 'M0 -19 L-3.6 -9.4 L0 -10.5 Z', shaded: 'M0 -19 L0 -10.5 L3.6 -9.4 Z' },
+        lit: 'fill-buddy-ghost-night',
+        shaded: 'fill-buddy-ghost-night-shade',
+        edge: 'stroke-buddy-hat-gold',
+        ring: 'fill-buddy-ghost-housing stroke-buddy-hat-gold',
+        body: 'fill-buddy-ghost-housing',
+        glint: 'stroke-buddy-hat-cloth',
+        eye: 'fill-buddy-hat-gold',
+        core: 'fill-buddy-hat-cloth',
+    },
     gilded: {
         ...FACETED,
         lit: 'fill-buddy-hat-gold',
@@ -126,6 +159,20 @@ const LOOKS: Record<ShellId, Look> = {
         glint: 'stroke-buddy-ghost-core',
         eye: 'fill-buddy-ghost-eye',
         core: 'fill-buddy-ghost-core',
+    },
+    // A beige box for each plate, a prompt pressed into it, around a green phosphor eye.
+    terminal: {
+        plate: { lit: 'M-7 -22 H0 V-12.5 L-7 -10.5 Z', shaded: 'M0 -22 H7 V-10.5 L0 -12.5 Z' },
+        groove: 'M-4.8 -19.6 L-2.8 -17.6 L-4.8 -15.6 M1.2 -15.6 H4.8',
+        spike: { lit: 'M-4 -18.5 H0 V-10.5 L-4 -9.3 Z', shaded: 'M0 -18.5 H4 V-9.3 L0 -10.5 Z' },
+        lit: 'fill-buddy-ghost-terminal',
+        shaded: 'fill-buddy-ghost-terminal-shade',
+        edge: 'stroke-buddy-ghost-terminal-shade',
+        ring: 'fill-buddy-ghost-housing stroke-buddy-ghost-terminal-shade',
+        body: 'fill-buddy-ghost-housing',
+        glint: 'stroke-buddy-ghost-terminal-core',
+        eye: 'fill-buddy-ghost-terminal-eye',
+        core: 'fill-buddy-ghost-terminal-core',
     },
     vex: {
         plate: { lit: 'M0 -24 L-8 -18 L-8 -10 L0 -12.5 Z', shaded: 'M0 -24 L0 -12.5 L8 -10 L8 -18 Z' },
@@ -140,6 +187,19 @@ const LOOKS: Record<ShellId, Look> = {
         eye: 'fill-buddy-ghost-vex-eye',
         core: 'fill-buddy-ghost-vex-core',
     },
+    // The one to chase: the Generalist's plates, each in a hue of its own, eight around a white eye.
+    prismatic: {
+        ...FACETED,
+        prism: true,
+        lit: 'fill-buddy-ghost-prism',
+        shaded: 'fill-buddy-ghost-prism-shade',
+        edge: 'stroke-buddy-ghost-prism-shade',
+        ring: 'fill-buddy-ghost-housing stroke-buddy-hat-cloth',
+        body: 'fill-buddy-ghost-housing',
+        glint: 'stroke-buddy-ghost-core',
+        eye: 'fill-buddy-hat-cloth',
+        core: 'fill-buddy-ghost-core',
+    },
 }
 
 /** The four lesser plates' turns, on the diagonals, and the four great plates', square to the eye. */
@@ -147,6 +207,9 @@ const SPIKE_TURNS = [45, 135, 225, 315]
 const PLATE_TURNS = [0, 90, 180, 270]
 /** A plate's place: turned about the eye. */
 const at = (turn: number) => `translate(${GHOST_CENTER.x} ${GHOST_CENTER.y}) rotate(${turn})`
+/** A prism's plate's hue: its colors turned around the wheel as far as the plate is turned; any other's, its own. */
+const hueAt = (look: Look, turn: number): CSSProperties | undefined =>
+    look.prism === true && turn !== 0 ? { filter: `hue-rotate(${turn}deg)` } : undefined
 
 /** Where the light comes from, as a unit vector from the eye: the top left. */
 const LIGHT = { x: -Math.SQRT1_2, y: -Math.SQRT1_2 }
@@ -184,7 +247,7 @@ function shadesAt(turn: number, behind = 0): { left: Shade; right: Shade } {
 
 /**
  * A shell's plates, about the eye. With a `cue`, the great plates spread a little each time it changes, as a Ghost's do
- * when it talks; while `rave` is on, the shell turns a quarter on each beat of the lights.
+ * when it talks, and a prism's hues drift; while `rave` is on, the shell turns a quarter on each beat of the lights.
  */
 export function ShellPlates({ id, cue, rave = false }: { id: ShellId; cue?: number; rave?: boolean }) {
     const look = LOOKS[id]
@@ -193,53 +256,55 @@ export function ShellPlates({ id, cue, rave = false }: { id: ShellId; cue?: numb
             {look.body === undefined ? null : (
                 <circle cx={GHOST_CENTER.x} cy={GHOST_CENTER.y} r="13" className={look.body} />
             )}
-            {SPIKE_TURNS.map((turn) => (
-                <g key={turn} transform={at(turn)}>
-                    {'leaf' in look.spike ? (
-                        <path
-                            d={look.spike.leaf}
-                            strokeWidth="0.6"
-                            strokeLinejoin="round"
-                            className={cn(look.shaded, look.edge)}
-                        />
-                    ) : (
-                        <Facets look={look} facets={look.spike} shades={shadesAt(turn, BEHIND)} />
-                    )}
-                </g>
-            ))}
-            {PLATE_TURNS.map((turn, n) => (
-                <g key={turn} transform={at(turn)}>
-                    <g
-                        className={cn(cue !== undefined && 'animate-ghost-breathe')}
-                        style={cue === undefined ? undefined : breathing(n)}
-                    >
-                        <g key={cue} className={cn(cue !== undefined && 'animate-ghost-talk')}>
-                            {'wire' in look.plate ? (
-                                <path
-                                    d={look.plate.wire}
-                                    fill="none"
-                                    strokeWidth="1.5"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    className={look.lit}
-                                />
-                            ) : (
-                                <Facets look={look} facets={look.plate} shades={shadesAt(turn)} />
-                            )}
-                            {look.groove === undefined ? null : (
-                                <path
-                                    d={look.groove}
-                                    fill="none"
-                                    strokeWidth="0.45"
-                                    strokeLinecap="round"
-                                    strokeOpacity="0.45"
-                                    className="stroke-buddy-ghost-housing"
-                                />
-                            )}
+            <g className={cn(look.prism === true && cue !== undefined && 'animate-ghost-prism')}>
+                {SPIKE_TURNS.map((turn) => (
+                    <g key={turn} transform={at(turn)} style={hueAt(look, turn)}>
+                        {'leaf' in look.spike ? (
+                            <path
+                                d={look.spike.leaf}
+                                strokeWidth="0.6"
+                                strokeLinejoin="round"
+                                className={cn(look.shaded, look.edge)}
+                            />
+                        ) : (
+                            <Facets look={look} facets={look.spike} shades={shadesAt(turn, BEHIND)} />
+                        )}
+                    </g>
+                ))}
+                {PLATE_TURNS.map((turn, n) => (
+                    <g key={turn} transform={at(turn)} style={hueAt(look, turn)}>
+                        <g
+                            className={cn(cue !== undefined && 'animate-ghost-breathe')}
+                            style={cue === undefined ? undefined : breathing(n)}
+                        >
+                            <g key={cue} className={cn(cue !== undefined && 'animate-ghost-talk')}>
+                                {'wire' in look.plate ? (
+                                    <path
+                                        d={look.plate.wire}
+                                        fill="none"
+                                        strokeWidth="1.5"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        className={look.lit}
+                                    />
+                                ) : (
+                                    <Facets look={look} facets={look.plate} shades={shadesAt(turn)} />
+                                )}
+                                {look.groove === undefined ? null : (
+                                    <path
+                                        d={look.groove}
+                                        fill="none"
+                                        strokeWidth="0.45"
+                                        strokeLinecap="round"
+                                        strokeOpacity="0.45"
+                                        className="stroke-buddy-ghost-housing"
+                                    />
+                                )}
+                            </g>
                         </g>
                     </g>
-                </g>
-            ))}
+                ))}
+            </g>
         </g>
     )
 }
