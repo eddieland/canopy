@@ -256,14 +256,25 @@ SOCKET_PATH_MAX = 107
 # `$XDG_DATA_HOME/canopy/sandbox/`. Setup warms the worker's caches.
 CACHES = {"worker": "worker", "setup": "worker", "chore": "chore", "review": "review", "overseer": "overseer"}
 # Where the command's tools keep their caches, each relative to the role's cache directory. XDG_CACHE_HOME moves
-# OpenCode's, and most tools' on Linux; the rest are npm's, which never follows it, and Go's and pip's, which do not on
-# macOS. Each is the directory the tool takes under XDG_CACHE_HOME on Linux, or else its own name.
+# OpenCode's, yarn 1's, and most tools' on Linux; the rest are npm's, which never follows it, Go's and pip's, which do
+# not on macOS, and the homes of the tools that keep their caches in one, under the HOME the templates hide. Each is the
+# directory the tool takes under XDG_CACHE_HOME on Linux, or else its own name.
+# - CARGO_HOME holds the registry and git checkouts, which no variable of their own moves. It also names where cargo
+#   reads its config and credentials, which the templates already hide, and where `cargo install` puts binaries: the
+#   operator's stay on PATH where rustup put them, and rustup finds its toolchains by RUSTUP_HOME, which stays.
+# - GRADLE_USER_HOME holds Gradle's caches, its wrapper's distributions, and its daemons, beside the operator's
+#   gradle.properties and init scripts, which the templates already hide.
+# - YARN_GLOBAL_FOLDER holds yarn 2+'s shared cache, under XDG_DATA_HOME otherwise. Never YARN_CACHE_FOLDER: yarn 2+
+#   reads it as the project's own cache, which a repository may commit.
 CACHE_ENV = (
     ("XDG_CACHE_HOME", "."),
     ("npm_config_cache", "npm"),
     ("GOCACHE", "go-build"),
     ("GOMODCACHE", "go-mod"),
     ("PIP_CACHE_DIR", "pip"),
+    ("CARGO_HOME", "cargo"),
+    ("GRADLE_USER_HOME", "gradle"),
+    ("YARN_GLOBAL_FOLDER", "yarn-berry"),
 )
 # What a run reads from the operator's own data directory once XDG_DATA_HOME is the role's: uv's Pythons and tools,
 # which the templates let it read, each relative to the operator's XDG_DATA_HOME. Set only when the operator has not.

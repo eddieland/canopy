@@ -203,6 +203,9 @@ def caching(cache: Path) -> dict[str, str]:
         "GOCACHE": str(cache / "go-build"),
         "GOMODCACHE": str(cache / "go-mod"),
         "PIP_CACHE_DIR": str(cache / "pip"),
+        "CARGO_HOME": str(cache / "cargo"),
+        "GRADLE_USER_HOME": str(cache / "gradle"),
+        "YARN_GLOBAL_FOLDER": str(cache / "yarn-berry"),
     }
 
 
@@ -425,7 +428,8 @@ def test_each_role_caches_in_a_directory_of_its_own_and_setup_in_the_workers(san
     """
     _, slot = linked_worktree(tmp_path, "repo")
     write = ["sh", "-c", 'mkdir -p "$XDG_CACHE_HOME/tool" && echo "$1" > "$XDG_CACHE_HOME/tool/$1"', "sh"]
-    operators = {"GOMODCACHE": str(tmp_path / "go-mod"), "npm_config_cache": str(tmp_path / "npm")}
+    names = ("GOMODCACHE", "npm_config_cache", "CARGO_HOME", "GRADLE_USER_HOME", "YARN_GLOBAL_FOLDER")
+    operators = {name: str(tmp_path / name) for name in names}
     places = {"worker": slot, "setup": slot, "chore": chore_dir(tmp_path), "review": review_dir(tmp_path, slot)}
 
     for role, cwd in places.items():
@@ -442,6 +446,32 @@ def test_each_role_caches_in_a_directory_of_its_own_and_setup_in_the_workers(san
     assert sorted(p.name for p in sandbox.caches().iterdir()) == ["chore", "review", "worker"]
     assert sorted(p.name for p in (sandbox.caches() / "worker" / "tool").iterdir()) == ["setup", "worker"]
     assert (sandbox.caches() / "review").stat().st_mode & 0o777 == 0o700
+
+
+def test_cargo_caches_in_the_roles_directory_and_runs_the_operators_binaries(
+    sandbox: Sandbox,
+    canopy_env: CanopyEnv,
+    tmp_path: Path,
+) -> None:
+    """CARGO_HOME moves cargo's registry, whatever the operator set it to, but not the PATH that finds their binaries.
+
+    rustup's proxies, `cargo` among them, stay in the operator's `~/.cargo/bin`, which the worker's template reads.
+    """
+    _, slot = linked_worktree(tmp_path, "repo")
+    tools = canopy_env.home / ".cargo" / "bin"
+    tools.mkdir(parents=True)
+    executable(tools / "cargo", '#!/bin/sh\nprintf %s "$CARGO_HOME"\n')
+    env = {
+        "CANOPY_GIT_OBJECTS": str(objects_dir(tmp_path)),
+        "CARGO_HOME": str(tools.parent),
+        "PATH": os.pathsep.join((str(tools), os.environ["PATH"])),
+    }
+
+    done = wrap("worker", "cargo", cwd=slot, env=env)
+
+    assert done.ok, done.stderr
+    assert done.stdout == str(sandbox.caches() / "worker" / "cargo")
+    assert "~/.cargo/bin" in json.loads((sandbox.templates / "worker.json").read_text())["filesystem"]["allowRead"]
 
 
 def test_a_cache_directory_already_there_is_made_private(sandbox: Sandbox, tmp_path: Path) -> None:
