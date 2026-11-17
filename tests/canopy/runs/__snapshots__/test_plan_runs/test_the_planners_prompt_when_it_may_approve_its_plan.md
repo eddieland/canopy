@@ -99,8 +99,8 @@ prose beside one names each part it draws, and need not retell its arrows.
 
 Before you exit, check the plan against the ticket and the operator's messages, and fix any gap: a requirement with no
 `Acceptance` line or no step that meets it, a line that defers a decision, a name or signature spelled two ways, a
-diagram or table the headings above call for that is not there, a diagram that names a part, call, or state the prose does not, or a claim about the code that you guessed rather than
-read.
+diagram or table the headings above call for that is not there, a diagram that names a part, call, or state the prose
+does not, or a claim about the code that you guessed rather than read.
 
 If `.canopy-plan.md` exists in your directory, it is the plan this one replaces, and `.canopy-new-plan.md` starts as a copy of
 it. The operator's messages that came after it say what to change. Read `.canopy-new-plan.md`, then change only that with
