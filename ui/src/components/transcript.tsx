@@ -947,7 +947,9 @@ const TOOL_ICONS: Record<ToolKind, LucideIcon> = {
 /** A tool call's kind (`toolKind`), as an icon before its name: decoration, since the name says it. */
 function ToolIcon({ kind }: { kind: ToolKind }) {
     const Icon = TOOL_ICONS[kind]
-    return <Icon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
+    // The narrowest panel, a window under the rail's step, keeps the room for the command, which its line holds at
+    // 300px there: the icon shows from just past that width, under any the whole rail leaves.
+    return <Icon aria-hidden className="hidden size-3.5 shrink-0 text-muted-foreground @[45rem]:block" />
 }
 
 /**
