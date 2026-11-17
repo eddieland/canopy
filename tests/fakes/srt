@@ -19,6 +19,7 @@ from pathlib import Path
 
 RECORDED = (
     "BASH_ENV",
+    "CARGO_HOME",
     "ENV",
     "CANOPY_GIT_OBJECTS",
     "CLAUDE_CODE_TMPDIR",
@@ -28,6 +29,7 @@ RECORDED = (
     "GIT_OBJECT_DIRECTORY",
     "GOCACHE",
     "GOMODCACHE",
+    "GRADLE_USER_HOME",
     "PATH",
     "PIP_CACHE_DIR",
     "TMPDIR",
@@ -35,6 +37,7 @@ RECORDED = (
     "UV_TOOL_DIR",
     "XDG_CACHE_HOME",
     "XDG_DATA_HOME",
+    "YARN_GLOBAL_FOLDER",
     "npm_config_cache",
 )
 

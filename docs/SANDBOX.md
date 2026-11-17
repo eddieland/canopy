@@ -112,10 +112,16 @@ an absolute one. `srt` runs its seccomp helper inside the sandbox, so the wrappe
 
 Each role caches in a directory of its own, `~/.cache/canopy/sandbox/<role>/` (under `$XDG_CACHE_HOME` when that is
 set), which the wrapper makes, and setup in the worker's, so that what it installs is there for the worker. The
-wrapper points the command's `XDG_CACHE_HOME` there, and `npm_config_cache`, `GOCACHE`, `GOMODCACHE`, and
-`PIP_CACHE_DIR` under it, whatever you set them to. The first sandboxed run of each role fills its cache from nothing.
-Nothing empties them but `canopy gc --caches`, which skips a role's while a run of it is live, and the overseer's
-while a tick runs.
+wrapper points the command's `XDG_CACHE_HOME` there, and `npm_config_cache`, `GOCACHE`, `GOMODCACHE`,
+`PIP_CACHE_DIR`, `CARGO_HOME`, `GRADLE_USER_HOME`, and `YARN_GLOBAL_FOLDER` under it, whatever you set them to. The
+first sandboxed run of each role fills its cache from nothing. Nothing empties them but `canopy gc --caches`, which
+skips a role's while a run of it is live, and the overseer's while a tick runs.
+
+Cargo and Gradle also read their config from those homes, and a run never read yours, which the templates hide:
+`~/.cargo/config.toml`, `~/.gradle/gradle.properties`, and `~/.gradle/init.d`. Give a run what it needs in the
+repository's own `.cargo/config.toml` or `gradle.properties`, or as their variables (`CARGO_*`,
+`ORG_GRADLE_PROJECT_*`) in the command. Your cargo binaries and toolchains stay where `PATH` and rustup find them, in
+`~/.cargo/bin` and `~/.rustup`; what a run's `cargo install` adds goes in the role's cache.
 
 OpenCode keeps its data the same way, in `~/.local/share/canopy/sandbox/<role>/` (under `$XDG_DATA_HOME` when that is
 set), which the wrapper makes the command's `XDG_DATA_HOME`: your own, `~/.local/share/opencode`, is what your
@@ -175,10 +181,10 @@ your own caches in `allowWrite`: your own tools run what is in them, outside the
 can run code on your machine. OpenCode's is one: it imports packages and runs programs from `~/.cache/opencode`, the
 overseer's OpenCode included, which is why the templates name `@CACHE@` instead. OpenCode's data, logins and
 sessions, goes in `@DATA@` for the same reason: leave `~/.local/share/opencode` out of both lists. A tool whose cache
-the wrapper does not move, such as cargo's under `~/.cargo`, writes under the `$HOME` the template hides, so its cache
+the wrapper does not move, such as Maven's under `~/.m2`, writes under the `$HOME` the template hides, so its cache
 lasts one run; to keep it, point it under the cache directory, by its absolute path, in the command after the
-wrapper's `--`, such as `env CARGO_HOME=/home/you/.cache/canopy/sandbox/worker/cargo`: the template is split into
-words, and no shell expands `$HOME` in it. Two more you are likely to need:
+wrapper's `--`, such as `env MAVEN_OPTS=-Dmaven.repo.local=/home/you/.cache/canopy/sandbox/worker/m2`: the template is
+split into words, and no shell expands `$HOME` in it. Two more you are likely to need:
 
 - **Push credentials.** A worker pushes from inside the sandbox, so its git credential helper does too. Add what the
   helper reads: `~/.config/gh` for `gh auth setup-git`, `~/.git-credentials` or `~/.config/git/credentials` for the
