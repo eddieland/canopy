@@ -228,8 +228,8 @@ operator-skill/  SKILL.md: the canopy skill, for the operator's own agent sessio
 migrations/      NNNN_name.sql
 packages/        uv workspace members: separate programs canopy ships, run only as commands, such as the Slack sink
                  (§20) and the sandbox wrapper (§24); canopy-http, the HTTP client those programs share (D130);
-                 canopy-mcp, the MCP protocol canopy's servers share (D124); and the review bench, a dev tool canopy
-                 neither ships nor runs
+                 canopy-mcp, the MCP protocol canopy's servers share (D124); and the review bench and the codemods,
+                 dev tools canopy neither ships nor runs
 ui/              the web UI (D079): a Vite and React app, its own rules in ui/AGENTS.md and ui/DESIGN.md
 ```
 

@@ -95,6 +95,10 @@ If code and the design disagree, the design doc wins until a decision entry says
   Every formatter and linter is cheap, so it runs them all; the tests it runs are the ones its change reaches.
   - Always `make fmt` and `make lint`: every formatter, then every linter and the type checker, over the whole
     repository, in seconds. A change under `ui/` also runs `npm --prefix ui run lint` and `typecheck`.
+  - `make fmt` also applies the codemods (`packages/canopy-codemods`, LibCST), and `make lint` fails with the diff
+    where one would still change a file. A convention that can be applied mechanically becomes a codemod there, by
+    its README's steps, rather than a rule for review. The first, `final-constants`, annotates every `UPPER_CASE`
+    module constant `Final`.
   - The Playwright screenshot baselines are Git LFS objects, so `make ui-e2e` needs `git-lfs` and `git lfs pull`.
   - Optionally `make hooks`, once per clone: prek's git hooks (`prek.toml`) then run the same formatters and linters
     on each commit's files, and `ui/`'s lint and type check on a push. They stop a commit that fails one; they do not
@@ -124,7 +128,8 @@ If code and the design disagree, the design doc wins until a decision entry says
   (D074, only in `canopy.serve`), `tomlkit` for its edits to the private config (D129, only in `canopy.serve`), and
   `httpx2` for its test client (D079) and, only in the workspace member `canopy-http`, for every HTTP request the
   programs canopy ships make (D130), `syrupy` for snapshot tests (dev only), `jsonschema` to hold an MCP tool's
-  result to its output schema (dev only), and `opentelemetry-sdk` for telemetry (D132, only in `canopy.infra`).
+  result to its output schema (dev only), `libcst` for the codemods (dev only, in the workspace member
+  `canopy-codemods`), and `opentelemetry-sdk` for telemetry (D132, only in `canopy.infra`).
 - The web UI lives in `ui/` (D079) and has its own rules: read `ui/AGENTS.md` before touching it. It needs Node 22.12+
   and npm; `make check` runs its checks, and `make ui-e2e` its Playwright tests.
 - Nothing tracker- or VCS-API-specific is ever imported by the harness, `src/canopy`. No Jira client, no GitHub
@@ -181,6 +186,9 @@ If code and the design disagree, the design doc wins until a decision entry says
   and `python -m canopy.serve`; `tests/canopy/test_layers.py` fails otherwise. A new package gets a layer there and a
   line in DESIGN §5. A separate program (a notification sink) is a uv workspace member, not a package.
 - No global mutable state. Pass a `Context` (config, db connection, paths).
+- A module constant is `UPPER_CASE` and `Final`: `LIMIT: Final = 3`, or `Final[Sequence[str]]` where it had an
+  annotation. `make fmt` writes the `Final` (the `final-constants` codemod). A module's object with state of its own,
+  such as its logger, has a lowercase name and none.
 - Config is not downgrade-compatible. An unknown key stays an error, so an older release rejects a key a newer one
   added; that is expected, since a release already out cannot be fixed. A review finding about it needs no code.
 - Every module is in newspaper order, so it reads top-down from what to how: the docstring, then the public names
