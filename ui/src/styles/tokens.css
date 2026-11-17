@@ -164,7 +164,9 @@
     --buddy-ghost-housing: oklch(0.26 0.02 255);
     /* The Ghost's other shells (src/lib/shells.ts): the Sprig Shell's leaves in shade, a pumpkin's rind lit and in
      * shade (the jack-o'-lantern beside Sprig at Halloween wears them too), a gilded shell's shaded gold beside the
-     * hats' lit one, and a Vex shell's bronze, its red eye and the eye's hot core. */
+     * hats' lit one, a Vex shell's bronze, its red eye and the eye's hot core, a starry shell's night sky lit and in
+     * shade, and a terminal shell's beige case, its green phosphor eye and the eye's core. The Canopy Shell is
+     * Sprig's leaf, lit and in shade. */
     --buddy-leaf-shade: oklch(0.45 0.12 145);
     --buddy-ghost-pumpkin: oklch(0.72 0.17 55);
     --buddy-ghost-pumpkin-shade: oklch(0.55 0.15 45);
@@ -173,6 +175,12 @@
     --buddy-ghost-vex-shade: oklch(0.42 0.05 60);
     --buddy-ghost-vex-eye: oklch(0.6 0.22 27);
     --buddy-ghost-vex-core: oklch(0.95 0.06 40);
+    --buddy-ghost-night: oklch(0.42 0.1 275);
+    --buddy-ghost-night-shade: oklch(0.3 0.08 275);
+    --buddy-ghost-terminal: oklch(0.87 0.03 90);
+    --buddy-ghost-terminal-shade: oklch(0.66 0.035 85);
+    --buddy-ghost-terminal-eye: oklch(0.7 0.2 145);
+    --buddy-ghost-terminal-core: oklch(0.96 0.09 145);
 
     /* The lightswitch rave's dark, when The Cheat flips the lights off: a near black, a touch of the indigo. */
     --rave-dark: oklch(0.16 0.03 275);
@@ -414,6 +422,12 @@
     --buddy-ghost-vex-shade: oklch(0.46 0.05 60);
     --buddy-ghost-vex-eye: oklch(0.68 0.22 27);
     --buddy-ghost-vex-core: oklch(0.97 0.05 40);
+    --buddy-ghost-night: oklch(0.46 0.11 275);
+    --buddy-ghost-night-shade: oklch(0.33 0.09 275);
+    --buddy-ghost-terminal: oklch(0.82 0.03 90);
+    --buddy-ghost-terminal-shade: oklch(0.62 0.035 85);
+    --buddy-ghost-terminal-eye: oklch(0.8 0.2 145);
+    --buddy-ghost-terminal-core: oklch(0.97 0.08 145);
 
     --rave-dark: oklch(0.08 0.02 275);
 
@@ -1334,6 +1348,12 @@
     --color-buddy-ghost-vex-shade: var(--buddy-ghost-vex-shade);
     --color-buddy-ghost-vex-eye: var(--buddy-ghost-vex-eye);
     --color-buddy-ghost-vex-core: var(--buddy-ghost-vex-core);
+    --color-buddy-ghost-night: var(--buddy-ghost-night);
+    --color-buddy-ghost-night-shade: var(--buddy-ghost-night-shade);
+    --color-buddy-ghost-terminal: var(--buddy-ghost-terminal);
+    --color-buddy-ghost-terminal-shade: var(--buddy-ghost-terminal-shade);
+    --color-buddy-ghost-terminal-eye: var(--buddy-ghost-terminal-eye);
+    --color-buddy-ghost-terminal-core: var(--buddy-ghost-terminal-core);
 
     --color-rave-dark: var(--rave-dark);
 

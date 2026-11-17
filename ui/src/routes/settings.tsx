@@ -544,7 +544,7 @@ function ShellShop() {
                     </div>
                 </div>
                 <CollapsibleContent asChild>
-                    <ul className="grid grid-cols-2 gap-2 border-t p-3 sm:grid-cols-5">
+                    <ul className="grid grid-cols-2 gap-2 border-t p-3 sm:grid-cols-4">
                         {SHELLS.map((shell) => (
                             <ShellItem
                                 key={shell.id}

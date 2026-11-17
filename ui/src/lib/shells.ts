@@ -8,7 +8,7 @@ import { storedSetting, useStoredSetting } from '@/lib/stored-setting'
  */
 
 /** A shell the Ghost can own. */
-export type ShellId = 'generalist' | 'sprig' | 'pumpkin' | 'gilded' | 'vex'
+export type ShellId = 'generalist' | 'sprig' | 'canopy' | 'pumpkin' | 'starry' | 'gilded' | 'terminal' | 'vex'
 
 /** One shell in the shop. */
 export interface Shell {
@@ -29,8 +29,26 @@ export const FREE_SHELL: ShellId = 'generalist'
 export const SHELLS: readonly Shell[] = [
     { id: 'generalist', name: 'Generalist Shell', price: 0, blurb: 'Standard issue. Every Ghost starts somewhere.' },
     { id: 'sprig', name: 'Sprig Shell', price: 100, blurb: 'Sprig, brought back by the Traveler. Still has notes.' },
+    {
+        id: 'canopy',
+        name: 'Canopy Shell',
+        price: 200,
+        blurb: 'Four leaves and their understory. Photosynthesis pending.',
+    },
     { id: 'pumpkin', name: 'Pumpkin Shell', price: 300, blurb: 'Festival of the Lost, all year. Nobody can stop you.' },
+    {
+        id: 'starry',
+        name: 'Starry Shell',
+        price: 750,
+        blurb: 'Eight points of night sky, gilt at the edges. No wishes.',
+    },
     { id: 'gilded', name: 'Gilded Shell', price: 1500, blurb: 'Every facet polished with Glimmer you did not have.' },
+    {
+        id: 'terminal',
+        name: 'Terminal Shell',
+        price: 2500,
+        blurb: 'Beige box, green phosphor. It has never once crashed.',
+    },
     { id: 'vex', name: 'Vex Shell', price: 5000, blurb: 'Its eye is red now. It says that is fine.' },
 ]
 

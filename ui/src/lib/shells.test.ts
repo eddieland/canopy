@@ -19,6 +19,19 @@ describe('SHELLS', () => {
         expect(SHELLS[0]).toMatchObject({ id: 'generalist', price: 0 })
     })
 
+    it('lists every shell, in shop order', () => {
+        expect(SHELLS.map((s) => s.id)).toEqual([
+            'generalist',
+            'sprig',
+            'canopy',
+            'pumpkin',
+            'starry',
+            'gilded',
+            'terminal',
+            'vex',
+        ])
+    })
+
     it('sells a Sprig Shell', () => {
         expect(SHELLS.find((s) => s.id === 'sprig')?.price).toBeGreaterThan(0)
     })

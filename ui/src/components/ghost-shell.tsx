@@ -93,6 +93,20 @@ const LOOKS: Record<ShellId, Look> = {
             </g>
         ),
     },
+    // A leaf for each plate, pointed where a pumpkin's is round, its veins pressed in either side of the midrib.
+    canopy: {
+        plate: { lit: 'M0 -24 Q-9 -19 -8 -10 L0 -12.5 Z', shaded: 'M0 -24 L0 -12.5 L8 -10 Q9 -19 0 -24 Z' },
+        groove: 'M0 -19.5 L-4 -16.5 M0 -16 L-4.4 -13 M0 -19.5 L4 -16.5 M0 -16 L4.4 -13',
+        spike: { lit: 'M0 -20 Q-5.5 -15 -4.5 -9 L0 -10.5 Z', shaded: 'M0 -20 L0 -10.5 L4.5 -9 Q5.5 -15 0 -20 Z' },
+        lit: 'fill-buddy-leaf',
+        shaded: 'fill-buddy-leaf-shade',
+        edge: 'stroke-buddy-leaf-shade',
+        ring: 'fill-buddy-ghost-housing stroke-buddy-leaf-shade',
+        body: 'fill-buddy-ghost-housing',
+        glint: 'stroke-buddy-ghost-core',
+        eye: 'fill-buddy-ghost-eye',
+        core: 'fill-buddy-ghost-core',
+    },
     pumpkin: {
         plate: { lit: 'M0 -23 Q-10 -21 -9 -10 L0 -12.5 Z', shaded: 'M0 -23 L0 -12.5 L9 -10 Q10 -21 0 -23 Z' },
         groove: 'M-4.2 -21.4 Q-6.4 -16.5 -5 -11.6 M4.2 -21.4 Q6.4 -16.5 5 -11.6',
@@ -116,6 +130,20 @@ const LOOKS: Record<ShellId, Look> = {
             />
         ),
     },
+    // An eight-pointed star: slim plates of night sky, rimmed in the gold its eye burns, to stand off a dark
+    // canvas.
+    starry: {
+        plate: { lit: 'M0 -25 L-5.5 -10.6 L0 -12.5 Z', shaded: 'M0 -25 L0 -12.5 L5.5 -10.6 Z' },
+        spike: { lit: 'M0 -19 L-3.6 -9.4 L0 -10.5 Z', shaded: 'M0 -19 L0 -10.5 L3.6 -9.4 Z' },
+        lit: 'fill-buddy-ghost-night',
+        shaded: 'fill-buddy-ghost-night-shade',
+        edge: 'stroke-buddy-hat-gold',
+        ring: 'fill-buddy-ghost-housing stroke-buddy-hat-gold',
+        body: 'fill-buddy-ghost-housing',
+        glint: 'stroke-buddy-hat-cloth',
+        eye: 'fill-buddy-hat-gold',
+        core: 'fill-buddy-hat-cloth',
+    },
     gilded: {
         ...FACETED,
         lit: 'fill-buddy-hat-gold',
@@ -126,6 +154,20 @@ const LOOKS: Record<ShellId, Look> = {
         glint: 'stroke-buddy-ghost-core',
         eye: 'fill-buddy-ghost-eye',
         core: 'fill-buddy-ghost-core',
+    },
+    // A beige box for each plate, a prompt pressed into it, around a green phosphor eye.
+    terminal: {
+        plate: { lit: 'M-7 -22 H0 V-12.5 L-7 -10.5 Z', shaded: 'M0 -22 H7 V-10.5 L0 -12.5 Z' },
+        groove: 'M-4.8 -19.6 L-2.8 -17.6 L-4.8 -15.6 M1.2 -15.6 H4.8',
+        spike: { lit: 'M-4 -18.5 H0 V-10.5 L-4 -9.3 Z', shaded: 'M0 -18.5 H4 V-9.3 L0 -10.5 Z' },
+        lit: 'fill-buddy-ghost-terminal',
+        shaded: 'fill-buddy-ghost-terminal-shade',
+        edge: 'stroke-buddy-ghost-terminal-shade',
+        ring: 'fill-buddy-ghost-housing stroke-buddy-ghost-terminal-shade',
+        body: 'fill-buddy-ghost-housing',
+        glint: 'stroke-buddy-ghost-terminal-core',
+        eye: 'fill-buddy-ghost-terminal-eye',
+        core: 'fill-buddy-ghost-terminal-core',
     },
     vex: {
         plate: { lit: 'M0 -24 L-8 -18 L-8 -10 L0 -12.5 Z', shaded: 'M0 -24 L0 -12.5 L8 -10 L8 -18 Z' },
