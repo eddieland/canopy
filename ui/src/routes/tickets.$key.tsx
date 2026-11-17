@@ -204,12 +204,21 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                 </Panel>
                 {/* The answer: the conversation, the reply, then the ticket's verbs, so the keyboard reaches the
                     reply before Stop or Forget, as on its attention item. */}
+                {/* Wide, it stays put while the lists beside it scroll, as tall as the window has room for under the
+                    shell's header and the page's padding, so a ticket with a long history leaves no empty column
+                    under it and the reply stays in reach; the conversation takes what the rest of it leaves. */}
                 <Panel
-                    className={cn('2xl:col-start-2 2xl:row-start-1', memoryOn ? '2xl:row-span-5' : '2xl:row-span-4')}
+                    className={cn(
+                        '2xl:col-start-2 2xl:row-start-1',
+                        memoryOn ? '2xl:row-span-5' : '2xl:row-span-4',
+                        '2xl:sticky 2xl:top-6 2xl:flex 2xl:max-h-[max(28rem,calc(100dvh-6.5rem))] 2xl:flex-col',
+                        '2xl:overflow-y-auto 2xl:print:static 2xl:print:max-h-none',
+                    )}
                     data-testid="ticket-conversation"
                 >
                     <TicketAnswer
                         detail={detail}
+                        fill
                         after={
                             <>
                                 <TicketVerbs ticket={ticket} limits={limits} place="after" testId="ticket-actions" />

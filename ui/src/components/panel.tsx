@@ -298,12 +298,29 @@ export function PanelScroll({ label, className, ...props }: ComponentProps<'sect
  * the window's height, so its reply form stays in reach under it. It opens at `end`, the thread's newest end, and keeps
  * to it as the thread grows, while the operator is there: scrolled away to read, it stays where they put it. Flipping
  * the thread's order takes it to the new newest end; so does a new `key`, such as another ticket's.
+ *
+ * With `fill`, on a wide screen (`2xl`) it has no height of its own: its panel, a column as tall as the window has room
+ * for, gives it what the rest of the panel leaves.
  */
-export function ThreadScroll({ label, end, children }: { label: string; end: 'top' | 'bottom'; children: ReactNode }) {
+export function ThreadScroll({
+    label,
+    end,
+    fill = false,
+    children,
+}: {
+    /** The region's accessible name. */
+    label: string
+    /** The thread's newest end, which it opens at and keeps to. */
+    end: 'top' | 'bottom'
+    /** Whether, wide, it takes the height its panel has left rather than a share of the window's. */
+    fill?: boolean
+    /** The thread. */
+    children: ReactNode
+}) {
     return (
         <PanelScroll
             label={label}
-            className="max-h-[max(20rem,60dvh)]"
+            className={cn('max-h-[max(20rem,60dvh)]', fill && '2xl:max-h-none 2xl:min-h-40 2xl:shrink')}
             // The compiler keeps this callback until `end` changes, so a re-render leaves the operator's place alone
             // and only a flip attaches it again, at the new end.
             ref={(region) => (region === null ? undefined : keepToEnd(region, end))}

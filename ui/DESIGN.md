@@ -230,6 +230,8 @@ Rules:
   content beside the rest. The source keeps the narrow order, which is the reading order; the grid only places that
   content in a second column, over rows whose last is `1fr`, so a long thread leaves no gaps between the panels beside
   it.
+  A ticket's conversation is `sticky` there, as tall as the window has room for, its thread taking what the reply and
+  the actions leave: the lists beside it scroll past, so a long history leaves no empty column under it.
 - **The header** carries, after its name, the stream's state (and `mock`) and the ticker (Fun, below); then at its end
   the loop's pause and Tick now, the readouts, and the theme toggle, in three groups with a hairline rule between each.
   Every readout that opens a page has a hover card of it; the theme toggle has one of the shown theme's palettes,
