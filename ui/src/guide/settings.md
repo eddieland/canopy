@@ -57,7 +57,7 @@ Rosé Pine, Forest, and Plum round their corners, Plum most of all. **Starry Ski
 field of stars in the gaps between panels, never behind anything you have to read, lets them twinkle, the brightest
 with a glint, leaves a little nebula low in the sky, hangs a crescent moon in the lower right corner, and sends a
 meteor across the open sky every twenty seconds or so. The moon is usually behind a panel, as moons are behind
-clouds; the Attention page has the best view. Make a wish; it won't merge your PR, but nothing else will
+clouds; a tall window on a short page has the best view. Make a wish; it won't merge your PR, but nothing else will
 either. If your system asks for reduced motion, the sky holds still and the meteors stay home. Layout and sizes never
 change with a palette, so nothing moves when you switch, except under Gruvbox, Pulp, Monokai, and Acme, where monospace
 runs wider and a long line wraps a little sooner. Their text is drawn a step smaller to make up some of the width;
