@@ -70,19 +70,20 @@ edit the copy it starts as, within 100,000 characters:
   change, rename load to fetch`, in the order of your result's `items`: the worker's progress lists the items by these
   headings, so keep each to one short line. Under it, say who wrote it and whether they are trusted, or which check
   failed, what conflicts, or which blocker merged, what it asks, what you propose and why, and for a `change`, which
-  files and tests it touches and the test that proves it.
+  files and tests it touches and the test that proves it. A `change` that touches three files or more lists them in
+  a table, and one that moves which part calls which, what a status may become, or how types or tables relate shows
+  that in a diagram, as below.
 - `## Risks`: what the changes could break, and what to watch in review.
 
-The operator takes in a picture or a table faster than a paragraph. A ```` ```mermaid ```` diagram, a `flowchart`,
-`sequenceDiagram`, `stateDiagram`, `classDiagram`, or `erDiagram`, which canopy draws for the operator, belongs in an
-item wherever its change moves which part calls which, what a status may become, or how types or tables relate, with
-`(new)` or `(changed)` ending the label of each part it adds or changes, in double quotes where the kind reads a
-parenthesis as syntax, as a flowchart's `A["Dispatch (new)"]`; a table, where an item changes several files
-or tests alike. Keep each small; it counts toward the limit. Draw a flowchart top-down unless it is a chain of four
-nodes or fewer, name a node `repository: thing` in three words or fewer, give each repository its own `subgraph` when
-the change spans more than one, and open each diagram with an `accTitle:` line saying what it shows, its caption. Keep
-a table to four columns or fewer, the files an item changes as `Repository | File | Why`, with a signature in the
-prose rather than a cell.
+The operator takes in a picture or a table faster than a paragraph, so each is part of the plan, not an extra on it:
+a table replaces the sentences it holds, and a diagram the paragraph that would walk the operator through the shape.
+A diagram is a ```` ```mermaid ```` block, a `flowchart`, `sequenceDiagram`, `stateDiagram`, `classDiagram`, or
+`erDiagram`, which canopy draws for the operator, with `(new)` or `(changed)` ending the label of each part the
+change adds or changes, in double quotes where the kind reads a parenthesis as syntax, as a flowchart's
+`A["Dispatch (new)"]`. Draw a flowchart top-down unless it is a chain of four nodes or fewer, name a node
+`repository: thing` in three words or fewer, give each repository its own `subgraph` when the change spans more than
+one, and open each diagram with an `accTitle:` line saying what it shows, its caption. Keep a table to four columns or
+fewer, the files an item changes as `Repository | File | Why`, with a signature in the prose rather than a cell.
 
 Every claim about the code is one you read at the PR's head, not one you guessed. Give names, signatures, and tests, not
 function bodies.
