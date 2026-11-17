@@ -380,9 +380,13 @@ github.com.
   before it was; `canopy sandbox setup` says which. Or the login is not in your own OpenCode data: log in there, as
   without a sandbox.
 - **A build cannot fetch, or a tool cannot find its files:** a registry missing from `allowedDomains`, or a toolchain
-  missing from `allowRead`. The error is the tool's own, in the run's log. A tool that writes outside `TMPDIR`, the
-  worktree, and the cache directory needs its directory moved under the cache directory (step 3), or, if nothing of
-  yours runs what it writes, in `allowWrite`.
+  missing from `allowRead`. The error is the tool's own, in the run's log. `srt` answers a host off the allowlist with
+  a `403`, `host is not on the allow list` or `Connection blocked by network allowlist`, and names the host only in
+  its debug output, which the wrapper does not turn on: the URL in the tool's error is the one to add. A write the
+  template does not allow fails with `Read-only file system` on Linux or `Operation not permitted` on macOS; on Linux,
+  one under a directory the template hides, such as `$HOME`, seems to work and is gone after the run. A tool that
+  writes outside `TMPDIR`, the worktree, and the cache directory needs its directory moved under the cache directory
+  (step 3), or, if nothing of yours runs what it writes, in `allowWrite`.
 - **Bazel:** the disk and repository caches and `--output_user_root` from [BAZEL.md](BAZEL.md) are your own builds'
   too. In `allowWrite`, a run can leave outputs there that your builds then use, outside the sandbox; left out, each
   run builds cold. Prefer the cold build, or a remote cache only CI writes, until DESIGN §24 settles Bazel caches of
