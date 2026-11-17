@@ -14,7 +14,8 @@ without leaving the page. The card stays put while you click through them; the o
 
 Each theme also has a palette, picked apart; hover one, here or in the header's card, for a line on what it looks
 like before you commit to it. The defaults tint the canvas with the accent's hue: **Lavender** in light,
-**Indigo** in dark. Light can also be **Off-white**, a warm paper, a soft green **Sage**, or the light side of
+**Indigo** in dark. Light can also be **Off-white**, a warm paper, a soft green **Sage**, **Komorebi**, a wall in
+the sun that gets through a tree, or the light side of
 **Solarized**, **Nord**, **Gruvbox**, **Rosé Pine** (its Dawn variant), or **Acme**, in the two tones of Plan 9's
 editor. **Pulp**, on either side, is a comic printed in four colors: newsprint cream in light, a night blue in dark,
 loud flat section colors on both, and process magenta for the button you actually came to press. Dark can be a plain
@@ -23,8 +24,8 @@ loud flat section colors on both, and process magenta for the button you actuall
 or **Monokai**. The background, surfaces, text, and accent change. Schemes with an accent bring it: Nord and Solarized
 their blues, Monokai its hot pink, Rosé Pine its dusty one, Acme its dark blue, Gruvbox its purple, since its orange
 looked like every run was blocked. The rest get one that suits them: ink blue on Off-white, heather on Sage and in the
-Forest alike, steel blue on Grey, ultraviolet on Black, orchid on Plum, and starlight on Starry Skies, since gold
-stars looked a lot like every run was waiting on you.
+Forest alike, wisteria on Komorebi, steel blue on Grey, ultraviolet on Black, orchid on Plum, and starlight on Starry
+Skies, since gold stars looked a lot like every run was waiting on you.
 Neither green one gets a green accent, for the same reason Gruvbox lost its orange, and the Forest gave up its lake
 blue, which kept passing for a ticket. Every status color stays where you learned it. Scheme purists
 will notice the bases and accents sit a shade off the spec, so everything stays readable on them.
@@ -58,7 +59,13 @@ field of stars in the gaps between panels, never behind anything you have to rea
 with a glint, leaves a little nebula low in the sky, hangs a crescent moon in the lower right corner, and sends a
 meteor across the open sky every twenty seconds or so. The moon is usually behind a panel, as moons are behind
 clouds; a tall window on a short page has the best view. Make a wish; it won't merge your PR, but nothing else will
-either. If your system asks for reduced motion, the sky holds still and the meteors stay home. Layout and sizes never
+either. If your system asks for reduced motion, the sky holds still and the meteors stay home. **Komorebi** is the
+daytime answer, named for the Japanese word for sunlight coming through leaves: flecks of sun and the soft shadows of
+leaves lie on the page between the panels, a bough's shadow sways in the lower right corner, and every so often a
+leaf's shadow drifts down the open page. The rail, the header, and a page's title stay clear of all of it. This guide
+is the one place a shadow crosses something you read, so the shadows are faint enough to read through, and the links
+a shade deeper than they would otherwise be. It is also the only palette under which a console called canopy looks
+like it is under one. Reduced motion stops the breeze, and the leaves stay on the tree. Layout and sizes never
 change with a palette, so nothing moves when you switch, except under Gruvbox, Pulp, Monokai, and Acme, where monospace
 runs wider and a long line wraps a little sooner. Their text is drawn a step smaller to make up some of the width;
 every line keeps its height, so nothing shifts up or down. This guide stays in its usual sans under all four: monospace

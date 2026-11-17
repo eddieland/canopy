@@ -306,6 +306,7 @@ test.describe("Starry Skies's stars", () => {
             expect(layer.mask).toMatch(/^linear-gradient\(/u)
         }
         expect(await skyMotion(page)).toEqual(['star-shimmer', 'twinkle', 'meteor', 'meteor-2'])
+        expect(await crosser(page)).toEqual({ mask: 'none', turn: '162deg', long: true })
     })
 
     test('hangs its moon under the panels, its phase cut by a mask, and no other palette does', async ({ page }) => {
@@ -340,6 +341,84 @@ test.describe("Starry Skies's stars", () => {
     })
 })
 
+test.describe("Komorebi's light", () => {
+    test.beforeEach(async ({ page }) => {
+        await signIn(page)
+        await storeTheme(page, 'light')
+        await storePalette(page, 'light', 'komorebi')
+    })
+
+    test('lays sun and leaf shadows on the two layers, masked, dims them, and lets its leaves fall', async ({
+        page,
+    }) => {
+        await page.goto('workspace/runs')
+        await settled(page)
+        const [light, shade] = await canvasTone(page)
+        expect(light?.image).toMatch(/^radial-gradient\(/u)
+        expect(light?.mask).toMatch(/^linear-gradient\(/u)
+        // The shade is one color, cut to its leaves by the tile, then cleared where the light is.
+        expect(shade?.image).toBe('none')
+        expect(shade?.mask).toMatch(/^url\("[^"]*sprays[^"]*\.svg"\), radial-gradient\(.*linear-gradient\(/u)
+        expect(await skyMotion(page)).toEqual([
+            'dapple',
+            'dapple-shade',
+            'leaf-fall, leaf-rock',
+            'leaf-fall-2, leaf-rock',
+        ])
+        expect(await crosser(page)).toEqual({
+            mask: expect.stringMatching(/^url\("[^"]*leaf[^"]*\.svg"\)$/u),
+            turn: '0deg',
+            long: false,
+        })
+    })
+
+    test("casts its bough's shadow under the panels, swaying, and no other palette does", async ({ page }) => {
+        await page.goto('workspace/runs')
+        await settled(page)
+        expect(await bough(page)).toEqual({
+            painted: true,
+            mask: expect.stringMatching(/^url\("[^"]*sprig[^"]*\.svg"\)$/u),
+            zIndex: '-1',
+            motion: 'bough-sway',
+        })
+        // Its leaves are files the page fetches itself, which the content security policy must allow.
+        const mask = await page.evaluate(() => {
+            const root = document.querySelector('#root')
+            return root ? getComputedStyle(root, '::after').maskImage.slice(5, -2) : ''
+        })
+        expect((await page.request.get(mask)).headers()['content-type']).toBe('image/svg+xml')
+
+        await storePalette(page, 'light', 'sage')
+        await page.reload()
+        await settled(page)
+        expect(await bough(page)).toEqual({ painted: false, mask: 'none', zIndex: '-1', motion: 'none' })
+    })
+
+    test('holds still and drops no leaf under reduced motion', async ({ page }) => {
+        await page.emulateMedia({ reducedMotion: 'reduce' })
+        await page.goto('workspace/runs')
+        await settled(page)
+        expect(await skyMotion(page)).toEqual(['none', 'none', 'none', 'none'])
+        expect((await bough(page)).motion).toBe('none')
+        expect(await page.evaluate(() => getComputedStyle(document.body, '::before').content)).toBe('none')
+    })
+
+    test('keeps its light and shade off the rail, the header, and the page title', async ({ page }) => {
+        await page.goto('workspace/runs')
+        await settled(page)
+        const rem = await page.evaluate(() => Number.parseFloat(getComputedStyle(document.documentElement).fontSize))
+        const title = await page.getByRole('heading', { level: 1 }).boundingBox()
+        const rail = await page.getByRole('navigation').first().boundingBox()
+        // Both layers' masks are clear to 14rem from the left and 12.5rem from the top (`--shade-clear`).
+        expect((rail?.x ?? 0) + (rail?.width ?? Infinity)).toBeLessThanOrEqual(14 * rem)
+        expect((title?.y ?? 0) + (title?.height ?? Infinity)).toBeLessThanOrEqual(12.5 * rem)
+        for (const layer of await canvasTone(page)) {
+            expect(layer.mask).toContain(`linear-gradient(90deg, rgba(0, 0, 0, 0) ${14 * rem}px`)
+            expect(layer.mask).toContain(`linear-gradient(rgba(0, 0, 0, 0) ${12.5 * rem}px`)
+        }
+    })
+})
+
 /** The animations the sky runs: the canvas's two layers, then its two meteors, each by name, or none. */
 function skyMotion(page: Page): Promise<string[]> {
     return page.evaluate(() =>
@@ -365,6 +444,35 @@ function moon(page: Page): Promise<{ image: string; mask: string; zIndex: string
             mask: style.maskImage,
             zIndex: style.zIndex,
             drawn: style.content !== 'none' && Number.parseFloat(style.width) > 0,
+        }
+    })
+}
+
+/** What crosses the canvas: the first one's mask, its turn, and whether it is a streak, far longer than thick. */
+function crosser(page: Page): Promise<{ mask: string; turn: string; long: boolean }> {
+    return page.evaluate(() => {
+        const style = getComputedStyle(document.body, '::before')
+        return {
+            mask: style.maskImage,
+            turn: style.rotate,
+            long: Number.parseFloat(style.width) > 10 * Number.parseFloat(style.height),
+        }
+    })
+}
+
+/** Whether the bough's box paints a color, the mask that cuts its leaves, where it sits in the stack, and its sway. */
+function bough(page: Page): Promise<{ painted: boolean; mask: string; zIndex: string; motion: string }> {
+    return page.evaluate(() => {
+        const root = document.querySelector('#root')
+        if (!root) {
+            throw new Error('the page has no #root')
+        }
+        const style = getComputedStyle(root, '::after')
+        return {
+            painted: style.content !== 'none' && style.backgroundColor !== 'rgba(0, 0, 0, 0)',
+            mask: style.maskImage,
+            zIndex: style.zIndex,
+            motion: style.animationName,
         }
     })
 }
