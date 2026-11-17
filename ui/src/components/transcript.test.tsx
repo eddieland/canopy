@@ -411,6 +411,38 @@ describe('TranscriptPanel', () => {
         expect(within(reported).getByText('Rerun CI?')).toBeDefined()
     })
 
+    it('says a canopy call as what it did, and opens to what the agent said and what canopy found', () => {
+        const base = { kind: 'tool', status: 'completed', title: null, duration_ms: 1000, cut: false, call: 1 } as const
+        const dispatch = {
+            ...base,
+            at: '2026-10-08T12:00:00Z',
+            tool: 'canopy_dispatch',
+            input: JSON.stringify({ key: 'ABC-104', kind: 'implement', context: 'Start with the form.' }),
+            output: JSON.stringify({ key: 'ABC-104', recorded: 43, branch: 'agent/ABC-104-sso', dry_run: false }),
+        }
+        const diff = {
+            ...base,
+            at: '2026-10-08T12:01:00Z',
+            tool: 'canopy_git_diff',
+            input: JSON.stringify({ base: 'main', head: 'HEAD' }),
+            output: 'diff --git a/a.ts b/a.ts\n@@ -1 +1 @@\n-old\n+new',
+        }
+        render(
+            <TranscriptPanel transcript={{ ...transcript(), entries: [dispatch, diff] }} running={false} page="run" />,
+        )
+        const dispatched = call('canopy_dispatch')
+        expect(within(dispatched).getByText('implement')).toBeDefined()
+        expect(dispatched.textContent).toContain('run 43 on agent/ABC-104-sso')
+        expect(within(dispatched).queryByText('context')).toBeNull()
+        dispatched.open = true
+        fireEvent(dispatched, new Event('toggle'))
+        expect(within(dispatched).getByText('context')).toBeDefined()
+
+        const read = call('canopy_git_diff')
+        expect(read.textContent).toContain('main..HEAD')
+        expect(within(read).getByText('+new')).toBeDefined()
+    })
+
     it('opens a model call in order to what it was sent and what it did, built only once opened', () => {
         render(<TranscriptPanel transcript={transcript()} running={false} page="run" />)
         const second = call('1.5k in · 60 out')
