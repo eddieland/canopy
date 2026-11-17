@@ -136,7 +136,10 @@ Rules:
   beside its box, so it takes no room, and a texture is clear where text sits; a box that clips what overflows it, as a
   list's cell does, still paints the few pixels past its edge that the ink and a focus ring reach (`clip-reach`), so
   neither is cut. Pulp, a comic in four-color print, takes them all; both its sides ink by the same rings, dark's line
-  its cream.
+  its cream. Starry Skies prints a sky on the canvas instead: tiles of stars on the two layers, cleared over the rail
+  and the header and faded in past a page's title, each layer twinkling on a period of its own, and a meteor that
+  crosses the sky along the window's foot now and then, under the panels, so it covers nothing. All of it moves by
+  opacity and transform alone.
   A palette may also give the shell's signature a form of its own, the first place it is felt: the aurora (a gradient
   hairline, a stepped bar of solid blocks, a print strip of those blocks, or a line that blooms), the name (the
   aurora's gradient, on a solid block, on a tilted plate, or glowing), and the nav's highlight (a tint and a bar, a
@@ -423,7 +426,9 @@ holds only the rules it all keeps; what each one does is written in its code. No
 
 Motion says something arrived or changed, and gives the page some life without asking for attention. It is short
 (at most 700ms), eased out (`cubic-bezier(0.2, 0, 0, 1)`), and never loops on anything but the logo, a running run,
-a skeleton, and fun (Fun, above). The keyframes and utilities are in `src/index.css`.
+a skeleton, a palette's stars, and fun (Fun, above). A loop is the one exception to the length and the easing: it keeps
+the pace of what it draws, a breath or a star's twinkle, since a 700ms loop eased out would read as a flash. The
+keyframes and utilities are in `src/index.css`.
 
 - Route changes cross-fade through the `<ViewTransition>` around the outlet. The old page stays until the new one is
   ready, because navigations run inside React transitions. A transition that redraws part of a page, as a transcript's

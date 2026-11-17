@@ -13,7 +13,7 @@
  * light and indigo for dark, have neutrals that carry the accent's hue, so the canvas has some color of its own. The
  * others set the neutrals and the accent over the default's: off-white, Solarized, Nord, Gruvbox, Pulp, sage, Rosé
  * Pine Dawn, and Acme for light; grey (the one the 2026-10-19 exploration drew for Mailroom), black, Solarized,
- * Gruvbox, Pulp, forest, plum, and Monokai for dark.
+ * Gruvbox, Pulp, forest, plum, Starry Skies, and Monokai for dark.
  */
 
 :root {
@@ -203,6 +203,15 @@
     --canvas-texture-mask: none;
     --canvas-swell: none;
     --canvas-swell-mask: none;
+    /* What may move in the sky, only while the operator's system allows motion (src/index.css), as Starry Skies's
+     * does: each canvas layer's animation, and two meteors, each a streak's image and its animation. None by
+     * default, so nothing moves and no meteor is drawn. */
+    --canvas-texture-motion: none;
+    --canvas-swell-motion: none;
+    --meteor: none;
+    --meteor-glow: none;
+    --meteor-motion: none;
+    --meteor-motion-2: none;
     --title-drop: 0px;
     --title-drop-alpha: 0;
     /* What a cleared attention item drops (src/routes/attention.tsx): a leaf by default, or, where a palette shows
@@ -1051,6 +1060,100 @@
     --radius: 0.875rem;
     --nav-hairline: 0;
     --wordmark-glow: drop-shadow(0 0 5px oklch(from var(--accent) l c h / 0.45));
+}
+
+/* Starry Skies: a night-blue canvas, a little darker and bluer than indigo's, under a field of stars, with starlight
+ * for an accent. The neutrals carry the canvas's hue, as indigo's do, and Workspace's indigo turns a few degrees
+ * toward violet, so the nav's highlight on it reads as a color and not as a lighter sky. */
+.dark[data-dark-palette='starry-skies'] {
+    --accent: oklch(0.84 0.09 252);
+    --ring: oklch(0.84 0.09 252 / 0.5);
+    --background: oklch(0.15 0.034 260);
+    --surface: oklch(0.188 0.04 260);
+    --surface-raised: oklch(0.238 0.046 260);
+    --border: oklch(0.295 0.052 260);
+    --foreground: oklch(0.955 0.012 250);
+    --muted-foreground: oklch(0.73 0.045 254);
+    --accent-foreground: oklch(0.15 0.034 260);
+    --scrollbar: oklch(0.73 0.045 254 / 0.4);
+    --status-stopped: oklch(0.75 0.045 254);
+    --spend-dry-run: oklch(0.6 0.03 258);
+    --check-other: oklch(0.6 0.03 258);
+    --answer-na: oklch(0.6 0.03 258);
+    --context-carried: oklch(0.6 0.03 258);
+    --section-workspace: oklch(0.74 0.14 274);
+
+    /* The night: soft corners, the panels' hairlines kept so each holds its edge against the dark, the aurora
+     * blooming softly as the Milky Way would, the name glowing in starlight, and the active nav icon lit like a star,
+     * on a tint with no hairline. */
+    --radius: 0.625rem;
+    --aurora-bloom: blur(5px);
+    --aurora-bloom-opacity: 0.7;
+    --wordmark-glow: drop-shadow(0 0 5px oklch(from var(--accent) l c h / 0.5));
+    --nav-hairline: 0;
+    --nav-on-glow: drop-shadow(0 0 5px currentColor);
+
+    /* The sky, painted on the canvas's two layers: the faint stars and a haze of the Milky Way on the first, the bright
+     * stars on the second, which twinkle. Each layer of stars is a tile of a few, the tiles' sides in rem at lengths
+     * that share no small multiple, so the field repeats nowhere the eye can find. White stars, a few warm and a few
+     * blue, as the sky holds. Both layers are clear over the rail and the header, and fade in past a page's title, so
+     * no star sits behind text that is not on a panel. */
+    --star: oklch(0.97 0.012 250);
+    --star-dim: oklch(0.9 0.02 250 / 0.55);
+    --star-warm: oklch(0.93 0.06 80);
+    --star-blue: oklch(0.88 0.07 240);
+    --star-haze: oklch(0.62 0.07 268 / 0.1);
+    --canvas-texture:
+        radial-gradient(circle at 12% 18%, var(--star-dim) 0 0.05rem, transparent 0.09rem) 0 0 / 9.7rem 8.3rem,
+        radial-gradient(circle at 67% 41%, var(--star-dim) 0 0.04rem, transparent 0.08rem) 0 0 / 9.7rem 8.3rem,
+        radial-gradient(circle at 38% 79%, var(--star-dim) 0 0.05rem, transparent 0.09rem) 0 0 / 9.7rem 8.3rem,
+        radial-gradient(circle at 21% 63%, var(--star) 0 0.06rem, transparent 0.11rem) 0 0 / 15.1rem 12.7rem,
+        radial-gradient(circle at 74% 12%, var(--star-warm) 0 0.06rem, transparent 0.11rem) 0 0 / 15.1rem 12.7rem,
+        radial-gradient(circle at 53% 36%, var(--star-dim) 0 0.04rem, transparent 0.08rem) 0 0 / 15.1rem 12.7rem,
+        radial-gradient(circle at 88% 84%, var(--star-blue) 0 0.05rem, transparent 0.1rem) 0 0 / 15.1rem 12.7rem,
+        linear-gradient(
+            118deg,
+            transparent 20%,
+            oklch(from var(--star-haze) l c h / calc(alpha * 0.5)) 34%,
+            var(--star-haze) 46% 54%,
+            oklch(from var(--star-haze) l c h / calc(alpha * 0.5)) 66%,
+            transparent 80%
+        );
+    --canvas-swell:
+        radial-gradient(
+                circle at 31% 27%,
+                var(--star) 0 0.07rem,
+                oklch(from var(--star) l c h / 0.25) 0.12rem,
+                transparent 0.32rem
+            )
+            0 0 / 27.3rem 21.9rem,
+        radial-gradient(
+                circle at 79% 71%,
+                var(--star-blue) 0 0.07rem,
+                oklch(from var(--star-blue) l c h / 0.25) 0.12rem,
+                transparent 0.3rem
+            )
+            0 0 / 27.3rem 21.9rem,
+        radial-gradient(
+                circle at 61% 47%,
+                var(--star-warm) 0 0.08rem,
+                oklch(from var(--star-warm) l c h / 0.3) 0.14rem,
+                transparent 0.4rem
+            )
+            0 0 / 41.9rem 33.1rem;
+    --star-clear:
+        linear-gradient(90deg, transparent 14rem, oklch(0 0 0) 22rem) intersect,
+        linear-gradient(transparent 5rem, oklch(0 0 0) 13rem);
+    --canvas-texture-mask: var(--star-clear);
+    --canvas-swell-mask: var(--star-clear);
+    /* The sky moves, not much but enough to see: the faint stars shimmer and the bright ones twinkle, out of step,
+     * and a meteor crosses the open sky about every twenty seconds, its tail fading from its head's starlight. */
+    --canvas-texture-motion: star-shimmer 13s ease-in-out infinite;
+    --canvas-swell-motion: twinkle 7s ease-in-out infinite;
+    --meteor: linear-gradient(90deg, transparent, oklch(from var(--star) l c h / 0.45) 70%, var(--star));
+    --meteor-glow: drop-shadow(0 0 0.15rem oklch(from var(--star) l c h / 0.8));
+    --meteor-motion: meteor 61s linear infinite;
+    --meteor-motion-2: meteor-2 83s linear infinite;
 }
 
 /* Monokai: its olive-grey background the canvas, the line highlight the hairlines, its off-white the text, the

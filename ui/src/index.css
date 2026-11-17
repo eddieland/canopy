@@ -52,10 +52,12 @@
     }
 
     /*
-     * A palette's tone over the canvas, which only Pulp prints: its dots (`--canvas-texture`) and, outside them, the
-     * swell they grow into (`--canvas-swell`), each where its mask lets it. Fixed to the window and under everything
-     * else, so it is painted once, never on a scroll, and the panels, the header, and the rail sit over it. By default
-     * both are none, and the two layers draw nothing.
+     * A palette's tone over the canvas, which Pulp and Starry Skies print: Pulp's dots (`--canvas-texture`) and,
+     * outside them, the swell they grow into (`--canvas-swell`), or the sky's faint stars and its bright ones, each
+     * where its mask lets it. Fixed to the window and under everything else, so it is painted once, never on a scroll,
+     * and the panels, the header, and the rail sit over it. By default both are none, and the two layers draw nothing.
+     * Each may move (`--canvas-texture-motion`, `--canvas-swell-motion`), by its opacity alone, which the compositor
+     * runs without a repaint.
      */
     html::before,
     html::after {
@@ -74,6 +76,48 @@
     html::after {
         background: var(--canvas-swell);
         mask: var(--canvas-swell-mask);
+    }
+
+    /*
+     * A palette's meteors, which only Starry Skies draws: two streaks (`--meteor`, lit by `--meteor-glow`) under the
+     * panels, each crossing the sky now and then on a path of its own (`--meteor-motion`, `--meteor-motion-2`), out of
+     * step, so no rhythm shows. Each falls down and to the left, turned about its head, the streak's bright end, so a
+     * path names where the head runs. They move by transform and opacity alone, and rest unseen, so a still page shows
+     * none. Under reduced motion none of the sky moves, and no meteor is drawn at all.
+     */
+    @media (prefers-reduced-motion: no-preference) {
+        html::before {
+            animation: var(--canvas-texture-motion);
+        }
+
+        html::after {
+            animation: var(--canvas-swell-motion);
+        }
+
+        body::before,
+        body::after {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: -9rem;
+            z-index: -1;
+            width: 9rem;
+            height: 0.1rem;
+            background: var(--meteor);
+            filter: var(--meteor-glow);
+            transform-origin: 100% 50%;
+            rotate: 162deg;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        body::before {
+            animation: var(--meteor-motion);
+        }
+
+        body::after {
+            animation: var(--meteor-motion-2);
+        }
     }
 
     :focus-visible {
@@ -519,6 +563,98 @@
     50% {
         opacity: 0.45;
         transform: scale(0.7);
+    }
+}
+
+/* A sky's bright stars scintillate (`--canvas-swell-motion`): uneven steps of their brightness, never out, so the
+rhythm reads as air moving over them rather than a pulse. */
+@keyframes twinkle {
+    15% {
+        opacity: 0.4;
+    }
+    30% {
+        opacity: 0.95;
+    }
+    55% {
+        opacity: 0.55;
+    }
+    75% {
+        opacity: 1;
+    }
+    88% {
+        opacity: 0.7;
+    }
+}
+
+/* Its faint stars shimmer more gently, on a period of their own (`--canvas-texture-motion`), so the two layers never
+dim together. */
+@keyframes star-shimmer {
+    40% {
+        opacity: 0.6;
+    }
+    70% {
+        opacity: 1;
+    }
+    85% {
+        opacity: 0.8;
+    }
+}
+
+/* A meteor's two passes in a minute (`--meteor-motion`), each about a second, bright as it enters and fading as it
+falls 28rem along its shallow slope, then dark while it moves to the next start. Its paths cross the band of sky along
+the window's foot, which a page's panels leave open most often; where one passes behind a panel, it reads as a cloud.
+Unseen at rest, its first frame. */
+@keyframes meteor {
+    0%,
+    5% {
+        opacity: 0;
+        translate: 98vw 80vh;
+    }
+    5.4% {
+        opacity: 1;
+    }
+    7% {
+        opacity: 0;
+        translate: calc(98vw - 26.6rem) calc(80vh + 8.7rem);
+    }
+    7.1%,
+    52% {
+        opacity: 0;
+        translate: 74vw 85vh;
+    }
+    52.4% {
+        opacity: 1;
+    }
+    54% {
+        opacity: 0;
+        translate: calc(74vw - 26.6rem) calc(85vh + 8.7rem);
+    }
+    54.1%,
+    100% {
+        opacity: 0;
+        translate: 98vw 80vh;
+    }
+}
+
+/* The other meteor's one pass, fainter and on a longer period (`--meteor-motion-2`), so the two never fall together
+twice in a row. */
+@keyframes meteor-2 {
+    0%,
+    32% {
+        opacity: 0;
+        translate: 90vw 74vh;
+    }
+    32.3% {
+        opacity: 0.8;
+    }
+    33.5% {
+        opacity: 0;
+        translate: calc(90vw - 26.6rem) calc(74vh + 8.7rem);
+    }
+    33.6%,
+    100% {
+        opacity: 0;
+        translate: 90vw 74vh;
     }
 }
 

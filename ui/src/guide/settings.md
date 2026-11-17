@@ -19,11 +19,12 @@ like before you commit to it. The defaults tint the canvas with the accent's hue
 editor. **Pulp**, on either side, is a comic printed in four colors: newsprint cream in light, a night blue in dark,
 loud flat section colors on both, and process magenta for the button you actually came to press. Dark can be a plain
 **Grey**, a near **Black** for an OLED screen, a deep green **Forest**, a wine-dark
-**Plum**, or the dark side of **Solarized**, **Gruvbox**, or **Monokai**. The background, surfaces, text, and accent
-change. Schemes with an accent bring it: Nord and Solarized their blues, Monokai its hot pink, Rosé Pine its dusty one,
-Acme its dark blue, Gruvbox its purple, since its orange looked like every run was blocked. The rest get one that suits
-them: ink blue on Off-white, heather on Sage and in the Forest alike, steel blue on Grey, ultraviolet on Black, and
-orchid on Plum.
+**Plum**, **Starry Skies**, a night blue with stars between the panels, or the dark side of **Solarized**, **Gruvbox**,
+or **Monokai**. The background, surfaces, text, and accent change. Schemes with an accent bring it: Nord and Solarized
+their blues, Monokai its hot pink, Rosé Pine its dusty one, Acme its dark blue, Gruvbox its purple, since its orange
+looked like every run was blocked. The rest get one that suits them: ink blue on Off-white, heather on Sage and in the
+Forest alike, steel blue on Grey, ultraviolet on Black, orchid on Plum, and starlight on Starry Skies, since gold
+stars looked a lot like every run was waiting on you.
 Neither green one gets a green accent, for the same reason Gruvbox lost its orange, and the Forest gave up its lake
 blue, which kept passing for a ticket. Every status color stays where you learned it. Scheme purists
 will notice the bases and accents sit a shade off the spec, so everything stays readable on them.
@@ -52,12 +53,14 @@ have a little of the same: Gruvbox's light side matches its dark one, monospace 
 Monokai crisp and monospaced with a neon glow, Acme square-cornered and monospaced, pale yellow panels on a pale cyan
 page under one olive rule, the way Plan 9's editor drew them, before anyone thought to ask for a dark mode, Nord's light
 side a calm fade through its blues, Grey one steel-blue rule, Off-white panels lying on the page like paper, and Sage,
-Rosé Pine, Forest, and Plum round their corners, Plum most of all. Layout and sizes never change with a palette, so
-nothing moves when you switch, except under Gruvbox, Pulp, Monokai, and Acme, where monospace runs wider and a long
-line wraps
-a little sooner. Their text is drawn a step smaller to make up some of the width; every line keeps its height, so
-nothing shifts up or down. This guide stays in its usual sans under all four: monospace suits a readout, and a manual
-set in it reads like one long log line.
+Rosé Pine, Forest, and Plum round their corners, Plum most of all. **Starry Skies** rounds its corners too, puts a
+field of stars in the gaps between panels, never behind anything you have to read, lets them twinkle, and sends a
+meteor across the open sky every twenty seconds or so. Make a wish; it won't merge your PR, but nothing else will
+either. If your system asks for reduced motion, the sky holds still and the meteors stay home. Layout and sizes never
+change with a palette, so nothing moves when you switch, except under Gruvbox, Pulp, Monokai, and Acme, where monospace
+runs wider and a long line wraps a little sooner. Their text is drawn a step smaller to make up some of the width;
+every line keeps its height, so nothing shifts up or down. This guide stays in its usual sans under all four: monospace
+suits a readout, and a manual set in it reads like one long log line.
 
 ## Time
 

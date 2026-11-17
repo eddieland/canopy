@@ -8,14 +8,15 @@ import type { ResolvedTheme } from './store'
  * Light can wear off-white, a warm paper, sage, a soft green, or Solarized's, Nord's, Gruvbox's, Rosé Pine Dawn's, or
  * Acme's light base tones instead, or Pulp, a comic printed in four colors on newsprint. Dark can wear grey, the
  * neutral one the 2026-10-19 exploration drew for Mailroom, a near black, forest, a deep green, plum, a dark wine
- * purple, or Solarized's, Gruvbox's, or Monokai's dark tones, or Pulp's night blue. Kept in localStorage and synced
- * across tabs; the inline script in index.html applies it before first paint, and this module afterwards.
+ * purple, Starry Skies, a night blue under a field of stars, or Solarized's, Gruvbox's, or Monokai's dark tones, or
+ * Pulp's night blue. Kept in localStorage and synced across tabs; the inline script in index.html applies it before
+ * first paint, and this module afterwards.
  */
 
 /** Each theme's palettes, the default first. */
 export const PALETTES = {
     light: ['lavender', 'off-white', 'sage', 'solarized', 'nord', 'gruvbox', 'pulp', 'rose-pine', 'acme'],
-    dark: ['indigo', 'grey', 'black', 'forest', 'plum', 'solarized', 'gruvbox', 'pulp', 'monokai'],
+    dark: ['indigo', 'grey', 'black', 'forest', 'plum', 'starry-skies', 'solarized', 'gruvbox', 'pulp', 'monokai'],
 } as const
 
 /** A set of neutrals `T` can wear. */
@@ -40,6 +41,7 @@ export const PALETTE_LABELS: { readonly [T in ResolvedTheme]: Readonly<Record<Pa
         black: 'Black',
         forest: 'Forest',
         plum: 'Plum',
+        'starry-skies': 'Starry Skies',
         solarized: 'Solarized',
         gruvbox: 'Gruvbox',
         pulp: 'Pulp',
@@ -66,6 +68,8 @@ export const PALETTE_DESCRIPTIONS: { readonly [T in ResolvedTheme]: Readonly<Rec
         black: 'A near-black canvas, kind to an OLED screen, with no edges and an ultraviolet glow.',
         forest: 'A deep green canvas, the dark side of Sage, with a heather accent.',
         plum: 'A dark wine purple, warmer than indigo, with an orchid accent and the softest corners.',
+        'starry-skies':
+            'A night blue under a field of twinkling stars, a meteor now and then, and starlight for an accent.',
         solarized: "Solarized's dark base tones and its blue, crisp and flat.",
         gruvbox:
             "Gruvbox's dark tones and its bright purple, in mono with hard shadows, like an editor of the nineties.",

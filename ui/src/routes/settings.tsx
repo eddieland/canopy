@@ -164,8 +164,9 @@ function ThemePanel() {
                 Gruvbox&apos;s inked as a comic.
             </PaletteRow>
             <PaletteRow theme="dark" value={palettes.dark} options={paletteOptions('dark')}>
-                The dark theme&apos;s: an indigo slate, a plain grey, a near black, a deep forest green, a plum, or a
-                scheme&apos;s dark tones, each with an accent of its own, or Pulp, Gruvbox&apos;s inked as a comic.
+                The dark theme&apos;s: an indigo slate, a plain grey, a near black, a deep forest green, a plum, a night
+                sky full of stars, or a scheme&apos;s dark tones, each with an accent of its own, or Pulp,
+                Gruvbox&apos;s inked as a comic.
             </PaletteRow>
         </Panel>
     )
