@@ -435,6 +435,7 @@ export function ThreadCard({
                             <span className="font-medium text-foreground">{c.author ?? 'a deleted account'}</span>
                             {c.bot && <Chip>bot</Chip>}
                             {c.operator_sent && <Chip>sent by you</Chip>}
+                            {c.ignored && <Chip>ignored</Chip>}
                             {c.created_at !== null && <Age at={c.created_at} variant="ago" />}
                             {c.url !== null && <LinkOut href={c.url} label="The comment on its host" />}
                         </span>

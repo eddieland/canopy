@@ -111,6 +111,8 @@ class ThreadComment(Model):
     """Its URL on GitHub."""
     operator_sent: bool
     """Whether the operator sent it through canopy."""
+    ignored: bool
+    """Whether `connect.ignore_comments` names it: canopy reads it as no feedback."""
 
 
 class Thread(Model):

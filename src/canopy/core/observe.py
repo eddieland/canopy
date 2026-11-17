@@ -13,7 +13,9 @@ keeps it across reads (`item_numbers`): what a cursor passes. A run with no `end
 
 An observation is a dated copy of what a connector saw, never authority (DESIGN §22): in M36 it decides which thread a
 draft answers and what the PR's page shows, and nothing the overseer or a worker is told to do. Each comment is also
-recorded in its ticket's conversation when first observed, as data (§35).
+recorded in its ticket's conversation when first observed, as data (§35). A comment `connect.ignore_comments` names is
+recorded marked ignored, and every reader that derives from review items or hands them to an agent reads them through
+`heeded`.
 """
 
 from __future__ import annotations
@@ -23,7 +25,7 @@ import re
 import sqlite3
 from collections import Counter
 from collections.abc import Collection, Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Annotated, Literal, assert_never, cast
 
@@ -175,7 +177,7 @@ class Observed:
     #: The lines recorded, and refused, of each kind.
     recorded: Mapping[str, int] = field(default_factory=dict[str, int])
     refused: Mapping[str, int] = field(default_factory=dict[str, int])
-    #: The comments `connect.ignore_comments` named, which were not recorded.
+    #: The comments and reviews recorded as ignored: `connect.ignore_comments` names their text.
     ignored: int = 0
     #: The harness's words for what the run did not read; None when it read everything asked.
     missed: str | None = None
@@ -679,11 +681,11 @@ def _record(
     """Replace what the journal holds of each subject read whole with what the run read of it, in one transaction.
 
     `operators` are the source's: the tracker accounts whose comments on a private ticket are the operator's messages.
-    A comment `connect.ignore_comments` names is not recorded, so nothing canopy derives or shows rests on it; a
-    review it names keeps its state, an approval's among them, and is recorded with no text, as one that says nothing.
+    A comment or review whose text `connect.ignore_comments` names is recorded marked ignored (`heeded`), and a
+    tracker comment recorded ignored that it no longer names is taken up (`_release`).
 
     Returns:
-        The lines recorded of each kind, and how many comments were ignored.
+        The lines recorded of each kind, and how many of them are ignored.
     """
     recorded: Counter[str] = Counter()
     ignored = 0
@@ -704,15 +706,26 @@ def _record(
         for line in read.lines:
             if line.of not in (whole.tickets | whole.prs | whole.repositories):
                 continue
-            kept = line
-            if isinstance(line, _Comment | _Review) and config.connect.ignores(line.body):
-                ignored += 1
-                if not (isinstance(line, _Review) and line.item is ReviewItem.REVIEW):
-                    continue
-                kept = line.model_copy(update={"body": ""})
-            if _insert(conn, config, kept, now, known, operators=operators):
+            if _insert(conn, config, line, now, known, operators=operators):
                 recorded[line.kind] += 1
+                ignored += isinstance(line, _Comment | _Review) and config.connect.ignores(line.body)
+        if kind is SourceKind.TRACKER:
+            _release(conn, config, now, operators=operators)
     return dict(recorded), ignored
+
+
+def heeded(rows: Iterable[records.ObservedReview]) -> list[records.ObservedReview]:
+    """The review items among `rows` canopy takes notice of: what it derives from and hands an agent (DESIGN §30).
+
+    An ignored comment is left out. An ignored review is kept for its state, an approval's among them, with no text,
+    as a review that says nothing.
+
+    Returns:
+        The items, in the order given.
+    """
+    return [
+        replace(r, body="") if r.ignored else r for r in rows if not (r.ignored and r.item is not ReviewItem.REVIEW)
+    ]
 
 
 def _insert(
@@ -770,7 +783,7 @@ def _insert(
                 closed_at=line.closed_at,
             ).or_replace().run(conn)
         case _Review():
-            _insert_review(conn, line, now)
+            _insert_review(conn, line, now, ignored=config.connect.ignores(line.body))
         case _Check():
             number = _keep_check_run(conn, line, now)
             if line.run_id is None:
@@ -812,7 +825,8 @@ def _record_comment(
     source `worker` when it carries the workers' marks, else `tracker` (DESIGN §35). Its body is cut and marked, and an
     edit after is not followed, here or in the conversation. One by an account in `operators` on a private ticket, with
     none of the workers' marks, is the operator's message instead, its text whole (§22,
-    `conversation.record_operator_comment`).
+    `conversation.record_operator_comment`). One `connect.ignore_comments` names is recorded ignored, with no number
+    and in no conversation, until a read finds it named no longer (`_release`).
 
     Returns:
         True if the comment was new to the journal.
@@ -824,6 +838,7 @@ def _record_comment(
         if conversation.worker_marked(line.body, config.trust.comment_prefix, config.trust.comment_suffix)
         else "tracker"
     )
+    ignored = config.connect.ignores(line.body)
     cursor = (
         records.insert(
             records.ObservedComment,
@@ -835,27 +850,85 @@ def _record_comment(
             truncated=truncated,
             source=source,
             observed_at=now,
+            ignored=ignored,
         )
         .or_ignore()
         .run(conn)
     )
     if cursor.rowcount != 1:
         return False
-    number = item_numbers.take(conn, NumberedItem.COMMENT, line.ticket, line.id, at=now)
-    the_comment = records.update(records.ObservedComment).where("ticket = ? AND id = ?", line.ticket, line.id)
-    the_comment.set(number=number).run(conn)
-    comment = db.Comment(id=line.id, author=line.author, at=line.time, truncated=truncated)
-    if source == "tracker" and line.author in operators:
-        whole = db.Comment(id=line.id, author=line.author, at=line.time, truncated=False)
-        if conversation.record_operator_comment(conn, line.ticket, whole, line.body.strip()):
-            return True
-    conversation.record_comment(conn, line.ticket, comment, source=source, body=body, channel=conversation.TRACKER)
+    if not ignored:
+        comment = db.Comment(id=line.id, author=line.author, at=line.time, truncated=truncated)
+        _take_up(
+            conn,
+            line.ticket,
+            comment,
+            now,
+            source=source,
+            body=body,
+            whole=line.body.strip(),
+            operators=operators,
+        )
     return True
 
 
-def _insert_review(conn: sqlite3.Connection, line: _Review, now: str) -> None:
+def _release(conn: sqlite3.Connection, config: Config, now: str, *, operators: AbstractSet[str]) -> None:
+    """Take up each tracker comment recorded ignored that `connect.ignore_comments` no longer names.
+
+    The tracker source is asked only for comments newer than the newest it recorded, so one ignored is not printed
+    again: it is taken up from its row, numbered now, as a comment first observed now is.
+    """
+    held = records.select(records.ObservedComment).where("ignored = 1").order_by("commented_at, id").all(conn)
+    for c in held:
+        if config.connect.ignores(c.body):
+            continue
+        records.update(records.ObservedComment).set(ignored=False).where("ticket = ? AND id = ?", c.ticket, c.id).run(
+            conn,
+        )
+        comment = db.Comment(id=c.id, author=c.author, at=c.commented_at, truncated=c.truncated)
+        _take_up(conn, c.ticket, comment, now, source=c.source, body=c.body, whole=c.body, operators=operators)
+
+
+def _take_up(
+    conn: sqlite3.Connection,
+    ticket: str,
+    comment: db.Comment,
+    now: str,
+    *,
+    source: str,
+    body: str,
+    whole: str,
+    operators: AbstractSet[str],
+) -> None:
+    """Number a recorded tracker comment and record it in its ticket's conversation, or as the operator's message.
+
+    Args:
+        conn: The journal, inside the transaction that records the observation.
+        ticket: The comment's ticket.
+        comment: The comment, as recorded.
+        now: When it is numbered.
+        source: `worker` when it carries the workers' marks, else `tracker`.
+        body: Its text as the conversation records a comment's, cut.
+        whole: Its text as an operator's message holds it, not cut.
+        operators: The tracker accounts whose comments on a private ticket are the operator's messages.
+    """
+    number = item_numbers.take(conn, NumberedItem.COMMENT, ticket, comment.id, at=now)
+    records.update(records.ObservedComment).set(number=number).where("ticket = ? AND id = ?", ticket, comment.id).run(
+        conn,
+    )
+    if source == "tracker" and comment.author in operators:
+        mine = db.Comment(id=comment.id, author=comment.author, at=comment.at, truncated=False)
+        if conversation.record_operator_comment(conn, ticket, mine, whole):
+            return
+    conversation.record_comment(conn, ticket, comment, source=source, body=body, channel=conversation.TRACKER)
+
+
+def _insert_review(conn: sqlite3.Connection, line: _Review, now: str, *, ignored: bool) -> None:
     thread = line.thread if line.item is ReviewItem.COMMENT else None
     kind = item_numbers.of_review(line.item)
+    # An ignored comment takes no number until a read finds it ignored no longer, so no cursor passes it unseen; an
+    # ignored review is numbered for its state.
+    numbered = not ignored or line.item is ReviewItem.REVIEW
     records.insert(
         records.ObservedReview,
         pr_url=line.pr,
@@ -876,7 +949,8 @@ def _insert_review(conn: sqlite3.Connection, line: _Review, now: str) -> None:
         resolved=None if thread is None else thread.resolved,
         observed_at=now,
         # Kept across reads, which replace the row: what is newer than the `review` cursor (DESIGN §35).
-        number=item_numbers.take(conn, kind, line.pr, line.id, at=now),
+        number=item_numbers.take(conn, kind, line.pr, line.id, at=now) if numbered else None,
+        ignored=ignored,
     ).or_replace().run(conn)
 
 

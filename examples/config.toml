@@ -279,7 +279,8 @@ cmd = "canopy-connect-jira --site acme.atlassian.net"
 
 # Optional: comments canopy takes no notice of, on a ticket or a PR, such as a sign-off your reviewers must leave on
 # every PR. Each is a regular expression that must match a comment's whole text, trimmed, whatever its case, so a
-# comment that also says something else is still read. A review that says only this keeps its approval.
+# comment that also says something else is still read. An ignored comment is still recorded, and marked on its PR's
+# page; it is no feedback, and no agent is shown it. A review that says only this keeps its approval.
 # [connect]
 # ignore_comments = ['I looked at this\.?']
 

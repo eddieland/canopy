@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Annotated
 
 from pydantic import Field, StrictInt
 
-from canopy.core import conversation, db, records
+from canopy.core import conversation, db, observe, records
 from canopy.core.vocab import ReviewItem, TicketState
 from canopy.infra import logs
 from canopy.loop import harness, harness_dispatches, phases
@@ -115,7 +115,7 @@ def read_review_items(ctx: Context, request: ReviewItems) -> Outcome[ReviewItems
     url = _pr_of(ctx, key, repo)
     numbers = sorted(set(request.numbers))
     query = records.select(records.ObservedReview).where("pr_url = ?", url).where_in("number", numbers)
-    found = query.order_by("number").all(ctx.conn)
+    found = observe.heeded(query.order_by("number").all(ctx.conn))
     missing = sorted(set(numbers) - {r.number for r in found if r.number is not None})
     if missing:
         _refuse_unobserved(current.id, key=key, repo=repo, url=url, missing=missing)

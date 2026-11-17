@@ -5,7 +5,8 @@ An item is a review, a thread of review comments, or a comment on a PR's convers
 covered, or else its first comment, with each other comment on it a reply given beside it, so a reviewer's "never mind"
 or the PR author's "won't do" reaches the planner as an answer to the item, never as work of its own. The operator's
 replies sent through canopy, a worker's comments (D069), pending reviews, resolved threads, reviews that say nothing,
-and bots' comments on a PR's conversation are neither. A failed check at a PR's head, but one its repository says is not
+bots' comments on a PR's conversation, and comments the operator ignores (`observe.heeded`) are neither.
+A failed check at a PR's head, but one its repository says is not
 CI, the PR's conflict with its base, and a merged blocker, another ticket's PR that the PR is stacked on and that merged
 (DESIGN §10), are items too (`raised`), by ids canopy gives them (`check_id`, `conflict_id`, `blocker_id`), since the
 source observes none.
@@ -591,7 +592,9 @@ def _threads(
     Returns:
         The items, oldest first.
     """
-    rows = records.select(records.ObservedReview).where("pr_url = ?", pr).order_by("created_at, item, id").all(conn)
+    rows = observe.heeded(
+        records.select(records.ObservedReview).where("pr_url = ?", pr).order_by("created_at, item, id").all(conn),
+    )
     author = _pr_author(conn, pr)
     kept = [r for r in rows if not _skipped(r, trust, sent, author)]
     covered = _covered_comments(conn, key, pr) if key is not None else frozenset[int]()

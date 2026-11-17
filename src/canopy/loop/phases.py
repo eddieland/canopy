@@ -602,7 +602,13 @@ class _World:
         done = _done(conn)
         keys = sorted(set(tickets) | (set(connector_runs.query_result(conn)) - stopped - done))
         comments: dict[str, list[records.ObservedComment]] = {}
-        query = sql.select("*").from_("observed_comments").where_in("ticket", keys).order_by("commented_at, id")
+        query = (
+            sql.select("*")
+            .from_("observed_comments")
+            .where_in("ticket", keys)
+            .where("ignored = 0")
+            .order_by("commented_at, id")
+        )
         for c in records.fetch_all(conn, records.ObservedComment, query):
             comments.setdefault(c.ticket, []).append(c)
         checks: dict[str, list[records.ObservedCheck]] = {}
@@ -610,7 +616,7 @@ class _World:
             checks.setdefault(c.pr_url, []).append(c)
         reviews: dict[str, list[records.ObservedReview]] = {}
         query = sql.select("*").from_("observed_reviews").order_by("pr_url, created_at, id")
-        for r in records.fetch_all(conn, records.ObservedReview, query):
+        for r in observe.heeded(records.fetch_all(conn, records.ObservedReview, query)):
             reviews.setdefault(r.pr_url, []).append(r)
         branches: dict[str, list[records.ObservedBranch]] = {}
         for b in records.select(records.ObservedBranch).all(conn):

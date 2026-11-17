@@ -75,9 +75,13 @@ ignore_comments = ['I looked at this\.?']
 ```
 
 Each entry is a regular expression that has to match the whole comment, trimmed, in any case. So "I looked at this, and
-the retry is wrong" still gets through, which is the point. An ignored comment never reaches the journal, so it shows
-on no page here; a review whose text is only the sign-off keeps its approval and just has nothing to say. PR comments
-catch up on the next read; a ticket comment canopy recorded before you added the pattern stays recorded.
+the retry is wrong" still gets through, which is the point. canopy still records an ignored comment; it just never
+counts it as feedback, plans around it, or shows it to an agent. On a thread it stays where GitHub has it, marked
+`ignored`, so a pattern that swallows more than you meant is something you can see. A review whose text is only the
+sign-off keeps its approval and has nothing else to say.
+
+Change your mind and it works backwards: drop the pattern, and on the next read the comments it hid become feedback
+like any other. Adding one is the same for PR comments; a ticket comment already in the conversation stays there.
 
 Not everything has a line to sit on. A thread on a file the diff doesn't show waits in **Not in the diff**, after the
 files; when no run kept a diff at all, every thread is listed whole under **Threads**, and the line at the top says

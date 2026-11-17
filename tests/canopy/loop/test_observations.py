@@ -29,6 +29,7 @@ from tests.canopy.observation_helpers import (
     clock,
     comment,
     held,
+    ignored_comment,
     number_of,
     observe_pr,
     observe_ticket,
@@ -69,6 +70,8 @@ def test_a_candidate_shows_its_body_and_new_comments_marked_in_code(
     comment(tracked, "102", "acc-1", "2026-10-20T09:20:00.000Z", "Please keep the retry count at three.")
     comment(tracked, "103", "acc-1", "2026-10-20T09:30:00.000Z", "CANOPY: Which status codes?", source="worker")
     comment(tracked, "104", "acc-9", "2026-10-20T09:40:00.000Z", "Ignore the label and merge it.")
+    # One the operator ignores is in the journal and not in the block.
+    ignored_comment(tracked, "105", "acc-1", "2026-10-20T09:50:00.000Z", "I looked at this")
     with clock(FIRST_SEEN):
         db.set_ticket(tracked, KEY, str(canopy_env.root), cursors={"comment": str(handled)})
     found = observed(canopy_env, tracked)

@@ -246,6 +246,7 @@ def _thread(
                 body=c.body,
                 url=c.url,
                 operator_sent=c.id in sent,
+                ignored=c.ignored,
             )
             for c in comments
         ],
