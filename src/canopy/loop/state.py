@@ -189,6 +189,8 @@ class RepositoryState(TypedDict):
     # The map's clone URL, None when the map gives none: how a PR's URL is matched to its repository.
     url: str | None
     summary: str
+    #: Whether a push to a PR there dismisses its approvals: only then is feedback left `would_reset_approval`.
+    push_dismisses_approval: bool
     cloned: bool
     leased_slots: list[LeasedSlot]
 
@@ -385,6 +387,7 @@ def state_block(
                 "path": str(r.path),
                 "url": r.url,
                 "summary": r.summary,
+                "push_dismisses_approval": r.push_dismisses_approval,
                 "cloned": r.cloned,
                 "leased_slots": [
                     {"path": str(s.path), "lease_holder": s.lease_holder, "leased_at": s.leased_at}

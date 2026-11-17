@@ -124,6 +124,15 @@ def test_a_high_impact_path_is_a_path_from_the_repositorys_root(ws: Ws, entry: s
         workspace.load(ws.root)
 
 
+def test_a_push_dismisses_approvals_only_in_a_repository_whose_table_says_so(ws: Ws) -> None:
+    (ws.root / config.WORKSPACE_FILE_NAME).write_text(
+        map_text(("web", "https://x.test/web.git"))
+        + '\n[repos.api]\nurl = "https://x.test/a.git"\npush_dismisses_approval = true\n',
+    )
+    found = {r.name: r.push_dismisses_approval for r in workspace.load(ws.root).repos}
+    assert found == {"api": True, "web": False}
+
+
 def test_a_repositorys_high_impact_paths_are_read_from_its_table(ws: Ws) -> None:
     (ws.root / config.WORKSPACE_FILE_NAME).write_text(
         map_text(("web", "https://x.test/web.git"))

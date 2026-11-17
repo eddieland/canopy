@@ -550,7 +550,8 @@ class PassReason(StrEnum):
 
     #: The reviewer said it needs no change: a nit, a thought, an aside.
     OPTIONAL = "optional"
-    #: A push for it would dismiss the approval the PR has, so the operator decides.
+    #: A push for it would dismiss the approval the PR has, so the operator decides: only in a repository whose map
+    #: says a push does.
     WOULD_RESET_APPROVAL = "would_reset_approval"
     #: It asks a question rather than for a change.
     QUESTION = "question"

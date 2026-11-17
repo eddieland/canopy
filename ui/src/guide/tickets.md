@@ -183,9 +183,10 @@ while it waits.
 ## Feedback left with no worker
 
 Sometimes the overseer reads a comment on the ticket's PR and decides it isn't worth a worker: a nit marked optional,
-a question rather than a change, something the head already does, or a change whose push would dismiss the approval
-you're about to merge on. When it moves past such a comment it has to say which one and why, and canopy refuses the
-move if it skips any without a reason. Those comments are listed in the ticket's **Left feedback** panel, above its
+a question rather than a change, something the head already does, or, in a repository whose map sets
+`push_dismisses_approval`, a change whose push would dismiss the approval you're about to merge on. When it moves past
+such a comment it has to say which one and why, and canopy refuses the move if it skips any without a reason.
+Those comments are listed in the ticket's **Left feedback** panel, above its
 runs, one row each: why it was left (`optional`, `would reset approval`, `a question`, `already done`, `out of scope`,
 `you said to leave it`), who wrote it, its first line, the file and line it's on (or `review` for a review's own
 text), linking out to it on GitHub with the whole path on hover, and the tick that decided, linking to that tick's

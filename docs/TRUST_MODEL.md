@@ -1047,6 +1047,8 @@ Controls, in code:
 - A repository's `high_impact_paths` in the map only adds to `.github/workflows/`, which the harness holds high
   impact in every repository, so a commit to the workspace file cannot take CI's workflows off. It can change the rest
   of the list, which only ranks attention.
+- A repository's `push_dismisses_approval` in the map only chooses whether a trusted reviewer's feedback on an approved
+  PR gets a worker, as it does on any other PR, or is left listed for the operator. It makes no reviewer trusted.
 - No file in a code repository is read as canopy config; a `canopy.toml` there is named as not read, never loaded.
 - `trust.branch_prefix` must be non-empty and end in `/`.
 - A workspace's state is under its root, so it may be inside a checkout. canopy refuses a state directory that is not

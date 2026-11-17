@@ -20,7 +20,16 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictStr, ValidationError, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictBool,
+    StrictStr,
+    ValidationError,
+    model_validator,
+)
 
 from canopy.core import hostgit, treehouse
 from canopy.core.config import (
@@ -145,6 +154,8 @@ class _RepoTable(_Table):
     checks: dict[Annotated[StrictStr, AfterValidator(_check_name)], CheckRole] = {}
     # Paths whose change makes a review high impact, beside CI's workflows, which no entry removes (DESIGN §21).
     high_impact_paths: tuple[Annotated[StrictStr, AfterValidator(impact_path)], ...] = ()
+    # Whether its host dismisses a PR's approvals when a commit is pushed to it (DESIGN §7). Most keep them.
+    push_dismisses_approval: StrictBool = False
 
     @model_validator(mode="before")
     @classmethod
@@ -178,6 +189,10 @@ class Repo:
     #: a review of this repository `high` impact. They add to `.github/workflows/`, which covers every repository
     #: (DESIGN §21).
     high_impact_paths: Sequence[str] = ()
+    #: Whether its host dismisses a PR's approvals when a commit is pushed to it, so feedback on an approved PR may be
+    #: left for the operator as `would_reset_approval`. Elsewhere an approval stands, and a fix after it is a push like
+    #: any other (DESIGN §7).
+    push_dismisses_approval: bool = False
 
     @property
     def cloned(self) -> bool:
@@ -342,6 +357,7 @@ def load(root: Path) -> Workspace:
             branch_url=github_branch_url(table.url) if table.branch_url is None else table.branch_url,
             checks=table.checks,
             high_impact_paths=table.high_impact_paths,
+            push_dismisses_approval=table.push_dismisses_approval,
         )
         for name, table in sorted(parsed.repos.items())
     )
