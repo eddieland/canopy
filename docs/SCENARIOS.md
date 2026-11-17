@@ -46,12 +46,13 @@ any OpenCode upgrade, and before relying on a permission they check.
   no web tools, and the worker going on without trying either another way. Bare `Permission denied:` means 2 no longer
   tells the agent the inner error's reason: the refusal holds as before, unexplained.
 - **S81. A server kept out of canopy's runs** (taken on request 2026-11-12, #2343). Confirmed in the binaries of OpenCode
-  1.19.5 and a 2 dev build (2026-11-09), not in a run. Name a server of your OpenCode config in
+  1.19.5 and, as 2 is given a server turned off since #2402, of 2.3.0, not in a run. Name a server of your OpenCode
+  config in
   `runtime.mcp_servers`'s `disabled`, and another in `[runtime.mcp_servers.overseer]`'s alone, and run a tick and a
   worker. Expect `canopy agents` to list the first among the disabled and the second as the overseer's, and each run's
   transcript to show none of the tools its role keeps out and its first prompt not waiting on them. Their tools
-  offered means the runtime no longer takes an entry of `enabled` false alone, or no longer merges it into the
-  operator's.
+  offered means the runtime no longer takes the entry canopy turns a server off with: under 1, `enabled` false alone,
+  merged into the operator's; under 2, a disabled definition of its own, which replaces theirs.
 - **S3. The private worker's wildcard deny** (M18). Confirmed in OpenCode's source (1.18.35), not in a run. Start a
   ticket privately and check that its worker can call the tracker's `tracker.read_tools` and is refused every other
   tool of the tracker's server, and the tracker CLIs in bash.

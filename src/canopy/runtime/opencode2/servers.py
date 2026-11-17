@@ -10,9 +10,10 @@ says otherwise; there is no variable that turns code mode off. So canopy's serve
 own shape of the entry (`mcp.servers`), and its tools are offered by name, `<server>_<tool>`, as the definitions'
 rules name them.
 
-A server of the operator's own that config turns off for canopy's runs is given an entry of `enabled` false alone,
-which OpenCode 2 takes as its first's shape of the entry and merges deep into the operator's own, so the server never
-starts. A `disabled` entry would be checked whole against 2's own shape, which wants its type and command, and dropped.
+A server of the operator's own that config turns off for canopy's runs is given a definition of its own, `_OFF`: a
+whole one, which replaces the operator's as canopy's replaces a workspace's, and `disabled`, so the server never
+starts, and canopy never reads the operator's config for it. An entry of the switch alone would not do: OpenCode 2.3.0
+checks each entry whole against its own shape, which wants a type, and drops one without (#2402).
 """
 
 from __future__ import annotations
@@ -28,6 +29,8 @@ if TYPE_CHECKING:
 INLINE_CONFIG_ENV = "OPENCODE_CONFIG_CONTENT"
 #: The variables canopy sets to give a run a server, which no run started below it may inherit.
 VARIABLES = frozenset({INLINE_CONFIG_ENV})
+#: The definition that stands in for a server of the operator's turned off for a run: its command is never run.
+_OFF: Mapping[str, object] = {"type": "local", "command": ["true"], "disabled": True}
 
 
 def env(
@@ -50,7 +53,7 @@ def env(
     """
     limit = {} if timeout_seconds is None else {"timeout": {"execution": timeout_seconds * 1000}}
     # canopy's own come last, so a name in both is canopy's server, never one turned off.
-    turned_off = {server: {"enabled": False} for server in disabled}
+    turned_off = {server: dict(_OFF) for server in disabled}
     entries = {
         server: {"type": "local", "command": list(command), "cwd": str(cwd), "codemode": False, **limit}
         for server, command in commands.items()

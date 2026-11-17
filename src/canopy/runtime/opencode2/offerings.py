@@ -3,7 +3,7 @@
 OpenCode merges the operator's config into canopy's definitions, so what an agent is offered is not what canopy's
 definitions say alone. canopy asks a server it starts for the questions (`canopy.runtime.opencode2.serve`):
 `agent.list` until the agents have loaded, then `skill.list`, and `config.get` for the MCP servers, of which only their
-names, `type`, `disabled`, `enabled`, and `codemode` are read, since the rest may hold a secret.
+names, `type`, `disabled`, and `codemode` are read, since the rest may hold a secret.
 
 From those this applies OpenCode's own rules, read from its source at 2.1.2: an agent's rules are `{action, resource,
 effect}`, the last whose action and resource both match decides, and only a deny with the resource `*` keeps a tool from
@@ -111,11 +111,9 @@ class _Skills(BaseModel):
 class _McpServer(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
 
-    #: None for an entry that only turns a server on or off (`_merged`), which alone is no server.
+    #: None for an entry that is no definition, which OpenCode ignores (`_merged`).
     type: StrictStr | None = None
     disabled: StrictBool = False
-    #: OpenCode 1's shape of the switch, which such an entry may set alone; None when it does not.
-    enabled: StrictBool | None = None
     codemode: StrictBool = True
 
 
@@ -313,18 +311,14 @@ def _loaded(client: Client, wanted: Collection[str]) -> _Loaded:
 def _merged(earlier: _McpServer | None, later: _McpServer) -> _McpServer | None:
     """The server that a later document's entry `later` leaves, over `earlier`, as OpenCode merges them.
 
-    A definition, with its type, replaces an earlier one whole: each document's is lowered with its own `enabled`. An
-    entry of `enabled` alone, as a run's inline config turns off a server of the operator's, is merged into the
-    definition before it; with none before it, OpenCode ignores it, an entry without a type, and it is no server.
+    A definition, with its type, replaces an earlier one whole, as the one a run's inline config turns off a server of
+    the operator's with replaces theirs. An entry without a type is no definition: OpenCode ignores it, and what came
+    before it stands.
 
     Returns:
         The server as merged, or None when there is still none.
     """
-    if later.type is not None:
-        return later
-    if earlier is None or later.enabled is None:
-        return earlier
-    return earlier.model_copy(update={"disabled": not later.enabled})
+    return later if later.type is not None else earlier
 
 
 def _entries(printed: str) -> tuple[_Entry, ...]:

@@ -5,6 +5,9 @@ from pathlib import Path
 
 from canopy.runtime.opencode2 import servers
 
+#: The definition a server of the operator's is turned off with: whole, so it replaces theirs, and never started.
+OFF = {"type": "local", "command": ["true"], "disabled": True}
+
 
 def test_a_server_is_given_in_the_inline_config_with_its_tools_offered_by_name() -> None:
     env = servers.env({"canopy": ["canopy", "_mcp", "--run", "7"]}, cwd=Path("/ws"), disabled=())
@@ -49,14 +52,14 @@ def test_a_timeout_bounds_each_tool_call_in_milliseconds() -> None:
     assert given["timeout"] == {"execution": 900_000}
 
 
-def test_a_server_of_the_operators_that_config_turns_off_is_given_enabled_false_alone() -> None:
-    """OpenCode 2 takes `enabled` alone in 1's shape and merges it into the operator's entry; `disabled` would not."""
+def test_a_server_of_the_operators_that_config_turns_off_is_given_a_disabled_definition() -> None:
+    """OpenCode 2.3.0 drops an entry without a type, so a whole definition replaces the operator's, disabled."""
     env = servers.env({"canopy": ["canopy", "_mcp"]}, cwd=Path("/ws"), disabled=("slack", "browser"))
     given = json.loads(env["OPENCODE_CONFIG_CONTENT"])["mcp"]["servers"]
-    assert given["slack"] == given["browser"] == {"enabled": False}
+    assert given["slack"] == given["browser"] == OFF
     assert given["canopy"]["command"] == ["canopy", "_mcp"]
 
 
 def test_turning_servers_off_alone_still_gives_an_inline_config() -> None:
     env = servers.env({}, cwd=Path("/ws"), disabled=("slack",))
-    assert json.loads(env["OPENCODE_CONFIG_CONTENT"]) == {"mcp": {"servers": {"slack": {"enabled": False}}}}
+    assert json.loads(env["OPENCODE_CONFIG_CONTENT"]) == {"mcp": {"servers": {"slack": OFF}}}
