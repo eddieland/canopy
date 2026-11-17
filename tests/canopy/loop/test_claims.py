@@ -600,8 +600,23 @@ def test_a_review_cursor_past_feedback_no_worker_was_sent_names_it(observed: sql
     assert action == "refused:unexplained"
     assert f"passes feedback on {PR} that no worker was sent: {nit} (comment 2 by octocat)" in reason
     # The approval is no feedback, so it needs no name.
-    assert ticket_set(observed, {"review": str(nit)}, {str(nit): "would_reset_approval"}) == []
+    assert ticket_set(observed, {"review": str(nit)}, {str(nit): "optional"}) == []
     assert approved < nit
+
+
+def test_feedback_is_left_for_an_approval_only_where_a_push_dismisses_one(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+) -> None:
+    """An approval stands where the map does not say a push dismisses it, so a fix after it gets a worker."""
+    review(observed, 1, "octocat", "approved", EARLIER)
+    fix = review(observed, 2, "octocat", None, EARLIER, "Handle the empty list.", item="comment")
+    left = {str(fix): "would_reset_approval"}
+    [(action, reason)] = ticket_set(observed, {"review": str(fix)}, left)
+    assert action == "refused:approval_stands"
+    assert f"leaves {fix} as would_reset_approval, but a push to repo dismisses no approval" in reason
+    canopy_env.configure(canopy_env.shared_file, {"repos": {"repo": {"push_dismisses_approval": True}}})
+    assert ticket_set(observed, {"review": str(fix)}, left) == []
 
 
 @pytest.mark.parametrize(

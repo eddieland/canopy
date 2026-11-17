@@ -248,6 +248,12 @@ on a new push, canopy sees the
 dismissal and the PR waits for its reviewer again; if it doesn't, an approval stands until the merge. That's your
 team's rule to set in GitHub, and canopy follows it rather than inventing a stricter one.
 
+canopy can't read that rule from GitHub, so it takes an approval to stand, and a reviewer's comment on an approved PR
+gets a worker like any other. For a repository that does dismiss approvals, say so in its table of
+`canopy-workspace.toml` with `push_dismisses_approval = true`. There the overseer leaves such a comment for you
+instead ([Feedback left with no worker](tickets#feedback-left-with-no-worker)), since the fix would cost the approval
+you're about to merge on.
+
 ## Your coworkers' PRs
 
 canopy can review a PR the loop doesn't own: one `review.query` matches, or one you paste into **Review a PR**. It

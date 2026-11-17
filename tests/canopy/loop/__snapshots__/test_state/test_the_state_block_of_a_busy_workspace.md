@@ -39,6 +39,7 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
       "path": "/workspace/repos/repo",
       "url": "https://example.test/acme/repo.git",
       "summary": "The only repository.",
+      "push_dismisses_approval": false,
       "cloned": true,
       "leased_slots": [
         {

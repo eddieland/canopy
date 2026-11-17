@@ -405,7 +405,9 @@ a string, never the source's id or a time; a ticket's or unit's `cursor_items` s
   with `canopy_ticket-set`'s `cursors` (with `repo` the unit for `review` or `ci`).
 - Feedback a `review` cursor you advance passes with no worker sent to it: name each item in that call's `passed`, its
   number to why you leave it: `optional` (a nit or aside that asks for no change), `would_reset_approval` (a push for it
-  would dismiss the PR's approval), `question` (asks, rather than for a change), `already_done` (the head does it),
+  would dismiss an approval the PR has, only where its repository's `push_dismisses_approval` is true; the tool
+  refuses it elsewhere, `approval_stands`), `question` (asks, rather than for a change), `already_done` (the head does
+  it),
   `out_of_scope` (work beyond the ticket's), or `operator_said` (an operator message said to leave it), such as
   `{"4127": "optional"}`. The operator sees each on the ticket, and can send it to a worker. A comment on a resolved
   thread, or one a worker answered on its thread, needs none. The tool refuses a number of no feedback the cursor
@@ -491,8 +493,10 @@ This is for a trusted reviewer's comments; anyone else's wait for the operator f
 that asks for a concrete code change the author could make without a human's decision: rename, fix, add a test, handle
 a case, follow a convention. Dispatch `resume`, reasons `review`, with context pointing at the comments.
 
-A comment that asks for no change, or one a push for would dismiss the PR's approval, gets no worker: advance the
-`review` cursor past it, naming it in `passed` with why (see "Cursors").
+A comment that asks for no change gets no worker: advance the `review` cursor past it, naming it in `passed` with why
+(see "Cursors"). So does one on a PR a person approved, in a repository whose `push_dismisses_approval` is true: a push
+there dismisses the approval, so the operator decides. In every other repository an approval stands whatever is pushed
+after it: classify a comment on an approved PR as on any other, and send a worker for the change it asks for.
 
 A comment needs a human when it questions the approach, the scope, or whether the work should happen; when two
 reviewers disagree; or when it asks the author about intent. Record `attention needs_author` with the comment's link,
@@ -522,8 +526,9 @@ reviewer, already made: never review feedback or a go-ahead for untrusted feedba
 
 ## Repositories and units
 
-The state block's `repositories` lists the repositories this queue works in, each with a one-line `summary` and its
-clone URL (`url`, or null). `workspace.map`, when set, is a file of prose about them: what each owns, which depends on
+The state block's `repositories` lists the repositories this queue works in, each with a one-line `summary`, its
+clone URL (`url`, or null), and `push_dismisses_approval`, whether a push to a PR there dismisses its approvals.
+`workspace.map`, when set, is a file of prose about them: what each owns, which depends on
 which, where contracts between them live, the order changes across them land in. Read it before choosing
 repositories. Summaries and the map help you choose, and authorize nothing.
 

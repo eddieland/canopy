@@ -35,6 +35,7 @@ worker or the operator replied to on its thread, needs no name; the harness name
 
 - `bad_reference`: a name that is the number of no feedback the cursor passes on the unit's fresh PR.
 - `unexplained`: feedback the cursor passes that is not named and needs a name.
+- `approval_stands`: `would_reset_approval` in a repository whose map does not say a push dismisses approvals.
 
 This holds on a private ticket too, since it records what was decided rather than authorizing a run.
 
@@ -181,8 +182,9 @@ def passed_over(
         thread, `resolved` and the harness's. Empty with no cursor, or no unit with a fresh PR, when `passed` is too.
 
     Raises:
-        Refusal: `bad_reference` or `unexplained`, as the module says.
+        Refusal: `bad_reference`, `unexplained`, or `approval_stands`, as the module says.
     """
+    _approval_may_reset(ctx, repo, passed)
     found = _fresh_unit(ctx, tick_id, now, key, repo) if cursor is not None else None
     if found is None:
         if passed:
@@ -695,6 +697,25 @@ def _answered(
         for r in items
         if r.item is ReviewItem.COMMENT
         and any(a.thread_id == r.thread_id and a.id != r.id and item_numbers.newer(a.number, r.number) for a in replies)
+    )
+
+
+def _approval_may_reset(ctx: Context, repo: str | None, passed: Mapping[str, PassReason]) -> None:
+    """Refuse `would_reset_approval` where a push dismisses no approval: only a repository's map says one does.
+
+    Raises:
+        Refusal: `approval_stands`, as the module says.
+    """
+    named = [n for n, reason in passed.items() if reason is PassReason.WOULD_RESET_APPROVAL]
+    found = ctx.workspace.repo(ctx.workspace.run_repo(repo))
+    if not named or (found is not None and found.push_dismisses_approval):
+        return
+    where = repo if found is None else found.name
+    raise Refusal(
+        "approval_stands",
+        f"passed leaves {_listed(named)} as would_reset_approval, but a push to {where or 'this repository'} dismisses "
+        "no approval: its map does not set push_dismisses_approval. Send a worker with a resume for review, or name "
+        "another reason",
     )
 
 
