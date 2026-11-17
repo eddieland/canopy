@@ -1,10 +1,11 @@
-"""Delivering to notification sinks at the end of each tick (DESIGN §6 step 7, §20).
+"""Delivering to notification sinks, at the end of each tick and between ticks (DESIGN §6 step 7, §20).
 
 For each sink, in name order: gather its attention diff if it takes `attention`, the events after its cursor it takes
 by name, and a digest if one is due; hold it if the sink batches and nothing in it is urgent; else render one
 message in its format and run its command with the message on stdin. Exit 0 within the timeout is a delivery,
 recorded in the journal; anything else changes nothing but the sink's failure count, so the next tick tries again.
-Sinks run one after another under the tick lock.
+Sinks run one after another under the tick lock. A delivery the loop makes between ticks is the same, but leaves a
+failing sink to the next tick.
 """
 
 from __future__ import annotations
@@ -72,11 +73,14 @@ def publish(
     *,
     dismissed: Collection[str] = (),
     ui: str | None = None,
+    between_ticks: bool = False,
 ) -> list[Delivery]:
     """Deliver to every configured sink, after recording the loop's own events. Never raises: the tick is closed.
 
     `dismissed` holds the fingerprints of chore findings the operator dismissed: a sink told of one hears why it left.
     `ui` is the web UI's address, ending in `/`, when the loop serves it: a `json` message then links to its pages.
+    `between_ticks` is set for a delivery no tick makes: a sink whose last delivery failed is not tried, so it is
+    `held` for the next tick, and a sink holding its batch is not logged each time.
 
     Returns:
         How each sink's delivery went, in name order.
@@ -91,7 +95,18 @@ def publish(
     if ctx.config.notify.takes(outbox.BUDGET_REACHED):
         _record_budget_event(ctx, now)
     deliveries = [
-        _deliver(ctx, name, sink, items, path=path, now=now, log=log, dismissed=dismissed, ui=ui)
+        _deliver(
+            ctx,
+            name,
+            sink,
+            items,
+            path=path,
+            now=now,
+            log=log,
+            dismissed=dismissed,
+            ui=ui,
+            between_ticks=between_ticks,
+        )
         for name, sink in sinks.items()
     ]
     journal.prune_events(ctx.conn, now)
@@ -258,8 +273,12 @@ def _deliver(
     log: logs.TickAdapter,
     dismissed: Collection[str],
     ui: str | None,
+    between_ticks: bool,
 ) -> Delivery:
     row = journal.ensure_sink(ctx.conn, name)
+    if between_ticks and row.failures:
+        # A tick's to retry: a sink that hangs would else hold the lock, and the loop's wait, for most of every minute.
+        return Delivery(name, Delivered.HELD, "failing; tried again at the next tick")
     # Read first: a detached `_run` may record an event while this sink is served, and the cursor must not pass it.
     cursor = journal.newest_event_id(ctx.conn)
     events = [message.Event.of(e) for e in journal.events_after(ctx.conn, row.cursor, sink, cursor)]
@@ -307,7 +326,8 @@ def _deliver(
     }
     if _batching(row, sink, now) and not _urgent(change, events):
         # Nothing moves: the next tick gathers all of this again, with whatever happened since.
-        log.info("notification held", extra=fields)
+        if not between_ticks:
+            log.info("notification held", extra=fields)
         return Delivery(name, Delivered.HELD)
     failure = send(ctx, sink, msg.render(sink.format))
     # The sink's name is config text, so not a label (D132).

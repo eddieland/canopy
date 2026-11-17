@@ -1,14 +1,19 @@
 # Notifications
 
-canopy can tell you what changed without you watching this UI: after each tick it hands a message to each notification
-sink you've configured. This page covers what it sends, the sinks that ship with canopy, writing your own, and what
-happens when one breaks.
+canopy can tell you what changed without you watching this UI: after each tick, and every half minute while the loop
+waits for the next, it hands a message to each notification sink you've configured. This page covers what it sends,
+the sinks that ship with canopy, writing your own, and what happens when one breaks.
 
 ## What canopy tells you
 
 After every tick, each sink gets at most one message, and only when it has something to say: the
 [attention list](attention)'s changes since that sink last heard, the events it takes in the order they happened, and
 a [digest](#batching-and-digests) when one is due. A quiet tick sends nothing, which is how you'll know it was quiet.
+
+News doesn't wait for a tick. Ticks can be hours apart when nothing is happening, so between them the loop checks
+every half minute for something a sink hasn't heard, such as a chore's run ending, and sends it. That costs no model
+run and starts no tick. It needs the loop running: with only `canopy tick` run by hand, a sink hears at the next one,
+and that includes what a `canopy chore try` run has to say.
 
 Each sink hears of each attention item once, when it opens, and once more when it resolves. A message lists at most 20
 attention lines and 20 events; the rest are counted, with a pointer to `attention.md` and `canopy status`. Events more
@@ -147,7 +152,8 @@ It's refused inside a tick or a run, so no agent can page you.
 
 ## When a sink fails
 
-Nothing is lost. A failed delivery moves nothing, so the next tick tries again with everything the sink missed.
+Nothing is lost. A failed delivery moves nothing, so the next tick tries again with everything the sink missed. Only
+a tick retries: the deliveries between ticks skip a sink that's failing, so a broken one can't stall the loop's wait.
 `canopy status` lists each sink with its last delivery, how many have failed in a row and the last error, and how many
 events wait for it.
 

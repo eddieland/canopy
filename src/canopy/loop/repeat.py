@@ -22,7 +22,8 @@ that holds what the latest tick, read the same way as it ended, did not (DESIGN 
 was asked ends the wait once, so the tick reads the sources again and raises what still fails; until a run reads them
 whole, the polls end none, and the poll that does ends it. Either way the minimum gap holds the tick, which records
 `poll` as what woke it. The wait after a live tick also reads which models served the runs left unread (`models`), one
-at a time, which ends no wait.
+at a time, which ends no wait. Nor does the delivery the wait makes every half minute to the notification sinks
+(`flush`, DESIGN §20), paused or not: what a run records while the loop idles reaches its sinks with no tick.
 
 While the operator has paused the loop (`core.pause`), the wait does not end at its deadline: it holds until they
 resume, then ticks at once if the deadline has passed. `PAUSE_KEY` pauses and resumes from the terminal; the web UI and
@@ -62,6 +63,7 @@ from canopy.core import config, connector_runs, db, notice, pause
 from canopy.core.vocab import ConnectorRunStatus
 from canopy.infra import lock, logs, procs, resources
 from canopy.loop import (
+    flush,
     loop_view,
     models,
     outlook,
@@ -384,6 +386,8 @@ class _Polls:
     failing: bool = False
     #: Whether a poll since the latest tick ended the wait.
     woke: bool = False
+    #: When the sinks were last delivered to, by a tick or between ticks (`flush`), on `clock`.
+    delivered: float = 0.0
 
     def ticked(self, outcome: tick.Outcome) -> float:
         """Note that the tick that ended with `outcome` has just ended, and read what it left for the polls after it.
@@ -394,7 +398,7 @@ class _Polls:
         Returns:
             The time, on `clock`.
         """
-        self.last = self.clock()
+        self.last = self.delivered = self.clock()
         if self.backlog is not None:
             self.backlog.ticked()
         ctx = self.settings.ctx
@@ -409,11 +413,14 @@ class _Polls:
     def step(self) -> None:
         """Read the config again if asked to, as every step of a wait does, then poll if one is due and not paused.
 
-        Before the poll, read a run's session if one is due (`models.Backlog.step`), and the runtime's sessions if
-        their read is due (`sessions.Recorder.step`).
+        Before the poll, deliver to the sinks if that is due, paused or not (`flush.run`), read a run's session if
+        one is due (`models.Backlog.step`), and the runtime's sessions if their read is due (`sessions.Recorder.step`).
         """
         self.settings.apply()
         ctx = self.settings.ctx
+        if self.clock() - self.delivered >= flush.EVERY_SECONDS:
+            self.delivered = self.clock()
+            flush.run(ctx, self.log, ui=self.settings.ui)
         if self.backlog is not None:
             self.backlog.step(ctx)
         if self.recorder is not None:

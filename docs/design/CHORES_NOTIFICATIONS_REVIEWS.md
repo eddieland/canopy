@@ -167,6 +167,12 @@ a digest if one is due. Only exit 0 records what the sink was told; the third fa
 `loop.sink_failing`. A message is bounded, the rest counted with a pointer to `attention.md` and `canopy status`. A new
 sink starts with no backlog. Sinks run under the tick lock, so a hung sink delays the next tick by its timeout.
 
+A tick's pace is the overseer's cost, and a delivery costs no model run, so the loop also delivers during each wait,
+every half minute, paused or not: an event a run records while the loop idles reaches its sinks within a minute, and no
+tick is started for it. A sink whose last delivery failed waits for the next tick, so a hung one never holds the wait.
+Nothing delivers between ticks without the loop: a `canopy chore try` run's events then wait for the next `canopy tick`.
+Rejected: waking the loop for an event, which spends an overseer run to send a message.
+
 ### Batching
 
 A sink with `batch_minutes` sends at most one message per window, so a busy loop is not a message every few minutes.
