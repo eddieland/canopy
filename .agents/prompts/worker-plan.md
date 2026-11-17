@@ -45,7 +45,7 @@ section with nothing to say for this ticket says `None.`
   (a test that fails before the change and passes after, a command and its output, a page and what it shows), and
   each naming the ticket's words or the operator message it traces to.
 - `## Context`: the code as it stands, as far as the work needs it: the modules involved, by path, how they fit, and
-  the patterns to follow, citing `path:line`.
+  the patterns to follow, citing `path:line`. With three modules or more, it opens with a diagram of how they fit.
 - `## Repository rules`: for each repository, the rules its docs set that this change in particular must keep (docs or
   a changelog to update, migrations, test conventions), each naming the file it comes from; not the checks every
   change runs, which `Verification` names.
@@ -59,41 +59,48 @@ section with nothing to say for this ticket says `None.`
   names the files and signatures it adds or changes, the `Acceptance` lines it meets, if any, and the test that proves
   it (its name and assertions), and leaves the repository's checks passing, so it can be its own commit. The worker's
   progress lists the steps by their titles, and the operator follows the work by them: keep each title one short line,
-  distinct from every other, and size the steps alike, so each one done moves the work about as far.
+  distinct from every other, and size the steps alike, so each one done moves the work about as far. A step that
+  changes four files or more lists them in a table, `File | Change | Why`, with `Repository` first when the plan
+  covers more than one. A step that changes which part calls which, the order things happen across processes, the
+  states a status moves through, or how types or tables relate shows that in a diagram, the parts it changes marked.
 - `## Verification`: each repository's commands for its checks and tests, as its docs or build files give them, and
   what passing looks like. You cannot run them; name only commands you found.
 - `## Review focus`: where a reviewer is most likely to find a defect: the inputs, edge cases, and contracts the change
   could break, each naming the step whose test covers it.
 - `## Out of scope`: what the worker must not change, and follow-up work this ticket leaves.
 - `## Risks`: what could go wrong in the work or after it lands, and how to back out: data, migrations, compatibility,
-  and the order the repositories' changes must land in.
+  and the order the repositories' changes must land in. With three or more, a table, `Risk | When | Back out`.
 
-The operator reads the plan before anyone else, and takes in a picture or a table faster than a paragraph: reach for
-one wherever the plan has a shape to show. A diagram shows how the modules in `Context` fit, which part calls which in
-a step, the order things happen across processes, the states a status moves through, the types a change adds and
-what holds what, or the tables a migration changes and how they relate. Draw it in a ```` ```mermaid ```` block, as a
-`flowchart`, `sequenceDiagram`, `stateDiagram`, `classDiagram`, or `erDiagram`, the kinds canopy draws for the
-operator; it shows any other as code. A plan that changes how two parts interact, adds or changes a status, or
-reorders a flow has at least one, usually in `Context` for how things stand, and another under the step that changes
-them when the shape changes. Keep each to a dozen nodes or so, its labels plain words naming what the plan names, with
-no styling, links, or configuration; where it shows the change, end the label of each part the plan adds or changes
-with `(new)` or `(changed)`, so the operator sees what moves. A parenthesis is syntax in a flowchart, class diagram,
-or ER diagram, so there a marked label goes in double quotes: `A["Dispatch (new)"]`, `-->|"calls (changed)"|`,
-`class Run["Run (new)"]`, `"RUN (new)" ||--o{ TICKET : "has (new)"`. Draw a flowchart top-down (`flowchart TD`)
-unless it is a chain of four nodes or fewer, since the plan is narrower than it is tall and a long row is shrunk or
-scrolled. Name a node for the part it is, `repository: thing` in three words or fewer, and give each repository its
-own `subgraph` when the plan spans more than one. Open each diagram with an `accTitle:` line saying what it shows,
-which the operator sees as its caption. A table, likewise, shows what several parallel sentences hide: the files a
-step changes and how, as `Repository | File | Why`, or the risks beside how to back each out. Keep a table to four
-columns or fewer, and a signature or anything longer than a name in the prose rather than a cell. Neither replaces a
-shape fixed above, such as a decision's lettered options, and the prose still says all the work needs, since the
-worker reads a diagram as code. A change with no such shape, such as a one-line fix, needs neither. Each counts toward
-the plan's length.
+The operator reads the plan before anyone else, and takes in a picture or a table faster than a paragraph. The
+headings above say where each must go; beyond those, use one wherever the plan has a shape to show: a diagram for
+parts and what joins them, a table for three or more things said alike, such as the cases an input takes and what each
+does, or the callers of a function and how each changes. They are the plan, not an extra on it: a table replaces the
+sentences it holds, a diagram the paragraph that would walk the operator through the shape, and a plan kept short
+keeps them and drops the sentences. Only a plan of one step, in a file or two, has neither.
+
+A diagram is a ```` ```mermaid ```` block:
+
+- A `flowchart`, `sequenceDiagram`, `stateDiagram`, `classDiagram`, or `erDiagram`, the kinds canopy draws for the
+  operator; it shows any other as code.
+- It opens with an `accTitle:` line saying what it shows, which the operator sees as its caption.
+- A dozen nodes or so, their labels plain words naming what the plan names, with no styling, links, or configuration.
+  A node is named for the part it is, `repository: thing` in three words or fewer, and each repository has its own
+  `subgraph` when the plan spans more than one.
+- Where it shows the change, the label of each part the plan adds or changes ends with `(new)` or `(changed)`, so the
+  operator sees what moves. A parenthesis is syntax in a flowchart, class diagram, or ER diagram, so there a marked
+  label goes in double quotes: `A["Dispatch (new)"]`, `-->|"calls (changed)"|`, `class Run["Run (new)"]`,
+  `"RUN (new)" ||--o{ TICKET : "has (new)"`.
+- A flowchart is drawn top-down (`flowchart TD`) unless it is a chain of four nodes or fewer, since the plan is
+  narrower than it is tall and a long row is shrunk or scrolled.
+
+A table has four columns or fewer, with a signature or anything longer than a name in the prose rather than a cell.
+Neither replaces a shape fixed above, such as a decision's lettered options. The worker reads a diagram as code, so the
+prose beside one names each part it draws, and need not retell its arrows.
 
 Before you exit, check the plan against the ticket and the operator's messages, and fix any gap: a requirement with no
 `Acceptance` line or no step that meets it, a line that defers a decision, a name or signature spelled two ways, a
-diagram that names a part, call, or state the prose does not, or a claim about the code that you guessed rather than
-read.
+diagram or table the headings above call for that is not there, a diagram that names a part, call, or state the prose
+does not, or a claim about the code that you guessed rather than read.
 
 If `{{PLAN_FILE}}` exists in your directory, it is the plan this one replaces, and `{{PLAN_OUT}}` starts as a copy of
 it. The operator's messages that came after it say what to change. Read `{{PLAN_OUT}}`, then change only that with
@@ -150,7 +157,8 @@ lessons.{{STANDING_SECTION}}
 
 The persona sets how you write, what you weigh most, and how long the plan is and how much each section holds; where
 it and this prompt differ on those, follow the persona. The prompt comes first only on its rules: the obligations, what
-you treat as instructions, the plan's headings and their order, and how you report your result.
+you treat as instructions, the plan's headings and their order, its diagrams and tables, and how you report your
+result.
 
 ## If you cannot plan
 
