@@ -12,6 +12,7 @@ import {
     skillsReportQuery,
     reviewsReportQuery,
     spendBreakdownQuery,
+    toolsReportQuery,
 } from '@/api/queries'
 import type { ReportKind, ReportModel, ReportMonth, ReportTicket, ReportTokens } from '@/api/types'
 import { ChartTable } from '@/components/chart-table'
@@ -72,6 +73,7 @@ import {
 import { reviewsLine } from '@/lib/review-report'
 import { skillsLine } from '@/lib/skill-report'
 import { modelKey, SERIES, shareText, spendLine } from '@/lib/spend'
+import { toolsLine } from '@/lib/tool-report'
 import { tokenCount } from '@/lib/transcript'
 import { cn } from '@/lib/utils'
 
@@ -287,8 +289,18 @@ function ReportCards() {
     const reviews = useQuery(reviewsReportQuery(CARD_DAYS))
     const plans = useQuery(plansReportQuery(CARD_DAYS))
     const skills = useQuery(skillsReportQuery(CARD_DAYS))
-    const [spendPage, checklistPage, healthPage, ciPage, connectorsPage, reviewsPage, plansPage, skillsPage] =
-        REPORT_PAGES
+    const tools = useQuery(toolsReportQuery(CARD_DAYS))
+    const [
+        spendPage,
+        checklistPage,
+        healthPage,
+        ciPage,
+        connectorsPage,
+        reviewsPage,
+        plansPage,
+        skillsPage,
+        toolsPage,
+    ] = REPORT_PAGES
     return (
         <nav aria-label="Report pages" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" data-testid="reports-cards">
             <ReportCard
@@ -328,6 +340,7 @@ function ReportCards() {
             />
             <ReportCard page={plansPage} query={plans} line={plansLine} />
             <ReportCard page={skillsPage} query={skills} line={skillsLine} />
+            <ReportCard page={toolsPage} query={tools} line={toolsLine} />
         </nav>
     )
 }

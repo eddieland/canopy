@@ -276,6 +276,13 @@ export const TIPS = {
         'Hot take: a description is a pitch. Most skills here are still waiting for the callback.',
         'Haiku: offered every time / the front matter rides along / loaded? Not this week',
     ],
+    '/reports/tools': [
+        "It looks like you're counting tools. I have a paperclip. It is the tool.",
+        'Unhelpful tip: a tool never called never fails. Its definition still rides along in every call.',
+        'Dear diary, today I was offered a server. I did not call. It did not call either.',
+        'Hot take: grep is a personality. Some agents have it. Some just read the whole file.',
+        'Haiku: offered every run / schema riding every call / never once picked up',
+    ],
     '/workspace/ticks/': [
         "It looks like you're counting ticks. I counted one, then lost my place.",
         'Unhelpful tip: every tick has an id. I have an id too. It is Sprig.',

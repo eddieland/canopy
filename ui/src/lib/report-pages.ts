@@ -12,6 +12,7 @@ export interface ReportPage {
         | '/reports/reviews'
         | '/reports/plans'
         | '/reports/skills'
+        | '/reports/tools'
     /** Its name. */
     label: string
     /** What it holds, for an operator who does not know it yet. */
@@ -59,5 +60,10 @@ export const REPORT_PAGES = [
         to: '/reports/skills',
         label: 'Skills',
         hint: 'Which skills each agent is offered, which it loads, and what their front matter costs every call',
+    },
+    {
+        to: '/reports/tools',
+        label: 'Tools',
+        hint: 'Which MCP servers and tools each agent is offered, which it calls, and what their calls return',
     },
 ] as const satisfies readonly ReportPage[]

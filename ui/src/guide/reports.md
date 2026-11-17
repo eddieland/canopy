@@ -5,8 +5,8 @@ dollar and token here is what the agent runtime reported, so if a runtime under-
 mirror, not an audit. Beside them, the checklist page counts how workers answered your checklists, item by item, the
 CI page says which checks fail, the Connectors page says how reliably canopy reads your tracker and your PRs, the
 Reviews page says who reviews canopy's PRs and how soon, the Plans page says how you approve plans and what their
-PRs needed after, and the Skills page says which skills your agents are offered, which they load, and what the rest
-cost you.
+PRs needed after, the Skills page says which skills your agents are offered, which they load, and what the rest
+cost you, and the Tools page says the same of their MCP servers and tools.
 
 Every report keeps its window in the same place, at the top right beside its title, so changing it from the bottom of
 a long page is one scroll up rather than a hunt. A column name with a dotted underline has more to say about what it
@@ -20,9 +20,9 @@ Spend never is: whether more of it bought enough is your call, not the page's.
 ## The reports page
 
 [Reports](/reports) opens on a card for each report under it: **Spend**, **Checklist**, **Health**, **CI**,
-**Connectors**, **Reviews**, **Plans**, and **Skills**, each with that page's own line for the last 30 days (`3 of 46
-runs failed over 30 days`) and, where the page draws one, a small line of its days, so a bad week shows before you open
-anything.
+**Connectors**, **Reviews**, **Plans**, **Skills**, and **Tools**, each with that page's own line for the last 30 days
+(`3 of 46 runs failed over 30 days`) and, where the page draws one, a small line of its days, so a bad week shows
+before you open anything.
 Click a card for its page on those 30 days; hover it for what the page holds.
 
 Under the cards, the calendar months sit side by side. The page opens on the months since the first one with anything
@@ -550,3 +550,52 @@ What the page can't see, it counts apart rather than as zero, and says so under 
 
 A day runs midnight to midnight on the clock of the machine canopy runs on, and a run counts on the day it started,
 once it has ended. The page reads the journal alone: it starts no runtime and changes no skill.
+
+## The Tools page
+
+The Tools page, **Tools** under [Reports](/reports) in the nav, asks the Skills page's question of the other thing
+every model call carries: tool definitions. It says which MCP servers and which of the runtime's own tools each agent
+was offered over the last **7 days** or **30 days**, which it called, how many of those calls failed, and what they
+returned into context. The line under the title is the window at a glance, `3 servers and 7 tools offered over 7 days
+· 4 never called · 292 calls, 15 failed`, and the figures under it are its headline, each beside the window before's.
+
+A server or a tool is **offered** to a run when the runtime said so as the run started, and **called** when the run
+called it, whether or not the call worked. Offered is where the weight is: a tool's **definition**, its name,
+description, and input schema, rides in every model call of a run offered it, called or not.
+
+- **Agents**: each agent that ran, the busiest first. Its runs, how many have no offer on record, the servers and
+  the tools it was offered, how many of those none of its runs called, then its calls, those that failed, and what
+  they returned. Click an agent's name and the table under it becomes that agent's own; **every agent**, in that
+  table's header, widens it again.
+- **Servers and tools**: a row per MCP server, per tool built into the runtime, and per tool of a server that a run
+  called, over every agent or the one you picked. The runs offered it and the share that called it, its calls, those
+  that failed, and what they returned. A server's figures are its tools' together. One offered and called in no run
+  says `never` where its rate would be. The toggle orders the rows: **most called**, **least called** with the
+  never-called first, **returned** for what fills your context, and **failed**. Pick an agent and press **least
+  called**, and you are looking at what you could deny it.
+
+Three things the page can't tell you, so you don't go looking:
+
+- **What a definition costs.** Nothing records how long a tool's definition is, so no figure here is the price of
+  being offered. `never` tells you where to look; how much you'd save is still a guess. A server with forty tools is
+  a bigger guess than one with three.
+- **A server's tools it never called.** An offer names a server, not its tools, so a tool of a server shows up here
+  the first time a run calls it, under the name the runtime gives it, `github_pull_request_read`, with a dash where
+  its runs offered would be. The ones no run called are invisible, which is a shame, since they are the ones you
+  came for.
+- **What a run was offered when nobody asked.** A task's run and an epic's plan run are never asked, and a run the
+  runtime couldn't answer for has nothing on record. Those runs count under the agent canopy ships for their kind,
+  and their calls count all the same; the line under the agents says how many there are.
+
+Read `never` as you would on the [Skills page](#the-skills-page): a week can't tell a tool nobody needs from one whose
+kind of work didn't come up, so try 30 days before you take the error tracker away from an agent on the strength of
+a week without errors. A server whose rules leave an agent only some of its tools says so on its rate's tip. And a
+server the runtime reaches through code mode has no call under its own name, so it reads `never` however hard it
+works. A failed call is not always bad news: a refusal is what a deny looks like from the inside. The loads of skills
+all count as calls of the one `skill` tool here; which skill is the Skills page's business.
+
+The remedy is your runtime config's: deny a tool to an agent by name, or keep a server out of canopy's runs with
+`runtime.mcp_servers`. A deny shows here slowly, since the runs from before it stay in the window; `canopy agents`
+says what an agent is offered right now. Every count of tokens is an estimate, characters over four. A day runs
+midnight to midnight on the clock of the machine canopy runs on, and a run counts on the day it started, once it has
+ended. The page reads the journal alone: it starts no runtime and changes nothing.

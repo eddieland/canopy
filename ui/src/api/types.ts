@@ -305,6 +305,16 @@ export type SkillsUse = Schemas['SkillsUse']
 export type SkillsAgent = Schemas['SkillsAgent']
 /** The window before a Skills report's: the skills offered, those never loaded, the loads, and the front matter. */
 export type SkillsPrevious = Schemas['SkillsPrevious']
+/** Which MCP servers and tools a window's agent runs were offered and called, and what the calls returned. */
+export type ToolsReport = Schemas['ToolsReport']
+/** One MCP server or one tool over a window: its figures over every agent, then each agent's own. */
+export type ToolsRow = Schemas['ToolsRow']
+/** One agent's use of one server or tool over a window: the runs offered it, those that called it, and the calls. */
+export type ToolsUse = Schemas['ToolsUse']
+/** One agent's runs over a window: how many the runtime answered for, what they were offered, and their calls. */
+export type ToolsAgent = Schemas['ToolsAgent']
+/** The window before a Tools report's: the servers and tools offered, those never called, and the calls. */
+export type ToolsPrevious = Schemas['ToolsPrevious']
 /** Where a window's review feedback came from, how long it took, and what answering it cost. */
 export type ReviewsReport = Schemas['ReviewsReport']
 /** A PR in a window: its feedback, how soon its first review came, and what answering cost. */
