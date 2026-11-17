@@ -486,5 +486,6 @@ longer, the wordy ones most.
 canopy measures a plan once, when its run records it, and keeps the figures, so the page doesn't read every plan again
 each time you open it. Plans from before canopy kept them are measured by the loop, a few each tick, and the page
 measures any it hasn't reached yet itself, so the report is complete from your first plan either way. When the way
-canopy measures changes, every plan is measured again the same way. A plan whose original file is gone or no longer
-matches what its planner wrote shows a dash, and stays out of the length table.
+canopy measures changes, every plan is measured again the same way. A plan from before canopy kept that copy is
+measured from its own file, as long as you never edited it. A plan with no file left as its planner wrote it shows a
+dash, and stays out of the length table.

@@ -21,8 +21,8 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 #: The model's version, kept with each plan's cached measurements (`plan_lengths`): raise it when a change to the model
-#: below would measure a plan differently, and every plan is measured again.
-VERSION = 1
+#: below, or to where a plan's text is found, would measure a plan differently, and every plan is measured again.
+VERSION = 2
 #: The characters of body text the plan editor fits on a line, at its widest.
 LINE_CHARS = 100
 #: The characters of a table's row the editor fits on a line: its smaller type takes more.
