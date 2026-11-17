@@ -239,7 +239,8 @@ def step(
     return Stepped(
         indexed=reading.indexed,
         dropped=dropped or 0,
-        behind=not state.built or not caught_up,
+        # A read that failed is not behind: the next waits the usual gap, rather than retrying every few seconds.
+        behind=state.error is None and (not state.built or not caught_up),
         error=state.error,
     )
 

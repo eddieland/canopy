@@ -123,6 +123,18 @@ def test_a_sandbox_roles_record_is_indexed_and_one_canopy_cannot_read_passed_ove
     assert progress.passed_over == 1
 
 
+def test_a_first_build_whose_record_cannot_be_read_is_not_behind(ctx: Context) -> None:
+    """A record the runtime left unreadable ends the step with its error, not behind, so the next waits its gap."""
+    broken = runtime_database()
+    broken.parent.mkdir(parents=True)
+    broken.write_text("not a database")
+
+    stepped = session_index.step(ctx.conn, ctx.state_dir, version=Version.TWO, exclude=(), now=NOW)
+
+    assert stepped.error is not None
+    assert not stepped.behind
+
+
 def test_a_session_of_canopys_is_never_indexed_by_what_it_was_sent(ctx: Context) -> None:
     ran_in(ctx.conn, "ses_tick")
     runtime_record(
