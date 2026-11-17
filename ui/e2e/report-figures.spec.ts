@@ -13,6 +13,7 @@ const PAGES = [
     'reports/reviews',
     'reports/plans',
     'reports/skills',
+    'reports/tools',
     'chores/deps',
 ] as const
 

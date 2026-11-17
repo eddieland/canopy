@@ -177,6 +177,7 @@ export const PAGE_GUIDES = {
     '/reports/reviews': 'reports#the-reviews-page',
     '/reports/plans': 'reports#the-plans-page',
     '/reports/skills': 'reports#the-skills-page',
+    '/reports/tools': 'reports#the-tools-page',
     '/memory': 'memory',
     '/search': 'overview#search',
     '/system': 'overview#system-resources',

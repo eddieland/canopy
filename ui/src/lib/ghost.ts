@@ -212,6 +212,13 @@ export const GHOST_TIPS = {
         'Scanning... nine hundred characters of description. Somebody loves that skill. Nobody loads it.',
         "Dear Traveler, an agent denied a skill it never loaded. It hasn't noticed. Neither would I.",
     ],
+    '/reports/tools': [
+        'Eyes up, Guardian. A server offered to every run and called by none. Check its pulse, or its config.',
+        'Field report: the shell, called forty times in one run. Thirty-seven of them were ls.',
+        'Grimoire: an offer names the server, never its tools. We learn their names when they are called.',
+        'Scanning... six failed calls. Some are denies doing their job. Some are just Tuesday.',
+        'Dear Traveler, a tool nobody calls still rides in every call. The Darkness loves a free ride.',
+    ],
     '/workspace/ticks/': [
         "Eyes up, Guardian. Between two ticks there's a tock. Nobody has survived seeing one.",
         'Grimoire: an idle tick is the overseer looking at everything and choosing a nap.',

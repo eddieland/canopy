@@ -99,6 +99,8 @@ export const keys = {
     plansReport: (days: number) => ['spend', 'breakdown', 'plans', days] as const,
     // Under the breakdowns' key too: a run's end records what it was offered and what it loaded.
     skillsReport: (days: number) => ['spend', 'breakdown', 'skills', days] as const,
+    // Under the breakdowns' key too: a run's end records what it was offered and what it called.
+    toolsReport: (days: number) => ['spend', 'breakdown', 'tools', days] as const,
     tick: ['tick'] as const,
     // Tick now's request, a mutation's key: every Tick now shares it, so the header sees the one asked for.
     tickNow: ['tick-now'] as const,
@@ -391,6 +393,19 @@ export function skillsReportQuery(days: number) {
         queryKey: keys.skillsReport(days),
         queryFn: async ({ signal }) =>
             unwrap(await api.GET('/api/reports/skills', { params: { query: { days } }, signal })),
+    })
+}
+
+/**
+ * Which MCP servers and tools the agent runs of the last `days` local days were offered and called, by agent, with
+ * their calls and what they returned. Read from the journal alone, so it starts no runtime. Marked stale with the
+ * spend breakdowns.
+ */
+export function toolsReportQuery(days: number) {
+    return queryOptions({
+        queryKey: keys.toolsReport(days),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/reports/tools', { params: { query: { days } }, signal })),
     })
 }
 

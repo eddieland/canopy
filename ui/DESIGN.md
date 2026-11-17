@@ -844,10 +844,10 @@ reader, so no table repeats them.
   or Escape. A hover leaves the focus where it was.
 - **A table of PRs** (`PullRequestTable`, `src/components/pull-request-table.tsx`) is a report's per-PR table: the PR
   with its unit's phase, its ticket, then the page's own figures.
-- **A pick in a table** (the checklist page's items, the Skills report's agents) is a row's name that narrows the
-  panel under it to that row: an accent link, the picked one on the accent's tint (`aria-current`), kept in the search
-  with `replace` and the scroll held, so the change is in view. The narrowed panel's header names what is picked and
-  links back to the whole; a table narrowed so keeps its columns, which mean what they did.
+- **A pick in a table** (the checklist page's items, the Skills and Tools reports' agents) is a row's name that narrows
+  the panel under it to that row: an accent link, the picked one on the accent's tint (`aria-current`), kept in the
+  search with `replace` and the scroll held, so the change is in view. The narrowed panel's header names what is picked
+  and links back to the whole; a table narrowed so keeps its columns, which mean what they did.
 - **The first-call chart** (the spend page's First calls by week) follows Charts but where a rate needs otherwise: a
   bar per local ISO week of one kind's series, as tall as the share of the week's first calls the cache served, its top
   the whole, so the axis means the same in every window, and every bar's rate over it, since there are few and the eye

@@ -66,7 +66,18 @@ interface NavSetup {
 }
 
 // The Reports section's links with its pages open: the section, then each report.
-const REPORTS = ['Reports', 'Spend', 'Checklist', 'Health', 'CI', 'Connectors', 'Reviews', 'Plans', 'Skills'] as const
+const REPORTS = [
+    'Reports',
+    'Spend',
+    'Checklist',
+    'Health',
+    'CI',
+    'Connectors',
+    'Reviews',
+    'Plans',
+    'Skills',
+    'Tools',
+] as const
 
 // The nav's sections, in its order, with no pages open under any.
 const SECTIONS = ['Attention', 'Tickets', 'Tasks', 'Epics', 'Pull requests', 'Workspace', 'Chores', 'Reports', 'Memory']
@@ -140,6 +151,7 @@ describe('Nav', () => {
         ['Reviews', '/reports/reviews?days=30', REPORTS],
         ['Plans', '/reports/plans?days=90', REPORTS],
         ['Skills', '/reports/skills?days=30', REPORTS],
+        ['Tools', '/reports/tools?days=30', REPORTS],
     ] as const)('marks %s current on its own page, not the section over it', async (page, at, opened) => {
         await renderNav({ at, items: [] })
         expect(listed()).toEqual(opening(opened))

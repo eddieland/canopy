@@ -64,6 +64,7 @@ export const ROUTES = [
     'reports/reviews',
     'reports/plans',
     'reports/skills',
+    'reports/tools',
     'settings',
     'settings/limits',
     'settings/skills',

@@ -338,6 +338,7 @@ function AgentLink({ agent }: { agent: string }) {
     return (
         // The router marks the picked one's link `aria-current="page"`: its search is the page's own.
         <Link
+            from={Route.fullPath}
             to="/reports/skills"
             search={(prev) => ({ ...prev, agent })}
             replace
@@ -394,6 +395,7 @@ function Scope({ picked }: { picked: SkillsAgent | undefined }) {
             </span>
             {picked !== undefined && (
                 <Link
+                    from={Route.fullPath}
                     to="/reports/skills"
                     search={(prev) => ({ ...prev, agent: undefined })}
                     // Not the page shown while an agent is: its search drops the agent rather than matching it.

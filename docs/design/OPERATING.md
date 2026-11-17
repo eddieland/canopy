@@ -78,6 +78,8 @@ to what the editor draws. It is measured once and kept in the journal, when its 
 by a live tick, a few a tick; the page measures what is not kept yet, so a read never writes. The Skills page reads
 what each run was offered and its calls of the skill tool (§13), by agent and skill: a skill's entry in the list rides
 in every model call, so its cost is that length for each call, counted only over the runs where both are on record.
+The Tools page reads the same offers for MCP servers and the runtime's own tools, and the runs' calls by tool; an
+offer names a server, not its tools, so a server's tool is known once called, and no definition's cost is counted.
 What the journal cannot say, a run not asked about or an offer with no length, is counted apart, never as nothing.
 
 `spend.monthly_budget_usd` is what the operator means a local calendar month of agent spend to cost: canopy's runs and
