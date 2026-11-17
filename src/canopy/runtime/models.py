@@ -20,11 +20,26 @@ if TYPE_CHECKING:
     from canopy.runtime.report import ModelList
 
 
-def listed(runner: procs.Runner, *, version: Version, cwd: Path, variants: bool = False) -> ModelList:
+def listed(
+    runner: procs.Runner,
+    *,
+    version: Version,
+    cwd: Path,
+    variants: bool = False,
+    wanted: str | None = None,
+) -> ModelList:
     """Ask the runtime `version` runs, started in `cwd`, which models it can run an agent on, with `variants` each's.
+
+    Args:
+        runner: Runs the runtime.
+        version: The runtime's version.
+        cwd: Where the runtime is started, whose config it reads.
+        variants: Whether each model's variants are read too.
+        wanted: The one model the list is read for, as `provider/model`, when there is one: a runtime whose list
+            fills as its providers answer is given the time to list it.
 
     Returns:
         The models it listed, with their variants when asked for; or none, with why, when it could not be asked or
         failed.
     """
-    return pick(version, one.models, two.models).listed(runner, cwd=cwd, variants=variants)
+    return pick(version, one.models, two.models).listed(runner, cwd=cwd, variants=variants, wanted=wanted)

@@ -20,10 +20,17 @@ export const canopy = module.default;
  * @param {object} [answers] what the runtime answers the plugin when it asks.
  * @param {() => Promise<{ data: object[] }>} [answers.servers] its MCP servers, each with its name and status.
  * @param {() => Promise<object[]>} [answers.tools] its registered tools, each with its id.
+ * @param {{ providerID: string, id: string }} [answers.model] the model the session's agent names; none by default.
+ * @param {() => Promise<{ data: object[] }>} [answers.models] the models it lists, each with its provider and id.
  * @returns the hook before a session's `prompt` goes on, the one `before` a tool call, the one `after` it, and the
  *     names of every hook `registered`, sorted.
  */
-export async function plugin({ servers = async () => ({ data: [] }), tools = async () => [] } = {}) {
+export async function plugin({
+    servers = async () => ({ data: [] }),
+    tools = async () => [],
+    model = undefined,
+    models = async () => ({ data: [] }),
+} = {}) {
     /** @type {Record<string, (event?: object) => Promise<void>>} */
     const hooks = {};
     const hook = (domain) => async (name, callback) => {
@@ -31,7 +38,9 @@ export async function plugin({ servers = async () => ({ data: [] }), tools = asy
         return { dispose: async () => {} };
     };
     await canopy.setup({
-        session: { hook: hook("session") },
+        session: { hook: hook("session"), get: async () => ({ id: "ses_1", agent: "canopy-worker" }) },
+        agent: { get: async () => ({ data: { id: "canopy-worker", model } }) },
+        model: { list: models },
         tool: { hook: hook("tool"), list: tools },
         mcp: { list: servers },
     });
@@ -41,6 +50,11 @@ export async function plugin({ servers = async () => ({ data: [] }), tools = asy
         after: hooks["tool.execute.after"],
         registered: Object.keys(hooks).sort(),
     };
+}
+
+/** A prompt of `session`, as the runtime hands the hook before it goes on. */
+export function prompted(session = "ses_1") {
+    return { sessionID: session, messageID: "msg_1", prompt: { text: "go", files: [] }, delivery: "immediate" };
 }
 
 /** A call of `tool` in `session` with `input`, as the runtime hands the hook before it. */

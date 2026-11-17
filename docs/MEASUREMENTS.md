@@ -1492,3 +1492,38 @@ have missed those, unless they were the overseer's mistakes.
   section, so whether the waits churned is not shown here.
 - No tick running the overseer with nothing listed to it: not counted by these commands.
 - M40's live checks, which need a watched run of the loop.
+
+## 2026-11-17: when OpenCode 2.3.0 lists GitHub Copilot's `auto`
+
+Why canopy could not look up `github-copilot/auto`, the router OpenCode 2 added, nor run an agent on it. Cited by
+DESIGN §33.
+
+### Setup
+
+- OpenCode 2.3.0 from npm (`@opencode/cli`), with a home of its own. A stand-in for Copilot's API on loopback, serving
+  `/models` (two models, each with `billing.auto_discount`), `/auto` (routing to one of them), and
+  `/chat/completions`, logging each request, and answering `/models` at once or after 3 seconds. A GitHub Copilot
+  OAuth credential imported with `opencode auth import`, its `metadata.apiEndpoint` the stand-in. No Copilot account
+  was used, so nothing here is Copilot's own latency or answers.
+- An agent definition with `model: github-copilot/auto` in a config directory of its own, run with
+  `opencode run --standalone --agent`, with and without canopy's plugin in the directory.
+
+### Findings
+
+- `opencode api --standalone model.list`, as canopy asked for the list, answered with the catalog's 30
+  `github-copilot` models every time, never the stand-in's two nor `auto`: the server answers before the provider's
+  plugin has fetched Copilot's list. `opencode models` printed the same.
+- A server left running (`opencode serve`) answered `plugin.list` with no plugin at first, then with all of them
+  `active`; `model.list` changed from the catalog's models to the stand-in's two and `auto` only when the fetch of
+  `/models` ended, 3 seconds after every plugin was `active` with the slow stand-in. `integration.list`,
+  `provider.list`, `model.default`, and `location.reload` neither waited for the fetch nor said it was pending.
+- `opencode run --standalone --model github-copilot/auto` failed, `provider.no-route`, four runs of four. The same run
+  through the server left running was routed: `/auto`, then `/chat/completions` with the routed model.
+- With the agent definition, a standalone run did not fail: it ran on OpenCode's default model, two runs of two.
+- A plugin's `prompt` hook that waited until `model.list` held the agent's model had the run routed through `/auto`,
+  with the stand-in answering at once (a wait of 75 ms) and after 3 seconds; so does canopy's plugin, whose wait this
+  is. An agent on a model never listed waited the plugin's 15 seconds, then ran on the default.
+- The routed session's reply names the model it was routed to, `{providerID: "github-copilot", id: "standin-b"}`, in
+  `opencode session export --sanitize` and in `session_message`, never `auto`; canopy's readers of both read it.
+- Through a server canopy starts, the lookup of `github-copilot/auto` found it in 4.9 seconds with the slow stand-in;
+  a list read with no model asked about, which waited then for 2 seconds without a change, gave the catalog's.

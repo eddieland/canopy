@@ -243,7 +243,13 @@ def check(
         ModelError: (`MISSING`) the runtime does not list the model or its variant, or (`LIST_FAILED`) its list could
             not be read.
     """
-    found = runtime_models.listed(runner, version=version, cwd=root, variants=model.variant is not None)
+    found = runtime_models.listed(
+        runner,
+        version=version,
+        cwd=root,
+        variants=model.variant is not None,
+        wanted=model.id,
+    )
     if found.error is not None:
         raise ModelError(
             LIST_FAILED,

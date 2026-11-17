@@ -13,6 +13,7 @@ import pytest
 from canopy.infra import procs
 from canopy.runtime.agents import AgentOffer, ServerOffer, SkillFile
 from canopy.runtime.opencode2 import offerings
+from canopy.runtime.opencode2 import serve as server
 from canopy.runtime.opencode2.offerings import matches
 
 if TYPE_CHECKING:
@@ -194,7 +195,7 @@ def test_each_agent_is_offered_what_its_merged_rules_leave_it() -> None:
     assert serve_argv == ("opencode", "serve", "--hostname", "127.0.0.1", "--port", "0")
     assert cwd == Path("/ws")
     assert env["OPENCODE_CONFIG_DIR"] == "/defs"
-    assert len(env[offerings.PASSWORD_ENV]) >= 32
+    assert len(env[server.PASSWORD_ENV]) >= 32
     asked = [argv[-1] for argv, _, _ in serve.ran[1:]]
     assert asked == ["agent.list"] * 3 + ["skill.list", "config.get"]
     assert all(e == env for _, _, e in serve.ran)
@@ -324,7 +325,7 @@ def test_a_server_that_cannot_start_or_never_listens_is_the_error() -> None:
         return procs.Result(tuple(args), -9, "", "", timed_out=True)
 
     assert offered(Serve({}, fail=slow)).error == (
-        f"`opencode serve` did not listen within {offerings.TIMEOUT_SECONDS} seconds"
+        f"`opencode serve` did not listen within {server.TIMEOUT_SECONDS} seconds"
     )
 
 

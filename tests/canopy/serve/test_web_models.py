@@ -74,7 +74,7 @@ def test_the_list_names_what_hide_models_hides_and_a_hidden_model_may_still_be_c
 def test_a_list_that_could_not_be_read_is_never_kept(ctx: Context, opencode_state: Path) -> None:
     backend, _ = kept(ctx)
     opencode_state.write_text(json.dumps({"exit": 1}))
-    assert listed(backend).error == f"`{model_list(ctx.config.runtime.version, variants=True)[1]}` exited 1"
+    assert listed(backend).error == f"{model_list(ctx.config.runtime.version, variants=True)[1]}"
 
     # The runtime is asked again at once, and then answers.
     lists(opencode_state, "acme/fake-model-1")
@@ -119,7 +119,7 @@ def test_the_model_list_is_read_again_when_the_loop_reads_its_config_again(ctx: 
     backend.use(backend.config.model_copy(update={"runtime": runtime}), backend.workspace)
     assert listed(backend).models == {"acme/fake-model-2"}
     argvs = [json.loads(line)["argv"] for line in log(opencode_state).read_text().splitlines()]
-    assert [a[:1] for a in argvs] == [["models"], ["models"], ["api"]]
+    assert [a[:1] for a in argvs] == [["models"], ["models"], ["serve"], ["api"], ["api"]]
 
 
 def kept(ctx: Context) -> tuple[Backend, FakeTime]:
@@ -141,9 +141,12 @@ def lists(state: Path, *models: str) -> None:
 
 
 def runtime_runs(state: Path) -> int:
-    """How many times the fake `opencode` was started."""
+    """How many times the fake `opencode` was asked its list: OpenCode 2 by a server started for it, 1 by a command."""
     found = log(state)
-    return len(found.read_text().splitlines()) if found.exists() else 0
+    if not found.exists():
+        return 0
+    argvs = [json.loads(line)["argv"] for line in found.read_text().splitlines()]
+    return sum(argv[0] in ("serve", "models") for argv in argvs)
 
 
 def log(state: Path) -> Path:

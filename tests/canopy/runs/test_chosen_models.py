@@ -192,8 +192,8 @@ def test_a_list_that_cannot_be_read_refuses_the_run(scenario: Scenario, opencode
     opencode_state.write_text(json.dumps({"exit": 1, "stderr": "Error: something broke\n"}))
     scenario.configures(runtime={"models": {"worker": MODEL}})
     reason = (
-        f"could not look up the model {MODEL} chosen in runtime.models: `{model_list(scenario.env.runtime)[1]}` "
-        "exited 1. Nothing ran on another model; the work resumes once the list can be read"
+        f"could not look up the model {MODEL} chosen in runtime.models: {model_list(scenario.env.runtime)[1]}. "
+        "Nothing ran on another model; the work resumes once the list can be read"
     )
     refused = scenario.refuses(dispatches())
     assert refused == [("refused:model_list_failed", reason), ("attention:model_list_failed", reason)]
@@ -290,7 +290,7 @@ def test_canopy_model_refuses_a_model_not_listed_an_unknown_agent_and_inside_a_r
     err = scenario.operator("model", KEY, OTHER, code=1).err
     assert err == (
         f"Error: model refused (model_list_failed): could not read the models OpenCode lists, to look {OTHER} up: "
-        f"`{model_list(scenario.env.runtime)[1]}` exited 1\n"
+        f"{model_list(scenario.env.runtime)[1]}\n"
     )
     assert scenario.conn.execute("SELECT count(*) FROM ticket_overrides").fetchone()[0] == 0
 

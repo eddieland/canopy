@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-"""Fake `opencode` for tests: plays OpenCode 1's `export ID --sanitize`, `debug`, and `models`, and OpenCode 2's
-`serve`, `api`, and `session export`, from a state file, and hands `opencode run` to the fake agent beside it.
+"""Fake `opencode` for tests: plays OpenCode 1's and 2's commands from a state file.
+
+It plays OpenCode 1's `export ID --sanitize`, `debug`, and `models`, and OpenCode 2's `serve`, `api`, and
+`session export`, and hands `opencode run` to the fake agent beside it.
 
 The two versions' commands share no name, so one fake plays whichever `runtime.version` canopy runs. On PATH ahead of
 any real one, so no test reaches the operator's OpenCode or its sessions. Configured through the environment:
@@ -34,10 +36,10 @@ Keys of the state besides `sessions`, each optional, each read by both versions 
             line, indented as OpenCode indents it, `{"id": ..., "variants": {NAME: {...}}}`, and 2's `model.list`
             lists them with it. Default none.
 
-2's `serve` says where it listens, then waits to be stopped; `api --server URL` answers `agent.list`, `skill.list`, and
-`config.get` from the state, and `api --standalone model.list` the models. An export, and what 2's `api` prints, is
-written as OpenCode writes it, so a pipe gets at most what fits in its buffer. `run` runs `agent` with the same
-arguments, so a template that runs `opencode run` plays the fake agent. Any other command exits 2.
+2's `serve` says where it listens, then waits to be stopped; `api --server URL` answers `agent.list`, `skill.list`,
+`config.get`, and `model.list` from the state, and `plugin.list` with one plugin, loaded. An export, and what 2's
+`api` prints, is written as OpenCode writes it, so a pipe gets at most what fits in its buffer. `run` runs `agent`
+with the same arguments, so a template that runs `opencode run` plays the fake agent. Any other command exits 2.
 Stdlib only, no canopy imports: this runs as a separate process under whatever python3 is on PATH.
 """
 
@@ -57,12 +59,12 @@ RENAMED = {"bash": "shell", "task": "subagent", "write": "edit", "patch": "edit"
 URL = "http://127.0.0.1:41234"
 
 
-def main() -> int:
+def main() -> int:  # noqa: PLR0911 - one return for each command it plays
     log = os.environ.get("FAKE_OPENCODE_LOG")
     if log:
         with Path(log).open("a") as f:
             env = sorted(name for name in os.environ if name.startswith("OPENCODE_"))
-            f.write(json.dumps({"argv": sys.argv[1:], "cwd": os.getcwd(), "env": env}) + "\n")
+            f.write(json.dumps({"argv": sys.argv[1:], "cwd": str(Path.cwd()), "env": env}) + "\n")
     match sys.argv[1:]:
         case ["export", session_id, "--sanitize"]:
             return export(session_id)
@@ -78,8 +80,6 @@ def main() -> int:
             return serve()
         case ["api", "--server", _, operation]:
             return api(operation)
-        case ["api", "--standalone", "model.list"]:
-            return api("model.list")
         case ["run", *_]:
             agent = Path(__file__).with_name("agent")
             os.execv(agent, [str(agent), *sys.argv[1:]])  # noqa: S606  (stands in for OpenCode running an agent)
@@ -189,6 +189,8 @@ def api(operation: str) -> int:
             for config in (state.get("config", {}), json.loads(os.environ.get("OPENCODE_CONFIG_CONTENT") or "{}")):
                 if config.get("mcp"):
                     printed.append({"type": "document", "info": {"mcp": {"servers": servers(config["mcp"])}}})
+        case "plugin.list":
+            printed = {"data": [{"id": "canopy", "state": {"status": "active"}}]}
         case "model.list":
             variants = state.get("variants", {})
             printed = {
@@ -252,8 +254,11 @@ def session_info(state: dict[str, Any], session_id: str) -> dict[str, Any]:
 
 
 def write(printed: str) -> None:
-    """Print `printed` as OpenCode does with stderr a pipe: one write that does not wait for a full pipe to drain, and
-    what did not fit lost when it exits. A file takes it all."""
+    """Print `printed` as OpenCode does with stderr a pipe.
+
+    One write that does not wait for a full pipe to drain, and what did not fit lost when it exits. A file takes it
+    all.
+    """
     os.set_blocking(sys.stdout.fileno(), False)
     with contextlib.suppress(BlockingIOError):
         os.write(sys.stdout.fileno(), printed.encode())

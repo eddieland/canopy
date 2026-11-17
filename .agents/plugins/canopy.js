@@ -10,7 +10,8 @@
 // CANOPY_RUN_ID and each call's tool and session, and in a run that follows a plan, CANOPY_PLAN and the steps of each
 // `status` call; the answer, the wrap-up, and the message, CANOPY_RUN_ID and each its one file canopy writes in the
 // directory CANOPY_ANSWERS names; the directory, a shell call's command and working directory; the wait, the MCP
-// servers' names and states and the tools' names; the refusal, a refused call's permission and resources), changes only
+// servers' names and states and the tools' names; the model, the session's agent, its model, and the models the
+// runtime lists; the refusal, a refused call's permission and resources), changes only
 // what its hook is handed, writes no file, refuses no call, and grants no tool. Each job's hooks run in its own try, in
 // the order of `JOBS`, so a job that throws neither fails a call that has already run nor keeps the jobs after it from
 // theirs.
@@ -38,6 +39,11 @@
 // registered, which the runtime does only after the server connects, so that the first model call is sent them
 // (`mcpTools`).
 //
+// Its ninth is the model (DESIGN §33): a session's first prompt waits until the runtime lists the model its agent
+// names, since a provider that fetches its own models lists some, a router such as `github-copilot/auto` among them,
+// only once it has, and the runtime runs an agent whose model it does not list yet on its default instead
+// (`listedModel`).
+//
 // Its eighth is the refusal (DESIGN §33): a call the run's permission rules refuse, which the runtime reports to the
 // agent as no more than `Permission denied:` and the permission, also says what it asked for and that the refusal is
 // on purpose, not to be tried another way (`explain`); it reads the refusal's permission and resources, and changes
@@ -58,13 +64,15 @@
 /** @typedef {Extract<AfterEvent, { status: "completed" }>["result"]} Result */
 /** @typedef {Exclude<Result["content"], string | undefined>[number]} Content */
 /** @typedef {{ name: string, status: { status: string } }} McpServer */
+/** @typedef {Parameters<Parameters<Context["session"]["hook"]>[1]>[0]} SessionEvent */
+/** @typedef {Extract<SessionEvent, { delivery: unknown }>} PromptEvent */
 /**
  * A job's hooks, each called as the runtime calls its own: `prompt` before a session's prompt goes on, `before` each
  * tool call, whose input it may change in place, and `after` each, with the content of the call's result, to put a
  * line first in, or null for a call that failed, which has none.
  *
  * @typedef {object} Job
- * @property {() => Promise<void>} [prompt]
+ * @property {(event: PromptEvent) => Promise<void>} [prompt]
  * @property {(event: BeforeEvent) => Promise<void>} [before]
  * @property {(event: AfterEvent, content: Content[] | null) => Promise<void>} [after]
  */
@@ -131,6 +139,9 @@ const MCP_WAIT_MS = 30_000;
 const MCP_SETTLE_MS = 2_000;
 /** How often it asks the runtime again while it waits. */
 const MCP_POLL_MS = 50;
+/** The longest a session's first prompt waits for the runtime to list its agent's model: a provider's fetch of its
+ * own models, which the runtime itself gives up on after seconds. */
+const MODEL_WAIT_MS = 15_000;
 /** The tag of the error the runtime fails a call with when the run's permission rules refuse it. */
 const BLOCKED = "Permission.BlockedError";
 /** The most of a refused call's resources the reason names, and the longest each is named, in characters. */
@@ -151,7 +162,7 @@ const REFUSED = new Map([
  *
  * @type {Array<(ctx: Context) => Job>}
  */
-const JOBS = [clock, nudge, answer, workdir, wrapUp, message, mcpTools, explain];
+const JOBS = [clock, nudge, answer, workdir, wrapUp, message, mcpTools, listedModel, explain];
 
 /**
  * The plugin, as OpenCode reads it: its id, and the entry point that registers its hooks.
@@ -182,7 +193,7 @@ async function setup(ctx) {
             // A job that cannot load has no hook, and the jobs after it still load.
         }
     }
-    await ctx.session.hook("prompt", () => inTurn(jobs, (job) => job.prompt?.()));
+    await ctx.session.hook("prompt", (event) => inTurn(jobs, (job) => job.prompt?.(event)));
     await ctx.tool.hook("execute.before", (event) => inTurn(jobs, (job) => job.before?.(event)));
     await ctx.tool.hook("execute.after", async (event) => {
         try {
@@ -835,6 +846,59 @@ async function untilRegistered(ctx) {
             if (Date.now() - settling >= MCP_SETTLE_MS) {
                 return;
             }
+        }
+        await new Promise((resolve) => setTimeout(resolve, MCP_POLL_MS));
+    }
+}
+
+/**
+ * The model's hooks: the one that holds a session's first prompt until the runtime lists its agent's model.
+ *
+ * The runtime starts with the models of its catalog, and a provider that fetches its own, as GitHub Copilot does once
+ * it has loaded, replaces them after: only then is a model listed that the provider alone names, its router `auto`
+ * among them. The runtime picks a prompt's model when the prompt goes on, and an agent whose model is not listed then
+ * runs on the runtime's default without a word, a model nobody chose. The prompt hook runs before that, and the
+ * runtime waits on it. So it waits while the model the session's agent names is not listed, at most `MODEL_WAIT_MS`;
+ * then the prompt goes on, as it would have. An agent that names no model waits for nothing. It reads the session's
+ * agent, that agent's model, and the listed models' ids, and changes nothing. Later prompts wait for nothing.
+ *
+ * @param {Context} ctx
+ * @returns {Job} The model's hooks.
+ */
+function listedModel(ctx) {
+    let waited = false;
+    return {
+        prompt: async (event) => {
+            if (waited) {
+                return;
+            }
+            waited = true;
+            const session = await ctx.session.get({ sessionID: event.sessionID });
+            if (session.agent === undefined) {
+                return;
+            }
+            const model = (await ctx.agent.get({ agentID: session.agent })).data.model;
+            if (model !== undefined) {
+                await untilListed(ctx, model.providerID, model.id);
+            }
+        },
+    };
+}
+
+/**
+ * Wait until the runtime lists the model `id` of provider `providerID`, or the time is up.
+ *
+ * @param {Context} ctx
+ * @param {string} providerID
+ * @param {string} id
+ * @returns {Promise<void>}
+ */
+async function untilListed(ctx, providerID, id) {
+    const start = Date.now();
+    while (Date.now() - start < MODEL_WAIT_MS) {
+        const models = (await ctx.model.list()).data;
+        if (models.some((model) => model.providerID === providerID && model.id === id)) {
+            return;
         }
         await new Promise((resolve) => setTimeout(resolve, MCP_POLL_MS));
     }
