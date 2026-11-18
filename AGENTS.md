@@ -97,8 +97,8 @@ If code and the design disagree, the design doc wins until a decision entry says
     repository, in seconds. A change under `ui/` also runs `npm --prefix ui run lint` and `typecheck`.
   - `make fmt` also applies the codemods (`packages/canopy-codemods`, LibCST), and `make lint` fails with the diff
     where one would still change a file. A convention that can be applied mechanically becomes a codemod there, by
-    its README's steps, rather than a rule for review. The first, `final-constants`, annotates every `UPPER_CASE`
-    module constant `Final`.
+    its README's steps, rather than a rule for review. `final-constants` annotates every `UPPER_CASE` module
+    constant `Final`, and `type-aliases` spells a type alias as a `type` statement where nothing reads it at run time.
   - The Playwright screenshot baselines are Git LFS objects, so `make ui-e2e` needs `git-lfs` and `git lfs pull`.
   - Optionally `make hooks`, once per clone: prek's git hooks (`prek.toml`) then run the same formatters and linters
     on each commit's files, and `ui/`'s lint and type check on a push. They stop a commit that fails one; they do not

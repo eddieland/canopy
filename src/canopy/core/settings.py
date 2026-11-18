@@ -34,7 +34,7 @@ class Layer(StrEnum):
 
 
 #: A value as JSON holds it: a number, a switch, a choice, a list of choices, or None for unset.
-Value = int | float | bool | str | Sequence[str] | None
+type Value = int | float | bool | str | Sequence[str] | None
 
 
 @dataclass(frozen=True)

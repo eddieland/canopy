@@ -169,7 +169,7 @@ def said(body: str, *, login: str = BOT) -> dict[str, object]:
 
 #: What the fake reviewer has said on a PR by the time of a poll: given the PR's title and how many times its
 #: comments were read before, the inline comments, reviews, and conversation comments, each as GitHub gives them.
-Reviewer = Callable[[str, int], Mapping[str, Sequence[dict[str, object]]]]
+type Reviewer = Callable[[str, int], Mapping[str, Sequence[dict[str, object]]]]
 
 
 @dataclass

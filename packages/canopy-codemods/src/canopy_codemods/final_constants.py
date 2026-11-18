@@ -88,17 +88,19 @@ def constants(source: str) -> frozenset[str]:
         SyntaxError: When the text is not Python.
     """
     module = ast.parse(source)
-    bindings = _Bindings()
+    bindings = Bindings()
     bindings.visit(module)
     return frozenset(
         name for statement in module.body if (name := _candidate(statement)) is not None and bindings.counts[name] == 1
     )
 
 
-class _Bindings(ast.NodeVisitor):
+class Bindings(ast.NodeVisitor):
     """Counts how often each name is bound in a module's own scope; a name deleted or declared `global` counts twice."""
 
     def __init__(self) -> None:
+        """Start with no name bound."""
+        #: How often each name is bound.
         self.counts: Counter[str] = Counter()
         #: How many functions, classes, and lambdas enclose the node being visited: 0 in the module's own scope.
         self._depth = 0
@@ -184,14 +186,14 @@ def _candidate(statement: ast.stmt) -> str | None:
         return None
     if isinstance(annotation, ast.Subscript):
         annotation = annotation.value
-    if annotation is not None and _last_name(annotation) in _KEPT:
+    if annotation is not None and last_name(annotation) in _KEPT:
         return None
-    if isinstance(value, ast.Call) and _last_name(value.func) in STATEFUL | DECLARES:
+    if isinstance(value, ast.Call) and last_name(value.func) in STATEFUL | DECLARES:
         return None
     return name
 
 
-def _last_name(expression: ast.expr) -> str | None:
+def last_name(expression: ast.expr) -> str | None:
     """The last name of a dotted one: `getLogger` of `logging.getLogger`.
 
     Returns:

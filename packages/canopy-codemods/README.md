@@ -27,6 +27,14 @@ is how the git hook (`prek.toml`) runs the codemods on a commit's files.
   a lowercase name, which is how a module spells an object with state of its own (`_log`, `router`); a name bound
   again anywhere in the module (a second assignment, `+=`, `del`, a function's `global`); an object made to hold
   state whatever its name, such as a logger or a lock; and a `TypeVar` or an explicit `TypeAlias`.
+- **`type-aliases`** spells an implicit type alias as a `type` statement, which ruff does only for one annotated
+  `TypeAlias`: `Outcome = Literal["packed", "failed"]` becomes `type Outcome = Literal["packed", "failed"]`. An alias
+  is a `CamelCase` name bound once, among the module's own statements, to a `Literal`, a `tuple`, a `Callable`, or a
+  union of types. A `type` statement makes a `TypeAliasType`, not the type it names, so it leaves alone a name the
+  module reads outside an annotation (passed to `get_args` or `isinstance`, called, subclassed, held in another
+  assignment); an `Annotated[...]` alias, whose metadata frameworks read as the program runs; and a union that may be
+  of values, with no `None`, subscript, or builtin type in it. It sees one module at a time: where another module
+  reads a rewritten alias at run time, that reader takes its `__value__`.
 
 ## Adding one
 

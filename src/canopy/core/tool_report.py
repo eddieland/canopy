@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
 
 #: What a row is: an MCP server, or one tool, the runtime's own or a server's.
-Kind = Literal["server", "tool"]
+type Kind = Literal["server", "tool"]
 
 
 @dataclass(frozen=True)

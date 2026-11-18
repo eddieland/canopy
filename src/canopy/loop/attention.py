@@ -208,7 +208,7 @@ def decided_about(decision: records.Decision) -> str:
 
 
 # An item is its ticket, its reason, and its repository if it has one.
-_ItemId = tuple[str | None, str, str | None]
+type _ItemId = tuple[str | None, str, str | None]
 
 
 def keys(items: Iterable[Item]) -> set[_ItemId]:

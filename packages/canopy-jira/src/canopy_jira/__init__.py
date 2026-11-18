@@ -33,7 +33,7 @@ _MAX_DEPTH: Final = 50
 _HOST: Final = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?(?::[0-9]{1,5})?")
 
 #: The site's host, to the base URL its REST API is under.
-Endpoint = Callable[[str], str]
+type Endpoint = Callable[[str], str]
 
 
 class InputError(Exception):

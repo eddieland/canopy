@@ -38,13 +38,13 @@ MAX_BYTES: Final = 16 * 1024
 #: The directory in a run's answers directory that holds its repositories' lists, `<repo>.md` each, for canopy's hook.
 DIR: Final = "checklists"
 #: How much an item that fails weighs in the checklist review, as a review's finding does.
-Severity = Literal["blocking", "major", "minor"]
+type Severity = Literal["blocking", "major", "minor"]
 #: Every severity an item may name, gravest first.
 SEVERITIES: Final[tuple[Severity, ...]] = ("blocking", "major", "minor")
 #: An item's severity unless its `severity:` line says another.
 DEFAULT_SEVERITY: Final[Severity] = "minor"
 #: Whether an item is asked: an `active` one is, a `retired` one stays in its file, unasked, so its counts read on.
-Status = Literal["active", "retired"]
+type Status = Literal["active", "retired"]
 #: Every status an item may name.
 STATUSES: Final[tuple[Status, ...]] = ("active", "retired")
 #: The kinds of worker run that may push, and so hear their repositories' lists; a task's run, of no kind, hears its.

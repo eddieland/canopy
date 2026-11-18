@@ -25,7 +25,7 @@ SEGMENT_RE: Final = re.compile(r"[A-Za-z0-9_-]+")
 #: The longest pattern a sink may list.
 MAX_PATTERN: Final = 200
 #: How a sink takes events of one name for some subjects: every one, none, or some, by its subject.
-Taken = Literal["all", "some", "none"]
+type Taken = Literal["all", "some", "none"]
 #: How each kind of subject is spelled, as config and the journal check it: a ticket key (`config.KEY_RE`), a chore's or
 #: a repository's name (`CHORE_NAME_RE`, `REPO_NAME_RE`), and an epic's or a task's id. A pattern naming a subject no
 #: event can have is refused, as `tasks.deploy.ended` is.
@@ -250,7 +250,7 @@ def _match(pattern: Sequence[str], name: Sequence[str], *, subject: _Subject | N
 
 
 #: Where a name's subject is, and how a subject is spelled.
-_Subject = tuple[int, re.Pattern[str]]
+type _Subject = tuple[int, re.Pattern[str]]
 
 
 def _fit(pattern: tuple[str, ...], name: tuple[str, ...], p: int, n: int, subject: _Subject | None) -> Fit:
