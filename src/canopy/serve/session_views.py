@@ -148,6 +148,8 @@ def _session(
         updated_at=db.parse_time(session.updated_at),
         cost_usd=session.cost_usd,
         archived=session.archived,
+        asked=session.asked,
+        models=list(session.models),
         made_by=runs.get((made.table, made.run_id)) if made is not None else None,
         reopen=runtime_sessions.reopen(session.session_id, session.directory, version=version) if outside else None,
         subagents=[_session(s, runs, version=version, outside=outside) for s in session.subagents],

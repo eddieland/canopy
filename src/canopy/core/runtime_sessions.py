@@ -323,8 +323,9 @@ def sessions_in(since: str, until: str | None, state_dir: Path) -> sql.Select:
     """Each of the runtime's sessions that started in `[since, until)`, and whether it is canopy's, as `spend` reads it.
 
     `until` None reads to the newest. Its columns are the session's `started_at`, `directory`, `cost_usd`, and
-    `tokens_*`, and `ours`, true for canopy's; and its `session_id`, `parent_id`, `updated_at`, `title`, and
-    `archived_at`, for a list of the sessions (`canopy.core.session_list`).
+    `tokens_*`, and `ours`, true for canopy's; and its `session_id`, `parent_id`, `updated_at`, `title`,
+    `archived_at`, `asked_model`, and `models`, the models its replies name as a JSON array, the most costly first,
+    for a list of the sessions (`canopy.core.session_list`).
 
     Whether a session is canopy's is read for the window's sessions alone, walking up from each through the sessions
     it ran for, and each run table is asked by its index of sessions: the read costs what the window holds, however
@@ -344,7 +345,9 @@ def sessions_in(since: str, until: str | None, state_dir: Path) -> sql.Select:
         sql.select(
             "s.started_at, s.directory, s.cost_usd, s.tokens_input, s.tokens_output, s.tokens_reasoning,"
             " s.tokens_cache_read, s.tokens_cache_write, s.session_id IN (SELECT session_id FROM ours) AS ours,"
-            " s.session_id, s.parent_id, s.updated_at, s.title, s.archived_at",
+            " s.session_id, s.parent_id, s.updated_at, s.title, s.archived_at, s.asked_model,"
+            " (SELECT json_group_array(model) FROM (SELECT m.model FROM runtime_session_models m"
+            " WHERE m.session_id = s.session_id ORDER BY m.cost_usd DESC, m.model)) AS models",
         )
         # Each of the window's sessions, and each session it ran for, however deep, within a bound on a parent chain
         # a run wrote into a loop: a session is canopy's when one it ran for is.
@@ -406,6 +409,7 @@ def _record_session(conn: sqlite3.Connection, session: SessionSpend, at: str, *,
         read_at=at,
         title=session.title if keep_title else None,
         archived_at=_journal_time(session.archived_ms) if keep_title and session.archived_ms is not None else None,
+        asked_model=session.asked,
     ).run(conn)
     records.insert_rows(records.RuntimeSessionModel, ("session_id", "model", "replies", "cost_usd")).many(
         conn,

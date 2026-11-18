@@ -2,7 +2,7 @@ import type { ModelsServed } from '@/api/types'
 import { Cost } from '@/components/cost'
 import { Field } from '@/components/fields'
 import { None } from '@/components/none'
-import { isUnread, sameModel, UNREAD, unservedReason } from '@/lib/models'
+import { insteadMark, isUnread, sameModel, UNREAD, unservedReason } from '@/lib/models'
 import { cn } from '@/lib/utils'
 
 /**
@@ -11,7 +11,8 @@ import { cn } from '@/lib/utils'
  * one model's cost is `spent` already. Until canopy reads the session, a few ended runs each tick, or when it cannot,
  * says `unread`, why on hover; a session read, or gone, that names none says `none` and why: both muted sans, as no
  * id. For a run that records the model canopy `asked` for, it says `asked X` until then instead, why none served yet
- * on hover. Once read, a run the model asked for served none of reads `asked Y ≠ served X`, and one it
+ * on hover. Once read, a run the model asked for served none of reads `asked Y ≠ served X`, or `asked Y → served X`
+ * when what it asked for is a router, which sends a run on to another model as its job (`isRouter`), and one it
  * served alongside another marks only the other `≠`: in the field's own color, since a model other than the one asked
  * for is worth knowing, not waiting on the operator. `X@variant` asked and `X` served are the same (`sameModel`).
  */
@@ -68,7 +69,7 @@ function Models({ models, asked }: { models: ModelsServed; asked: string | null 
     }
     return (
         <span>
-            asked {asked} ≠ served {served}
+            asked {asked} {asked === null ? '≠' : insteadMark(asked)} served {served}
         </span>
     )
 }

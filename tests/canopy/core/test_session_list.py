@@ -6,18 +6,18 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
+import pytest
+
 from canopy.cli import sessions as sessions_cli
 from canopy.cli.main import main
 from canopy.core import db, records, runtime_sessions, session_list
 from canopy.core.session_list import MadeBy
-from canopy.runtime.report import SessionPage, SessionSpend
+from canopy.runtime.report import ModelUse, SessionPage, SessionSpend
 from tests.canopy.helpers import in_run
 
 if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Sequence
-
-    import pytest
 
     from canopy.core.session_list import Listed, Whose
     from tests.conftest import CanopyEnv
@@ -26,6 +26,8 @@ if TYPE_CHECKING:
 NOON_MS: Final = 1_792_843_200_000
 #: The workspace's state directory, below which every session is canopy's.
 STATE_DIR: Final = Path("/work/.canopy")
+#: A router: a model a provider serves by sending each request on to another, so no reply names it.
+AUTO: Final = "github-copilot/auto"
 
 
 def kept(
@@ -36,8 +38,13 @@ def kept(
     parent: str | None = None,
     directory: str = "/home/me/notes",
     archived: bool = False,
+    asked: str | None = None,
+    served: Sequence[str] = (),
 ) -> SessionSpend:
-    """A session as the runtime reports it to a read that keeps titles, started `minute` minutes after noon."""
+    """A session as the runtime reports it to a read that keeps titles, started `minute` minutes after noon.
+
+    `asked` is the model it was set to run on, and `served` the models its replies name, the most costly first.
+    """
     at = NOON_MS + minute * 60_000
     return SessionSpend(
         session_id=session_id,
@@ -53,6 +60,8 @@ def kept(
         cache_write=0,
         title=title,
         archived_ms=at if archived else None,
+        asked=asked,
+        models=tuple(ModelUse(model, 1, 1.0 / (n + 1)) for n, model in enumerate(served)),
     )
 
 
@@ -72,6 +81,7 @@ def listed(
     archived: bool = False,
     directory: str | None = None,
     limit: int = session_list.LISTED,
+    model: str | None = None,
 ) -> list[Listed]:
     """The sessions a list holds."""
     return list(
@@ -84,6 +94,7 @@ def listed(
             archived=archived,
             directory=directory,
             limit=limit,
+            model=model,
         ).sessions,
     )
 
@@ -143,6 +154,47 @@ def test_words_find_the_newest_whose_title_holds_every_one_a_subagents_among_the
     assert [s.session_id for s in listed(conn, words=["0%"])] == ["ses_5"]
     assert [s.session_id for s in listed(conn, words=["_"])] == []
     assert [s.parent_id for s in listed(conn, words=["look"])] == ["ses_3"]
+
+
+def test_a_session_names_the_model_it_was_asked_to_run_on_and_those_that_served_it(conn: sqlite3.Connection) -> None:
+    run_id = ran_in(conn, "ses_tick")
+    records.update(records.Tick).set(model="openai/gpt-5@high").where("id = ?", run_id).run(conn)
+    read(
+        conn,
+        kept("ses_routed", "Routed", asked=AUTO, served=["github-copilot/gpt-5", "github-copilot/claude-x"]),
+        kept("ses_plain", "Plain", minute=1, served=["openai/gpt-5"]),
+        kept("ses_tick", "Tick", minute=2, directory="/work", served=["openai/gpt-5@high"]),
+        # A subagent's model is not the one canopy asked for its run.
+        kept("ses_sub", "Sub", minute=3, directory="/work", parent="ses_tick", served=["openai/gpt-5-mini"]),
+    )
+
+    assert [(s.session_id, s.asked, s.models) for s in listed(conn)] == [
+        ("ses_plain", None, ("openai/gpt-5",)),
+        ("ses_routed", AUTO, ("github-copilot/gpt-5", "github-copilot/claude-x")),
+    ]
+    [tick] = listed(conn, "canopy")
+    assert (tick.asked, tick.models) == ("openai/gpt-5@high", ("openai/gpt-5@high",))
+    [sub] = tick.subagents
+    assert (sub.asked, sub.models) == (None, ("openai/gpt-5-mini",))
+
+
+def test_a_list_narrowed_to_a_model_holds_the_sessions_asked_for_it_or_served_by_it(conn: sqlite3.Connection) -> None:
+    run_id = ran_in(conn, "ses_tick")
+    records.update(records.Tick).set(model=AUTO).where("id = ?", run_id).run(conn)
+    read(
+        conn,
+        kept("ses_routed", "Routed", asked=AUTO, served=["github-copilot/gpt-5"]),
+        kept("ses_direct", "Direct", minute=1, served=["github-copilot/gpt-5"]),
+        kept("ses_other", "Other", minute=2, served=["openai/gpt-5"]),
+        kept("ses_sub", "Sub", minute=3, parent="ses_routed", asked=AUTO),
+        kept("ses_tick", "Tick", minute=4, directory="/work", served=["github-copilot/claude-x"]),
+    )
+
+    # Each on a line of its own, a subagent's among them, as a list found by words is.
+    assert tree(listed(conn, model=AUTO)) == ["ses_sub", "ses_routed"]
+    assert tree(listed(conn, model="github-copilot/gpt-5")) == ["ses_direct", "ses_routed"]
+    assert tree(listed(conn, "canopy", model=AUTO)) == ["ses_tick"]
+    assert listed(conn, model="github-copilot/nonesuch") == []
 
 
 def test_a_session_in_an_excluded_directory_is_never_listed(conn: sqlite3.Connection) -> None:
@@ -279,9 +331,63 @@ def test_canopy_sessions_finds_one_of_the_operators_by_its_title_with_the_comman
     assert "client" not in printed
     assert "Read every session updated up to" in printed
     [tick] = canopys["sessions"]
+    assert (tick["asked"], tick["models"]) == (None, [])
     assert (tick["title"], tick["made_by"], tick["reopen"]) == (
         "Tick release",
         {"table": "ticks", "run_id": tick_id},
         None,
     )
     assert canopys["progress"]["current"] is True
+
+
+def test_canopy_sessions_names_each_sessions_model_and_narrows_the_list_to_one(
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    canopy_env.append_user("\n[sessions]\nsearch = 'titles'\n")
+    with canopy_env.journal() as conn:
+        read(
+            conn,
+            kept("ses_routed", "Routed", asked=AUTO, served=["github-copilot/gpt-5"]),
+            kept("ses_plain", "Plain", minute=1, served=["openai/gpt-5"]),
+            kept("ses_unknown", "Unknown", minute=2),
+        )
+
+    assert main(["sessions"]) == 0
+    every = capsys.readouterr().out
+    assert main(["sessions", "--model", AUTO]) == 0
+    routed = capsys.readouterr().out
+    assert main(["sessions", "--model", AUTO, "--json"]) == 0
+    [found] = json.loads(capsys.readouterr().out)["sessions"]
+
+    assert f"    model {AUTO} -> github-copilot/gpt-5\n" in every
+    assert "    model openai/gpt-5\n" in every
+    assert every.count("    model ") == 2
+    assert routed.startswith(f"Sessions outside canopy on {AUTO}, newest first:\n")
+    assert "Routed" in routed
+    assert "Plain" not in routed
+    assert (found["session_id"], found["asked"], found["models"]) == ("ses_routed", AUTO, ["github-copilot/gpt-5"])
+
+
+@pytest.mark.parametrize(
+    ("asked", "served", "line"),
+    [
+        (
+            AUTO,
+            ["github-copilot/gpt-5", "github-copilot/claude-x"],
+            f"model {AUTO} -> github-copilot/gpt-5, github-copilot/claude-x",
+        ),
+        # A session names a variant only when it is not the model's default.
+        ("openai/gpt-5@medium", ["openai/gpt-5"], "model openai/gpt-5@medium"),
+        ("openai/gpt-5", ["openai/gpt-5"], "model openai/gpt-5"),
+        ("openai/gpt-5", [], "model openai/gpt-5"),
+        (None, ["openai/gpt-5", "openai/gpt-5-mini"], "model openai/gpt-5, openai/gpt-5-mini"),
+        (None, [], None),
+    ],
+)
+def test_a_sessions_model_line_names_what_was_asked_and_what_served_only_when_they_differ(
+    asked: str | None,
+    served: list[str],
+    line: str | None,
+) -> None:
+    assert sessions_cli.model_line(asked, served) == line

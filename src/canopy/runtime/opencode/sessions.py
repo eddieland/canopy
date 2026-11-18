@@ -42,6 +42,7 @@ from canopy.runtime.report import (
     Count,
     SessionPage,
     SessionSpend,
+    model_name,
     model_uses,
     session_id,
     session_title,
@@ -116,6 +117,16 @@ class TitleQueries(NamedTuple):
 
 #: How OpenCode 1's record is asked for its sessions' titles.
 TITLES: Final = TitleQueries("session", TITLES_SQL, UNARCHIVED_SQL)
+
+
+class AskedQuery(NamedTuple):
+    """How a version's record is asked which model each session was set to run on, where it keeps one."""
+
+    #: The table of sessions, and its column that holds the model: a record made before the column has none.
+    table: str
+    column: str
+    #: Each session a JSON array of ids names, with its model's provider, id, and variant.
+    asked: str
 
 
 class _Session(BaseModel):
@@ -290,6 +301,7 @@ def read(
     limit: int,
     variant_mark: str,
     titles: TitleQueries | None = None,
+    asked: AskedQuery | None = None,
 ) -> SessionPage:
     """Read a page of sessions from the databases at `paths`, with queries shaped as `SESSIONS_SQL` and `MODELS_SQL`.
 
@@ -298,7 +310,8 @@ def read(
     can keep only its own role's sessions from being read. Each is read from the cursor, and their sessions merged in
     the order of their update, so the page's last is where every one of them is read from next.
     `variant_mark` goes between a model and the variant it ran at, as the version's export names it. With `titles`,
-    each session's title and archive are read with it, as `TITLES` reads OpenCode 1's.
+    each session's title and archive are read with it, as `TITLES` reads OpenCode 1's; with `asked`, the model each was
+    set to run on, from a record that keeps one.
 
     Returns:
         The page, as `updated_after` gives it.
@@ -310,9 +323,8 @@ def read(
         if not path.is_file():
             continue
         try:
-            rows.extend(
-                _rows(path, sessions_sql, models_sql, after, limit=limit, variant_mark=variant_mark, titles=titles),
-            )
+            queries = _Queries(sessions_sql, models_sql, variant_mark, titles, asked)
+            rows.extend(_rows(path, queries, after, limit=limit))
         except _UnreadableError as e:
             if n == 0:
                 return SessionPage("failed", error=str(e))
@@ -339,24 +351,27 @@ class _UnreadableError(Exception):
     """A database canopy cannot read, or cannot read past."""
 
 
+class _Queries(NamedTuple):
+    """How one version's record is read, as `read` is given it."""
+
+    sessions: str
+    models: str
+    variant_mark: str
+    titles: TitleQueries | None
+    asked: AskedQuery | None
+
+
 # The database's sessions updated after the cursor, at most `limit` of them, in the order of their update.
-def _rows(
-    path: Path,
-    sessions_sql: str,
-    models_sql: str,
-    after: SessionCursor,
-    *,
-    limit: int,
-    variant_mark: str,
-    titles: TitleQueries | None,
-) -> list[_Row]:
+def _rows(path: Path, queries: _Queries, after: SessionCursor, *, limit: int) -> list[_Row]:
+    variant_mark, titles = queries.variant_mark, queries.titles
     try:
         with opened(path) as conn:
-            rows = query(conn, sessions_sql, after[0], after[0], after[1], limit)
+            rows = query(conn, queries.sessions, after[0], after[0], after[1], limit)
             sessions = [_session(row) for row in rows]
             ids = json.dumps([s.id for s in sessions if s is not None])
-            replies = _replies(query(conn, models_sql, ids)) if any(sessions) else []
+            replies = _replies(query(conn, queries.models, ids)) if any(sessions) else []
             named = _titles(conn, titles, ids) if titles is not None and any(sessions) else {}
+            set_to = _asked(conn, queries.asked, ids, variant_mark) if queries.asked and any(sessions) else {}
     except sqlite3.Error as e:
         raise _UnreadableError(f"OpenCode's database could not be read: {str(e)[:200]}") from None
     found: list[_Row] = []
@@ -365,11 +380,30 @@ def _rows(
         if not isinstance(updated, int) or not isinstance(row_id, str):
             raise _UnreadableError("OpenCode's database holds a session canopy cannot read past")
         spend = (
-            _spend(session, [r for r in replies if r.session_id == session.id], variant_mark, named.get(session.id))
+            _spend(
+                session,
+                [r for r in replies if r.session_id == session.id],
+                variant_mark,
+                named.get(session.id),
+                set_to.get(session.id),
+            )
             if session
             else None
         )
         found.append(_Row(updated, row_id, spend))
+    return found
+
+
+# The model each session of those `ids`, a JSON array, names was set to run on, by its id, as a reply's model is named;
+# none from a record whose table has no such column, and a session whose model is not text has none.
+def _asked(conn: sqlite3.Connection, asked: AskedQuery, ids: str, variant_mark: str) -> dict[str, str]:
+    if asked.column not in {row[0] for row in query(conn, COLUMNS_SQL, asked.table)}:
+        return {}
+    found: dict[str, str] = {}
+    for found_id, provider, model, variant in query(conn, asked.asked, ids):
+        if isinstance(found_id, str) and isinstance(provider, str) and isinstance(model, str):
+            at = f"{variant_mark}{variant}" if isinstance(variant, str) and variant else ""
+            found[found_id] = model_name(f"{provider}/{model}{at}")
     return found
 
 
@@ -415,6 +449,7 @@ def _spend(
     replies: Iterable[_Replies],
     variant_mark: str,
     titled: tuple[str | None, int | None] | None,
+    asked: str | None,
 ) -> SessionSpend:
     named = (
         (f"{r.provider}/{r.model}{f'{variant_mark}{r.variant}' if r.variant else ''}", r.replies, float(r.cost))
@@ -435,4 +470,5 @@ def _spend(
         models=model_uses(named),
         title=titled[0] if titled is not None else None,
         archived_ms=titled[1] if titled is not None else None,
+        asked=asked,
     )

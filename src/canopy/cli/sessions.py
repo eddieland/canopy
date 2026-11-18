@@ -69,6 +69,12 @@ _COUNT_WIDTH: Final = 10
 @click.option("--canopy", "ours", is_flag=True, help="List canopy's own runs' sessions instead of those outside it.")
 @click.option("--archived", is_flag=True, help="List the sessions the runtime archived too.")
 @click.option(
+    "--model",
+    default=None,
+    metavar="PROVIDER/MODEL",
+    help="List only the sessions asked to run on this model, or served by it, such as github-copilot/auto.",
+)
+@click.option(
     "--limit",
     type=click.IntRange(min=1, max=session_list.MAX_LISTED),
     default=session_list.LISTED,
@@ -89,6 +95,7 @@ def cmd_sessions(
     words: tuple[str, ...],
     ours: bool,
     archived: bool,
+    model: str | None,
     limit: int,
     sizes: bool,
     as_json: bool,
@@ -98,6 +105,9 @@ def cmd_sessions(
     Lists the sessions outside canopy, your own in any directory, each with the command that reopens it in the runtime;
     with --canopy, canopy's runs' instead, each with the run that made it. A subagent's session is listed under the
     one it ran for; one the runtime archived only with --archived; and one in a directory sessions.exclude names never.
+    Each names the model it was asked to run on, where the runtime or its run recorded one, and the models that served
+    it when they differ, as a router's do; --model lists only the sessions asked to run on a model, or served by it,
+    each on a line of its own.
     The loop's wait between ticks reads each session's title while sessions.search is "titles", and this says how far
     that read has come. At "text", the wait also keeps an index of what each session said, did, and read, and WORDS
     finds the sessions whose title and one message hold every word, the best match first, each with a snippet of the
@@ -120,7 +130,7 @@ def cmd_sessions(
         raise CliError(f"sessions refused ({r.guard}): {r.reason}") from None
     ctx = open_context(click_ctx)
     if not sizes:
-        return _list(ctx, words, ours=ours, archived=archived, limit=limit, as_json=as_json)
+        return _list(ctx, words, ours=ours, archived=archived, model=model, limit=limit, as_json=as_json)
     found = session_sizes.measure(
         ctx.conn,
         version=ctx.config.runtime.version,
@@ -144,11 +154,12 @@ def listed_lines(
     words: Sequence[str],
     reopen: dict[str, str],
     text: bool = False,
+    model: str | None = None,
 ) -> list[str]:
     """The list as `canopy sessions` prints it: a line for each session, and a line under it for its run or command.
 
     `reopen` is the command that reopens each session outside canopy, by its id. With `text`, the words were found by
-    the index of what sessions said, and each hit has its snippet.
+    the index of what sessions said, and each hit has its snippet. `model` is the model the list was narrowed to.
 
     Returns:
         Its lines, without line ends, how far the read has come last.
@@ -156,10 +167,13 @@ def listed_lines(
     whose = "canopy's sessions" if ours else "Sessions outside canopy"
     holds = "that hold" if text else "whose title holds"
     heading = f"{whose} {holds} {' '.join(words)}" if words else whose
+    if model is not None:
+        heading = f"{heading} on {model}"
     order = "best match first" if text and words else "newest first"
     lines = [f"{heading}, {order}:" if listing.sessions else f"{heading}: none.", ""]
     for session in listing.sessions:
-        lines.extend([*_session_lines(session, reopen, depth=0, flat=bool(words)), ""])
+        flat = bool(words) or model is not None
+        lines.extend([*_session_lines(session, reopen, depth=0, flat=flat), ""])
     if listing.more:
         lines.append(f"More match than these {len(listing.sessions)}: --limit lists up to {session_list.MAX_LISTED}.")
     lines.append(progress_line(listing.progress))
@@ -260,7 +274,33 @@ def render(found: Sizes) -> list[str]:
 
 
 # The list, printed, or as JSON; the command's exit status.
-def _list(ctx: Context, words: Sequence[str], *, ours: bool, archived: bool, limit: int, as_json: bool) -> int:
+def model_line(asked: str | None, served: Sequence[str]) -> str | None:
+    """What a session's line says of its models: the one asked for, and those that served it when they differ.
+
+    A session asked for a model at a variant and served by the model alone ran on what was asked: a session names a
+    variant only when it is not the model's default.
+
+    Returns:
+        `model A` for one asked for and served alike, or known only one way; `model A -> B, C` for one asked for A and
+        served by others, as a router's is; None when neither is known.
+    """
+    if asked is None:
+        return f"model {', '.join(served)}" if served else None
+    if not served or all(m in {asked, asked.rpartition("@")[0]} for m in served):
+        return f"model {asked}"
+    return f"model {asked} -> {', '.join(served)}"
+
+
+def _list(
+    ctx: Context,
+    words: Sequence[str],
+    *,
+    ours: bool,
+    archived: bool,
+    model: str | None,
+    limit: int,
+    as_json: bool,
+) -> int:
     search = ctx.config.sessions
     if search.search == "off":
         raise CliError(OFF)
@@ -276,6 +316,7 @@ def _list(ctx: Context, words: Sequence[str], *, ours: bool, archived: bool, lim
         archived=archived,
         limit=limit,
         text=version if text else None,
+        model=model,
     )
     index = session_index.progress(ctx.state_dir, search.exclude) if text else None
     reopen = {
@@ -294,7 +335,7 @@ def _list(ctx: Context, words: Sequence[str], *, ours: bool, archived: bool, lim
         }
         click.echo(json.dumps(found, indent=2))
     else:
-        for line in listed_lines(listing, ours=ours, words=words, reopen=reopen, text=text):
+        for line in listed_lines(listing, ours=ours, words=words, reopen=reopen, text=text, model=model):
             click.echo(line)
         if text:
             click.echo(index_line(index))
@@ -314,6 +355,7 @@ def _as_json(session: Listed, reopen: dict[str, str]) -> dict[str, object]:
     return {
         **shown,
         "made_by": {"table": made.table, "run_id": made.run_id} if made is not None else None,
+        "models": list(session.models),
         "hit": dataclasses.asdict(session.hit) if session.hit is not None else None,
         "reopen": reopen.get(session.session_id),
         "subagents": [_as_json(s, reopen) for s in session.subagents],
@@ -334,6 +376,9 @@ def _session_lines(session: Listed, reopen: dict[str, str], *, depth: int, flat:
     else:
         made = f"{_run(session.made_by)}, " if session.made_by is not None else ""
         lines.append(f"{indent}    {made}session {session.session_id} in {session.directory}")
+    models = model_line(session.asked, session.models)
+    if models is not None:
+        lines.append(f"{indent}    {models}")
     if flat and session.parent_id is not None:
         lines.append(f"{indent}    a subagent's, for session {session.parent_id}")
     for below in session.subagents:

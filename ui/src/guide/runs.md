@@ -47,7 +47,9 @@ list share a name, so `claude-opus-4-1` rather than `anthropic/claude-opus-4-1`,
 Hover it for each one whole, with its cost. Until canopy reads the session it names the model canopy asked for,
 `asked claude-opus-4-1`, or says `model unread`, with why on hover; a run with no session to read, such as a feedback
 plan's, names no model at all. A run that got none of what it asked for says so, asked first,
-`asked claude-opus-4-1 ≠ claude-sonnet-4-5`, as [its page](#a-runs-page) does; one that got it and switched partway
+`asked claude-opus-4-1 ≠ claude-sonnet-4-5`, as [its page](#a-runs-page) does. A router is the exception: ask for
+`github-copilot/auto` and something else serving is the whole idea, so that reads `asked auto → gpt-5`, an arrow
+rather than a complaint. A run that got what it asked for and switched partway
 leads with it and sets the `+1` apart. Neither is amber: a run that went elsewhere waits on nothing, it just bears
 knowing. Asking for `openai/gpt-5@medium`, the default effort, and being served `openai/gpt-5` is no surprise either,
 since the session names a variant only when it isn't the default. A ticket's Runs panel shows the same line, so a
@@ -99,10 +101,11 @@ read failed, the field says `unread`, with why on hover. Once the runtime has fo
 made no model call, it says `none` and why. When canopy chose the run's model, from
 `[runtime.models]` or the ticket's override, the field says `asked` and that model instead, from the moment it starts,
 with why none served yet on hover. Once the session is read, a run the model asked for served none of reads
-`asked Y ≠ served X`, and one it served alongside another marks the other with a `≠`, its tip saying it wasn't asked
-for. Last come the places: the branch, its worktrees, and the path of its log, which only you can read. The worktrees
-stay after the run ends, so you can still see where it worked. The pool hands the slot to the next lease, though, so by
-then it may hold someone else's work; check before you go digging there for this run's leftovers.
+`asked Y ≠ served X`, or `asked Y → served X` when Y is a router such as `github-copilot/auto`, and one it served
+alongside another marks the other with a `≠`, its tip saying it wasn't asked for. Last come the places: the branch,
+its worktrees, and the path of its log, which only you can read. The worktrees stay after the run ends, so you can
+still see where it worked. The pool hands the slot to the next lease, though, so by then it may hold someone else's
+work; check before you go digging there for this run's leftovers.
 
 A run that ended `failed`, `crashed`, or `unknown` also has **ended on**, right under its summary: the transcript's
 last runtime error, or failing that its last failed or refused tool call, with when it happened. The summary is the

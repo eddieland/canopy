@@ -138,6 +138,9 @@ class RuntimeSession(Row):
     title: str | None
     #: When the runtime archived it, so its own list leaves it out; None when it did not, or no title is kept.
     archived_at: str | None
+    #: The model it was set to run on, as `provider/model[@variant]`, where the runtime records one: what was asked
+    #: for, which for a router differs from every model `RuntimeSessionModel` names. None when it records none.
+    asked_model: str | None
 
 
 @dataclass(frozen=True)

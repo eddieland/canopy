@@ -89,6 +89,18 @@ describe('ModelsField', () => {
         expect(screen.queryByText(/asked/u)).toBeNull()
     })
 
+    it('says a router canopy asked for sent the run on to what served', () => {
+        renderModels(
+            {
+                status: 'found',
+                models: [{ model: 'github-copilot/gpt-5', replies: 3, cost_usd: 0 }],
+                error: null,
+            },
+            'github-copilot/auto',
+        )
+        expect(screen.getByText(/^asked/u).textContent).toBe('asked github-copilot/auto → served github-copilot/gpt-5')
+    })
+
     it("says what canopy asked for and what served, in the field's color, when it served none of the replies", () => {
         renderModels(
             {

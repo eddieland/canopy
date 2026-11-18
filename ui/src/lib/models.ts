@@ -101,6 +101,39 @@ export function sameModel(asked: string, served: string): boolean {
 }
 
 /**
+ * Whether `model`, as `provider/model[@variant]`, is a router: a name a provider serves by picking one of its models
+ * for each request, as `github-copilot/auto` does, so no session ever names it as what served. By its name alone: the
+ * last part of its id is `auto`, which is how the providers that have one name it.
+ */
+export function isRouter(model: string): boolean {
+    const id = pickerModel(model).variant === null ? model : model.slice(0, model.lastIndexOf('@'))
+    return id.slice(id.lastIndexOf('/') + 1) === 'auto'
+}
+
+/**
+ * The mark between the model canopy `asked` for and one that served instead: `→` for a router, which served as it was
+ * asked to by sending the run on, and `≠` for any other, which did not serve at all.
+ */
+export function insteadMark(asked: string): string {
+    return isRouter(asked) ? '→' : '≠'
+}
+
+/**
+ * What a session's row says of its models: the one `asked` for, and those that `served` it when they differ, as a
+ * router's do (`auto → gpt-5`); null when neither is known. A model at a variant asked and the model alone served are
+ * the same (`sameModel`).
+ */
+export function sessionModels(asked: string | null, served: readonly string[]): string | null {
+    if (asked === null) {
+        return served.length === 0 ? null : served.join(', ')
+    }
+    if (served.every((model) => sameModel(asked, model))) {
+        return asked
+    }
+    return `${asked} ${insteadMark(asked)} ${served.join(', ')}`
+}
+
+/**
  * Why no model is named as having served a run, by how canopy's last read of its session went (DESIGN §13), why a
  * failed read failed after it in parentheses; null once a model is named.
  */

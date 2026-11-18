@@ -237,6 +237,11 @@ describe('RunsTable', () => {
         expect(screen.queryByTestId('run-model')).toBeNull()
     })
 
+    it('says a router canopy asked for sent the run on to what served, not that it missed', async () => {
+        await renderRuns([run({ model: 'github-copilot/auto' })])
+        expect(screen.getByTestId('run-model').textContent).toBe('asked auto → claude-sonnet-4-5')
+    })
+
     it('says what canopy asked for, then what served, when it served none of the replies', async () => {
         await renderRuns([run({ model: 'anthropic/claude-opus-4-1' })])
         const model = screen.getByTestId('run-model')
