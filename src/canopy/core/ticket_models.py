@@ -27,14 +27,14 @@ if TYPE_CHECKING:
     from canopy.runtime.report import ModelList
 
 #: One of a ticket's agents, each a key of `[runtime.models]`: `worker` covers the public and the private worker.
-Agent = Literal["worker", "planner", "reviewer"]
+type Agent = Literal["worker", "planner", "reviewer"]
 #: Every agent of a ticket's, in the order `canopy model KEY` lists them.
 AGENTS: Final[tuple[Agent, ...]] = ("worker", "planner", "reviewer")
 #: The guard of an override naming a model the runtime does not list, or a variant the model does not: it is refused
 #: when set, as at a run's start.
 UNKNOWN: Final = "unknown_model"
 #: Where an agent's next model comes from: the ticket's override, `[runtime.models]`, or neither, the runtime's default.
-Source = Literal["ticket", "config", "default"]
+type Source = Literal["ticket", "config", "default"]
 
 
 @dataclass(frozen=True)

@@ -209,7 +209,7 @@ REQUIRED_STANDING: Final = (STANDING_SECTION, STANDING_TEXT)
 MAX_STANDING_BYTES: Final = 4096
 STANDING_HEADING: Final = "## Standing instructions from the operator"
 #: Whose standing instructions a prompt carries, which says how to read them (`STANDING_FRAMING`).
-Reader = Literal["overseer", "worker", "private", "planner", "reviewer", "chore"]
+type Reader = Literal["overseer", "worker", "private", "planner", "reviewer", "chore"]
 #: How each reader is told to read the operator's standing instructions, after them in the section.
 STANDING_FRAMING: Final[Mapping[Reader, str]] = {
     "overseer": (

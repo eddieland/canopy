@@ -1876,7 +1876,7 @@ class Artifacts(Section):
 
 
 CHORE_DAYS: Final = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")  # by `datetime.weekday()`
-ChoreDay = Literal["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+type ChoreDay = Literal["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 _HOURS_RE: Final = re.compile(r"([01]\d|2[0-3]):([0-5]\d)-([01]\d|2[0-4]):([0-5]\d)")
 _DAY_MINUTES: Final = 24 * 60
 

@@ -52,8 +52,8 @@ _CLONE: Final = re.compile(
 )
 
 # The host a token is for, to the GraphQL endpoint to send it to; and the host to the token.
-Endpoint = Callable[[str], str]
-Token = Callable[[str], str]
+type Endpoint = Callable[[str], str]
+type Token = Callable[[str], str]
 
 
 class InputError(Exception):
