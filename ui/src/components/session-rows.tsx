@@ -15,6 +15,7 @@ import { TaskRunLink } from '@/components/task-link'
 import { TickLink } from '@/components/tick-link'
 import { Timestamp } from '@/components/timestamp'
 import { Tip } from '@/components/tip'
+import { sessionModels } from '@/lib/models'
 import { directoryTail, sessionName } from '@/lib/sessions'
 
 /** No words to mark: a list read without any. */
@@ -83,6 +84,7 @@ function SessionRow({
     narrow: boolean
 }) {
     const name = sessionName(session)
+    const models = sessionModels(session.asked, session.models)
     return (
         <>
             {/* `group/copy`: the command's copy button shows while the pointer is anywhere over the row. */}
@@ -108,6 +110,13 @@ function SessionRow({
                 </span>
                 <Cost usd={session.cost_usd} className="text-right text-xs text-muted-foreground" />
                 <Age at={session.started_at} variant="ago" className="text-right" />
+                {models !== null && (
+                    <RowLine from="title">
+                        <span className="font-mono text-xs text-muted-foreground" data-testid="session-models">
+                            {models}
+                        </span>
+                    </RowLine>
+                )}
                 {session.reopen !== null && (
                     <RowLine from="title">
                         <Copyable

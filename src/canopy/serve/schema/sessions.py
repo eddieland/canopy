@@ -90,6 +90,11 @@ class RuntimeSession(Model):
     """What it cost, in US dollars, as the runtime reported it."""
     archived: bool
     """Whether the runtime archived it, so its own list leaves it out."""
+    asked: str | None = None
+    """The model it was asked to run on, as `provider/model[@variant]`: the one the runtime records it was set to, else
+    the one canopy asked for its run. None when neither is known."""
+    models: list[str] = []
+    """The models its replies name, the most costly first: what served it, which for a router is not what was asked."""
     made_by: SessionRun | None = None
     """For one of canopy's, the run that made it; None for one outside, or one no run names."""
     reopen: str | None = None

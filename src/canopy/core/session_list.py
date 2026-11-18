@@ -52,6 +52,9 @@ class MadeBy:
 
     table: RunTable
     run_id: int
+    #: The model canopy asked the runtime for, for the run's own session; None for the runtime's default, or for a
+    #: subagent's session, whose model the run did not choose.
+    model: str | None = None
 
 
 @dataclass(frozen=True)
@@ -72,6 +75,11 @@ class Listed:
     #: For one of canopy's, the run that made it; None for one outside, or one of canopy's no run names, as a chore's
     #: trial run that records none.
     made_by: MadeBy | None
+    #: The model it was asked to run on, as `provider/model[@variant]`: the one the runtime records the session was set
+    #: to, else the one canopy asked for its run. None when neither is known, as for the runtime's default.
+    asked: str | None = None
+    #: The models its replies name, the most costly first: what served it, which for a router is not what was asked.
+    models: Sequence[str] = ()
     #: The sessions that ran for it as subagents, oldest first, each with its own; empty for a list found by words.
     subagents: Sequence[Listed] = ()
     #: Found by the index of what sessions said: its snippet, and how many more of its messages hold the words; None
@@ -117,6 +125,7 @@ def listing(
     directory: str | None = None,
     limit: int = LISTED,
     text: Version | None = None,
+    model: str | None = None,
 ) -> Listing:
     """List the runtime's sessions `whose` names, newest first, or find the newest whose title holds every word.
 
@@ -125,7 +134,9 @@ def listing(
     subagents' under it. A word is found anywhere in a title, its case aside for ASCII letters, as `LIKE` finds it.
     `archived` lists the sessions the runtime archived too, and `directory` narrows the list to the sessions that ran in
     that directory exactly, their subagents' among them, none in one `exclude` names all the same. With `text`, the
-    runtime that keeps the record, words are found by the index of what sessions said, the best match first.
+    runtime that keeps the record, words are found by the index of what sessions said, the best match first. `model`
+    narrows the list to the sessions asked to run on that model, or served by it, named exactly, each on a line of
+    its own as one found by words is: where a router among the models was used, and what it routed to.
 
     Returns:
         At most `limit` sessions, within `MAX_LISTED`, and how far the read has come.
@@ -142,14 +153,16 @@ def listing(
             directory=directory,
             limit=limit,
             version=text,
+            model=model,
         )
+    flat = bool(words) or model is not None
     with db.read_snapshot(conn):
-        query = _matching(whose, state_dir, exclude, archived=archived, directory=directory)
+        query = _matching(whose, state_dir, exclude, archived=archived, directory=directory, model=model)
         for word in words:
             query = query.where("title LIKE ? ESCAPE '\\'", f"%{_escaped(word)}%")
-        if not words and directory is None:
+        if not flat and directory is None:
             query = query.where("parent_id IS NULL OR parent_id NOT IN (SELECT session_id FROM runtime_sessions)")
-        elif not words:
+        elif not flat:
             # Narrowed, a session whose parent ran in another directory heads a tree of its own, so every session
             # that ran here is listed, however deep it ran.
             query = query.where(
@@ -160,7 +173,7 @@ def listing(
         shown = found[:limit]
         ids = [s.session_id for s in shown]
         below: list[_Session] = []
-        if not words:
+        if not flat:
             below = _subagents(
                 conn,
                 ids,
@@ -210,13 +223,14 @@ def _found(
     directory: str | None,
     limit: int,
     version: Version,
+    model: str | None,
 ) -> Listing:
     ours = whose == "canopy"
     # Each a word as memory's search reads it, never the index's query syntax.
     words = memory_search.words(" ".join(words))
     ranked = session_search.found(state_dir, words, canopy=ours)
     with db.read_snapshot(conn):
-        query = _matching(whose, state_dir, exclude, archived=archived, directory=directory).where(
+        query = _matching(whose, state_dir, exclude, archived=archived, directory=directory, model=model).where(
             "session_id IN (SELECT value FROM json_each(?))",
             json.dumps([f.session_id for f in ranked]),
         )
@@ -246,10 +260,14 @@ class _Session(records.View):
     updated_at: str
     cost_usd: float
     archived_at: str | None
+    asked_model: str | None
+    #: The models its replies name, a JSON array, the most costly first.
+    models: str
 
 
-# The sessions `whose` names, never one `exclude` names, an archived one only when `archived`, and, given a `directory`,
-# only those that ran in it.
+# The sessions `whose` names, never one `exclude` names, an archived one only when `archived`, given a `directory`,
+# only those that ran in it, and, given a `model`, only those asked to run on it, by the runtime's record or by the
+# run that made them, or served by it.
 def _matching(
     whose: Whose,
     state_dir: Path,
@@ -257,15 +275,33 @@ def _matching(
     *,
     archived: bool,
     directory: str | None,
+    model: str | None = None,
 ) -> sql.Select:
     query = (
-        sql.select("session_id, parent_id, title, directory, started_at, updated_at, cost_usd, archived_at")
+        sql.select(
+            "session_id, parent_id, title, directory, started_at, updated_at, cost_usd, archived_at, asked_model,"
+            " models",
+        )
         .from_("({}) AS c", runtime_sessions.sessions_in("", None, state_dir))
         .where("ours = ?", whose == "canopy")
         .where("NOT ({})", runtime_sessions.excluded(exclude))
     )
     if directory is not None:
         query = query.where("directory = ?", directory)
+    if model is not None:
+        ran = sql.any_of(
+            *(
+                sql.frag("EXISTS (SELECT 1 FROM {} WHERE session_id = c.session_id AND model = ?)", sql.name(t), model)
+                for t in runtime_sessions.RUN_TABLES
+            ),
+        )
+        query = query.where(
+            "asked_model = ? OR EXISTS (SELECT 1 FROM runtime_session_models m WHERE m.session_id = c.session_id"
+            " AND m.model = ?) OR {}",
+            model,
+            model,
+            ran,
+        )
     return query if archived else query.where("archived_at IS NULL")
 
 
@@ -314,7 +350,7 @@ def _made_by(conn: sqlite3.Connection, ids: Sequence[str]) -> dict[str, MadeBy]:
         return {}
     ran = sql.union(
         *(
-            sql.select("session_id, ? AS run_table, id AS run_id", t)
+            sql.select("session_id, ? AS run_table, id AS run_id, model", t)
             .from_("{}", sql.name(t))
             .where("session_id IN (SELECT at FROM up)")
             for t in runtime_sessions.RUN_TABLES
@@ -322,7 +358,7 @@ def _made_by(conn: sqlite3.Connection, ids: Sequence[str]) -> dict[str, MadeBy]:
         every=True,
     )
     query = (
-        sql.select("u.session_id, r.run_table, r.run_id")
+        sql.select("u.session_id, r.run_table, r.run_id, r.model, u.depth")
         .with_(
             "up(session_id, at, depth) AS ("
             "SELECT value, value, 0 FROM json_each(?)"
@@ -332,16 +368,17 @@ def _made_by(conn: sqlite3.Connection, ids: Sequence[str]) -> dict[str, MadeBy]:
             _MAX_DEPTH,
             recursive=True,
         )
-        .with_("ran(session_id, run_table, run_id) AS ({})", ran)
+        .with_("ran(session_id, run_table, run_id, model) AS ({})", ran)
         .from_("up u")
         .join("ran r ON r.session_id = u.at")
         .order_by("u.depth DESC, r.run_table, r.run_id")
     )
     # The nearest is read last, so it is the one kept.
     made: dict[str, MadeBy] = {}
-    for session_id, table, run_id in sql.execute(conn, query):
+    for session_id, table, run_id, model, depth in sql.execute(conn, query):
         if table in runtime_sessions.RUN_TABLES and isinstance(run_id, int):
-            made[str(session_id)] = MadeBy(cast("RunTable", table), run_id)
+            asked = model if depth == 0 and isinstance(model, str) else None
+            made[str(session_id)] = MadeBy(cast("RunTable", table), run_id, asked)
     return made
 
 
@@ -354,6 +391,7 @@ def _tree(shown: Iterable[_Session], below: Sequence[_Session], made: dict[str, 
 
     def listed(session: _Session, seen: frozenset[str]) -> Listed:
         mine = [c for c in children.get(session.session_id, []) if c.session_id not in seen]
+        by = made.get(session.session_id)
         return Listed(
             session_id=session.session_id,
             parent_id=session.parent_id,
@@ -363,7 +401,9 @@ def _tree(shown: Iterable[_Session], below: Sequence[_Session], made: dict[str, 
             updated_at=session.updated_at,
             cost_usd=session.cost_usd,
             archived=session.archived_at is not None,
-            made_by=made.get(session.session_id),
+            made_by=by,
+            asked=session.asked_model or (by.model if by is not None else None),
+            models=tuple(m for m in json.loads(session.models) if isinstance(m, str)),
             subagents=tuple(listed(c, seen | {c.session_id}) for c in mine),
         )
 

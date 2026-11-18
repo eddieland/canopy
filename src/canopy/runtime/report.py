@@ -234,6 +234,10 @@ class SessionSpend:
     #: When the runtime archived it, so its own list leaves it out, in milliseconds since the epoch; None when it did
     #: not, or the read was not asked for titles.
     archived_ms: int | None = None
+    #: The model the session was set to run on, as `provider/model[@variant]`, where the runtime records one: what was
+    #: asked for, which a router among the models, such as `github-copilot/auto`, is never named as by a reply. None
+    #: when the runtime records none, as for a session whose agent's definition chose its model.
+    asked: str | None = None
 
 
 @dataclass(frozen=True)
@@ -556,6 +560,15 @@ def session_title(value: object) -> str | None:
     return flat[:MAX_TITLE].rstrip() or None
 
 
+def model_name(value: str) -> str:
+    """Return a model's name as canopy keeps one: printable, with no space, cut to `MAX_MODEL_NAME`.
+
+    Returns:
+        The name, or `?` when nothing is left of it.
+    """
+    return "".join(c for c in value if c.isprintable() and not c.isspace())[:MAX_MODEL_NAME] or "?"
+
+
 def model_uses(replies: Iterable[tuple[str, int, float]]) -> tuple[ModelUse, ...]:
     """Each model's replies and their cost, from rows of a model's name, its replies, and their cost.
 
@@ -567,7 +580,7 @@ def model_uses(replies: Iterable[tuple[str, int, float]]) -> tuple[ModelUse, ...
     """
     found: dict[str, ModelUse] = {}
     for model, count, cost in replies:
-        name = "".join(c for c in model if c.isprintable() and not c.isspace())[:MAX_MODEL_NAME] or "?"
+        name = model_name(model)
         if name not in found and len(found) >= MAX_MODELS:
             name = OTHER_MODELS
         was = found.get(name, ModelUse(name, 0, 0.0))

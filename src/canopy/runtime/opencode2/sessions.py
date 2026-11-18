@@ -47,6 +47,17 @@ TITLES_SQL: Final = "SELECT id, title, time_archived FROM session_v2 WHERE id IN
 UNARCHIVED_SQL: Final = "SELECT id, title, NULL FROM session_v2 WHERE id IN (SELECT value FROM json_each(?))"
 #: How OpenCode 2's record is asked for its sessions' titles.
 TITLES: Final = opencode1.TitleQueries("session_v2", TITLES_SQL, UNARCHIVED_SQL)
+#: The model each session a JSON array of ids names was set to run on, `{providerID, id, variant}` in its row, as the
+#: operator chose it or a command named it: the one place OpenCode keeps what was asked for, where a router, such as
+#: `github-copilot/auto`, is replaced in each reply by the model it routed to. Null for a session whose agent's
+#: definition chose its model, as canopy's runs' do.
+ASKED_SQL: Final = """
+SELECT id, json_extract(model, '$.providerID'), json_extract(model, '$.id'), json_extract(model, '$.variant')
+FROM session_v2
+WHERE id IN (SELECT value FROM json_each(?)) AND json_valid(model)
+"""
+#: How OpenCode 2's record is asked for it.
+ASKED: Final = opencode1.AskedQuery("session_v2", "model", ASKED_SQL)
 #: Between a model and its variant, as canopy's config spells one (`canopy.core.agent_models`), not as OpenCode 2's own
 #: `#`, so the same variant reads the same under either runtime (`canopy.runtime.opencode2.session_models`).
 VARIANT_MARK: Final = "@"
@@ -69,6 +80,7 @@ def updated_after(cursor: SessionCursor | None, *, limit: int = MAX_SESSIONS, ti
         limit=limit,
         variant_mark=VARIANT_MARK,
         titles=TITLES if titles else None,
+        asked=ASKED,
     )
 
 

@@ -25,7 +25,7 @@ import { TicketTitle } from '@/components/ticket-title'
 import { Clipped, Tip } from '@/components/tip'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { costText } from '@/lib/cost-total'
-import { isUnread, modelNames, runModelIds, sameModel, UNREAD, unservedReason } from '@/lib/models'
+import { insteadMark, isUnread, modelNames, runModelIds, sameModel, UNREAD, unservedReason } from '@/lib/models'
 import { choreRunRef } from '@/lib/refs'
 import { shortSha, verdictText, verdictTone } from '@/lib/reviews'
 import { ROW_SUBGRID, rowLineFrom } from '@/lib/rows'
@@ -485,7 +485,8 @@ function namesModel(run: Run): boolean {
 
 /**
  * The model that served a run, as its list names it (`modelNames`), and `+1` for each other it switched to, every one
- * whole in its tip with its cost. A run the model canopy asked for served none of says `asked Y ≠ X`, asked first;
+ * whole in its tip with its cost. A run the model canopy asked for served none of says `asked Y ≠ X`, asked first,
+ * or `asked Y → X` when what it asked for is a router, which sends a run on to another model as its job (`isRouter`);
  * one it served alongside another marks only the count of the others, `+1`, in the foreground, the rest muted: worth
  * knowing, not waiting on the operator, so no status color (`sameModel` takes `X@variant` asked and `X` served alike).
  * Until its session is read, the model canopy asked for, else `model unread`, why in its tip, and `model none` once a
@@ -533,7 +534,7 @@ function RunModel({ run, names, className }: { run: Run; names: ModelNames; clas
             <span className={cn('text-muted-foreground', className)} data-testid="run-model">
                 {match === undefined && asked !== null ? (
                     <>
-                        asked {name(asked)} ≠{' '}
+                        asked {name(asked)} {insteadMark(asked)}{' '}
                         <span className="text-foreground">
                             {name(first?.model ?? '')}
                             {rest.length > 0 && ` +${rest.length}`}

@@ -40,6 +40,12 @@ does this page until you press `archived`. It shows the newest 50 sessions with 
 count in the header, which counts every row, can read higher: `newest 53`. When more match, the line at its foot links
 to the newest 500, and back; the same line says how far the loop's read has come.
 
+Under a title sits the session's model, when anything recorded one: the model it was asked to run on, and, when
+something else answered, what did. A session set to a router reads `github-copilot/auto → github-copilot/gpt-5`,
+which is the only place the runtime admits `auto` was ever involved, since every reply names the model it was routed
+to. For one of canopy's, what was asked is what canopy asked for its run. `canopy sessions --model github-copilot/auto`
+lists just the sessions asked for a model or served by it, which is how you find out where your router has been.
+
 **Outside canopy**, the default, is yours, in any directory, and other workspaces' canopy runs, which this workspace
 doesn't know. A row shows the end of the directory the session ran in, `…/acme/infra`, the whole on hover, and under
 its title the command that reopens it there:

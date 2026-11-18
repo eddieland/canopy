@@ -6,10 +6,13 @@ import type { ModelsServed, Run } from '@/api/types'
 import {
     isUnread,
     modelNames,
+    insteadMark,
+    isRouter,
     pickerModel,
     ranOn,
     runModelIds,
     sameModel,
+    sessionModels,
     shownModels,
     unservedReason,
     withVariant,
@@ -121,6 +124,38 @@ describe('sameModel', () => {
         expect(sameModel('openai/gpt-5', 'openai/gpt-5@high')).toBe(false)
         // An `@` in the provider is no variant.
         expect(sameModel('me@corp/model', 'me')).toBe(false)
+    })
+})
+
+describe('isRouter', () => {
+    it('takes a model whose id ends in auto as a router, at a variant or not, and no other', () => {
+        expect(isRouter('github-copilot/auto')).toBe(true)
+        expect(isRouter('openrouter/openrouter/auto')).toBe(true)
+        expect(isRouter('github-copilot/auto@high')).toBe(true)
+        expect(isRouter('github-copilot/gpt-5')).toBe(false)
+        expect(isRouter('acme/auto-tuned')).toBe(false)
+        expect(isRouter('auto/gpt-5')).toBe(false)
+    })
+
+    it('marks what served in place of a router as sent on, and in place of any other model as not it', () => {
+        expect(insteadMark('github-copilot/auto')).toBe('→')
+        expect(insteadMark('openai/gpt-5')).toBe('≠')
+    })
+})
+
+describe('sessionModels', () => {
+    it('names the model asked for, and what served only when it differs', () => {
+        expect(sessionModels('github-copilot/auto', ['github-copilot/gpt-5', 'github-copilot/claude-x'])).toBe(
+            'github-copilot/auto → github-copilot/gpt-5, github-copilot/claude-x',
+        )
+        expect(sessionModels('openai/gpt-5@medium', ['openai/gpt-5'])).toBe('openai/gpt-5@medium')
+        expect(sessionModels('openai/gpt-5', ['openai/gpt-5-mini'])).toBe('openai/gpt-5 ≠ openai/gpt-5-mini')
+        expect(sessionModels('openai/gpt-5', [])).toBe('openai/gpt-5')
+    })
+
+    it('names what served when nothing says what was asked, and nothing when neither is known', () => {
+        expect(sessionModels(null, ['openai/gpt-5', 'openai/gpt-5-mini'])).toBe('openai/gpt-5, openai/gpt-5-mini')
+        expect(sessionModels(null, [])).toBeNull()
     })
 })
 

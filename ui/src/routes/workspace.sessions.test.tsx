@@ -39,6 +39,8 @@ function session(id: string, title: string | null, at: string, more: Partial<Run
         updated_at: at,
         cost_usd: 0.84,
         archived: false,
+        asked: null,
+        models: [],
         made_by: null,
         reopen: `cd /home/op/acme/infra && opencode --session ${id}`,
         subagents: [],
@@ -162,6 +164,18 @@ describe('the sessions page', () => {
         expect(screen.getByTestId('sessions-progress').textContent).toMatch(
             /^Read every session updated up to .*last read/u,
         )
+    })
+
+    it('names the model a session was asked to run on, and what served it when a router sent it on', async () => {
+        const routed = session('ses_routed', 'Routed', '2026-10-08T11:00:00Z', {
+            asked: 'github-copilot/auto',
+            models: ['github-copilot/gpt-5'],
+        })
+        const plain = session('ses_plain', 'Plain', '2026-10-08T10:00:00Z', { models: ['openai/gpt-5'] })
+        const unknown = session('ses_unknown', 'Unknown', '2026-10-08T09:00:00Z')
+        await renderPage('/workspace/sessions', { outside: { ...OUTSIDE, sessions: [routed, plain, unknown] } })
+        const said = screen.getAllByTestId('session-models').map((line) => line.textContent)
+        expect(said).toEqual(['github-copilot/auto → github-copilot/gpt-5', 'openai/gpt-5'])
     })
 
     it("lists canopy's behind a filter, each opening the page of the run that made it", async () => {

@@ -493,6 +493,10 @@ promises:
   GitHub Copilot with its router `github-copilot/auto`, does only after it starts: canopy gives a model it looks up
   seconds to be listed, and a run's first prompt waits the same way (§33). A run on a router records the models it was
   routed to, as any run records what served.
+- **What was asked is kept beside what served.** A run records the model canopy asked for; a session of the runtime's
+  own, the model the runtime says it was set to, where it says. So where a router was used is told from what it
+  routed to: the list of sessions names both, and narrows to a model asked for or served, and a run on a router reads
+  as sent on, not as served by the wrong model.
 - **Hiding narrows only what is shown.** `runtime.hide_models` leaves models and variants matching its globs out of the
   lists canopy shows, `canopy models` and the web UI's menus, never out of the check above: config or a ticket may
   still name a hidden one, and its runs run.
