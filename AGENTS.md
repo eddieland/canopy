@@ -204,7 +204,8 @@ If code and the design disagree, the design doc wins until a decision entry says
   `#`. A class's docstring says what the class is; what one field holds goes on that field, not in the docstring.
   `runs/dispatch.py` is an example. `make fmt` writes the `#:` (the `doc-comments` codemod) above a module's constant
   or type alias, a field of a dataclass or `NamedTuple`, and an enum member, so a comment directly above one of those
-  is its doc comment whatever it says. Above any other class's attribute it is written by hand.
+  is its doc comment whatever it says: a note on why goes inside the value or a blank line above, or is worded as part
+  of what the name is. Above any other class's attribute the `#:` is written by hand.
   The exception is a field of an API model, a `canopy.serve.schema.Model`: what it holds is the docstring directly
   below it, which pydantic makes its description in the schema. pydantic reads no comment, so a `#:` there would
   describe the field to nobody who reads the API; a comment above such a field is a note kept out of the schema, and

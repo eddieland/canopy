@@ -227,6 +227,18 @@ MARK: Final = "#"
 MARK: Final = "#"
 ```
 
+### A rule inside a comment's text, which is no banner
+
+```python
+# See foo___bar, and a --- b.
+LIMIT: Final = 3
+```
+
+```python
+#: See foo___bar, and a --- b.
+LIMIT: Final = 3
+```
+
 ## Left alone
 
 ### Already a doc comment

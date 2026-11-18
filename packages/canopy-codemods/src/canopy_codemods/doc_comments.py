@@ -50,7 +50,7 @@ _KEPT: Final = re.compile(
     r"#(?:[:!]|\s*(?:noqa|type|pyrefly|pyright|mypy|fmt|ruff|isort|pragma|pylint|coding)\b\s*:|\s*noqa\b)",
 )
 #: A section's banner: a comment that opens or closes with a rule, such as `# ---- Limits ----` or `# ====`.
-_BANNER: Final = re.compile(r"#\s*(?:[-=#*~_]{3,}.*|.*[-=#*~_]{3,})")
+_BANNER: Final = re.compile(r"#\s*(?:[-=#*~_]{3,}.*|.*[-=#*~_]{3,}\s*$)")
 
 
 class DocComments(Command):
