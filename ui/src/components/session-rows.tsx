@@ -16,8 +16,11 @@ import { TickLink } from '@/components/tick-link'
 import { Timestamp } from '@/components/timestamp'
 import { Tip } from '@/components/tip'
 import { sessionModels } from '@/lib/models'
-import { directoryTail, hitNote, sessionName } from '@/lib/sessions'
+import { directoryTail, moreMessages, sessionName, unstopped } from '@/lib/sessions'
 import { byteSize } from '@/lib/ticks'
+
+/** What `indexed in part` means, in its tip. */
+const CUT_MEANS = 'It is longer than the index reads of one session, so words past that are not found.'
 
 /** No words to mark: a list read without any. */
 const NO_WORDS: readonly string[] = []
@@ -63,7 +66,7 @@ export function SessionsProgressLine({ progress }: { progress: SessionsProgress 
                 </>
             )}
             ; last read <Age at={progress.read_at} variant="ago" />
-            {progress.error !== null && <>, which failed: {progress.error}</>}
+            {progress.error !== null && <>, which failed: {unstopped(progress.error)}</>}
             {!progress.current &&
                 ". Titles are not yet read as sessions.exclude says: the loop's next wait reads them from the first"}
             .
@@ -72,9 +75,10 @@ export function SessionsProgressLine({ progress }: { progress: SessionsProgress 
 }
 
 /**
- * How far the index of what sessions said has read the runtime's record, in a line, as `canopy sessions` says it:
- * how many sessions it holds and its size, up to when it has read, and whether its first build still goes on. Why
- * `text` finds by titles alone, where the runtime or SQLite cannot keep the index; nothing below `text`.
+ * How far the index of what sessions said has read the runtime's record, in a line that leads with what the operator
+ * needs first: that it is still being built, and how far back it has got, or once built what it holds and up to when;
+ * then its size and when it was last read, or why that failed. Why `text` finds by titles alone, where the runtime or
+ * SQLite cannot keep the index; nothing below `text`.
  */
 export function SessionsIndexLine({ list }: { list: Pick<SessionList, 'search' | 'index' | 'why_titles'> }) {
     if (list.why_titles !== null) {
@@ -85,37 +89,40 @@ export function SessionsIndexLine({ list }: { list: Pick<SessionList, 'search' |
     }
     const { index } = list
     if (index === null) {
-        return <>The index of sessions&apos; text is not built yet: the loop&apos;s waits between ticks build it.</>
+        return <>The index of what sessions said is not built yet: the loop&apos;s waits between ticks build it.</>
     }
     if (index.read_at === null) {
         return (
             <>
-                The index of sessions&apos; text is new: the loop&apos;s next wait reads the runtime&apos;s sessions
-                into it.
+                The index of what sessions said is new: the loop&apos;s next wait reads the runtime&apos;s sessions into
+                it.
             </>
         )
     }
+    const sessions = `${index.sessions} ${index.sessions === 1 ? 'session' : 'sessions'}`
     return (
         <>
-            The index holds {index.sessions} {index.sessions === 1 ? 'session' : 'sessions'},{' '}
-            {byteSize(index.size_bytes)},{' '}
-            {index.through === null ? (
-                'none read yet'
+            {index.built ? (
+                <>
+                    The index holds what {sessions} said
+                    {index.through !== null && (
+                        <>
+                            , up to <Timestamp at={index.through} />
+                        </>
+                    )}
+                </>
             ) : (
                 <>
-                    read up to <Timestamp at={index.through} />
+                    Still indexing what sessions said: {sessions} so far
+                    {index.back_to !== null && (
+                        <>
+                            , back to <Timestamp at={index.back_to} />
+                        </>
+                    )}
                 </>
-            )}
-            ; last read <Age at={index.read_at} variant="ago" />
-            {!index.built &&
-                (index.back_to === null ? (
-                    '; still building'
-                ) : (
-                    <>
-                        ; still building, back to <Timestamp at={index.back_to} />
-                    </>
-                ))}
-            {index.error !== null && <>, which failed: {index.error}</>}
+            )}{' '}
+            ({byteSize(index.size_bytes)}); last read <Age at={index.read_at} variant="ago" />
+            {index.error !== null && <>, which failed: {unstopped(index.error)}</>}
             {!index.current && ". It is not yet built as sessions.exclude says: the loop's next wait builds it again"}.
         </>
     )
@@ -138,7 +145,8 @@ function SessionRow({
 }) {
     const name = sessionName(session)
     const models = sessionModels(session.asked, session.models)
-    const note = hitNote(session)
+    const snippet = session.snippet !== null && session.snippet.length > 0 ? session.snippet : null
+    const more = moreMessages(session.more_messages)
     return (
         <>
             {/* `group/copy`: the command's copy button shows while the pointer is anywhere over the row. */}
@@ -164,22 +172,35 @@ function SessionRow({
                 </span>
                 <Cost usd={session.cost_usd} className="text-right text-xs text-muted-foreground" />
                 <Age at={session.started_at} variant="ago" className="text-right" />
-                {session.snippet !== null && session.snippet.length > 0 && (
+                {(snippet !== null || more !== null || session.cut) && (
                     <RowLine from="title">
-                        {/* Text, never markup; its URLs are not linked, since a snippet may cut one short. */}
-                        <p className="text-sm wrap-break-word text-muted-foreground" data-testid="session-snippet">
-                            {/* A snippet's pieces never reorder, so their index is their key. */}
-                            {session.snippet.map((part, i) =>
-                                part.marked ? <Mark key={i}>{part.text}</Mark> : part.text,
+                        {/* Why it was found, as one line of reading: the snippet, then what else the hit says. Text,
+                            never markup; its URLs are not linked, since a snippet may cut one short. */}
+                        <p className="text-sm wrap-break-word text-muted-foreground">
+                            {snippet !== null && (
+                                <span data-testid="session-snippet">
+                                    {/* A snippet's pieces never reorder, so their index is their key. */}
+                                    {snippet.map((part, i) =>
+                                        part.marked ? <Mark key={i}>{part.text}</Mark> : part.text,
+                                    )}
+                                </span>
+                            )}
+                            {/* A dot that stays with the snippet's end, so a note that wraps starts its line clean. */}
+                            {snippet !== null && (more !== null || session.cut) && ' · '}
+                            {(more !== null || session.cut) && (
+                                <span className="text-xs whitespace-nowrap" data-testid="session-hit-note">
+                                    {more}
+                                    {more !== null && session.cut && ' · '}
+                                    {session.cut && (
+                                        <Tip fact="indexed in part" detail={CUT_MEANS}>
+                                            <span className="underline decoration-dotted underline-offset-4">
+                                                indexed in part
+                                            </span>
+                                        </Tip>
+                                    )}
+                                </span>
                             )}
                         </p>
-                    </RowLine>
-                )}
-                {note !== null && (
-                    <RowLine from="title">
-                        <span className="text-xs text-muted-foreground" data-testid="session-hit-note">
-                            {note}
-                        </span>
                     </RowLine>
                 )}
                 {models !== null && (

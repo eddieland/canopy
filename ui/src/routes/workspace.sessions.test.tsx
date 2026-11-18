@@ -326,7 +326,7 @@ describe('the sessions page', () => {
         expect(snippet.textContent).toBe('… the lockfile is never released …')
         expect([...snippet.querySelectorAll('mark')].map((m) => m.textContent)).toStrictEqual(['lockfile'])
         expect(within(hit as HTMLElement).getByTestId('session-hit-note').textContent).toBe(
-            '2 more messages hold them; indexed in part: past its bound, words are not found',
+            '2 more messages hold the words · indexed in part',
         )
         expect(within(plain as HTMLElement).queryByTestId('session-snippet')).toBeNull()
         expect(within(plain as HTMLElement).queryByTestId('session-hit-note')).toBeNull()
@@ -349,8 +349,8 @@ describe('the sessions page', () => {
         }
         await renderPage('/workspace/sessions', { outside: building })
         const line = (await screen.findByTestId('sessions-index')).textContent
-        expect(line).toMatch(/^The index holds 1 session, 2\.0 KiB, read up to /u)
-        expect(line).toMatch(/; still building, back to .+\.$/u)
+        expect(line).toMatch(/^Still indexing what sessions said: 1 session so far, back to /u)
+        expect(line).toMatch(/ \(2\.0 KiB\); last read .+\.$/u)
     })
 
     it('says the index is not built yet at text, why text finds by titles, and nothing of it at titles', async () => {
@@ -363,5 +363,26 @@ describe('the sessions page', () => {
         await renderPage('/workspace/sessions', { outside: OUTSIDE })
         await screen.findByTestId('sessions-progress')
         expect(screen.queryByTestId('sessions-index')).toBeNull()
+    })
+
+    it('leads with what a built index holds, and ends a failed read in one period', async () => {
+        const failed: SessionList = {
+            ...OUTSIDE,
+            search: 'text',
+            index: {
+                sessions: 40,
+                through: '2026-10-08T12:06:00Z',
+                back_to: null,
+                built: true,
+                read_at: '2026-10-08T12:08:00Z',
+                error: 'the record is locked.',
+                current: true,
+                size_bytes: 4096,
+            },
+        }
+        await renderPage('/workspace/sessions', { outside: failed })
+        const line = (await screen.findByTestId('sessions-index')).textContent
+        expect(line).toMatch(/^The index holds what 40 sessions said, up to /u)
+        expect(line).toMatch(/, which failed: the record is locked\.$/u)
     })
 })

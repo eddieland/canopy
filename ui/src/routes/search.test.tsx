@@ -92,8 +92,8 @@ describe("the search page's sessions", () => {
     it('says how far the index has come when no session is found while it still builds', async () => {
         await renderSearch(found('outside', { index: BUILDING }), found('canopy', { index: BUILDING }))
         const panel = screen.getByTestId('search-sessions-unfound')
-        expect(panel.textContent).toMatch(/No session found, though the index may not hold every one yet\./u)
-        expect(panel.textContent).toMatch(/The index holds 12 sessions, .+; still building, back to /u)
+        expect(panel.textContent).toContain('no session found yet')
+        expect(panel.textContent).toMatch(/Still indexing what sessions said: 12 sessions so far, back to /u)
     })
 
     it('shows no panel for sessions when none is found and the index is whole', async () => {
@@ -105,14 +105,21 @@ describe("the search page's sessions", () => {
     it('leaves the index to the panel that found a session, at its foot', async () => {
         await renderSearch(found('outside', { index: BUILDING, sessions: [HIT] }), found('canopy', { index: BUILDING }))
         expect(screen.queryByTestId('search-sessions-unfound')).toBeNull()
-        expect(screen.getByTestId('search-sessions-index').textContent).toMatch(/still building/u)
+        expect(screen.getByTestId('search-sessions-index').textContent).toMatch(/^Still indexing/u)
     })
 
     it('says only why text finds by titles where the index cannot be kept', async () => {
         const why = { search: 'titles', index: null, why_titles: 'SQLite 3.40 is too old.' } as const
         await renderSearch(found('outside', why), found('canopy', why))
         const said = screen.getByTestId('search-sessions-unfound').textContent
+        expect(said).toContain("no session's title holds every word")
         expect(said).toContain('SQLite 3.40 is too old.')
         expect(said).not.toContain('yet')
+    })
+
+    it('counts the best hits at text, and says in its lede that what sessions said is searched', async () => {
+        await renderSearch(found('outside', { sessions: [HIT], more: true }), found('canopy'))
+        expect(screen.getByTestId('search-sessions-outside').textContent).toContain('best 1')
+        expect(screen.getByText(/sessions by their titles and what they said, that hold every word/u)).toBeTruthy()
     })
 })

@@ -150,29 +150,32 @@ function Listed({
                     <SessionRows sessions={list.sessions} narrow={directory === undefined} />
                 </RowList>
             )}
-            <p className="border-t px-3 py-2 text-xs text-muted-foreground" data-testid="sessions-progress">
-                <SessionsProgressLine progress={list.progress} />
-                {/* The way to the longest list, and back from it, one link in the same place, so its focus stays. */}
-                {(list.more || all) && (
-                    <>
-                        {' '}
-                        {all ? null : 'More match than these: '}
-                        <Link
-                            to="/workspace/sessions"
-                            search={(prev) => ({ ...prev, all: all ? undefined : true })}
-                            className="text-accent underline-offset-4 hover:underline"
-                        >
-                            {all ? `list the newest ${SESSIONS_LISTED}` : `list up to ${SESSIONS_MAX}`}
-                        </Link>
-                        .
-                    </>
-                )}
-            </p>
-            {(list.search === 'text' || list.why_titles !== null) && (
-                <p className="border-t px-3 py-2 text-xs text-muted-foreground" data-testid="sessions-index">
-                    <SessionsIndexLine list={list} />
+            {/* One foot, a line for each read: the titles', then the index's. */}
+            <div className="flex flex-col gap-1 border-t px-3 py-2 text-xs text-muted-foreground">
+                <p data-testid="sessions-progress">
+                    <SessionsProgressLine progress={list.progress} />
+                    {/* The way to the longest list and back, one link in the same place, so its focus stays. */}
+                    {(list.more || all) && (
+                        <>
+                            {' '}
+                            {all ? null : 'More match than these: '}
+                            <Link
+                                to="/workspace/sessions"
+                                search={(prev) => ({ ...prev, all: all ? undefined : true })}
+                                className="text-accent underline-offset-4 hover:underline"
+                            >
+                                {all ? `list the newest ${SESSIONS_LISTED}` : `list up to ${SESSIONS_MAX}`}
+                            </Link>
+                            .
+                        </>
+                    )}
                 </p>
-            )}
+                {(list.search === 'text' || list.why_titles !== null) && (
+                    <p data-testid="sessions-index">
+                        <SessionsIndexLine list={list} />
+                    </p>
+                )}
+            </div>
         </>
     )
 }

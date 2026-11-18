@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { SessionList } from '@/api/types'
 
-import { directoryTail, hitNote, indexBehind, sessionName } from './sessions'
+import { directoryTail, indexBehind, moreMessages, sessionName, unstopped } from './sessions'
 
 describe('directoryTail', () => {
     it.each([
@@ -23,15 +23,23 @@ describe('sessionName', () => {
     })
 })
 
-describe('hitNote', () => {
+describe('moreMessages', () => {
     it.each([
-        [0, false, null],
-        [1, false, '1 more message holds them'],
-        [3, false, '3 more messages hold them'],
-        [0, true, 'indexed in part: past its bound, words are not found'],
-        [2, true, '2 more messages hold them; indexed in part: past its bound, words are not found'],
-    ])('of %i more and cut %s is %s', (more, cut, note) => {
-        expect(hitNote({ more_messages: more, cut })).toBe(note)
+        [0, null],
+        [1, '1 more message holds the words'],
+        [3, '3 more messages hold the words'],
+    ])('of %i is %s', (more, said) => {
+        expect(moreMessages(more)).toBe(said)
+    })
+})
+
+describe('unstopped', () => {
+    it.each([
+        ['the record is locked.', 'the record is locked'],
+        ['the record is locked', 'the record is locked'],
+        ['no such file: sessions.db. ', 'no such file: sessions.db'],
+    ])('ends %s as %s', (text, ended) => {
+        expect(unstopped(text)).toBe(ended)
     })
 })
 

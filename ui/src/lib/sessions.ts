@@ -43,22 +43,22 @@ export function sessionsShown(sessions: readonly RuntimeSession[]): number {
 }
 
 /**
- * What a hit says beside its snippet, in the words `canopy sessions` prints: how many more of the session's messages
- * hold the words, and that it was indexed in part. Null for a session with neither, as one not found by its text is.
+ * How many more of a hit's messages hold the search's words, said after its snippet, which is the best of them. Null
+ * when none does, as for a session not found by its text.
  */
-export function hitNote(session: Pick<RuntimeSession, 'more_messages' | 'cut'>): string | null {
-    const said: string[] = []
-    if (session.more_messages > 0) {
-        said.push(
-            session.more_messages === 1
-                ? '1 more message holds them'
-                : `${session.more_messages} more messages hold them`,
-        )
+export function moreMessages(more: number): string | null {
+    if (more <= 0) {
+        return null
     }
-    if (session.cut) {
-        said.push('indexed in part: past its bound, words are not found')
-    }
-    return said.length === 0 ? null : said.join('; ')
+    return more === 1 ? '1 more message holds the words' : `${more} more messages hold the words`
+}
+
+/**
+ * A reason as the end of a sentence that closes with its own period: `text` without the period it may end in, so a
+ * failure's words never leave the line ending in two.
+ */
+export function unstopped(text: string): string {
+    return text.replace(/\.+\s*$/u, '')
 }
 
 /**
