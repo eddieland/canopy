@@ -381,8 +381,8 @@ test.describe("Komorebi's light", () => {
         await page.goto('workspace/runs')
         await settled(page)
         // The sprays' two tiles, the bough, and a falling leaf: each a `data:` image, which the content security policy
-        // must let the page load, and none a file among the build's assets. A mask left to a file would paint its
-        // layer flat until the file came.
+        // must let the page load, and none a file among the build's assets. Left to files, the shadows would be
+        // missing until the files came.
         expect(await maskImages(page)).toEqual([true, true, true, true])
         expect(asked.filter((path) => path.includes('/assets/') && path.endsWith('.svg'))).toEqual([])
     })

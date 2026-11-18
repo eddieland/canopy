@@ -786,7 +786,8 @@
  * from every status and from the other light accents, and Pull requests' violet turns a few degrees toward magenta
  * to stand apart from it. Muted text, the accent, and Settings' slate sit a step deeper than they would need to on a
  * plain canvas, so each still reads at 4.5:1 where a leaf's shadow crosses text set on the canvas, as the guide's
- * prose and Loop settings' headings are; tokens.test.ts measures them there. */
+ * prose and Loop settings' headings are, and muted text reads there on a code chip's tint as well, as the foot of
+ * Memory sets it; tokens.test.ts measures them there. */
 :root[data-light-palette='komorebi']:not(.dark) {
     --accent: oklch(0.465 0.17 293);
     --ring: oklch(0.465 0.17 293 / 0.55);
@@ -795,8 +796,8 @@
     --surface-raised: oklch(0.968 0.028 106);
     --border: oklch(0.905 0.04 110);
     --foreground: oklch(0.255 0.028 128);
-    --muted-foreground: oklch(0.445 0.04 125);
-    --scrollbar: oklch(0.445 0.04 125 / 0.4);
+    --muted-foreground: oklch(0.415 0.04 125);
+    --scrollbar: oklch(0.415 0.04 125 / 0.4);
     --status-stopped: oklch(0.43 0.04 125);
     --spend-dry-run: oklch(0.6 0.03 120);
     --check-other: oklch(0.6 0.03 120);
@@ -877,8 +878,8 @@
      * sprays-2.svg). Both layers are clear over the rail, the header, and a page's title, fading in past it. Every
      * shadow is the canvas mixed toward `--shade`, as that much of it would lie over the canvas, opaque, and darkens
      * what is under it (`--shade-blend`), so where two shadows cross the canvas goes no deeper than the deeper of
-     * them, never both. The palette's masks are written into the stylesheet (`?inline`), never fetched: Chromium
-     * drops a mask layer whose image has not arrived, and would paint the shade flat through the layers left. */
+     * them, never both. The palette's masks are written into the stylesheet (`?inline`), never fetched: left to
+     * files, its shadows would be missing until the files came. */
     --shade-blend: darken;
     --spray-shadow: color-mix(in srgb, var(--shade) 12%, var(--background));
     --shade-clear:

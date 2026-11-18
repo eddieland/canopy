@@ -407,10 +407,25 @@ describe("Komorebi's shade", () => {
         return mixed
     }
 
+    // The canvas under a leaf's shadow, the deepest shade.
+    const shaded = (): Rgb => over(token('shade'), strength('leaf-shadow'), token('background'))
+
     it("reads text set on the canvas under a leaf's shadow, the deepest", () => {
-        const shaded = over(token('shade'), strength('leaf-shadow'), token('background'))
         const low = ['foreground', 'muted-foreground', 'accent', 'section-settings']
-            .map((name) => below(`${name} under a leaf's shadow`, token(name), shaded))
+            .map((name) => below(`${name} under a leaf's shadow`, token(name), shaded()))
+            .filter((line) => line !== null)
+        expect(low).toEqual([])
+    })
+
+    // Code in a line of that text sits on a chip of its own ink, a ground deeper again: the guide's in the
+    // foreground's, and the purge line's at the foot of Memory in muted, which the bough's shadow reaches at some
+    // window sizes.
+    it("reads code on its chip under a leaf's shadow", () => {
+        const low = ['foreground', 'muted-foreground']
+            .map((name) => {
+                const ink = token(name)
+                return below(`${name} code on its chip under a leaf's shadow`, ink, over(ink, CODE_CHIP, shaded()))
+            })
             .filter((line) => line !== null)
         expect(low).toEqual([])
     })
