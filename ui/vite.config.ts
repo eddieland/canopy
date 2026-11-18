@@ -80,7 +80,8 @@ export default defineConfig({
         outDir: 'dist',
         emptyOutDir: true,
         assetsDir: 'assets',
-        // Fonts stay files, never inlined data: URLs, so they cache and preload.
+        // Fonts stay files, never inlined data: URLs, so they cache and preload. Only a `url()` that asks with
+        // `?inline` is written into the stylesheet, as Komorebi's masks are (src/styles/tokens.css).
         assetsInlineLimit: 0,
     },
 })

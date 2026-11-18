@@ -121,38 +121,31 @@ Rules:
   it matched another palette is left out, as Nord's dark is.
   A palette sets its character too, beyond color, from a few closed choices in the same rule, so a component still
   never knows which it is on: its corners (`--radius`), its `edge` (a hairline, or none, where panels stand apart by
-  their lightness alone), its depth (a soft shadow in the canvas's hue, a hard one with no blur, or, on black, where a
-  shadow does nothing, the accent's glow), and its face (`--face`: interface text in Plex Sans, or in Plex Mono, as an
-  editor sets it). Spacing, sizes, and layout never change with a palette, and neither do the status colors; only the
-  mono face reflows text, since it runs wider, so it stays with the few palettes that are an editor's own look, and
-  there draws every line a step smaller, at 15/16 of the size asked for, in the same line boxes, so no line changes
-  height. The guide keeps the default faces under every palette, since pages of prose read worse in mono. The one
-  other face that reflows is Pulp's display face (`--face-title`), on a section's own page title alone, a fixed name,
-  never a title from the data, so no line it sets wraps differently.
+  their lightness alone), its depth (a soft shadow in the canvas's hue or the palette's shade, a hard one with no blur,
+  or, on black, where a shadow does nothing, the accent's glow), and its face (`--face`: interface text in Plex Sans, or
+  in Plex Mono, as an editor sets it). Spacing, sizes, and layout never change with a palette, and neither do the status
+  colors; only the mono face reflows text, since it runs wider, so it stays with the few palettes that are an editor's
+  own look, and there draws every line a step smaller, at 15/16 of the size asked for, in the same line boxes, so no
+  line changes height. The guide keeps the default faces under every palette, since pages of prose read worse in mono.
+  The one other face that reflows is Pulp's display face (`--face-title`), on a section's own page title alone, a fixed
+  name, never a title from the data, so no line it sets wraps differently.
   A palette may ink the page further from knobs whose defaults draw nothing: a panel's, a bubble's, a chip's, and a
   selected row's outline and drop, a field's and an outline button's line in ink, a tone printed on the canvas, the
   primary action pressed into its shadow, a page title dropped in its section's color and lettered, a bubble's balloon
   tail, and a starburst where a cleared item drops its leaf. Each is a shadow, a transform, a background, or drawn
-  beside its box, so it takes no room, and a texture is clear where text sits; a box that clips what overflows it, as a
-  list's cell does, still paints the few pixels past its edge that the ink and a focus ring reach (`clip-reach`), so
-  neither is cut. Pulp, a comic in four-color print, takes them all; both its sides ink by the same rings, dark's line
-  its cream. Starry Skies prints a sky on the canvas instead: tiles of stars on the two layers, cleared over the rail
-  and the header and faded in past a page's title, each layer twinkling on a period of its own, a crescent moon in
-  the window's lower right corner, which never moves, and a meteor that crosses the sky along the window's foot now and
-  then, all under the panels, so none covers anything. What moves does so by opacity and transform alone.
-  Komorebi, light's own, lays sunlight through leaves on it the same way: flecks of sun on one layer and the shadows
-  of leaves on the other, each dimming on a period of its own, a bough's shadow that sways in that corner, and a
-  leaf's shadow that falls along the window's foot now and then. Its light is lighter than the canvas and its shade
-  darker, so both layers are clear over the rail, the header, and a page's title and description, and its muted text
-  and accent read at 4.5:1 under its deepest shade, which `tokens.test.ts` measures, since the guide sets prose on the
-  canvas. Its leaves are drawn once, as SVG files beside `tokens.css` that only this palette fetches, and painted in
-  a token through a mask, so they hold no color of their own.
+  beside its box, so it takes no room, and a texture is clear where text sits; a box that clips still paints the reach
+  of that ink and of a focus ring (`clip-reach`). Pulp, a comic in four-color print, takes them all. Starry Skies prints
+  a sky on the canvas instead: stars on the two layers, cleared over the rail and the header and faded in past a page's
+  title, a crescent moon in the window's lower right corner, and a meteor along its foot now and then, all under the
+  panels, so none covers anything. Komorebi lays sunlight through leaves the same way: flecks of sun, and the shadows of
+  leaves, of a bough swaying in that corner, and of a falling leaf, no deeper where two cross; text set on the canvas
+  reads at 4.5:1 under the deepest, which `tokens.test.ts` measures. What moves does so by opacity and transform alone.
   A palette may also give the shell's signature a form of its own, the first place it is felt: the aurora (a gradient
-  hairline, a stepped bar of solid blocks, a print strip of those blocks, or a line that blooms), the name (the
-  aurora's gradient, on a solid block, on a tilted plate, or glowing), and the nav's highlight (a tint and a bar, a
-  solid block with the active item inked in the canvas's color, or a tint with the icon lit). On a block, a count
-  beside the active item sits on a plate of that ink, where its status color reads. Each form takes the room the
-  default does, so a switch moves nothing, and what a form draws past its box stays clear of what is beside it.
+  hairline, a stepped bar of solid blocks, a print strip of those blocks, or a line that blooms), the name (the aurora's
+  gradient, the accent and a leaf green, on a solid block, on a tilted plate, or glowing), and the nav's highlight (a
+  tint and a bar, a solid block with the active item inked in the canvas's color, or a tint with the icon lit). On a
+  block, a count beside the active item sits on a plate of that ink, where its status color reads. Each form takes the
+  room the default does, so a switch moves nothing, and what a form draws past its box stays clear of what is beside it.
   A palette may tune its section colors too, muted toward a scheme's own set or turned up, but each keeps its hue's
   family, which says what its page is for: a rose stays a rose, a gold a gold. Each still reads at 4.5:1 there, and
   stays apart from the status colors and the palette's accent.

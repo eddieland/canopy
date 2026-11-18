@@ -62,8 +62,9 @@ clouds; a tall window on a short page has the best view. Make a wish; it won't m
 either. If your system asks for reduced motion, the sky holds still and the meteors stay home. **Komorebi** is the
 daytime answer, named for the Japanese word for sunlight coming through leaves: flecks of sun and the soft shadows of
 leaves lie on the page between the panels, a bough's shadow sways in the lower right corner, and every so often a
-leaf's shadow drifts down the open page. The rail, the header, and a page's title stay clear of all of it. This guide
-is the one place a shadow crosses something you read, so the shadows are faint enough to read through, and the links
+leaf's shadow drifts down the open page. The rail, the header, and a page's title stay clear of all of it. Where
+words sit straight on the page rather than in a panel, as this guide's do, a shadow will cross something you read, so
+the shadows are faint enough to read through, two of them never add up to a darker one, and muted text and links are
 a shade deeper than they would otherwise be. It is also the only palette under which a console called canopy looks
 like it is under one. Reduced motion stops the breeze, and the leaves stay on the tree. Layout and sizes never
 change with a palette, so nothing moves when you switch, except under Gruvbox, Pulp, Monokai, and Acme, where monospace

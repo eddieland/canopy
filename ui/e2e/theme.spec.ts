@@ -277,7 +277,7 @@ test.describe("Pulp's Ben-Day tone", () => {
             await page.goto('workspace/runs')
             await settled(page)
             for (const layer of await canvasTone(page)) {
-                expect(layer).toEqual({ image: 'none', mask: 'none' })
+                expect(layer).toEqual({ image: 'none', mask: 'none', composite: 'add' })
             }
 
             await storePalette(page, theme, 'pulp')
@@ -356,9 +356,10 @@ test.describe("Komorebi's light", () => {
         const [light, shade] = await canvasTone(page)
         expect(light?.image).toMatch(/^radial-gradient\(/u)
         expect(light?.mask).toMatch(/^linear-gradient\(/u)
-        // The shade is one color, cut to its leaves by the tile, then cleared where the light is.
+        // The shade is one color, cut to its leaves by its two tiles, inside the same clearing as the light: the rail,
+        // the header, and the title. Each tile is in the stylesheet, a `data:` URL.
         expect(shade?.image).toBe('none')
-        expect(shade?.mask).toMatch(/^url\("[^"]*sprays[^"]*\.svg"\), radial-gradient\(.*linear-gradient\(/u)
+        expect(shade?.mask).toMatch(/^linear-gradient\(.+linear-gradient\(.+(?:, url\("data:image\/svg[^"]+"\)){2}$/u)
         expect(await skyMotion(page)).toEqual([
             'dapple',
             'dapple-shade',
@@ -366,32 +367,50 @@ test.describe("Komorebi's light", () => {
             'leaf-fall-2, leaf-rock',
         ])
         expect(await crosser(page)).toEqual({
-            mask: expect.stringMatching(/^url\("[^"]*leaf[^"]*\.svg"\)$/u),
+            mask: expect.stringMatching(/^url\("data:image\/svg[^"]+"\)$/u),
             turn: '0deg',
             long: false,
         })
     })
 
+    test('carries its leaves in the stylesheet, so no mask waits on a file, and the page loads each', async ({
+        page,
+    }) => {
+        const asked: string[] = []
+        page.on('request', (request) => asked.push(new URL(request.url()).pathname))
+        await page.goto('workspace/runs')
+        await settled(page)
+        // The sprays' two tiles, the bough, and a falling leaf: each a `data:` image, which the content security policy
+        // must let the page load, and none a file among the build's assets. A mask left to a file would paint its
+        // layer flat until the file came.
+        expect(await maskImages(page)).toEqual([true, true, true, true])
+        expect(asked.filter((path) => path.includes('/assets/') && path.endsWith('.svg'))).toEqual([])
+    })
+
     test("casts its bough's shadow under the panels, swaying, and no other palette does", async ({ page }) => {
         await page.goto('workspace/runs')
         await settled(page)
+        // It darkens what is under it, as every shadow of Komorebi's does, so two of them go no deeper than one.
         expect(await bough(page)).toEqual({
             painted: true,
-            mask: expect.stringMatching(/^url\("[^"]*sprig[^"]*\.svg"\)$/u),
+            mask: expect.stringMatching(/^url\("data:image\/svg[^"]+"\)$/u),
+            blend: 'darken',
             zIndex: '-1',
             motion: 'bough-sway',
         })
-        // Its leaves are files the page fetches itself, which the content security policy must allow.
-        const mask = await page.evaluate(() => {
-            const root = document.querySelector('#root')
-            return root ? getComputedStyle(root, '::after').maskImage.slice(5, -2) : ''
-        })
-        expect((await page.request.get(mask)).headers()['content-type']).toBe('image/svg+xml')
+        expect(await shadeBlend(page)).toEqual(['normal', 'darken', 'darken', 'darken'])
 
         await storePalette(page, 'light', 'sage')
         await page.reload()
         await settled(page)
-        expect(await bough(page)).toEqual({ painted: false, mask: 'none', zIndex: '-1', motion: 'none' })
+        expect(await bough(page)).toEqual({
+            painted: false,
+            mask: 'none',
+            blend: 'normal',
+            zIndex: '-1',
+            motion: 'none',
+        })
+        expect(await shadeBlend(page)).toEqual(['normal', 'normal', 'normal', 'normal'])
     })
 
     test('holds still and drops no leaf under reduced motion', async ({ page }) => {
@@ -412,10 +431,15 @@ test.describe("Komorebi's light", () => {
         // Both layers' masks are clear to 14rem from the left and 12.5rem from the top (`--shade-clear`).
         expect((rail?.x ?? 0) + (rail?.width ?? Infinity)).toBeLessThanOrEqual(14 * rem)
         expect((title?.y ?? 0) + (title?.height ?? Infinity)).toBeLessThanOrEqual(12.5 * rem)
-        for (const layer of await canvasTone(page)) {
-            expect(layer.mask).toContain(`linear-gradient(90deg, rgba(0, 0, 0, 0) ${14 * rem}px`)
-            expect(layer.mask).toContain(`linear-gradient(rgba(0, 0, 0, 0) ${12.5 * rem}px`)
+        const [light, shade] = await canvasTone(page)
+        for (const layer of [light, shade]) {
+            expect(layer?.mask).toContain(`linear-gradient(90deg, rgba(0, 0, 0, 0) ${14 * rem}px`)
+            expect(layer?.mask).toContain(`linear-gradient(rgba(0, 0, 0, 0) ${12.5 * rem}px`)
         }
+        // A layer shows only where both gradients do: added instead, each would let it through where the other
+        // clears. The shade's two tiles add to each other, inside them.
+        expect(light?.composite).toBe('intersect, add')
+        expect(shade?.composite).toBe('intersect, intersect, add, add')
     })
 })
 
@@ -460,8 +484,11 @@ function crosser(page: Page): Promise<{ mask: string; turn: string; long: boolea
     })
 }
 
-/** Whether the bough's box paints a color, the mask that cuts its leaves, where it sits in the stack, and its sway. */
-function bough(page: Page): Promise<{ painted: boolean; mask: string; zIndex: string; motion: string }> {
+/**
+ * Whether the bough's box paints a color, the mask that cuts its leaves, how it blends with what is under it, where
+ * it sits in the stack, and its sway.
+ */
+function bough(page: Page): Promise<{ painted: boolean; mask: string; blend: string; zIndex: string; motion: string }> {
     return page.evaluate(() => {
         const root = document.querySelector('#root')
         if (!root) {
@@ -471,18 +498,65 @@ function bough(page: Page): Promise<{ painted: boolean; mask: string; zIndex: st
         return {
             painted: style.content !== 'none' && style.backgroundColor !== 'rgba(0, 0, 0, 0)',
             mask: style.maskImage,
+            blend: style.mixBlendMode,
             zIndex: style.zIndex,
             motion: style.animationName,
         }
     })
 }
 
-/** What the canvas's two tone layers paint, the dots and their swell: each one's background and mask. */
-function canvasTone(page: Page): Promise<{ image: string; mask: string }[]> {
+/** How the canvas's two layers, then what crosses it, blend with what lies under them: the light never does. */
+function shadeBlend(page: Page): Promise<string[]> {
+    return page.evaluate(() =>
+        [
+            [document.documentElement, '::before'],
+            [document.documentElement, '::after'],
+            [document.body, '::before'],
+            [document.body, '::after'],
+        ].map(([element, layer]) => getComputedStyle(element as Element, layer as string).mixBlendMode),
+    )
+}
+
+/**
+ * Whether the page itself loads each `data:` image a shadow's mask names, under its own policy: the canvas's second
+ * layer's, the bough's, and the first crosser's, in that order.
+ */
+function maskImages(page: Page): Promise<boolean[]> {
+    return page.evaluate(() => {
+        const root = document.querySelector('#root')
+        if (!root) {
+            throw new Error('the page has no #root')
+        }
+        const layers: [Element, string][] = [
+            [document.documentElement, '::after'],
+            [root, '::after'],
+            [document.body, '::before'],
+        ]
+        const urls = layers.flatMap(([element, layer]) =>
+            [...getComputedStyle(element, layer).maskImage.matchAll(/url\("(data:[^"]*)"\)/gu)].map(([, url]) => url),
+        )
+        return Promise.all(
+            urls.map((url) => {
+                const image = new Image()
+                image.src = url ?? ''
+                return image.decode().then(
+                    () => true,
+                    () => false,
+                )
+            }),
+        )
+    })
+}
+
+/**
+ * What the canvas's two tone layers paint, the dots and their swell: each one's background, its mask, and how the
+ * mask's layers combine.
+ */
+function canvasTone(page: Page): Promise<{ image: string; mask: string; composite: string }[]> {
     return page.evaluate(() =>
         (['::before', '::after'] as const).map((layer) => {
             const style = getComputedStyle(document.documentElement, layer)
-            return { image: style.backgroundImage, mask: style.maskImage }
+            return { image: style.backgroundImage, mask: style.maskImage, composite: style.maskComposite }
         }),
     )
 }

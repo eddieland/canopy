@@ -58,7 +58,10 @@
      * it. Fixed to the window and under everything else, so it is painted once, never on a scroll, and the panels,
      * the header, and the rail sit over it. By default both are none, and the two layers draw nothing. Each may move
      * (`--canvas-texture-motion`, `--canvas-swell-motion`), by its opacity alone, which the compositor runs without a
-     * repaint.
+     * repaint. The second layer blends with what lies under it as `--shade-blend` says, as the bough and what crosses
+     * the canvas do (below): `normal` by default, or `darken` where a palette's three are shadows, so that two of
+     * them go no deeper than one. The first never blends: its light may be lighter than the canvas, which `darken`
+     * would hide.
      */
     html::before,
     html::after {
@@ -77,6 +80,7 @@
     html::after {
         background: var(--canvas-swell);
         mask: var(--canvas-swell-mask);
+        mix-blend-mode: var(--shade-blend);
     }
 
     /*
@@ -114,6 +118,7 @@
         height: min(27.25rem, 100vh - 16rem);
         background: var(--bough);
         mask: var(--bough-mask);
+        mix-blend-mode: var(--shade-blend);
         transform-origin: 100% 100%;
         pointer-events: none;
     }
@@ -152,6 +157,7 @@
             height: var(--meteor-girth);
             background: var(--meteor);
             mask: var(--meteor-mask);
+            mix-blend-mode: var(--shade-blend);
             filter: var(--meteor-glow);
             transform-origin: var(--meteor-origin);
             rotate: var(--meteor-turn);

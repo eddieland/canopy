@@ -360,10 +360,29 @@ describe('title lettering', () => {
     })
 })
 
-/** The strength `--code-chip` mixes its ink at, as a fraction; a chip written another way fails rather than passes. */
-// Komorebi's leaves shade the canvas, and the guide sets its prose there. Under the deepest shade it casts, a leaf's
-// shadow in the bough, the colors the guide's text is set in still read; the shade over the rest of the canvas is no
-// deeper, and is clear of the bough's corner, so no two shadows deepen each other.
+// What crosses a canvas is shaped by knobs whose defaults are Starry Skies's streak; a bough, and how a shadow blends
+// with what is under it, by knobs whose defaults draw nothing and paint plainly. So a palette that sets none of them
+// looks as it did before they were added.
+describe("the canvas's knobs", () => {
+    it.each([
+        ['--meteor-mask', 'none'],
+        ['--meteor-length', '9rem'],
+        ['--meteor-girth', '0.1rem'],
+        ['--meteor-turn', '162deg'],
+        ['--meteor-origin', '100% 50%'],
+        ['--bough', 'none'],
+        ['--bough-mask', 'none'],
+        ['--bough-motion', 'none'],
+        ['--shade-blend', 'normal'],
+    ])('defaults %s to %s', (knob, value) => {
+        expect(rule(':root')).toContain(`\n    ${knob}: ${value};`)
+    })
+})
+
+// Komorebi's leaves shade the canvas, where the guide sets its prose and Loop settings its headings. Each shadow is an
+// opaque color, the canvas mixed toward the shade, and darkens what is under it, so where two overlap the canvas goes
+// no deeper than the deeper of them: the deepest the page can paint is a leaf's shadow, and every color text on the
+// canvas is set in still reads on it.
 describe("Komorebi's shade", () => {
     const body = rule(paletteRule('light', 'komorebi'))
     const colors = THEMES['komorebi light'] ?? {}
@@ -374,36 +393,39 @@ describe("Komorebi's shade", () => {
         }
         return srgb(...value)
     }
+    // How far toward `--shade` each shadow mixes the canvas, as a fraction, by the token that names it.
+    const shadows = new Map(
+        [...body.matchAll(/--([\w-]+): color-mix\(in srgb, var\(--shade\) ([\d.]+)%, var\(--background\)\);/gu)].map(
+            ([, name, percent]) => [name, Number(percent) / 100],
+        ),
+    )
     const strength = (name: string): number => {
-        const alpha = new RegExp(`--${name}: oklch\\(from var\\(--shade\\) l c h / ([\\d.]+)\\);`, 'u').exec(body)?.[1]
-        if (alpha === undefined) {
+        const mixed = shadows.get(name)
+        if (mixed === undefined) {
             throw new Error(`tokens.css sets --${name} in a form this test does not read`)
         }
-        return Number(alpha)
+        return mixed
     }
 
-    it("reads the guide's text on the canvas under a leaf's shadow", () => {
+    it("reads text set on the canvas under a leaf's shadow, the deepest", () => {
         const shaded = over(token('shade'), strength('leaf-shadow'), token('background'))
-        const low = ['foreground', 'muted-foreground', 'accent']
+        const low = ['foreground', 'muted-foreground', 'accent', 'section-settings']
             .map((name) => below(`${name} under a leaf's shadow`, token(name), shaded))
             .filter((line) => line !== null)
         expect(low).toEqual([])
     })
 
-    it('shades the rest of the canvas no deeper than the bough, and no leaf falls darker', () => {
-        expect(strength('spray-shadow')).toBeLessThanOrEqual(strength('leaf-shadow'))
+    it("paints every shadow in an opaque shade no deeper than a leaf's, and darkens with it", () => {
+        expect(new Set(shadows.keys())).toEqual(new Set(['leaf-shadow', 'spray-shadow']))
+        expect(Math.max(...shadows.values())).toBe(strength('leaf-shadow'))
+        expect(body).toContain('--canvas-swell: var(--spray-shadow);')
         expect(body).toContain('--bough: var(--leaf-shadow);')
         expect(body).toContain('--meteor: var(--leaf-shadow);')
-    })
-
-    it('casts no shadow by default', () => {
-        const defaults = rule(':root')
-        expect(defaults).toContain('--bough: none;')
-        expect(defaults).toContain('--bough-mask: none;')
-        expect(defaults).toContain('--meteor-mask: none;')
+        expect(body).toContain('--shade-blend: darken;')
     })
 })
 
+/** The strength `--code-chip` mixes its ink at, as a fraction; a chip written another way fails rather than passes. */
 function codeChip(): number {
     const percent = /--code-chip: color-mix\(in oklab, currentColor ([\d.]+)%, transparent\);/u.exec(css)?.[1]
     if (percent === undefined) {
