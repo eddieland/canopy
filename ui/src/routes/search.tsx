@@ -151,7 +151,9 @@ function SessionsUnfound({ q }: { q: string }) {
         <Panel data-testid="search-sessions-unfound">
             <PanelHeader label="Sessions" />
             <p className="px-3 py-2 text-xs text-muted-foreground">
-                No session found, though the index may not hold every one yet. <SessionsIndexLine list={outside} />
+                {/* Where the index cannot be kept at all, why says so alone: nothing is on its way. */}
+                {outside.why_titles === null && 'No session found, though the index may not hold every one yet. '}
+                <SessionsIndexLine list={outside} />
             </p>
         </Panel>
     )

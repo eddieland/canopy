@@ -107,4 +107,12 @@ describe("the search page's sessions", () => {
         expect(screen.queryByTestId('search-sessions-unfound')).toBeNull()
         expect(screen.getByTestId('search-sessions-index').textContent).toMatch(/still building/u)
     })
+
+    it('says only why text finds by titles where the index cannot be kept', async () => {
+        const why = { search: 'titles', index: null, why_titles: 'SQLite 3.40 is too old.' } as const
+        await renderSearch(found('outside', why), found('canopy', why))
+        const said = screen.getByTestId('search-sessions-unfound').textContent
+        expect(said).toContain('SQLite 3.40 is too old.')
+        expect(said).not.toContain('yet')
+    })
 })
