@@ -194,5 +194,5 @@ builds the index again whole, as a change of shape or cut does; and a sandbox ro
 keeps what the index already holds of it. Stage 2's web UI built 2026-11-18: a hit's row shows its snippet, the words
 marked, how many more of its messages hold them, and that it was indexed in part; the Sessions page has a line for the
 index's progress, and a search's panel one while the index may miss a session; with `ui/DESIGN.md` and the guide. A
-search that finds no session shows no panel, so says nothing of an index still building: the Sessions page does. Left
-of stage 2: the live checks of the Accept, the operator's.
+search that finds no session while the index may miss one shows a panel with that line alone (2026-11-18). Left of
+stage 2: the live checks of the Accept, the operator's.

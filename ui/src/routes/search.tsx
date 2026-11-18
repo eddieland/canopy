@@ -96,6 +96,7 @@ function Results({ q }: { q: string }) {
             {SESSIONS_WHOSE.map((whose) => (
                 <SessionsFound key={whose} q={q} whose={whose} />
             ))}
+            <SessionsUnfound q={q} />
         </div>
     )
 }
@@ -127,6 +128,33 @@ function SessionsFound({ q, whose }: { q: string; whose: SessionsWhose }) {
                     <SessionsIndexLine list={data} />
                 </p>
             )}
+        </Panel>
+    )
+}
+
+/**
+ * A panel in place of the sessions' two when neither found one and the index of their text may have missed one: not
+ * built, still building, failed, or built under another `sessions.exclude`. It says how far the index has come, so no
+ * hit is not read as no such session. Nothing once the index is whole, as a source with no hits has no panel.
+ */
+function SessionsUnfound({ q }: { q: string }) {
+    // The two panels' own reads, by the same keys, so nothing is read twice.
+    const outside = useQuery(sessionsQuery({ whose: 'outside', q, limit: SESSIONS_PER_SEARCH })).data
+    const canopy = useQuery(sessionsQuery({ whose: 'canopy', q, limit: SESSIONS_PER_SEARCH })).data
+    if (outside === undefined || canopy === undefined) {
+        return null
+    }
+    if (outside.sessions.length > 0 || canopy.sessions.length > 0 || !indexBehind(outside)) {
+        return null
+    }
+    return (
+        <Panel data-testid="search-sessions-unfound">
+            <PanelHeader label="Sessions" />
+            <p className="px-3 py-2 text-xs text-muted-foreground">
+                {/* Where the index cannot be kept at all, why says so alone: nothing is on its way. */}
+                {outside.why_titles === null && 'No session found, though the index may not hold every one yet. '}
+                <SessionsIndexLine list={outside} />
+            </p>
         </Panel>
     )
 }
