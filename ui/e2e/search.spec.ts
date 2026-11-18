@@ -188,3 +188,22 @@ test('a long query with no spaces, such as a pasted URL, wraps in the title rath
     })
     expect(right).toBeLessThanOrEqual(await page.evaluate(() => document.documentElement.clientWidth))
 })
+
+test("the Sessions page's own field finds among its list, and a search's panel links to it", async ({ page }) => {
+    await page.goto('search?q=deploy')
+    await page.getByTestId('search-sessions-outside').getByRole('link', { name: 'find in Sessions' }).click()
+    await expect(page).toHaveURL(/\/workspace\/sessions\?q=deploy$/u)
+    const field = page.getByRole('searchbox', { name: 'Find sessions by title' })
+    await expect(field).toHaveValue('deploy')
+    await expect(page.getByTestId('session')).toHaveCount(2)
+    await expect(page.getByTestId('sessions').locator('mark')).toHaveText(['deploy', 'deploy'])
+
+    // Narrower as the operator types, the field keeping the keyboard; cleared, the whole list is back.
+    await field.fill('deploy staging')
+    await expect(page).toHaveURL(/\/workspace\/sessions\?q=deploy(\+|%20)staging$/u)
+    await expect(page.getByTestId('session')).toHaveCount(1)
+    await expect(field).toBeFocused()
+    await page.getByRole('button', { name: 'Clear the filter' }).click()
+    await expect(page).toHaveURL(/\/workspace\/sessions$/u)
+    await expect(page.getByTestId('session')).toHaveCount(5)
+})

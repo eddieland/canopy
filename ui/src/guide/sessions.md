@@ -73,8 +73,16 @@ sits in the address with the other filters, so you can link to a narrowed list, 
 
 ## Finding one
 
-Search, the box at the top of every page, finds sessions by their titles, or at `text` by what they said too: see
-[Search](overview#search). The command line has the same list, `canopy sessions` for yours and
+The field at the top of the list finds sessions by the words in their titles, or at `text` by what they said too,
+the best match first, each with the snippet that got it found. It works with the filters, not instead of them: narrow
+to a directory, switch to canopy's, include the archived, and the words stay put. That's the query this page exists
+for, "the one in `…/acme/infra` where I mentioned the lockfile", and the only place you can ask it. A subagent's
+session that matches gets a row of its own here, marked `subagent`, since its parent may not match at all. The words
+live in the address as `?q=`, so a search is a link.
+
+Search, the box at the top of every page, finds sessions too, among everything else in the journal, 20 of each kind:
+see [Search](overview#search). Each of its session panels has a `find in Sessions` link that brings the same words
+here. The command line has the same list, `canopy sessions` for yours and
 `canopy sessions --canopy` for canopy's, with words to find one and `--json` for scripts; at `text` it also prints each
 hit's snippet, the words marked, and how many more of its messages hold them.
 

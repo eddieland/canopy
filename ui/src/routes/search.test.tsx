@@ -122,4 +122,11 @@ describe("the search page's sessions", () => {
         expect(screen.getByTestId('search-sessions-outside').textContent).toContain('best 1')
         expect(screen.getByText(/sessions by their titles and what they said, that hold every word/u)).toBeTruthy()
     })
+
+    it('links each panel of sessions to the same words on the Sessions page', async () => {
+        await renderSearch(found('outside', { sessions: [HIT] }), found('canopy', { sessions: [HIT] }))
+        const [outside, canopy] = screen.getAllByRole('link', { name: 'find in Sessions' })
+        expect(outside?.getAttribute('href')).toBe('/workspace/sessions?q=lockfile')
+        expect(canopy?.getAttribute('href')).toBe('/workspace/sessions?q=lockfile&canopy=true')
+    })
 })

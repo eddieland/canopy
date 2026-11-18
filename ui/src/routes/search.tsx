@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 
 import { searchQuery, sessionsQuery } from '@/api/queries'
 import type { SearchHit, SearchSource, SessionsWhose } from '@/api/types'
@@ -126,11 +126,21 @@ function SessionsFound({ q, whose }: { q: string; whose: SessionsWhose }) {
     return (
         <Panel data-testid={`search-sessions-${whose}`}>
             <PanelHeader label={WHOSE_LABEL[whose]}>
-                <span className="readout text-xs text-muted-foreground">
-                    {/* At text the hits are ranked, a title's word over a message's: the best, not the newest. */}
-                    {data.more
-                        ? `${data.search === 'text' ? 'best' : 'newest'} ${data.sessions.length}`
-                        : data.sessions.length}
+                <span className="flex items-center gap-3">
+                    {/* The same words on the Sessions page, where its filters and the longest list are. */}
+                    <Link
+                        to="/workspace/sessions"
+                        search={{ q, canopy: whose === 'canopy' ? true : undefined }}
+                        className="text-xs text-accent underline-offset-4 hover:underline"
+                    >
+                        find in Sessions
+                    </Link>
+                    <span className="readout text-xs text-muted-foreground">
+                        {/* At text the hits are ranked, a title's word over a message's: the best, not the newest. */}
+                        {data.more
+                            ? `${data.search === 'text' ? 'best' : 'newest'} ${data.sessions.length}`
+                            : data.sessions.length}
+                    </span>
                 </span>
             </PanelHeader>
             <RowList kind="session" className="divide-y">

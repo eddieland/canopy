@@ -97,7 +97,12 @@ const CANOPYS: SessionList = {
  * The sessions page at `at`, each list it asks for already read as `lists` gives it, by whose, narrowed to `directory`
  * when one is given.
  */
-async function renderPage(at: string, lists: Partial<Record<SessionList['whose'], SessionList>>, directory?: string) {
+async function renderPage(
+    at: string,
+    lists: Partial<Record<SessionList['whose'], SessionList>>,
+    directory?: string,
+    q?: string,
+) {
     // Nothing reads the server: the lists are the ones set here, and every other query stays off.
     const client = new QueryClient({ defaultOptions: { queries: { enabled: false } } })
     for (const [whose, list] of Object.entries(lists)) {
@@ -108,6 +113,7 @@ async function renderPage(at: string, lists: Partial<Record<SessionList['whose']
                     archived,
                     limit,
                     directory,
+                    q,
                 }
                 client.setQueryData(keys.sessions(find), list)
             }
@@ -384,5 +390,47 @@ describe('the sessions page', () => {
         const line = (await screen.findByTestId('sessions-index')).textContent
         expect(line).toMatch(/^The index holds what 40 sessions said, up to /u)
         expect(line).toMatch(/, which failed: the record is locked\.$/u)
+    })
+
+    it('finds sessions by the words in its field, marks them, and keeps them through its filters', async () => {
+        const found: SessionList = {
+            ...OUTSIDE,
+            search: 'text',
+            words: ['deploy'],
+            more: true,
+            sessions: [session('ses_deploy', 'Why does the deploy script hang?', '2026-10-08T11:12:00Z')],
+        }
+        await renderPage('/workspace/sessions?q=deploy', { outside: found }, undefined, 'deploy')
+        const field = await screen.findByRole('searchbox', { name: 'Find sessions by title or what was said' })
+        expect((field as HTMLInputElement).value).toBe('deploy')
+        expect(within(rows()[0] as HTMLElement).getByText('deploy', { selector: 'mark' })).toBeTruthy()
+        // Ranked at text, so the count and the way back say best, not newest.
+        expect(screen.getByTestId('sessions-count').textContent).toBe('best 1')
+        expect(screen.getByRole('link', { name: "canopy's" }).getAttribute('href')).toBe(
+            '/workspace/sessions?canopy=true&q=deploy',
+        )
+        expect(screen.getByRole('link', { name: 'archived' }).getAttribute('href')).toBe(
+            '/workspace/sessions?archived=true&q=deploy',
+        )
+    })
+
+    it('says what no session holds when its words find none, by title alone at titles', async () => {
+        const none: SessionList = { ...OUTSIDE, words: ['zzz'], sessions: [] }
+        await renderPage('/workspace/sessions?q=zzz', { outside: none }, undefined, 'zzz')
+        expect(await screen.findByText('no session outside canopy has a title that holds every word')).toBeTruthy()
+        expect(screen.getByRole('searchbox', { name: 'Find sessions by title' })).toBeTruthy()
+    })
+
+    it('says a miss may be the index still catching up, while it is', async () => {
+        const behind: SessionList = { ...OUTSIDE, search: 'text', words: ['zzz'], sessions: [], index: null }
+        await renderPage('/workspace/sessions?q=zzz', { outside: behind }, undefined, 'zzz')
+        expect(await screen.findByText(/^no session outside canopy found yet: the index/u)).toBeTruthy()
+    })
+
+    it('has no field while sessions.search is off', async () => {
+        const off: SessionList = { ...OUTSIDE, search: 'off', sessions: [], progress: null }
+        await renderPage('/workspace/sessions', { outside: off })
+        await screen.findByText(/in your private config/u)
+        expect(screen.queryByRole('searchbox')).toBeNull()
     })
 })
