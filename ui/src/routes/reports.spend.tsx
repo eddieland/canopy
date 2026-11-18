@@ -1084,16 +1084,16 @@ function modelColumns(
     return columns
 }
 
-/**
- * A model's name in By model: the runs no session named one for (`UnnamedModel`), why on hover; a model the runs page
- * lists no run of, plain, why on hover; else a link to its runs of kind `of`. A row of the runs that asked for another
- * model says so after it, `via auto` for a router that sent them on and `asked X` for a model that did not serve.
- */
 /** What a row's `via` or `asked` says on hover. */
 const ASKED_HINT =
     'These runs asked for this model and were served by the one named: a router sends a run on to another, and any ' +
     'other model asked for did not serve'
 
+/**
+ * A model's name in By model: the runs no session named one for (`UnnamedModel`), why on hover; a model the runs page
+ * lists no run of, plain, why on hover; else a link to its runs of kind `of`. A row of the runs that asked for another
+ * model says so after it, `via auto` for a router that sent them on and `asked X` for a model that did not serve.
+ */
 function ModelName({ model: m, of, listed }: { model: ModelRow; of: RunsKind; listed: ReadonlySet<string> }) {
     if (m.model === null) {
         return (
