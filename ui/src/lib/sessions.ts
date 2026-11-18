@@ -1,4 +1,4 @@
-import type { RuntimeSession, SessionsWhose } from '@/api/types'
+import type { RuntimeSession, SessionList, SessionsWhose } from '@/api/types'
 
 // The server's bounds on a list (core/session_list.py), so the UI never asks for what it would answer with a 422.
 /** How many sessions a list holds unless asked for more. */
@@ -40,4 +40,38 @@ export function directoryTail(directory: string): string {
 /** How many sessions a list shows, its subagents' among them, which sit under the session they ran for. */
 export function sessionsShown(sessions: readonly RuntimeSession[]): number {
     return sessions.reduce((n, s) => n + 1 + sessionsShown(s.subagents), 0)
+}
+
+/**
+ * What a hit says beside its snippet, in the words `canopy sessions` prints: how many more of the session's messages
+ * hold the words, and that it was indexed in part. Null for a session with neither, as one not found by its text is.
+ */
+export function hitNote(session: Pick<RuntimeSession, 'more_messages' | 'cut'>): string | null {
+    const said: string[] = []
+    if (session.more_messages > 0) {
+        said.push(
+            session.more_messages === 1
+                ? '1 more message holds them'
+                : `${session.more_messages} more messages hold them`,
+        )
+    }
+    if (session.cut) {
+        said.push('indexed in part: past its bound, words are not found')
+    }
+    return said.length === 0 ? null : said.join('; ')
+}
+
+/**
+ * Whether a search of the sessions' text may miss one the runtime keeps: `text` is asked for and the index cannot be
+ * kept, is not built yet or still building, failed its last read, or was built under another `sessions.exclude`.
+ */
+export function indexBehind(list: Pick<SessionList, 'search' | 'index' | 'why_titles'>): boolean {
+    if (list.why_titles !== null) {
+        return true
+    }
+    if (list.search !== 'text') {
+        return false
+    }
+    const { index } = list
+    return index === null || !index.built || index.error !== null || !index.current
 }

@@ -1,12 +1,12 @@
 import { Link } from '@tanstack/react-router'
 
-import type { SessionsProgress, RuntimeSession, SessionRun } from '@/api/types'
+import type { RuntimeSession, SessionList, SessionRun, SessionsProgress } from '@/api/types'
 import { Age } from '@/components/age'
 import { ChoreRunLink } from '@/components/chore-link'
 import { Copyable } from '@/components/copy-button'
 import { Cost } from '@/components/cost'
 import { EpicLink } from '@/components/epic-link'
-import { MarkedText } from '@/components/marked-text'
+import { Mark, MarkedText } from '@/components/marked-text'
 import { ReviewLink } from '@/components/review-link'
 import { ListRow, RowLine } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
@@ -16,15 +16,18 @@ import { TickLink } from '@/components/tick-link'
 import { Timestamp } from '@/components/timestamp'
 import { Tip } from '@/components/tip'
 import { sessionModels } from '@/lib/models'
-import { directoryTail, sessionName } from '@/lib/sessions'
+import { directoryTail, hitNote, sessionName } from '@/lib/sessions'
+import { byteSize } from '@/lib/ticks'
 
 /** No words to mark: a list read without any. */
 const NO_WORDS: readonly string[] = []
 
 /**
  * The runtime's sessions as rows of a `RowList` of kind `session`, each subagent's right under the session it ran for,
- * marked `subagent`. A title is untrusted text, shown as text with `words` marked. With `narrow`, a row's directory
- * links the Sessions page narrowed to the sessions that ran there, keeping the page's other flags.
+ * marked `subagent`. A title is untrusted text, shown as text with `words` marked, and so is the snippet under the
+ * title of one found by what it said, with what else the hit says: how many more of its messages hold the words, and
+ * whether it was indexed in part. With `narrow`, a row's directory links the Sessions page narrowed to the sessions
+ * that ran there, keeping the page's other flags.
  */
 export function SessionRows({
     sessions,
@@ -69,6 +72,56 @@ export function SessionsProgressLine({ progress }: { progress: SessionsProgress 
 }
 
 /**
+ * How far the index of what sessions said has read the runtime's record, in a line, as `canopy sessions` says it:
+ * how many sessions it holds and its size, up to when it has read, and whether its first build still goes on. Why
+ * `text` finds by titles alone, where the runtime or SQLite cannot keep the index; nothing below `text`.
+ */
+export function SessionsIndexLine({ list }: { list: Pick<SessionList, 'search' | 'index' | 'why_titles'> }) {
+    if (list.why_titles !== null) {
+        return list.why_titles
+    }
+    if (list.search !== 'text') {
+        return null
+    }
+    const { index } = list
+    if (index === null) {
+        return <>The index of sessions&apos; text is not built yet: the loop&apos;s waits between ticks build it.</>
+    }
+    if (index.read_at === null) {
+        return (
+            <>
+                The index of sessions&apos; text is new: the loop&apos;s next wait reads the runtime&apos;s sessions
+                into it.
+            </>
+        )
+    }
+    return (
+        <>
+            The index holds {index.sessions} {index.sessions === 1 ? 'session' : 'sessions'},{' '}
+            {byteSize(index.size_bytes)},{' '}
+            {index.through === null ? (
+                'none read yet'
+            ) : (
+                <>
+                    read up to <Timestamp at={index.through} />
+                </>
+            )}
+            ; last read <Age at={index.read_at} variant="ago" />
+            {!index.built &&
+                (index.back_to === null ? (
+                    '; still building'
+                ) : (
+                    <>
+                        ; still building, back to <Timestamp at={index.back_to} />
+                    </>
+                ))}
+            {index.error !== null && <>, which failed: {index.error}</>}
+            {!index.current && ". It is not yet built as sessions.exclude says: the loop's next wait builds it again"}.
+        </>
+    )
+}
+
+/**
  * A session's row, then its subagents' rows right under it. Every title starts at the same place, so the column reads
  * straight; the `subagent` chip says a row ran for the one above, and names that session to a screen reader.
  */
@@ -85,6 +138,7 @@ function SessionRow({
 }) {
     const name = sessionName(session)
     const models = sessionModels(session.asked, session.models)
+    const note = hitNote(session)
     return (
         <>
             {/* `group/copy`: the command's copy button shows while the pointer is anywhere over the row. */}
@@ -110,6 +164,24 @@ function SessionRow({
                 </span>
                 <Cost usd={session.cost_usd} className="text-right text-xs text-muted-foreground" />
                 <Age at={session.started_at} variant="ago" className="text-right" />
+                {session.snippet !== null && session.snippet.length > 0 && (
+                    <RowLine from="title">
+                        {/* Text, never markup; its URLs are not linked, since a snippet may cut one short. */}
+                        <p className="text-sm wrap-break-word text-muted-foreground" data-testid="session-snippet">
+                            {/* A snippet's pieces never reorder, so their index is their key. */}
+                            {session.snippet.map((part, i) =>
+                                part.marked ? <Mark key={i}>{part.text}</Mark> : part.text,
+                            )}
+                        </p>
+                    </RowLine>
+                )}
+                {note !== null && (
+                    <RowLine from="title">
+                        <span className="text-xs text-muted-foreground" data-testid="session-hit-note">
+                            {note}
+                        </span>
+                    </RowLine>
+                )}
                 {models !== null && (
                     <RowLine from="title">
                         <span className="font-mono text-xs text-muted-foreground" data-testid="session-models">

@@ -1535,6 +1535,10 @@ reader, so no table repeats them.
   dimmed to 60%. While empty, the field's end also holds the jump palette's keys in a keycap that opens it. After the
   journal's panels come the runtime's sessions' two, outside canopy then canopy's, each only with hits, their rows the
   Sessions page's with the words marked in the title; a subagent's, found apart from its parent, carries its chip.
+  A session found by what it said has its snippet under its title, in muted `text-sm`, the words marked as a hit's
+  are and nothing linked, then a muted `text-xs` line for what else the hit says (`2 more messages hold them`, and
+  that it was indexed in part). While the index may miss a session (not built, still building, failed, or built under
+  another `sessions.exclude`), a muted line at the panel's foot says how far it has come.
 - **The Sessions page** (`/workspace/sessions`, `SessionRows`) lists the runtime's sessions under Workspace, beside the
   runs: one panel, its header naming whose they are, with the group word `whose` and two filter chips, `outside canopy`
   (the default) and `canopy's`, then, each after a hairline, an `archived` toggle chip (`aria-pressed`), while the list
@@ -1547,7 +1551,9 @@ reader, so no table repeats them.
   button while the row is hovered or focused, named for the session. A subagent's row follows its parent's, marked by
   its `subagent` chip, which names the parent to a screen reader; titles are not indented, so every title starts at the
   same place. A line under the list, in muted text, says how far the loop's read has come, and holds the one link to the
-  longest list and back. At `sessions.search = "off"` the panel is one `Empty` saying how to turn it on, and the header
+  longest list and back; at `sessions.search = "text"` a second line under it says the same of the index, in the CLI's
+  words: the sessions it holds, its size, how far it has read, and whether its first build still goes on. At
+  `sessions.search = "off"` the panel is one `Empty` saying how to turn it on, and the header
   holds no count.
 - **The jump palette** (`JumpPalette`, `src/components/shell/jump-palette.tsx`) jumps to a ticket from anywhere: `⌘K`
   opens and closes it, from a text field too, as a `Dialog` in the window's top sixth over the canvas. Its field is over

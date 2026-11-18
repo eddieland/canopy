@@ -8,7 +8,7 @@ import type { SessionList, SessionsWhose } from '@/api/types'
 import { Code } from '@/components/code'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { RowList } from '@/components/rows'
-import { SessionRows, SessionsProgressLine } from '@/components/session-rows'
+import { SessionRows, SessionsIndexLine, SessionsProgressLine } from '@/components/session-rows'
 import { Tip } from '@/components/tip'
 import { Button } from '@/components/ui/button'
 import {
@@ -70,7 +70,8 @@ function SessionsPage() {
         <>
             <PageHeader title="Sessions">
                 Sessions the agent runtime keeps, newest first. Yours come with the command that reopens them;
-                canopy&apos;s open the run that made them. Search finds them by title.
+                canopy&apos;s open the run that made them. Search finds them by title
+                {data?.search === 'text' && ', and by what they said'}.
             </PageHeader>
             {/* The previous list stays while the next one loads, dimmed so it does not read as its answer. */}
             <Panel className={cn('transition-opacity', isPlaceholderData && 'opacity-60')}>
@@ -115,7 +116,10 @@ function SessionsPage() {
     )
 }
 
-/** The list, or why it is empty, then how far the read has come and whether more sessions match. */
+/**
+ * The list, or why it is empty, then how far the read has come and whether more sessions match, and at `text` how far
+ * the index of what they said has.
+ */
 function Listed({
     list,
     archived,
@@ -164,6 +168,11 @@ function Listed({
                     </>
                 )}
             </p>
+            {(list.search === 'text' || list.why_titles !== null) && (
+                <p className="border-t px-3 py-2 text-xs text-muted-foreground" data-testid="sessions-index">
+                    <SessionsIndexLine list={list} />
+                </p>
+            )}
         </>
     )
 }

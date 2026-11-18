@@ -9,7 +9,7 @@ import { MarkedText } from '@/components/marked-text'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { ListRow, RowList } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
-import { SessionRows } from '@/components/session-rows'
+import { SessionRows, SessionsIndexLine } from '@/components/session-rows'
 import { Chip, RunDot, Word } from '@/components/status'
 import { TaskLink, TaskRunLink } from '@/components/task-link'
 import { TickLink } from '@/components/tick-link'
@@ -17,7 +17,7 @@ import { TicketLink } from '@/components/ticket-link'
 import { choreRunState } from '@/lib/chores'
 import { RUN_TEXT } from '@/lib/run-state'
 import { bySource, SEARCH_MIN, searchQueryOf, SOURCE_LABEL } from '@/lib/search'
-import { SESSIONS_PER_SEARCH, SESSIONS_WHOSE, WHOSE_LABEL } from '@/lib/sessions'
+import { indexBehind, SESSIONS_PER_SEARCH, SESSIONS_WHOSE, WHOSE_LABEL } from '@/lib/sessions'
 import { cn } from '@/lib/utils'
 
 interface SearchParams {
@@ -102,8 +102,10 @@ function Results({ q }: { q: string }) {
 
 /**
  * One of the two panels of the runtime's sessions (DESIGN §13), after the journal's: those outside canopy, or
- * canopy's, the newest whose title holds every word, each opening its run's page or giving the command that reopens
- * it. None while `sessions.search` is `off`, or none matches, as a journal source with no hits has no panel.
+ * canopy's, the newest whose title holds every word, or at `text` the best matches of title and text, each with its
+ * snippet, each opening its run's page or giving the command that reopens it. None while `sessions.search` is `off`,
+ * or none matches, as a journal source with no hits has no panel. While the index may miss a session, still building
+ * or failed, a line under the hits says how far it has come.
  */
 function SessionsFound({ q, whose }: { q: string; whose: SessionsWhose }) {
     const { data } = useQuery(sessionsQuery({ whose, q, limit: SESSIONS_PER_SEARCH }))
@@ -120,6 +122,11 @@ function SessionsFound({ q, whose }: { q: string; whose: SessionsWhose }) {
             <RowList kind="session" className="divide-y">
                 <SessionRows sessions={data.sessions} words={data.words} />
             </RowList>
+            {indexBehind(data) && (
+                <p className="border-t px-3 py-2 text-xs text-muted-foreground" data-testid="search-sessions-index">
+                    <SessionsIndexLine list={data} />
+                </p>
+            )}
         </Panel>
     )
 }

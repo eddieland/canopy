@@ -301,4 +301,67 @@ describe('the sessions page', () => {
         await renderPage('/workspace/sessions', { outside: unread })
         expect(await screen.findByText(/^no sessions yet: canopy loop reads/u)).toBeTruthy()
     })
+
+    it('shows a hit its snippet with the words marked, and what else the hit says', async () => {
+        const found: SessionList = {
+            ...OUTSIDE,
+            search: 'text',
+            sessions: [
+                session('ses_deploy', 'Why does the deploy script hang?', '2026-10-08T11:12:00Z', {
+                    snippet: [
+                        { text: '… the ', marked: false },
+                        { text: 'lockfile', marked: true },
+                        { text: ' is never released …', marked: false },
+                    ],
+                    more_messages: 2,
+                    cut: true,
+                }),
+                session('ses_plain', 'Notes', '2026-10-08T10:00:00Z'),
+            ],
+        }
+        await renderPage('/workspace/sessions', { outside: found })
+        await screen.findByTestId('sessions')
+        const [hit, plain] = rows()
+        const snippet = within(hit as HTMLElement).getByTestId('session-snippet')
+        expect(snippet.textContent).toBe('… the lockfile is never released …')
+        expect([...snippet.querySelectorAll('mark')].map((m) => m.textContent)).toStrictEqual(['lockfile'])
+        expect(within(hit as HTMLElement).getByTestId('session-hit-note').textContent).toBe(
+            '2 more messages hold them; indexed in part: past its bound, words are not found',
+        )
+        expect(within(plain as HTMLElement).queryByTestId('session-snippet')).toBeNull()
+        expect(within(plain as HTMLElement).queryByTestId('session-hit-note')).toBeNull()
+    })
+
+    it('says at text how far the index has read, and that its first build still goes on', async () => {
+        const building: SessionList = {
+            ...OUTSIDE,
+            search: 'text',
+            index: {
+                sessions: 1,
+                through: '2026-10-08T12:06:00Z',
+                back_to: '2026-10-01T09:00:00Z',
+                built: false,
+                read_at: '2026-10-08T12:08:00Z',
+                error: null,
+                current: true,
+                size_bytes: 2048,
+            },
+        }
+        await renderPage('/workspace/sessions', { outside: building })
+        const line = (await screen.findByTestId('sessions-index')).textContent
+        expect(line).toMatch(/^The index holds 1 session, 2\.0 KiB, read up to /u)
+        expect(line).toMatch(/; still building, back to .+\.$/u)
+    })
+
+    it('says the index is not built yet at text, why text finds by titles, and nothing of it at titles', async () => {
+        await renderPage('/workspace/sessions', { outside: { ...OUTSIDE, search: 'text' } })
+        expect((await screen.findByTestId('sessions-index')).textContent).toMatch(/is not built yet/u)
+        cleanup()
+        await renderPage('/workspace/sessions', { outside: { ...OUTSIDE, why_titles: 'SQLite 3.40 is too old.' } })
+        expect((await screen.findByTestId('sessions-index')).textContent).toBe('SQLite 3.40 is too old.')
+        cleanup()
+        await renderPage('/workspace/sessions', { outside: OUTSIDE })
+        await screen.findByTestId('sessions-progress')
+        expect(screen.queryByTestId('sessions-index')).toBeNull()
+    })
 })
