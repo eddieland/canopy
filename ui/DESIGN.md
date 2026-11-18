@@ -1538,7 +1538,8 @@ reader, so no table repeats them.
   A session found by what it said has its snippet under its title, in muted `text-sm`, the words marked as a hit's
   are and nothing linked, then a muted `text-xs` line for what else the hit says (`2 more messages hold them`, and
   that it was indexed in part). While the index may miss a session (not built, still building, failed, or built under
-  another `sessions.exclude`), a muted line at the panel's foot says how far it has come.
+  another `sessions.exclude`), a muted line at the panel's foot says how far it has come; when neither panel has a
+  hit then, one `Sessions` panel holds that line alone, so no hit is not read as no such session.
 - **The Sessions page** (`/workspace/sessions`, `SessionRows`) lists the runtime's sessions under Workspace, beside the
   runs: one panel, its header naming whose they are, with the group word `whose` and two filter chips, `outside canopy`
   (the default) and `canopy's`, then, each after a hairline, an `archived` toggle chip (`aria-pressed`), while the list
