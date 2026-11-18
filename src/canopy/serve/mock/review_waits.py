@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 #: When the reader began keeping a PR's times: a PR read before it has none.
 TIMES_FROM: Final = datetime(2026, 9, 15, tzinfo=UTC)
-# The planner's estimate of each approved feedback plan, by its ticket.
+#: The planner's estimate of each approved feedback plan, by its ticket.
 _EFFORTS: Final = {"ABC-130": PlanEffort.SMALL, "ABC-131": PlanEffort.SMALL, "ABC-132": PlanEffort.MEDIUM}
 
 

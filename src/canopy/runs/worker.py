@@ -111,8 +111,8 @@ MAX_OTHER_CAUSE: Final = 60
 MAX_DRIFT: Final = 2 * epic_outline.MAX_IDS
 #: The longest string `drift` keeps: an id is a letter and at most four digits, so anything longer is none.
 MAX_DRIFT_ID: Final = 8
-# The repository whose slot `setup_cmd` runs in, by its name in the map, and the run's branch, which the slot has
-# checked out detached (DESIGN §8).
+#: The repository whose slot `setup_cmd` runs in, by its name in the map, and the run's branch, which the slot has
+#: checked out detached (DESIGN §8).
 SETUP_REPO_ENV: Final = "CANOPY_REPO"
 SETUP_BRANCH_ENV: Final = "CANOPY_BRANCH"
 
@@ -292,10 +292,10 @@ class Outcome:
     status: RunStatus
     result: WorkerResult | PlanResult | None
     note: str = ""
-    # What the worker sent of agent memory, and the commit its branch was at when it ended (DESIGN §28).
+    #: What the worker sent of agent memory, and the commit its branch was at when it ended (DESIGN §28).
     memory: memory.Fields | None = None
     head: str | None = None
-    # The comments it drafted in place of posting them (DESIGN §29).
+    #: The comments it drafted in place of posting them (DESIGN §29).
     drafts: drafts.Fields | None = None
     #: The follow-up tickets the worker reported, checked: those to record, and those refused (DESIGN §18).
     follow_ups: follow_ups.Checked | None = None

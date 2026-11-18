@@ -45,18 +45,18 @@ if TYPE_CHECKING:
 TIMEOUT_SECONDS: Final = 120
 #: OpenCode's tool that loads a skill, and the permission its rules name.
 SKILL: Final = "skill"
-# The words that start OpenCode, as canopy's debug commands run it.
+#: The words that start OpenCode, as canopy's debug commands run it.
 _OPENCODE: Final = ("opencode",)
-# The built-in tools `opencode debug agent` lists that no request carries: OpenCode's stand-in for a call to a tool it
-# does not have (MEASUREMENTS 2026-10-19, F42).
+#: The built-in tools `opencode debug agent` lists that no request carries: OpenCode's stand-in for a call to a tool it
+#: does not have (MEASUREMENTS 2026-10-19, F42).
 _UNSENT: Final = frozenset({"invalid"})
-# An agent's name, as one path component could hold it.
+#: An agent's name, as one path component could hold it.
 _AGENT_RE: Final = re.compile(r"[a-z][a-z0-9-]*")
-# What OpenCode makes of a server's name in its tools' names: anything but a letter, a digit, `_`, or `-` is `_`.
+#: What OpenCode makes of a server's name in its tools' names: anything but a letter, a digit, `_`, or `-` is `_`.
 _UNSAFE_RE: Final = re.compile(r"[^a-zA-Z0-9_-]")
-# Where OpenCode's own output starts: a line that opens an object or an array alone, or an empty array.
+#: Where OpenCode's own output starts: a line that opens an object or an array alone, or an empty array.
 _PRINTED_RE: Final = re.compile(r"^(\{|\[\]?)$", re.MULTILINE)
-# The regex characters OpenCode escapes in a pattern before it reads `*` and `?` as wildcards.
+#: The regex characters OpenCode escapes in a pattern before it reads `*` and `?` as wildcards.
 _SPECIAL_RE: Final = re.compile(r"[.+^${}()|\[\]\\]")
 
 

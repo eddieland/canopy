@@ -51,17 +51,17 @@ from tests.canopy.review_helpers import CLEAN, PR, reviewer_reports, run_inline
 from tests.canopy.scenario_helpers import dispatches
 from tests.conftest import HERMETIC_GIT, CanopyEnv, GitPool, executable, git, user_toml
 
-# The command the install puts beside python, which is how canopy runs it: never `python -m`, which would put the
-# slot's own directory first on the import path.
+#: The command the install puts beside python, which is how canopy runs it: never `python -m`, which would put the
+#: slot's own directory first on the import path.
 WRAPPER: Final = Path(sys.executable).parent / "canopy-sandbox"
 ROLES: Final = ("worker", "setup", "chore", "review", "overseer")
 FAKES: Final = Path(__file__).resolve().parents[1] / "fakes"
 SRT_PACKAGE: Final = "@anthropic-ai/sandbox-runtime"
-# Quotes, a line break, and what a shell would expand: the command must receive it as it was given (§5 item 3).
+#: Quotes, a line break, and what a shell would expand: the command must receive it as it was given (§5 item 3).
 PROMPT: Final = 'it\'s "quoted"\n$(touch pwned) `id` $HOME \\ ; | & *'
 PRINT_ARG: Final = ["sh", "-c", 'printf %s "$1"', "sh"]
-# The operator's OpenCode logins, as OpenCode 1.19.3 writes them: a provider's OAuth login, whose `expires` is in
-# milliseconds, and a remote MCP server's, whose `expiresAt` is in seconds.
+#: The operator's OpenCode logins, as OpenCode 1.19.3 writes them: a provider's OAuth login, whose `expires` is in
+#: milliseconds, and a remote MCP server's, whose `expiresAt` is in seconds.
 OAUTH: Final = {
     "type": "oauth",
     "refresh": "refresh-1",

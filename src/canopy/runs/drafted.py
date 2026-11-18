@@ -65,7 +65,7 @@ def _check(ctx: Context, whole: Collection[str], log: logs.TickAdapter) -> None:
         log.info("drafts checked", extra={"prs": sorted(whole), **counts})
 
 
-# The attention reason drafts waiting on the operator raise (DESIGN §14, §29): the harness's, and the operator's alone.
+#: The attention reason drafts waiting on the operator raise (DESIGN §14, §29): the harness's, and the operator's alone.
 WAITING_REASON: Final = "drafts_waiting"
 
 

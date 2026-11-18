@@ -29,7 +29,7 @@ KIND_LABELS: Final[dict[spend.Kind, str]] = {
     "reviews": "review runs",
     "tasks": "task runs",
 }
-# The per-day table's columns: a heading and the cost it shows.
+#: The per-day table's columns: a heading and the cost it shows.
 _COLUMNS: Final[tuple[tuple[str, str], ...]] = (
     ("overseer", "overseer"),
     ("idle", "idle"),
@@ -47,13 +47,13 @@ _COST_WIDTH: Final = 9
 #: The ticks' tables' last column: how many ran no overseer, left nothing to judge or halted before it (DESIGN §39).
 _NO_OVERSEER: Final = "no overseer"
 _KEY_WIDTH: Final = 16
-# The costliest tickets the text lists; `--json` lists every one.
+#: The costliest tickets the text lists; `--json` lists every one.
 _TICKETS: Final = 10
-# The tools that returned the most the text lists, and the width of their names' column; `--json` lists every one.
+#: The tools that returned the most the text lists, and the width of their names' column; `--json` lists every one.
 _TOOLS: Final = 10
 _TOOL_WIDTH: Final = 32
-# What `canopy spend` says for a kind's runs whose sessions named no model: those canopy has yet to read (running, not
-# read yet, or failed to read), and those read that named none (no longer kept, no session, or no model call).
+#: What `canopy spend` says for a kind's runs whose sessions named no model: those canopy has yet to read (running, not
+#: read yet, or failed to read), and those read that named none (no longer kept, no session, or no model call).
 UNREAD: Final = "(unread)"
 NO_MODEL: Final = "(none)"
 

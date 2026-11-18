@@ -52,17 +52,17 @@ if TYPE_CHECKING:
     from canopy.core.config import Chore, Config
 
 MAX_KEY: Final = 100
-# Set for the agents of canopy's own runs, as CANOPY_TICK_ID is for the overseer: the operator's commands refuse in
-# either, so an agent that follows injected text naively cannot reply or start a ticket as the operator (TRUST_MODEL
-# T1).
+#: Set for the agents of canopy's own runs, as CANOPY_TICK_ID is for the overseer: the operator's commands refuse in
+#: either, so an agent that follows injected text naively cannot reply or start a ticket as the operator (TRUST_MODEL
+#: T1).
 TICK_ID_ENV: Final = "CANOPY_TICK_ID"
 RUN_ID_ENV: Final = "CANOPY_RUN_ID"
 MAX_OPERATOR: Final = 4000
 MAX_PR_URL: Final = 300
-# The channel of a start record the loop wrote: with `tracker.private` set, a labeled ticket's first dispatch starts
-# it privately, as if the operator had (DESIGN §22).
+#: The channel of a start record the loop wrote: with `tracker.private` set, a labeled ticket's first dispatch starts
+#: it privately, as if the operator had (DESIGN §22).
 LABEL: Final = "label"
-# A submission id a channel's form draws when it is rendered (DESIGN §22).
+#: A submission id a channel's form draws when it is rendered (DESIGN §22).
 SUBMISSION_RE: Final = re.compile(r"[A-Za-z0-9_-]{8,64}")
 #: Where the recorded submission of an operator message that answers no question starts: one an operator verb writes
 #: as its instruction, such as a feedback plan's approval (DESIGN §32), never a reply. No reply's submission, a
@@ -77,17 +77,17 @@ TRACKER: Final = "tracker"
 #: The decision each `mirror` recorded, before M37 retired the overseer's mirror of tracker comments: a copy of one,
 #: which decided nothing. Older ticks hold them.
 MIRROR_ACTION: Final = "mirror"
-# A tracker's comment id, as a cursor id is: plain and short. An author is the tracker's account id: printable, no
-# whitespace.
+#: A tracker's comment id, as a cursor id is: plain and short. An author is the tracker's account id: printable, no
+#: whitespace.
 COMMENT_ID_RE: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/-]{0,199}")
 MAX_AUTHOR: Final = 200
 MAX_TIME: Final = 64
-# How much of a ticket's conversation a private worker's prompt carries: its latest messages, oldest first.
+#: How much of a ticket's conversation a private worker's prompt carries: its latest messages, oldest first.
 PROMPT_MESSAGES: Final = 20
 PROMPT_CHARS: Final = 30_000
-# How many of a ticket's latest runs a public worker's prompt reports (`prompt_previous_runs`).
+#: How many of a ticket's latest runs a public worker's prompt reports (`prompt_previous_runs`).
 PREVIOUS_RUNS: Final = 3
-# How many of the operator's notes to a chore its prompt carries: the latest, oldest first (DESIGN §19).
+#: How many of the operator's notes to a chore its prompt carries: the latest, oldest first (DESIGN §19).
 CHORE_NOTES: Final = 10
 #: Who wrote a tick's note on a ticket: canopy, from what the tick recorded (`loop/acknowledge.py`).
 CANOPY: Final = "canopy"
@@ -99,15 +99,15 @@ PR: Final = "pr"
 CHORE: Final = "chore"
 RUN: Final = "run"
 REVIEW: Final = "review"
-# What a review's dismissal may give as its reason, as a refusal names them.
+#: What a review's dismissal may give as its reason, as a refusal names them.
 _REASONS: Final = ", ".join(f"`{r}`" for r in DismissalReason)
 #: A one-off task the operator submitted (DESIGN §36), `task:N`.
 TASK: Final = "task"
 #: An epic the operator submitted (DESIGN §43), `epic:N`.
 EPIC: Final = "epic"
-# The verbs each kind of subject takes. A PR takes `grant` (more reviews, DESIGN §21), `start --review`, `stop`, and
-# `persona` (a review request and its persona, `reviews/review_requests.py`), and `show`; working one is PR-scoped work
-# (ROADMAP M14).
+#: The verbs each kind of subject takes. A PR takes `grant` (more reviews, DESIGN §21), `start --review`, `stop`, and
+#: `persona` (a review request and its persona, `reviews/review_requests.py`), and `show`; working one is PR-scoped work
+#: (ROADMAP M14).
 VERBS: Final[Mapping[str, tuple[str, ...]]] = {
     # A ticket's `send` sends feedback its `review` cursors passed with no worker to one (DESIGN §7).
     TICKET: (
@@ -142,7 +142,7 @@ VERBS: Final[Mapping[str, tuple[str, ...]]] = {
     # plan runs and every run of its members read (§22).
     EPIC: ("stop", "show", "reply", "plan", "attach", "detach"),
 }
-# What a PR refuses beyond reviews: canopy works only tickets until PR-scoped work exists.
+#: What a PR refuses beyond reviews: canopy works only tickets until PR-scoped work exists.
 _PR_WORK: Final = (
     "{ref} is a PR; canopy only reviews PRs it does not own, and works them once PR-scoped work exists (ROADMAP M14)"
 )

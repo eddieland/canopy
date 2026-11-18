@@ -62,7 +62,7 @@ class RunMemory(Row):
     run_id: int
     ticket_notes: MemoryMode
     proposals: MemoryMode
-    # A JSON list of the entries refused from the run's result, each the field, the key if valid, and why.
+    #: A JSON list of the entries refused from the run's result, each the field, the key if valid, and why.
     refused: str
 
 
@@ -74,7 +74,7 @@ class MemoryRead(Row):
 
     run_id: int
     memory_id: int
-    # What the run said of it; None when it cited it in neither list, and for every read from before runs were named.
+    #: What the run said of it; None when it cited it in neither list, and for every read from before runs were named.
     cited: MemoryCited | None
 
 

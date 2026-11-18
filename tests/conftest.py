@@ -33,18 +33,18 @@ if TYPE_CHECKING:
     import click
 
 FAKES_DIR: Final = Path(__file__).parent / "fakes"
-# Where this interpreter's scripts live, `canopy` among them. A fake agent runs `canopy` the way an overseer does.
+#: Where this interpreter's scripts live, `canopy` among them. A fake agent runs `canopy` the way an overseer does.
 SCRIPTS_DIR: Final = Path(sys.executable).parent
-# The prefixes tests/fakes/agent records in its log's `env`. Keep in sync with it.
+#: The prefixes tests/fakes/agent records in its log's `env`. Keep in sync with it.
 RECORDED_ENV_PREFIXES: Final = ("CANOPY_", "OPENCODE_")
-# What tests/fakes/agent reads its behavior from, for each role it plays. Keep in sync with it.
+#: What tests/fakes/agent reads its behavior from, for each role it plays. Keep in sync with it.
 FAKE_AGENT_PREFIXES: Final = tuple(
     f"FAKE_{role}_" for role in ("AGENT", "OVERSEER", "WORKER", "PLANNER", "CHORE", "REVIEWER")
 )
 
-# Commits made under test have a fixed author, and git reads no config of the operator's or the machine's. Nor does it
-# start automatic maintenance: newer git (2.55 on CI) runs it in the background after a commit or a fetch, where it
-# can prune a worktree that `git worktree add` has made but not yet locked, or leave a `maintenance.lock` a test sees.
+#: Commits made under test have a fixed author, and git reads no config of the operator's or the machine's. Nor does it
+#: start automatic maintenance: newer git (2.55 on CI) runs it in the background after a commit or a fetch, where it
+#: can prune a worktree that `git worktree add` has made but not yet locked, or leave a `maintenance.lock` a test sees.
 HERMETIC_GIT: Final = {
     "GIT_AUTHOR_NAME": "canopy test",
     "GIT_COMMITTER_NAME": "canopy test",

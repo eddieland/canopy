@@ -18,9 +18,9 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
     from canopy.core.workspace import Workspace
 
-# How a reload names a change to the workspace file's map, its `[workspace]` and `[repos]` tables.
+#: How a reload names a change to the workspace file's map, its `[workspace]` and `[repos]` tables.
 WORKSPACE_MAP: Final = "workspace map"
-# Keys whose change takes effect only when the loop restarts: the web UI's listener is started once, with the loop.
+#: Keys whose change takes effect only when the loop restarts: the web UI's listener is started once, with the loop.
 RESTART_PREFIX: Final = "serve."
 #: The `serve.` keys a reload does apply: dictation's command is read by each recording from the config the server
 #: serves, which a reload replaces.
@@ -32,7 +32,7 @@ class Reload:
     """Whether the operator asked the loop to read its config again. Set by SIGHUP and by the web UI's thread."""
 
     requested: bool = False
-    # Set by the loop while a tick runs: a reload asked for then waits for the tick to end.
+    #: Set by the loop while a tick runs: a reload asked for then waits for the tick to end.
     ticking: bool = False
 
     def request(self) -> bool:

@@ -27,10 +27,10 @@ async def provide_stream(backend: BackendDep) -> AsyncIterator[live.Stream]:
         yield stream
 
 
-# `request` is FastAPI's default for a dependency with `yield`, named here because the stream relies on it: the
-# request's exit stack closes the stream after it cancels the SSE producer reading its events, which was entered on that
-# stack later. With `function`, it would close before the response is sent, under a producer still reading. The
-# provider is async, so the stream closes on the event loop, where its events run.
+#: `request` is FastAPI's default for a dependency with `yield`, named here because the stream relies on it: the
+#: request's exit stack closes the stream after it cancels the SSE producer reading its events, which was entered on
+#: that stack later. With `function`, it would close before the response is sent, under a producer still reading. The
+#: provider is async, so the stream closes on the event loop, where its events run.
 StreamDep = Annotated[live.Stream, Depends(provide_stream, scope="request")]
 
 

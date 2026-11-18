@@ -50,7 +50,7 @@ SHIPPED: Final[Mapping[RunTable, sql.Fragment]] = {
     "task_runs": sql.frag("?", names.PRIVATE_WORKER),
     "epic_runs": sql.frag("?", names.PLANNER),
 }
-# Which of a table's rows are an agent's runs: every one, but a tick that ran no overseer.
+#: Which of a table's rows are an agent's runs: every one, but a tick that ran no overseer.
 _EVERY: Final = sql.frag("1")
 _RUNS: Final[Mapping[RunTable, sql.Fragment]] = {"ticks": sql.frag("r.overseer_ran IS NOT 0")}
 

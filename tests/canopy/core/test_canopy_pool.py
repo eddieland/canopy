@@ -71,8 +71,8 @@ def ws(tmp_path: Path, journals: Journals) -> Iterator[Ws]:
         yield Ws(root, origin, clone, tmp_path / "canopy.db", journals)
 
 
-# Run in a process of its own: lease a slot of the pool at argv[1] (root) for argv[3], recording it in the journal at
-# argv[2], and print the lease.
+#: Run in a process of its own: lease a slot of the pool at argv[1] (root) for argv[3], recording it in the journal at
+#: argv[2], and print the lease.
 LEASE_SCRIPT: Final = """
 import sys
 from pathlib import Path

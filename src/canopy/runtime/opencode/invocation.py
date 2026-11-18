@@ -37,7 +37,7 @@ APPROVE_OPTIONS: Final = frozenset(
 #: The option of `opencode run` that chooses what it prints, and its value for one JSON event a line.
 FORMAT_OPTION: Final = "--format"
 EVENTS_FORMAT: Final = "json"
-# The agent a command runs, as `opencode run` takes it, by a name that is safe as one path component.
+#: The agent a command runs, as `opencode run` takes it, by a name that is safe as one path component.
 _AGENT_RE: Final = re.compile(r"(--agent[ =])([a-z][a-z0-9-]*)(?=\s|$)")
 
 

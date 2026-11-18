@@ -12,13 +12,13 @@ from typing import Final
 
 PACKAGE: Final = Path(__file__).resolve().parents[2] / "src" / "canopy"
 TESTS: Final = Path(__file__).resolve().parents[1]
-# The workspace members' packages (D041), each `packages/NAME/src/PACKAGE`.
+#: The workspace members' packages (D041), each `packages/NAME/src/PACKAGE`.
 MEMBERS: Final = Path(__file__).resolve().parents[2] / "packages"
 
-# Top to bottom. A module may import from its own package and from any package in a lower layer. It may not import
-# from a higher layer or from another package in its own layer: features stay independent of each other, and code two
-# of them share moves down a layer instead. The web UI's server sits above the features, as the loop and the command
-# line do, so what only those read stays in the feature that owns it.
+#: Top to bottom. A module may import from its own package and from any package in a lower layer. It may not import
+#: from a higher layer or from another package in its own layer: features stay independent of each other, and code two
+#: of them share moves down a layer instead. The web UI's server sits above the features, as the loop and the command
+#: line do, so what only those read stays in the feature that owns it.
 LAYERS: Final[tuple[frozenset[str], ...]] = (
     frozenset({"__main__"}),
     frozenset({"cli"}),
@@ -29,7 +29,7 @@ LAYERS: Final[tuple[frozenset[str], ...]] = (
     frozenset({"runtime"}),
     frozenset({"infra"}),
 )
-# Third-party packages only one canopy package may import.
+#: Third-party packages only one canopy package may import.
 CONFINED: Final = {
     "anyio": "serve",
     "click": "cli",
@@ -40,14 +40,14 @@ CONFINED: Final = {
     "tomlkit": "serve",
     "uvicorn": "serve",
 }
-# The programs canopy ships besides `canopy`, each a command line of its own and so free to import click: the desktop
-# sink and the development server.
+#: The programs canopy ships besides `canopy`, each a command line of its own and so free to import click: the desktop
+#: sink and the development server.
 PROGRAMS: Final = frozenset({"notify/desktop.py", "serve/__main__.py"})
-# Programs canopy ships as separate distributions and runs only as commands (D041): the Slack sink, the GitHub
-# programs, and the Jira connector hold secrets and open connections, which the harness never does (DESIGN §20, §29,
-# §30), and the local artifact store holds what workers publish, which stays out of the journal (§38). The review bench
-# is a dev tool canopy never runs, which scores another reviewer through git and gh, and the codemods are another, which
-# rewrite canopy's own source.
+#: Programs canopy ships as separate distributions and runs only as commands (D041): the Slack sink, the GitHub
+#: programs, and the Jira connector hold secrets and open connections, which the harness never does (DESIGN §20, §29,
+#: §30), and the local artifact store holds what workers publish, which stays out of the journal (§38). The review bench
+#: is a dev tool canopy never runs, which scores another reviewer through git and gh, and the codemods are another,
+#: which rewrite canopy's own source.
 SEPARATE: Final = frozenset(
     {
         "canopy_artifacts",
@@ -58,25 +58,25 @@ SEPARATE: Final = frozenset(
         "canopy_review_bench",
     },
 )
-# The HTTP stack those programs share (D130), and its transport: the harness opens no connection but its opt-in OTLP
-# export (TRUST_MODEL T2), as ruff's ban on the stdlib's network modules keeps it from doing with those elsewhere.
+#: The HTTP stack those programs share (D130), and its transport: the harness opens no connection but its opt-in OTLP
+#: export (TRUST_MODEL T2), as ruff's ban on the stdlib's network modules keeps it from doing with those elsewhere.
 NETWORK: Final = frozenset({"canopy_http", "httpx2"})
-# The package that alone knows the agent runtime (D009), and the name that must appear in no string outside it.
+#: The package that alone knows the agent runtime (D009), and the name that must appear in no string outside it.
 RUNTIME: Final = "runtime"
 RUNTIME_NAME: Final = re.compile(r"opencode", re.IGNORECASE)
-# Within it, the implementations that alone name the runtime, OpenCode 1's and OpenCode 2's, each its own and importing
-# neither the other nor the surface; the one module that imports them; and the modules of what any runtime reports, the
-# only others of the package an implementation may import.
+#: Within it, the implementations that alone name the runtime, OpenCode 1's and OpenCode 2's, each its own and importing
+#: neither the other nor the surface; the one module that imports them; and the modules of what any runtime reports, the
+#: only others of the package an implementation may import.
 IMPLEMENTATIONS: Final = (PACKAGE / RUNTIME / "opencode", PACKAGE / RUNTIME / "opencode2")
 BINDING: Final = PACKAGE / RUNTIME / "implementation.py"
 NEUTRAL: Final = frozenset({"canopy.runtime.report", "canopy.runtime.entries", "canopy.runtime.agents"})
-# The modules an implementation may take from another: OpenCode 2 reads OpenCode 1's agent format through its
-# compatibility layer, so canopy's definitions, and how config is rendered into them, are one for both; and it keeps its
-# sessions in the same database, read by the same reader with queries of its own.
+#: The modules an implementation may take from another: OpenCode 2 reads OpenCode 1's agent format through its
+#: compatibility layer, so canopy's definitions, and how config is rendered into them, are one for both; and it keeps
+#: its sessions in the same database, read by the same reader with queries of its own.
 SHARED: Final = {
     "canopy.runtime.opencode2": frozenset({"canopy.runtime.opencode.definitions", "canopy.runtime.opencode.sessions"}),
 }
-# Modules outside it allowed to name the runtime, with why: none knows how it behaves.
+#: Modules outside it allowed to name the runtime, with why: none knows how it behaves.
 NAMES_RUNTIME: Final = {
     # The web UI's demo: its made-up pools' slots run the runtime's process, and its made-up runs' transcripts print
     # what the runtime prints, which the runtime package reads.

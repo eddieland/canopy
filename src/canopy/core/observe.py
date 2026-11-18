@@ -425,7 +425,7 @@ _SHA_RE: Final = re.compile(r"[0-9a-f]{7,64}")
 _HOST_REPO_RE: Final = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 _REF_RE: Final = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_./-]*")
 _NODE_RE: Final = re.compile(r"[A-Za-z0-9_=-]+")
-# Plain ref components, as the branch prefix is: nothing git reads specially.
+#: Plain ref components, as the branch prefix is: nothing git reads specially.
 _BRANCH_RE: Final = re.compile(r"(?:[A-Za-z0-9][A-Za-z0-9_.-]*/)*[A-Za-z0-9][A-Za-z0-9_.-]*")
 
 _Key = Annotated[str, text_of(conversation.MAX_KEY, conversation.KEY_RE)]
@@ -583,7 +583,7 @@ _KINDS: Final[Mapping[str, type[_Observation]]] = {
     "check": _Check,
     "branch": _Branch,
 }
-# What each kind is about, and the field that names it: a refused line's subject is not whole this run.
+#: What each kind is about, and the field that names it: a refused line's subject is not whole this run.
 _SUBJECTS: Final[Mapping[str, tuple[Literal["tickets", "prs", "repositories"], str]]] = {
     "ticket": ("tickets", "key"),
     "comment": ("tickets", "ticket"),
@@ -1035,7 +1035,7 @@ def _insert_status_run(conn: sqlite3.Connection, line: _Check, conclusion: Check
     ).run(conn)
 
 
-# How many subjects a run's `missed` names before it counts the rest.
+#: How many subjects a run's `missed` names before it counts the rest.
 _NAMED: Final = 5
 
 

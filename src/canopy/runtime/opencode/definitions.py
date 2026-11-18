@@ -95,42 +95,43 @@ _PRIVATE_FILE: Final = _file(PRIVATE_WORKER)
 _OVERSEER_FILE: Final = _file(OVERSEER)
 _REVIEWER_FILE: Final = _file(REVIEWER)
 _CHORE_FILE: Final = _file(CHORE)
-# The definitions that may call only the tracker's read tools, rendered at their marked line.
+#: The definitions that may call only the tracker's read tools, rendered at their marked line.
 _READ_ONLY_TRACKER_FILES: Final = (_PRIVATE_FILE, _file(PLANNER))
 _WORKER_FILES: Final = (_file(WORKER), _PRIVATE_FILE)
-# The definitions that deny GitHub's issue tools off a GitHub tracker, at their marked line.
+#: The definitions that deny GitHub's issue tools off a GitHub tracker, at their marked line.
 _GITHUB_ISSUE_FILES: Final = (*_WORKER_FILES, _file(PLANNER))
-# The line of the shipped worker definitions the rules for a rebased branch's push are rendered at.
+#: The line of the shipped worker definitions the rules for a rebased branch's push are rendered at.
 _REBASE_MARKER: Final = "    # canopy: rebase rules\n"
-# The one forced push `trust.rebase` allows, after the deny of every other: the prompts' own command, a lease on the
-# branch's remote-tracking ref. A `--force` added to it is denied again; the rules after the marker still deny the rest.
+#: The one forced push `trust.rebase` allows, after the deny of every other: the prompts' own command, a lease on the
+#: branch's remote-tracking ref. A `--force` added to it is denied again; the rules after the marker still deny the
+#: rest.
 _REBASE_RULES: Final = (
     '    "git push --force-with-lease origin HEAD:refs/heads/*": allow\n',
     '    "git push *--force": deny\n',
     '    "git push *--force *": deny\n',
 )
-# The lines of the shipped worker definitions the denial of commenting is rendered at, when workers draft their
-# replies (DESIGN §29): in bash, `gh`'s commands that comment; among the MCP rules, the GitHub server's comment tools.
-# A worker that still posts its ticket comments itself, for want of a tracker source that posts, keeps the issue ones.
+#: The lines of the shipped worker definitions the denial of commenting is rendered at, when workers draft their
+#: replies (DESIGN §29): in bash, `gh`'s commands that comment; among the MCP rules, the GitHub server's comment tools.
+#: A worker that still posts its ticket comments itself, for want of a tracker source that posts, keeps the issue ones.
 _REPLY_BASH_MARKER: Final = "    # canopy: reply rules\n"
 _REPLY_TOOLS_MARKER: Final = "  # canopy: reply tools\n"
 _REPLY_BASH: Final = ('    "gh pr comment*": deny\n',)
 _REPLY_BASH_ISSUES: Final = ('    "gh issue comment*": deny\n',)
 _REPLY_TOOLS: Final = ('  "*reply_to_pull_request_comment*": deny\n', '  "*add_comment_to_pending_review*": deny\n')
 _REPLY_TOOLS_ISSUES: Final = ('  "*add_issue_comment*": deny\n',)
-# The line of the shipped private worker's and planner's definitions the tracker's rules are rendered at.
+#: The line of the shipped private worker's and planner's definitions the tracker's rules are rendered at.
 _TOOLS_MARKER: Final = "  # canopy: tracker tools\n"
-# The line of the shipped reviewer's and chore's definitions the tracker's rules are rendered at, above their denials
-# of GitHub's tools by name and patterns, so that no allow rendered there reopens a write they close (D021).
+#: The line of the shipped reviewer's and chore's definitions the tracker's rules are rendered at, above their denials
+#: of GitHub's tools by name and patterns, so that no allow rendered there reopens a write they close (D021).
 _READS_MARKER: Final = "  # canopy: tracker reads\n"
-# The tracker provider whose tickets are GitHub's issues, on the same server as the PRs (the skill `tracker-github`).
+#: The tracker provider whose tickets are GitHub's issues, on the same server as the PRs (the skill `tracker-github`).
 _GITHUB: Final = "github"
-# GitHub's issue reads, which the reviewer has no use for off a GitHub tracker. Rendered before the tracker's rules: a
-# read of the tracker's that one matches, such as a `list_issues` of its own, is allowed again after it.
+#: GitHub's issue reads, which the reviewer has no use for off a GitHub tracker. Rendered before the tracker's rules: a
+#: read of the tracker's that one matches, such as a `list_issues` of its own, is allowed again after it.
 _GITHUB_ISSUE_READS: Final = ("*issue_read*", "*list_issues*", "*search_issues*")
-# GitHub's issue tools, which only the `tracker-github` skill names, so that the workers and the planner have no use
-# for them off a GitHub tracker: the reads, and what filing or labelling an issue takes. Not its issue comment tools,
-# which comment on a PR's conversation too.
+#: GitHub's issue tools, which only the `tracker-github` skill names, so that the workers and the planner have no use
+#: for them off a GitHub tracker: the reads, and what filing or labelling an issue takes. Not its issue comment tools,
+#: which comment on a PR's conversation too.
 _GITHUB_ISSUE_TOOLS: Final = (
     *_GITHUB_ISSUE_READS,
     "*issue_write*",
@@ -138,33 +139,33 @@ _GITHUB_ISSUE_TOOLS: Final = (
     "*list_issue_fields*",
     "*get_label*",
 )
-# The line of the shipped workers' and planner's definitions the denial of GitHub's issue tools is rendered at.
+#: The line of the shipped workers' and planner's definitions the denial of GitHub's issue tools is rendered at.
 _ISSUES_MARKER: Final = "  # canopy: github issue tools\n"
-# The line of every shipped definition the artifact store's server is rendered at (DESIGN §38): after the patterns
-# that deny tools by their names, so that a tool allowed by name there is allowed, and before the rules for canopy's own
-# servers, whose names no store's may share.
+#: The line of every shipped definition the artifact store's server is rendered at (DESIGN §38): after the patterns
+#: that deny tools by their names, so that a tool allowed by name there is allowed, and before the rules for canopy's
+#: own servers, whose names no store's may share.
 _ARTIFACT_TOOLS_MARKER: Final = "  # canopy: artifact tools\n"
-# The line of the shipped worker definition the allow of the store's skill is rendered at, after its deny.
+#: The line of the shipped worker definition the allow of the store's skill is rendered at, after its deny.
 _ARTIFACT_SKILL_MARKER: Final = "    # canopy: artifact skill\n"
 _ARTIFACT_SKILL: Final = "canopy-artifacts"
-# The agents canopy ships, each of which is rendered with the store's server.
+#: The agents canopy ships, each of which is rendered with the store's server.
 _AGENTS: Final = (WORKER, PRIVATE_WORKER, PLANNER, REVIEWER, OVERSEER, CHORE)
-# The line of the shipped reviewer's and overseer's definitions their temperature is rendered at.
+#: The line of the shipped reviewer's and overseer's definitions their temperature is rendered at.
 _TEMPERATURE_MARKER: Final = "# canopy: temperature\n"
-# The line of every shipped definition its model is rendered at.
+#: The line of every shipped definition its model is rendered at.
 _MODEL_MARKER: Final = "# canopy: model\n"
-# The line of the shipped overseer definition its prompt replaces, with everything after it.
+#: The line of the shipped overseer definition its prompt replaces, with everything after it.
 _PROMPT_MARKER: Final = "<!-- canopy: overseer prompt -->\n"
-# The line of the other shipped definitions that take a body (`BODIED`) a run's fixed instructions replace, with the
-# stub after it; a definition rendered with none keeps the stub, and loses only the line.
+#: The line of the other shipped definitions that take a body (`BODIED`) a run's fixed instructions replace, with the
+#: stub after it; a definition rendered with none keeps the stub, and loses only the line.
 _BODY_MARKER: Final = "<!-- canopy: prompt -->\n"
-# The line of the shipped overseer definition the denial of its skill tool is rendered at: it reads no tracker, so it
-# has no skill to load, and a tool whose last rule denies `*` is not sent. The line ends its `skill` rules, after the
-# denial of the operator's skill.
+#: The line of the shipped overseer definition the denial of its skill tool is rendered at: it reads no tracker, so it
+#: has no skill to load, and a tool whose last rule denies `*` is not sent. The line ends its `skill` rules, after the
+#: denial of the operator's skill.
 _SKILL_MARKER: Final = "    # canopy: skill rule\n"
 _SKILL_RULE: Final = '    "*": deny\n'
-# The line of a shipped definition the commands config allows it are rendered at: the last of its bash rules, so each
-# allow wins (D021). Only a definition whose bash rules deny every command but those they name has it.
+#: The line of a shipped definition the commands config allows it are rendered at: the last of its bash rules, so each
+#: allow wins (D021). Only a definition whose bash rules deny every command but those they name has it.
 _BASH_ALLOWS_MARKER: Final = "    # canopy: bash allows\n"
 
 

@@ -27,13 +27,13 @@ class RunStatus(StrEnum):
     DONE = "done"
     BLOCKED = "blocked"
     FAILED = "failed"
-    # The worker reported no result.
+    #: The worker reported no result.
     UNKNOWN = "unknown"
-    # The worker reported done with work it had not pushed.
+    #: The worker reported done with work it had not pushed.
     UNPUSHED = "unpushed"
     CRASHED = "crashed"
     TIMEOUT = "timeout"
-    # The operator stopped it (DESIGN §22).
+    #: The operator stopped it (DESIGN §22).
     STOPPED = "stopped"
 
 
@@ -59,7 +59,7 @@ class ReviewRunStatus(StrEnum):
     CRASHED = "crashed"
 
 
-# Any run table's status, for the lifecycle every run table shares (`db.finish_run`).
+#: Any run table's status, for the lifecycle every run table shares (`db.finish_run`).
 type AnyRunStatus = RunStatus | ChoreRunStatus | ReviewRunStatus
 
 #: The statuses a run ends in without having done its work: its agent reported it failed, left no result, ran out of
@@ -89,23 +89,24 @@ class TickStatus(StrEnum):
 
     RUNNING = "running"
     OK = "ok"
-    # The overseer skipped the whole tick: it could not see the world (`mcp_unavailable`, `tracker_unsupported`). Kept
-    # for an older release's ticks: since config requires a `tracker` source, the overseer reads no server (DESIGN §39).
+    #: The overseer skipped the whole tick: it could not see the world (`mcp_unavailable`, `tracker_unsupported`). Kept
+    #: for an older release's ticks: since config requires a `tracker` source, the overseer reads no server (DESIGN
+    #: §39).
     SKIPPED = "skipped"
-    # The server of the overseer's tools did not answer `initialize` (DESIGN §27), so the overseer did not run.
+    #: The server of the overseer's tools did not answer `initialize` (DESIGN §27), so the overseer did not run.
     CANOPY_UNAVAILABLE = "canopy_unavailable"
-    # The state directory's or the workspace's filesystem had less than `loop.min_free_disk_mib` free, so the overseer
-    # did not run.
+    #: The state directory's or the workspace's filesystem had less than `loop.min_free_disk_mib` free, so the overseer
+    #: did not run.
     DISK_LOW = "disk_low"
-    # The runtime does not list the overseer's chosen model, or its variant, so the overseer did not run (DESIGN §13).
+    #: The runtime does not list the overseer's chosen model, or its variant, so the overseer did not run (DESIGN §13).
     MODEL_MISSING = "model_missing"
-    # The runtime's list of models could not be read to look the overseer's chosen model up, so it did not run.
+    #: The runtime's list of models could not be read to look the overseer's chosen model up, so it did not run.
     MODEL_LIST_FAILED = "model_list_failed"
     OVERSEER_FAILED = "overseer_failed"
     RECONCILE_FAILED = "reconcile_failed"
-    # The tick raised an unexpected exception; its summary names it.
+    #: The tick raised an unexpected exception; its summary names it.
     ERROR = "error"
-    # The tick's process exited without closing it; the next tick closed it.
+    #: The tick's process exited without closing it; the next tick closed it.
     ABANDONED = "abandoned"
 
 
@@ -128,18 +129,18 @@ class RunKind(StrEnum):
     """What a worker run does, `runs.kind` (DESIGN §8)."""
 
     IMPLEMENT = "implement"
-    # Retired (M56): a `resume` with the reason `ci` fixes CI. Kept so the runs it named still read, and count as
-    # `resume` runs (DESIGN §8); nothing dispatches it.
+    #: Retired (M56): a `resume` with the reason `ci` fixes CI. Kept so the runs it named still read, and count as
+    #: `resume` runs (DESIGN §8); nothing dispatches it.
     FIX_CI = "fix-ci"
     RESUME = "resume"
-    # Retired (M46): workers file follow-up tickets instead (DESIGN §18). Kept so the runs it named still read, counted
-    # per ticket and in no unit's attempts; nothing dispatches it.
+    #: Retired (M46): workers file follow-up tickets instead (DESIGN §18). Kept so the runs it named still read, counted
+    #: per ticket and in no unit's attempts; nothing dispatches it.
     SPLIT = "split"
-    # Writes a plan before a ticket's first implement (DESIGN §25): no branch, attempts counted per ticket.
+    #: Writes a plan before a ticket's first implement (DESIGN §25): no branch, attempts counted per ticket.
     PLAN = "plan"
-    # Retired (M55): a triage that judged, before a ticket's first plan, whether its work needed one. Every ticket the
-    # policy plans is planned now (DESIGN §25). Kept so the runs it named still read, counted per ticket and in no
-    # unit's attempts; nothing dispatches it.
+    #: Retired (M55): a triage that judged, before a ticket's first plan, whether its work needed one. Every ticket the
+    #: policy plans is planned now (DESIGN §25). Kept so the runs it named still read, counted per ticket and in no
+    #: unit's attempts; nothing dispatches it.
     NEEDS_PLAN = "needs-plan"
     #: Writes a plan for what came back to a unit's PR, before the `resume` that acts on it (DESIGN §32): it reads the
     #: PR's head, pushes nothing, and counts per unit.
@@ -149,17 +150,17 @@ class RunKind(StrEnum):
 class ResumeReason(StrEnum):
     """Why a `resume` runs, `run_reasons.reason` (DESIGN §8): each the phase, or the step, that sends it."""
 
-    # `ci_red`: failed checks.
+    #: `ci_red`: failed checks.
     CI = "ci"
-    # `changes_requested` and `review_findings`: review feedback, or a canopy review's findings.
+    #: `changes_requested` and `review_findings`: review feedback, or a canopy review's findings.
     REVIEW = "review"
-    # `human_replied`: an authorized reply or an operator message.
+    #: `human_replied`: an authorized reply or an operator message.
     REPLY = "reply"
-    # `conflicted`: the PR conflicts with its base.
+    #: `conflicted`: the PR conflicts with its base.
     CONFLICT = "conflict"
-    # `pushed_no_pr`: the branch is pushed and has no PR.
+    #: `pushed_no_pr`: the branch is pushed and has no PR.
     NO_PR = "no_pr"
-    # The PR's blocker merged, so it targets the repository's base branch again (DESIGN §10).
+    #: The PR's blocker merged, so it targets the repository's base branch again (DESIGN §10).
     RETARGET = "retarget"
 
 
@@ -182,14 +183,14 @@ class Phase(StrEnum):
     MERGED = "merged"
     NEEDS_HUMAN = "needs_human"
     HUMAN_REPLIED = "human_replied"
-    # Retired (M46), with split runs: kept so a ticket that still holds it reads; nothing sets it.
+    #: Retired (M46), with split runs: kept so a ticket that still holds it reads; nothing sets it.
     SPLIT = "split"
-    # The newest plan waits on the operator (DESIGN §25): no run, and the slot is free while they read it.
+    #: The newest plan waits on the operator (DESIGN §25): no run, and the slot is free while they read it.
     PLAN_PROPOSED = "plan_proposed"
 
 
-# The phases about a PR, `pushed_no_pr` to `merged` in the phase table, are a unit's (DESIGN §7, §18); the others are
-# the ticket's own.
+#: The phases about a PR, `pushed_no_pr` to `merged` in the phase table, are a unit's (DESIGN §7, §18); the others are
+#: the ticket's own.
 UNIT_PHASES: Final = frozenset(
     {
         Phase.PUSHED_NO_PR,
@@ -212,7 +213,7 @@ class PlanStatus(StrEnum):
 
     PROPOSED = "proposed"
     APPROVED = "approved"
-    # A newer plan, a request for one, a skip, or `canopy forget` replaced it.
+    #: A newer plan, a request for one, a skip, or `canopy forget` replaced it.
     SUPERSEDED = "superseded"
 
 
@@ -321,7 +322,7 @@ class MemoryMode(StrEnum):
     """A memory tier's mode, `memory.ticket_notes` and `memory.proposals`, and `run_memory`'s columns (DESIGN §28)."""
 
     OFF = "off"
-    # Workers write, and no agent reads what they wrote.
+    #: Workers write, and no agent reads what they wrote.
     RECORD = "record"
     USE = "use"
 
@@ -337,11 +338,11 @@ class MemoryScope(StrEnum):
 class MemoryStatus(StrEnum):
     """Where a memory stands, `memories.status` (DESIGN §28)."""
 
-    # A note or a lesson in force.
+    #: A note or a lesson in force.
     ACTIVE = "active"
-    # A proposal waiting on the operator.
+    #: A proposal waiting on the operator.
     PENDING = "pending"
-    # A newer one replaced it under its key, or a proposal the operator promoted.
+    #: A newer one replaced it under its key, or a proposal the operator promoted.
     SUPERSEDED = "superseded"
     INVALID = "invalid"
 
@@ -349,9 +350,9 @@ class MemoryStatus(StrEnum):
 class MemoryCited(StrEnum):
     """What a run said of a memory rendered into its prompt, `memory_reads.cited` (DESIGN §28)."""
 
-    # In its `memory_used`: it relied on it.
+    #: In its `memory_used`: it relied on it.
     USED = "used"
-    # In its `memory_wrong`: it found it wrong.
+    #: In its `memory_wrong`: it found it wrong.
     WRONG = "wrong"
 
 
@@ -365,9 +366,9 @@ class MemoryAuthor(StrEnum):
 class ReplyMode(StrEnum):
     """`trust.review_replies`, and what a run was rendered under, `run_replies.mode` (DESIGN §29)."""
 
-    # Workers draft every comment they would post; the operator sends them.
+    #: Workers draft every comment they would post; the operator sends them.
     APPROVE = "approve"
-    # Workers post their own comments, marked.
+    #: Workers post their own comments, marked.
     POST = "post"
 
 
@@ -392,11 +393,11 @@ class PlannerApproval(StrEnum):
 class DraftKind(StrEnum):
     """Where a draft goes, `drafts.kind` (DESIGN §29)."""
 
-    # A reply on a PR's review thread.
+    #: A reply on a PR's review thread.
     THREAD = "thread"
-    # A PR's one top-level comment: the body of the review its drafts are sent as.
+    #: A PR's one top-level comment: the body of the review its drafts are sent as.
     PR = "pr"
-    # A comment on the ticket's issue.
+    #: A comment on the ticket's issue.
     TICKET = "ticket"
 
 
@@ -411,20 +412,20 @@ class DraftStance(StrEnum):
 class DraftStatus(StrEnum):
     """Where a draft stands, `drafts.status` (DESIGN §29)."""
 
-    # Waiting on a whole read of its PR before it can be sent.
+    #: Waiting on a whole read of its PR before it can be sent.
     UNCHECKED = "unchecked"
-    # Checked, and the operator's to send, edit, or drop.
+    #: Checked, and the operator's to send, edit, or drop.
     WAITING = "waiting"
-    # The read did not return the thread it names, or its PR is not the run's.
+    #: The read did not return the thread it names, or its PR is not the run's.
     REFUSED = "refused"
-    # A later run's draft for the same thread, PR, or ticket replaced it.
+    #: A later run's draft for the same thread, PR, or ticket replaced it.
     SUPERSEDED = "superseded"
     DROPPED = "dropped"
-    # Claimed by a send that is posting it now.
+    #: Claimed by a send that is posting it now.
     SENDING = "sending"
-    # A send ended without saying whether it posted; a read, or the operator, settles it.
+    #: A send ended without saying whether it posted; a read, or the operator, settles it.
     UNCONFIRMED = "unconfirmed"
-    # In a pending review the operator opened through canopy, theirs to submit on GitHub; a read settles it.
+    #: In a pending review the operator opened through canopy, theirs to submit on GitHub; a read settles it.
     STAGED = "staged"
     SENT = "sent"
 

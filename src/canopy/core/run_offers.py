@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 #: How long a run that has ended waits for the runtime to say what it was offered: the ask started with the run, so
 #: only a run shorter than the ask waits at all.
 WAIT_SECONDS: Final = 60
-# The rows of one run, by its table and id.
+#: The rows of one run, by its table and id.
 _RUN: Final = "run_table = ? AND run_id = ?"
 
 

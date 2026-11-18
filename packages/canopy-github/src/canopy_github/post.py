@@ -64,9 +64,9 @@ from canopy_github import (
 )
 from canopy_github.read import threads
 
-# GitHub's own limit on a comment's body.
+#: GitHub's own limit on a comment's body.
 MAX_TEXT: Final = 65536
-# Each reaction a reply may add, by the name canopy and GitHub's REST API give it, to the name GraphQL takes.
+#: Each reaction a reply may add, by the name canopy and GitHub's REST API give it, to the name GraphQL takes.
 REACTIONS: Final = {
     "+1": "THUMBS_UP",
     "-1": "THUMBS_DOWN",
@@ -78,11 +78,11 @@ REACTIONS: Final = {
     "eyes": "EYES",
 }
 MAX_REPLIES: Final = 100
-# As many comments as replies: canopy sends at most 30 (DESIGN §34).
+#: As many comments as replies: canopy sends at most 30 (DESIGN §34).
 MAX_COMMENTS: Final = 100
-# A commit's full object id, SHA-1 or SHA-256, as GitHub's `GitObjectID` takes it.
+#: A commit's full object id, SHA-1 or SHA-256, as GitHub's `GitObjectID` takes it.
 _COMMIT: Final = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
-# A key a GitHub Issues tracker gives a ticket: letters, a hyphen, the issue's number (DESIGN §17).
+#: A key a GitHub Issues tracker gives a ticket: letters, a hyphen, the issue's number (DESIGN §17).
 _KEY: Final = re.compile(r"[A-Za-z][A-Za-z0-9_]*-([1-9][0-9]{0,9})")
 
 _VIEWER: Final = "query Viewer { viewer { login } }"

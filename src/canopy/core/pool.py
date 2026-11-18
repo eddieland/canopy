@@ -45,7 +45,7 @@ from canopy.core.vocab import PoolKind
 from canopy.infra import cwds, lock, procs
 
 POOLS_DIR: Final = "pools"
-# A pool with no declared size stops here, as treehouse's default `max_trees` does.
+#: A pool with no declared size stops here, as treehouse's default `max_trees` does.
 MAX_SLOTS: Final = 16
 LOCK_NAME: Final = ".lock"
 LEASED: Final = "leased"
@@ -53,7 +53,7 @@ IN_USE: Final = "in-use"
 DIRTY: Final = "dirty"
 DAMAGED: Final = "damaged"
 UNVERIFIED: Final = "unverified"
-# git takes no optional lock, so reading a slot's status never writes its index.
+#: git takes no optional lock, so reading a slot's status never writes its index.
 ENV: Final = {**hostgit.ENV, "GIT_OPTIONAL_LOCKS": "0"}
 _GIT_TIMEOUT_SECONDS: Final = 300
 _FETCH_TIMEOUT_SECONDS: Final = 900

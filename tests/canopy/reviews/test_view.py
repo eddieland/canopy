@@ -48,8 +48,8 @@ def section(*prs: ReviewedPR) -> ReviewsSection:
     }
 
 
-# A listed ticket's PR; a done ticket's; a unit's PR reviewed with no ticket; a coworker's PR the query found; and one
-# it no longer finds.
+#: A listed ticket's PR; a done ticket's; a unit's PR reviewed with no ticket; a coworker's PR the query found; and one
+#: it no longer finds.
 REVIEWED: Final = section(
     reviewed(1, "PROJ-1"),
     reviewed(2, "PROJ-2"),

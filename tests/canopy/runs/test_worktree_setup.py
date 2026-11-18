@@ -24,8 +24,8 @@ from tests.canopy.helpers import (
 from tests.canopy.scenario_helpers import Scenario, dispatches
 from tests.conftest import CanopyEnv, GitPool, git, user_toml
 
-# What a setup sees: the run's branch, its repository, its run, and the latest commit checked out, the branch's. It
-# leaves a file the worker then looks for, so the setup ran before the worker.
+#: What a setup sees: the run's branch, its repository, its run, and the latest commit checked out, the branch's. It
+#: leaves a file the worker then looks for, so the setup ran before the worker.
 SETUP: Final = (
     'sh -c \'echo "setup on $CANOPY_BRANCH in $CANOPY_REPO, run $CANOPY_RUN_ID: $(git log -1 --format=%s)"; '
     "touch .setup-done'"

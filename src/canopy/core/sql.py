@@ -666,7 +666,7 @@ class Delete(Write, _Guarded):
         )
 
 
-# A slot, or a quoted string or identifier, whose `?`s and `{}`s are not slots.
+#: A slot, or a quoted string or identifier, whose `?`s and `{}`s are not slots.
 _TOKEN: Final = re.compile(r"'(?:[^']|'')*'|\"(?:[^\"]|\"\")*\"|\?|\{\}")
 _IDENTIFIER: Final = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 

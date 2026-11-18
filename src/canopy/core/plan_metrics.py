@@ -32,9 +32,9 @@ DIAGRAM_LINES: Final = 15
 
 type _Kind = Literal["para", "quote", "item", "h12", "h34", "code", "diagram", "table", "rule"]
 
-# How tall each kind of block draws, in the editor's lines, per line of its wrapped text, and once per block: fitted to
-# the editor's drawn heights (module docstring). A heading is larger type with space above it; a code block is smaller
-# type in a padded box; an item carries its list's gap.
+#: How tall each kind of block draws, in the editor's lines, per line of its wrapped text, and once per block: fitted to
+#: the editor's drawn heights (module docstring). A heading is larger type with space above it; a code block is smaller
+#: type in a padded box; an item carries its list's gap.
 _PER_LINE: Final[dict[_Kind, float]] = {
     "para": 1.05,
     "quote": 1.05,

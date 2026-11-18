@@ -98,7 +98,8 @@ If code and the design disagree, the design doc wins until a decision entry says
   - `make fmt` also applies the codemods (`packages/canopy-codemods`, LibCST), and `make lint` fails with the diff
     where one would still change a file. A convention that can be applied mechanically becomes a codemod there, by
     its README's steps, rather than a rule for review. `final-constants` annotates every `UPPER_CASE` module
-    constant `Final`, and `type-aliases` spells a type alias as a `type` statement where nothing reads it at run time.
+    constant `Final`, `type-aliases` spells a type alias as a `type` statement where nothing reads it at run time,
+    and `doc-comments` writes the comment above a constant, a dataclass or `NamedTuple` field, or an enum member `#:`.
   - The Playwright screenshot baselines are Git LFS objects, so `make ui-e2e` needs `git-lfs` and `git lfs pull`.
   - Optionally `make hooks`, once per clone: prek's git hooks (`prek.toml`) then run the same formatters and linters
     on each commit's files, and `ui/`'s lint and type check on a push. They stop a commit that fails one; they do not
@@ -201,8 +202,10 @@ If code and the design disagree, the design doc wins until a decision entry says
   dataclass, pydantic model, or `NamedTuple`, or an enum member, is a Sphinx doc comment: lines starting `#:`
   directly above the name, so editors and doc tools attach it to the name. A note on why the code is so stays a plain
   `#`. A class's docstring says what the class is; what one field holds goes on that field, not in the docstring.
-  `runs/dispatch.py` is an example. Older modules still spell these with `#`, and need no bulk fix: write new ones
-  with `#:`, and convert a module's when a PR is already changing it, if that is cheap.
+  `runs/dispatch.py` is an example. `make fmt` writes the `#:` (the `doc-comments` codemod) above a module's constant
+  or type alias, a field of a dataclass or `NamedTuple`, and an enum member, so a comment directly above one of those
+  is its doc comment whatever it says: a note on why goes inside the value or a blank line above, or is worded as part
+  of what the name is. Above any other class's attribute the `#:` is written by hand.
   The exception is a field of an API model, a `canopy.serve.schema.Model`: what it holds is the docstring directly
   below it, which pydantic makes its description in the schema. pydantic reads no comment, so a `#:` there would
   describe the field to nobody who reads the API; a comment above such a field is a note kept out of the schema, and

@@ -43,9 +43,9 @@ from canopy.runs import drafts
 if TYPE_CHECKING:
     from canopy.core.config import Config, Source
 
-# How many hex characters of a text's SHA-256 name it, in the CLI and the web UI alike.
+#: How many hex characters of a text's SHA-256 name it, in the CLI and the web UI alike.
 HASH_CHARS: Final = 12
-# How much of a comment a `thread_changed` refusal quotes, and of the poster's stderr a failure says.
+#: How much of a comment a `thread_changed` refusal quotes, and of the poster's stderr a failure says.
 _MAX_QUOTED: Final = 100
 _MAX_STDERR: Final = 300
 
@@ -338,7 +338,7 @@ def _check_sendable(conn: sqlite3.Connection, draft: records.Draft, seen: str) -
         raise conversation.Refused("stale", _changed(draft, current))
 
 
-# What the operator does with a review they staged, which a refusal for it says.
+#: What the operator does with a review they staged, which a refusal for it says.
 _FINISH: Final = "submit or delete it on GitHub, and the next read of the PR settles it"
 
 

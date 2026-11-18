@@ -10,7 +10,7 @@ from tests.canopy.review_helpers import CLEAN, PR, head, review_decisions, revie
 from tests.canopy.scenario_helpers import Scenario, reviews
 from tests.conftest import CanopyEnv, GitPool
 
-# A PR the operator names, with no ticket.
+#: A PR the operator names, with no ticket.
 OTHER_PR: Final = f"{PR}0"
 
 

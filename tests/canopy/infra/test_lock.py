@@ -7,7 +7,7 @@ import pytest
 from canopy.infra import lock
 from canopy.infra.procs import SubprocessRunner
 
-# Try the lock from another process, the way a second `canopy tick` would.
+#: Try the lock from another process, the way a second `canopy tick` would.
 TRY_LOCK: Final = """
 import sys
 from pathlib import Path

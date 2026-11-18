@@ -19,11 +19,11 @@ import unicodedata
 from collections import Counter
 from typing import Final
 
-# A key: lowercase words joined by single hyphens, at most 40 characters, as a branch's slug is (DESIGN §8).
+#: A key: lowercase words joined by single hyphens, at most 40 characters, as a branch's slug is (DESIGN §8).
 KEY_RE: Final = re.compile(r"(?=[a-z0-9-]{1,40}\Z)[a-z0-9]+(?:-[a-z0-9]+)*")
-# Unicode's control, format, surrogate, private-use, unassigned, and line and paragraph separator categories. Format
-# takes in the zero-width characters, the bidi controls, and the tag characters, each a way to hide text from a person
-# that a model still reads.
+#: Unicode's control, format, surrogate, private-use, unassigned, and line and paragraph separator categories. Format
+#: takes in the zero-width characters, the bidi controls, and the tag characters, each a way to hide text from a person
+#: that a model still reads.
 HIDDEN_CATEGORIES: Final = frozenset({"Cc", "Cf", "Cs", "Co", "Cn", "Zl", "Zp"})
 #: The zero-width joiner, which joins emoji into one, such as 👩 and 💻 into 👩‍💻: hidden, but for an emoji's.
 _ZWJ: Final = "\u200d"
@@ -31,8 +31,8 @@ _ZWJ: Final = "\u200d"
 _SKIN_TONES: Final = frozenset(chr(c) for c in range(0x1F3FB, 0x1F400))
 #: The variation selector that asks for a character's emoji form, as in ❤️.
 _EMOJI_PRESENTATION: Final = "\ufe0f"
-# Known shapes of credentials: a private key, cloud and VCS tokens, chat and model API keys, a JWT, a bearer header,
-# and a password or key assigned a value that is not a placeholder (`$VAR`, `<token>`, `{secret}`).
+#: Known shapes of credentials: a private key, cloud and VCS tokens, chat and model API keys, a JWT, a bearer header,
+#: and a password or key assigned a value that is not a placeholder (`$VAR`, `<token>`, `{secret}`).
 _SECRET_RES: Final = tuple(
     re.compile(pattern)
     for pattern in (
@@ -51,11 +51,11 @@ _SECRET_RES: Final = tuple(
         r"(?i)\b(?:password|passwd|api[_-]?key|secret|token|access[_-]?key)\s*[:=]\s*(?![$<{])\S{6,}",
     )
 )
-# A word that may be a random token: at least 20 characters of a base64 or URL-safe alphabet.
+#: A word that may be a random token: at least 20 characters of a base64 or URL-safe alphabet.
 _WORD_RE: Final = re.compile(r"[A-Za-z0-9+/=_-]{20,}")
 _HEX_RE: Final = re.compile(r"[0-9a-fA-F]+")
-# How often a random token changes between upper case, lower case, and digits from one character to the next, and how
-# varied its characters are: identifiers in CamelCase change about once a word, and repeat their letters.
+#: How often a random token changes between upper case, lower case, and digits from one character to the next, and how
+#: varied its characters are: identifiers in CamelCase change about once a word, and repeat their letters.
 _MIN_CLASS_CHANGES: Final = 0.45
 _MIN_ENTROPY_BITS: Final = 3.5
 

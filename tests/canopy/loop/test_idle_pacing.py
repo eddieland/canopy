@@ -41,10 +41,10 @@ from tests.canopy.scenario_helpers import Scenario, dispatches, sets_phase
 from tests.conftest import CanopyEnv
 
 PR: Final = "https://example.test/pr/1"
-# The journal's clock and the test's: a tick's `read_at` is put this far back, so what the test records after it is
-# after it, whatever the millisecond.
+#: The journal's clock and the test's: a tick's `read_at` is put this far back, so what the test records after it is
+#: after it, whatever the millisecond.
 BACK: Final = timedelta(seconds=1)
-# Where hand-made runs say they log; nothing is written there.
+#: Where hand-made runs say they log; nothing is written there.
 LOGS: Final = Path("logs")
 
 type Step = Callable[[sqlite3.Connection, int], object]

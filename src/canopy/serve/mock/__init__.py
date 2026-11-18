@@ -87,7 +87,7 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 T0: Final = datetime(2026, 10, 8, 12, 0, tzinfo=UTC)
-# The run whose cost `changes` moves.
+#: The run whose cost `changes` moves.
 LIVE_RUN: Final = 41
 
 _MAP_TOML: Final = """\
@@ -185,11 +185,11 @@ every_minutes = 120
 search = "titles"
 exclude = ["{excluded}"]
 """
-# The chore whose finding the attention list shows.
+#: The chore whose finding the attention list shows.
 CHORE: Final = "deps"
-# Each cloned repository's pool directory, as treehouse names it: the clone's name and a short hash of its remote.
+#: Each cloned repository's pool directory, as treehouse names it: the clone's name and a short hash of its remote.
 _POOLS: Final = {"mobile": "mobile-8e41d0c7", "web": "web-3f9c2a1b"}
-# The variants the mock's runtime lists for each provider's models, which a ticket's page may choose one at.
+#: The variants the mock's runtime lists for each provider's models, which a ticket's page may choose one at.
 _VARIANTS: Final = {"anthropic": ("high", "max"), "openai": ("minimal", "low", "medium", "high")}
 
 
@@ -346,7 +346,7 @@ Flag a behavior change that has no test. Leave formatting to the linters: a find
 """
 
 
-# The worker's file as it read before its last two saves, each kept as a version, so the page has some to list.
+#: The worker's file as it read before its last two saves, each kept as a version, so the page has some to list.
 _WORKER_VERSIONS: Final = (
     (timedelta(days=-6), "## Commits\n\n- Commit a review's fixes as new commits.\n"),
     (
@@ -1320,8 +1320,8 @@ def _models(conn: sqlite3.Connection) -> None:
     records.insert_rows(records.RunModel, ("run_table", "run_id", "model", "replies", "cost_usd")).many(conn, served)
 
 
-# What each kind's first model call was sent on T0's day, before the run's id adds a little, and the share of it read
-# from the cache. A table's name here is fixed, never input (D125).
+#: What each kind's first model call was sent on T0's day, before the run's id adds a little, and the share of it read
+#: from the cache. A table's name here is fixed, never input (D125).
 _FIRST_CALLS: Final[tuple[tuple[LiteralString, int, float], ...]] = (
     # table, sent, share read from the cache
     ("ticks", 31_800, 0.86),

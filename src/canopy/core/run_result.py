@@ -49,9 +49,9 @@ ENDED: Final = (
     "`blocked` when you cannot go on without the operator's answer, which `question` asks; `failed` when you could "
     "not do it, with why in `summary`."
 )
-# A contract's name and a group's: a word of the variable's value.
+#: A contract's name and a group's: a word of the variable's value.
 _WORD_RE: Final = re.compile(r"[a-z][a-z_]{0,39}")
-# How many groups a value may name: more than any contract has.
+#: How many groups a value may name: more than any contract has.
 _MAX_GROUPS: Final = 20
 
 

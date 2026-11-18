@@ -100,7 +100,7 @@ _TASKS: Final = (
 #: A task run's row as `seed` writes it: run, task, repo, slot, started, ended, status, result, head, cost.
 type _Run = tuple[int, int, str, int, int, int | None, RunStatus, dict[str, object] | None, str | None, float]
 
-# The ticket task 5's run reported, which its task, naming no project, cannot record.
+#: The ticket task 5's run reported, which its task, naming no project, cannot record.
 _UNRECORDED: Final = task_tickets.check(["OPS-7"], project=None, limit=3)
 
 

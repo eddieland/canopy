@@ -69,7 +69,7 @@ FINDING: Final = {
     "link": "https://ci.example.test/job/checkout/90",
 }
 OK: Final = {"status": "ok", "summary": "one flaky test", "findings": [FINDING]}
-# A time the journal records, as `db.now` writes it.
+#: A time the journal records, as `db.now` writes it.
 TIMES: Final = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z")
 
 

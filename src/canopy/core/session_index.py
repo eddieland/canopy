@@ -69,8 +69,8 @@ OLD_SQLITE: Final = (
     f"sessions.search is text, but this Python's SQLite, {sqlite3.sqlite_version}, is older than 3.43, which the "
     "index of sessions' text needs: sessions are found by their titles"
 )
-# The index's tables: the step's state, a row for each session indexed, a row for each of its messages, and the words,
-# splitting text into words as memory's index does (DESIGN §28), so a word matches as memory's search matches it.
+#: The index's tables: the step's state, a row for each session indexed, a row for each of its messages, and the words,
+#: splitting text into words as memory's index does (DESIGN §28), so a word matches as memory's search matches it.
 _SCHEMA: Final[tuple[sql.Fragment, ...]] = (
     sql.frag(
         "CREATE TABLE meta (id INTEGER PRIMARY KEY CHECK (id = 1), setting TEXT NOT NULL, front_ms INTEGER,"
@@ -88,7 +88,7 @@ _SCHEMA: Final[tuple[sql.Fragment, ...]] = (
         " tokenize='porter unicode61')",
     ),
 )
-# The sessions among a JSON array of ids.
+#: The sessions among a JSON array of ids.
 _AMONG: Final = "session_id IN (SELECT value FROM json_each(?))"
 
 

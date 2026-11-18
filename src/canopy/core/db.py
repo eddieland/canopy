@@ -38,39 +38,39 @@ if TYPE_CHECKING:
     from canopy.core.vocab import AnyRunStatus, RunStatus
 
 DB_FILE_NAME: Final = "canopy.db"
-# How long a connection waits for another to release the write lock before its write fails as `database is locked`.
+#: How long a connection waits for another to release the write lock before its write fails as `database is locked`.
 BUSY_SECONDS: Final = 10.0
 _MIGRATION_RE: Final = re.compile(r"(\d{4})_([a-z0-9_]+)\.sql")
 #: The last of the migrations squashed into `0001_init.sql` (D068). A journal that applied 1 through it holds the schema
 #: 0001 makes now, so its ledger is rewritten to name 0001 alone.
 SQUASHED_THROUGH: Final = 129
-# The rationale the overseer gives a `done` decision for a ticket the tracker reports closed (DESIGN §7).
+#: The rationale the overseer gives a `done` decision for a ticket the tracker reports closed (DESIGN §7).
 CLOSED_RATIONALE: Final = "closed"
-# The version of canopy this process runs, recorded on each tick it starts (DESIGN §6). Read once, at import: an upgrade
-# while `canopy loop` runs replaces the installed package's metadata, not the code this process loaded, so a read per
-# tick would name the new release on ticks the old code ran.
+#: The version of canopy this process runs, recorded on each tick it starts (DESIGN §6). Read once, at import: an
+#: upgrade while `canopy loop` runs replaces the installed package's metadata, not the code this process loaded, so a
+#: read per tick would name the new release on ticks the old code ran.
 CANOPY_VERSION: Final = version("canopy")
 
-# The cursors the `ticket-set` tool names, and the column each one updates. The comment cursor is the ticket's; the
-# review and ci cursors are a unit's, since each unit has its own PR (DESIGN §18). The message cursor is a ticket's,
-# over journal message ids (DESIGN §22); the rest are journal numbers (§35).
+#: The cursors the `ticket-set` tool names, and the column each one updates. The comment cursor is the ticket's; the
+#: review and ci cursors are a unit's, since each unit has its own PR (DESIGN §18). The message cursor is a ticket's,
+#: over journal message ids (DESIGN §22); the rest are journal numbers (§35).
 TICKET_CURSORS: Final[Mapping[str, LiteralString]] = {"comment": "comment_cursor", "message": "last_message_id"}
 UNIT_CURSORS: Final[Mapping[str, LiteralString]] = {"review": "review_cursor", "ci": "ci_cursor"}
 CURSOR_COLUMNS: Final[Mapping[str, LiteralString]] = {**TICKET_CURSORS, **UNIT_CURSORS}
 #: The columns of a ticket whose change is activity, as `change_ticket` sets them. A column name in SQL comes from
 #: here, never from input.
 type TicketChange = Literal["phase", "title", "done", "plan_setting"]
-# The tables of detached runs (DESIGN §6): workers', chores', reviews', tasks', and epics' plan runs (§43). Each
-# has the same lifecycle, written once below over a table from this closed set: claimed by its process's pid, its
-# agent's pid recorded, its report, and its close. A table name in SQL comes from here, never from input.
+#: The tables of detached runs (DESIGN §6): workers', chores', reviews', tasks', and epics' plan runs (§43). Each
+#: has the same lifecycle, written once below over a table from this closed set: claimed by its process's pid, its
+#: agent's pid recorded, its report, and its close. A table name in SQL comes from here, never from input.
 type RunTable = Literal["runs", "chore_runs", "review_runs", "task_runs", "epic_runs"]
 #: The run tables whose running run the operator can end with `canopy stop --now`, each recording that it was asked.
 type StoppableTable = Literal["runs", "task_runs", "epic_runs"]
-# The rows whose agent's progress `set_progress` records as it prints; a worker run's is `set_run_progress`.
+#: The rows whose agent's progress `set_progress` records as it prints; a worker run's is `set_run_progress`.
 type ProgressTable = Literal["ticks", "chore_runs", "task_runs", "review_runs"]
 RUN_TABLES: Final[tuple[RunTable, ...]] = ("runs", "chore_runs", "review_runs", "task_runs", "epic_runs")
-# What each run table's rows are called in a message, and the column it keeps its agent's pid in: the leader of the
-# process group the run's own process starts, which outlives that process if it dies.
+#: What each run table's rows are called in a message, and the column it keeps its agent's pid in: the leader of the
+#: process group the run's own process starts, which outlives that process if it dies.
 RUN_NOUNS: Final[Mapping[RunTable, str]] = {
     "runs": "run",
     "chore_runs": "chore run",
@@ -681,9 +681,9 @@ def recently_done(conn: sqlite3.Connection, since: str) -> list[sqlite3.Row]:
 
 # The run lifecycle (DESIGN §6, §8): what every table of detached runs shares
 
-# A run with its ticket's title as `ticket_title`, a `resume`'s reasons as `reasons`, comma-separated (read them with
-# `reasons_in`), and whether the operator stopped its ticket as `ticket_stopped`, for display (DESIGN §8, §13, §22).
-# Every query a page or `canopy status` shows runs from starts here.
+#: A run with its ticket's title as `ticket_title`, a `resume`'s reasons as `reasons`, comma-separated (read them with
+#: `reasons_in`), and whether the operator stopped its ticket as `ticket_stopped`, for display (DESIGN §8, §13, §22).
+#: Every query a page or `canopy status` shows runs from starts here.
 _RUNS: Final = (
     sql.select(
         "r.*, t.title AS ticket_title, "
@@ -694,7 +694,7 @@ _RUNS: Final = (
     .from_("runs r")
     .left_join("tickets t ON t.key = r.ticket_key")
 )
-# What a run table's rows are read as: a run with its ticket's title, for display, and any other run as it is.
+#: What a run table's rows are read as: a run with its ticket's title, for display, and any other run as it is.
 _RUN_SELECT: Final[Mapping[RunTable, sql.Select]] = {
     "runs": _RUNS,
     "chore_runs": sql.select("r.*").from_("chore_runs r"),
@@ -1447,7 +1447,7 @@ def decision_count(conn: sqlite3.Connection, tick_id: int) -> int:
 
 # Conversations (DESIGN §22)
 
-# The kind of subject a ticket is. Messages and start records are keyed by subject, so a new kind adds no table (D075).
+#: The kind of subject a ticket is. Messages and start records are keyed by subject, so a new kind adds no table (D075).
 SUBJECT_TICKET: Final = "ticket"
 
 
@@ -1686,11 +1686,11 @@ def _weighed_tickets(conn: sqlite3.Connection, keys: str, limit: int) -> list[sq
     return sql.execute(conn, query).fetchall()
 
 
-# Each source of a ticket's activity as `recent_tickets` weighs it: a ticket key and a time, newest first, read in
-# order from an index. A run that ended has its end time (`finish_run`), so the ended runs and the
-# running ones between them give each run's time as `recent_tickets` takes it. Messages and start records may name a
-# ticket the journal has no row for, which the join leaves out, so one never takes a real ticket's place; CROSS JOIN
-# keeps SQLite reading the start records in order from their index, rather than sorting every one.
+#: Each source of a ticket's activity as `recent_tickets` weighs it: a ticket key and a time, newest first, read in
+#: order from an index. A run that ended has its end time (`finish_run`), so the ended runs and the
+#: running ones between them give each run's time as `recent_tickets` takes it. Messages and start records may name a
+#: ticket the journal has no row for, which the join leaves out, so one never takes a real ticket's place; CROSS JOIN
+#: keeps SQLite reading the start records in order from their index, rather than sorting every one.
 _TICKET_ACTIVITY: Final = (
     sql.select("key, changed_at").from_("tickets").order_by("changed_at DESC"),
     sql.select("m.subject_id, m.at")

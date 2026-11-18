@@ -196,7 +196,7 @@ class _Counts:
     phase_only: Counter[str] = field(default_factory=Counter[str])
     situations: dict[str, set[str]] = field(default_factory=dict[str, set[str]])
     disagreeing: dict[str, set[str]] = field(default_factory=dict[str, set[str]])
-    # Of the disagreeing, those with a disagreement about what the overseer did, not its phase alone.
+    #: Of the disagreeing, those with a disagreement about what the overseer did, not its phase alone.
     acted: dict[str, set[str]] = field(default_factory=dict[str, set[str]])
 
     def add(self, key: str, rows: Sequence[str], compared: phases.Compared) -> None:
@@ -241,8 +241,8 @@ class _Tally:
     #: Each subject under every row that held for it, and under its row when that was its only one.
     every: _Counts = field(default_factory=_Counts)
     alone: _Counts = field(default_factory=_Counts)
-    # By ticket and the comparison's words: the rows, the ticks, the rationale, and what it is about, each the latest
-    # tick's.
+    #: By ticket and the comparison's words: the rows, the ticks, the rationale, and what it is about, each the latest
+    #: tick's.
     found: dict[tuple[str, str], tuple[Sequence[str], list[int], str, phases.Mismatch]] = field(
         default_factory=dict[tuple[str, str], tuple[Sequence[str], list[int], str, phases.Mismatch]],
     )

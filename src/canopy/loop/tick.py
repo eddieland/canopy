@@ -95,16 +95,16 @@ if TYPE_CHECKING:
     from canopy.runtime.report import Usage
 
 TICK_ID_ENV: Final = conversation.TICK_ID_ENV
-# A word no model writes by chance, alone on a line of the overseer's final message (DESIGN §6).
+#: A word no model writes by chance, alone on a line of the overseer's final message (DESIGN §6).
 DONE_LINE: Final = "CANOPY_TICK_DONE"
-# The overseer acts only through canopy's tools, so a tick starts their server as the runtime would, and asks it to
-# `initialize`, before paying for the overseer (DESIGN §6, §27). When it fails, the tick closes `canopy_unavailable`
-# and raises an item of the same name.
+#: The overseer acts only through canopy's tools, so a tick starts their server as the runtime would, and asks it to
+#: `initialize`, before paying for the overseer (DESIGN §6, §27). When it fails, the tick closes `canopy_unavailable`
+#: and raises an item of the same name.
 SERVER_CHECK_TIMEOUT_SECONDS: Final = 60
 MIB: Final = 1024 * 1024
-# How long a ticket marked done stays in the state block's `recently_done` while the query still finds it, so the
-# overseer leaves it out while a human has yet to close it in the tracker (DESIGN §7). One still open after that is read
-# again and marked done again, which lists it for as long once more.
+#: How long a ticket marked done stays in the state block's `recently_done` while the query still finds it, so the
+#: overseer leaves it out while a human has yet to close it in the tracker (DESIGN §7). One still open after that is
+#: read again and marked done again, which lists it for as long once more.
 RECENTLY_DONE_DAYS: Final = 30
 #: What the summary of a tick that ran no overseer starts with, after a dry run's prefix (DESIGN §39).
 NO_OVERSEER: Final = "no overseer, nothing left to judge"
@@ -112,15 +112,16 @@ NO_OVERSEER: Final = "no overseer, nothing left to judge"
 REFUSED_PREFIX: Final = "refused:"
 #: How many of the runtime's errors a failed overseer's summary names; past it, the first and last, the rest counted.
 MAX_ERRORS_NAMED: Final = 3
-# How a tick ended: the status it closed its row with, or, with no row, `lock_busy` when another tick held the lock and
-# `error` when `canopy loop` caught the tick raising before it had one or after it closed it.
+#: How a tick ended: the status it closed its row with, or, with no row, `lock_busy` when another tick held the lock and
+#: `error` when `canopy loop` caught the tick raising before it had one or after it closed it.
 type OutcomeStatus = TickStatus | Literal["lock_busy", "error"]
-# What ended `canopy loop`'s wait before its deadline: the operator's act (a message, a ticket started or stopped, a
-# grant, a task submitted, replied to, or stopped, a review requested, a notice set or cleared), a run ending, a poll
-# of the connectors (DESIGN §39), the operator pressing the loop's tick-now key, or the operator asking from the web UI.
+#: What ended `canopy loop`'s wait before its deadline: the operator's act (a message, a ticket started or stopped, a
+#: grant, a task submitted, replied to, or stopped, a review requested, a notice set or cleared), a run ending, a poll
+#: of the connectors (DESIGN §39), the operator pressing the loop's tick-now key, or the operator asking from the web
+#: UI.
 type Woken = Literal["message", "starts", "grant", "task", "request", "notice", "run", "poll", "key", "web"]
-# What started a tick the loop ran, recorded on its row (`ticks.woken_by`): the loop starting, a wait that ran its
-# length, one a gate shortened, or what ended one early.
+#: What started a tick the loop ran, recorded on its row (`ticks.woken_by`): the loop starting, a wait that ran its
+#: length, one a gate shortened, or what ended one early.
 type WokenBy = Woken | Literal["start", "timer", "gate"]
 
 

@@ -59,10 +59,10 @@ requires_canary = pytest.mark.skipif(
     os.environ.get("CANOPY_OPENCODE_CANARY") != "1" or shutil.which("opencode") is None,
     reason="opt-in: set CANOPY_OPENCODE_CANARY=1 with opencode installed and a model configured",
 )
-# Read at import, like the opt-in above: conftest's autouse fixture drops CANOPY_* variables before each test runs.
+#: Read at import, like the opt-in above: conftest's autouse fixture drops CANOPY_* variables before each test runs.
 CANARY_MODEL: Final = os.environ.get("CANOPY_OPENCODE_CANARY_MODEL")
 
-# Last matching rule wins in OpenCode, so the catch-all comes first.
+#: Last matching rule wins in OpenCode, so the catch-all comes first.
 AGENT: Final = """\
 ---
 description: canopy permission canary. Tries tool calls it should not be allowed to make.
@@ -87,7 +87,7 @@ Finally print exactly one line: canary finished
 """
 
 
-# A repository's definition of the same agent, merged before canopy's: it allows the command canopy's denies.
+#: A repository's definition of the same agent, merged before canopy's: it allows the command canopy's denies.
 REPO_AGENT: Final = """\
 ---
 description: a repository trying to loosen canopy's agent.
@@ -148,7 +148,7 @@ def check_canary(tmp_path: Path, *, repo_agent: str | None) -> None:
     assert asked, "the model never tried the `ask` command\n" + report
 
 
-# The worker's file permissions (`.agents/agents/canopy-worker.md`), with bash off so only the edit tool can write.
+#: The worker's file permissions (`.agents/agents/canopy-worker.md`), with bash off so only the edit tool can write.
 DESK_AGENT: Final = """\
 ---
 description: canopy desk canary. Writes through a desk link, then beside the desk.
@@ -212,7 +212,7 @@ def test_a_worker_in_a_desk_edits_through_its_links_and_nothing_beside_them(
     assert attempted(tool_calls(result.stdout), "outside-marker"), "the model never tried the outside edit\n" + report
 
 
-# The reviewer's file permissions (`.agents/agents/canopy-reviewer.md`): read-only, nothing outside its directory.
+#: The reviewer's file permissions (`.agents/agents/canopy-reviewer.md`): read-only, nothing outside its directory.
 REVIEWER_AGENT: Final = """\
 ---
 description: canopy reviewer canary. Reads through its checkout link, then beside it.
@@ -274,7 +274,7 @@ def test_a_reviewer_reads_its_checkout_through_its_link_and_nothing_beside_it(tm
     assert attempted(tool_calls(result.stdout), "secret.txt"), "the model never tried the outside read\n" + report
 
 
-# The worker's file permissions (`.agents/agents/canopy-worker.md`), with bash off so only the read tool can read.
+#: The worker's file permissions (`.agents/agents/canopy-worker.md`), with bash off so only the read tool can read.
 BAZEL_AGENT: Final = """\
 ---
 description: canopy Bazel canary. Reads through Bazel's convenience links, then beside them.

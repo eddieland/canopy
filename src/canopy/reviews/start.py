@@ -51,8 +51,8 @@ REVIEWS_DIR: Final = "reviews"
 CHECKOUT_LINK: Final = "checkout"
 DISPATCH_ACTION: Final = "dispatch:review"
 HOLDER_KEY: Final = "review:"
-# Why a review runs (DESIGN §21): one of the loop's own PRs, named by its ticket, a PR with the operator's open review
-# request, or a `review.query` match.
+#: Why a review runs (DESIGN §21): one of the loop's own PRs, named by its ticket, a PR with the operator's open review
+#: request, or a `review.query` match.
 OWN: Final = "own"
 REQUEST: Final = review_requests.PURPOSE
 QUERY: Final = "query"

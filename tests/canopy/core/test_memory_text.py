@@ -21,8 +21,8 @@ from canopy.core.memory_text import (
     visible,
 )
 
-# Characters a note may not hold, from each category: control but the line feed and tab, format (zero-width, bidi,
-# tag), surrogate, private use, unassigned, and the line and paragraph separators.
+#: Characters a note may not hold, from each category: control but the line feed and tab, format (zero-width, bidi,
+#: tag), surrogate, private use, unassigned, and the line and paragraph separators.
 HIDDEN: Final = [
     "\x00",
     "\r",

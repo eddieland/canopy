@@ -23,7 +23,7 @@ from tests.canopy.helpers import (
 )
 from tests.conftest import GitPool, git
 
-# A PR the loop opened.
+#: A PR the loop opened.
 PR: Final = "https://github.com/acme/api/pull/7"
 FINDINGS: Final = {
     "status": "done",

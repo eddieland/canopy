@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
     from canopy.serve.backend import Backend
 
-# The PRs list, by most recent activity, and how many runs and decisions a PR's page carries.
+#: The PRs list, by most recent activity, and how many runs and decisions a PR's page carries.
 PULL_REQUESTS: Final = 100
 PR_RUNS: Final = 20
 PR_DECISIONS: Final = 20

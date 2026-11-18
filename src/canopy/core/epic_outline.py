@@ -216,9 +216,9 @@ def drift(outline: Outline, named: Iterable[object]) -> list[str]:
     return sorted({i for i in named if isinstance(i, str) and i in held}, key=_order)
 
 
-# The outline's shapes. A fence opens and closes a code block, whose lines are never read as structure.
+#: The outline's shapes. A fence opens and closes a code block, whose lines are never read as structure.
 _FENCE: Final = re.compile(r"^ {0,3}(`{3,}|~{3,})")
-# What marks a line of a code block: a character no plan's structure starts with, dropped from the text compared.
+#: What marks a line of a code block: a character no plan's structure starts with, dropped from the text compared.
 _CODE: Final = "\x00"
 _HEADING: Final = re.compile(r"^ {0,3}(#{1,6})\s+(.*?)\s*#*\s*$")
 _ITEM: Final = re.compile(r"^[-*+]\s+(.*)$")

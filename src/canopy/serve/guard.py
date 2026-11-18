@@ -26,15 +26,15 @@ from canopy.serve.dictation import MAX_AUDIO_BYTES
 if TYPE_CHECKING:
     from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-# Sent on every response. No framing (clickjacking), no MIME sniffing, no Referer to anywhere.
+#: Sent on every response. No framing (clickjacking), no MIME sniffing, no Referer to anywhere.
 SECURITY_HEADERS: Final[tuple[tuple[bytes, bytes], ...]] = (
     (b"x-content-type-options", b"nosniff"),
     (b"x-frame-options", b"DENY"),
     (b"referrer-policy", b"no-referrer"),
 )
-# The largest body a request may carry. The largest the API takes is an edited plan's 100,000 characters (DESIGN §25):
-# at most 1,200,000 bytes of JSON when every one is outside the BMP and escaped as a surrogate pair, `\ud83d\ude00`, 12
-# bytes each.
+#: The largest body a request may carry. The largest the API takes is an edited plan's 100,000 characters (DESIGN §25):
+#: at most 1,200,000 bytes of JSON when every one is outside the BMP and escaped as a surrogate pair, `\ud83d\ude00`, 12
+#: bytes each.
 MAX_BODY_BYTES: Final = 1280 * 1024
 #: The path under the API's prefix that takes a recording, and so a larger body than any other (`dictation.py`).
 DICTATION_PATH: Final = "/dictation"

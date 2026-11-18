@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Final
 
-# This file is canopy/infra/resources.py; bundled files sit beside the top-level package.
+#: This file is canopy/infra/resources.py; bundled files sit beside the top-level package.
 _PACKAGE: Final = Path(__file__).resolve().parent.parent
 _BUNDLED: Final = _PACKAGE / "_data"
 _SOURCE: Final = _PACKAGE.parent.parent

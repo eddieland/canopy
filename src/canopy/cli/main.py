@@ -18,8 +18,8 @@ from canopy.cli.common import Obj
 from canopy.core import config, db
 from canopy.infra import procs
 
-# Each top-level command's module under canopy.cli and the attribute that holds it. A new command goes here; a test
-# fails on one defined in a command module but listed nowhere.
+#: Each top-level command's module under canopy.cli and the attribute that holds it. A new command goes here; a test
+#: fails on one defined in a command module but listed nowhere.
 COMMANDS: Final[dict[str, tuple[str, str]]] = {
     "init": ("setup", "cmd_init"),
     "skill": ("setup", "cmd_skill"),

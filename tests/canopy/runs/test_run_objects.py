@@ -31,12 +31,12 @@ from tests.canopy.helpers import (
 from tests.canopy.scenario_helpers import Scenario, dispatches
 from tests.conftest import CanopyEnv, GitPool, git
 
-# What a sandbox wrapper does before git runs: new objects to the run's directory, the slot's shared ones read through.
+#: What a sandbox wrapper does before git runs: new objects to the run's directory, the slot's shared ones read through.
 SANDBOXED: Final = (
     'export GIT_OBJECT_DIRECTORY="$CANOPY_GIT_OBJECTS" '
     'GIT_ALTERNATE_OBJECT_DIRECTORIES="$(git rev-parse --path-format=absolute --git-common-dir)/objects"; '
 )
-# A worker that commits, leaves a ref of the worktree's own and a FETCH_HEAD naming its objects, and pushes nothing.
+#: A worker that commits, leaves a ref of the worktree's own and a FETCH_HEAD naming its objects, and pushes nothing.
 WORKER: Final = (
     SANDBOXED + "git -c core.hooksPath=/dev/null commit --quiet --allow-empty -m 'PROJ-1: work' && "
     "git update-ref refs/worktree/mine HEAD && git fetch --quiet --refmap= origin main"

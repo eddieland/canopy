@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 FILE_NAME: Final = "listener-secret"
 MIN_LENGTH: Final = 32
-# Anything longer is not a secret canopy wrote, and is refused rather than read whole.
+#: Anything longer is not a secret canopy wrote, and is refused rather than read whole.
 MAX_LENGTH: Final = 512
 
 

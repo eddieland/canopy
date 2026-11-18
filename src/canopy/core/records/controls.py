@@ -29,13 +29,13 @@ class Forget(Row):
     id: int
     ticket_key: str
     at: str
-    # `cli` or `web`; None, with `prs`, for a forget made before forgets were recorded.
+    #: `cli` or `web`; None, with `prs`, for a forget made before forgets were recorded.
     channel: str | None
-    # The ticket's newest run and message then: the loop reads only later ones.
+    #: The ticket's newest run and message then: the loop reads only later ones.
     run_id: int | None
     message_id: int | None
     branch: str | None
-    # A JSON array of its units' PR URLs.
+    #: A JSON array of its units' PR URLs.
     prs: str | None
 
 
@@ -72,9 +72,9 @@ class Start(Row):
     subject_id: str
     status: StartStatus
     started_at: str
-    # When the operator stopped it; None while it is started.
+    #: When the operator stopped it; None while it is started.
     stopped_at: str | None
-    # The channel of the latest start or stop.
+    #: The channel of the latest start or stop.
     channel: str
 
 

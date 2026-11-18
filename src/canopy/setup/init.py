@@ -20,7 +20,7 @@ from typing import Final
 from canopy.core import config, hostgit
 from canopy.infra import procs
 
-# A provider name becomes a directory name; keep it to one plain path component.
+#: A provider name becomes a directory name; keep it to one plain path component.
 PROVIDER_RE: Final = re.compile(r"[a-z0-9][a-z0-9_-]*")
 
 
@@ -55,7 +55,7 @@ Branch protection canopy relies on (TRUST_MODEL §7). Configure it on the reposi
   - Workers push only to branches under {prefix}; nothing else should be pushable by the loop.
 """
 
-# The wrapper canopy installs beside itself, and the prefix it gives a worker run's commands (DESIGN §24).
+#: The wrapper canopy installs beside itself, and the prefix it gives a worker run's commands (DESIGN §24).
 SANDBOX_WRAPPER: Final = config.SANDBOX_WRAPPER
 SANDBOX_PREFIX: Final = f"{SANDBOX_WRAPPER} worker --read {config.DEFINITIONS_DIR} --"
 SANDBOX_SUGGESTION: Final = """\
@@ -65,7 +65,7 @@ Optional: run workers in a sandbox, so a steered worker cannot read your secrets
   [runtime]
   {line}
 """
-# What `canopy sandbox setup` prints instead, having just done that.
+#: What `canopy sandbox setup` prints instead, having just done that.
 SANDBOX_NEXT: Final = """\
 Then set this in {user_file}, which prefixes worker_cmd, private_worker_cmd, and plan_cmd
 (https://github.com/eddieland/canopy/blob/main/docs/SANDBOX.md, step 5):
@@ -73,7 +73,7 @@ Then set this in {user_file}, which prefixes worker_cmd, private_worker_cmd, and
   {line}
 """
 
-# Transports git runs over ssh. Anything else with `://` (https, git, file) is not SSH.
+#: Transports git runs over ssh. Anything else with `://` (https, git, file) is not SSH.
 _SSH_SCHEMES: Final = ("ssh://", "git+ssh://", "ssh+git://")
 
 

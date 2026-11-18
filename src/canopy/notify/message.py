@@ -24,14 +24,14 @@ if TYPE_CHECKING:
     from canopy.notify.journal import Diff
 
 VERSION: Final = 1
-# At most this many attention lines and this many events in one message; the rest are counted, and count as delivered.
+#: At most this many attention lines and this many events in one message; the rest are counted, and count as delivered.
 MAX_LINES: Final = 20
-# Events older than this when a sink next succeeds are counted, not listed.
+#: Events older than this when a sink next succeeds are counted, not listed.
 STALE_EVENTS: Final = timedelta(hours=24)
 _DONE_LISTED: Final = 10
-# The attention list's subjects that are not tickets: a chore, by `chore:<name>`, a PR, by `pr:<url>`, a one-off
-# task, by `task:<id>`, which has no page of its own yet (DESIGN §36), and an epic, by `epic:<id>`, whose one item is
-# its plan waiting on the operator (§43).
+#: The attention list's subjects that are not tickets: a chore, by `chore:<name>`, a PR, by `pr:<url>`, a one-off
+#: task, by `task:<id>`, which has no page of its own yet (DESIGN §36), and an epic, by `epic:<id>`, whose one item is
+#: its plan waiting on the operator (§43).
 _CHORE: Final = "chore:"
 _PR: Final = "pr:"
 _TASK: Final = "task:"
@@ -618,7 +618,7 @@ class Message:
     events: list[Event] = field(default_factory=list[Event])
     digest: Digest | None = None
     now: datetime | None = None
-    # Ticket titles by key, which the `json` format carries beside each key; the `text` format shows keys alone.
+    #: Ticket titles by key, which the `json` format carries beside each key; the `text` format shows keys alone.
     titles: dict[str, str] = field(default_factory=dict[str, str])
     #: The web UI's address, ending in `/`, when the loop serves it: the `json` format links to its pages. The `text`
     #: format links nothing, so `notify.cmd` sees no change.

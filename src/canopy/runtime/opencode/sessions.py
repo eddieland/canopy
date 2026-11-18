@@ -97,7 +97,7 @@ VARIANT_MARK: Final = "@"
 #: Where the read starts when no cursor is given: before every session.
 _FIRST: Final[SessionCursor] = (-1, "")
 
-# Milliseconds since the epoch, as OpenCode stamps a session: up to the year 9999.
+#: Milliseconds since the epoch, as OpenCode stamps a session: up to the year 9999.
 _MAX_MILLIS: Final = 253_402_300_799_999
 _Millis = Annotated[StrictInt, Field(ge=0, le=_MAX_MILLIS)]
 _Cost = Annotated[StrictFloat | StrictInt, Field(ge=0, le=MAX_COST_USD, allow_inf_nan=False)]

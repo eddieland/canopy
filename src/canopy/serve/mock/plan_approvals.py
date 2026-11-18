@@ -57,7 +57,7 @@ _PLANNED: Final = (
     _Planned("ABC-091", PlannerApproval.STRICT, None, 9, 9, 11_800, PlanEffort.LARGE, comment=7),
     _Planned("ABC-091", PlannerApproval.STRICT, "web", 6, 2, 14_600, PlanEffort.LARGE),
 )
-# A comment's passage, which each plan's text holds.
+#: A comment's passage, which each plan's text holds.
 _QUOTE: Final = "the existing patterns"
 
 

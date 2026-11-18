@@ -11,7 +11,7 @@ from canopy.infra import resources
 from tests.canopy.helpers import PROMPT_VALUES, with_rebase
 from tests.conftest import CanopyEnv
 
-# A row of the overseer prompt's phase table: `| `phase` | evidence | action |`.
+#: A row of the overseer prompt's phase table: `| `phase` | evidence | action |`.
 _PHASE_ROW: Final = re.compile(r"^\| `([a-z_]+)` \|", re.MULTILINE)
 
 UNIT_KINDS: Final = sorted(k for k in prompts.WORKER if k != "plan")
@@ -23,7 +23,8 @@ PLAN_VALUES: Final = {
     "PLAN_OUT": ".canopy-new-plan.md",
     "MAX_PLAN_CHARS": "100,000",
 }
-# The kinds whose prompt checks the queue label through `{{LABELS}}`: a plan's carries its check in `{{AUTHORIZATION}}`.
+#: The kinds whose prompt checks the queue label through `{{LABELS}}`: a plan's carries its check in
+#: `{{AUTHORIZATION}}`.
 LABELED_KINDS: Final = sorted(k for k in prompts.WORKER if k != "plan")
 
 

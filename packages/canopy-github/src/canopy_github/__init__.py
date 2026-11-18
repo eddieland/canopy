@@ -24,34 +24,34 @@ import canopy_http
 TIMEOUT_SECONDS: Final = 30
 #: The media type that names the preview a PR's `mergeStateStatus` was introduced under.
 MERGE_INFO_PREVIEW: Final = "application/vnd.github.merge-info-preview+json"
-# How much of a comment's or review's body is printed. canopy bounds what it records again.
+#: How much of a comment's or review's body is printed. canopy bounds what it records again.
 MAX_BODY: Final = 8000
 #: How long a query GitHub answered with a server error, such as its unicorn page, or whose reply was cut off, or that
 #: GitHub failed to run, waits before each new try, give or take half at random: one try, then one more for each
 #: pause. A mutation is sent again only when it never left or GitHub refused it for its rate limit, as one GitHub failed
 #: to answer may have been carried out (canopy-http).
 RETRY_PAUSES: Final[Sequence[float]] = (1.0, 3.0)
-# How much of GitHub's reply an error quotes.
+#: How much of GitHub's reply an error quotes.
 _MAX_REPLY: Final = 500
 #: How GitHub's GraphQL API starts the error it answers a query it failed to run with, most often one that ran past
 #: its time limit, though it answers with a 200. The rest names when, and the request ID GitHub's support asks for.
 _FAILED_TO_RUN: Final = "Something went wrong while executing your query"
-# A query, which reads and so may be sent again, as a mutation may not: the operation each document names first.
+#: A query, which reads and so may be sent again, as a mutation may not: the operation each document names first.
 _QUERY: Final = re.compile(r"\s*query\b")
 _HOST: Final = r"[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?(?::[0-9]{1,5})?"
 _NAME: Final = r"[A-Za-z0-9_.-]{1,100}"
 _NUMBER: Final = r"[1-9][0-9]{0,9}"
 _PR: Final = re.compile(rf"https://({_HOST})/({_NAME})/({_NAME})/pull/({_NUMBER})")
 _ISSUE: Final = re.compile(rf"https://({_HOST})/({_NAME})/({_NAME})/issues/({_NUMBER})")
-# A clone URL as `git clone` takes it: https, scp-style SSH, or ssh://, with an optional `.git` and trailing slash. An
-# SSH URL's port is the SSH server's, not the API's, so it is not part of the host.
+#: A clone URL as `git clone` takes it: https, scp-style SSH, or ssh://, with an optional `.git` and trailing slash. An
+#: SSH URL's port is the SSH server's, not the API's, so it is not part of the host.
 _HOST_NAME: Final = r"[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?"
 _CLONE: Final = re.compile(
     rf"(?:https://({_HOST})/|ssh://git@({_HOST_NAME})(?::[0-9]{{1,5}})?/|git@({_HOST_NAME}):)"
     rf"({_NAME})/({_NAME}?)(?:\.git)?/?",
 )
 
-# The host a token is for, to the GraphQL endpoint to send it to; and the host to the token.
+#: The host a token is for, to the GraphQL endpoint to send it to; and the host to the token.
 type Endpoint = Callable[[str], str]
 type Token = Callable[[str], str]
 

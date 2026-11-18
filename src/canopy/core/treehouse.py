@@ -26,8 +26,8 @@ from canopy.core.vocab import PoolKind
 from canopy.infra import procs
 
 ROOT_ENV: Final = "TREEHOUSE_ROOT"
-# treehouse's own default layout, pinned: a repository's `treehouse.toml` cannot move a workspace's slots, and `return`
-# finds a slot's pool two levels above it even when the repository's clone is gone.
+#: treehouse's own default layout, pinned: a repository's `treehouse.toml` cannot move a workspace's slots, and `return`
+#: finds a slot's pool two levels above it even when the repository's clone is gone.
 WORKTREE_PATH: Final = "{pool}/{slot}/{repo}"
 _TIMEOUT_SECONDS: Final = 120
 

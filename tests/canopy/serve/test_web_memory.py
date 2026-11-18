@@ -198,7 +198,7 @@ def test_the_overview_lists_pinned_lessons_first_then_those_reported_wrong_then_
     assert [lesson["id"] for lesson in c.get("/api/memory").json()["lessons"]] == [5, 4, 3, 2, 1]
 
 
-# A write to the mock needs no session, but an Origin naming the server (guard.py).
+#: A write to the mock needs no session, but an Origin naming the server (guard.py).
 WRITE: Final = {"origin": ORIGIN}
 #: The mock's pinned lessons (mock/memory.py), which lead its lessons, by key, before lesson 8.
 PINNED: Final = [10, 9]

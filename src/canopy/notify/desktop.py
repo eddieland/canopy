@@ -30,7 +30,7 @@ TITLE: Final = "canopy"
 MAX_LINES: Final = 12
 MAX_BODY: Final = 1000
 _TIMEOUT_SECONDS: Final = 20
-# AppleScript reads the title and body from its arguments, so neither is ever parsed as script.
+#: AppleScript reads the title and body from its arguments, so neither is ever parsed as script.
 _OSASCRIPT: Final = [
     "osascript",
     "-e",
