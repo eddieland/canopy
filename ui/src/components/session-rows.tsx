@@ -18,6 +18,7 @@ import { Tip } from '@/components/tip'
 import { sessionModels } from '@/lib/models'
 import { directoryTail, moreMessages, sessionName, unstopped } from '@/lib/sessions'
 import { byteSize } from '@/lib/ticks'
+import { cn } from '@/lib/utils'
 
 /** What `indexed in part` means, in its tip. */
 const CUT_MEANS = 'It is longer than the index reads of one session, so words past that are not found.'
@@ -188,12 +189,18 @@ function SessionRow({
                             {/* A dot that stays with the snippet's end, so a note that wraps starts its line clean. */}
                             {snippet !== null && (more !== null || session.cut) && ' · '}
                             {(more !== null || session.cut) && (
-                                <span className="text-xs whitespace-nowrap" data-testid="session-hit-note">
-                                    {more}
+                                <span className="text-xs" data-testid="session-hit-note">
+                                    {/* Each piece keeps to one line; the two may part where the row is narrow. */}
+                                    {more !== null && <span className="whitespace-nowrap">{more}</span>}
                                     {more !== null && session.cut && ' · '}
                                     {session.cut && (
                                         <Tip fact="indexed in part" detail={CUT_MEANS}>
-                                            <span className="underline decoration-dotted underline-offset-4">
+                                            <span
+                                                className={cn(
+                                                    'whitespace-nowrap',
+                                                    'underline decoration-dotted underline-offset-4',
+                                                )}
+                                            >
                                                 indexed in part
                                             </span>
                                         </Tip>
