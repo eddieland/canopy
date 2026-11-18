@@ -43,7 +43,7 @@ RUN_KINDS: Final[dict[RunTable, SessionRunKind]] = {
     "task_runs": "task_run",
     "epic_runs": "epic_run",
 }
-# A row whose id is among those of a JSON array.
+#: A row whose id is among those of a JSON array.
 _AMONG: Final = "id IN (SELECT value FROM json_each(?))"
 
 

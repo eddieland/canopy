@@ -39,10 +39,10 @@ from canopy.runtime.report import MAX_COST_USD, MESSAGE_ID_RE, Called, Count, Re
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping
 
-# Milliseconds since the epoch, as OpenCode stamps events: up to the year 9999.
+#: Milliseconds since the epoch, as OpenCode stamps events: up to the year 9999.
 _MAX_MS: Final = 253_402_300_799_999
-# The fields of a tool call's input that say what it did, in the order a title takes the first that is a string: a
-# shell's command, a file tool's path, a search's pattern, a fetch's address, a search's query, a skill's id.
+#: The fields of a tool call's input that say what it did, in the order a title takes the first that is a string: a
+#: shell's command, a file tool's path, a search's pattern, a fetch's address, a search's query, a skill's id.
 _SAID_BY: Final = ("command", "path", "pattern", "url", "query", "id")
 
 #: The tools that read one file, that edit one, that edit those a patch names, and that search.

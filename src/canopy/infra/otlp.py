@@ -252,8 +252,8 @@ class _NoRedirect(HTTPRedirectHandler):
         """Follow none: returning nothing makes urllib raise the redirect as an error."""
 
 
-# No proxy, whatever the environment names: a post reaches the endpoint the operator named, a collector on this machine
-# included, or fails.
+#: No proxy, whatever the environment names: a post reaches the endpoint the operator named, a collector on this machine
+#: included, or fails.
 _OPENER: Final = build_opener(ProxyHandler({}), _NoRedirect())
 _LOG = logging.getLogger("canopy")
 
@@ -284,7 +284,7 @@ def encoded(spans: Sequence[ReadableSpan]) -> dict[str, object]:
     }
 
 
-# OTLP numbers span kinds from 1, where OpenTelemetry's Python `SpanKind` numbers them from 0.
+#: OTLP numbers span kinds from 1, where OpenTelemetry's Python `SpanKind` numbers them from 0.
 _KIND_OFFSET: Final = 1
 
 

@@ -49,7 +49,7 @@ if TYPE_CHECKING:
 TAG: Final = "reviews"
 router = APIRouter(tags=[TAG])
 _log = logs.for_tick(None)
-# A body this long or longer goes gzipped to a browser that takes it; a shorter one saves too little to be worth it.
+#: A body this long or longer goes gzipped to a browser that takes it; a shorter one saves too little to be worth it.
 _GZIP_FROM: Final = 1024
 
 CommentNumber = Annotated[

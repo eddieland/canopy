@@ -67,9 +67,9 @@ KEY: Final = "PROJ-1"
 PLAN: Final = "# Plan\n\n## api\n\nAdd the endpoint.\n"
 #: The prompt `prompted` gives its plan's planner.
 PLAN_PROMPT: Final = "You are planning PROJ-1.\n\nThe operator said: keep it small.\n"
-# The branch an `implement` of KEY with slug `work` pushes.
+#: The branch an `implement` of KEY with slug `work` pushes.
 BRANCH: Final = f"agent/{KEY}-work"
-# The label the test operator's tickets carry (`user_toml`).
+#: The label the test operator's tickets carry (`user_toml`).
 LABEL: Final = "agent-ready-tester"
 #: The PR WORKER_DONE reports, as a URL that names no PR, so no source reads it.
 WORKER_PR: Final = "https://example.test/pr/1"
@@ -129,13 +129,13 @@ Sessions survive a restart.
 
 ## Out of scope
 """
-# What a blocked worker asks (`blocked_result`).
+#: What a blocked worker asks (`blocked_result`).
 QUESTION: Final = "Should the button be red or blue?"
-# The last line an overseer prints when it has finished its tick.
+#: The last line an overseer prints when it has finished its tick.
 TICK_DONE: Final = "CANOPY_TICK_DONE"
-# Above Linux's largest pid_max, so never a live process.
+#: Above Linux's largest pid_max, so never a live process.
 DEAD_PID: Final = 4_194_305
-# A value for every placeholder the worker prompts take.
+#: A value for every placeholder the worker prompts take.
 PROMPT_VALUES: Final = {
     "KEY": "PROJ-1",
     "SLOT": "/pool/1/repo",
@@ -1021,7 +1021,7 @@ class Behavior(TypedDict, total=False):
     errors: str  # a JSON list, each the `error` of an `error` event it prints at the end, with `--format json`
 
 
-# The fake's name for each of Behavior's keys, after its FAKE_<ROLE>_ prefix.
+#: The fake's name for each of Behavior's keys, after its FAKE_<ROLE>_ prefix.
 BEHAVIOR_SETTINGS: Final = {
     "says": "SAYS",
     "exit_code": "EXIT",

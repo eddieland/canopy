@@ -12,7 +12,7 @@ from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from typing import Final
 
-# The controlling terminal, whichever descriptors point at it: output sent to a file still hangs up with it.
+#: The controlling terminal, whichever descriptors point at it: output sent to a file still hangs up with it.
 _CONTROLLING_TERMINAL: Final = "/dev/tty"
 
 

@@ -30,7 +30,7 @@ def fetch(get, attempts):
             last = e
     raise last
 """
-# The PR: a delay between attempts.
+#: The PR: a delay between attempts.
 PR_HEAD: Final = """\
 import time
 
@@ -45,7 +45,7 @@ def fetch(get, attempts, delay=0.1):
             time.sleep(delay)
     raise last
 """
-# The fix: no attempts at all raised None. Lines 5 and 6 are the guard.
+#: The fix: no attempts at all raised None. Lines 5 and 6 are the guard.
 FIXED: Final = """\
 import time
 

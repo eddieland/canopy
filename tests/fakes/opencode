@@ -51,11 +51,11 @@ import time
 from pathlib import Path
 from typing import Any, Final
 
-# The rules OpenCode 2 starts every agent from, before its own.
+#: The rules OpenCode 2 starts every agent from, before its own.
 DEFAULTS: Final = [["*", "*", "allow"], ["read", "*.env", "ask"], ["read", "*.env.*", "ask"]]
-# What OpenCode 2 reads each of OpenCode 1's permissions as.
+#: What OpenCode 2 reads each of OpenCode 1's permissions as.
 RENAMED: Final = {"bash": "shell", "task": "subagent", "write": "edit", "patch": "edit"}
-# Where `serve` says it listens.
+#: Where `serve` says it listens.
 URL: Final = "http://127.0.0.1:41234"
 
 

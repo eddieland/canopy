@@ -27,7 +27,7 @@ TAG: Final = "dictation"
 router = APIRouter(tags=[TAG])
 _log = logs.for_tick(None)
 
-# The body is the recording's bytes, not JSON, which would grow it by a third.
+#: The body is the recording's bytes, not JSON, which would grow it by a third.
 _BODY: Final[dict[str, Any]] = {
     "requestBody": {
         "required": True,

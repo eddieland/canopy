@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     import sqlite3
 
 RUN: Final = 45
-# The head run 45 pushed, and its diff from the base branch: the spinner clears in a `finally` now.
+#: The head run 45 pushed, and its diff from the base branch: the spinner clears in a `finally` now.
 SHA: Final = "e3a7d915" + "9" * 32
 DIFF: Final = """\
 diff --git a/src/search/SearchBox.tsx b/src/search/SearchBox.tsx

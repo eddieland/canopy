@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
 OPUS: Final = "anthropic/claude-opus-4-1"
 SONNET: Final = "anthropic/claude-sonnet-4-5"
-# The words a branch name leaves out of its ticket's title.
+#: The words a branch name leaves out of its ticket's title.
 _SMALL_WORDS: Final = frozenset({"a", "an", "the", "to", "in", "on", "for", "of"})
 
 
@@ -410,8 +410,8 @@ TICKETS: Final[Sequence[Ticket]] = (
     ),
 )
 
-# What a run's tokens are per dollar it cost, as the fixtures' runs are, but for the cache read, which grew as the
-# prompts settled: by the month the run started in.
+#: What a run's tokens are per dollar it cost, as the fixtures' runs are, but for the cache read, which grew as the
+#: prompts settled: by the month the run started in.
 _CACHE_READ_PER_USD: Final = {4: 90_000, 5: 140_000, 6: 220_000, 7: 300_000, 8: 330_000, 9: 380_000}
 #: The definitions snapshot the runs loaded until a prompt change on Monday Sep 21, and the one after it, which the
 #: fixtures' runs load too: a smaller prefix, which the week of the change read little of from the cache.
@@ -423,11 +423,11 @@ _SNAPSHOT_FROM: Final = _on(9, 21, 0)
 FIRST_RUNTIME: Final = "1.0.98"
 RUNTIME: Final = "1.0.104"
 _RUNTIME_FROM: Final = _on(9, 28, 0)
-# What a run's first model call was sent, by its kind, before the prompt change took this much off it.
+#: What a run's first model call was sent, by its kind, before the prompt change took this much off it.
 _FIRST_SENT: Final = {RunKind.IMPLEMENT: 24_200, RunKind.RESUME: 25_100, RunKind.FIX_CI: 23_600}
 _SNAPSHOT_SAVED: Final = 1_800
-# The share of it read from the cache, by the month the run started in, which grew as the prompts settled; from
-# September on, but for the week of the prompt change, and the runtime's upgrade the week after.
+#: The share of it read from the cache, by the month the run started in, which grew as the prompts settled; from
+#: September on, but for the week of the prompt change, and the runtime's upgrade the week after.
 _FIRST_HIT: Final = {4: 0.31, 5: 0.47, 6: 0.64, 7: 0.76, 8: 0.82, 9: 0.85}
 _FIRST_HIT_CHANGED: Final = 0.57
 _FIRST_HIT_UPGRADED: Final = 0.79

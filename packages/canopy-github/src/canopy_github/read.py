@@ -95,7 +95,7 @@ fragment Thread on PullRequestReviewThread {
     + _COMMENT
 )
 
-# Every named context, a check run or a commit status: never the combined status, which stops at 30 (DESIGN §30).
+#: Every named context, a check run or a commit status: never the combined status, which stops at 30 (DESIGN §30).
 _CONTEXTS: Final = """
 fragment Contexts on StatusCheckRollupContextConnection {
   pageInfo { hasNextPage endCursor }
@@ -107,8 +107,8 @@ fragment Contexts on StatusCheckRollupContextConnection {
 }
 """
 
-# The timeline events a PR's ready and review-requested times are read from, read from the newest, as the latest ready
-# event matters and nothing before it does.
+#: The timeline events a PR's ready and review-requested times are read from, read from the newest, as the latest ready
+#: event matters and nothing before it does.
 _EVENTS: Final = "itemTypes: [READY_FOR_REVIEW_EVENT, REVIEW_REQUESTED_EVENT], last: 100"
 _TIMELINE: Final = """
 fragment Timeline on PullRequestTimelineItemsConnection {

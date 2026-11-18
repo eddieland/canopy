@@ -65,10 +65,10 @@ if TYPE_CHECKING:
     from canopy.core.conversation import Ref
 
 CLI: Final = "cli"
-# `canopy show` lists this many of a ticket's runs and messages.
+#: `canopy show` lists this many of a ticket's runs and messages.
 SHOW_RUNS: Final = 5
 SHOW_MESSAGES: Final = 100
-# How much of a commented passage `canopy show --plans` quotes, as a change request does (DESIGN §25).
+#: How much of a commented passage `canopy show --plans` quotes, as a change request does (DESIGN §25).
 SHOW_QUOTE: Final = 160
 
 

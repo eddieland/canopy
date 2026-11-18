@@ -26,8 +26,8 @@ if TYPE_CHECKING:
 #: When the snapshot's journal is read: its plans are written in the week before.
 NOW: Final = datetime(2026, 10, 8, 12, tzinfo=UTC)
 
-# A plan of under a page, one of one to two pages in the plan editor, and one of four to six pages with every kind of
-# block that is not prose (`plan_metrics`).
+#: A plan of under a page, one of one to two pages in the plan editor, and one of four to six pages with every kind of
+#: block that is not prose (`plan_metrics`).
 SHORT: Final = "# Plan\n\nOne step.\n"
 MEDIUM: Final = "# Plan\n\n" + "\n".join(f"- step {i}" for i in range(60)) + "\n"
 LONG: Final = (

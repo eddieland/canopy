@@ -35,7 +35,7 @@ class ReviewRun(Row):
     pr_url: str
     sha: str
     ticket_key: str | None
-    # The repository whose pool the slot came from; None in a workspace of one.
+    #: The repository whose pool the slot came from; None in a workspace of one.
     repo: str | None
     slot_path: str | None
     lease_id: str | None

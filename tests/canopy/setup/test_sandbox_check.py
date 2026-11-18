@@ -24,8 +24,8 @@ from canopy.infra.procs import SubprocessRunner
 from canopy.setup import sandbox_check
 from tests.conftest import HERMETIC_GIT, CanopyEnv, executable, git
 
-# Plays curl under srt's proxy: for the host the check expects refused it fails, and says the proxy answered 403 when
-# asked how the CONNECT went ($FAKE_CURL_CONNECT says otherwise, as for a host that is down); it answers any other.
+#: Plays curl under srt's proxy: for the host the check expects refused it fails, and says the proxy answered 403 when
+#: asked how the CONNECT went ($FAKE_CURL_CONNECT says otherwise, as for a host that is down); it answers any other.
 CURL: Final = """\
 #!{python}
 import os, sys

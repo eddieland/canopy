@@ -9,8 +9,8 @@ import pytest
 import canopy
 from canopy.infra import procs
 
-# The web server's models stay eager: FastAPI builds every one when it creates the app, so deferring them saves
-# nothing, and only a serving `canopy loop` imports them.
+#: The web server's models stay eager: FastAPI builds every one when it creates the app, so deferring them saves
+#: nothing, and only a serving `canopy loop` imports them.
 EAGER: Final = "canopy.serve."
 
 

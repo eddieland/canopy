@@ -92,7 +92,7 @@ fragment Ticket on Issue {
 }
 """
 
-# What an asked ticket is read with besides: read from the newest, as the newest label event and comment matter most.
+#: What an asked ticket is read with besides: read from the newest, as the newest label event and comment matter most.
 _LABELED: Final = "pageInfo { hasPreviousPage startCursor } nodes { ... on LabeledEvent { createdAt label { name } } }"
 _COMMENTS: Final = (
     "pageInfo { hasPreviousPage startCursor } nodes { fullDatabaseId createdAt body author { __typename login } }"

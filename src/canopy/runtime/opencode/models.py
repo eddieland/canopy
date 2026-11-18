@@ -37,7 +37,7 @@ TIMEOUT_SECONDS: Final = 30
 COMMAND: Final = "opencode models"
 #: The option that prints each model's JSON after its line, its variants among it.
 VERBOSE: Final = "--verbose"
-# The blank space between a model's line and its JSON.
+#: The blank space between a model's line and its JSON.
 _SPACE_RE: Final = re.compile(r"\s*")
 
 

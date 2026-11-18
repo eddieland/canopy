@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
     from canopy.core import run_result
 
-# Every pair of modes but both off, which asks for no field.
+#: Every pair of modes but both off, which asks for no field.
 MODES: Final = [
     (notes, proposals)
     for notes in MemoryMode

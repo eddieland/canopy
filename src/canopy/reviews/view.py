@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from canopy.core import records
     from canopy.core.config import Config
 
-# PRs reviewed this recently are in the state block, newest first, at most this many.
+#: PRs reviewed this recently are in the state block, newest first, at most this many.
 RECENT: Final = timedelta(days=14)
 MAX_PRS: Final = 50
 

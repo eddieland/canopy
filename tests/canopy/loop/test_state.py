@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
 DAY: Final = "2026-10-16"
 NOW: Final = datetime(2026, 10, 16, 10, 0, tzinfo=UTC)
-# What a snapshot shows in place of the workspace root, which is in a temporary directory.
+#: What a snapshot shows in place of the workspace root, which is in a temporary directory.
 WORKSPACE: Final = "/workspace"
 PR: Final = "https://example.test/acme/repo/pull/7"
 #: A row the harness dispatches for, enabled here as a measurement would enable it (DESIGN §37).

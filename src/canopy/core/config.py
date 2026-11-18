@@ -61,15 +61,15 @@ if TYPE_CHECKING:
     from pydantic.fields import FieldInfo
 
 WORKSPACE_FILE_NAME: Final = "canopy-workspace.toml"
-# A workspace's state is always here, under its root: each workspace has its own journal and locks (DESIGN §18).
+#: A workspace's state is always here, under its root: each workspace has its own journal and locks (DESIGN §18).
 WORKSPACE_STATE_DIR: Final = ".canopy"
-# The private file's name, in the state directory, and the user file's, in the user config directory.
+#: The private file's name, in the state directory, and the user file's, in the user config directory.
 CONFIG_FILE_NAME: Final = "config.toml"
-# Tables of the workspace file that are its map, not config. `canopy.core.workspace` reads them.
+#: Tables of the workspace file that are its map, not config. `canopy.core.workspace` reads them.
 WORKSPACE_MAP_TABLES: Final = ("workspace", "repos")
-# M55: triage before a plan waived too few plans to pay for itself, so trivial work is planned (DESIGN §25).
+#: M55: triage before a plan waived too few plans to pay for itself, so trivial work is planned (DESIGN §25).
 _PLANNED: Final = "delete it; every ticket policy.plan plans is planned, and canopy plan KEY --skip waives one"
-# Keys earlier canopy read, and what to do with one left in a file. Each is an error that says so, not "unknown key".
+#: Keys earlier canopy read, and what to do with one left in a file. Each is an error that says so, not "unknown key".
 REMOVED_KEYS: Final = {
     "paths.state_dir": f"delete it; state is always in the workspace's {WORKSPACE_STATE_DIR}/ (D016)",
     "trust.pr_label": "delete it; workers no longer label their PRs, which the branch prefix already marks",
@@ -87,20 +87,20 @@ REMOVED_KEYS: Final = {
     "runtime.plan_triage_timeout_minutes": _PLANNED,
 }
 PROMPT: Final = "{prompt}"
-# Replaced with the snapshot of canopy's agent definitions and skills (D040).
+#: Replaced with the snapshot of canopy's agent definitions and skills (D040).
 DEFINITIONS_DIR: Final = "{definitions_dir}"
-# Replaced with the run's session title: a worker's `<KEY> <kind>: <ticket title>`, `tick <id>`, `chore:<name>`, or
-# `review <PR URL>` (DESIGN §13). Optional in every template.
+#: Replaced with the run's session title: a worker's `<KEY> <kind>: <ticket title>`, `tick <id>`, `chore:<name>`, or
+#: `review <PR URL>` (DESIGN §13). Optional in every template.
 TITLE: Final = "{title}"
 _PLACEHOLDER_RE: Final = re.compile(r"\{prompt\}|\{definitions_dir\}|\{title\}")
 #: The sandbox wrapper canopy installs beside itself (DESIGN §24), by the name its command is installed as.
 SANDBOX_WRAPPER: Final = "canopy-sandbox"
-# A repository name is a directory name, a treehouse leaf, and a `--repo` argument (DESIGN §18).
+#: A repository name is a directory name, a treehouse leaf, and a `--repo` argument (DESIGN §18).
 REPO_NAME_RE: Final = re.compile(r"[a-z][a-z0-9-]*")
 #: A ticket key reaches branch names, lease holders, paths, and argv (DESIGN §17). It has no `:`, `#`, or `/`, so no
 #: other kind of reference can be read as one.
 KEY_RE: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
-# A chore's name appears in file paths and on the command line (DESIGN §19).
+#: A chore's name appears in file paths and on the command line (DESIGN §19).
 CHORE_NAME_RE: Final = re.compile(r"[a-z][a-z0-9-]*")
 MIN_CHORE_EVERY_MINUTES: Final = 15
 #: A persona's name, and its file's, `<name>.md` (DESIGN §31): lowercase words joined by single hyphens, at most 40
@@ -126,7 +126,7 @@ class Tighten(Enum):
 
     LOWER = "lower"
     HIGHER = "higher"
-    # For a field typed as a Literal of choices listed from loosest to strictest: a later choice is stricter.
+    #: For a field typed as a Literal of choices listed from loosest to strictest: a later choice is stricter.
     LATER = "later"
 
 
@@ -149,8 +149,8 @@ def _temperature(value: float) -> float:
     return value
 
 
-# One or more plain ref components, each followed by "/". Branch names reach git's argv, so none may start with "-" or
-# hold anything git treats specially ("..", "@{", a leading "."). The workspace file can set this key (TRUST_MODEL T7).
+#: One or more plain ref components, each followed by "/". Branch names reach git's argv, so none may start with "-" or
+#: hold anything git treats specially ("..", "@{", a leading "."). The workspace file can set this key (TRUST_MODEL T7).
 BRANCH_PREFIX_RE: Final = re.compile(r"(?:[A-Za-z0-9][A-Za-z0-9_-]*/)+")
 
 
@@ -185,10 +185,10 @@ def _comment_mark(value: str) -> str:
 
 MAX_TRAILER_NAME: Final = 80
 MAX_TRAILER_EMAIL: Final = 254
-# The `Co-authored-by` trailer canopy's git hooks add to a worker's commits (TRUST_MODEL T5).
+#: The `Co-authored-by` trailer canopy's git hooks add to a worker's commits (TRUST_MODEL T5).
 DEFAULT_TRAILER_NAME: Final = "canopy worker"
 DEFAULT_TRAILER_EMAIL: Final = "noreply@canopy.invalid"
-# An address git and VCS hosts read as one: no whitespace, angle brackets, or backtick, and one "@" inside it.
+#: An address git and VCS hosts read as one: no whitespace, angle brackets, or backtick, and one "@" inside it.
 TRAILER_EMAIL_RE: Final = re.compile(r"[^\s<>@`]+@[^\s<>@`]+")
 
 
@@ -239,8 +239,8 @@ def _commit_prefix(value: str) -> str:
 
 
 MAX_REVIEWER: Final = 100
-# The `trust.trusted_reviewers` entry for canopy's own reviewer (DESIGN §21). A login cannot hold a colon, so no account
-# can be read as it; canopy's reviewer posts as the operator, so the operator's login cannot stand for it.
+#: The `trust.trusted_reviewers` entry for canopy's own reviewer (DESIGN §21). A login cannot hold a colon, so no
+#: account can be read as it; canopy's reviewer posts as the operator, so the operator's login cannot stand for it.
 CANOPY_REVIEWER: Final = "canopy:review"
 
 
@@ -449,7 +449,7 @@ ATTACHMENTS_CEILING: Final = 20
 ATTACHMENT_KIB_CEILING: Final = 1024
 ATTACHMENTS_TOTAL_KIB_CEILING: Final = 4096
 
-# bool is an int subclass; Strict* types reject `max_workers = true` and quoted numbers.
+#: bool is an int subclass; Strict* types reject `max_workers = true` and quoted numbers.
 NonBlank = Annotated[StrictStr, AfterValidator(_non_blank)]
 Count = Annotated[StrictInt, Field(ge=0)]
 Minutes = Annotated[StrictInt, Field(ge=1)]
@@ -543,14 +543,14 @@ def link_template(placeholder: str) -> AfterValidator:
     return AfterValidator(check)
 
 
-# Each shipped provider's usual MCP server, as an operator's runtime config usually names it, and the tools of it a
-# private worker needs: its read tools, which the planner gets too, and for GitHub, whose server is also the one PRs
-# go through, the PR tools, which only the private worker gets. None of the reads writes anything
-# (DESIGN §22, §25). Named from the servers' tool lists (Atlassian's Rovo MCP server v2, GitHub's MCP server v2.0.1);
-# a name wrong here fails closed. Atlassian's server lists only its primary tools unless its URL asks for
-# `?tools=all`, and runs the rest through `execute*` tools that read or write by argument; those are denied.
-# The create tools are the ones a private worker files follow-ups with. GitHub's `issue_write` also edits and closes
-# issues, which has no narrower tool to name; the prompt keeps it to creating (TRUST_MODEL T6).
+#: Each shipped provider's usual MCP server, as an operator's runtime config usually names it, and the tools of it a
+#: private worker needs: its read tools, which the planner gets too, and for GitHub, whose server is also the one PRs
+#: go through, the PR tools, which only the private worker gets. None of the reads writes anything
+#: (DESIGN §22, §25). Named from the servers' tool lists (Atlassian's Rovo MCP server v2, GitHub's MCP server v2.0.1);
+#: a name wrong here fails closed. Atlassian's server lists only its primary tools unless its URL asks for
+#: `?tools=all`, and runs the rest through `execute*` tools that read or write by argument; those are denied.
+#: The create tools are the ones a private worker files follow-ups with. GitHub's `issue_write` also edits and closes
+#: issues, which has no narrower tool to name; the prompt keeps it to creating (TRUST_MODEL T6).
 DEFAULT_TRACKER_TOOLS: Final[dict[str, McpTools]] = {
     "jira": McpTools(
         "atlassian",
@@ -1192,10 +1192,10 @@ class Spend(Section):
     ] = ()
 
 
-# Host names that mean loopback. The web UI's Host and Origin checks accept these and the bind address (DESIGN §22).
+#: Host names that mean loopback. The web UI's Host and Origin checks accept these and the bind address (DESIGN §22).
 LOOPBACK_NAMES: Final = frozenset({"localhost", "127.0.0.1", "::1"})
-# A path prefix the web UI is served under through a proxy: `/canopy`, `/a/b`. Restricted to characters that need no
-# escaping in a URL or an HTML attribute, since the server writes it into index.html's <base href>.
+#: A path prefix the web UI is served under through a proxy: `/canopy`, `/a/b`. Restricted to characters that need no
+#: escaping in a URL or an HTML attribute, since the server writes it into index.html's <base href>.
 _BASE_PATH_RE: Final = re.compile(r"(/[A-Za-z0-9._~-]+)*")
 
 
@@ -1285,8 +1285,8 @@ def _dictation_command(value: str) -> str:
 
 #: The longest `serve.url`: the links built on it must fit in a notification.
 MAX_UI_URL: Final = 200
-# A URL's own characters, so a link built on it needs no escaping in a notification's markup: no space, `|`, `<`, `>`,
-# quote, or backslash. The Slack sink checks each link against the same class (`_PAGE` in `canopy_notify_slack`).
+#: A URL's own characters, so a link built on it needs no escaping in a notification's markup: no space, `|`, `<`, `>`,
+#: quote, or backslash. The Slack sink checks each link against the same class (`_PAGE` in `canopy_notify_slack`).
 _UI_URL_RE: Final = re.compile(r"https?://[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+")
 
 
@@ -1546,13 +1546,13 @@ class Personas(Section):
     reviewers: Annotated[tuple[PersonaName, ...], Scope.PRIVATE, AfterValidator(_distinct_personas)] = ()
 
 
-# A sink's name is a table name and appears in `canopy notify test` and the journal (DESIGN §20).
+#: A sink's name is a table name and appears in `canopy notify test` and the journal (DESIGN §20).
 SINK_NAME_RE: Final = re.compile(r"[a-z][a-z0-9-]*")
 MAX_SINKS: Final = 5
-# The sink `notify.cmd` stands for.
+#: The sink `notify.cmd` stands for.
 DEFAULT_SINK: Final = "default"
 MIN_DIGEST_MINUTES: Final = 60
-# A sink batching for longer than a day would hold everything but what needs the operator now.
+#: A sink batching for longer than a day would hold everything but what needs the operator now.
 MAX_BATCH_MINUTES: Final = 1440
 
 
@@ -1654,12 +1654,12 @@ class Notify(Section):
         return any(sink.takes(name) for sink in self.all_sinks().values())
 
 
-# A source's name is a table name, as a sink's is (ROADMAP M36).
+#: A source's name is a table name, as a sink's is (ROADMAP M36).
 SOURCE_NAME_RE: Final = SINK_NAME_RE
-# The commands a `vcs` source runs when none is configured: canopy's own GitHub programs (DESIGN §29).
+#: The commands a `vcs` source runs when none is configured: canopy's own GitHub programs (DESIGN §29).
 GITHUB_READER: Final = "canopy-connect-github"
 GITHUB_POSTER: Final = "canopy-post-github"
-# The name canopy's own `vcs` source goes by when none is configured, in `connector_runs` and `canopy status`.
+#: The name canopy's own `vcs` source goes by when none is configured, in `connector_runs` and `canopy status`.
 DEFAULT_SOURCE: Final = "github"
 #: Why config refuses a workspace with no `tracker` source that reads: the overseer reads the tracker no longer, so it
 #: could do nothing with a ticket no source observes (DESIGN §30, §39).
@@ -2096,7 +2096,7 @@ SPECS: Final[dict[str, KeySpec]] = {
     for section, model in SECTIONS.items()
     for key, field in model.model_fields.items()
 }
-# Sections whose tables are named by the operator, such as `[chores.build-health]`: one key each, the whole section.
+#: Sections whose tables are named by the operator, such as `[chores.build-health]`: one key each, the whole section.
 TABLE_SECTIONS: Final = ("chores",)
 SPECS.update({name: _spec(name, Config.model_fields[name]) for name in TABLE_SECTIONS})
 

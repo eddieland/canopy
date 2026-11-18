@@ -30,8 +30,8 @@ DEPLOY: Final = "ses_op_deploy"
 #: The subagent run 41's worker ran.
 EXPLORE: Final = "ses_mock41_explore"
 
-# The sessions outside canopy: id, the session it ran for, title, directory, minutes after T0 it started and was last
-# updated, what it cost, and whether the runtime archived it.
+#: The sessions outside canopy: id, the session it ran for, title, directory, minutes after T0 it started and was last
+#: updated, what it cost, and whether the runtime archived it.
 _OUTSIDE: Final[tuple[tuple[str, str | None, str, str, int, int, float, bool], ...]] = (
     (DEPLOY, None, "Why does the deploy script hang on staging?", "/home/op/acme/infra", -48, -9, 0.84, False),
     (

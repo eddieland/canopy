@@ -40,7 +40,7 @@ MAX_SNIPPET: Final = 400
 # What `snippet()` marks a word found with: characters a snippet's text never holds, since every one that is not
 # printable is dropped first.
 _START, _END = "\x01", "\x02"
-# A message's row, found when its title and text hold every word between them and its text holds one.
+#: A message's row, found when its title and text hold every word between them and its text holds one.
 _MESSAGE_MATCH: Final = "{cols} : ({every}) AND {text} : ({any})"
 
 

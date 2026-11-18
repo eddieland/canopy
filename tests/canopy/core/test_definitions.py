@@ -259,7 +259,7 @@ def test_with_rebase_workers_may_push_with_a_lease_and_no_other_force(canopy_env
         assert not _allowed(rules, refused), refused
 
 
-# Each agent whose temperature is rendered from config, with its key in `[runtime]`.
+#: Each agent whose temperature is rendered from config, with its key in `[runtime]`.
 TEMPERATURES: Final = [
     ("canopy-reviewer", "review_temperature"),
     ("canopy-overseer", "overseer_temperature"),

@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
 OBJECTS_ENV: Final = "CANOPY_GIT_OBJECTS"
 _GIT_TIMEOUT_SECONDS: Final = 300
-# A worktree's own refs, kept in its own directory beside HEAD. Every other ref is shared, which a sandbox denies.
+#: A worktree's own refs, kept in its own directory beside HEAD. Every other ref is shared, which a sandbox denies.
 _OWN_REFS: Final = ("refs/worktree", "refs/bisect", "refs/rewritten")
 _PSEUDO_REFS: Final = ("ORIG_HEAD", "FETCH_HEAD")
 

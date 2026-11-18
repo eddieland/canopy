@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
     from canopy.core.config import Config
 
-# The KIND `canopy grant` takes for a PR.
+#: The KIND `canopy grant` takes for a PR.
 KIND: Final = "review"
 
 

@@ -37,8 +37,8 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 TICKS_DIR: Final = "ticks"
-# A file under the run directories that no journal row names goes only once it is this old: a review run writes its
-# prompt before its row (DESIGN §26).
+#: A file under the run directories that no journal row names goes only once it is this old: a review run writes its
+#: prompt before its row (DESIGN §26).
 UNRECORDED_AGE: Final = timedelta(hours=1)
 KIB: Final = 1024
 MIB: Final = KIB * KIB
@@ -52,7 +52,7 @@ type RowTable = Literal[
     "observed_check_runs",
     "observed_status_runs",
 ]
-# The bytes of each row's text, in each table a pass removes rows of: what it holds, not the pages it fills.
+#: The bytes of each row's text, in each table a pass removes rows of: what it holds, not the pages it fills.
 _DECISION_BYTES: Final = sql.frag(
     "length(CAST(action AS BLOB)) + length(CAST(rationale AS BLOB)) + length(CAST(created_at AS BLOB)) + "
     "coalesce(length(CAST(ticket_key AS BLOB)), 0) + coalesce(length(CAST(repo AS BLOB)), 0) + "

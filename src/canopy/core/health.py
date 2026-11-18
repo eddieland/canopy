@@ -26,18 +26,19 @@ if TYPE_CHECKING:
     from canopy.core.config import Config
     from canopy.core.spend import Kind
 
-# The newest failures a report lists, across every kind.
+#: The newest failures a report lists, across every kind.
 FAILURES: Final = 20
-# What a failure's note is cut to: enough to tell one cause from another, which `canopy show` and the web UI give whole.
+#: What a failure's note is cut to: enough to tell one cause from another, which `canopy show` and the web UI give
+#: whole.
 NOTE_LIMIT: Final = 300
 REFUSED: Final = "refused:"
 #: The asks a refusal lists of what its guard refused, the most often refused first.
 ASKS: Final = 5
 
 
-# The statuses each kind of run ends in when it did not do what it was started for. A worker that asked a question
-# (`blocked`) or that the operator stopped did, as did a tick that closed `ok`. A plan run (§25), an old triage before
-# a plan among them, is a run of the `runs` table, and fails as a worker does.
+#: The statuses each kind of run ends in when it did not do what it was started for. A worker that asked a question
+#: (`blocked`) or that the operator stopped did, as did a tick that closed `ok`. A plan run (§25), an old triage before
+#: a plan among them, is a run of the `runs` table, and fails as a worker does.
 _WORKER_FAILED: Final = frozenset(
     {RunStatus.FAILED, RunStatus.UNKNOWN, RunStatus.UNPUSHED, RunStatus.CRASHED, RunStatus.TIMEOUT},
 )
@@ -50,10 +51,10 @@ _FAILED: Final[dict[Kind, frozenset[str]]] = {
     # A task's run fails as a worker's does (DESIGN §36).
     "tasks": _WORKER_FAILED,
 }
-# Each kind's runs as one shape: its id, what it was (a tick's `live` or `dry run`, a run's kind, a chore's name, or
-# `review`), its status, when it started and ended, what it was about, its note, and its cost. A plan run is a row of
-# `runs`, a kind of its own, an old triage among them, as `canopy spend` counts them. The tables are fixed, never input,
-# and each is built from literal SQL (D125).
+#: Each kind's runs as one shape: its id, what it was (a tick's `live` or `dry run`, a run's kind, a chore's name, or
+#: `review`), its status, when it started and ended, what it was about, its note, and its cost. A plan run is a row of
+#: `runs`, a kind of its own, an old triage among them, as `canopy spend` counts them. The tables are fixed, never
+#: input, and each is built from literal SQL (D125).
 _RUN_ROWS: Final = sql.select(
     "id, kind AS what, status, started_at, ended_at, ticket_key AS subject, result_json AS note, cost_usd",
 ).from_("runs")
@@ -79,7 +80,7 @@ _ROWS: Final[Mapping[Kind, sql.Select]] = {
 #: What each band of `Bins` holds: a run whose length, over its kind's limit, is under the first, then the next; a run
 #: at or past its limit is over it.
 BANDS: Final = (0.25, 0.5, 0.75, 1.0)
-# A tick that ran no overseer has no timeout of its own.
+#: A tick that ran no overseer has no timeout of its own.
 _NO_OVERSEER: Final = "no overseer"
 
 

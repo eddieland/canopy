@@ -34,7 +34,7 @@ _SEARCH_BOX: Final = """\
 6\t}
 """
 
-# Shortened from what canopy renders, keeping its shape.
+#: Shortened from what canopy renders, keeping its shape.
 _PROMPT_39: Final = """\
 # canopy worker: implement
 
@@ -106,7 +106,7 @@ This is review 2 of at most 2 of this PR.
 
 The first review found a stale response could replace a newer one; check the abort.
 """
-# Run 40's setup command, as `_run` writes it before the worker starts (DESIGN §8), and its runtime's stderr.
+#: Run 40's setup command, as `_run` writes it before the worker starts (DESIGN §8), and its runtime's stderr.
 _SETUP_40: Final = """\
 --- setup web stdout ---
 Lockfile is up to date, resolution step is skipped

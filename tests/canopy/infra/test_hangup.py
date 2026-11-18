@@ -10,8 +10,8 @@ from typing import Final
 
 from canopy.infra import procs
 
-# The child takes a pseudo-terminal as its controlling terminal, then hangs it up by closing the end a terminal emulator
-# would hold. SIGHUP is ignored so the child lives to print what it saw.
+#: The child takes a pseudo-terminal as its controlling terminal, then hangs it up by closing the end a terminal
+#: emulator would hold. SIGHUP is ignored so the child lives to print what it saw.
 _HANG_UP: Final = """
 import fcntl, os, pty, signal, termios
 from canopy.infra import hangup
@@ -25,7 +25,7 @@ with hangup.watch() as hung_up:
     print(before, hung_up())
 """
 
-# SIGHUP in the loop, with the terminal said to have hung up or not.
+#: SIGHUP in the loop, with the terminal said to have hung up or not.
 _LOOP: Final = """
 import os, signal
 from canopy.loop import repeat, reread

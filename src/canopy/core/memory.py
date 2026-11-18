@@ -30,53 +30,53 @@ from canopy.infra import logs
 if TYPE_CHECKING:
     from canopy.core.config import Config, Memory
 
-# What each tier is called wherever memory shows: `memory.ticket_notes` and `memory.proposals`, whose lessons are what
-# a run reads.
+#: What each tier is called wherever memory shows: `memory.ticket_notes` and `memory.proposals`, whose lessons are what
+#: a run reads.
 NOTES_TIER: Final = "ticket notes"
 LESSONS_TIER: Final = "lessons"
-# The kinds whose prompts carry a ticket's notes and the whole memory contract; a review and a chore get no memory, and
-# a plan and a feedback plan hear lessons and may cite them, but write none: a planner pushes nothing a merge can check
-# (DESIGN §28).
+#: The kinds whose prompts carry a ticket's notes and the whole memory contract; a review and a chore get no memory, and
+#: a plan and a feedback plan hear lessons and may cite them, but write none: a planner pushes nothing a merge can check
+#: (DESIGN §28).
 NOTE_KINDS: Final = frozenset({RunKind.IMPLEMENT, RunKind.RESUME})
 LESSON_KINDS: Final = frozenset({*NOTE_KINDS, RunKind.PLAN, RunKind.FEEDBACK_PLAN})
-# Bounds on what a run may write (DESIGN §28, Writing).
+#: Bounds on what a run may write (DESIGN §28, Writing).
 MAX_NOTE_CHARS: Final = 400
 MAX_NOTES_PER_RUN: Final = 5
-# The ticket's notes in a prompt, in UTF-8 bytes; past it the least recently used are left out of the prompt.
+#: The ticket's notes in a prompt, in UTF-8 bytes; past it the least recently used are left out of the prompt.
 MAX_TICKET_DIGEST: Final = 3 * 1024
 MAX_PROPOSAL_CHARS: Final = 600
-# Fewer than notes', so one run cannot fill the queue: past `MAX_PENDING` pending, a new proposal is refused.
+#: Fewer than notes', so one run cannot fill the queue: past `MAX_PENDING` pending, a new proposal is refused.
 MAX_PROPOSALS_PER_RUN: Final = 3
 MAX_PENDING: Final = 20
-# A proposal nobody reviews expires; a lesson comes up for review this long after it was promoted or last used.
+#: A proposal nobody reviews expires; a lesson comes up for review this long after it was promoted or last used.
 PROPOSAL_DAYS: Final = 14
 REVIEW_DAYS: Final = 90
-# The lessons in a prompt, in UTF-8 bytes; past it the rest are left out, in key order, and counted. Room for a dozen
-# lessons at `MAX_PROPOSAL_CHARS`, twice that at a usual length: they are the operator's own words, so a lesson left out
-# is one the operator promoted for nothing.
+#: The lessons in a prompt, in UTF-8 bytes; past it the rest are left out, in key order, and counted. Room for a dozen
+#: lessons at `MAX_PROPOSAL_CHARS`, twice that at a usual length: they are the operator's own words, so a lesson left
+#: out is one the operator promoted for nothing.
 MAX_LESSONS_DIGEST: Final = 8 * 1024
-# The runs a memory names as having relied on it, the latest first; its use count counts every one.
+#: The runs a memory names as having relied on it, the latest first; its use count counts every one.
 USED_BY_SHOWN: Final = 5
-# The memories `reads` asks of the journal at once, well under SQLite's limit on a statement's parameters.
+#: The memories `reads` asks of the journal at once, well under SQLite's limit on a statement's parameters.
 _READS_BATCH: Final = 500
-# The most proposals or lessons no longer pending or in force a history lists: the latest to leave, enough to look back
-# a few weeks without sending a busy workspace's whole past.
+#: The most proposals or lessons no longer pending or in force a history lists: the latest to leave, enough to look back
+#: a few weeks without sending a busy workspace's whole past.
 HISTORY_SHOWN: Final = 50
-# The attention reasons memory raises (DESIGN §14, §28): the harness's, and the operator's alone.
+#: The attention reasons memory raises (DESIGN §14, §28): the harness's, and the operator's alone.
 PROPOSAL_REASON: Final = "memory_proposal"
 REVIEW_REASON: Final = "lesson_review"
 WRONG_REASON: Final = "lesson_wrong"
 HARNESS_REASONS: Final = frozenset({PROPOSAL_REASON, REVIEW_REASON, WRONG_REASON})
-# The placeholders a prompt carries memory in (`prompts.MEMORY_PARTS`).
+#: The placeholders a prompt carries memory in (`prompts.MEMORY_PARTS`).
 TICKET_MEMORY: Final = "TICKET_MEMORY"
 WORKSPACE_LESSONS: Final = "WORKSPACE_LESSONS"
-# What a run is told to run to search its memory past its digest (`canopy memory search`).
+#: What a run is told to run to search its memory past its digest (`canopy memory search`).
 SEARCH_COMMAND: Final = "canopy memory search WORDS"
 _NOTES_HEADING: Final = "## Notes from earlier runs"
 _LESSONS_HEADING: Final = "## Lessons from the operator"
-# Every memory's whole row, for each reader to finish.
+#: Every memory's whole row, for each reader to finish.
 _MEMORIES: Final = records.select(records.Memory)
-# The step of a walk back through `supersedes` from the ids in `back`.
+#: The step of a walk back through `supersedes` from the ids in `back`.
 _EARLIER: Final = (
     sql.select("m.supersedes").from_("memories m").join("back b ON m.id = b.id").where("m.supersedes IS NOT NULL")
 )

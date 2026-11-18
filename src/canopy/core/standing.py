@@ -46,14 +46,14 @@ KEEP_VERSIONS: Final = 10
 #: The state directory's directory of versions, one directory in it for each agent.
 VERSIONS_DIR: Final = "instructions"
 
-# Read by name from the request, so each guard's words are the operator's to act on.
+#: Read by name from the request, so each guard's words are the operator's to act on.
 CONFIGURED: Final = "configured"
 TOO_LARGE: Final = "too_large"
 STALE: Final = "stale"
 UNSAFE_FILE: Final = "unsafe_file"
 NO_VERSION: Final = "no_version"
 
-# How much of a file each read takes.
+#: How much of a file each read takes.
 _CHUNK: Final = 64 * 1024
 
 #: A version's name: when it was kept, to the microsecond, in UTC, so names sort as times do; then what made it.
@@ -62,7 +62,8 @@ _STAMP: Final = "%Y%m%dT%H%M%S%fZ"
 #: counted, or pruned.
 _VERSION_NAME: Final = re.compile(r"[0-9]{8}T[0-9]{12}Z-(?:edit|delete)\.md")
 
-# The most of a file the page is shown: past the bound, so the operator can trim one from the page, but not without end.
+#: The most of a file the page is shown: past the bound, so the operator can trim one from the page, but not without
+#: end.
 _MAX_SHOWN: Final = 16 * MAX_BYTES
 
 #: What made a version: a save over the file, or its deletion.

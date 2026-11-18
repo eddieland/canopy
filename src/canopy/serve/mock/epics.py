@@ -38,7 +38,7 @@ PLANNING: Final = 3
 #: The epic the operator stopped before any plan run of it started.
 STOPPED: Final = 4
 
-# The operator's words, as typed: a paragraph is one line.
+#: The operator's words, as typed: a paragraph is one line.
 _BILLING: Final = (
     "Move billing to the v2 API everywhere it is called, web and mobile both, and retire v1 once nothing reads it.\n\n"
     "v2 is down for a minute or two most weeks, so a call that fails should wait and try again rather than show the "
@@ -231,7 +231,7 @@ The mobile app's order history reads from a local copy when it is offline, and t
 - Placing an order offline.
 """
 
-# ABC-103's plan, for B1, written against epic 1's approved plan.
+#: ABC-103's plan, for B1, written against epic 1's approved plan.
 _MEMBER_PLAN: Final = """\
 # A v2 billing client in web
 

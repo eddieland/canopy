@@ -33,7 +33,7 @@ from tests.canopy.scenario_helpers import Scenario, dispatches
 from tests.conftest import TRACKER_SOURCE, CanopyEnv, GitPool
 
 TEXT: Final = "# Plan for PROJ-1\n\n## repo\n\nAdd the button.\n"
-# `canopy plan KEY`, asking for a plan, and its two flags.
+#: `canopy plan KEY`, asking for a plan, and its two flags.
 VERBS: Final[tuple[tuple[str, ...], ...]] = ((), ("--skip",), ("--approve",))
 UNPLANNED: Final = "PROJ-1 needs a plan before its implement, and {}; dispatch `plan` or wait for it"
 #: The workspace's policy, asking for a plan the operator approves before any `implement` (DESIGN §25).

@@ -64,8 +64,8 @@ if TYPE_CHECKING:
     from canopy.core import records
     from canopy.core.context import Context
 
-# Where a ticket key would be, an item about a chore names it so, and one about a PR with no ticket. A ticket key has
-# no colon (DESIGN §17), so neither can equal one.
+#: Where a ticket key would be, an item about a chore names it so, and one about a PR with no ticket. A ticket key has
+#: no colon (DESIGN §17), so neither can equal one.
 CHORE_PREFIX: Final = "chore:"
 PR_PREFIX: Final = "pr:"
 #: Where a ticket key would be, an item about a one-off task names it so (DESIGN §36).
@@ -99,7 +99,7 @@ def run_reason(status: RunStatus) -> str | None:
             assert_never(status)
 
 
-# A tick that found `canopy` not working for the overseer closes with this status and raises this item (DESIGN §6).
+#: A tick that found `canopy` not working for the overseer closes with this status and raises this item (DESIGN §6).
 UNAVAILABLE: Final[str] = TickStatus.CANOPY_UNAVAILABLE
 #: A tick that found too little free disk closes with this status and raises this item (DESIGN §6).
 DISK_LOW: Final[str] = TickStatus.DISK_LOW
@@ -174,8 +174,8 @@ ALWAYS_HARNESS: Final[frozenset[str]] = frozenset(
 )
 #: What the harness records itself, so the overseer does not, and the state block does not list to it.
 HARNESS_REASONS: Final[frozenset[str]] = ALWAYS_HARNESS | FROM_CAUSES
-# The window the list reads: how far back to look when working out how long an item has been open. Garbage
-# collection keeps every row of a tick inside it (DESIGN §26).
+#: The window the list reads: how far back to look when working out how long an item has been open. Garbage
+#: collection keeps every row of a tick inside it (DESIGN §26).
 HISTORY_TICKS: Final = 1000
 FILE_NAME: Final = "attention.md"
 # Kept importable from here: tests and the CLI name items through this module.
@@ -207,7 +207,7 @@ def decided_about(decision: records.Decision) -> str:
     return decision.ticket_key or decision.repo or "-"
 
 
-# An item is its ticket, its reason, and its repository if it has one.
+#: An item is its ticket, its reason, and its repository if it has one.
 type _ItemId = tuple[str | None, str, str | None]
 
 

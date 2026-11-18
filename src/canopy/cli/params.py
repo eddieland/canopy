@@ -129,7 +129,7 @@ def chore_names() -> list[str]:
 TICKET_KEY: Final = PatternType("KEY", config.KEY_RE, "ticket key")
 REPO: Final = PatternType("NAME", config.REPO_NAME_RE, "repository name", repo_names)
 CHORE: Final = PatternType("NAME", config.CHORE_NAME_RE, "chore name", chore_names)
-# One of the example chores canopy ships, which `canopy chore install` sets up.
+#: One of the example chores canopy ships, which `canopy chore install` sets up.
 EXAMPLE_CHORE: Final = PatternType("NAME", config.CHORE_NAME_RE, "chore name", install.available)
 PERSONA: Final = PatternType("NAME", config.PERSONA_NAME_RE, "persona name")
 EVAL_CASE: Final = PatternType("NAME", config.EVAL_CASE_RE, "eval case name")

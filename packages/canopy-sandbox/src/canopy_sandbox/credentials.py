@@ -37,16 +37,16 @@ from typing import TYPE_CHECKING, Final, TypeGuard
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
-# OpenCode's data directory under XDG_DATA_HOME, and the files in it that hold its logins.
+#: OpenCode's data directory under XDG_DATA_HOME, and the files in it that hold its logins.
 RUNTIME: Final = "opencode"
 AUTH: Final = "auth.json"
 MCP_AUTH: Final = "mcp-auth.json"
 FILES: Final = (AUTH, MCP_AUTH)
-# More than any login file holds, and less than a run could make the host read.
+#: More than any login file holds, and less than a run could make the host read.
 MAX_FILE: Final = 1 << 20
 MAX_TOKEN: Final = 1 << 16
-# What `share` and `collect` hold while they read and write, in the directory that holds every role's data directory,
-# which no run can write.
+#: What `share` and `collect` hold while they read and write, in the directory that holds every role's data directory,
+#: which no run can write.
 LOCK: Final = "credentials.lock"
 DIR_FLAGS: Final = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 

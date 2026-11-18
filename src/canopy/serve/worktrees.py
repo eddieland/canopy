@@ -31,9 +31,9 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
     from canopy.serve.backend import Backend
 
-# At most this many pools are read at once.
+#: At most this many pools are read at once.
 READERS: Final = 8
-# How many of a slot's processes the page lists; a build can start hundreds.
+#: How many of a slot's processes the page lists; a build can start hundreds.
 PROCESSES: Final = 20
 _STATES: Final[dict[str, WorktreeState]] = {
     AVAILABLE: "idle",
@@ -48,15 +48,15 @@ _STALE: Final = (
     "{name}` now"
 )
 _SYNC: Final = "held while `canopy workspace sync` makes this pool's slots"
-# The operator's own checkout of a ticket's branch (DESIGN §18): only they close it.
+#: The operator's own checkout of a ticket's branch (DESIGN §18): only they close it.
 _DESK: Final = "held by your desk for {key}, on its branch; `canopy desk {key} --close` returns it"
-# What a dirty slot blocks and what clears it (DESIGN §18, What a pool guarantees). No canopy command clears one: its
-# changes may be someone's work, so the operator keeps or discards them.
+#: What a dirty slot blocks and what clears it (DESIGN §18, What a pool guarantees). No canopy command clears one: its
+#: changes may be someone's work, so the operator keeps or discards them.
 _DIRTY: Final = (
     "never reused while it has changes, and counts as busy, so a full pool refuses a lease: keep what you need of "
     "them, then discard them in the slot"
 )
-# What holds a slot a failed seeding left, and what frees it (DESIGN §18): only the operator, once they have looked.
+#: What holds a slot a failed seeding left, and what frees it (DESIGN §18): only the operator, once they have looked.
 _QUARANTINED: Final = (
     "seeding found a file already in this slot, so the pool holds it and counts it as busy: remove the file it "
     "collided with, then run `canopy workspace release {repo} {name}`"

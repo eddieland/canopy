@@ -106,11 +106,11 @@ def _close_epic_run(ctx: Context, run: records.EpicRun) -> ending.Ending:
 class Reloading:
     """What asking the loop to read its config again found, compared with the config it runs on now."""
 
-    # Keys whose values differ, as `section.key`, and `workspace map` for the workspace file's repositories.
+    #: Keys whose values differ, as `section.key`, and `workspace map` for the workspace file's repositories.
     changed: tuple[str, ...]
-    # The changed keys that take effect only when the loop restarts.
+    #: The changed keys that take effect only when the loop restarts.
     restart: tuple[str, ...]
-    # A tick is running: it finishes on the config it started with, and the reload follows.
+    #: A tick is running: it finishes on the config it started with, and the reload follows.
     after_tick: bool
 
 
@@ -118,17 +118,17 @@ class Reloading:
 class Limit:
     """A limit `canopy grant` raises: a ticket's unit's runs of one kind, or a PR's review runs (DESIGN §22)."""
 
-    # `implement` or `resume` for a unit's; `review` for a PR's.
+    #: `implement` or `resume` for a unit's; `review` for a PR's.
     kind: str
-    # The unit's repository; a PR's, when it is a unit's PR.
+    #: The unit's repository; a PR's, when it is a unit's PR.
     repo: str | None
-    # The PR, for a review limit.
+    #: The PR, for a review limit.
     pr_url: str | None
-    # Its runs of the kind, however they ended: every one counts (D030).
+    #: Its runs of the kind, however they ended: every one counts (D030).
     runs: int
-    # The runs the operator granted it past the policy's limit.
+    #: The runs the operator granted it past the policy's limit.
     granted: int
-    # The policy's limit plus `granted`.
+    #: The policy's limit plus `granted`.
     limit: int
 
 
@@ -147,43 +147,44 @@ class Backend:
 
     config: Config
     workspace: Workspace
-    # The attention list as `canopy status` shows it, with each running run's question unanswered (DESIGN §41).
+    #: The attention list as `canopy status` shows it, with each running run's question unanswered (DESIGN §41).
     attention: Callable[[Context], list[Item]]
-    # End a running run as `canopy stop --now` does; False if it had already ended.
+    #: End a running run as `canopy stop --now` does; False if it had already ended.
     end_run: Callable[[Context, records.Run], bool]
-    # Ask the loop to read its config again, as SIGHUP does. Raises ConfigError, naming the file, when it does not load.
+    #: Ask the loop to read its config again, as SIGHUP does. Raises ConfigError, naming the file, when it does not
+    #: load.
     reload: Callable[[Context], Reloading]
-    # Ask the loop for a tick now, as `t` at its terminal does. Returns whether a tick is running, which the one asked
-    # for follows.
+    #: Ask the loop for a tick now, as `t` at its terminal does. Returns whether a tick is running, which the one asked
+    #: for follows.
     tick_now: Callable[[], bool]
-    # The ticket's units' attempt limits, each kind of each unit it has had runs in, as `canopy grant` raises them.
+    #: The ticket's units' attempt limits, each kind of each unit it has had runs in, as `canopy grant` raises them.
     limits: Callable[[Context, str], list[Limit]]
-    # The PR's review limit, or None for a PR canopy has never reviewed.
+    #: The PR's review limit, or None for a PR canopy has never reviewed.
     review_limit: Callable[[Context, str], Limit | None]
-    # `canopy grant REF KIND [--repo NAME]` for one more run: a ticket's unit, or with `review` a PR. Raises Refused
-    # with the CLI's guards.
+    #: `canopy grant REF KIND [--repo NAME]` for one more run: a ticket's unit, or with `review` a PR. Raises Refused
+    #: with the CLI's guards.
     grant: Callable[[Context, Ref, str, str | None], Granted]
-    # `canopy chore try NAME`, recorded, its run going on in a process of its own: the new chore run's id. Raises
-    # Refused: `running` while a run of the chore is running, `not_started` when it could not start.
+    #: `canopy chore try NAME`, recorded, its run going on in a process of its own: the new chore run's id. Raises
+    #: Refused: `running` while a run of the chore is running, `not_started` when it could not start.
     try_chore: Callable[[Context, str], int]
-    # Fixture data, shown as `mock` in the UI's header.
+    #: Fixture data, shown as `mock` in the UI's header.
     mock: bool = False
-    # A repository's pool's slots, for the worktrees page: its `status`. Called on a thread per pool, each with a
-    # Context of its own from `open`.
+    #: A repository's pool's slots, for the worktrees page: its `status`. Called on a thread per pool, each with a
+    #: Context of its own from `open`.
     slots: Callable[[Context, str], Sequence[pools.Slot]] = field(default=_status)
-    # The models the runtime lists to run an agent on, and each one's variants, for a ticket's model menus to
-    # choose from and for a choice of one to be looked up in: what `canopy models` prints.
+    #: The models the runtime lists to run an agent on, and each one's variants, for a ticket's model menus to
+    #: choose from and for a choice of one to be looked up in: what `canopy models` prints.
     models: Callable[[Context], ModelList] = field(default=_models)
     #: Every skill the runtime finds where canopy's agents start, each with its file and text, for the skills page:
     #: one ask of the runtime. The mock's are made up, as it has no runtime to ask.
     skills: Callable[[Context], Skills] = field(default=_skills)
-    # Now, for windows such as the spend figure's: the mock's is fixed, as its journal's times are.
+    #: Now, for windows such as the spend figure's: the mock's is fixed, as its journal's times are.
     clock: Callable[[], datetime] = field(default=lambda: datetime.now(UTC))
-    # Rewrite `attention.md` after a write that changes the list without a tick, such as a dismissal. The mock's
-    # writes nothing.
+    #: Rewrite `attention.md` after a write that changes the list without a tick, such as a dismissal. The mock's
+    #: writes nothing.
     write_attention: Callable[[Context], object] = field(default=lambda _ctx: None)
-    # The process runner each Context gets. The mock's answers for canopy's GitHub programs from its own journal, so a
-    # draft sent from the mock posts nowhere.
+    #: The process runner each Context gets. The mock's answers for canopy's GitHub programs from its own journal, so a
+    #: draft sent from the mock posts nowhere.
     runner: Callable[[], procs.Runner] = field(default=procs.SubprocessRunner)
     #: End a stopped task's running run as `canopy stop task:N --now` does, and say how it ended. The loop passes
     #: `runs.task_run.stop_now`; the default, the mock's, closes the run's row and kills nothing.
@@ -200,9 +201,9 @@ class Backend:
     #: Close a desk as `canopy desk KEY --close` does, losing its work when told to discard it: what it would lose,
     #: when it kept the desk for it. Raises CheckoutError when a pool could not return a slot.
     close_desk: Callable[[Context, checkouts.Desk, bool], list[checkouts.Unsafe]] = field(default=_close_desk)
-    # The user config the loop read, under the private file the settings page edits (config_edit.py).
+    #: The user config the loop read, under the private file the settings page edits (config_edit.py).
     user_file: Path = field(default_factory=config.user_config_path)
-    # `canopy loop --every`'s minutes, which set the pace whatever `loop.interval_minutes` says, or None.
+    #: `canopy loop --every`'s minutes, which set the pace whatever `loop.interval_minutes` says, or None.
     every: int | None = None
     #: The machine the loop runs on, for the system resources page: read from the operating system. The mock's is a
     #: fixed reading, so its pages show the same machine every time and the demo shows none of its host's.
@@ -220,14 +221,14 @@ class Backend:
     #: Held while a recording is transcribed (dictation.py), so a second is refused rather than started beside it: a
     #: speech model is the heaviest thing the server runs, and the operator records one field at a time.
     dictating: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False, compare=False)
-    # Held while `config` and `workspace` are read or replaced, so a request never gets one of each.
+    #: Held while `config` and `workspace` are read or replaced, so a request never gets one of each.
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False, compare=False)
     #: Held while the model list is looked up or read, so requests that find none kept start one runtime, not one each.
     _models_lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False, compare=False)
     #: The model list last read, with what it was read on and when; None before the first and after one that failed.
     _listed: _Listed | None = field(default=None, init=False, repr=False, compare=False)
-    # When chores' findings started, as the last read found them, handed to every Context opened, so a request or a
-    # stream reads back only to there rather than through the whole history of a finding open for months.
+    #: When chores' findings started, as the last read found them, handed to every Context opened, so a request or a
+    #: stream reads back only to there rather than through the whole history of a finding open for months.
     _finding_starts: chore_view.FindingStarts = field(
         default_factory=chore_view.FindingStarts,
         init=False,

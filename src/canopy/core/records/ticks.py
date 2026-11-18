@@ -47,20 +47,20 @@ class Tick(Row):
     tokens_reasoning: int | None
     tokens_cache_read: int | None
     tokens_cache_write: int | None
-    # The newest message, and the time, the tick had read up to; None before it read the journal.
+    #: The newest message, and the time, the tick had read up to; None before it read the journal.
     message_id: int | None
     read_at: str | None
-    # Set by `canopy loop` alone (`db.set_tick_loop`): whether the tick was idle, and what started it.
+    #: Set by `canopy loop` alone (`db.set_tick_loop`): whether the tick was idle, and what started it.
     idle: bool | None
     woken_by: str | None
     tokens_peak_context: int | None
-    # Whether the tick's state block told the overseer to run the tracker query; None on a tick from before that was
-    # recorded, each of which was told to.
+    #: Whether the tick's state block told the overseer to run the tracker query; None on a tick from before that was
+    #: recorded, each of which was told to.
     query_due: bool | None
     tokens_first_call: int | None
     tokens_first_cache_write: int | None
     definitions_digest: str | None
-    # The version of canopy that ran the tick; None on a tick from before that was recorded.
+    #: The version of canopy that ran the tick; None on a tick from before that was recorded.
     canopy_version: str | None
     #: Whether it ran its overseer: False when halted or when nothing was left to it (DESIGN §39); None on a tick from
     #: before that was recorded, or one that ended before it got that far.

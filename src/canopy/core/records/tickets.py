@@ -25,13 +25,13 @@ class Ticket(Row):
     TABLE: ClassVar[LiteralString] = "tickets"
 
     key: str
-    # The workspace root.
+    #: The workspace root.
     repo: str
     first_seen_at: str
     last_seen_at: str
-    # The ticket's own last derived phase, for display only; never read as truth.
+    #: The ticket's own last derived phase, for display only; never read as truth.
     phase: Phase | None
-    # Fixed by its first implement, and the same in every unit.
+    #: Fixed by its first implement, and the same in every unit.
     branch: str | None
     #: The comment cursor of a ticket no `tracker` source observed, the tracker's comment id: unread since config
     #: required one (DESIGN §39), and kept, since no migration drops a column.
@@ -41,12 +41,12 @@ class Ticket(Row):
     last_message_id: int | None
     #: The mirror cursor, unread since M37 retired the mirror (DESIGN §35); kept, since no migration drops a column.
     last_mirrored_id: str | None
-    # When the operator last forgot the ticket's work, and its newest run and message then (DESIGN §22).
+    #: When the operator last forgot the ticket's work, and its newest run and message then (DESIGN §22).
     forgotten_at: str | None
     forgotten_run_id: int | None
     forgotten_message_id: int | None
     title: str | None
-    # The ticket's own plan setting, overriding `policy.plan`; None when unset (DESIGN §25).
+    #: The ticket's own plan setting, overriding `policy.plan`; None when unset (DESIGN §25).
     plan_setting: PlanSetting | None
     #: When it last changed: made, or its phase, title, done flag, plan setting, or a unit's phase or PR set anew.
     changed_at: str

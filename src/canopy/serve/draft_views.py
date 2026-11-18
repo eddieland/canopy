@@ -24,7 +24,7 @@ from canopy.serve.schema.draft import (
 if TYPE_CHECKING:
     import sqlite3
 
-# How many of a ticket's own drafts its page carries, the newest runs' first.
+#: How many of a ticket's own drafts its page carries, the newest runs' first.
 TICKET_DRAFTS: Final = 10
 
 

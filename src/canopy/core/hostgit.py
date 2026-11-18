@@ -36,7 +36,7 @@ from canopy.infra import procs
 
 #: The git executable, which no other module names (`argv` is how the harness runs it).
 PROGRAM: Final = "git"
-# Flags before the subcommand: these override any repository, global, or system config.
+#: Flags before the subcommand: these override any repository, global, or system config.
 SAFE_FLAGS: Final = (
     "-c",
     "core.hooksPath=/dev/null",
@@ -47,17 +47,17 @@ SAFE_FLAGS: Final = (
     "-c",
     "protocol.ext.allow=never",
 )
-# git's automatic maintenance, as config keys and values: `maintenance.auto` for what a fetch or a commit starts, and
-# `gc.auto` for `gc --auto`, which older git runs instead. Run in the background on a pool's shared git directory, it
-# packs refs and prunes while other slots' runs use them; on CI it pruned a worktree `git worktree add` had not yet
-# locked. Maintenance an operator runs on purpose is unaffected.
+#: git's automatic maintenance, as config keys and values: `maintenance.auto` for what a fetch or a commit starts, and
+#: `gc.auto` for `gc --auto`, which older git runs instead. Run in the background on a pool's shared git directory, it
+#: packs refs and prunes while other slots' runs use them; on CI it pruned a worktree `git worktree add` had not yet
+#: locked. Maintenance an operator runs on purpose is unaffected.
 AUTO_MAINTENANCE_OFF: Final = (("maintenance.auto", "false"), ("gc.auto", "0"))
 _MAINTENANCE_FLAGS: Final = tuple(arg for key, value in AUTO_MAINTENANCE_OFF for arg in ("-c", f"{key}={value}"))
-# Never let git wait for credentials on a terminal nobody is watching.
+#: Never let git wait for credentials on a terminal nobody is watching.
 ENV: Final = {"GIT_TERMINAL_PROMPT": "0"}
 LINK: Final = ".git"
 COMMONDIR: Final = "commondir"
-# What `git worktree add` writes in `commondir`: the common directory is the one that holds `worktrees/<slot>/`.
+#: What `git worktree add` writes in `commondir`: the common directory is the one that holds `worktrees/<slot>/`.
 COMMONDIR_CONTENT: Final = b"../..\n"
 _LINK_PREFIX: Final = b"gitdir:"
 _LS_FILES_TIMEOUT_SECONDS: Final = 30

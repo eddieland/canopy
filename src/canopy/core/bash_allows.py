@@ -84,8 +84,8 @@ WEB_COMMANDS: Final = frozenset(
 #: runs hooks and configured commands.
 VCS_COMMANDS: Final = frozenset({"gh", "glab", "hub"})
 
-# The families of interpreters, refused with any version (`python3`, `python3.12`, `pip3`), and of canopy's own
-# programs, git's, and treehouse's, refused with any suffix (`canopy-post-github`, `git-receive-pack`).
+#: The families of interpreters, refused with any version (`python3`, `python3.12`, `pip3`), and of canopy's own
+#: programs, git's, and treehouse's, refused with any suffix (`canopy-post-github`, `git-receive-pack`).
 _INTERPRETERS_RE: Final = re.compile(r"(?:python|pypy|pip|perl|ruby|php|lua|node|nodejs|tclsh|wish)[0-9.]*")
 _LOOP_RE: Final = re.compile(r"(?:canopy|treehouse)(?:-.*)?")
 _GIT_RE: Final = re.compile(r"git(?:-.*)?")

@@ -28,7 +28,7 @@ from canopy.serve.schema.review import (
 TAG: Final = "pull requests"
 router = APIRouter(tags=[TAG])
 _log = logs.for_tick(None)
-# The kind a PR's grant is of, as `canopy grant URL review` names it.
+#: The kind a PR's grant is of, as `canopy grant URL review` names it.
 _REVIEW: Final = "review"
 
 PrUrl = Annotated[
@@ -40,7 +40,7 @@ PrUrl = Annotated[
     ),
 ]
 
-# The 422 a route answers for a URL that is not a plain https:// URL of at most 300 characters.
+#: The 422 a route answers for a URL that is not a plain https:// URL of at most 300 characters.
 _BAD_URL: Final = {422: {"model": ErrorResponse, "description": "Not a plain https:// URL of at most 300 characters."}}
 
 

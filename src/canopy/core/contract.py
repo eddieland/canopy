@@ -13,14 +13,14 @@ from typing import Final, cast
 
 from pydantic import AfterValidator, BaseModel, ValidationError
 
-# A PR's title, as a worker or a reviewer reports it: GitHub's own limit.
+#: A PR's title, as a worker or a reviewer reports it: GitHub's own limit.
 MAX_PR_TITLE: Final = 256
 #: How many closing brackets `last_line` adds to or drops from a result line that is not JSON: a slip's worth, so a
 #: line wrong in more than its closing is still no result.
 MAX_REPAIRS: Final = 3
 
 _CLOSERS: Final = {"{": "}", "[": "]"}
-# A JSON string, captured so that splitting a line on it keeps it.
+#: A JSON string, captured so that splitting a line on it keeps it.
 _STRING: Final = re.compile(r'("(?:[^"\\]|\\.)*")')
 
 

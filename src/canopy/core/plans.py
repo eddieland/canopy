@@ -42,32 +42,32 @@ if TYPE_CHECKING:
 
     from canopy.core.config import Policy
 
-# What a planner can write in one message and an operator can read before approving (DESIGN §25, The prompt).
+#: What a planner can write in one message and an operator can read before approving (DESIGN §25, The prompt).
 MAX_CHARS: Final = 100_000
 DIR_NAME: Final = "plans"
-# A copy of a plan in a run's working directory: in a worker's, the approved plan it follows, and in a plan run's desk,
-# the plan it replaces (DESIGN §25, Workers follow the plan). Written fresh for each run and removed before its slots
-# go back.
+#: A copy of a plan in a run's working directory: in a worker's, the approved plan it follows, and in a plan run's desk,
+#: the plan it replaces (DESIGN §25, Workers follow the plan). Written fresh for each run and removed before its slots
+#: go back.
 COPY: Final = ".canopy-plan.md"
 REPLACED: Final = COPY
-# The file a planner writes its plan to in its desk, the one file its definition lets it edit (DESIGN §25). A revision
-# starts with it holding the plan it replaces, as `REPLACED` does, so the planner edits that plan rather than writing it
-# again. `.agents/agents/canopy-planner.md` names it too.
+#: The file a planner writes its plan to in its desk, the one file its definition lets it edit (DESIGN §25). A revision
+#: starts with it holding the plan it replaces, as `REPLACED` does, so the planner edits that plan rather than writing
+#: it again. `.agents/agents/canopy-planner.md` names it too.
 WRITTEN: Final = ".canopy-new-plan.md"
 #: Why a revision's plan was not recorded when its planner left `WRITTEN` as canopy seeded it (`unrevised`).
 UNREVISED: Final = (
     f"the planner reported done, but left its {WRITTEN} as the plan it replaces, though the operator asked for "
     "changes; no plan was recorded"
 )
-# A plan's outline in a worker's prompt: its markdown headings outside fenced code, at most this many, each cut at
-# `MAX_HEADING` characters (DESIGN §25, Workers follow the plan).
+#: A plan's outline in a worker's prompt: its markdown headings outside fenced code, at most this many, each cut at
+#: `MAX_HEADING` characters (DESIGN §25, Workers follow the plan).
 MAX_OUTLINE: Final = 200
 MAX_HEADING: Final = 200
-# The most bytes `MAX_CHARS` characters of UTF-8 can take: one more and the file is over the bound however it decodes.
+#: The most bytes `MAX_CHARS` characters of UTF-8 can take: one more and the file is over the bound however it decodes.
 _MAX_BYTES: Final = 4 * MAX_CHARS
 _CHUNK: Final = 64 * 1024
 
-# CommonMark's: an ATX heading, and a fence's opening or closing marker, each indented at most three spaces.
+#: CommonMark's: an ATX heading, and a fence's opening or closing marker, each indented at most three spaces.
 _HEADING_RE: Final = re.compile(r"#{1,6}(?:[ \t]|$)")
 _FENCE_RE: Final = re.compile(r"(`{3,}|~{3,})")
 _MAX_INDENT: Final = 3
@@ -86,7 +86,7 @@ DRIFT_SEPARATOR: Final = ", "
 #: What of a ticket's text can change since its plan was approved, as the harness's warning names it (`ticket_changed`).
 type TicketPart = Literal["title", "description"]
 
-# Why a file is not a plan, as `canopy show` and the refusals say it.
+#: Why a file is not a plan, as `canopy show` and the refusals say it.
 type Problem = Literal["missing", "not a regular file", "unreadable", "not UTF-8", "empty", "over the bound"]
 
 

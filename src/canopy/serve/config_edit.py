@@ -45,7 +45,7 @@ if TYPE_CHECKING:
 type Value = int | bool | str | tuple[str, ...] | tuple[int, ...] | dict[str, int] | None
 type Source = Literal["private", "user", "workspace", "default"]
 
-# Read by name from the request, so each guard's words are the operator's to act on.
+#: Read by name from the request, so each guard's words are the operator's to act on.
 NOT_EDITABLE: Final = "not_editable"
 PAST_BOUND: Final = "past_bound"
 NOT_STRICTER: Final = "not_stricter"
@@ -60,12 +60,12 @@ class Editable:
     """A key the settings page may change, and how far."""
 
     name: str
-    # `limit`: raised or lowered, within `bound`. `stricter`: only toward stricter. `free`: set to anything the loader
-    # takes, for a key no value of which loosens a guard.
+    #: `limit`: raised or lowered, within `bound`. `stricter`: only toward stricter. `free`: set to anything the loader
+    #: takes, for a key no value of which loosens a guard.
     kind: Literal["limit", "stricter", "free"]
-    # A limit's loosest value from the page: a count's ceiling, or a pace's floor in minutes.
+    #: A limit's loosest value from the page: a count's ceiling, or a pace's floor in minutes.
     bound: int | None = None
-    # Which way loosens a limit: a count's higher spends more, a pace's lower does.
+    #: Which way loosens a limit: a count's higher spends more, a pace's lower does.
     looser: Literal["higher", "lower"] | None = None
     #: A stricter choice's values, loosest first: the page may move it only later in the list.
     choices: Sequence[str] = ()
@@ -90,9 +90,9 @@ def _choice(name: str, *choices: str) -> Editable:
     return Editable(name, "stricter", choices=choices)
 
 
-# In the order the page shows them. The bounds stop a stolen session from turning one operator's spend up without limit:
-# a raise within them outlives a new secret, a residual the page and the log show (TRUST_MODEL T8). They are set well
-# above what one machine runs today, so the page is for the operator's real changes and the file for the rest.
+#: In the order the page shows them. The bounds stop a stolen session from turning one operator's spend up without
+#: limit: a raise within them outlives a new secret, a residual the page and the log show (TRUST_MODEL T8). They are set
+#: well above what one machine runs today, so the page is for the operator's real changes and the file for the rest.
 EDITABLE: Final[tuple[Editable, ...]] = (
     _count("capacity.max_workers", 32),
     _count("capacity.max_chores", 16),
@@ -159,12 +159,12 @@ EDITABLE: Final[tuple[Editable, ...]] = (
     Editable("trust.commit_trailer", "stricter"),
 )
 BY_NAME: Final = {e.name: e for e in EDITABLE}
-# The file as it was before the latest save, beside it: `config.toml.bak`. None when the save made the file.
+#: The file as it was before the latest save, beside it: `config.toml.bak`. None when the save made the file.
 BACKUP_SUFFIX: Final = ".bak"
 REPO_SLOTS: Final = "capacity.repo_slots"
-# A private file the save makes: the operator's alone, as `config.load` requires of it.
+#: A private file the save makes: the operator's alone, as `config.load` requires of it.
 NEW_FILE_MODE: Final = 0o600
-# The trust switches, and the value each may move to from the page: the stricter one.
+#: The trust switches, and the value each may move to from the page: the stricter one.
 _STRICTER_BOOL: Final = {"trust.rebase": False, "trust.commit_trailer": True}
 
 

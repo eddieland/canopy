@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from canopy.infra import logs
 
 _GIT_TIMEOUT_SECONDS: Final = 300
-# The most commits a note names that lack one of canopy's marks; it counts the rest.
+#: The most commits a note names that lack one of canopy's marks; it counts the rest.
 _MAX_NAMED: Final = 5
 
 

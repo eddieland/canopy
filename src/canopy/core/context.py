@@ -14,7 +14,7 @@ from canopy.core.vocab import PoolKind
 from canopy.core.workspace import REPOS_DIR
 from canopy.infra import lock, logs, metrics, procs, resources, tracing
 
-# Held by every command that may start a detached run, so two cannot both pass a capacity check (DESIGN §8, §19).
+#: Held by every command that may start a detached run, so two cannot both pass a capacity check (DESIGN §8, §19).
 DISPATCH_LOCK: Final = "dispatch.lock"
 
 if TYPE_CHECKING:

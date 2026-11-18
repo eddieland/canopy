@@ -23,12 +23,12 @@ if TYPE_CHECKING:
     from canopy.core.config import Chore, Config
     from canopy.core.workspace import Workspace
 
-# Chore run statuses that raise `chore_failed`: the chore could not check, or left no usable result.
+#: Chore run statuses that raise `chore_failed`: the chore could not check, or left no usable result.
 FAILED: Final = frozenset(
     {ChoreRunStatus.FAILED, ChoreRunStatus.UNKNOWN, ChoreRunStatus.TIMEOUT, ChoreRunStatus.CRASHED},
 )
 FAILED_REASON: Final = "chore_failed"
-# How many of a chore's runs to read back at a time. A finding open longer than that reads further back.
+#: How many of a chore's runs to read back at a time. A finding open longer than that reads further back.
 _HISTORY_RUNS: Final = 200
 
 

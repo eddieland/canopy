@@ -37,9 +37,9 @@ from canopy.infra import procs, tracing
 from tests.canopy.helpers import KEY, present, spans
 from tests.conftest import HERMETIC_GIT, Journals, git
 
-# Found before any fixture puts the fake first on PATH.
+#: Found before any fixture puts the fake first on PATH.
 REAL_TREEHOUSE: Final = shutil.which("treehouse")
-# Set by `make pool-contract`: real treehouse must run, so a missing one fails the run instead of skipping it.
+#: Set by `make pool-contract`: real treehouse must run, so a missing one fails the run instead of skipping it.
 REQUIRED: Final = os.environ.get("CANOPY_POOL_CONTRACT") == "1"
 REPO: Final = "repo"
 

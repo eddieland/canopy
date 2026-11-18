@@ -26,15 +26,15 @@ from canopy.core.vocab import Reaction, ReplyMode, RunKind
 if TYPE_CHECKING:
     from canopy.core.config import Config
 
-# The kinds whose workers comment, and so whose prompts say how (DESIGN §29).
+#: The kinds whose workers comment, and so whose prompts say how (DESIGN §29).
 COMMENTING_KINDS: Final = frozenset({RunKind.IMPLEMENT, RunKind.RESUME})
-# The result's field and the placeholder that asks for it, which every prompt that drafts must carry under `approve`:
-# an override written before drafts existed would have its worker post in the operator's name.
+#: The result's field and the placeholder that asks for it, which every prompt that drafts must carry under `approve`:
+#: an override written before drafts existed would have its worker post in the operator's name.
 DRAFTS: Final = "DRAFTS"
 REQUIRED_APPROVE: Final = (DRAFTS,)
 MAX_DRAFTS: Final = 30
 MAX_DRAFT_CHARS: Final = 4000
-# Where a mark goes once a worker posts only on the ticket.
+#: Where a mark goes once a worker posts only on the ticket.
 _ON_TICKET: Final = "on the ticket"
 
 

@@ -16,7 +16,7 @@ from canopy.core import db, records, sql
 if TYPE_CHECKING:
     import sqlite3
 
-# The channel of a pause or resume from the loop's own terminal, beside `cli` and `web` (DESIGN §22).
+#: The channel of a pause or resume from the loop's own terminal, beside `cli` and `web` (DESIGN §22).
 LOOP: Final = "loop"
 
 

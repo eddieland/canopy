@@ -54,7 +54,7 @@ _STARTED, _ENDED = -16, -12
 _REVIEW: Final = 4_102_337_001
 _ALICE: Final = 2_468_013_579
 _BOB: Final = 2_468_013_601
-# carol's review, after the plan was written: what makes it stale.
+#: carol's review, after the plan was written: what makes it stale.
 _CAROL: Final = 4_102_337_050
 _TEXT: Final = """# Feedback plan: ABC-099
 

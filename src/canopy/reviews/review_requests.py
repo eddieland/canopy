@@ -35,14 +35,14 @@ if TYPE_CHECKING:
 #: `review_runs.purpose` of a review that answers the operator's request, rather than one the loop started on its own.
 PURPOSE: Final = "request"
 
-# Why a request ended: a `done` review of its PR; the PR merged or closed before one, or is in none of the
-# workspace's repositories (the overseer's reading); or the operator stopped it.
+#: Why a request ended: a `done` review of its PR; the PR merged or closed before one, or is in none of the
+#: workspace's repositories (the overseer's reading); or the operator stopped it.
 REVIEWED: Final = "reviewed"
 MERGED: Final = "merged"
 CLOSED: Final = "closed"
 UNKNOWN_REPO: Final = "unknown_repo"
 STOPPED: Final = "stopped"
-# The reasons the overseer may give the `review-end` tool: what it read on the PR, never the operator's own.
+#: The reasons the overseer may give the `review-end` tool: what it read on the PR, never the operator's own.
 OVERSEER_REASONS: Final = (MERGED, CLOSED, UNKNOWN_REPO)
 #: The most characters a request's notes may hold, after stripping: the operator's bound on what they write (§22).
 MAX_NOTES: Final = conversation.MAX_OPERATOR

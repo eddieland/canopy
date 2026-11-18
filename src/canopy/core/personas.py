@@ -411,7 +411,7 @@ def description(text: str) -> str | None:
 
 
 class _File(NamedTuple):
-    # A persona's file as canopy reads it: the text a prompt carries, and what a menu shows beside its name.
+    #: A persona's file as canopy reads it: the text a prompt carries, and what a menu shows beside its name.
     text: str
     description: str | None
 

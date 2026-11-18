@@ -24,7 +24,7 @@ class ChoreRun(Row):
     TABLE: ClassVar[LiteralString] = "chore_runs"
 
     id: int
-    # None for a run the operator started with `canopy chore try`.
+    #: None for a run the operator started with `canopy chore try`.
     tick_id: int | None
     chore: str
     pid: int | None

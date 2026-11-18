@@ -93,11 +93,11 @@ if TYPE_CHECKING:
     from canopy.serve.backend import Backend
 
 LOCK_FILE_NAME: Final = "loop.lock"
-# How often the wait wakes to redraw the countdown and to notice a stop or an operator message.
+#: How often the wait wakes to redraw the countdown and to notice a stop or an operator message.
 _WAIT_STEP_SECONDS: Final = 0.5
-# A second stop signal this soon after the first is the same Ctrl-C, not a second one. `uv run` forwards the
-# SIGINT it gets to its child about 200 ms after the terminal already sent it to the child; a person reading "Ctrl-C
-# again aborts it" and pressing it again takes longer than this.
+#: A second stop signal this soon after the first is the same Ctrl-C, not a second one. `uv run` forwards the
+#: SIGINT it gets to its child about 200 ms after the terminal already sent it to the child; a person reading "Ctrl-C
+#: again aborts it" and pressing it again takes longer than this.
 SAME_SIGNAL_SECONDS: Final = 1.0
 #: The log line for each of the operator's acts after a time that ends the wait (`_operator_acted`), but a message.
 _ACTS_SINCE: Final[dict[Woken, str]] = {
@@ -115,7 +115,7 @@ class Stop:
 
     requested: bool = False
     requested_at: float | None = None  # `signals`' clock at the first stop signal
-    # The first stop signal was SIGINT, a Ctrl-C: the loop waits for the runs still running to end before it exits.
+    #: The first stop signal was SIGINT, a Ctrl-C: the loop waits for the runs still running to end before it exits.
     awaits_runs: bool = False
 
 
@@ -315,8 +315,8 @@ class _Settings:
     asked: tick_now.TickNow  # a tick the web UI asked for, which the next wait takes
     console: Console
     backend: Backend | None = None  # the web UI's, which serves the new config too
-    # Where notifications' links open the web UI this loop serves; None when it serves none. `serve.` keys take
-    # effect at a restart (`reread.RESTART_PREFIX`), so a reload keeps it.
+    #: Where notifications' links open the web UI this loop serves; None when it serves none. `serve.` keys take
+    #: effect at a restart (`reread.RESTART_PREFIX`), so a reload keeps it.
     ui: str | None = None
 
     def apply(self) -> None:

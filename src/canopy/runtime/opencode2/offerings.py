@@ -50,8 +50,9 @@ POLL_SECONDS: Final = 0.25
 #: OpenCode's tool that loads a skill, the permission its rules name, and the tool that runs code calling other tools.
 SKILL: Final = "skill"
 EXECUTE: Final = "execute"
-# Each built-in tool OpenCode 2.1.2 sends a primary agent, and the permission it asks under: the file tools that
-# write share `edit`. `patch` stands in for `edit` on some models only, and `todowrite` is an experiment off by default.
+#: Each built-in tool OpenCode 2.1.2 sends a primary agent, and the permission it asks under: the file tools that
+#: write share `edit`. `patch` stands in for `edit` on some models only, and `todowrite` is an experiment off by
+#: default.
 _BUILTIN: Final = {
     "shell": "shell",
     "read": "read",
@@ -66,11 +67,11 @@ _BUILTIN: Final = {
     "subagent": "subagent",
     EXECUTE: EXECUTE,
 }
-# An agent's name, as one path component could hold it.
+#: An agent's name, as one path component could hold it.
 _AGENT_RE: Final = re.compile(r"[a-z][a-z0-9-]*")
-# What OpenCode makes of a server's name in its tools' names: anything but a letter, a digit, `_`, or `-` is `_`.
+#: What OpenCode makes of a server's name in its tools' names: anything but a letter, a digit, `_`, or `-` is `_`.
 _UNSAFE_RE: Final = re.compile(r"[^a-zA-Z0-9_-]")
-# The regex characters OpenCode escapes in a pattern before it reads `*` and `?` as wildcards.
+#: The regex characters OpenCode escapes in a pattern before it reads `*` and `?` as wildcards.
 _SPECIAL_RE: Final = re.compile(r"[.+^${}()|\[\]\\]")
 
 

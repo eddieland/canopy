@@ -19,7 +19,7 @@ from canopy.core.items import Item, fingerprint, subject
 if TYPE_CHECKING:
     from canopy.core.config import Sink
 
-# Events every sink has passed are deleted once they are this old.
+#: Events every sink has passed are deleted once they are this old.
 KEEP_EVENTS: Final = timedelta(days=7)
 
 
@@ -141,7 +141,7 @@ class Diff:
     resolved: Sequence[tuple[str, str]]  # (subject, reason)
     resolved_fingerprints: Sequence[str]
     resolved_items: Sequence[tuple[str | None, str, str | None]]  # (ticket key, reason, repo)
-    # Whether each resolved item left because the operator dismissed it rather than because its cause is gone.
+    #: Whether each resolved item left because the operator dismissed it rather than because its cause is gone.
     resolved_dismissed: Sequence[bool] = ()
 
     def __bool__(self) -> bool:

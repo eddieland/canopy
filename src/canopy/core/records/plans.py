@@ -35,10 +35,10 @@ class Plan(Row):
     run_id: int
     created_at: str
     status: PlanStatus
-    # The file's SHA-256, hex, and its size in bytes, as the planner wrote it.
+    #: The file's SHA-256, hex, and its size in bytes, as the planner wrote it.
     sha256: str
     size: int
-    # The file's SHA-256 when the operator approved it, their edits included; set with the time and the channel.
+    #: The file's SHA-256 when the operator approved it, their edits included; set with the time and the channel.
     approved_sha256: str | None
     approved_at: str | None
     approved_channel: str | None

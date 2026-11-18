@@ -34,7 +34,7 @@ JSON: Final = st.recursive(
     lambda inner: st.lists(inner, max_size=3) | st.dictionaries(st.text(max_size=5), inner, max_size=3),
     max_leaves=10,
 )
-# Near enough to a login that the checks are reached, with any field of any type.
+#: Near enough to a login that the checks are reached, with any field of any type.
 SOME_TEXT: Final = st.text(min_size=1, max_size=3)
 TOKEN: Final = SOME_TEXT | st.just("") | JSON
 STAMP: Final = st.integers(-1, 3_000) | st.floats(allow_nan=True) | st.booleans() | JSON
@@ -47,7 +47,7 @@ LOGIN: Final = st.fixed_dictionaries(
     },
     optional={"accountId": JSON, "enterpriseUrl": JSON, "key": JSON, "token": JSON},
 )
-# A refresh, and whatever else a run puts beside its tokens.
+#: A refresh, and whatever else a run puts beside its tokens.
 REFRESHED: Final = st.fixed_dictionaries(
     {"type": st.just("oauth"), "refresh": SOME_TEXT, "access": SOME_TEXT, "expires": st.integers(1_001, 10**15)},
     optional={"accountId": JSON, "enterpriseUrl": JSON, "key": JSON, "metadata": JSON},

@@ -6,7 +6,7 @@ from typing import Final
 
 from canopy.core.plan_metrics import DIAGRAM_LINES, LINE_CHARS, Metrics, measure
 
-# A plan with every kind of block a planner writes, a list's items continued and nested, and a fence left open.
+#: A plan with every kind of block a planner writes, a list's items continued and nested, and a fence left open.
 EVERY_KIND: Final = """\
 # Plan
 

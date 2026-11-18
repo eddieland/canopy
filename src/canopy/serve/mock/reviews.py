@@ -59,7 +59,7 @@ _STALE: Final = ReviewResult(
         ),
     ],
 )
-# What review 4 reported, its reviewer's last line in its transcript too.
+#: What review 4 reported, its reviewer's last line in its transcript too.
 LATEST: Final = ReviewResult(
     status="done",
     verdict="findings",
@@ -88,7 +88,7 @@ LATEST: Final = ReviewResult(
         ),
     ],
 )
-# What review 5 reported on Carol's PR: two findings on lines of its diff, and one about a file it does not touch.
+#: What review 5 reported on Carol's PR: two findings on lines of its diff, and one about a file it does not touch.
 _CAROL: Final = ReviewResult(
     status="done",
     verdict="findings",
@@ -117,7 +117,7 @@ _CAROL: Final = ReviewResult(
         ),
     ],
 )
-# What review 6, the skeptic's, reported on Carol's PR, at the same commit as review 5.
+#: What review 6, the skeptic's, reported on Carol's PR, at the same commit as review 5.
 _CAROL_SKEPTIC: Final = ReviewResult(
     status="done",
     verdict="findings",
@@ -184,7 +184,7 @@ index 0000000..b3e8f42
 +    return { results, loading }
 +}
 """
-# Blank context lines are written empty, as some tools save them; the reader takes them as context.
+#: Blank context lines are written empty, as some tools save them; the reader takes them as context.
 DIFF_12: Final = """\
 diff --git a/README.md b/README.md
 index 1d2e3f4..5a6b7c8 100644

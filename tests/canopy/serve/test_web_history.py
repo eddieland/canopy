@@ -35,19 +35,19 @@ from canopy.serve.backend import Backend
 from canopy.serve.mock import history as serve_history
 from tests.conftest import Journals
 
-# The mock's own PR, which the old history leaves alone.
+#: The mock's own PR, which the old history leaves alone.
 PR: Final = "https://github.com/acme/web/pull/88"
-# How old the oldest of the mock's own rows is, in minutes, its months before T0 among them (mock/history.py); the
-# history this adds is older than that.
+#: How old the oldest of the mock's own rows is, in minutes, its months before T0 among them (mock/history.py); the
+#: history this adds is older than that.
 HISTORY_STARTS: Final = 200 * 24 * 60
-# SQLite calls the progress handler once per this many virtual machine instructions: a step.
+#: SQLite calls the progress handler once per this many virtual machine instructions: a step.
 STEP: Final = 10
-# How much more work a read may do over five times the history: a deeper index, never another pass over it.
+#: How much more work a read may do over five times the history: a deeper index, never another pass over it.
 GROWTH: Final = 1.1
 SLACK: Final = 5
 
-# Each read a page or the event stream makes, but the all-time spend: that one sums every cost ever recorded, from an
-# index alone, and grows with the journal by design.
+#: Each read a page or the event stream makes, but the all-time spend: that one sums every cost ever recorded, from an
+#: index alone, and grows with the journal by design.
 READS: Final[dict[str, Callable[[Backend, Context], object]]] = {
     "attention": views.attention,
     "runs": lambda _b, ctx: views.runs(ctx),
@@ -225,7 +225,7 @@ def test_a_findings_start_is_read_back_once(backend: Backend) -> None:
 
 
 ADVISORY: Final = {"id": "lodash-advisory", "title": "lodash 4.17.20 has a prototype pollution advisory"}
-# The results a chore's page reads with nothing to walk: its latest `ok` run's, its summary's, and each run it lists.
+#: The results a chore's page reads with nothing to walk: its latest `ok` run's, its summary's, and each run it lists.
 PAGE: Final = 2 + chore_views.CHORE_RUNS
 
 

@@ -50,7 +50,7 @@ PRS: Final = {
 }
 #: PRs the tests' `vcs` source reads, where PRS name none it can.
 READ_PRS: Final = {"api": "https://github.com/acme/api/pull/1", "web": "https://github.com/acme/web/pull/2"}
-# Each PR's own title as the worker reports it: web's spans lines, and docs is not one of the run's repositories.
+#: Each PR's own title as the worker reports it: web's spans lines, and docs is not one of the run's repositories.
 TITLES: Final = {
     "api": "PROJ-1: add the endpoint",
     "web": "PROJ-1: call\n  the endpoint",

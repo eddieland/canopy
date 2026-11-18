@@ -22,7 +22,7 @@ from canopy.setup import workspace as setup_workspace
 if TYPE_CHECKING:
     from canopy.core.context import Context
 
-# What sync reports for a repository it could not bring to what is declared; any of them makes it exit 1.
+#: What sync reports for a repository it could not bring to what is declared; any of them makes it exit 1.
 _UNMET: Final = ("failed", "kept")
 
 

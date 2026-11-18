@@ -9,11 +9,11 @@ from pathlib import Path
 from typing import Final
 
 PACKAGE: Final = Path(__file__).resolve().parents[2] / "src" / "canopy"
-# The builder itself, which alone runs SQL on a connection and makes fragments.
+#: The builder itself, which alone runs SQL on a connection and makes fragments.
 BUILDER: Final = "core/sql.py"
-# What runs SQL on a sqlite3 connection or cursor.
+#: What runs SQL on a sqlite3 connection or cursor.
 RUNS_SQL: Final = frozenset({"execute", "executemany", "executescript"})
-# Calls that run SQL the builder does not make, with why: each is the only one of its kind.
+#: Calls that run SQL the builder does not make, with why: each is the only one of its kind.
 EXEMPT: Final = {
     # The migrations are files of SQL, run whole as they shipped.
     ("core/db.py", "migrate", "executescript"),
