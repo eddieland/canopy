@@ -12,8 +12,12 @@
  * Each theme wears a palette, picked apart for light and for dark (src/theme/palette.ts). The defaults, lavender for
  * light and indigo for dark, have neutrals that carry the accent's hue, so the canvas has some color of its own. The
  * others set the neutrals and the accent over the default's: off-white, Solarized, Nord, Gruvbox, Pulp, sage, Rosé
- * Pine Dawn, Acme, and Komorebi for light; grey (the one the 2026-10-19 exploration drew for Mailroom), black,
- * Solarized, Gruvbox, Pulp, forest, plum, Starry Skies, and Monokai for dark.
+ * Pine Dawn, Acme, Komorebi, and Koi Pond for light; grey (the one the 2026-10-19 exploration drew for Mailroom),
+ * black, Solarized, Gruvbox, Pulp, forest, plum, Starry Skies, and Monokai for dark.
+ *
+ * Two drawings hold colors of their own, the one exception to the first line: Koi Pond's lily pads and its koi
+ * (koi-pond/pads.svg, koi-pond/koi.svg), each of several colors, where a mask painted in a token can hold one. Its
+ * rule says which, and why none of them passes for a status.
  */
 
 :root {
@@ -218,9 +222,10 @@
      * cuts its phase. None by default, so no moon is drawn. */
     --moon: none;
     --moon-mask: none;
-    /* A bough's shadow across the canvas's lower right corner, which only Komorebi casts (src/index.css): what its
-     * box paints, the mask that cuts its leaves, and its sway, only while the operator's system allows motion. None
-     * by default, so no bough is drawn. */
+    /* What lies across the canvas's lower right corner (src/index.css): what its box paints, the mask that cuts it,
+     * and its sway, only while the operator's system allows motion. Komorebi casts a bough's shadow there, a color
+     * cut to its leaves; Koi Pond floats its lily pads, a drawing, uncut and still. None by default, so nothing is
+     * drawn. */
     --bough: none;
     --bough-mask: none;
     --bough-motion: none;
@@ -229,11 +234,11 @@
      * `darken` and paints each in an opaque shade, so where two overlap the canvas goes no deeper than the deeper. */
     --shade-blend: normal;
     /* What may move over the canvas, only while the operator's system allows motion (src/index.css), as Starry
-     * Skies's sky and Komorebi's light do: each canvas layer's animation, and two things that cross it now and then,
-     * each an image and its animation: Starry Skies's meteors, each a streak as long as `--meteor-length` and as
-     * thick as `--meteor-girth`, turned down its slope (`--meteor-turn`) about its head (`--meteor-origin`), or
-     * Komorebi's falling leaves, each that box cut to a leaf (`--meteor-mask`). None by default, so nothing moves and
-     * nothing crosses. */
+     * Skies's sky, Komorebi's light, and Koi Pond's water do: each canvas layer's animation, and two things that
+     * cross it now and then, each an image and its animation: Starry Skies's meteors, each a streak as long as
+     * `--meteor-length` and as thick as `--meteor-girth`, turned down its slope (`--meteor-turn`) about its head
+     * (`--meteor-origin`), Komorebi's falling leaves, each that box cut to a leaf (`--meteor-mask`), or Koi Pond's
+     * koi. None by default, so nothing moves and nothing crosses. */
     --canvas-texture-motion: none;
     --canvas-swell-motion: none;
     --meteor: none;
@@ -245,6 +250,11 @@
     --meteor-origin: 100% 50%;
     --meteor-motion: none;
     --meteor-motion-2: none;
+    /* The second of the two may be another thing than the first, as Koi Pond's is, a ripple where the first is a koi:
+     * what it paints and the mask that cuts it. Each is the first's by default, so a palette that sets neither draws
+     * two of a kind, as Starry Skies and Komorebi do, exactly as before these were knobs. */
+    --meteor-2: var(--meteor);
+    --meteor-mask-2: var(--meteor-mask);
     --title-drop: 0px;
     --title-drop-alpha: 0;
     /* What a cleared attention item drops (src/routes/attention.tsx): a leaf by default, or, where a palette shows
@@ -911,6 +921,131 @@
     --meteor-origin: 50% 50%;
     --meteor-motion: leaf-fall 47s linear infinite, leaf-rock 3.1s ease-in-out infinite alternate;
     --meteor-motion-2: leaf-fall-2 71s linear infinite, leaf-rock 3.7s ease-in-out infinite alternate;
+}
+
+/* Koi Pond, a sunlit pond seen from above: the canvas pale water, the panels afloat on it, and the text a deep
+ * blue-black. The accent is a water iris's violet, apart from every status, and Pull requests' violet turns toward
+ * magenta to stand apart from it. Muted text, the accent, and Settings' slate sit a step deeper than they would need
+ * to on a plain canvas, so each still reads at 4.5:1 wherever the still pond lies under text set on the canvas, as
+ * the guide's prose, Loop settings' headings, and Memory's last line are: over its deepest water, in the window's
+ * lower right corner, and over every paint of the pads' drawing there; tokens.test.ts measures them on each. */
+:root[data-light-palette='koi-pond']:not(.dark) {
+    --accent: oklch(0.47 0.19 295);
+    --ring: oklch(0.47 0.19 295 / 0.55);
+    --background: oklch(0.95 0.028 228);
+    --surface: oklch(0.993 0.006 228);
+    --surface-raised: oklch(0.964 0.019 228);
+    --border: oklch(0.895 0.032 228);
+    --foreground: oklch(0.24 0.04 248);
+    --muted-foreground: oklch(0.45 0.05 242);
+    --scrollbar: oklch(0.45 0.05 242 / 0.4);
+    --status-stopped: oklch(0.45 0.05 242);
+    --spend-dry-run: oklch(0.6 0.03 238);
+    --check-other: oklch(0.6 0.03 238);
+    --answer-na: oklch(0.6 0.03 238);
+    --context-carried: oklch(0.6 0.03 238);
+    --section-pull-requests: oklch(0.54 0.21 314);
+    --section-settings: oklch(0.45 0.03 250);
+
+    /* The shell on the same water: water-worn corners, and each panel afloat as a pad is, a meniscus of light around
+     * it where it meets the surface and its shadow on the pond's floor, in the pond's deep blue, down and to the
+     * right of it, where the same sun throws the pads' and the koi's. The aurora is the waterline, the sections' colors
+     * cut to a wave over its own reflection (koi-pond/wave.svg, a mask, so the line still follows the section
+     * tokens), the name runs from the iris into the water's blues, and the nav's active icon floats over a shadow of
+     * its own color, on a tint with no hairline. The swimming koi's file repeats `--pond-shade` for its shadow and
+     * its eyes, since an image reads no token: retune the two together. */
+    --radius: 0.75rem;
+    --pond-shade: oklch(0.42 0.09 244);
+    --depth-panel:
+        0 0 0 0.1875rem oklch(1 0 0 / 0.5), 0.4rem 0.65rem 1.1rem -0.3rem oklch(from var(--pond-shade) l c h / 0.2);
+    --depth-float:
+        0 0 0 0.1875rem oklch(1 0 0 / 0.55), 0.6rem 1rem 2rem -0.4rem oklch(from var(--pond-shade) l c h / 0.34),
+        0 2px 6px oklch(from var(--pond-shade) l c h / 0.1);
+    --depth-action:
+        inset 0 1px 0 oklch(1 0 0 / 0.28), 0.15rem 0.25rem 0.6rem -0.1rem oklch(from var(--accent) l c h / 0.5);
+    --aurora-height: 0.5rem;
+    --aurora-mask: url('./koi-pond/wave.svg?inline') 0 0 / 2.25rem 100% repeat-x;
+    --wordmark-image: linear-gradient(
+        90deg,
+        var(--accent),
+        var(--section-tickets) 25%,
+        var(--section-memory) 50%,
+        var(--section-tickets) 75%,
+        var(--accent)
+    );
+    --nav-hairline: 0;
+    --nav-on-glow: drop-shadow(0.06rem 0.14rem 0.08rem oklch(from currentColor l c h / 0.4));
+
+    /* The water, on the canvas's first layer, which never moves: deeper toward the window's foot, and deepest in its
+     * lower right corner, where the pads lie. It is darker than the canvas, so text set on the canvas and every status
+     * are measured over its deepest (tokens.test.ts). Both layers are clear over the rail, the header, and a page's
+     * title, so neither lies behind text there, and fade in below it. */
+    --pond-water: oklch(0.8 0.075 232);
+    --pond-depth: oklch(from var(--pond-water) l c h / 0.4);
+    --pond-shallows: oklch(from var(--pond-water) l c h / 0.2);
+    --pond-clear:
+        linear-gradient(90deg, transparent 14rem, oklch(0 0 0) 22rem) intersect,
+        linear-gradient(transparent 12.5rem, oklch(0 0 0) 18rem);
+    --canvas-texture:
+        radial-gradient(ellipse 62rem 30rem at 100% 100%, var(--pond-depth), transparent 72%),
+        linear-gradient(to top, var(--pond-shallows), transparent 18rem);
+    --canvas-texture-mask: var(--pond-clear);
+    /* The light, on the second, over everything in the pond: the nets of sunlight that ripples on the surface focus
+     * on its floor, one color through a mask of them (koi-pond/net.svg, a tile whose cells close across its edges,
+     * its sides whole pixels, so it repeats without a seam). They are lighter than the canvas, so text over one reads
+     * better, never worse, and clear over the pads, which float above the floor. They breathe by a seventh of their
+     * brightness at most, slowly enough to pass for stillness. The palette's masks are written into the stylesheet
+     * (`?inline`), never fetched: Chromium drops a mask layer whose image has not arrived, and would paint the light
+     * flat through the layers left. */
+    --pond-light: oklch(1 0 0 / 0.56);
+    --canvas-swell: var(--pond-light);
+    --canvas-swell-mask:
+        url('./koi-pond/net.svg?inline') 0 0 / round(44rem, 1px) round(36rem, 1px) intersect,
+        radial-gradient(
+                ellipse calc(var(--pond-pads) * 0.42) calc(var(--pond-pads) * 0.33) at right
+                    calc(2.4rem + var(--pond-pads) * 0.39) bottom calc(0.25rem + var(--pond-pads) * 0.37),
+                transparent 72%,
+                oklch(0 0 0)
+            )
+            intersect,
+        var(--pond-clear);
+    --canvas-swell-motion: pond-glimmer 23s ease-in-out infinite;
+    /* The corner of the pond, in the window's lower right, where Starry Skies hangs its moon and Komorebi its bough:
+     * lily pads, an open lily, and the koi that lives under them, its tail beneath a pad (koi-pond/pads.svg), all of it
+     * still. It and the koi that swims by are the two drawings in this UI that hold colors of their own, where every
+     * other color is a token in this file: a pad, a petal, a gold patch, and a shadow are one drawing, and a mask
+     * paints one color. Their colors are few and written in those two files, the only ones besides this one where the
+     * lint lets a color be written: the pads a pale sage and the gold a pale straw, far lighter and greyer than the
+     * emerald of a running run or the amber of a blocked one, so no slice of either in the gap between two panels
+     * passes for a status.
+     * A page may set text across this corner, as Memory's last line is in some windows, so no paint in the still
+     * drawing is deeper than that text reads on at 4.5:1: each of its shadows and lines is a light shade that holds
+     * the text at full strength, never a deep one thinned, so two that cross go no deeper than one (tokens.test.ts
+     * holds each paint).
+     * The drawing still takes only the room the guide leaves it, so a page of prose is never set across it: right of
+     * the guide's text column and under its list of headings. So it is whole in a window 95rem wide and 48rem tall,
+     * smaller in a smaller one, and gone once it would be under 5rem wide, where it would read as a mark and not as a
+     * pond. */
+    --pond-room: min(14.5rem, 100vw - 80.5rem, (100vh - 38rem) * 1.5);
+    --pond-pads: max(0rem, min(var(--pond-room), (var(--pond-room) - 5rem) * 1000));
+    --bough: url('./koi-pond/pads.svg') right 4.4rem bottom 2.25rem / var(--pond-pads) auto no-repeat;
+    /* What visits it, where Starry Skies sends its meteors, and far more seldom: a koi that swims by under the
+     * panels about every two minutes, a larger one and a smaller taking turns (koi-pond/koi.svg, the other drawing,
+     * over its own shadow), each along one slow arc at the window's foot, and, on a period of its own, a ripple that
+     * opens on the water and fades (koi-pond/ripple.svg, a mask painted in the light). Both keep to the open water
+     * beside the pads. Nothing else moves, and under reduced motion neither is drawn: the still pond is whole without
+     * them, since the koi that lives in the corner is part of its drawing. The koi that swims keeps a deeper shadow
+     * and ink than the one at rest: it may pass under text set on the canvas, and is under any word for a second or
+     * two. */
+    --meteor: url('./koi-pond/koi.svg') center / contain no-repeat;
+    --meteor-2: oklch(from var(--pond-light) l c h / 0.95);
+    --meteor-mask-2: url('./koi-pond/ripple.svg?inline') center / contain no-repeat;
+    --meteor-length: 8rem;
+    --meteor-girth: 8rem;
+    --meteor-turn: 0deg;
+    --meteor-origin: 50% 50%;
+    --meteor-motion: koi-swim 211s linear infinite;
+    --meteor-motion-2: pond-ripple 149s linear infinite;
 }
 
 /* The dark theme's grey palette, Mailroom's neutrals, with a steel blue accent. Muted text is a step further from the

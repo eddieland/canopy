@@ -124,6 +124,10 @@ const CODE_CHIP = codeChip()
 // The operator's bubble in a conversation (`TONE` in src/components/conversation.tsx).
 const REPLY = 0.18
 
+// The colors of text a page sets straight on the canvas, as the guide sets its prose and Loop settings its headings:
+// what Komorebi and Koi Pond, which paint the canvas deeper under that text, each hold readable there.
+const CANVAS_TEXT = ['foreground', 'muted-foreground', 'accent', 'section-settings']
+
 // A status word also sits on its own tint: a chip (10%) in a selected inbox row (the accent at 14%), a destructive
 // button (12%, 20% hovered), a question's bubble (12%) on a raised surface. So does a feedback plan's proposal, a chip.
 const TINTED = TEXT.filter((name) => name.startsWith('status-') || name.startsWith('proposal-'))
@@ -360,9 +364,9 @@ describe('title lettering', () => {
     })
 })
 
-// What crosses a canvas is shaped by knobs whose defaults are Starry Skies's streak; a bough, and how a shadow blends
-// with what is under it, by knobs whose defaults draw nothing and paint plainly. So a palette that sets none of them
-// looks as it did before they were added.
+// What crosses a canvas is shaped by knobs whose defaults are Starry Skies's streak, the second of the two painting
+// what the first does; a bough, and how a shadow blends with what is under it, by knobs whose defaults draw nothing
+// and paint plainly. So a palette that sets none of them looks as it did before they were added.
 describe("the canvas's knobs", () => {
     it.each([
         ['--meteor-mask', 'none'],
@@ -370,6 +374,8 @@ describe("the canvas's knobs", () => {
         ['--meteor-girth', '0.1rem'],
         ['--meteor-turn', '162deg'],
         ['--meteor-origin', '100% 50%'],
+        ['--meteor-2', 'var(--meteor)'],
+        ['--meteor-mask-2', 'var(--meteor-mask)'],
         ['--bough', 'none'],
         ['--bough-mask', 'none'],
         ['--bough-motion', 'none'],
@@ -385,14 +391,7 @@ describe("the canvas's knobs", () => {
 // canvas is set in still reads on it.
 describe("Komorebi's shade", () => {
     const body = rule(paletteRule('light', 'komorebi'))
-    const colors = THEMES['komorebi light'] ?? {}
-    const token = (name: string): Rgb => {
-        const value = colors[name]
-        if (value === undefined) {
-            throw new Error(`tokens.css sets no --${name} for Komorebi`)
-        }
-        return srgb(...value)
-    }
+    const token = tokens('komorebi light')
     // How far toward `--shade` each shadow mixes the canvas, as a fraction, by the token that names it.
     const shadows = new Map(
         [...body.matchAll(/--([\w-]+): color-mix\(in srgb, var\(--shade\) ([\d.]+)%, var\(--background\)\);/gu)].map(
@@ -411,9 +410,9 @@ describe("Komorebi's shade", () => {
     const shaded = (): Rgb => over(token('shade'), strength('leaf-shadow'), token('background'))
 
     it("reads text set on the canvas under a leaf's shadow, the deepest", () => {
-        const low = ['foreground', 'muted-foreground', 'accent', 'section-settings']
-            .map((name) => below(`${name} under a leaf's shadow`, token(name), shaded()))
-            .filter((line) => line !== null)
+        const low = CANVAS_TEXT.map((name) => below(`${name} under a leaf's shadow`, token(name), shaded())).filter(
+            (line) => line !== null,
+        )
         expect(low).toEqual([])
     })
 
@@ -440,6 +439,105 @@ describe("Komorebi's shade", () => {
     })
 })
 
+// Koi Pond's water deepens toward the window's lower right corner, where its pads lie, and pages set text on the
+// canvas: the guide its prose, Loop settings its headings, Memory its last line, which crosses that corner in some
+// windows. So the colors that text is set in read over the deepest water the palette lays, the corner's tint over the
+// foot's, and over every paint of the pads' drawing, which never moves; every status reads over that water too. The
+// light is white. Its pads and its koi are drawings with colors of their own, the one place a color is written outside
+// tokens.css, so those colors are held here: each is spelled as these tests read it, no green or gold among them comes
+// near a status color's depth, and what is painted through a mask holds no color at all.
+describe("Koi Pond's water", () => {
+    const body = rule(paletteRule('light', 'koi-pond'))
+    const colors = THEMES['koi-pond light'] ?? {}
+    const token = tokens('koi-pond light')
+    const strength = (name: string): number => {
+        const alpha = new RegExp(`--${name}: oklch\\(from var\\(--pond-water\\) l c h / ([\\d.]+)\\);`, 'u').exec(
+            body,
+        )?.[1]
+        if (alpha === undefined) {
+            throw new Error(`tokens.css sets --${name} in a form this test does not read`)
+        }
+        return Number(alpha)
+    }
+    it('reads text set on the canvas and every status over the deepest water', () => {
+        const foot = over(token('pond-water'), strength('pond-shallows'), token('background'))
+        const corner = over(token('pond-water'), strength('pond-depth'), foot)
+        const read = [...CANVAS_TEXT, ...TEXT.filter((name) => name.startsWith('status-'))]
+        const low = read
+            .map((name) => below(`${name} over the deepest water`, token(name), corner))
+            .filter((line) => line !== null)
+        expect(low).toEqual([])
+    })
+
+    // A paint thinned, blurred, or crossed by another lies between itself and what is under it, another paint or the
+    // water. So a drawing whose every fill, line, and gradient stop holds the text at full strength holds it wherever
+    // it is drawn.
+    it("reads text set on the canvas over every paint of the pads' drawing", () => {
+        const low = paints('pads.svg')
+            .flatMap(({ attribute, ink }) =>
+                CANVAS_TEXT.map((name) =>
+                    below(`${name} on a ${attribute} of oklch ${ink.join(' ')}`, token(name), srgb(...ink)),
+                ),
+            )
+            .filter((line) => line !== null)
+        expect(low).toEqual([])
+    })
+
+    it('lays only the water and white light on the canvas', () => {
+        expect(body).toMatch(
+            /--canvas-texture:\s+radial-gradient\([^;]*var\(--pond-depth\)[^;]*var\(--pond-shallows\)/u,
+        )
+        expect(body).toContain('--canvas-swell: var(--pond-light);')
+        expect(body).toMatch(/--pond-light: oklch\(1 0 0 \/ [\d.]+\);/u)
+    })
+
+    // A running run is an emerald and a blocked one an amber, each about half as light as the canvas. Whatever in
+    // the drawings is green through gold is far lighter than either, so a slice of it between two panels is no status.
+    it.each(['pads.svg', 'koi.svg'])('draws no green or gold in %s as deep as a status color', (name) => {
+        const deepest = Math.max(...['status-running', 'status-blocked'].map((status) => colors[status]?.[0] ?? 1))
+        const greens = paints(name)
+            .map(({ ink: [lightness, chroma, hue] }) => ({ lightness, chroma, hue }))
+            .filter(({ chroma, hue }) => chroma > 0.02 && hue >= 40 && hue <= 190)
+        expect(greens.length).toBeGreaterThan(0)
+        for (const { lightness, chroma } of greens) {
+            expect(lightness).toBeGreaterThanOrEqual(deepest + 0.25)
+            expect(chroma).toBeLessThanOrEqual(0.105)
+        }
+    })
+
+    // The tests above hold a drawing's colors only if they read every one: a fill, a line, or a gradient stop is
+    // `none`, a gradient of the drawing's own, or an opaque oklch color, which `paints` reads or throws on, and no
+    // color comes in by a style or a filter's flood. A drawing stays a file, which paints nothing until it arrives.
+    it.each(['pads.svg', 'koi.svg'])('spells every color in %s as these tests read it, in a file', (name) => {
+        expect(paints(name).length).toBeGreaterThan(0)
+        expect(drawing(name)).not.toMatch(/\bstyle=|<style|flood-color|lighting-color|currentColor/u)
+        expect(body).toContain(`url('./koi-pond/${name}')`)
+    })
+
+    // A mask is written into the stylesheet (`?inline`), never fetched: a mask layer whose image has not arrived is
+    // dropped, and the color under it would paint flat.
+    it.each(['net.svg', 'ripple.svg', 'wave.svg'])('holds no color in %s, a mask in the stylesheet', (name) => {
+        expect(drawing(name)).not.toMatch(/oklch\(|#[\da-f]{3}|rgb/iu)
+        expect(body).toMatch(new RegExp(`mask(?:-2)?:\\s[^;]*url\\('\\./koi-pond/${name}\\?inline'\\)`, 'u'))
+    })
+
+    // The second crosser's defaults are held with the canvas's knobs, above; the aurora's mask has none to hold.
+    it('cuts no aurora by default', () => {
+        expect(rule(':root')).not.toContain('--aurora-mask')
+    })
+
+    it.each(
+        (['light', 'dark'] as const).flatMap((mode) =>
+            PALETTES[mode].slice(1).map((palette) => [`${palette} ${mode}`, palette, paletteRule(mode, palette)]),
+        ),
+    )('%s sets a second crosser or cuts its aurora if and only if it is Koi Pond', (_name, palette, selector) => {
+        const other = rule(selector)
+        expect(other.includes('--meteor-2:')).toBe(palette === 'koi-pond')
+        expect(other.includes('--meteor-mask-2:')).toBe(palette === 'koi-pond')
+        expect(other.includes('--aurora-mask:')).toBe(palette === 'koi-pond')
+    })
+})
+
 /** The strength `--code-chip` mixes its ink at, as a fraction; a chip written another way fails rather than passes. */
 function codeChip(): number {
     const percent = /--code-chip: color-mix\(in oklab, currentColor ([\d.]+)%, transparent\);/u.exec(css)?.[1]
@@ -449,11 +547,48 @@ function codeChip(): number {
     return Number(percent) / 100
 }
 
+/** One of Koi Pond's drawings, an SVG file beside tokens.css, as text. */
+function drawing(name: string): string {
+    return readFileSync(resolve(import.meta.dirname, 'koi-pond', name), 'utf8')
+}
+
+/**
+ * Every color one of Koi Pond's drawings paints: the attribute that names it, a fill, a stroke, or a gradient's stop,
+ * and its oklch coordinates. A paint that is neither `none`, a reference to the drawing's own gradient, nor an opaque
+ * oklch color throws: a color spelled any other way would escape what the tests hold the drawings to.
+ */
+function paints(name: string): { attribute: string; ink: Oklch }[] {
+    return [...drawing(name).matchAll(/\b(fill|stroke|stop-color)="([^"]*)"/gu)].flatMap(
+        ([, attribute = '', value = '']) => {
+            if (value === 'none' || /^url\(#[\w-]+\)$/u.test(value)) {
+                return []
+            }
+            const [, l, c, h] = /^oklch\(([\d.]+) ([\d.]+) ([\d.]+)\)$/u.exec(value) ?? []
+            if (l === undefined) {
+                throw new Error(`${name} paints ${attribute}="${value}", a color this test does not read`)
+            }
+            return [{ attribute, ink: [Number(l), Number(c), Number(h)] as Oklch }]
+        },
+    )
+}
+
 /** The selector of the rule that sets `palette` over `mode`'s default. */
 function paletteRule(mode: ResolvedTheme, palette: string): string {
     return mode === 'light'
         ? `:root[data-light-palette='${palette}']:not(.dark)`
         : `.dark[data-dark-palette='${palette}']`
+}
+
+/** A reader of one theme's opaque tokens as sRGB, by name, which throws on a token that theme does not set. */
+function tokens(themeName: string): (name: string) => Rgb {
+    const colors = THEMES[themeName] ?? {}
+    return (name) => {
+        const value = colors[name]
+        if (value === undefined) {
+            throw new Error(`tokens.css sets no --${name} for ${themeName}`)
+        }
+        return srgb(...value)
+    }
 }
 
 /** The opaque oklch tokens a rule sets, by name. */

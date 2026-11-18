@@ -7,7 +7,7 @@ import type { ResolvedTheme } from './store'
  * the accent's hue in its canvas: lavender, a pale lavender grey with white surfaces, and indigo, a deep indigo slate.
  * Light can wear off-white, a warm paper, sage, a soft green, or Solarized's, Nord's, Gruvbox's, Rosé Pine Dawn's, or
  * Acme's light base tones instead, or Pulp, a comic printed in four colors on newsprint, or Komorebi, a wall in the
- * sun that comes through a canopy of leaves. Dark can wear grey, the
+ * sun that comes through a canopy of leaves, or Koi Pond, a sunlit pond seen from above. Dark can wear grey, the
  * neutral one the 2026-10-19 exploration drew for Mailroom, a near black, forest, a deep green, plum, a dark wine
  * purple, Starry Skies, a night blue under a field of stars, or Solarized's, Gruvbox's, or Monokai's dark tones, or
  * Pulp's night blue. Kept in localStorage and synced across tabs; the inline script in index.html applies it before
@@ -16,7 +16,19 @@ import type { ResolvedTheme } from './store'
 
 /** Each theme's palettes, the default first. */
 export const PALETTES = {
-    light: ['lavender', 'off-white', 'sage', 'komorebi', 'solarized', 'nord', 'gruvbox', 'pulp', 'rose-pine', 'acme'],
+    light: [
+        'lavender',
+        'off-white',
+        'sage',
+        'komorebi',
+        'koi-pond',
+        'solarized',
+        'nord',
+        'gruvbox',
+        'pulp',
+        'rose-pine',
+        'acme',
+    ],
     dark: ['indigo', 'grey', 'black', 'forest', 'plum', 'starry-skies', 'solarized', 'gruvbox', 'pulp', 'monokai'],
 } as const
 
@@ -30,6 +42,7 @@ export const PALETTE_LABELS: { readonly [T in ResolvedTheme]: Readonly<Record<Pa
         'off-white': 'Off-white',
         sage: 'Sage',
         komorebi: 'Komorebi',
+        'koi-pond': 'Koi Pond',
         solarized: 'Solarized',
         nord: 'Nord',
         gruvbox: 'Gruvbox',
@@ -59,6 +72,7 @@ export const PALETTE_DESCRIPTIONS: { readonly [T in ResolvedTheme]: Readonly<Rec
         sage: 'A soft green canvas with a heather accent and soft corners.',
         komorebi:
             'Sunlight through leaves: flecks of sun, a swaying bough, a leaf falling now and then, a wisteria accent.',
+        'koi-pond': 'A sunlit pond from above: lily pads, light on the water, a koi that swims by, and an iris accent.',
         solarized: "Solarized's light base tones and its blue, crisp and flat.",
         nord: "Nord's Snow Storm and Frost's blue, soft, under a fade through Frost's blues.",
         gruvbox: "Gruvbox's light tones and its faded purple, set in mono like an editor of the nineties.",

@@ -2,7 +2,9 @@
 //
 // - Under src/, a color is named, never written down (ui/DESIGN.md, "Tokens"). Refused everywhere but
 //   src/styles/tokens.css: hex colors, CSS color functions, Tailwind's palette utilities (bg-zinc-800, text-white),
-//   and the dark: variant. A theme difference belongs in tokens.css, not in a component.
+//   and the dark: variant. A theme difference belongs in tokens.css, not in a component. An SVG under src/ is held
+//   to it too, so a mask holds no color. The two drawings of several colors, which no mask painted in a token can
+//   hold, are the exception (`DRAWINGS`); src/styles/tokens.test.ts holds their colors.
 // - Under src/, a corner is on the radius scale (ui/DESIGN.md, "Shape and space"): no arbitrary `rounded-[...]`.
 // - Under src/, each `@keyframes` name is defined once. CSS keeps the last of two with one name, so every animation
 //   that names it runs the other's motion, and nothing else says so.
@@ -15,7 +17,9 @@ import { join, relative, resolve } from 'node:path'
 const ui = resolve(import.meta.dirname, '..')
 const src = join(ui, 'src')
 const GENERATED = new Set(['src/routeTree.gen.ts', 'src/api/schema.gen.ts', 'package-lock.json'])
-const EXEMPT = new Set(['src/styles/tokens.css', ...GENERATED])
+// Koi Pond's lily pads and its koi (src/styles/tokens.css).
+const DRAWINGS = ['src/styles/koi-pond/pads.svg', 'src/styles/koi-pond/koi.svg']
+const EXEMPT = new Set(['src/styles/tokens.css', ...DRAWINGS, ...GENERATED])
 const MAX_LINE = 120
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'test-results', 'playwright-report'])
 
@@ -55,7 +59,7 @@ function* files(dir, pattern) {
 }
 
 const found = []
-for (const path of files(src, /\.(?:css|ts|tsx)$/u)) {
+for (const path of files(src, /\.(?:css|ts|tsx|svg)$/u)) {
     const name = relative(ui, path)
     if (EXEMPT.has(name)) {
         continue

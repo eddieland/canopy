@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+    <!--
+        A ripple on the pond: three rings. A mask, so it holds no color: its box paints it (src/styles/tokens.css).
+    -->
+    <g fill="none" stroke="black">
+        <circle cx="100" cy="100" r="93" stroke-width="3" stroke-opacity="0.6"/>
+        <circle cx="100" cy="100" r="63" stroke-width="3.6" stroke-opacity="0.8"/>
+        <circle cx="100" cy="100" r="33" stroke-width="4"/>
+    </g>
+</svg>

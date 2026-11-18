@@ -160,8 +160,8 @@ function ThemePanel() {
             </div>
             <PaletteRow theme="light" value={palettes.light} options={paletteOptions('light')}>
                 The light theme&apos;s palette: lavender, which tints the canvas with the accent&apos;s hue, a warm
-                off-white, a soft sage, sunlight through a canopy of leaves, an editor scheme&apos;s light tones, each
-                with an accent of its own, or Pulp, Gruvbox&apos;s inked as a comic.
+                off-white, a soft sage, sunlight through a canopy of leaves, a pond with a koi in it, an editor
+                scheme&apos;s light tones, each with an accent of its own, or Pulp, Gruvbox&apos;s inked as a comic.
             </PaletteRow>
             <PaletteRow theme="dark" value={palettes.dark} options={paletteOptions('dark')}>
                 The dark theme&apos;s: an indigo slate, a plain grey, a near black, a deep forest green, a plum, a night
@@ -172,7 +172,11 @@ function ThemePanel() {
     )
 }
 
-/** One theme's palette, beside the line that says what each is, each item described on hover too. */
+/**
+ * One theme's palette, beside the line that says what each is, each item described on hover too. Where the line would
+ * be left less than 22rem beside the picker, the picker drops under it instead, and wraps where it is wider than the
+ * panel.
+ */
 function PaletteRow<T extends ResolvedTheme>({
     theme,
     value,
@@ -185,9 +189,14 @@ function PaletteRow<T extends ResolvedTheme>({
     children: ReactNode
 }) {
     return (
-        <div className="flex items-center justify-between gap-4 border-b p-3 last:border-b-0">
-            <p className="max-w-3xl text-sm text-muted-foreground">{children}</p>
-            <ToggleGroup type="single" value={value} aria-label={theme === 'light' ? 'Light palette' : 'Dark palette'}>
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b p-3 last:border-b-0">
+            <p className="max-w-3xl grow basis-88 text-sm text-muted-foreground">{children}</p>
+            <ToggleGroup
+                type="single"
+                value={value}
+                aria-label={theme === 'light' ? 'Light palette' : 'Dark palette'}
+                className="max-w-full flex-wrap"
+            >
                 {options.map((option) => (
                     <ToggleGroupItem
                         key={option.value}
