@@ -42,8 +42,10 @@ is how the git hook (`prek.toml`) runs the codemods on a commit's files.
    `libcst.codemod.VisitorBasedCodemodCommand`: its `visit_` and `leave_` methods rewrite the tree, and
    `AddImportsVisitor.add_needed_import` adds an import it needs. Give it a `DESCRIPTION`.
 2. Add it to `registry.CODEMODS` under the name the command line takes.
-3. Test it in `tests/canopy_codemods/`, as text before and after through `run.rewrite(source, [name])`: what it
-   rewrites, and each thing it must leave alone.
+3. Test it in `tests/canopy_codemods/`, with its cases as Python snippets in `cases/<name>.md`: under a heading, two
+   `python` blocks are a module's text before and after, and one is text it must leave alone. `helpers.cases(name)`
+   reads them for the test module, which runs each through `run.rewrite(source, [name])`. ruff does not format that
+   file, so a snippet stays as the codemod writes it.
 4. Run `make fmt` and commit what it rewrote with the codemod, since the lint fails from then on wherever it would
    still change a file.
 
