@@ -1220,10 +1220,9 @@ def models(
     As a breakdown's `models` lists them, the kinds in `KINDS` order and each kind's models the most costly first, its
     runs no session named a model for last, those unread before the rest. A model's runs that asked for another, as a
     router's did, are a row apart from those that asked for it, so what a router was sent on to is told by model.
-    `kind` keeps one kind's rows. `ticket` keeps
-    that ticket's runs, its workers', plans', and reviews', since no other kind's run names a ticket; each row then
-    carries the workspace's runs of its kind on its model too, the ticket's among them, so a model the ticket was moved
-    to reads against what it costs everywhere else.
+    `kind` keeps one kind's rows. `ticket` keeps that ticket's runs, its workers', plans', and reviews', since no other
+    kind's run names a ticket; each row then carries the workspace's runs of its kind on its model too, the ticket's
+    among them, so a model the ticket was moved to reads against what it costs everywhere else.
 
     Returns:
         A row per kind and model; none for a kind with no runs in the window.
