@@ -166,7 +166,8 @@ titles only, so a session called `fix it` is found by `fix` and by nothing it fi
 title and one message hold every word between them, the best match first. Such a hit shows the snippet of its best
 message under its title, the words marked, and says how many more of its messages hold them. While the index might
 miss a session (not built yet, still building, its last read failed, or built before you changed `exclude`), a line at
-the panel's foot says how far it has come, so a miss can be told from "not indexed yet". The whole list is on [Sessions](sessions).
+the panel's foot says how far it has come, so a miss can be told from "not indexed yet". The whole list is on
+[Sessions](sessions).
 
 A task's reference alone, `task:4`, opens that task on Enter instead of searching for it: faster than remembering
 which page it was on.
