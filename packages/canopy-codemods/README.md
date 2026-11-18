@@ -35,6 +35,15 @@ is how the git hook (`prek.toml`) runs the codemods on a commit's files.
   assignment); an `Annotated[...]` alias, whose metadata frameworks read as the program runs; and a union that may be
   of values, with no `None`, subscript, or builtin type in it. It sees one module at a time: where another module
   reads a rewritten alias at run time, that reader takes its `__value__`.
+- **`doc-comments`** writes the comment directly above a name as a Sphinx doc comment, which editors and doc tools
+  attach to the name: `# How often a run is resumed.` above `MAX_RESUMES: Final = 3` becomes
+  `#: How often a run is resumed.`. The names are a module's constants and type aliases, among its own statements, and
+  the fields of a `@dataclass`, a `NamedTuple`, or an enum. It leaves alone a field of any other class, since a
+  pydantic model's description is the docstring below its field and a `#` above one is a note kept out of the schema;
+  a comment above a function, an import, or a lowercase module object; a block that holds a `#:` line already, a
+  directive to a tool (`# noqa`, `# type:`, `# fmt:`), or a section's banner; and a comment a blank line separates
+  from the name. It cannot tell what a name is from why the code is so, so a note of the second kind is written with
+  a blank line below it, or beside the value. The colon can push a line past 120 columns, which the lint then reports.
 
 ## Adding one
 
