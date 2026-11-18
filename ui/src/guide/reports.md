@@ -154,7 +154,10 @@ rail's. Then:
   each model summed over every kind of run; the **kind** filter in its header narrows it to the overseer's, the
   workers', or any other kind the window has runs of. A run that switched models counts under both, with its share
   of the cost under each, so the runs column won't add up to the kind's. **per run** is what a model spent over its
-  runs, which is how you compare a model that ran twice with one that ran twenty times. The runs no session named a
+  runs, which is how you compare a model that ran twice with one that ran twenty times. A model's runs that asked
+  for something else get a row of their own, marked with what they asked for: `via github-copilot/auto` for a router,
+  which is how you learn what your router has been buying on your behalf, and `asked X` for a model that simply
+  didn't serve. The runs no session named a
   model for sit last, at what they reported costing, in two rows. **unread** is the ones whose sessions canopy hasn't
   read yet: still running, waiting for a tick to read them, or a read that failed and will be tried again. The header
   says how much of the table that is (`43% unread`), since a big **unread** quietly flatters every model above it.

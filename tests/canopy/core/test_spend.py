@@ -1048,6 +1048,56 @@ def test_the_runs_no_session_named_a_model_for_are_unread_apart_from_none(tmp_pa
     assert run_models.unread_of_ticket(conn, "PROJ-2") is None
 
 
+def journal_of_a_router(conn: sqlite3.Connection, now: datetime) -> None:
+    """A day of four runs served by one model: asked for it, for it at a variant, for a router, and for none."""
+    ticket(conn, "PROJ-1")
+    first = tick(conn, earlier(now, 0, 3), 0.5)
+    for n, asked in enumerate(["copilot/gpt-x", "copilot/gpt-x@high", "copilot/auto", None], start=1):
+        run(conn, first, "PROJ-1", earlier(now, 0, 3), 1.0, None)
+        conn.execute("UPDATE runs SET model = ? WHERE id = ?", (asked, n))
+        served(conn, "runs", n, ("copilot/gpt-x", 2, float(n)))
+    # A fifth the router sent on to two models.
+    run(conn, first, "PROJ-1", earlier(now, 0, 2), 1.0, None)
+    conn.execute("UPDATE runs SET model = 'copilot/auto' WHERE id = 5")
+    served(conn, "runs", 5, ("copilot/gpt-x", 1, 0.5), ("copilot/claude-y", 1, 0.25))
+
+
+def test_a_models_runs_that_asked_for_another_are_a_row_apart_under_what_they_asked_for(
+    tmp_path: Path,
+    journals: Journals,
+) -> None:
+    conn = journals.open(tmp_path / "canopy.db")
+    journal_of_a_router(conn, NOW)
+    since, until = (db.format_time(t) for t in spend.window(NOW, 1))
+    found = spend.models(conn, since, until, kind="workers")
+    assert [(m.model, m.asked, m.runs, m.replies, m.cost_usd) for m in found] == [
+        # Asked for it, at a variant or not, or for none: a session names a variant only when it is not the default.
+        ("copilot/gpt-x", None, 3, 6, 7.0),
+        # What the router was sent on to, by model.
+        ("copilot/gpt-x", "copilot/auto", 2, 3, 3.5),
+        ("copilot/claude-y", "copilot/auto", 1, 1, 0.25),
+    ]
+    # A ticket's row is beside the workspace's of the same model and the same ask.
+    narrowed = spend.models(conn, since, until, ticket="PROJ-1", kind="workers")
+    assert [(m.model, m.asked, m.workspace_runs, m.workspace_cost_usd) for m in narrowed] == [
+        ("copilot/gpt-x", None, 3, 7.0),
+        ("copilot/gpt-x", "copilot/auto", 2, 3.5),
+        ("copilot/claude-y", "copilot/auto", 1, 0.25),
+    ]
+
+
+def test_canopy_spend_names_what_a_models_runs_asked_for_when_it_was_another(
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    journal_of_a_router(canopy_env.journal(), noon_today())
+    assert main(["spend", "--days", "1"]) == 0
+    out = capsys.readouterr().out
+    assert "copilot/gpt-x (asked copilot/auto)" in out
+    assert "copilot/claude-y (asked copilot/auto)" in out
+    assert "A model's runs that asked for another, as a router's did, are a line of their own.\n" in out
+
+
 def test_a_ticket_s_spend_by_model_is_its_runs_beside_the_workspace_s(tmp_path: Path, journals: Journals) -> None:
     """Narrowed to a ticket, a row counts its runs on a model, with the workspace's runs of its kind on it beside."""
     conn = journals.open(tmp_path / "canopy.db")

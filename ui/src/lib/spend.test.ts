@@ -49,7 +49,7 @@ const H24: Clock = { hours: '24', zone: false }
 const H12: Clock = { hours: '12', zone: false }
 
 // A By model row of the whole workspace, with no ticket's runs set beside the workspace's.
-const ALONE = { workspace_runs: null, workspace_cost_usd: null, unread: false }
+const ALONE = { workspace_runs: null, workspace_cost_usd: null, asked: null, unread: false }
 
 const NONE: SpendCosts = {
     overseer: null,
@@ -223,6 +223,18 @@ describe('spend', () => {
         expect(modelRows(models, 'plans')).toEqual([])
     })
 
+    it("keeps a model's runs that asked for another, as a router's did, apart from those that asked for it", () => {
+        const models: SpendModel[] = [
+            { kind: 'workers', model: 'c/gpt-5', runs: 2, replies: 6, cost_usd: 1, ...ALONE },
+            { kind: 'workers', model: 'c/gpt-5', runs: 3, replies: 9, cost_usd: 2, ...ALONE, asked: 'c/auto' },
+            { kind: 'reviews', model: 'c/gpt-5', runs: 1, replies: 2, cost_usd: 0.5, ...ALONE, asked: 'c/auto' },
+        ]
+        expect(modelRows(models, undefined).map((m) => [modelKey(m), m.runs, m.cost_usd])).toEqual([
+            ['c/gpt-5 via c/auto', 4, 2.5],
+            ['c/gpt-5', 2, 1],
+        ])
+    })
+
     it('keeps the runs canopy has yet to read apart from those read that named none, unread first', () => {
         const models: SpendModel[] = [
             { kind: 'overseer', model: null, runs: 1, replies: 0, cost_usd: 3, ...ALONE },
@@ -264,6 +276,7 @@ describe('spend', () => {
                 cost_usd: 2.2,
                 workspace_runs: 5,
                 workspace_cost_usd: 4.5,
+                asked: null,
                 unread: false,
             },
             {
@@ -274,6 +287,7 @@ describe('spend', () => {
                 cost_usd: 0.3,
                 workspace_runs: 3,
                 workspace_cost_usd: 0.75,
+                asked: null,
                 unread: false,
             },
         ]

@@ -6,7 +6,7 @@ import { Tip } from '@/components/tip'
 import { costText } from '@/lib/cost-total'
 import { counted } from '@/lib/descriptions'
 import { modelNames } from '@/lib/models'
-import { comparedModels, perRun, TICKET_MODEL_WINDOW, workspacePerRun } from '@/lib/spend'
+import { comparedModels, modelKey, perRun, TICKET_MODEL_WINDOW, workspacePerRun } from '@/lib/spend'
 import { cn } from '@/lib/utils'
 
 /**
@@ -48,9 +48,10 @@ export function TicketModelSpend({
             {rows.map((m) => {
                 const model = m.model ?? ''
                 return (
-                    <Tip key={model} fact={factOf(m)} mono>
+                    <Tip key={modelKey(m)} fact={factOf(m)} mono>
                         <span className="font-mono">
-                            {names.get(model) ?? model}: {counted(m.runs, 'run')},{' '}
+                            {names.get(model) ?? model}
+                            {m.asked !== null && ` via ${m.asked}`}: {counted(m.runs, 'run')},{' '}
                             <Cost usd={perRun(m)} className="text-foreground" />
                             /run · workspace <Cost usd={workspacePerRun(m)} />
                             /run

@@ -347,7 +347,8 @@ export type ToolRow = Omit<SpendTool, 'kind'>
 /**
  * The By model table's rows: one kind's as the server sent them, or with no kind each model summed over every kind,
  * the most costly first and the runs no session named a model for last, those `unread` before those read that named
- * none. A run has one kind, so the runs add up.
+ * none. A run has one kind, so the runs add up. A model's runs that `asked` for another, as a router's did, stay a row
+ * of their own.
  */
 export function modelRows(models: readonly SpendModel[], kind: SpendKind | undefined): ModelRow[] {
     if (kind !== undefined) {
@@ -378,12 +379,12 @@ export function modelRows(models: readonly SpendModel[], kind: SpendKind | undef
 }
 
 /**
- * What tells a By model row from the others of its table: its model, else whether its runs are `unread` or `none`,
- * each its own row.
+ * What tells a By model row from the others of its table: its model, with the other its runs `asked` for when they
+ * did, else whether its runs are `unread` or `none`, each its own row.
  */
-export function modelKey(row: Pick<ModelRow, 'model' | 'unread'>): string {
+export function modelKey(row: Pick<ModelRow, 'model' | 'unread'> & Partial<Pick<ModelRow, 'asked'>>): string {
     if (row.model !== null) {
-        return row.model
+        return typeof row.asked === 'string' ? `${row.model} via ${row.asked}` : row.model
     }
     return row.unread ? UNREAD : 'none'
 }

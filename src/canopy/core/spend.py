@@ -51,6 +51,12 @@ type _Table = Literal["ticks", "runs", "chore_runs", "review_runs", "task_runs"]
 #: tick from before canopy recorded the loop's word has none either, so it reads as hand-run: nothing can tell.
 GROUPS: Final[tuple[Group, ...]] = ("idle", "busy", "hand_run", "not_ok", "dry_run")
 KINDS: Final[tuple[Kind, ...]] = ("overseer", "workers", "plans", "chores", "reviews", "tasks")
+#: The model a run, `r`, asked for when it is another than the one of its session's models, `m`, that served, in SQL:
+#: a session names a variant only when it is not the model's default, so a model asked for at a variant and served
+#: alone is the same.
+_ASKED_ANOTHER: Final = (
+    "CASE WHEN r.model != m.model AND substr(r.model, 1, length(m.model) + 1) != m.model || '@' THEN r.model END"
+)
 #: Each kind's weekly series of first calls, in the order `Breakdown.first_call_weeks` lists them.
 BY: Final[tuple[By, ...]] = ("kind", "chore", "model")
 #: The longest window `canopy spend` and the web UI read, in days; a year keeps the per-day lines bounded.
@@ -306,6 +312,11 @@ class ModelSpend:
     runs: int
     replies: int
     cost_usd: float | None
+    #: The model canopy asked the runtime for, as each run recorded it, when it is another than the one that served: a
+    #: router, such as `github-copilot/auto`, which sent the runs on to `model`, or a model that did not serve. Such
+    #: runs are a row of their own, apart from the runs asked for `model` itself. None when the runs asked for `model`,
+    #: at a variant or not, or for none, and for a row of no model.
+    asked: str | None = None
     #: For a row of no model, whether its runs' sessions canopy has yet to read: running, not read yet, or a read that
     #: failed (`run_models.unread`). False for the rest: no longer kept, no session to read, or no model call; and for
     #: a model's row.
@@ -1207,10 +1218,11 @@ def models(
     """What each kind's runs that started in `[since, until)`, each a journal time, spent on each model (§13).
 
     As a breakdown's `models` lists them, the kinds in `KINDS` order and each kind's models the most costly first, its
-    runs no session named a model for last, those unread before the rest. `kind` keeps one kind's rows. `ticket` keeps
-    that ticket's runs, its workers', plans', and reviews', since no other kind's run names a ticket; each row then
-    carries the workspace's runs of its kind on its model too, the ticket's among them, so a model the ticket was moved
-    to reads against what it costs everywhere else.
+    runs no session named a model for last, those unread before the rest. A model's runs that asked for another, as a
+    router's did, are a row apart from those that asked for it, so what a router was sent on to is told by model.
+    `kind` keeps one kind's rows. `ticket` keeps that ticket's runs, its workers', plans', and reviews', since no other
+    kind's run names a ticket; each row then carries the workspace's runs of its kind on its model too, the ticket's
+    among them, so a model the ticket was moved to reads against what it costs everywhere else.
 
     Returns:
         A row per kind and model; none for a kind with no runs in the window.
@@ -1221,9 +1233,10 @@ def models(
             if ticket is None:
                 found.extend(_models_of(conn, each, since, until, None))
             elif KIND_TABLES[each][0] in _TICKET_TABLES:
-                workspace = {(m.model, m.unread): m for m in _models_of(conn, each, since, until, None)}
+                workspace = {(m.model, m.asked, m.unread): m for m in _models_of(conn, each, since, until, None)}
                 found.extend(
-                    _beside(m, workspace.get((m.model, m.unread))) for m in _models_of(conn, each, since, until, ticket)
+                    _beside(m, workspace.get((m.model, m.asked, m.unread)))
+                    for m in _models_of(conn, each, since, until, ticket)
                 )
     return found
 
@@ -1232,8 +1245,15 @@ def models(
 # those of its runs no session named a model for, under None, the unread ones first.
 def _models_of(conn: sqlite3.Connection, kind: Kind, since: str, until: str, ticket: str | None) -> list[ModelSpend]:
     found = [
-        ModelSpend(kind=kind, model=str(model), runs=int(runs), replies=int(replies), cost_usd=float(cost))
-        for model, runs, replies, cost in sql.execute(conn, _named_models(kind, since, until, ticket))
+        ModelSpend(
+            kind=kind,
+            model=str(model),
+            runs=int(runs),
+            replies=int(replies),
+            cost_usd=float(cost),
+            asked=str(asked) if asked is not None else None,
+        )
+        for model, asked, runs, replies, cost in sql.execute(conn, _named_models(kind, since, until, ticket))
     ]
     found.extend(
         ModelSpend(kind=kind, model=None, runs=int(runs), replies=0, cost_usd=cost, unread=bool(unread))
@@ -1251,17 +1271,18 @@ def _beside(row: ModelSpend, workspace: ModelSpend | None) -> ModelSpend:
 
 
 # One kind's spend by model in a window, read as `_tools_of` reads `run_tools`: the run table leads, by its `_spent`
-# index, and `run_models` is read by its key's prefix. With a ticket, only the runs naming it.
+# index, and `run_models` is read by its key's prefix. With a ticket, only the runs naming it. A model's runs that
+# asked for another are grouped apart, under what they asked for.
 def _named_models(kind: Kind, since: str, until: str, ticket: str | None = None) -> sql.Select:
     table, which = KIND_TABLES[kind]
     return (
-        sql.select("m.model, count(*), SUM(m.replies), SUM(m.cost_usd)")
+        sql.select("m.model, {} AS asked, count(*), SUM(m.replies), SUM(m.cost_usd)", sql.frag(_ASKED_ANOTHER))
         .from_("{} r CROSS JOIN run_models m ON m.run_table = ? AND m.run_id = r.id", sql.name(table), table)
         .where("r.started_at >= ? AND r.started_at < ?", since, until)
         .where("{}", which)
         .where("{}", _of_ticket(ticket))
-        .group_by("m.model")
-        .order_by("SUM(m.cost_usd) DESC, m.model")
+        .group_by("m.model, asked")
+        .order_by("SUM(m.cost_usd) DESC, m.model, asked")
     )
 
 

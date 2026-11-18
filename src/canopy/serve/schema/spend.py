@@ -218,6 +218,9 @@ class SpendModel(Model):
     them, to compare with; None for a row of the whole workspace."""
     workspace_cost_usd: float | None = None
     """What those runs spent on the model, as `cost_usd` counts it; None as `workspace_runs` is."""
+    asked: str | None = None
+    """The model canopy asked for, when it is another than `model`: a router that sent the runs on to it, or a model
+    that did not serve. Such runs are a row of their own. None when the runs asked for `model`, or for none."""
     unread: bool = False
     """For a row of no model, whether canopy has yet to read its runs' sessions: running, not read yet, or a read that
     failed. False for the rest, read that named none (no longer kept, no session to read, or no model call), and for a

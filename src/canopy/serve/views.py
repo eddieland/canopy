@@ -1000,6 +1000,7 @@ def spend_model(found: spending.ModelSpend) -> SpendModel:
         cost_usd=found.cost_usd,
         workspace_runs=found.workspace_runs,
         workspace_cost_usd=found.workspace_cost_usd,
+        asked=found.asked,
         unread=found.unread,
     )
 

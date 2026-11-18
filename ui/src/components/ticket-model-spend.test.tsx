@@ -16,6 +16,7 @@ const OPUS: SpendModel = {
     cost_usd: 2.2,
     workspace_runs: 5,
     workspace_cost_usd: 4.4,
+    asked: null,
     unread: false,
 }
 const SONNET: SpendModel = { ...OPUS, model: 'anthropic/claude-sonnet-4-5', runs: 1, cost_usd: 0.6 }
@@ -46,6 +47,16 @@ describe('TicketModelSpend', () => {
         expect(tipOf(screen.getByText(/^claude-opus-4-1/u))).toBe(
             "anthropic/claude-opus-4-1: 2 runs of this ticket's, $1.10 each; 5 runs of the workspace's, these among " +
                 'them, $0.88 each',
+        )
+    })
+
+    it("sets a model's runs that asked for a router apart, naming the router", async () => {
+        const routed: SpendModel = { ...SONNET, asked: 'github-copilot/auto' }
+        await renderRouted(<TicketModelSpend ticketKey="ABC-1" spend={[SONNET, routed]} models={[worker('config')]} />)
+        expect(screen.getByTestId('ticket-model-spend').textContent).toBe(
+            'worker spend, 30 days' +
+                'claude-sonnet-4-5: 1 run, $0.60/run · workspace $0.88/run' +
+                'claude-sonnet-4-5 via github-copilot/auto: 1 run, $0.60/run · workspace $0.88/run',
         )
     })
 
