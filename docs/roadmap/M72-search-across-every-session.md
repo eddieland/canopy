@@ -191,6 +191,8 @@ indexed up to 64 KiB, a session up to 4 MiB and 10,000 messages; a word in a tit
 search ranks at most 1,000 sessions; the daily drop of the sessions the runtime no longer keeps runs in the loop's wait
 with the index's other upkeep, not inside the tick's pass, so no tick reads the record; a change to `sessions.exclude`
 builds the index again whole, as a change of shape or cut does; and a sandbox role's record that canopy cannot read
-keeps what the index already holds of it. Left of stage 2: the web UI showing a hit's snippet, how many more messages
-hold the words, and the index's progress on the Sessions page and the search's panels (the API serves them; the
-panels show the hits' titles, best match first), with `ui/DESIGN.md` for it; and the live checks of the Accept.
+keeps what the index already holds of it. Stage 2's web UI built 2026-11-18: a hit's row shows its snippet, the words
+marked, how many more of its messages hold them, and that it was indexed in part; the Sessions page has a line for the
+index's progress, and a search's panel one while the index may miss a session; with `ui/DESIGN.md` and the guide. A
+search that finds no session shows no panel, so says nothing of an index still building: the Sessions page does. Left
+of stage 2: the live checks of the Accept, the operator's.
