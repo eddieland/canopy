@@ -8,10 +8,6 @@ description: How canopy agents use Jira through the Atlassian MCP server. Load w
 What is specific to Jira as canopy's tracker. Where a tool named here differs from what your Atlassian MCP server
 exposes, use the closest equivalent.
 
-## Keys
-
-The ticket key is the Jira issue key as-is: `PROJ-123`.
-
 ## Finding tickets
 
 `tracker.query` is JQL: run it through the server's JQL search tool. Atlassian remote MCP tools usually need a cloud
@@ -29,7 +25,7 @@ and email addresses are not identities; two people can share a display name.
 
 ## Labels
 
-Jira labels cannot contain spaces. Set them with the issue edit tool (on Atlassian's remote server, `editJiraIssue`
+Set labels with the issue edit tool (on Atlassian's remote server, `editJiraIssue`
 with only `labels` in its fields), never with a command-line client, and pass no other field. Editing fields cannot
 change an issue's status; that takes a transition, which canopy agents never make. An edit may replace the whole list:
 read the current labels immediately before the edit, not earlier in the run, add or remove only the one you mean to,
@@ -44,11 +40,11 @@ Only an `implement` or `resume` worker creates issues, the follow-ups its prompt
 project, with the parent's issue type unless that type cannot be created, with an empty `labels` field and no assignee.
 Link it to the parent with a "relates to" link, not as a subtask; a private ticket's worker, which has the create tool
 and no link tool, names the parent in the body instead, on a line of its own, `Part of <parent key>`. Order the new
-issues with "Blocks" links: the earlier one blocks the later one. The new issue's key is the key Jira returns.
+issues with "Blocks" links: the earlier one blocks the later one.
 
 ## Comments and ordering
 
-Order comments by their created timestamp, and use the comment id as the cursor. Write comments in plain text; the
+Use the comment id as the cursor. Write comments in plain text; the
 server converts them to Jira's format.
 
 ## Blockers
