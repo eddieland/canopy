@@ -273,7 +273,6 @@ def render(found: Sizes) -> list[str]:
     return lines
 
 
-# The list, printed, or as JSON; the command's exit status.
 def model_line(asked: str | None, served: Sequence[str]) -> str | None:
     """What a session's line says of its models: the one asked for, and those that served it when they differ.
 
@@ -291,6 +290,7 @@ def model_line(asked: str | None, served: Sequence[str]) -> str | None:
     return f"model {asked} -> {', '.join(served)}"
 
 
+# The list, printed, or as JSON; the command's exit status.
 def _list(
     ctx: Context,
     words: Sequence[str],
