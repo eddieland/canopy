@@ -237,12 +237,14 @@ def _models(found: Breakdown) -> list[str]:
         for m in found.models
     )
     lines.append("A run on two models counts under each.")
+    if any(m.asked is not None for m in found.models):
+        lines.append("A model's runs that asked for another, as a router's did, are a line of their own.")
     return lines
 
 
 def _model_name(row: spend.ModelSpend) -> str:
     if row.model is not None:
-        return row.model
+        return row.model if row.asked is None else f"{row.model} (asked {row.asked})"
     return UNREAD if row.unread else NO_MODEL
 
 

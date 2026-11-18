@@ -38,7 +38,7 @@ import { barPercent } from '@/lib/chart'
 import { useClock } from '@/lib/clock'
 import { counted } from '@/lib/descriptions'
 import { firstKind, KIND_SERIES, seriesOf, seriesWeeks } from '@/lib/first-calls'
-import { unnamedHint, UNREAD, UNREAD_RUNS_HINT } from '@/lib/models'
+import { isRouter, unnamedHint, UNREAD, UNREAD_RUNS_HINT } from '@/lib/models'
 import { readoutDelta, usdChange, wholeChange } from '@/lib/readout-delta'
 import { windowBefore, windowName } from '@/lib/report-window'
 import {
@@ -1086,8 +1086,14 @@ function modelColumns(
 
 /**
  * A model's name in By model: the runs no session named one for (`UnnamedModel`), why on hover; a model the runs page
- * lists no run of, plain, why on hover; else a link to its runs of kind `of`.
+ * lists no run of, plain, why on hover; else a link to its runs of kind `of`. A row of the runs that asked for another
+ * model says so after it, `via auto` for a router that sent them on and `asked X` for a model that did not serve.
  */
+/** What a row's `via` or `asked` says on hover. */
+const ASKED_HINT =
+    'These runs asked for this model and were served by the one named: a router sends a run on to another, and any ' +
+    'other model asked for did not serve'
+
 function ModelName({ model: m, of, listed }: { model: ModelRow; of: RunsKind; listed: ReadonlySet<string> }) {
     if (m.model === null) {
         return (
@@ -1107,14 +1113,27 @@ function ModelName({ model: m, of, listed }: { model: ModelRow; of: RunsKind; li
             </Tip>
         )
     }
-    return (
+    const link = (
         <Link
             to="/workspace/runs"
             search={{ model: m.model, kind: of }}
-            className="block text-accent underline-offset-4 hover:underline"
+            className="block min-w-0 text-accent underline-offset-4 hover:underline"
         >
             <Clipped text={m.model} className="block readout" />
         </Link>
+    )
+    if (m.asked === null) {
+        return link
+    }
+    return (
+        <span className="flex min-w-0 items-baseline gap-2">
+            {link}
+            <Tip fact={ASKED_HINT}>
+                <span className="shrink-0 font-mono text-xs text-muted-foreground" data-testid="spend-model-asked">
+                    {isRouter(m.asked) ? 'via' : 'asked'} {m.asked}
+                </span>
+            </Tip>
+        </span>
     )
 }
 
