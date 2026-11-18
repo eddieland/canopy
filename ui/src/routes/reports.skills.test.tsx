@@ -288,7 +288,7 @@ describe('the Skills report', () => {
         expect(
             await screen.findByText(
                 '3 skills offered over 7 days · 1 never loaded · ' +
-                    'front matter ~56.1k tokens in 5 of 9 runs offered a skill',
+                    'front matter ~366 tokens a call in 5 of 9 runs offered a skill',
             ),
         ).toBeTruthy()
     })
@@ -300,7 +300,7 @@ describe('the Skills report', () => {
             within(tiles)
                 .getAllByRole('term')
                 .map((t) => t.textContent),
-        ).toEqual(['skills offered', 'never loaded', '~tokens a call', 'front matter ~tokens'])
+        ).toEqual(['skills offered', 'never loaded', '~tokens a call', '~tokens, all calls'])
         const shown = ['offered', 'unused', 'call', 'sent']
         expect(shown.map((key) => within(tiles).getByTestId(`skills-${key}`).textContent)).toEqual([
             '3',
@@ -326,13 +326,13 @@ describe('the Skills report', () => {
         await renderPage(REPORT)
         await screen.findByTestId('skills-agent-table')
         expect(cells('skills-agent-table', /^skills-agent-/u)).toEqual([
-            ['canopy-worker', '4', '0', '3', '1', '5', '387', '', '49.6k'],
-            ['canopy-reviewer', '6', '1', '3', '2', '2', '259', '', '6.5k'],
+            ['canopy-worker', '4', '0', '3', '1', '5', '387', '', '128', '49.6k'],
+            ['canopy-reviewer', '6', '1', '3', '2', '2', '259', '', '25', '6.5k'],
             // Offered no skill, which the runtime said: zeros, and an empty bar.
-            ['canopy-overseer', '2', '0', '0', '0', '0', '0', '', '0'],
+            ['canopy-overseer', '2', '0', '0', '0', '0', '0', '', '–', '0'],
             // No offer on record for any run: nothing says what it was offered, so dashes, and no bar. Its loads
             // are counted all the same.
-            ['canopy-worker-private', '3', '3', '–', '–', '3', '–', '', '–'],
+            ['canopy-worker-private', '3', '3', '–', '–', '3', '–', '', '–', '–'],
         ])
         expect(bars('canopy-overseer')).toHaveLength(1)
         expect(bars('canopy-worker-private')).toHaveLength(0)
@@ -347,11 +347,11 @@ describe('the Skills report', () => {
         await renderPage(REPORT)
         await screen.findByTestId('skills-skill-table')
         expect(cells('skills-skill-table', /^skills-skill-/u)).toEqual([
-            ['design-system', '7', '14%', '231', '35.4k', '', '1', '0', '2.4k'],
-            ['tracker-jira', '9', '67%', '26', '4.0k', '', '9', '1', '4.9k'],
-            ['terse', '9', 'never', '1', '191', '', '0', '0', '0'],
+            ['design-system', '7', '14%', '231', '153', '35.4k', '', '1', '0', '2.4k'],
+            ['tracker-jira', '9', '67%', '26', '153', '4.0k', '', '9', '1', '4.9k'],
+            ['terse', '9', 'never', '1', '153', '191', '', '0', '0', '0'],
             // Asked for by a call that failed, and offered to no run: nothing to rate, size, or cost.
-            ['canopy', '–', '–', '–', '–', '', '0', '1', '0'],
+            ['canopy', '–', '–', '–', '–', '–', '', '0', '1', '0'],
         ])
         expect(screen.getByTestId('skills-scope').textContent).toBe('every agent')
         expect(screen.getByTestId('skills-count').textContent).toBe('4')
@@ -372,9 +372,9 @@ describe('the Skills report', () => {
         expect(screen.getByTestId('skills-count').textContent).toBe('3 of 4')
         // Its own runs alone: the skill a worker loaded and it never did reads never for it.
         expect(cells('skills-skill-table', /^skills-skill-/u)).toEqual([
-            ['design-system', '3', 'never', '231', '5.8k', '', '0', '0', '0'],
-            ['tracker-jira', '5', '40%', '26', '656', '', '2', '1', '1.6k'],
-            ['terse', '5', 'never', '1', '31', '', '0', '0', '0'],
+            ['design-system', '3', 'never', '231', '25', '5.8k', '', '0', '0', '0'],
+            ['tracker-jira', '5', '40%', '26', '25', '656', '', '2', '1', '1.6k'],
+            ['terse', '5', 'never', '1', '25', '31', '', '0', '0', '0'],
         ])
         // The picked agent's row is the page's own: marked, as the page shown is.
         expect(within(agents).getByRole('link', { name: 'canopy-reviewer' }).getAttribute('aria-current')).toBe('page')
@@ -390,7 +390,7 @@ describe('the Skills report', () => {
         await screen.findByTestId('skills-skill-table')
         // Loaded in three runs nothing says what they were offered: no rate, no size, no cost.
         expect(cells('skills-skill-table', /^skills-skill-/u)).toEqual([
-            ['tracker-jira', '–', '–', '–', '–', '', '3', '0', '2.4k'],
+            ['tracker-jira', '–', '–', '–', '–', '–', '', '3', '0', '2.4k'],
         ])
         cleanup()
         await renderPage(REPORT, '/reports/skills?agent=canopy-overseer')
@@ -440,7 +440,7 @@ describe('the Skills report', () => {
         await renderPage({ ...REPORT, skills: [odd] })
         await screen.findByTestId('skills-skill-table')
         expect(cells('skills-skill-table', /^skills-skill-/u)).toEqual([
-            ['My_Skill', '9', '–', '26', '4.0k', '', '–', '–', '–'],
+            ['My_Skill', '9', '–', '26', '153', '4.0k', '', '–', '–', '–'],
         ])
     })
 
@@ -473,11 +473,11 @@ describe('the Skills report', () => {
                 .map((t) => t.textContent),
         ).toEqual(['skills offered', 'never loaded'])
         // Offered and loaded are still counted, and the skills most offered lead meanwhile.
-        expect(cells('skills-skill-table', /^skills-skill-/u).map((row) => row.slice(0, 6))).toEqual([
-            ['terse', '9', 'never', '–', '–', ''],
-            ['tracker-jira', '9', '67%', '–', '–', ''],
-            ['design-system', '7', '14%', '–', '–', ''],
-            ['canopy', '–', '–', '–', '–', ''],
+        expect(cells('skills-skill-table', /^skills-skill-/u).map((row) => row.slice(0, 7))).toEqual([
+            ['terse', '9', 'never', '–', '–', '–', ''],
+            ['tracker-jira', '9', '67%', '–', '–', '–', ''],
+            ['design-system', '7', '14%', '–', '–', '–', ''],
+            ['canopy', '–', '–', '–', '–', '–', ''],
         ])
         expect(screen.getByTestId('skills-coverage').textContent).toContain(
             "Front matter is counted over 0 of the 9 runs offered a skill: 9 from before canopy kept a skill's " +

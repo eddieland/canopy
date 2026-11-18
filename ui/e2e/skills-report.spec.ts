@@ -20,7 +20,8 @@ test('the nav opens Skills under Reports: each agent by what its list costs a ca
     // The mock's day of offers and loads on the runs it has (canopy/serve/mock/skill_use.py): the cost with the runs
     // it is counted in, since the rest have no model calls on record.
     await expect(page.locator('main header p')).toHaveText(
-        '8 skills offered over 7 days · 4 never loaded · front matter ~88.6k tokens in 8 of 19 runs offered a skill',
+        '8 skills offered over 7 days · 4 never loaded · ' +
+            'front matter ~348 tokens a call in 8 of 19 runs offered a skill',
     )
     await expect(page.getByTestId('skills-window-7')).toHaveAttribute('data-state', 'on')
     // The heaviest list a call first; the planner's sessions are not read, so its list has no cost yet; the
@@ -42,6 +43,7 @@ test('the nav opens Skills under Reports: each agent by what its list costs a ca
         '3',
         '11',
         '387',
+        '128',
         '49.6k',
     ])
     await expect(page.getByTestId('skills-agent-canopy-planner').locator(READ)).toHaveText([
@@ -53,6 +55,7 @@ test('the nav opens Skills under Reports: each agent by what its list costs a ca
         '5',
         '–',
         '–',
+        '–',
     ])
     await expect(page.getByTestId('skills-agent-canopy-overseer').locator(READ)).toHaveText([
         'canopy-overseer',
@@ -62,6 +65,7 @@ test('the nav opens Skills under Reports: each agent by what its list costs a ca
         '0',
         '0',
         '0',
+        '–',
         '0',
     ])
     // Not known draws no bar; a known nothing, an empty one.
@@ -81,6 +85,7 @@ test('the skills open on the costliest front matter, a skill no run loaded readi
         '11',
         '9%',
         '231',
+        '234',
         '54.2k',
         '1',
         '0',
@@ -92,6 +97,7 @@ test('the skills open on the costliest front matter, a skill no run loaded readi
         '19',
         '63%',
         '26',
+        '254',
         '6.7k',
         '15',
         '0',
@@ -104,6 +110,7 @@ test('the skills open on the costliest front matter, a skill no run loaded readi
         'never',
         '98',
         '–',
+        '–',
         '0',
         '0',
         '0',
@@ -111,6 +118,7 @@ test('the skills open on the costliest front matter, a skill no run loaded readi
     // The operator's own skill, denied to every agent: a call for it that failed, and no offer.
     await expect(page.getByTestId('skills-skill-canopy').locator(READ)).toHaveText([
         'canopy',
+        '–',
         '–',
         '–',
         '–',
@@ -152,6 +160,7 @@ test("an agent's name narrows the skills to its own, least loaded first its list
         '3',
         'never',
         '231',
+        '25',
         '5.8k',
         '0',
         '0',
@@ -174,7 +183,8 @@ test('the window is kept in the address beside the order, and 30 days say what t
     await page.getByTestId('skills-window-30').click()
     await expect(page).toHaveURL(/\/reports\/skills\?order=most&days=30$/u)
     await expect(page.locator('main header p')).toHaveText(
-        '8 skills offered over 30 days · 4 never loaded · front matter ~88.6k tokens in 8 of 24 runs offered a skill',
+        '8 skills offered over 30 days · 4 never loaded · ' +
+            'front matter ~348 tokens a call in 8 of 24 runs offered a skill',
     )
     // The workers' runs of the weeks before were offered skills with no length kept: more runs, no more counted.
     await expect(page.getByTestId('skills-coverage')).toContainText(
@@ -187,7 +197,8 @@ test('the reports page has a card for the Skills report, its line over 30 days',
     await page.goto('reports')
     await settled(page)
     await expect(page.getByTestId('reports-card-skills-line')).toHaveText(
-        '8 skills offered over 30 days · 4 never loaded · front matter ~88.6k tokens in 8 of 24 runs offered a skill',
+        '8 skills offered over 30 days · 4 never loaded · ' +
+            'front matter ~348 tokens a call in 8 of 24 runs offered a skill',
     )
     await page.getByTestId('reports-card-skills').click()
     await expect(page).toHaveURL(/\/reports\/skills\?days=30$/u)

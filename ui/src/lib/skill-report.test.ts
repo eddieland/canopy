@@ -121,16 +121,16 @@ describe('the Skills report', () => {
             loads: 24,
             listed: 19,
             counted: 8,
-            est_front_matter_tokens: 88_610,
+            est_call_tokens: 348,
             skills: [],
         }
         expect(skillsLine(found)).toBe(
             '8 skills offered over 7 days · 4 never loaded · ' +
-                'front matter ~88.6k tokens in 8 of 19 runs offered a skill',
+                'front matter ~348 tokens a call in 8 of 19 runs offered a skill',
         )
         // Counted whole, the cost needs no cover beside it.
         expect(skillsLine({ ...found, offered: 1, unused: 0, counted: 19 })).toBe(
-            '1 skill offered over 7 days · each one loaded · front matter ~88.6k tokens',
+            '1 skill offered over 7 days · each one loaded · front matter ~348 tokens a call',
         )
         // A skill the runtime cannot name has loads nothing counts: not known loaded.
         expect(
@@ -142,7 +142,7 @@ describe('the Skills report', () => {
             }),
         ).toContain('1 skill offered over 7 days · none known never loaded')
         // No run counted yet: not known, which is not a cost of nothing.
-        expect(skillsLine({ ...found, counted: 0, est_front_matter_tokens: null })).toBe(
+        expect(skillsLine({ ...found, counted: 0, est_call_tokens: null })).toBe(
             '8 skills offered over 7 days · 4 never loaded · front matter not counted yet',
         )
         expect(skillsLine({ ...found, days: 30, offered: 0, unused: 0, loads: 0 })).toBe(
