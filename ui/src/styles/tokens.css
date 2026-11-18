@@ -192,8 +192,8 @@
 
     /* Each palette's character beyond color (ui/DESIGN.md, "Palettes"): its corners (`--radius`, above), the edge a
      * panel or what floats draws, and its depth. Depth is used sparingly: a faint lift under a panel, a shadow under
-     * what floats over the page (a menu, a card, a dialog, a toast), and one under the primary action. Each shadow is
-     * drawn in the palette's own text color, so it carries the canvas's hue. */
+     * what floats over the page (a menu, a card, a dialog, a toast), and one under the primary action. By default each
+     * shadow is drawn in the palette's own text color, so it carries the canvas's hue. */
     --edge: var(--border);
     --depth-panel: 0 1px 2px oklch(from var(--foreground) l c h / 0.06);
     --depth-float:
@@ -224,6 +224,10 @@
     --bough: none;
     --bough-mask: none;
     --bough-motion: none;
+    /* How the canvas's second layer, a bough, and what crosses the canvas blend with what lies under them
+     * (src/index.css): `normal` by default, each painted over the last. Komorebi, whose three are shadows, sets
+     * `darken` and paints each in an opaque shade, so where two overlap the canvas goes no deeper than the deeper. */
+    --shade-blend: normal;
     /* What may move over the canvas, only while the operator's system allows motion (src/index.css), as Starry
      * Skies's sky and Komorebi's light do: each canvas layer's animation, and two things that cross it now and then,
      * each an image and its animation: Starry Skies's meteors, each a streak as long as `--meteor-length` and as
@@ -780,9 +784,10 @@
 /* Komorebi, sunlight through a canopy of leaves: the canvas a wall in that light, a pale gold-green, the panels paper
  * in full sun, and the text a deep leaf-black. The accent is wisteria, the violet a shadow turns in full sun, apart
  * from every status and from the other light accents, and Pull requests' violet turns a few degrees toward magenta
- * to stand apart from it. Muted text and the accent sit a step deeper than they would need to on a plain canvas, so
- * both still read at 4.5:1 where a leaf's shadow crosses text set on the canvas, as the guide's is; tokens.test.ts
- * measures them there. */
+ * to stand apart from it. Muted text, the accent, and Settings' slate sit a step deeper than they would need to on a
+ * plain canvas, so each still reads at 4.5:1 where a leaf's shadow crosses text set on the canvas, as the guide's
+ * prose and Loop settings' headings are, and muted text reads there on a code chip's tint as well, as the foot of
+ * Memory sets it; tokens.test.ts measures them there. */
 :root[data-light-palette='komorebi']:not(.dark) {
     --accent: oklch(0.465 0.17 293);
     --ring: oklch(0.465 0.17 293 / 0.55);
@@ -791,14 +796,15 @@
     --surface-raised: oklch(0.968 0.028 106);
     --border: oklch(0.905 0.04 110);
     --foreground: oklch(0.255 0.028 128);
-    --muted-foreground: oklch(0.445 0.04 125);
-    --scrollbar: oklch(0.445 0.04 125 / 0.4);
+    --muted-foreground: oklch(0.415 0.04 125);
+    --scrollbar: oklch(0.415 0.04 125 / 0.4);
     --status-stopped: oklch(0.43 0.04 125);
     --spend-dry-run: oklch(0.6 0.03 120);
     --check-other: oklch(0.6 0.03 120);
     --answer-na: oklch(0.6 0.03 120);
     --context-carried: oklch(0.6 0.03 120);
     --section-pull-requests: oklch(0.54 0.21 310);
+    --section-settings: oklch(0.45 0.03 250);
 
     /* The shell in the same light: soft corners, each panel a sheet whose shadow falls long and soft in the shade's
      * violet grey, the aurora blooming a little, the name wisteria among its leaves, and the nav's active icon in a
@@ -867,32 +873,30 @@
         radial-gradient(ellipse 1rem 0.8rem at 2.3% 31%, var(--sun-dim) 38%, transparent) 0 0 / 43rem 31rem,
         radial-gradient(ellipse 0.7rem 0.6rem at 93.8% 49.3%, var(--sun-dim) 38%, transparent) 0 0 / 43rem 31rem;
     /* The shade, on the second: the shadows of sprays of leaves near the wall, some crisp and some soft, as their
-     * distance from it makes them, each the shade's color through a mask of its leaves (komorebi/sprays.svg, a tile).
-     * Both layers are clear over the rail, the header, and a page's title and description, so neither lies behind
-     * text there, and the shade is clear of the corner the bough's shadow takes, so no two shadows deepen each
-     * other. */
-    --spray-shadow: oklch(from var(--shade) l c h / 0.12);
+     * distance from it makes them, each the shade's color through a mask of its leaves, on two tiles of unrelated
+     * sizes, as the light's are, so what the two draw together repeats nowhere in a window (komorebi/sprays.svg,
+     * sprays-2.svg). Both layers are clear over the rail, the header, and a page's title, fading in past it. Every
+     * shadow is the canvas mixed toward `--shade`, as that much of it would lie over the canvas, opaque, and darkens
+     * what is under it (`--shade-blend`), so where two shadows cross the canvas goes no deeper than the deeper of
+     * them, never both. The palette's masks are written into the stylesheet (`?inline`), never fetched: left to
+     * files, its shadows would be missing until the files came. */
+    --shade-blend: darken;
+    --spray-shadow: color-mix(in srgb, var(--shade) 12%, var(--background));
     --shade-clear:
         linear-gradient(90deg, transparent 14rem, oklch(0 0 0) 22rem) intersect,
         linear-gradient(transparent 12.5rem, oklch(0 0 0) 18rem);
     --canvas-texture-mask: var(--shade-clear);
     --canvas-swell: var(--spray-shadow);
     --canvas-swell-mask:
-        url('./komorebi/sprays.svg') 0 0 / 43rem 37rem intersect,
-        radial-gradient(
-                ellipse min(40rem, 100vw - 23rem) min(24rem, 100vh - 18rem) at right bottom,
-                transparent 62%,
-                oklch(0 0 0)
-            )
-            intersect,
-        var(--shade-clear);
+        var(--shade-clear) intersect, url('./komorebi/sprays.svg?inline') 0 0 / 37rem 43rem add,
+        url('./komorebi/sprays-2.svg?inline') 0 0 / 47rem 53rem;
     /* The nearest shadow, in the window's lower right corner, where Starry Skies hangs its moon: a sprig's, crisp,
      * over a bough's farther from the wall, so larger and softer (komorebi/sprig.svg), drawn whole inside its box
      * (src/index.css), so it shrinks with a small window rather than reach the rail or a page's title. It is the
-     * deepest shade the canvas takes, and the one muted text and the accent are measured under. */
-    --leaf-shadow: oklch(from var(--shade) l c h / 0.22);
+     * deepest shade the canvas takes, and the one text set on the canvas is measured under. */
+    --leaf-shadow: color-mix(in srgb, var(--shade) 22%, var(--background));
     --bough: var(--leaf-shadow);
-    --bough-mask: url('./komorebi/sprig.svg') right bottom / contain no-repeat;
+    --bough-mask: url('./komorebi/sprig.svg?inline') right bottom / contain no-repeat;
     /* A breeze moves it all, not much: the flecks and the shade dim and brighten out of step, as leaves crossing the
      * sun would make them, the sprig sways about the corner it grows from, and now and then a leaf's shadow drifts
      * down the open canvas at the window's foot, rocking as a falling leaf does (komorebi/leaf.svg). */
@@ -900,7 +904,7 @@
     --canvas-swell-motion: dapple-shade 13s ease-in-out infinite;
     --bough-motion: bough-sway 11s ease-in-out infinite;
     --meteor: var(--leaf-shadow);
-    --meteor-mask: url('./komorebi/leaf.svg') center / contain no-repeat;
+    --meteor-mask: url('./komorebi/leaf.svg?inline') center / contain no-repeat;
     --meteor-length: 3rem;
     --meteor-girth: 1.6rem;
     --meteor-turn: 0deg;

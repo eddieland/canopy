@@ -1,9 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 740">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 740 860">
     <defs>
-        <filter id="f0" filterUnits="userSpaceOnUse" x="-60" y="-60" width="980" height="860">
+        <filter id="f0" filterUnits="userSpaceOnUse" x="-60" y="-60" width="860" height="980">
             <feGaussianBlur stdDeviation="2.6"/>
         </filter>
-        <filter id="f1" filterUnits="userSpaceOnUse" x="-60" y="-60" width="980" height="860">
+        <filter id="f1" filterUnits="userSpaceOnUse" x="-60" y="-60" width="860" height="980">
             <feGaussianBlur stdDeviation="6"/>
         </filter>
         <g id="s0">
@@ -75,82 +75,23 @@
             <path transform="translate(86 22.9) rotate(-12.9)" d="M0 0C7.8 -12.7 29.1 -10.2 48.5 3C34.9 11.5 12.6 13.2 0
                 0Z"/>
         </g>
-        <g id="s4">
-            <path d="M-92.6 0C-37 2.6 27.8 6.5 92.6 4.5" fill="none" stroke="black" stroke-width="2.6"
-                stroke-linecap="round"/>
-            <path d="M-81.5 0.5L-77.4 -3" stroke="black" stroke-width="1.8"/>
-            <path transform="translate(-77.4 -3) rotate(-41.4)" d="M0 0C13.3 -22.7 49.7 -24.2 82.8 -6.6C59.6 13.3 21.5
-                23.7 0 0Z"/>
-            <path d="M-46.1 2.2L-42.4 6.4" stroke="black" stroke-width="1.8"/>
-            <path transform="translate(-42.4 6.4) rotate(48.6)" d="M0 0C10.5 -18.4 39.2 -14.5 65.4 4.8C47.1 16.8 17 19.1
-                0 0Z"/>
-            <path d="M-13.2 3.6L-6.4 -2.4" stroke="black" stroke-width="1.8"/>
-            <path transform="translate(-6.4 -2.4) rotate(-41.4)" d="M0 0C10 -18.4 37.4 -18.8 62.3 -3.7C44.9 11.8 16.2
-                19.2 0 0Z"/>
-            <path d="M23.7 4.7L28.4 8.9" stroke="black" stroke-width="1.8"/>
-            <path transform="translate(28.4 8.9) rotate(42.3)" d="M0 0C9.8 -16.7 36.7 -13 61.1 4.7C44 15.5 15.9 17.4 0
-                0Z"/>
-            <path d="M57.2 5L62.1 2.1" stroke="black" stroke-width="1.8"/>
-            <path transform="translate(62.1 2.1) rotate(-31.4)" d="M0 0C8.3 -15.1 31.1 -15.6 51.9 -3.3C37.4 9.5 13.5
-                15.7 0 0Z"/>
-            <path transform="translate(92.6 4.5) rotate(1.8)" d="M0 0C8.3 -13.7 31.3 -11.1 52.2 3C37.6 12.2 13.6 14.2 0
-                0Z"/>
-        </g>
-        <g id="s5">
-            <path d="M-109.7 0C-43.9 12.1 32.9 30.3 109.7 21.2" fill="none" stroke="black" stroke-width="2.6"
-                stroke-linecap="round"/>
-            <path d="M-89.7 3.8L-84.7 0.9" stroke="black" stroke-width="1.8"/>
-            <path transform="translate(-84.7 0.9) rotate(-29.7)" d="M0 0C16.3 -29.5 61.1 -32.5 101.9 -10.7C73.4 16 26.5
-                30.7 0 0Z"/>
-            <path d="M-47.3 11.7L-42.8 18.7" stroke="black" stroke-width="1.8"/>
-            <path transform="translate(-42.8 18.7) rotate(57.3)" d="M0 0C14.6 -26.9 54.7 -21.8 91.1 5.7C65.6 23.9 23.7
-                27.9 0 0Z"/>
-            <path d="M0.4 19.1L8 15.3" stroke="black" stroke-width="1.8"/>
-            <path transform="translate(8 15.3) rotate(-26.8)" d="M0 0C14 -26.1 52.6 -26.5 87.7 -4.8C63.2 16.9 22.8 27.2
-                0 0Z"/>
-            <path d="M53.8 23.5L57.6 27.6" stroke="black" stroke-width="1.8"/>
-            <path transform="translate(57.6 27.6) rotate(46.8)" d="M0 0C10.6 -17.3 39.9 -13 66.4 5.8C47.8 16.6 17.3 17.9
-                0 0Z"/>
-            <path transform="translate(109.7 21.2) rotate(-14.4)" d="M0 0C9.9 -16.2 37.1 -13.4 61.8 3C44.5 14.1 16.1
-                16.9 0 0Z"/>
-        </g>
-        <g id="s6">
-            <path d="M-98.7 0C-39.5 -13.9 29.6 -34.7 98.7 -24.3" fill="none" stroke="black" stroke-width="2.6"
-                stroke-linecap="round"/>
-            <path d="M-81.6 -4.1L-78.8 -10.7" stroke="black" stroke-width="1.8"/>
-            <path transform="translate(-78.8 -10.7) rotate(-66.9)" d="M0 0C12.5 -21.2 46.8 -22.1 77.9 -5.2C56.1 13 20.3
-                22.1 0 0Z"/>
-            <path d="M-26.9 -16.9L-21.3 -12.1" stroke="black" stroke-width="1.8"/>
-            <path transform="translate(-21.3 -12.1) rotate(40.3)" d="M0 0C11.7 -19.8 44 -14.3 73.4 7.8C52.8 19.7 19.1
-                20.5 0 0Z"/>
-            <path d="M35.1 -26.1L39.8 -30.1" stroke="black" stroke-width="1.8"/>
-            <path transform="translate(39.8 -30.1) rotate(-40.4)" d="M0 0C11.7 -20.3 43.7 -20.5 72.8 -3.7C52.4 13.2 18.9
-                21.1 0 0Z"/>
-            <path transform="translate(98.7 -24.3) rotate(13.8)" d="M0 0C8.9 -14.6 33.4 -11.9 55.7 3C40.1 12.9 14.5 15.2
-                0 0Z"/>
-        </g>
     </defs>
     <g filter="url(#f0)" opacity="1">
-        <use href="#s0" transform="translate(73.3 59.4) rotate(227.6)"/>
-        <use href="#s0" transform="translate(73.3 799.4) rotate(227.6)"/>
-        <use href="#s0" transform="translate(933.3 59.4) rotate(227.6)"/>
-        <use href="#s0" transform="translate(933.3 799.4) rotate(227.6)"/>
-        <use href="#s2" transform="translate(-117.9 61.9) rotate(207)"/>
-        <use href="#s2" transform="translate(-117.9 801.9) rotate(207)"/>
-        <use href="#s2" transform="translate(742.1 61.9) rotate(207)"/>
-        <use href="#s2" transform="translate(742.1 801.9) rotate(207)"/>
-        <use href="#s4" transform="translate(346 419.1) rotate(198.4)"/>
-        <use href="#s6" transform="translate(212.8 -156) rotate(337)"/>
-        <use href="#s6" transform="translate(212.8 584) rotate(337)"/>
-        <use href="#s6" transform="translate(1072.8 -156) rotate(337)"/>
-        <use href="#s6" transform="translate(1072.8 584) rotate(337)"/>
+        <use href="#s0" transform="translate(94.6 103.6) rotate(227.6)"/>
+        <use href="#s0" transform="translate(94.6 963.6) rotate(227.6)"/>
+        <use href="#s0" transform="translate(834.6 103.6) rotate(227.6)"/>
+        <use href="#s0" transform="translate(834.6 963.6) rotate(227.6)"/>
+        <use href="#s2" transform="translate(217.8 -322) rotate(207)"/>
+        <use href="#s2" transform="translate(217.8 538) rotate(207)"/>
+        <use href="#s2" transform="translate(957.8 -322) rotate(207)"/>
+        <use href="#s2" transform="translate(957.8 538) rotate(207)"/>
     </g>
     <g filter="url(#f1)" opacity="0.75">
-        <use href="#s1" transform="translate(478.7 72.6) rotate(257.5)"/>
-        <use href="#s1" transform="translate(478.7 812.6) rotate(257.5)"/>
-        <use href="#s3" transform="translate(61.3 400.4) rotate(176.9)"/>
-        <use href="#s3" transform="translate(921.3 400.4) rotate(176.9)"/>
-        <use href="#s5" transform="translate(-94.8 409.6) rotate(45.2)"/>
-        <use href="#s5" transform="translate(765.2 409.6) rotate(45.2)"/>
+        <use href="#s1" transform="translate(-122.1 126.6) rotate(257.5)"/>
+        <use href="#s1" transform="translate(-122.1 986.6) rotate(257.5)"/>
+        <use href="#s1" transform="translate(617.9 126.6) rotate(257.5)"/>
+        <use href="#s1" transform="translate(617.9 986.6) rotate(257.5)"/>
+        <use href="#s3" transform="translate(449.1 -162) rotate(176.9)"/>
+        <use href="#s3" transform="translate(449.1 698) rotate(176.9)"/>
     </g>
 </svg>
