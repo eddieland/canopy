@@ -203,6 +203,12 @@ If code and the design disagree, the design doc wins until a decision entry says
   `#`. A class's docstring says what the class is; what one field holds goes on that field, not in the docstring.
   `runs/dispatch.py` is an example. Older modules still spell these with `#`, and need no bulk fix: write new ones
   with `#:`, and convert a module's when a PR is already changing it, if that is cheap.
+  The exception is a field of an API model, a `canopy.serve.schema.Model`: what it holds is the docstring directly
+  below it, which pydantic makes its description in the schema. pydantic reads no comment, so a `#:` there would
+  describe the field to nobody who reads the API; a comment above such a field is a note kept out of the schema, and
+  stays a plain `#`. `serve/schema/ticket.py` is an example. A model whose schema an agent reads, such as a tool's
+  arguments, describes a field in `Field(description=...)`. A pydantic model that publishes no schema, such as the
+  config's, takes `#:`.
 - SQLite: WAL mode, `PRAGMA foreign_keys=ON`, numbered migrations in `migrations/NNNN_name.sql` applied in order at
   startup, recorded in a `schema_migrations` table. Never edit a shipped migration; add a new one. The series was
   squashed into `0001_init.sql` for v0.1 and again at 0129, each time on the operator's word (D068); that is not a
