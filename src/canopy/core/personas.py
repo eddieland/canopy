@@ -37,11 +37,11 @@ SUFFIX: Final = ".md"
 #: The most bytes a persona's file may hold: it is in every prompt it reaches, as the standing instructions are.
 MAX_BYTES: Final = 4096
 #: An agent a persona reaches, each a key of `[personas]`. The overseer and chores have none.
-Agent = Literal["worker", "planner", "reviewer"]
+type Agent = Literal["worker", "planner", "reviewer"]
 #: Every agent a persona reaches, in the order `[personas]` lists them.
 AGENTS: Final[tuple[Agent, ...]] = ("worker", "planner", "reviewer")
 #: An agent whose next run alone may take a persona of its own: the runs `canopy start` and `canopy plan` ask for.
-NextAgent = Literal["worker", "planner"]
+type NextAgent = Literal["worker", "planner"]
 #: Every agent whose next run alone may take a persona of its own.
 NEXT_AGENTS: Final[tuple[NextAgent, ...]] = ("worker", "planner")
 #: The guard and attention reason of a run whose persona has no file.
@@ -51,7 +51,7 @@ BAD: Final = "bad_persona"
 #: The guard of an override naming a persona with no file: it is refused when set, not when a run starts.
 UNKNOWN: Final = "unknown_persona"
 #: Where an agent's next persona comes from: the ticket's override, `[personas]`, or canopy's own default.
-Source = Literal["ticket", "config", "default"]
+type Source = Literal["ticket", "config", "default"]
 #: The most characters of a persona's description a menu shows beside its name; a longer one is cut at a word.
 DESCRIPTION_CHARS: Final = 160
 #: The one key a persona's front matter may hold.
@@ -411,7 +411,7 @@ def description(text: str) -> str | None:
 
 
 class _File(NamedTuple):
-    # A persona's file as canopy reads it: the text a prompt carries, and what a menu shows beside its name.
+    #: A persona's file as canopy reads it: the text a prompt carries, and what a menu shows beside its name.
     text: str
     description: str | None
 

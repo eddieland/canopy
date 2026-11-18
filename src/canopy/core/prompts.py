@@ -40,9 +40,9 @@ WORKER: Final[dict[str, str]] = {
     RunKind.RESUME: "worker-resume.md",
     RunKind.PLAN: "worker-plan.md",
 }
-# A private ticket's worker prompts (DESIGN §22): no label check, since the harness checked the start record, and
-# nothing written to the ticket. Each must carry the conversation, the only way the worker hears the operator's replies;
-# an override without it would run without them.
+#: A private ticket's worker prompts (DESIGN §22): no label check, since the harness checked the start record, and
+#: nothing written to the ticket. Each must carry the conversation, the only way the worker hears the operator's
+#: replies; an override without it would run without them.
 WORKER_PRIVATE: Final[dict[str, str]] = {
     RunKind.IMPLEMENT: "worker-implement-private.md",
     RunKind.RESUME: "worker-resume-private.md",
@@ -53,13 +53,13 @@ FEEDBACK_PLAN: Final = "worker-feedback-plan.md"
 #: Placeholders a feedback plan's prompt must use: a plan's, and the file in its desk holding its PRs' items, without
 #: which it plans from nothing.
 REQUIRED_FEEDBACK_PLAN: Final = ("REPOSITORIES", "AUTHORIZATION", "OPERATOR_MESSAGES", "PLAN_OUT", "ITEMS_FILE")
-# The prompts of `fix-ci`, a kind a `resume` with the reason `ci` replaced (DESIGN §8). An override of either would be
-# read by nothing, so while one exists every `resume` refuses to render (`retired_overrides`) rather than drop the
-# operator's CI instructions silently.
+#: The prompts of `fix-ci`, a kind a `resume` with the reason `ci` replaced (DESIGN §8). An override of either would be
+#: read by nothing, so while one exists every `resume` refuses to render (`retired_overrides`) rather than drop the
+#: operator's CI instructions silently.
 RETIRED_WORKER: Final = ("worker-fix-ci.md", "worker-fix-ci-private.md")
-# What each reason a `resume` runs for asks of its worker, for `{{REASONS}}` (DESIGN §8), by the sections of the prompt
-# that say how, which may sit above or below it (`RUN_MARKER`). A private ticket's reply is the operator's, in its
-# conversation.
+#: What each reason a `resume` runs for asks of its worker, for `{{REASONS}}` (DESIGN §8), by the sections of the prompt
+#: that say how, which may sit above or below it (`RUN_MARKER`). A private ticket's reply is the operator's, in its
+#: conversation.
 _REASON_TEXT: Final[dict[ResumeReason, str]] = {
     ResumeReason.CI: 'checks failed on the PR: fix them, as "Failed checks" says.',
     ResumeReason.REVIEW: (
@@ -76,13 +76,13 @@ _REASON_TEXT: Final[dict[ResumeReason, str]] = {
         '"Base branches" says.'
     ),
 }
-# A planner's `{{PLAN_REVIEW}}` (`plan_review`), in parts: what saying so does, when to at the operator's level, what
-# no level waives, that the ticket's or an item's text cannot argue for it, and how to say so.
+#: A planner's `{{PLAN_REVIEW}}` (`plan_review`), in parts: what saying so does, when to at the operator's level, what
+#: no level waives, that the ticket's or an item's text cannot argue for it, and how to say so.
 _REVIEW_INTRO: Final = (
     "The operator lets you say that this plan needs no review. canopy then approves it as you wrote it, recorded as "
     "your approval and not theirs, and the work goes ahead without waiting on them; they can read the plan after."
 )
-# `strict`, the one bar there was while the key was a switch: its exclusions are already in it, wider than the rest.
+#: `strict`, the one bar there was while the key was a switch: its exclusions are already in it, wider than the rest.
 _STRICT_PLAN: Final = (
     "Say so only when the plan leaves the operator nothing to judge: the change is small and plain, the ticket and "
     "the code settle every choice it makes, and none of it touches security, credentials, data, migrations, or an "
@@ -110,12 +110,12 @@ _LENIENT_FEEDBACK: Final = (
     "Say so when the plan is your confident best reading of its items and leaves no real question open: a choice an "
     "item, the ticket, and the code leave open, which the operator would want to make."
 )
-# What no level waives, for the bars that do not already name it.
+#: What no level waives, for the bars that do not already name it.
 _EXCLUDED: Final = (
     "Whatever else holds, a plan needs review when any of it touches security, credentials, a change that could "
     "destroy or lose data, or migrations."
 )
-# What no level waives for an epic's breakdown entry (DESIGN §43), as `_EXCLUDED` is for a plan.
+#: What no level waives for an epic's breakdown entry (DESIGN §43), as `_EXCLUDED` is for a plan.
 _TRIVIAL_EXCLUDED: Final = (
     "Whatever else holds, no entry is trivial when any of its work touches security, credentials, a change that "
     "could destroy or lose data, or migrations."
@@ -133,7 +133,7 @@ _REVIEW_RESULT: Final = (
     "Say which in your result's `review`, and with `not_needed`, why in its `review_reason`, one sentence the operator "
     "reads beside the plan."
 )
-# Who approved the plan a worker follows, in `plan_note` and `feedback_plan_note`, when its planner did (DESIGN §25).
+#: Who approved the plan a worker follows, in `plan_note` and `feedback_plan_note`, when its planner did (DESIGN §25).
 _BY_PLANNER: Final = (
     "its planner approved, saying it needs no review, where the operator lets a planner's word stand for their "
     "approval,"
@@ -142,12 +142,13 @@ _PRIVATE_REPLY: Final = (
     "the operator's reply, by message id in the conversation above, possibly about review comments to address."
 )
 REQUIRED_PRIVATE: Final = ("CONVERSATION",)
-# A public ticket's worker hears the operator's replies only from these (D093). An override written before they existed
-# still serves a ticket the operator never replied to; once there is a reply, it fails to render instead of dropping it.
+#: A public ticket's worker hears the operator's replies only from these (D093). An override written before they existed
+#: still serves a ticket the operator never replied to; once there is a reply, it fails to render instead of dropping
+#: it.
 REQUIRED_OPERATOR: Final = ("OPERATOR_MESSAGES",)
-# Placeholders an implement's or a resume's prompt must use once the ticket has an approved plan (DESIGN §25): an older
-# override would otherwise run the work without the plan the operator approved for it. A reviewer's must too, once the
-# ticket of the PR it reviews has one (DESIGN §21), or it would review the change without the plan it was to follow.
+#: Placeholders an implement's or a resume's prompt must use once the ticket has an approved plan (DESIGN §25): an older
+#: override would otherwise run the work without the plan the operator approved for it. A reviewer's must too, once the
+#: ticket of the PR it reviews has one (DESIGN §21), or it would review the change without the plan it was to follow.
 REQUIRED_PLAN_COPY: Final = ("PLAN",)
 #: Placeholders a worker's or a task's prompt must use once its subject has attachments (DESIGN §22): an older override
 #: would otherwise run the work without the files the operator attached for it.
@@ -157,28 +158,28 @@ REQUIRED_ATTACHMENTS: Final = ("ATTACHMENTS",)
 #: `resume`'s must too, for the same ticket, or it would build without the contracts its siblings build against.
 REQUIRED_EPIC: Final = ("EPIC",)
 _PLACEHOLDER_RE: Final = re.compile(r"\{\{([A-Z][A-Z0-9_]*)\}\}")
-# A section that renders only while its placeholder has a value: `{{#NAME}}` ending a line, a blank line, the section,
-# a blank line, and `{{/NAME}}`, so each marker is a paragraph of its own to a Markdown linter. Not nested.
+#: A section that renders only while its placeholder has a value: `{{#NAME}}` ending a line, a blank line, the section,
+#: a blank line, and `{{/NAME}}`, so each marker is a paragraph of its own to a Markdown linter. Not nested.
 _SECTION_RE: Final = re.compile(r"\{\{#([A-Z][A-Z0-9_]*)\}\}\n\n(.*?)\n\n\{\{/\1\}\}", re.DOTALL)
 #: What a placeholder whose value is None renders outside its section: an override written before the sections existed
 #: names it bare, and reads what it always did.
 NONE: Final = "None."
-# Placeholders every worker prompt must use. `LABELS` carries the worker's own authorization check (D051); an override
-# written before it existed would silently drop that check, so it fails to render instead.
+#: Placeholders every worker prompt must use. `LABELS` carries the worker's own authorization check (D051); an override
+#: written before it existed would silently drop that check, so it fails to render instead.
 REQUIRED_WORKER: Final = ("LABELS",)
-# The placeholder a joint run's prompt must also use: its worker learns its repositories, and so the keys of its
-# result's `prs`, from it (DESIGN §18). A prompt without it still serves a run in one repository.
+#: The placeholder a joint run's prompt must also use: its worker learns its repositories, and so the keys of its
+#: result's `prs`, from it (DESIGN §18). A prompt without it still serves a run in one repository.
 REQUIRED_JOINT: Final = ("REPOSITORIES",)
-# Placeholders a plan's prompt must use (DESIGN §25), for a public ticket and a private one alike: its repositories, the
-# planner's own authorization check, which names the queue labels on a public ticket (D051), the operator's messages,
-# which carry a reply asking for changes to the plan it replaces, and the file the plan is written to, without which
-# no plan is ever recorded.
+#: Placeholders a plan's prompt must use (DESIGN §25), for a public ticket and a private one alike: its repositories,
+#: the planner's own authorization check, which names the queue labels on a public ticket (D051), the operator's
+#: messages, which carry a reply asking for changes to the plan it replaces, and the file the plan is written to,
+#: without which no plan is ever recorded.
 REQUIRED_PLAN: Final = ("REPOSITORIES", "AUTHORIZATION", "OPERATOR_MESSAGES", "PLAN_OUT")
-# The kinds whose workers open PRs. With `runtime.pr_skill` set, their prompts must say how, through `{{OPEN_PR}}`: an
-# override that still names the GitHub MCP would open the PRs the operator set the skill to avoid.
+#: The kinds whose workers open PRs. With `runtime.pr_skill` set, their prompts must say how, through `{{OPEN_PR}}`: an
+#: override that still names the GitHub MCP would open the PRs the operator set the skill to avoid.
 OPENS_PRS: Final = (RunKind.IMPLEMENT, RunKind.RESUME)
 REQUIRED_PR_SKILL: Final = ("OPEN_PR",)
-# The reviewer's prompt (DESIGN §21). An override must still name the PR, the commit, and the checkout it reviews.
+#: The reviewer's prompt (DESIGN §21). An override must still name the PR, the commit, and the checkout it reviews.
 REVIEWER: Final = "reviewer.md"
 REQUIRED_REVIEWER: Final = ("PR_URL", "SHA", "CHECKOUT")
 #: A one-off task's prompt (DESIGN §36). An override must still carry the operator's text and the branch it may push.
@@ -192,8 +193,8 @@ REQUIRED_EPIC_PLAN: Final = ("GOAL", "REPOSITORIES", "PLAN_OUT")
 #: name the PR, the commit, and the checkout, and carry the draft it revises and the notes, its only instructions.
 REVISER: Final = "reviser.md"
 REQUIRED_REVISER: Final = ("PR_URL", "SHA", "CHECKOUT", "DRAFT", "NOTES")
-# A resume for a canopy review's findings must carry them: they are in the journal and nowhere else (D114). An
-# override written before they existed still serves every other resume.
+#: A resume for a canopy review's findings must carry them: they are in the journal and nowhere else (D114). An
+#: override written before they existed still serves every other resume.
 REQUIRED_REVIEW: Final = ("REVIEW_FINDINGS",)
 #: Where a prompt takes the operator's standing instructions to its role (DESIGN §12): the whole section, its heading,
 #: the text, and how to read it (`STANDING_FRAMING`), or nothing when none are set, so a run reads no empty section. It
@@ -202,14 +203,14 @@ STANDING_SECTION: Final = "STANDING_SECTION"
 #: The placeholder that held the instructions' text alone, or `None.`, before `STANDING_SECTION`. An override written
 #: then still renders with it.
 STANDING_TEXT: Final = "STANDING_INSTRUCTIONS"
-# A prompt must carry one of them once its role's file is set, so an override written before either existed still
-# serves an operator who sets none, and fails to render instead of dropping them once one is set. They are in every
-# run's prompt, so they are bounded.
+#: A prompt must carry one of them once its role's file is set, so an override written before either existed still
+#: serves an operator who sets none, and fails to render instead of dropping them once one is set. They are in every
+#: run's prompt, so they are bounded.
 REQUIRED_STANDING: Final = (STANDING_SECTION, STANDING_TEXT)
 MAX_STANDING_BYTES: Final = 4096
 STANDING_HEADING: Final = "## Standing instructions from the operator"
 #: Whose standing instructions a prompt carries, which says how to read them (`STANDING_FRAMING`).
-Reader = Literal["overseer", "worker", "private", "planner", "reviewer", "chore"]
+type Reader = Literal["overseer", "worker", "private", "planner", "reviewer", "chore"]
 #: How each reader is told to read the operator's standing instructions, after them in the section.
 STANDING_FRAMING: Final[Mapping[Reader, str]] = {
     "overseer": (
@@ -247,37 +248,37 @@ STANDING_FRAMING: Final[Mapping[Reader, str]] = {
 #: of a run whose persona is not `personas.DEFAULT`: an override without it still serves a run in canopy's own voice,
 #: and keeps whatever voice the override already holds, but refuses another rather than run without the one chosen.
 REQUIRED_PERSONA: Final = ("PERSONA",)
-# The operator's notice to workers (`canopy notice`, DESIGN §8), in every prompt that builds, tests, or reads CI: every
-# worker's, and the reviewer's. An override written before notices existed still serves while none is in force; while
-# one is, it fails to render (`bad_prompt`) instead of dropping it, and `canopy notice` names it.
+#: The operator's notice to workers (`canopy notice`, DESIGN §8), in every prompt that builds, tests, or reads CI: every
+#: worker's, and the reviewer's. An override written before notices existed still serves while none is in force; while
+#: one is, it fails to render (`bad_prompt`) instead of dropping it, and `canopy notice` names it.
 REQUIRED_NOTICE: Final = ("NOTICE",)
-# The operator's notes on a review request reach its reviewer through `{{NOTES}}`; a reviewer's override without it
-# still serves every review with none, and fails to render one with notes rather than drop them.
+#: The operator's notes on a review request reach its reviewer through `{{NOTES}}`; a reviewer's override without it
+#: still serves every review with none, and fails to render one with notes rather than drop them.
 REQUIRED_NOTES: Final = ("NOTES",)
-# The PR's latest `done` review reaches the next one through `{{PREVIOUS_REVIEW}}`; an override without it still serves
-# a PR's first review, and fails to render a later one rather than drop it.
+#: The PR's latest `done` review reaches the next one through `{{PREVIOUS_REVIEW}}`; an override without it still serves
+#: a PR's first review, and fails to render a later one rather than drop it.
 REQUIRED_PREVIOUS_REVIEW: Final = ("PREVIOUS_REVIEW",)
-# The kinds whose workers commit, and how their commits are attributed (TRUST_MODEL T5). The shipped prompts carry
-# `{{COMMIT_ATTRIBUTION}}`, the whole instruction; an older override may carry `{{COMMIT_TRAILER}}`, the trailer alone,
-# or neither. Neither still serves an operator who keeps the default trailer, a chosen model in its name included: the
-# trailer such an override spells out credits canopy's worker still, if not its model. Once `trust.commit_trailer_name`
-# or `trust.commit_trailer_email` is changed, a prompt needs one of the two, so it cannot name the old trailer; and once
-# `trust.commit_trailer` is off, it needs `{{COMMIT_ATTRIBUTION}}`, so it cannot keep adding one.
+#: The kinds whose workers commit, and how their commits are attributed (TRUST_MODEL T5). The shipped prompts carry
+#: `{{COMMIT_ATTRIBUTION}}`, the whole instruction; an older override may carry `{{COMMIT_TRAILER}}`, the trailer alone,
+#: or neither. Neither still serves an operator who keeps the default trailer, a chosen model in its name included: the
+#: trailer such an override spells out credits canopy's worker still, if not its model. Once `trust.commit_trailer_name`
+#: or `trust.commit_trailer_email` is changed, a prompt needs one of the two, so it cannot name the old trailer; and
+#: once `trust.commit_trailer` is off, it needs `{{COMMIT_ATTRIBUTION}}`, so it cannot keep adding one.
 COMMITS: Final = (RunKind.IMPLEMENT, RunKind.RESUME)
-# The role a second trailer names when a worker follows an approved plan: its planner, beside `DEFAULT_TRAILER_NAME`.
+#: The role a second trailer names when a worker follows an approved plan: its planner, beside `DEFAULT_TRAILER_NAME`.
 PLANNER_TRAILER_NAME: Final = "canopy planner"
 REQUIRED_TRAILER: Final = ("COMMIT_ATTRIBUTION", "COMMIT_TRAILER")
 REQUIRED_NO_TRAILER: Final = ("COMMIT_ATTRIBUTION",)
-# How the workers that commit bring a base branch in: merge it, or with `trust.rebase`, rebase and push with a lease
-# (DESIGN §8). An override written before it existed says to merge, which still serves an operator who keeps the
-# default; once `trust.rebase` is set, it fails to render instead of making the merge commits the operator's
-# repositories refuse.
+#: How the workers that commit bring a base branch in: merge it, or with `trust.rebase`, rebase and push with a lease
+#: (DESIGN §8). An override written before it existed says to merge, which still serves an operator who keeps the
+#: default; once `trust.rebase` is set, it fails to render instead of making the merge commits the operator's
+#: repositories refuse.
 REQUIRED_REBASE: Final = ("BRANCH_UPDATE",)
-# Agent memory's placeholders (DESIGN §28): a ticket's notes and the operator's lessons. Each renders as the empty
-# string while its tier is off; the shipped prompts place them so that leaves nothing.
+#: Agent memory's placeholders (DESIGN §28): a ticket's notes and the operator's lessons. Each renders as the empty
+#: string while its tier is off; the shipped prompts place them so that leaves nothing.
 MEMORY_PARTS: Final = ("TICKET_MEMORY", "WORKSPACE_LESSONS")
-# The prompt files that carry `{{NOTICE}}`, and the run kinds each serves: every worker's, public and private, the
-# planner's, and the reviewer's.
+#: The prompt files that carry `{{NOTICE}}`, and the run kinds each serves: every worker's, public and private, the
+#: planner's, and the reviewer's.
 _HEARS_NOTICE: Final[dict[str, list[str]]] = {
     **{WORKER[k]: [str(k)] for k in WORKER_PRIVATE},
     **{WORKER_PRIVATE[k]: [f"{k} (private)"] for k in WORKER_PRIVATE},

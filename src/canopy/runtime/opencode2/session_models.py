@@ -80,7 +80,7 @@ WHERE length(type) <= 64 AND length(data) <= 1024
 ORDER BY seq
 LIMIT ?
 """
-# Where a JSON object starts a line.
+#: Where a JSON object starts a line.
 _OBJECT_RE: Final = re.compile(r"^\{", re.MULTILINE)
 
 

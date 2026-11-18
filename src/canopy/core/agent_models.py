@@ -65,7 +65,7 @@ LIST_FAILED: Final = "model_list_failed"
 #: (`chore`), the definition of an agent of the operator's own that a chore runs, which canopy does not write
 #: (`agent`), or nothing, the runtime's default (`default`).
 type Source = Literal["config", "chore", "agent", "default"]
-# The most variants a refusal names of those the model lists.
+#: The most variants a refusal names of those the model lists.
 _MAX_NAMED: Final = 8
 
 

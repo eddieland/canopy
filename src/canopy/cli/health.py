@@ -30,9 +30,9 @@ _STATUS_WIDTH: Final = 20
 _COUNT_WIDTH: Final = 7
 _COST_WIDTH: Final = 9
 _LENGTH_WIDTH: Final = 9
-# The newest failures the text lists; `--json` lists `health.FAILURES`.
+#: The newest failures the text lists; `--json` lists `health.FAILURES`.
 _FAILURES: Final = 10
-# What the failures an agent's own words explained are counted as.
+#: What the failures an agent's own words explained are counted as.
 _OTHER: Final = "other: an agent's summary, or no note"
 
 

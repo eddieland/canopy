@@ -20,9 +20,9 @@ if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Sequence
 
-# A comment or a reply has a reply's bound (DESIGN §22), as the UI's `MAX_COMMENT` does.
+#: A comment or a reply has a reply's bound (DESIGN §22), as the UI's `MAX_COMMENT` does.
 MAX_BODY: Final = conversation.MAX_OPERATOR
-# A passage may be a whole section of a plan; the text either side is the UI's `CONTEXT`.
+#: A passage may be a whole section of a plan; the text either side is the UI's `CONTEXT`.
 MAX_QUOTE: Final = 4000
 MAX_CONTEXT: Final = 32
 

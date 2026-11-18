@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
 FIRST_RETRY_SECONDS: Final = 1.0
 MAX_RETRY_SECONDS: Final = 60.0
-# A server that ran this long before it failed starts its backoff over.
+#: A server that ran this long before it failed starts its backoff over.
 HEALTHY_SECONDS: Final = 60.0
 GRACEFUL_SECONDS: Final = 2
 _UVICORN_LOGGERS: Final = ("uvicorn", "uvicorn.error", "uvicorn.access")

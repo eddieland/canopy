@@ -20,7 +20,7 @@ from canopy.core import config
 WRAPPER: Final = Path(sys.executable).parent / config.SANDBOX_WRAPPER
 
 #: The wrapper's roles canopy starts a run in: a worker run's, `setup_cmd`'s, and a review's.
-Role = Literal["worker", "setup", "review"]
+type Role = Literal["worker", "setup", "review"]
 
 #: The role `runtime.sandbox_repos` starts each command in, by what it starts, as `canopy config commands` names it: a
 #: worker run's commands, setup, and the reviewer. `canopy config commands` and `canopy health` both read it.

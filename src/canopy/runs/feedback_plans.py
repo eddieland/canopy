@@ -56,8 +56,8 @@ MAX_WORDS: Final = conversation.MAX_OPERATOR - 1000
 _MAX_NAMED: Final = 10
 #: The most characters of an item's excerpt or of a plan's line on it, as the PR's page shows them.
 MAX_LINE: Final = 200
-# An item's heading in a plan's file, at any level, and any heading, which ends the item before it; a fenced code
-# block holds no item's first line.
+#: An item's heading in a plan's file, at any level, and any heading, which ends the item before it; a fenced code
+#: block holds no item's first line.
 _ITEM_HEADING_RE: Final = re.compile(r"#{1,6}[ \t]+Item[ \t]+(\d{1,20})(?![\d])")
 _ANY_HEADING_RE: Final = re.compile(r"#{1,6}(?:[ \t]|$)")
 _FENCE_RE: Final = re.compile(r"(?:`{3,}|~{3,})")

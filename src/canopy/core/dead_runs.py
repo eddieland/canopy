@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from canopy.core.db import Event, RunTable
     from canopy.infra import logs
 
-# Each run table's `crashed`: what a run whose process is gone is closed as.
+#: Each run table's `crashed`: what a run whose process is gone is closed as.
 CRASHED: Final[Mapping[RunTable, AnyRunStatus]] = {
     "runs": RunStatus.CRASHED,
     "chore_runs": ChoreRunStatus.CRASHED,

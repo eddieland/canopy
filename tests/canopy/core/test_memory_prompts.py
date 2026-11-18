@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
     from tests.conftest import CanopyEnv
 
-# Every prompt a worker run can be rendered from: each kind's public prompt, and the private variants.
+#: Every prompt a worker run can be rendered from: each kind's public prompt, and the private variants.
 PROMPTS: Final = [
     *((str(kind), False) for kind in prompts.WORKER),
     *((str(kind), True) for kind in prompts.WORKER_PRIVATE),

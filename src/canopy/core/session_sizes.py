@@ -60,9 +60,9 @@ OTHER_DIRECTORIES: Final = "(other directories)"
 CONTENTLESS_DELETE: Final = (3, 43, 0)
 #: How many rows a trial index takes in one transaction.
 BATCH: Final = 1000
-# Each trial index's table, by whether it keeps word positions and whether rows can be deleted from it, splitting
-# text into words with memory's tokenizer (`memories_fts`), so a word matches as memory's search matches it. The
-# temporary file is not the journal, but its statements are built as the journal's are (D125).
+#: Each trial index's table, by whether it keeps word positions and whether rows can be deleted from it, splitting
+#: text into words with memory's tokenizer (`memories_fts`), so a word matches as memory's search matches it. The
+#: temporary file is not the journal, but its statements are built as the journal's are (D125).
 _CREATE: Final[Mapping[tuple[bool, bool], sql.Fragment]] = {
     (True, True): sql.frag(
         "CREATE VIRTUAL TABLE idx USING fts5(text, content='', contentless_delete=1, tokenize='porter unicode61')",

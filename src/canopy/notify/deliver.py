@@ -29,17 +29,17 @@ if TYPE_CHECKING:
     from canopy.infra import logs
 
 TIMEOUT_SECONDS: Final = 60
-# A sink that fails this many deliveries in a row raises `loop.sink_failing` once; so many failed ticks raise
-# `loop.failing` once.
+#: A sink that fails this many deliveries in a row raises `loop.sink_failing` once; so many failed ticks raise
+#: `loop.failing` once.
 FAILING_AFTER: Final = 3
 #: The names of the loop's own events, which a sink's `events` match (`canopy.core.event_names`).
 _FAILING: Final = "loop.failing"
 _RECOVERED: Final = "loop.recovered"
 _SINK_FAILING: Final = "loop.sink_failing"
-# Events a batching sink sends at once, with whatever it held: the loop or a sink failing, a plan waiting on the
-# operator, which holds its ticket until they answer (DESIGN §25), or a forced push canopy made (DESIGN §23).
+#: Events a batching sink sends at once, with whatever it held: the loop or a sink failing, a plan waiting on the
+#: operator, which holds its ticket until they answer (DESIGN §25), or a forced push canopy made (DESIGN §23).
 _URGENT_KINDS: Final = frozenset({"loop.failing", "loop.sink_failing", "plan.proposed", "ci.kicked"})
-# The events whose `blocked` run asked the operator a question: a ticket's run's, and a one-off task's (DESIGN §36).
+#: The events whose `blocked` run asked the operator a question: a ticket's run's, and a one-off task's (DESIGN §36).
 _ASKING_KINDS: Final = frozenset({"run.ended", "task.ended"})
 
 

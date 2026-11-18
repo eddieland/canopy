@@ -107,9 +107,9 @@ if TYPE_CHECKING:
     from canopy.serve.backend import Backend
 
 
-# How `canopy health` names a task's run's subject: its task's id after it.
+#: How `canopy health` names a task's run's subject: its task's id after it.
 _TASK: Final = "task:"
-# The guard whose refusals the CI page shows: a `resume` for `ci` alone held until its checks had time to run again.
+#: The guard whose refusals the CI page shows: a `resume` for `ci` alone held until its checks had time to run again.
 _COOLDOWN: Final = "cooldown"
 
 

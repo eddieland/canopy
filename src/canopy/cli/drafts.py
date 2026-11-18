@@ -27,11 +27,11 @@ from canopy.runs import drafts, drafts_manage
 if TYPE_CHECKING:
     import sqlite3
 
-# The channel a send or an edit from the shell is recorded with (DESIGN §22).
+#: The channel a send or an edit from the shell is recorded with (DESIGN §22).
 CLI: Final = "cli"
 _RUN_REF: Final = re.compile(r"run:([1-9][0-9]*)")
 _WANTED: Final = re.compile(r"([1-9][0-9]*)@([0-9a-f]+)")
-# The statuses `list` shows: what still waits on the operator, or on a read.
+#: The statuses `list` shows: what still waits on the operator, or on a read.
 _OPEN: Final = (DraftStatus.WAITING, DraftStatus.UNCHECKED, DraftStatus.UNCONFIRMED, DraftStatus.STAGED)
 
 

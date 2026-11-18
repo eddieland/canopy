@@ -31,7 +31,7 @@ from canopy.infra import procs
 from canopy.setup import init
 
 GITIGNORE: Final = ".gitignore"
-# Everything under the root that is canopy's or treehouse's, never the workspace repository's.
+#: Everything under the root that is canopy's or treehouse's, never the workspace repository's.
 IGNORED: Final = tuple(
     f"/{d}/"
     for d in (workspace.REPOS_DIR, workspace.POOLS_DIR, pool.POOLS_DIR, workspace.DESKS_DIR, WORKSPACE_STATE_DIR)

@@ -51,8 +51,8 @@ RUN_DIR: Final = ".canopy-attachments"
 #: name an attachment can take (`NAME_RE`), so the two never meet.
 EPIC_DIR: Final = "_epic"
 KIB: Final = 1024
-# What runs of any other character become in a name made from a file's, and the `-` such a run leaves before a `.` or at
-# the end, which is dropped.
+#: What runs of any other character become in a name made from a file's, and the `-` such a run leaves before a `.` or
+#: at the end, which is dropped.
 _UNNAMED_RE: Final = re.compile(r"[^A-Za-z0-9._-]+")
 _LEFT_OVER_RE: Final = re.compile(r"-+(?=\.)|-+\Z")
 

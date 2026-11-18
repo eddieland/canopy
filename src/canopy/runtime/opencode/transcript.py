@@ -34,7 +34,7 @@ from canopy.runtime.report import MAX_COST_USD, MESSAGE_ID_RE, Called, Count, Re
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping
 
-# Milliseconds since the epoch, as OpenCode stamps events: up to the year 9999.
+#: Milliseconds since the epoch, as OpenCode stamps events: up to the year 9999.
 _MAX_MS: Final = 253_402_300_799_999
 
 #: The tools that read one file, that edit one, that edit those a patch names, and that search, and the shell.

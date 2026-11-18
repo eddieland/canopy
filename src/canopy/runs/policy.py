@@ -33,26 +33,26 @@ from canopy.core.vocab import ResumeReason, RunKind
 if TYPE_CHECKING:
     from canopy.core.config import Config
 
-# A unit: a ticket key and a repository name; None for a slot recorded with no repository name.
-Unit = tuple[str, str | None]
+#: A unit: a ticket key and a repository name; None for a slot recorded with no repository name.
+type Unit = tuple[str, str | None]
 
-# The kinds that work in a unit, and every kind the `dispatch` tool takes. Typed as str, since the counts below key on
-# `runs.kind` as read; a `click.Choice` takes them as `str(kind)`, since click matches an enum by its name. `fix-ci` is
-# none of them: its old runs and grants count as `resume`'s (`counted_as`). Nor are `split` and `needs-plan`, retired
-# too: their old runs count per ticket, and nothing dispatches them.
+#: The kinds that work in a unit, and every kind the `dispatch` tool takes. Typed as str, since the counts below key on
+#: `runs.kind` as read; a `click.Choice` takes them as `str(kind)`, since click matches an enum by its name. `fix-ci` is
+#: none of them: its old runs and grants count as `resume`'s (`counted_as`). Nor are `split` and `needs-plan`, retired
+#: too: their old runs count per ticket, and nothing dispatches them.
 KINDS: Final[tuple[str, ...]] = (RunKind.IMPLEMENT, RunKind.RESUME)
 RETIRED: Final = RunKind.FIX_CI
 SPLIT: Final = RunKind.SPLIT
 PLAN: Final = RunKind.PLAN
 NEEDS_PLAN: Final = RunKind.NEEDS_PLAN
 FEEDBACK_PLAN: Final = RunKind.FEEDBACK_PLAN
-# The kinds whose runs are the ticket's, not a unit's: they work on no branch, and their attempts count per ticket.
+#: The kinds whose runs are the ticket's, not a unit's: they work on no branch, and their attempts count per ticket.
 TICKET_KINDS: Final[tuple[str, ...]] = (SPLIT, PLAN, NEEDS_PLAN)
-# The kinds counted per ticket that `canopy grant` takes.
+#: The kinds counted per ticket that `canopy grant` takes.
 TICKET_GRANT_KINDS: Final[tuple[str, ...]] = (PLAN,)
 #: The kinds counted per unit that `canopy grant` takes: `KINDS`, and feedback plans, counted apart from them.
 UNIT_GRANT_KINDS: Final[tuple[str, ...]] = (*KINDS, FEEDBACK_PLAN)
-# The kinds `attempts` leaves out: the ticket's, and feedback plans, which `feedback_plan_attempts` counts.
+#: The kinds `attempts` leaves out: the ticket's, and feedback plans, which `feedback_plan_attempts` counts.
 _APART: Final[tuple[str, ...]] = (*TICKET_KINDS, FEEDBACK_PLAN)
 DISPATCH_KINDS: Final[tuple[str, ...]] = tuple(k for k in RunKind if k not in (RETIRED, SPLIT, NEEDS_PLAN))
 

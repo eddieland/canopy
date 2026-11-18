@@ -32,7 +32,7 @@ AttachmentName = Annotated[
     str,
     Path(max_length=100, description="What its runs see it as: a plain file name, such as `design.md`."),
 ]
-# The body is the file's bytes, not JSON: a text file escaped as a JSON string could outgrow the guard's bound.
+#: The body is the file's bytes, not JSON: a text file escaped as a JSON string could outgrow the guard's bound.
 _BODY: Final[dict[str, Any]] = {
     "requestBody": {
         "required": True,

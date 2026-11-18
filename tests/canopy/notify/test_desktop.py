@@ -14,7 +14,7 @@ from canopy.notify import desktop
 from canopy.notify.desktop import Notifier
 from tests.conftest import executable, invoke
 
-# The fields of a `json` message the desktop sink reads; the rest of one it ignores.
+#: The fields of a `json` message the desktop sink reads; the rest of one it ignores.
 MESSAGE: Final = {
     "version": 1,
     "sink": "desktop",

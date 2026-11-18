@@ -36,12 +36,12 @@ if TYPE_CHECKING:
 MAX_MONTHS: Final = 24
 DEFAULT_MONTHS: Final = 12
 
-# A worker's attempt at a ticket's code: what a ticket's iterations count. A plan, a feedback plan, or an old split
-# writes no code of the ticket's.
+#: A worker's attempt at a ticket's code: what a ticket's iterations count. A plan, a feedback plan, or an old split
+#: writes no code of the ticket's.
 _WORK_KINDS: Final = (RunKind.IMPLEMENT, RunKind.FIX_CI, RunKind.RESUME)
-# The local month a row started in, as `YYYY-MM`: SQLite reads the journal's UTC time in the local time Python does.
+#: The local month a row started in, as `YYYY-MM`: SQLite reads the journal's UTC time in the local time Python does.
 _MONTH_FORMAT: Final = "%Y-%m"
-# A month's row by model: its model, and for no model, whether its runs are unread.
+#: A month's row by model: its model, and for no model, whether its runs are unread.
 type _ModelKey = tuple[str | None, bool]
 
 

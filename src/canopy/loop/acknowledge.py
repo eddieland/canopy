@@ -24,9 +24,9 @@ if TYPE_CHECKING:
 
 #: The most characters of one decision's reason a note carries; the tick's page has it whole.
 MAX_REASON: Final = 300
-# What a note says the overseer's own decisions did (its `decide` tool).
+#: What a note says the overseer's own decisions did (its `decide` tool).
 _SAID: Final[Mapping[str, str]] = {"wait": "waiting", "done": "done", "skip": "skipped"}
-# A dispatch's rationale is canopy's own, and starts with the run it started (its `dispatch` tool).
+#: A dispatch's rationale is canopy's own, and starts with the run it started (its `dispatch` tool).
 _STARTED: Final = re.compile(r"run (\d+):")
 
 

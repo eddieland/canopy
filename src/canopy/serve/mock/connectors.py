@@ -31,15 +31,15 @@ GITHUB: Final = "github"
 #: missed, and its stderr.
 type _Row = tuple[int | None, str, str, str, SourceKind, ConnectorRunStatus, str, str, str, str | None, str]
 
-# How far back the polls go, in minutes before T0, and how often they ran.
+#: How far back the polls go, in minutes before T0, and how often they ran.
 _FROM: Final = -4 * 24 * 60
 _EVERY: Final = 30
-# The ticks' runs: the tick and when it started, in minutes after T0 (the mock's `_fixtures`).
+#: The ticks' runs: the tick and when it started, in minutes after T0 (the mock's `_fixtures`).
 _TICKS: Final = ((1, -121), (2, -60))
-# What each source asked: the tracker its query and two tickets' comments, the reader the PRs canopy holds.
+#: What each source asked: the tracker its query and two tickets' comments, the reader the PRs canopy holds.
 _JIRA_ASKED: Final = {"query": "project = ABC", "tickets": [{"key": "ABC-101"}, {"key": "ABC-104"}]}
 _GITHUB_ASKED: Final = {"prs": [PR_88, PR_14]}
-# A poll the tracker answered 503 for one ticket, and one that timed out, in their connectors' words.
+#: A poll the tracker answered 503 for one ticket, and one that timed out, in their connectors' words.
 _JIRA_503: Final = "ABC-102: the tracker answered 503 Service Unavailable; its comments were not read"
 _TIMED_OUT: Final = "httpx.ReadTimeout: timed out reading https://api.github.com/graphql after 120s"
 
@@ -57,7 +57,7 @@ class _Short:
     seconds: int | None = None
 
 
-# The polls that read less than asked, by source and minutes after T0.
+#: The polls that read less than asked, by source and minutes after T0.
 _SHORT: Final[Mapping[tuple[str, int], _Short]] = {
     (JIRA, -4 * 24 * 60 + 18 * 60): _Short(
         ConnectorRunStatus.PARTIAL,

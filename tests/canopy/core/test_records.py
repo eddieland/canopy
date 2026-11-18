@@ -24,7 +24,7 @@ from canopy.core.vocab import (
 from tests.canopy.helpers import in_tick, present
 from tests.conftest import Journals
 
-# The field types a column of each declared type may be read as.
+#: The field types a column of each declared type may be read as.
 AFFINITY: Final[dict[str, frozenset[object]]] = {
     "INTEGER": frozenset({int, bool}),
     "TEXT": frozenset({str}),

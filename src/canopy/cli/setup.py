@@ -29,13 +29,13 @@ from canopy.setup import workspace as setup_workspace
 if TYPE_CHECKING:
     from canopy.runtime.implementation import Version
 
-# The shells `canopy completion` writes a script for. The script runs canopy with `_CANOPY_COMPLETE` set, which click
-# answers before any command runs.
+#: The shells `canopy completion` writes a script for. The script runs canopy with `_CANOPY_COMPLETE` set, which click
+#: answers before any command runs.
 SHELLS: Final[dict[str, type[ShellComplete]]] = {"bash": BashComplete, "zsh": ZshComplete, "fish": FishComplete}
 COMPLETE_VAR: Final = "_CANOPY_COMPLETE"
 
-# Where `canopy skill --install` saves the skill when given no directory: the home skills directory shared by agent
-# runtimes (DESIGN §13).
+#: Where `canopy skill --install` saves the skill when given no directory: the home skills directory shared by agent
+#: runtimes (DESIGN §13).
 SKILLS_DIR: Final = "~/.agents/skills"
 
 

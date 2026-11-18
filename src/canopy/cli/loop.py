@@ -53,7 +53,7 @@ if TYPE_CHECKING:
 
     from canopy.core.context import Context
 
-# `canopy status` lists this many runs that ended.
+#: `canopy status` lists this many runs that ended.
 RECENT_RUNS: Final = 10
 
 

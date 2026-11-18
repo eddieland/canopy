@@ -49,11 +49,11 @@ REASON: Final = "archive_unpushed"
 #: The most plan files one tick exports, commits, and pushes, so a push of a long history fits its timeout.
 PER_TICK: Final = 1000
 _GIT_TIMEOUT_SECONDS: Final = 60
-# The most of git's own message an item's detail carries.
+#: The most of git's own message an item's detail carries.
 _MAX_ERROR: Final = 300
-# The most ticket keys a commit's subject names before it counts the rest.
+#: The most ticket keys a commit's subject names before it counts the rest.
 _SUBJECT_KEYS: Final = 3
-# How each change `git diff --name-status` reports is headed in a commit's body, in the body's order.
+#: How each change `git diff --name-status` reports is headed in a commit's body, in the body's order.
 _CHANGES: Final = {"A": "New", "M": "Changed", "R": "Changed", "D": "Removed"}
 
 

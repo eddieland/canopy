@@ -22,7 +22,7 @@ from canopy.infra.procs import SubprocessRunner
 from canopy.setup import sandbox
 from tests.conftest import CanopyEnv, executable
 
-# Records its arguments and working directory, prints $FAKE_STDOUT_<NAME>, then exits with $FAKE_EXIT_<NAME>, or 0.
+#: Records its arguments and working directory, prints $FAKE_STDOUT_<NAME>, then exits with $FAKE_EXIT_<NAME>, or 0.
 STUB: Final = """\
 #!{python}
 import json, os, sys
@@ -34,7 +34,7 @@ sys.stdout.write(os.environ.get("FAKE_STDOUT_" + name.upper(), ""))
 sys.stderr.write(os.environ.get("FAKE_STDERR", ""))
 sys.exit(int(os.environ.get("FAKE_EXIT_" + name.upper(), "0")))
 """
-# `npm ci`: replaces node_modules, as npm does, with an srt from the lockfile that answers its version to --version.
+#: `npm ci`: replaces node_modules, as npm does, with an srt from the lockfile that answers its version to --version.
 NPM: Final = STUB.replace(
     "sys.stderr.write",
     """if sys.argv[1:2] == ["ci"] and os.environ.get("FAKE_EXIT_NPM", "0") == "0":

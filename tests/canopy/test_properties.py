@@ -25,7 +25,7 @@ from tests.conftest import TRACKER_TOML
 #: What a cursor's id may be: a number, a journal number or a message's id (DESIGN §35), as long as `CURSOR_VALUE_RE`
 #: lets one be.
 CURSOR_NUMBER_RE: Final = re.compile(r"[0-9]{1,200}")
-# Characters that mean something to a shell, a path, a glob, or a git ref.
+#: Characters that mean something to a shell, a path, a glob, or a git ref.
 UNSAFE: Final = set(" \t\n\r\x0b\x0c/\\;$`&|<>()'\"*?#~!{}[]=:^@,.%+")
 fixtures = [HealthCheck.function_scoped_fixture]
 
@@ -98,8 +98,8 @@ def accepts_branch_prefix(value: str) -> bool:
     return True
 
 
-# Each validator the CLI, the overseer's tools, and init actually call, with the pattern it is meant to enforce on the
-# whole string.
+#: Each validator the CLI, the overseer's tools, and init actually call, with the pattern it is meant to enforce on the
+#: whole string.
 VALIDATORS: Final = [
     pytest.param(KEY_RE, accepts_ticket_key, id="ticket-key-type"),
     pytest.param(KEY_RE, valid_key, id="decide-key"),

@@ -22,10 +22,10 @@ type Source = Literal["ticket", "task", "message", "chore_run", "decision", "tic
 MIN_QUERY: Final = 2
 MAX_QUERY: Final = 200
 MAX_WORDS: Final = 8
-# Each source's newest hits; one more is read to learn whether it has more.
+#: Each source's newest hits; one more is read to learn whether it has more.
 PER_SOURCE: Final = 20
 SNIPPET: Final = 160
-# How much of a snippet comes before its first match, when the text is longer than a snippet.
+#: How much of a snippet comes before its first match, when the text is longer than a snippet.
 _LEAD: Final = 50
 _CUT: Final = "…"
 
@@ -39,7 +39,7 @@ class Hit:
     """One row that holds every word: where it is, and a snippet of the field that matched."""
 
     source: Source
-    # The journal's own time format.
+    #: The journal's own time format.
     at: str
     snippet: str
     ticket_key: str | None = None
@@ -48,11 +48,11 @@ class Hit:
     task_id: int | None = None
     #: The first line of that task's text that holds anything, cut to a snippet: the operator's, so still untrusted.
     task_title: str | None = None
-    # The run that reported a message (a task's run, for a task's message), or the tick that recorded a decision or is
-    # the hit itself.
+    #: The run that reported a message (a task's run, for a task's message), or the tick that recorded a decision or is
+    #: the hit itself.
     run_id: int | None = None
     tick_id: int | None = None
-    # A fixed word for the row: a message's kind, a decision's action, a run's or tick's status, a ticket's phase.
+    #: A fixed word for the row: a message's kind, a decision's action, a run's or tick's status, a ticket's phase.
     label: str | None = None
 
 
@@ -149,8 +149,8 @@ def _matching(conn: sqlite3.Connection, rows_of: sql.Select, terms: Collection[s
     return sql.execute(conn, query.order_by("id DESC").limit(PER_SOURCE + 1)).fetchall()
 
 
-# A ticket's text: its key and title, then its branch and each unit's branch and PR, each once. Ordered by when a tick
-# last saw it, since a ticket's rowid says only when it was first seen.
+#: A ticket's text: its key and title, then its branch and each unit's branch and PR, each once. Ordered by when a tick
+#: last saw it, since a ticket's rowid says only when it was first seen.
 _TICKETS: Final = sql.select(
     "t.key, t.phase, t.last_seen_at AS at,"
     "  t.key || coalesce(' ' || t.title, '') || coalesce(' ' || (SELECT group_concat(v, ' ') FROM ("
@@ -159,15 +159,15 @@ _TICKETS: Final = sql.select(
     "  ) WHERE v IS NOT NULL AND v != ''), '') AS text,"
     "  t.last_seen_at AS id",
 ).from_("tickets t")
-# A task's text: its reference, the operator's words, and the branch its runs push, each once (DESIGN §36). A task
-# is never edited, so its id orders it as when it was submitted.
+#: A task's text: its reference, the operator's words, and the branch its runs push, each once (DESIGN §36). A task
+#: is never edited, so its id orders it as when it was submitted.
 _TASKS: Final = sql.select(
     "t.id, t.stopped_at, t.submitted_at AS at, t.text AS task_text,"
     "  'task:' || t.id || ' ' || t.text || coalesce(' ' || (SELECT group_concat(DISTINCT r.branch)"
     "    FROM task_runs r WHERE r.task_id = t.id), '') AS text",
 ).from_("tasks t")
-# A ticket's, a chore's, or a task's, with the task's text for its first line. A review's are left out, as reviews
-# are.
+#: A ticket's, a chore's, or a task's, with the task's text for its first line. A review's are left out, as reviews
+#: are.
 _MESSAGES: Final = (
     sql.select(
         "id, subject_kind, subject_id, at, kind, run_id, task_run_id, body AS text,"
@@ -177,8 +177,8 @@ _MESSAGES: Final = (
     .from_("messages")
     .where("subject_kind IN ('ticket', 'chore', 'task')")
 )
-# A chore run's text: the harness's note, its summary, and each finding's title and detail. Only a run whose result
-# is valid JSON has one, and only an object is a finding: the JSON functions fail on anything else.
+#: A chore run's text: the harness's note, its summary, and each finding's title and detail. Only a run whose result
+#: is valid JSON has one, and only an object is a finding: the JSON functions fail on anything else.
 _CHORE_RUNS: Final = (
     sql.select(
         "id, chore, status, coalesce(ended_at, started_at) AS at,"

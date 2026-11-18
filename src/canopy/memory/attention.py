@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
     from canopy.core.config import Config
 
-# The most ids one item names; the rest are counted, so a workspace with many lessons due raises one short item.
+#: The most ids one item names; the rest are counted, so a workspace with many lessons due raises one short item.
 MAX_NAMED: Final = 10
 
 

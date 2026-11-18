@@ -8,7 +8,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Final
 
+from canopy_codemods.doc_comments import DocComments
 from canopy_codemods.final_constants import FinalConstants
+from canopy_codemods.type_aliases import TypeAliases
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -18,4 +20,6 @@ if TYPE_CHECKING:
 #: Each codemod by name, in the order they run on a file.
 CODEMODS: Final[Mapping[str, type[Command]]] = {
     "final-constants": FinalConstants,
+    "type-aliases": TypeAliases,
+    "doc-comments": DocComments,
 }

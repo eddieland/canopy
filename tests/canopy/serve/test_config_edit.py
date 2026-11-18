@@ -24,7 +24,7 @@ from canopy.serve import config_edit
 from tests.canopy.web_helpers import refused, signed_in_client
 from tests.conftest import CanopyEnv, user_toml
 
-# The private file the tests edit: the user file under it is `user_toml()`, which no save writes.
+#: The private file the tests edit: the user file under it is `user_toml()`, which no save writes.
 COMMENTED: Final = """# Two on the laptop; the desktop has room for more.
 [capacity]
 max_workers = 2  # raise when the fans allow

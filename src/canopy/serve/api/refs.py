@@ -23,7 +23,7 @@ type Responses = dict[int | str, dict[str, Any]]
 
 WEB: Final = "web"
 _log = logs.for_tick(None)
-# The largest id SQLite stores; a larger one in a path is a 422, not an overflow.
+#: The largest id SQLite stores; a larger one in a path is a 422, not an overflow.
 _MAX_ID: Final = 2**63 - 1
 
 TicketKey = Annotated[str, Path(description="The ticket's key, as the tracker names it: `PROJ-1`.")]
@@ -43,8 +43,8 @@ RepoName = Annotated[
     Path(max_length=200, description="A repository's name in the workspace, as the run's change names it."),
 ]
 
-# Every API route's: the guard answers 403, 411, or 413 before any route does (guard.py), and a session's check on a
-# write answers 403.
+#: Every API route's: the guard answers 403, 411, or 413 before any route does (guard.py), and a session's check on a
+#: write answers 403.
 GUARDED: Final[Responses] = {
     403: {
         "model": ErrorResponse,
@@ -60,12 +60,12 @@ GUARDED: Final[Responses] = {
         "description": f"Refused before the route ran: a body over {MAX_BODY_BYTES // 1024} KiB.",
     },
 }
-# Every route's but the session's own (deps.signed_in).
+#: Every route's but the session's own (deps.signed_in).
 SIGNED_IN: Final[Responses] = {
     401: {"model": ErrorResponse, "description": "No valid session: sign in with the listener secret."},
 }
-# Every route's but the stream's that reads or writes the journal: another connection held its write lock past
-# db.BUSY_SECONDS.
+#: Every route's but the stream's that reads or writes the journal: another connection held its write lock past
+#: db.BUSY_SECONDS.
 BUSY: Final[Responses] = {
     503: {
         "model": ErrorResponse,
@@ -73,7 +73,7 @@ BUSY: Final[Responses] = {
         "again.",
     },
 }
-# A route's whose guards can refuse: a write, or a path naming a ticket or a chore by a reference that is not one.
+#: A route's whose guards can refuse: a write, or a path naming a ticket or a chore by a reference that is not one.
 REFUSED: Final[Responses] = {
     409: {"model": RefusalResponse, "description": "A guard refused it: `detail` names the guard and its reason."},
 }

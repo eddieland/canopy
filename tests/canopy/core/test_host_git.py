@@ -17,7 +17,7 @@ from tests.canopy.scenario_helpers import Scenario, dispatches
 from tests.conftest import GitPool, executable, git
 
 PACKAGE: Final = Path(__file__).resolve().parents[3] / "src" / "canopy"
-# The worker's own git is not under test: it runs with the flags too, so only host-side git could fire a hook.
+#: The worker's own git is not under test: it runs with the flags too, so only host-side git could fire a hook.
 WORKER_COMMIT: Final = hostgit.argv("commit", "--quiet", "--allow-empty", "-m", "PROJ-1: work")
 #: The overseer dispatches PROJ-1's implement on its `work` branch.
 WORK: Final = dispatches(slug="work")

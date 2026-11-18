@@ -19,7 +19,7 @@ from typing import Final
 from canopy.infra import procs
 
 PROC: Final = Path("/proc")
-# How long `end` waits for the processes it signalled, after SIGTERM and again after SIGKILL, as treehouse does.
+#: How long `end` waits for the processes it signalled, after SIGTERM and again after SIGKILL, as treehouse does.
 GRACE_SECONDS: Final = 2.0
 _POLL_SECONDS: Final = 0.05
 _LSOF_TIMEOUT_SECONDS: Final = 30

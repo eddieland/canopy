@@ -23,10 +23,10 @@ from canopy.serve import pr_list
 from tests.canopy.helpers import DEAD_PID, journal_at, old_ticket, present, shipped_through
 from tests.conftest import Journals
 
-# Each migration has a companion here, named by its version alone, that opens with the migration's sha256 over LF line
-# endings and holds a row for each table the migration creates, in an order the foreign keys allow. A file each, not a
-# list in this module, so PRs that add migrations never meet in it; two that take the same version still collide, on
-# the companion's name, which is the one conflict worth having.
+#: Each migration has a companion here, named by its version alone, that opens with the migration's sha256 over LF line
+#: endings and holds a row for each table the migration creates, in an order the foreign keys allow. A file each, not a
+#: list in this module, so PRs that add migrations never meet in it; two that take the same version still collide, on
+#: the companion's name, which is the one conflict worth having.
 COMPANIONS: Final = Path(__file__).parent / "migrations"
 HASH: Final = re.compile(r"-- sha256 of (\S+): ([0-9a-f]{64})\n")
 #: The tables a migration means to delete rows of, by its version. None does yet.
@@ -219,8 +219,8 @@ def test_journal_newer_than_code_is_an_error(tmp_path: Path, journals: Journals)
         db.migrate(conn, resources.migrations_dir())
 
 
-# What the shared run lifecycle reads and writes in every table of detached runs (`db.claim_run` and the rest), besides
-# the column each keeps its agent's pid in.
+#: What the shared run lifecycle reads and writes in every table of detached runs (`db.claim_run` and the rest), besides
+#: the column each keeps its agent's pid in.
 LIFECYCLE_COLUMNS: Final = frozenset(
     {
         "id",

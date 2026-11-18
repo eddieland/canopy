@@ -107,41 +107,41 @@ SEEN_DIR: Final = "plan-exports"
 _DIR_MODE: Final = 0o700
 _FILE_MODE: Final = 0o600
 _FRONT_MATTER: Final = "---\n"
-# Bumped whenever `document` or `name` changes, or what `_Seen` keeps of a plan, so every plan exported before is read
-# and compared again.
+#: Bumped whenever `document` or `name` changes, or what `_Seen` keeps of a plan, so every plan exported before is read
+#: and compared again.
 _FORMAT: Final = 9
-# A plan's columns its front matter leaves out: the hashes of its ticket's text at approval, which tell a reader of the
-# archive nothing the plan does not, and would bury the plan's own lines, so an approval no longer reads as a rename.
+#: A plan's columns its front matter leaves out: the hashes of its ticket's text at approval, which tell a reader of the
+#: archive nothing the plan does not, and would bury the plan's own lines, so an approval no longer reads as a rename.
 _UNEXPORTED: Final = frozenset({"approved_title_sha256", "approved_body_sha256"})
-# The decimal places of a cost in a front matter: a millionth of a dollar, below what any run's cost is reported to.
+#: The decimal places of a cost in a front matter: a millionth of a dollar, below what any run's cost is reported to.
 _COST_DIGITS: Final = 6
-# The most characters of a title a file's name carries.
+#: The most characters of a title a file's name carries.
 _MAX_SLUG: Final = 60
-# The most characters of a title an index shows.
+#: The most characters of a title an index shows.
 _MAX_INDEX_TITLE: Final = 100
-# What a line of Markdown text reads as markup: a link or an image, a tag, an entity, emphasis, code, math, a table's
-# cell, and the escape itself. A backslash before each makes it literal.
+#: What a line of Markdown text reads as markup: a link or an image, a tag, an entity, emphasis, code, math, a table's
+#: cell, and the escape itself. A backslash before each makes it literal.
 _MARKUP_RE: Final = re.compile(r"([\\`*_~\[\]()<>|&$])")
-# A prompt's name in an export, `<run>-PROMPT.md`, or `<run>-prompt.md` as earlier exports wrote it: never a plan's,
-# which always has a status after its run.
+#: A prompt's name in an export, `<run>-PROMPT.md`, or `<run>-prompt.md` as earlier exports wrote it: never a plan's,
+#: which always has a status after its run.
 _PROMPT_NAME_RE: Final = re.compile(r"\d+-(?:PROMPT|prompt)\.md")
-# An original's name in an export, `<run>-ORIGINAL.md`: never a plan's either.
+#: An original's name in an export, `<run>-ORIGINAL.md`: never a plan's either.
 _ORIGINAL_NAME_RE: Final = re.compile(r"\d+-ORIGINAL\.md")
-# What a PR's URL holds to be a link in an index: nothing that could end the link or start markup of its own.
+#: What a PR's URL holds to be a link in an index: nothing that could end the link or start markup of its own.
 _LINKABLE_URL_RE: Final = re.compile(r"https://[A-Za-z0-9._~:/?#@!$&'*+,;=%-]+")
-# The runs an index lists as the work that followed a ticket's plans: every kind that works on its branch.
+#: The runs an index lists as the work that followed a ticket's plans: every kind that works on its branch.
 _WORK_KINDS: Final = (RunKind.IMPLEMENT, RunKind.FIX_CI, RunKind.RESUME)
-# What a planner's heading opens with before the ticket's title (the plan prompts' outline): `Plan: KEY`.
+#: What a planner's heading opens with before the ticket's title (the plan prompts' outline): `Plan: KEY`.
 _HEADING_PREFIX: Final = re.compile(r"(?:feedback\s+)?plan(?:\s*:|\s*$)\s*", re.IGNORECASE)
-# What a planner puts between a heading's key and its title, as `PROJ-1 — Title`, or leaves at its end, as `Title -`:
-# a character class's members. Each is the planner's only where a space sets it apart, so `--dry-run` keeps its own.
+#: What a planner puts between a heading's key and its title, as `PROJ-1 — Title`, or leaves at its end, as `Title -`:
+#: a character class's members. Each is the planner's only where a space sets it apart, so `--dry-run` keeps its own.
 _SEPARATORS: Final = r"\-\u2010-\u2015:,;|/·•"
-# A separator a space sets apart at a title's end.
+#: A separator a space sets apart at a title's end.
 _TRAILING_SEPARATOR: Final = re.compile(rf"(?:\s+[{_SEPARATORS}]+)+$")
-# A heading's closing sequence: `#`s a space sets apart at its end, or the whole of it, so `C#` keeps its own.
+#: A heading's closing sequence: `#`s a space sets apart at its end, or the whole of it, so `C#` keeps its own.
 _CLOSING_HASHES: Final = re.compile(r"(?:^|\s+)#+$")
-# How long before an export a file must have last changed for its stat to stand for its bytes. A file changed in the
-# same tick of the filesystem's clock as it was read can change again with the same stat, git's "racily clean" case.
+#: How long before an export a file must have last changed for its stat to stand for its bytes. A file changed in the
+#: same tick of the filesystem's clock as it was read can change again with the same stat, git's "racily clean" case.
 _SETTLED_NS: Final = 2_000_000_000
 
 

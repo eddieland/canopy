@@ -22,11 +22,11 @@ MAX_TITLE: Final = 200
 MAX_ID: Final = 200
 MAX_LINK: Final = 500
 MAX_FINDINGS: Final = 20
-# The findings a run lists unless its chore's `max_findings` says otherwise: as many as a person reads at a glance.
+#: The findings a run lists unless its chore's `max_findings` says otherwise: as many as a person reads at a glance.
 DEFAULT_MAX_FINDINGS: Final = 5
-# How many findings a run may say it left out. A count, so bounded only to keep nonsense out.
+#: How many findings a run may say it left out. A count, so bounded only to keep nonsense out.
 MAX_MORE_FINDINGS: Final = 100_000
-# Stable across runs for the same problem, so it identifies the finding on the attention list and in notifications.
+#: Stable across runs for the same problem, so it identifies the finding on the attention list and in notifications.
 FINDING_ID_RE: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/-]*")
 
 

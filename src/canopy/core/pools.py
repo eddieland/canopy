@@ -24,11 +24,11 @@ if TYPE_CHECKING:
     from canopy.core.vocab import PoolKind
 
 HOLDER_PREFIX: Final = "canopy:"
-# Held only while `canopy workspace sync` makes a pool's slots, which it then returns. Not a `canopy:` holder, so no
-# ticket key can name it and reconcile leaves it to the next sync.
+#: Held only while `canopy workspace sync` makes a pool's slots, which it then returns. Not a `canopy:` holder, so no
+#: ticket key can name it and reconcile leaves it to the next sync.
 SYNC_HOLDER: Final = "canopy-sync"
-# The holder of a reused slot whose seeding failed, in both pools: no ticket can name it and no lease's return clears
-# it, so the slot is not reused until the operator releases it (DESIGN §18).
+#: The holder of a reused slot whose seeding failed, in both pools: no ticket can name it and no lease's return clears
+#: it, so the slot is not reused until the operator releases it (DESIGN §18).
 QUARANTINED: Final = "quarantined: worktree seeding failed"
 AVAILABLE: Final = "available"
 
@@ -49,7 +49,7 @@ def _null_is_list(value: object) -> object:
     return list[object]() if value is None else value
 
 
-# treehouse writes "" for an unleased slot's lease fields and null for its `leased_at`; accept either for both.
+#: treehouse writes "" for an unleased slot's lease fields and null for its `leased_at`; accept either for both.
 MaybeStr = Annotated[StrictStr, BeforeValidator(_null_is_empty)]
 
 
@@ -106,9 +106,9 @@ class ReturnOutcome(Enum):
     """What returning a slot came to."""
 
     RETURNED = "returned"
-    # The slot is unknown, not leased, or leased under a different identity. Retrying cannot help.
+    #: The slot is unknown, not leased, or leased under a different identity. Retrying cannot help.
     FAILED = "failed"
-    # Dirty and not forced. canopy always forces, so this is an attention item, never a retry.
+    #: Dirty and not forced. canopy always forces, so this is an attention item, never a retry.
     DIRTY = "dirty"
 
 

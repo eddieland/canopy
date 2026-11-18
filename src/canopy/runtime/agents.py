@@ -125,7 +125,7 @@ class Rules:
 
 
 #: How much of an MCP server's tools an agent is offered: every one, only some, or none.
-Reach = Literal["all", "some", "none"]
+type Reach = Literal["all", "some", "none"]
 
 
 @dataclass(frozen=True)

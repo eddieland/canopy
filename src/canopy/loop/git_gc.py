@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 #: What maintenance came to in one repository.
-Outcome = Literal["packed", "skipped", "failed"]
+type Outcome = Literal["packed", "skipped", "failed"]
 
 #: The step that combines packs, which git refuses in a clone with no pack, as an empty repository's is.
 REPACK: Final = ("maintenance", "run", "--quiet", "--task=incremental-repack")

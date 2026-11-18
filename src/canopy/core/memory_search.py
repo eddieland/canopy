@@ -19,11 +19,11 @@ from canopy.core.vocab import MemoryMode, MemoryScope, MemoryStatus, RunStatus
 if TYPE_CHECKING:
     import sqlite3
 
-# A query's words past these are not searched for.
+#: A query's words past these are not searched for.
 MAX_WORDS: Final = 8
 DEFAULT_LIMIT: Final = 10
 MAX_LIMIT: Final = 50
-# bm25()'s weight for a word in a memory's key, against 1 for one in its text: a key names what the memory is about.
+#: bm25()'s weight for a word in a memory's key, against 1 for one in its text: a key names what the memory is about.
 _KEY_WEIGHT: Final = 2.0
 
 

@@ -78,11 +78,11 @@ class Pull:
     node: str
     reviews: list[Review] = field(default_factory=list)
     threads: list[Thread] = field(default_factory=list)
-    # The comments on its conversation, on no line of its diff.
+    #: The comments on its conversation, on no line of its diff.
     comments: list[Comment] = field(default_factory=list)
     labels: list[str] = field(default_factory=list)
-    # Each context at the head as GitHub's rollup lists it, a CheckRun's or a StatusContext's fields; None for a head
-    # nothing has written a check or a status on.
+    #: Each context at the head as GitHub's rollup lists it, a CheckRun's or a StatusContext's fields; None for a head
+    #: nothing has written a check or a status on.
     contexts: list[dict[str, Any]] | None = None
     state: str = "OPEN"
     merge_state: str = "CLEAN"
@@ -93,8 +93,8 @@ class Pull:
     created: str = "2026-10-17T09:00:00Z"
     merged: str | None = None
     closed: str | None = None
-    # Its timeline's ready-for-review and review-requested events, oldest first: each its kind, `ready` or `asked`, and
-    # its time.
+    #: Its timeline's ready-for-review and review-requested events, oldest first: each its kind, `ready` or `asked`, and
+    #: its time.
     events: list[tuple[str, str]] = field(default_factory=list)
 
 
@@ -127,17 +127,17 @@ class Fake:
     """
 
     pulls: dict[tuple[str, str, int], Pull] = field(default_factory=dict)
-    # Each repository's branches, by owner and name: a branch's name to its head's sha.
+    #: Each repository's branches, by owner and name: a branch's name to its head's sha.
     branches: dict[tuple[str, str], dict[str, str]] = field(default_factory=dict)
-    # What a search returns, by its query: PRs' and issues' URLs; and the count it reports, when not their number.
+    #: What a search returns, by its query: PRs' and issues' URLs; and the count it reports, when not their number.
     searches: dict[str, list[str]] = field(default_factory=dict)
     search_count: int | None = None
     issues: dict[tuple[str, str, int], str] = field(default_factory=dict)
     issue_comments: list[tuple[str, str]] = field(default_factory=list)
-    # The login the token is for; empty for a reply that has none.
+    #: The login the token is for; empty for a reply that has none.
     viewer: str = "me"
     fail: dict[str, str] = field(default_factory=dict)
-    # How many requests next, of any operation, are answered with GitHub's unicorn: a 502 whose page is HTML.
+    #: How many requests next, of any operation, are answered with GitHub's unicorn: a 502 whose page is HTML.
     unicorns: int = 0
     #: How many requests next, of any operation, are carried out and their replies cut off.
     cuts: int = 0
@@ -1262,8 +1262,8 @@ def test_endpoints_are_github_coms_api_host_or_the_servers_own() -> None:
     assert canopy_github.endpoint("ghe.example.com") == "https://ghe.example.com/api/graphql"
 
 
-# A `gh` logged in to ghe.example.com alone, that answers a token for any host, as it does for every host but
-# github.com while GH_ENTERPRISE_TOKEN is set.
+#: A `gh` logged in to ghe.example.com alone, that answers a token for any host, as it does for every host but
+#: github.com while GH_ENTERPRISE_TOKEN is set.
 _GH: Final = """#!/bin/sh
 case "$*" in
   "auth status --json hosts --hostname ghe.example.com") echo '{"hosts":{"ghe.example.com":[]}}' ;;

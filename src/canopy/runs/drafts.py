@@ -39,9 +39,9 @@ from canopy.core.vocab import (
 )
 from canopy.infra import logs
 
-# The longest ticket URL a draft may name; the post command checks the rest.
+#: The longest ticket URL a draft may name; the post command checks the rest.
 MAX_URL: Final = 2048
-# Every draft's whole row, for each reader to finish.
+#: Every draft's whole row, for each reader to finish.
 _DRAFTS: Final = records.select(records.Draft)
 #: The stance a thread's draft takes when it does what its plan item proposed, for the proposals that draft a reply.
 _PROPOSED_STANCE: Final[Mapping[Proposal, DraftStance]] = {

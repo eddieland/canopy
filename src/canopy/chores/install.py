@@ -51,7 +51,7 @@ PROMPTS_DIR: Final = "chore-prompts"
 AGENTS_DIR: Final = agent_models.CHORE_AGENTS_DIR
 #: The comment above an installed table, which says who owns it.
 MARKER: Final = "# Written by `canopy chore install {name}`, which replaces this table whole when run again."
-# A line that starts a table or an array of tables, and so ends the one before it.
+#: A line that starts a table or an array of tables, and so ends the one before it.
 _HEADER_RE: Final = re.compile(r"[ \t]*\[")
 
 

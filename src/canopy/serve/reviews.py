@@ -52,9 +52,9 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
     from canopy.serve.schema.transcript import RawOutput, Transcript
 
-# How many review runs the reviews list carries, newest first.
+#: How many review runs the reviews list carries, newest first.
 RECENT_REVIEWS: Final = 100
-# Most severe first: a review's worst finding is the first of these it reported.
+#: Most severe first: a review's worst finding is the first of these it reported.
 _SEVERITIES: Final[tuple[FindingSeverity, ...]] = ("blocking", "major", "minor")
 
 

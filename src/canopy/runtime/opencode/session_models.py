@@ -76,7 +76,7 @@ WHERE length(id) <= 64 AND length(info) <= 1024
 ORDER BY time_created, id
 LIMIT ?
 """
-# Where a JSON object starts a line.
+#: Where a JSON object starts a line.
 _OBJECT_RE: Final = re.compile(r"^\{", re.MULTILINE)
 
 

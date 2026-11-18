@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from canopy.core.db import RunTable
 
 #: What emptying came to in one cache directory.
-Outcome = Literal["emptied", "skipped", "failed"]
+type Outcome = Literal["emptied", "skipped", "failed"]
 
 #: The run tables whose runs start in the wrapper as each role (DESIGN §24): a worker or plan run's agent as `worker`
 #: and its `setup_cmd` as `setup`, a task's or an epic plan's agent as `worker`, a chore's as `chore`, and a

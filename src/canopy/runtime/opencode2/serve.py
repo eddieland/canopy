@@ -31,7 +31,7 @@ ASK_SECONDS: Final = 30
 PASSWORD_ENV: Final = "OPENCODE_PASSWORD"  # noqa: S105 - a variable's name, not a password
 #: The words that start OpenCode, as canopy's own questions run it.
 OPENCODE: Final = ("opencode",)
-# Where the server says it listens.
+#: Where the server says it listens.
 LISTENING_RE: Final = re.compile(r"server listening on (http://127\.0\.0\.1:\d{1,5})\b")
 
 

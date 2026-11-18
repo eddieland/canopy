@@ -43,8 +43,8 @@ from canopy.core.config import (
 from canopy.infra import logs
 
 MAP_FILE_NAME: Final = "MAP.md"
-# The shared config file earlier canopy read from a repository's root. It is never read now; finding one only adds a
-# hint to the error that there is no workspace (D016).
+#: The shared config file earlier canopy read from a repository's root. It is never read now; finding one only adds a
+#: hint to the error that there is no workspace (D016).
 OLD_REPO_FILE_NAME: Final = "canopy.toml"
 REPOS_DIR: Final = "repos"
 POOLS_DIR: Final = ".treehouse"
@@ -52,10 +52,10 @@ DESKS_DIR: Final = "desks"
 MAX_SUMMARY: Final = 200
 #: The longest name of a check a repository's `checks` names: a connector's longest (DESIGN §30).
 MAX_CHECK_NAME: Final = 200
-# Where a repository's `branch_url` puts a branch's name.
+#: Where a repository's `branch_url` puts a branch's name.
 BRANCH_NAME: Final = "{branch}"
-# A GitHub clone URL as `git clone` takes it: https (credentials allowed, and dropped), scp-style SSH, or ssh://, with
-# an optional `.git` and trailing slash. Its owner and repository name make the default `branch_url` (D115).
+#: A GitHub clone URL as `git clone` takes it: https (credentials allowed, and dropped), scp-style SSH, or ssh://, with
+#: an optional `.git` and trailing slash. Its owner and repository name make the default `branch_url` (D115).
 GITHUB_URL_RE: Final = re.compile(
     r"(?:https://(?:[^@/\s]+@)?|ssh://git@|git@)github\.com[/:]([A-Za-z0-9-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?/?",
     re.IGNORECASE,

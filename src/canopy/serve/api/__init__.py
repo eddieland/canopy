@@ -56,8 +56,8 @@ from canopy.serve.api import (
 # The docstring above is the schema's description. A route is handed the backend and the sessions it uses by deps.py;
 # what the routes share, the errors they answer among it, is in refs.py.
 
-# A new resource's module goes here, so it needs a session like the rest and its tag is described; its router has
-# that tag, and each route a summary, a docstring, and every error it answers (test_serve.py checks).
+#: A new resource's module goes here, so it needs a session like the rest and its tag is described; its router has
+#: that tag, and each route a summary, a docstring, and every error it answers (test_serve.py checks).
 _RESOURCES: Final = (
     overview,
     tickets,
@@ -90,7 +90,7 @@ _RESOURCES: Final = (
     dictation,
 )
 
-# Each resource's tag, described by its module's docstring, in the order the schema lists them.
+#: Each resource's tag, described by its module's docstring, in the order the schema lists them.
 TAGS: Final[list[dict[str, Any]]] = [{"name": m.TAG, "description": m.__doc__} for m in (session, *_RESOURCES)]
 
 _signed_in = APIRouter(dependencies=[Depends(deps.signed_in)], responses=refs.SIGNED_IN)

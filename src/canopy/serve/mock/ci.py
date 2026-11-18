@@ -23,13 +23,13 @@ if TYPE_CHECKING:
 
 #: ABC-100's PR, which its run 37 opened.
 PR_86: Final = "https://github.com/acme/web/pull/86"
-# The heads only these check runs name.
+#: The heads only these check runs name.
 _SHA_86: Final = "3f6b2e19" + "6" * 32
 _SHA_12_A: Final = "71c0a9d4" + "2" * 32
 _SHA_12_B: Final = "b2e98f13" + "2" * 32
 _SHA_12_C: Final = "e5d4c37a" + "2" * 32
 _SHA_14_A: Final = "4a90d1be" + "8" * 32
-# The check runs' ids on their host, from here up.
+#: The check runs' ids on their host, from here up.
 _RUN_IDS: Final = 9_200_000
 _S, _F, _T, _C, _K = (
     CheckConclusion.SUCCESS,

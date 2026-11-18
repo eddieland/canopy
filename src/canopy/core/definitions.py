@@ -50,7 +50,7 @@ __all__ = ["RUNTIME_DIR", "DefinitionsError", "digest", "ensure", "prune", "rule
 
 RUNTIME_DIR: Final = "runtime"
 _TMP_PREFIX: Final = ".tmp-"
-# A temporary directory this old belongs to a process that died mid-copy; a copy takes well under a second.
+#: A temporary directory this old belongs to a process that died mid-copy; a copy takes well under a second.
 _STALE_TMP_SECONDS: Final = 3600
 
 

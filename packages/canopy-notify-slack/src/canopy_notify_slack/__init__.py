@@ -50,21 +50,21 @@ import click
 
 SLACK_PREFIX: Final = "https://hooks.slack.com/"
 SLACK_API_URL: Final = "https://slack.com/api/chat.postMessage"
-# A bot token: a user token (`xoxp-`) acts as the operator, with every scope they granted it.
+#: A bot token: a user token (`xoxp-`) acts as the operator, with every scope they granted it.
 TOKEN_PREFIX: Final = "xoxb-"  # noqa: S105
 #: The pause before each new try of a request that never left, or that Slack's rate limit refused; and, for a read, of
 #: one Slack failed to answer: one try, then one more for each pause. A post Slack may have made is never sent again
 #: (canopy-http), and canopy's retry of the delivery skips the posts it knows were made.
 RETRY_PAUSES: Final[Sequence[float]] = (1.0, 3.0)
-# How much of Slack's reply a failure prints.
+#: How much of Slack's reply a failure prints.
 _MAX_REPLY: Final = 500
 _MAX_LINES: Final = 45
-# A channel id (`C0123ABCD`) or a name (`#canopy`, `canopy`).
+#: A channel id (`C0123ABCD`) or a name (`#canopy`, `canopy`).
 _CHANNEL: Final = re.compile(r"#?[A-Za-z0-9._-]{1,80}")
-# An emoji code (`:robot_face:`), with an optional skin tone (`:wave::skin-tone-3:`).
+#: An emoji code (`:robot_face:`), with an optional skin tone (`:wave::skin-tone-3:`).
 _EMOJI: Final = re.compile(r"(?::[a-z0-9_+'-]{1,100}:){1,2}")
 _MAX_USERNAME: Final = 80
-# A name canopy gives a reason, such as `needs_reviewer`; a chore's finding names its own, which stays as written.
+#: A name canopy gives a reason, such as `needs_reviewer`; a chore's finding names its own, which stays as written.
 _SNAKE: Final = re.compile(r"[a-z]+(?:_[a-z]+)+")
 
 
@@ -316,12 +316,12 @@ def render(message: Mapping[str, object]) -> str:
     return "\n".join([header, *lines])
 
 
-# Block Kit's limits: blocks in a message, characters in a section's text and in a header, elements in a context.
+#: Block Kit's limits: blocks in a message, characters in a section's text and in a header, elements in a context.
 _MAX_BLOCKS: Final = 50
 _MAX_SECTION: Final = 3000
 _MAX_HEADER: Final = 150
 _MAX_CONTEXT: Final = 10
-# Digest runs listed by name, as the text format lists them.
+#: Digest runs listed by name, as the text format lists them.
 _DIGEST_LISTED: Final = 10
 #: Each kind of run a digest's `spend` names, as its field shows it.
 _SPENT: Final = (
@@ -333,13 +333,13 @@ _SPENT: Final = (
     ("tasks", "tasks"),
     ("dry_run", "dry runs"),
 )
-# A URL in journal text: it runs to a space or an angle bracket, and starts a word or follows punctuation.
+#: A URL in journal text: it runs to a space or an angle bracket, and starts a word or follows punctuation.
 _URL: Final = re.compile(r"(?<![\w/])https?://[^\s<>]+")
-# What ends a sentence or wraps a URL, never the URL's own last character.
+#: What ends a sentence or wraps a URL, never the URL's own last character.
 _TRAILING: Final = ".,:;!?'\"`*_~"
 _CLOSING: Final = {")": "(", "]": "["}
-# A link canopy sends to a page of its web UI: a URL's own characters only, so it needs no escaping but `&`, and no `|`
-# can put a label of its own in it. The same class as `serve.url`'s check in canopy's config (`_UI_URL_RE`).
+#: A link canopy sends to a page of its web UI: a URL's own characters only, so it needs no escaping but `&`, and no `|`
+#: can put a label of its own in it. The same class as `serve.url`'s check in canopy's config (`_UI_URL_RE`).
 _PAGE: Final = re.compile(r"https?://[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+")
 _MAX_PAGE: Final = 2000
 #: Each status a run, a chore's run, or a review's run ends with, as the emoji that leads its line.
@@ -356,8 +356,8 @@ _STATUS_EMOJI: Final = {
     "stopped": ":octagonal_sign:",
 }
 
-# A pull request on GitHub, which its link shows by the name its own URL spells, `acme/api#7`: an owner, a repository,
-# and a number, in characters that need no escaping, so the label cannot say anything the URL does not.
+#: A pull request on GitHub, which its link shows by the name its own URL spells, `acme/api#7`: an owner, a repository,
+#: and a number, in characters that need no escaping, so the label cannot say anything the URL does not.
 _GITHUB_PR: Final = re.compile(r"https://github\.com/([A-Za-z0-9-]{1,39})/([A-Za-z0-9._-]{1,100})/pull/([0-9]{1,10})/?")
 
 #: The events that need the operator, shown before the rest: the loop or a sink failing, a plan waiting on them, and a
@@ -741,7 +741,7 @@ def _reply_refused(e: Mapping[str, object]) -> _Shown:
     )
 
 
-# Each event kind as shown, its first line naming what happened: the event's page in the web UI is linked after it.
+#: Each event kind as shown, its first line naming what happened: the event's page in the web UI is linked after it.
 _EVENTS: Final[dict[str, Callable[[Mapping[str, object]], _Shown]]] = {
     "run.started": _run_started,
     "run.ended": _run_ended,
@@ -1044,7 +1044,7 @@ _ANSWER: Final = "answer:"
 KEEP_DAYS: Final = 7
 #: The threads file's format: 2 added each subject's earlier threads, which a sink that writes 1 drops.
 _VERSION: Final = 2
-# A message's `ts`, which names it to reply in its thread.
+#: A message's `ts`, which names it to reply in its thread.
 _TS: Final = re.compile(r"\d{1,20}\.\d{1,20}")
 
 

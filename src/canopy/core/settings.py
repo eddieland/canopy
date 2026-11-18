@@ -13,7 +13,7 @@ import types
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum, StrEnum
-from typing import TYPE_CHECKING, Annotated, Literal, Union, get_args, get_origin
+from typing import TYPE_CHECKING, Annotated, Literal, TypeAliasType, Union, get_args, get_origin
 
 from pydantic.fields import FieldInfo
 
@@ -34,7 +34,7 @@ class Layer(StrEnum):
 
 
 #: A value as JSON holds it: a number, a switch, a choice, a list of choices, or None for unset.
-Value = int | float | bool | str | Sequence[str] | None
+type Value = int | float | bool | str | Sequence[str] | None
 
 
 @dataclass(frozen=True)
@@ -99,6 +99,9 @@ def _setting(name: str, field: FieldInfo, value: object, set_in: Layer | None) -
 # The choices of an annotation that is a number, a switch, or a choice, optional or a tuple of choices: empty for a
 # number or a switch; None for anything else.
 def _kind(annotation: object) -> tuple[str, ...] | None:
+    if isinstance(annotation, TypeAliasType):
+        # A `type` statement's alias is not the type it names: read what it names.
+        return _kind(annotation.__value__)
     origin, args = get_origin(annotation), get_args(annotation)
     if origin is Annotated:
         return _kind(args[0])

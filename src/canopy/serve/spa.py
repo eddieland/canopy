@@ -21,12 +21,12 @@ from starlette.responses import FileResponse, HTMLResponse, JSONResponse, Respon
 if TYPE_CHECKING:
     from starlette.requests import Request
 
-# Vite puts content-hashed files here; a name changes whenever its content does, so they can be cached forever.
+#: Vite puts content-hashed files here; a name changes whenever its content does, so they can be cached forever.
 _ASSETS: Final = "assets"
 _IMMUTABLE: Final = "public, max-age=31536000, immutable"
-# index.html names the current assets, so the browser must revalidate it on every load or an upgrade shows a stale UI.
+#: index.html names the current assets, so the browser must revalidate it on every load or an upgrade shows a stale UI.
 _NO_CACHE: Final = "no-cache"
-# The name of the meta tag in index.html that holds its build's id (SinglePageApp.build); the UI reads it there.
+#: The name of the meta tag in index.html that holds its build's id (SinglePageApp.build); the UI reads it there.
 BUILD_META: Final = "canopy-build"
 _INLINE_SCRIPT: Final = re.compile(r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", re.DOTALL)
 
