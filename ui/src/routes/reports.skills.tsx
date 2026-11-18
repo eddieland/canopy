@@ -56,10 +56,11 @@ const HELP =
     'rides in each of its model calls by its front matter, the name and description the runtime lists it by, ' +
     'loaded or not; one it loads ' +
     "puts its text into the run's context besides. Each agent, by what its whole list adds to a model call: pick " +
-    'one for its own skills. Then each skill, by what its front matter came to and how often a run offered it ' +
-    'loaded it. Every count of tokens is an estimate, characters over 4, and a short window cannot tell a skill ' +
-    'nobody needs from one whose work did not come up. The page changes no skill: one is denied to an agent, by ' +
-    "name, in the runtime's own config."
+    'one for its own skills. Then each skill, by what its front matter came to over every model call and how ' +
+    'often a run offered it loaded it. Tokens a call is a size; tokens, all calls is that size added up over the ' +
+    "window's model calls. Every count of tokens is an estimate, characters over 4, and a short window cannot " +
+    'tell a skill nobody needs from one whose work did not come up. The page changes no skill: one is denied to ' +
+    "an agent, by name, in the runtime's own config."
 
 // What a column or a tile counts, in its name's tip.
 const EST = 'characters over 4, an estimate'
@@ -69,7 +70,9 @@ const UNUSED_TILE_HINT = 'Of those, the skills no run of any agent loaded, in a 
 const CALL_TILE_HINT =
     "About how many tokens the skills' front matter adds to one model call of a run offered a skill, the mean of " +
     `the calls counted: ${EST}`
-const SENT_TILE_HINT = `About how many tokens the skills' front matter added to the counted runs' calls. ${CARRIED}`
+const SENT_TILE_HINT =
+    'A total over the window, not a size: the tokens a call, added up over every model call of the counted ' +
+    `runs. ${CARRIED}`
 const RUNS_HINT = 'Its runs that started in the window and have ended'
 const NO_OFFER_HINT =
     'Of those, the runs nothing says what they were offered: canopy never asked about them, or the runtime could ' +
@@ -79,7 +82,10 @@ const AGENT_UNUSED_HINT = 'Of those, the skills none of its runs loaded'
 const AGENT_CALL_HINT =
     'About how many tokens the front matter of every skill offered adds to one of its model calls, the mean of ' +
     `the calls counted: ${EST}`
-const AGENT_SENT_HINT = `About how many tokens that added to the counted runs' model calls, all told. ${CARRIED}`
+const AGENT_CALLS_HINT = 'The model calls its counted runs made: each one carried the whole list'
+const AGENT_SENT_HINT =
+    "A total, not the list's size: its tokens a call, added up over every model call of its counted " +
+    `runs. ${CARRIED}`
 const AGENT_LOADS_HINT = 'Its calls of the skill tool that did not fail, of every skill canopy could name'
 const OFFERED_HINT = 'The runs the runtime said it offered the skill: it rides in each of their model calls'
 const RATE_HINT =
@@ -88,9 +94,10 @@ const RATE_HINT =
 const CALL_HINT =
     'About how many tokens its front matter, its entry in the list of skills the runtime sends, adds to each model ' +
     `call of a run offered it, at its newest offer on record: ${EST}`
+const CALLS_HINT = 'The model calls of the counted runs offered it: each one carried its front matter'
 const SENT_HINT =
-    'About how many tokens its front matter added to the model calls of the runs counted, its length at each run ' +
-    `for each of the run's model calls. ${CARRIED}`
+    "A total, not its size: its front matter's tokens, at its length in each counted run, added up over every " +
+    `model call of those runs. ${CARRIED}`
 const LOADS_HINT = 'The calls of the skill tool for it that did not fail, in every run, offered it on record or not'
 const FAILED_HINT = 'The calls for it that failed, as one for a skill the agent is denied does: the deny at work'
 const BODY_HINT =
@@ -230,7 +237,7 @@ function skillsTiles(found: SkillsReport | undefined): ReadoutTile[] {
         },
         {
             key: 'sent',
-            label: 'front matter ~tokens',
+            label: '~tokens, all calls',
             hint: SENT_TILE_HINT,
             value: found === undefined ? undefined : tokenCount(found.est_front_matter_tokens),
         },
@@ -245,8 +252,9 @@ function countText(listed: number, all: number): string {
 /**
  * Each agent that ran, the heaviest list a call first: its runs, those with no offer on record, the skills it was
  * offered, how many of those none of its runs loaded, and its loads, then what their front matter adds to one of
- * its model calls, with a bar of the most's, and what that came to. An agent's name picks it for the skills table
- * under it. Under the table, the runs nothing says what they were offered, split by why.
+ * its model calls, with a bar of the most's, the model calls counted, and what that came to over all of them. An
+ * agent's name picks it for the skills table under it. Under the table, the runs nothing says what they were offered,
+ * split by why.
  */
 function Agents({ found, span }: { found: SkillsReport; span: string }) {
     if (found.agents.length === 0) {
@@ -323,10 +331,21 @@ function agentColumns(agents: readonly SkillsAgent[]): ReportColumn<SkillsAgent>
             tone: (a) => (a.est_call_tokens ?? 0) === 0 && 'text-muted-foreground',
         },
         {
+            key: 'calls',
+            kind: 'figure',
+            label: 'model calls',
+            hint: AGENT_CALLS_HINT,
+            // The calls of the counted runs alone: an agent with none counted made calls all the same, so no zero.
+            cell: (a) => (a.counted === 0 ? '–' : a.calls),
+            tip: agentCallTip,
+            tone: (a) => a.counted === 0 && 'text-muted-foreground',
+        },
+        {
             key: 'sent',
             kind: 'figure',
-            label: 'front matter ~tokens',
+            label: '~tokens, all calls',
             hint: AGENT_SENT_HINT,
+            tip: agentCallTip,
             cell: (a) => (a.est_front_matter_tokens === null ? '–' : tokenCount(a.est_front_matter_tokens)),
             tone: (a) => (a.est_front_matter_tokens ?? 0) === 0 && 'text-muted-foreground',
         },
@@ -413,7 +432,8 @@ function Scope({ picked }: { picked: SkillsAgent | undefined }) {
 
 /**
  * Each skill a run was offered or loaded, over every agent or the one picked: the runs offered it and the share that
- * loaded it, its front matter a call and what that came to, with a bar of the most's, then its loads, the calls that
+ * loaded it, its front matter a call, the model calls counted, and what that came to over all of them, with a bar
+ * of the most's, then its loads, the calls that
  * failed, and what its text put into context. A skill offered and loaded in no run reads `never` where its rate
  * would. Under the table, what the front matter is counted over.
  */
@@ -503,9 +523,18 @@ function skillColumns(rows: readonly SkillRow[]): ReportColumn<SkillRow>[] {
             tone: (r) => r.est_call_tokens === null && 'text-muted-foreground',
         },
         {
+            key: 'calls',
+            kind: 'figure',
+            label: 'model calls',
+            hint: CALLS_HINT,
+            cell: (r) => (r.counted === 0 ? '–' : r.calls),
+            tip: frontMatterTip,
+            tone: (r) => r.counted === 0 && 'text-muted-foreground',
+        },
+        {
             key: 'sent',
             kind: 'bar',
-            label: 'front matter ~tokens',
+            label: '~tokens, all calls',
             hint: SENT_HINT,
             cell: (r) => (r.est_front_matter_tokens === null ? '–' : tokenCount(r.est_front_matter_tokens)),
             tip: frontMatterTip,

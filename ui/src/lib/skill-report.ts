@@ -192,14 +192,15 @@ export function loadsTip(row: Pick<SkillRow, 'unoffered'>): string | undefined {
 }
 
 /**
- * The page's description, the window's state: `8 skills offered over 7 days · 4 never loaded · front matter ~88.6k
- * tokens in 8 of 19 runs offered a skill`, the coverage only where it is partial, `front matter not counted yet`
+ * The page's description, the window's state: `8 skills offered over 7 days · 4 never loaded · front matter ~348
+ * tokens a call in 8 of 19 runs offered a skill`, the size a call rather than the window's sum, which reads as a
+ * size and is not one; the coverage only where it is partial, `front matter not counted yet`
  * while no run is counted; or `no skill offered over 7 days`, with the loads of runs with no offer on record.
  */
 export function skillsLine(
     found: Pick<
         SkillsReport,
-        'days' | 'offered' | 'unused' | 'loads' | 'listed' | 'counted' | 'est_front_matter_tokens' | 'skills'
+        'days' | 'offered' | 'unused' | 'loads' | 'listed' | 'counted' | 'est_call_tokens' | 'skills'
     >,
 ): string {
     const over = windowName(found)
@@ -219,11 +220,11 @@ function everyLoaded(skills: readonly Pick<SkillsSkill, 'countable' | 'offered'>
     return skills.some((s) => !s.countable && s.offered > 0) ? 'none known never loaded' : 'each one loaded'
 }
 
-function frontMatterWords(found: Pick<SkillsReport, 'listed' | 'counted' | 'est_front_matter_tokens'>): string {
-    if (found.est_front_matter_tokens === null) {
+function frontMatterWords(found: Pick<SkillsReport, 'listed' | 'counted' | 'est_call_tokens'>): string {
+    if (found.est_call_tokens === null) {
         return 'front matter not counted yet'
     }
-    const sent = `front matter ~${tokenCount(found.est_front_matter_tokens)} tokens`
+    const sent = `front matter ~${tokenCount(found.est_call_tokens)} tokens a call`
     return found.counted === found.listed
         ? sent
         : `${sent} in ${found.counted} of ${runsText(found.listed)} offered a skill`
