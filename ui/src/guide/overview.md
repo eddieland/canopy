@@ -170,7 +170,8 @@ hovering the mark says so. While the index might
 miss a session (not built yet, still building, its last read failed, or built before you changed `exclude`), a line at
 the panel's foot says how far it has come. If no session is found at all while the index is in that state, a
 `Sessions` panel shows up anyway to say so, because "nothing matched" and "nothing indexed yet" look identical
-otherwise. The whole list is on [Sessions](sessions).
+otherwise. Each panel's `find in Sessions` link takes the same words to
+[Sessions](sessions), which has the whole list, its filters, and a search field of its own.
 
 A task's reference alone, `task:4`, opens that task on Enter instead of searching for it: faster than remembering
 which page it was on.

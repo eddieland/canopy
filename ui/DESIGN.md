@@ -1555,7 +1555,12 @@ reader, so no table repeats them.
   it is narrowed, and the command that reopens it under its title, a `Copyable` that wraps at spaces first and shows its
   button while the row is hovered or focused, named for the session. A subagent's row follows its parent's, marked by
   its `subagent` chip, which names the parent to a screen reader; titles are not indented, so every title starts at the
-  same place. A line under the list, in muted text, says how far the loop's read has come, and holds the one link to the
+  same place. Under the header, in a `search` row as the tickets' filter is, a `FilterField` kept in `?q=` finds among
+  the sessions the filters list (`Find by title`, or at `text` `Find by title or what was said`), each keystroke asking
+  the server: the rows are then a search's hits, words marked, snippet under the title, a subagent's in a row of its
+  own, and at `text` the count reads `best`; with none, the `Empty` says what no session holds, or that the index may
+  yet. A search page's panel of sessions links to it with the same words (`find in Sessions`, in the accent, before
+  the count). A line under the list, in muted text, says how far the loop's read has come, and holds the one link to the
   longest list and back; at `sessions.search = "text"` a second line in the same foot, under no rule of its own, says
   the same of the index: while its first build goes on, that it is still indexing, how many sessions so far, and how
   far back; once built, what it holds and up to when; then its size and its last read. At

@@ -1,18 +1,21 @@
 import { useQuery } from '@tanstack/react-query'
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { X } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import { sessionsQuery } from '@/api/queries'
 import type { SessionList, SessionsWhose } from '@/api/types'
 import { Code } from '@/components/code'
+import { FilterField } from '@/components/filter-field'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { RowList } from '@/components/rows'
 import { SessionRows, SessionsIndexLine, SessionsProgressLine } from '@/components/session-rows'
 import { Tip } from '@/components/tip'
 import { Button } from '@/components/ui/button'
+import { SEARCH_MAX, searchQueryOf } from '@/lib/search'
 import {
     directoryTail,
+    indexBehind,
     SESSIONS_LISTED,
     SESSIONS_MAX,
     SESSIONS_WHOSE,
@@ -27,6 +30,7 @@ interface SessionsSearch {
     archived?: boolean | undefined
     all?: boolean | undefined
     directory?: string | undefined
+    q?: string | undefined
 }
 
 /**
@@ -35,7 +39,10 @@ interface SessionsSearch {
  * of the run that made it. A subagent's is under the session it ran for; an archived one only with `?archived=true`;
  * `?all=true` lists up to the server's most. `?directory=`, which a row's directory links to, narrows the list to the
  * sessions that ran in that directory exactly, the server narrowing it, so the count and the longest list follow.
- * Nothing at all while `sessions.search` is `off`. One of Workspace's pages, beside the runs and the ticks.
+ * `?q=`, which the panel's field keeps, finds among them, with the other filters as they are, the sessions whose title
+ * holds every word, or at `text` whose title and one message hold them between them, best match first, each with its
+ * snippet, a subagent's in a row of its own. Nothing at all while `sessions.search` is `off`. One of Workspace's
+ * pages, beside the runs and the ticks.
  */
 export const Route = createFileRoute('/workspace/sessions')({
     // Typed search params: each a flag, true or left out, and the directory a string or left out; anything else is
@@ -46,20 +53,32 @@ export const Route = createFileRoute('/workspace/sessions')({
         all: flag(search['all']),
         directory:
             typeof search['directory'] === 'string' && search['directory'] !== '' ? search['directory'] : undefined,
+        // A query the server would refuse is dropped, as the search page drops it: the list is then every session.
+        q: searchQueryOf(search['q']),
     }),
     component: SessionsPage,
 })
+
+/** What the field finds a session by, at each setting that lists any: its placeholder and its name. */
+const FOUND_BY = { titles: 'title', text: 'title or what was said' } as const
+
+// Whether a list is in the order of how well each session matches, not of its age: one found by words at `text`.
+function ranked(list: SessionList, q: string | undefined): boolean {
+    return q !== undefined && list.search === 'text'
+}
 
 function flag(raw: unknown): true | undefined {
     return raw === true || raw === 'true' ? true : undefined
 }
 
 function SessionsPage() {
-    const { canopy, archived, all, directory } = Route.useSearch()
+    const { canopy, archived, all, directory, q } = Route.useSearch()
+    const navigate = useNavigate({ from: Route.fullPath })
     const whose: SessionsWhose = canopy === true ? 'canopy' : 'outside'
     const query = useQuery(
         sessionsQuery({
             whose,
+            q,
             archived: archived === true,
             directory,
             limit: all === true ? SESSIONS_MAX : SESSIONS_LISTED,
@@ -70,8 +89,8 @@ function SessionsPage() {
         <>
             <PageHeader title="Sessions">
                 Sessions the agent runtime keeps, newest first. Yours come with the command that reopens them;
-                canopy&apos;s open the run that made them. Search finds them by title
-                {data?.search === 'text' && ', and by what they said'}.
+                canopy&apos;s open the run that made them. Find one by its title
+                {data?.search === 'text' && ', or by what it said'}.
             </PageHeader>
             {/* The previous list stays while the next one loads, dimmed so it does not read as its answer. */}
             <Panel className={cn('transition-opacity', isPlaceholderData && 'opacity-60')}>
@@ -82,7 +101,7 @@ function SessionsPage() {
                             {SESSIONS_WHOSE.map((w) => (
                                 <FilterLink
                                     key={w}
-                                    search={{ canopy: w === 'canopy' ? true : undefined, archived, all, directory }}
+                                    search={{ canopy: w === 'canopy' ? true : undefined, archived, all, directory, q }}
                                     selected={w === whose}
                                 >
                                     {WHOSE_CHIP[w]}
@@ -91,25 +110,42 @@ function SessionsPage() {
                         </nav>
                         {/* A toggle, not a third choice of whose: set apart by a rule, and pressed or not. */}
                         <span className="flex items-center border-l pl-3">
-                            <ArchivedToggle search={{ canopy, archived, all, directory }} />
+                            <ArchivedToggle search={{ canopy, archived, all, directory, q }} />
                         </span>
                         {directory !== undefined && (
-                            <Narrowed directory={directory} search={{ canopy, archived, all }} />
+                            <Narrowed directory={directory} search={{ canopy, archived, all, q }} />
                         )}
                         {data !== undefined && data.search !== 'off' && (
                             <span
                                 className="border-l pl-3 readout text-xs text-muted-foreground"
                                 data-testid="sessions-count"
                             >
-                                {data.more ? `newest ${sessionsShown(data.sessions)}` : sessionsShown(data.sessions)}
+                                {data.more
+                                    ? `${ranked(data, q) ? 'best' : 'newest'} ${sessionsShown(data.sessions)}`
+                                    : sessionsShown(data.sessions)}
                             </span>
                         )}
                     </span>
                 </PanelHeader>
+                {/* The field stays while the next list loads, so typing never loses it; none at `off`. */}
+                {data !== undefined && data.search !== 'off' && (
+                    <search className="border-b px-3 py-2">
+                        <FilterField
+                            q={q}
+                            queryOf={searchQueryOf}
+                            onFilter={(words) =>
+                                void navigate({ search: (prev) => ({ ...prev, q: words }), replace: true })
+                            }
+                            label={`Find sessions by ${FOUND_BY[data.search]}`}
+                            placeholder={`Find by ${FOUND_BY[data.search]}`}
+                            maxLength={SEARCH_MAX}
+                        />
+                    </search>
+                )}
                 {data === undefined ? (
                     <PanelLoading query={query} className="min-h-72" />
                 ) : (
-                    <Listed list={data} archived={archived === true} all={all === true} directory={directory} />
+                    <Listed list={data} archived={archived === true} all={all === true} directory={directory} q={q} />
                 )}
             </Panel>
         </>
@@ -125,11 +161,13 @@ function Listed({
     archived,
     all,
     directory,
+    q,
 }: {
     list: SessionList
     archived: boolean
     all: boolean
     directory: string | undefined
+    q: string | undefined
 }) {
     if (list.search === 'off' || list.progress === null) {
         return (
@@ -143,11 +181,15 @@ function Listed({
     return (
         <>
             {list.sessions.length === 0 ? (
-                <Empty size="panel">{emptyWords(list.whose, list.progress.read_at, archived, directory)}</Empty>
+                <Empty size="panel">
+                    {q === undefined
+                        ? emptyWords(list.whose, list.progress.read_at, archived, directory)
+                        : unfoundWords(list, directory)}
+                </Empty>
             ) : (
                 <RowList kind="session" className="divide-y" data-testid="sessions">
                     {/* Narrowed, every row's directory is the list's own: no link to the page it is on. */}
-                    <SessionRows sessions={list.sessions} narrow={directory === undefined} />
+                    <SessionRows sessions={list.sessions} words={list.words} narrow={directory === undefined} />
                 </RowList>
             )}
             {/* One foot, a line for each read: the titles', then the index's. */}
@@ -164,7 +206,9 @@ function Listed({
                                 search={(prev) => ({ ...prev, all: all ? undefined : true })}
                                 className="text-accent underline-offset-4 hover:underline"
                             >
-                                {all ? `list the newest ${SESSIONS_LISTED}` : `list up to ${SESSIONS_MAX}`}
+                                {all
+                                    ? `list the ${ranked(list, q) ? 'best' : 'newest'} ${SESSIONS_LISTED}`
+                                    : `list up to ${SESSIONS_MAX}`}
                             </Link>
                             .
                         </>
@@ -194,6 +238,18 @@ function emptyWords(
     const noun = whose === 'canopy' ? "no session of canopy's" : 'no session outside canopy'
     const where = directory === undefined ? noun : `${noun} in ${directory}`
     return archived ? `${where} yet` : `${where} the runtime has not archived`
+}
+
+// What a list found by words says when it found none: what no session holds, where, and that the index may yet.
+function unfoundWords(list: SessionList, directory: string | undefined): string {
+    const noun = list.whose === 'canopy' ? "no session of canopy's" : 'no session outside canopy'
+    const where = directory === undefined ? noun : `${noun} in ${directory}`
+    if (list.search !== 'text') {
+        return `${where} has a title that holds every word`
+    }
+    return indexBehind(list)
+        ? `${where} found yet: the index of what sessions said does not hold every one`
+        : `${where} holds every word, in its title or in what it said`
 }
 
 // A filter chip's look, the runs page's: muted, and on the accent's tint while chosen.
