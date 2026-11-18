@@ -175,6 +175,10 @@ target-version = "py312"
 # The fakes are extensionless executables; lint and format them as Python too.
 extend-include = ["tests/fakes/agent", "tests/fakes/github", "tests/fakes/srt", "tests/fakes/treehouse"]
 
+[tool.ruff.format]
+# The codemods' test cases are Python snippets held as a codemod writes them, before ruff formats them.
+exclude = ["tests/canopy_codemods/cases/*.md"]
+
 [tool.ruff.lint]
 # Every stable rule (D018). Opt out below with a reason, never by narrowing `select`. Preview rules stay off, except
 # the pydoclint ones named in `extend-select`: they change between ruff releases, so selecting `ALL` of them would
