@@ -65,7 +65,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 Rules:
 
 - **No raw colors outside `tokens.css`.** No hex, `rgb()`, `oklch()`, Tailwind palette classes (`bg-zinc-800`,
-  `text-white`), or arbitrary color values. `npm run lint` fails on them, but in Koi Pond's two drawings (Palettes).
+  `text-white`), or arbitrary color values. `npm run lint` fails on them, except in Koi Pond's two drawings (Palettes).
 - **No `dark:` in components.** Both themes are first-class and come from the same tokens. If a component looks wrong
   in one theme, the token is wrong: fix the value in `tokens.css`, for that theme. The lint fails on `dark:`.
 - **Text reads at 4.5:1** (WCAG AA for small text), in both themes and every palette: every token used as text on

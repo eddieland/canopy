@@ -76,11 +76,10 @@ or two. The rail, the header, and a page's title stay clear of all of it, and th
 guide's text leaves free, so a window too narrow to leave one has no pads. The pads are a pale sage and the koi's
 gold a pale straw, so neither is mistaken for a run that is going or one that is stuck. The koi under the pad never
 moves, which makes it the one thing on the page that is not waiting on you. Reduced motion keeps the visitors away
-and the water still. Layout and sizes never
-change with a palette, so nothing moves when you switch, except under Gruvbox, Pulp, Monokai, and Acme, where monospace
-runs wider and a long line wraps a little sooner. Their text is drawn a step smaller to make up some of the width;
-every line keeps its height, so nothing shifts up or down. This guide stays in its usual sans under all four: monospace
-suits a readout, and a manual set in it reads like one long log line.
+and the water still. Layout and sizes never change with a palette, so nothing moves when you switch, except under
+Gruvbox, Pulp, Monokai, and Acme, where monospace runs wider and a long line wraps a little sooner. Their text is drawn
+a step smaller to make up some of the width; every line keeps its height, so nothing shifts up or down. This guide stays
+in its usual sans under all four: monospace suits a readout, and a manual set in it reads like one long log line.
 
 ## Time
 

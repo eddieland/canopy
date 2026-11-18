@@ -516,10 +516,17 @@ describe("Koi Pond's water", () => {
 
     // A mask is written into the stylesheet (`?inline`), never fetched: a mask layer whose image has not arrived is
     // dropped, and the color under it would paint flat.
-    it.each(['net.svg', 'ripple.svg', 'wave.svg'])('holds no color in %s, a mask in the stylesheet', (name) => {
-        expect(drawing(name)).not.toMatch(/oklch\(|#[\da-f]{3}|rgb/iu)
-        expect(body).toMatch(new RegExp(`mask(?:-2)?:\\s[^;]*url\\('\\./koi-pond/${name}\\?inline'\\)`, 'u'))
-    })
+    it.each(['net.svg', 'ripple.svg', 'wave.svg'])(
+        'paints %s in black and white alone, a mask in the stylesheet',
+        (name) => {
+            const inks = [...drawing(name).matchAll(/\b(?:fill|stroke|stop-color)=(["'])(.*?)\1/gu)].map(
+                ([, , ink]) => ink,
+            )
+            expect(inks.filter((ink) => !/^(?:none|black|white|url\(#[\w-]+\))$/u.test(ink ?? ''))).toEqual([])
+            expect(drawing(name)).not.toMatch(/oklch\(|#[\da-f]{3}|rgb|\bstyle=|<style|currentColor/iu)
+            expect(body).toMatch(new RegExp(`mask(?:-2)?:\\s[^;]*url\\('\\./koi-pond/${name}\\?inline'\\)`, 'u'))
+        },
+    )
 
     // The second crosser's defaults are held with the canvas's knobs, above; the aurora's mask has none to hold.
     it('cuts no aurora by default', () => {
@@ -558,8 +565,8 @@ function drawing(name: string): string {
  * oklch color throws: a color spelled any other way would escape what the tests hold the drawings to.
  */
 function paints(name: string): { attribute: string; ink: Oklch }[] {
-    return [...drawing(name).matchAll(/\b(fill|stroke|stop-color)="([^"]*)"/gu)].flatMap(
-        ([, attribute = '', value = '']) => {
+    return [...drawing(name).matchAll(/\b(fill|stroke|stop-color)=(["'])(.*?)\2/gu)].flatMap(
+        ([, attribute = '', , value = '']) => {
             if (value === 'none' || /^url\(#[\w-]+\)$/u.test(value)) {
                 return []
             }
