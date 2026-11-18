@@ -163,8 +163,10 @@ With `sessions.search` set to `titles`, two more panels follow the journal's: th
 canopy, yours, and canopy's own, each the newest 20 whose title holds every word. A subagent's is found too, marked as
 one. Yours carries the command that reopens it; canopy's opens the run that made it. At `titles` the search reads
 titles only, so a session called `fix it` is found by `fix` and by nothing it fixed; at `text` it finds a session whose
-title and one message hold every word between them, the best match first. Such a hit shows the snippet of its best
-message under its title, the words marked, and says how many more of its messages hold them. While the index might
+title and one message hold every word between them, the best match first, so a full panel says `best 20`. Such a
+hit shows the snippet of its best message under its title, the words marked, and says how many more of its messages
+hold them. One marked `indexed in part` is a session too long to index whole: words past the cut aren't found, and
+hovering the mark says so. While the index might
 miss a session (not built yet, still building, its last read failed, or built before you changed `exclude`), a line at
 the panel's foot says how far it has come. If no session is found at all while the index is in that state, a
 `Sessions` panel shows up anyway to say so, because "nothing matched" and "nothing indexed yet" look identical

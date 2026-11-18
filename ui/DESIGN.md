@@ -1535,11 +1535,15 @@ reader, so no table repeats them.
   dimmed to 60%. While empty, the field's end also holds the jump palette's keys in a keycap that opens it. After the
   journal's panels come the runtime's sessions' two, outside canopy then canopy's, each only with hits, their rows the
   Sessions page's with the words marked in the title; a subagent's, found apart from its parent, carries its chip.
-  A session found by what it said has its snippet under its title, in muted `text-sm`, the words marked as a hit's
-  are and nothing linked, then a muted `text-xs` line for what else the hit says (`2 more messages hold them`, and
-  that it was indexed in part). While the index may miss a session (not built, still building, failed, or built under
-  another `sessions.exclude`), a muted line at the panel's foot says how far it has come; when neither panel has a
-  hit then, one `Sessions` panel holds that line alone, so no hit is not read as no such session.
+  A session found by what it said has one line under its title, why it was found: its snippet in muted `text-sm`, the
+  words marked as a hit's are and nothing linked, then after a middle dot, in `text-xs`, what else the hit says
+  (`2 more messages hold the words`, and `indexed in part`, dotted under, its tip saying what that costs). The dot
+  stays with the snippet's end, so a note that wraps starts its line clean; the command that reopens the session
+  comes last. At `text` a panel's count reads `best 20`, not `newest 20`, since its hits are ranked, and the page's
+  lede says what sessions said is searched too. While the index may miss a session (not built, still building, failed,
+  or built under another `sessions.exclude`), a muted line at the panel's foot says how far it has come, leading with
+  that it is still indexing; when neither panel has a hit then, one `Sessions` panel holds an `Empty` row saying no
+  session was found yet over that foot, so no hit is not read as no such session.
 - **The Sessions page** (`/workspace/sessions`, `SessionRows`) lists the runtime's sessions under Workspace, beside the
   runs: one panel, its header naming whose they are, with the group word `whose` and two filter chips, `outside canopy`
   (the default) and `canopy's`, then, each after a hairline, an `archived` toggle chip (`aria-pressed`), while the list
@@ -1552,8 +1556,9 @@ reader, so no table repeats them.
   button while the row is hovered or focused, named for the session. A subagent's row follows its parent's, marked by
   its `subagent` chip, which names the parent to a screen reader; titles are not indented, so every title starts at the
   same place. A line under the list, in muted text, says how far the loop's read has come, and holds the one link to the
-  longest list and back; at `sessions.search = "text"` a second line under it says the same of the index, in the CLI's
-  words: the sessions it holds, its size, how far it has read, and whether its first build still goes on. At
+  longest list and back; at `sessions.search = "text"` a second line in the same foot, under no rule of its own, says
+  the same of the index: while its first build goes on, that it is still indexing, how many sessions so far, and how
+  far back; once built, what it holds and up to when; then its size and its last read. At
   `sessions.search = "off"` the panel is one `Empty` saying how to turn it on, and the header
   holds no count.
 - **The jump palette** (`JumpPalette`, `src/components/shell/jump-palette.tsx`) jumps to a ticket from anywhere: `⌘K`

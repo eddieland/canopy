@@ -39,8 +39,9 @@ the one it ran for, marked `subagent`. The runtime's own list leaves archived se
 does this page until you press `archived`. It shows the newest 50 sessions with their subagents under them, so the
 count in the header, which counts every row, can read higher: `newest 53`. When more match, the line at its foot links
 to the newest 500, and back; the same line says how far the loop's read has come. At `text` a second line reports on
-the index: how many sessions it holds, its size, how far it has read, and, while the first build is still working its
-way back through your history, how far back it has got.
+the index. While the first build is still working its way back through your history it leads with that, `Still
+indexing`, and says how many sessions so far and how far back it has got; once built, it says what it holds and up to
+when.
 
 Under a title sits the session's model, when anything recorded one: the model it was asked to run on, and, when
 something else answered, what did. A session set to a router reads `github-copilot/auto → github-copilot/gpt-5`,

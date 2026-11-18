@@ -41,8 +41,9 @@ function SearchPage() {
                 tab={q === undefined ? 'Search' : `Search “${q}”`}
             >
                 Tickets by key, title, and branch, tasks by their text, every conversation, chore runs, decisions,
-                ticks, and the agent runtime&apos;s sessions by their titles, that hold every word, newest first. Not
-                searched: transcripts, reviews, and task reports.
+                ticks, and the agent runtime&apos;s sessions by their titles
+                {q !== undefined && <SessionsByText q={q} />}, that hold every word, newest first. Not searched:
+                transcripts, reviews, and task reports.
             </PageHeader>
             {q === undefined ? (
                 <Panel>
@@ -55,6 +56,15 @@ function SearchPage() {
             )}
         </>
     )
+}
+
+/**
+ * What the lede adds once the sessions are searched at `text`: that what they said is searched too. Nothing at
+ * `titles` or `off`, or before the sessions are read. It reads by the first panel's key, so nothing is read twice.
+ */
+function SessionsByText({ q }: { q: string }) {
+    const { data } = useQuery(sessionsQuery({ whose: 'outside', q, limit: SESSIONS_PER_SEARCH }))
+    return data?.search === 'text' ? ' and what they said' : null
 }
 
 function Results({ q }: { q: string }) {
@@ -117,7 +127,10 @@ function SessionsFound({ q, whose }: { q: string; whose: SessionsWhose }) {
         <Panel data-testid={`search-sessions-${whose}`}>
             <PanelHeader label={WHOSE_LABEL[whose]}>
                 <span className="readout text-xs text-muted-foreground">
-                    {data.more ? `newest ${data.sessions.length}` : data.sessions.length}
+                    {/* At text the hits are ranked, a title's word over a message's: the best, not the newest. */}
+                    {data.more
+                        ? `${data.search === 'text' ? 'best' : 'newest'} ${data.sessions.length}`
+                        : data.sessions.length}
                 </span>
             </PanelHeader>
             <RowList kind="session" className="divide-y">
@@ -150,9 +163,14 @@ function SessionsUnfound({ q }: { q: string }) {
     return (
         <Panel data-testid="search-sessions-unfound">
             <PanelHeader label="Sessions" />
-            <p className="px-3 py-2 text-xs text-muted-foreground">
-                {/* Where the index cannot be kept at all, why says so alone: nothing is on its way. */}
-                {outside.why_titles === null && 'No session found, though the index may not hold every one yet. '}
+            {/* An empty row and a foot, as a sessions panel with hits has rows and a foot: what was not found, then
+                why that may not be the whole answer. */}
+            <Empty>
+                {outside.why_titles === null
+                    ? 'no session found yet: the index of what sessions said does not hold every one'
+                    : "no session's title holds every word"}
+            </Empty>
+            <p className="border-t px-3 py-2 text-xs text-muted-foreground" data-testid="search-sessions-index">
                 <SessionsIndexLine list={outside} />
             </p>
         </Panel>
