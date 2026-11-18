@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 8" preserveAspectRatio="none">
+    <!--
+        One period of the waterline: a wave, and its reflection under it. A mask over the aurora, so it holds no
+        color: the sections' own show through it (src/styles/tokens.css). Drawn past both ends, so it repeats
+        without a seam.
+    -->
+    <g fill="none" stroke="black">
+        <path d="M-9 5.9q9 -3 18 0t18 0t18 0" stroke-width="2.6" stroke-opacity="0.22"/>
+        <path d="M-9 3.2q9 -3.4 18 0t18 0t18 0" stroke-width="1.7"/>
+    </g>
+</svg>

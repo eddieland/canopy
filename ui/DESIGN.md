@@ -65,7 +65,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 Rules:
 
 - **No raw colors outside `tokens.css`.** No hex, `rgb()`, `oklch()`, Tailwind palette classes (`bg-zinc-800`,
-  `text-white`), or arbitrary color values. `npm run lint` fails on them.
+  `text-white`), or arbitrary color values. `npm run lint` fails on them, except in Koi Pond's two drawings (Palettes).
 - **No `dark:` in components.** Both themes are first-class and come from the same tokens. If a component looks wrong
   in one theme, the token is wrong: fix the value in `tokens.css`, for that theme. The lint fails on `dark:`.
 - **Text reads at 4.5:1** (WCAG AA for small text), in both themes and every palette: every token used as text on
@@ -110,15 +110,14 @@ Rules:
 - **Adding a token**: define it in both `:root` and `.dark`, expose it in `@theme inline`, and add a row above. Check it
   on both themes' surfaces before using it. A neutral, or a color drawn in one, is set again in each palette's rule.
 - **Palettes.** Lavender is light's default and indigo dark's. Each other palette is a rule in `tokens.css` that sets
-  the neutrals and the accent over the default's, keyed on `data-light-palette` or `data-dark-palette` on `<html>`,
-  and `tokens.test.ts` measures every palette `src/theme/palette.ts` lists. A scheme with an accent of its own wears
-  it; the others take one that suits the canvas. A light canvas is never grey, which only looks dim. Every other hue is
-  the same in all, so a component never knows which palette it is on, and an accent is read through its token, never
-  assumed indigo; where a scheme's own bases would drop a hue below 4.5:1, the bases move, never the hue. A palette's
-  accent is darkened or lightened until it reads as text there, on its own tint, and under `accent-foreground`, and
-  sets `ring` with it. A scheme whose accent would pass for a status wears another of its colors, as Gruvbox wears its
-  purple, not its orange, and a green canvas never takes a green accent. A scheme whose bases would have to move until
-  it matched another palette is left out, as Nord's dark is.
+  the neutrals and the accent over the default's, and `tokens.test.ts` measures every palette `src/theme/palette.ts`
+  lists. A scheme with an accent of its own wears it; the others take one that suits the canvas. A light canvas is never
+  grey, which only looks dim. Every other hue is the same in all, so a component never knows which palette it is on, and
+  an accent is read through its token, never assumed indigo; where a scheme's own bases would drop a hue below 4.5:1,
+  the bases move, never the hue. A palette's accent is darkened or lightened until it reads as text there, on its own
+  tint, and under `accent-foreground`, and sets `ring` with it. A scheme whose accent would pass for a status wears
+  another of its colors, as Gruvbox wears its purple, not its orange, and a green canvas never takes a green accent. A
+  scheme whose bases would have to move until it matched another palette is left out, as Nord's dark is.
   A palette sets its character too, beyond color, from a few closed choices in the same rule, so a component still
   never knows which it is on: its corners (`--radius`), its `edge` (a hairline, or none, where panels stand apart by
   their lightness alone), its depth (a soft shadow in the canvas's hue or the palette's shade, a hard one with no blur,
@@ -132,23 +131,24 @@ Rules:
   A palette may ink the page further from knobs whose defaults draw nothing: a panel's, a bubble's, a chip's, and a
   selected row's outline and drop, a field's and an outline button's line in ink, a tone printed on the canvas, the
   primary action pressed into its shadow, a page title dropped in its section's color and lettered, a bubble's balloon
-  tail, and a starburst where a cleared item drops its leaf. Each is a shadow, a transform, a background, or drawn
-  beside its box, so it takes no room, and a texture is clear where text sits; a box that clips still paints the reach
-  of that ink and of a focus ring (`clip-reach`). Pulp, a comic in four-color print, takes them all. Starry Skies prints
-  a sky on the canvas instead: stars on the two layers, cleared over the rail and the header and faded in past a page's
-  title, a crescent moon in the window's lower right corner, and a meteor along its foot now and then, all under the
-  panels, so none covers anything. Komorebi lays sunlight through leaves the same way: flecks of sun, and the shadows of
-  leaves, of a bough swaying in that corner, and of a falling leaf, no deeper where two cross; text set on the canvas
-  reads at 4.5:1 under the deepest, which `tokens.test.ts` measures. What moves does so by opacity and transform alone.
-  A palette may also give the shell's signature a form of its own, the first place it is felt: the aurora (a gradient
-  hairline, a stepped bar of solid blocks, a print strip of those blocks, or a line that blooms), the name (the aurora's
-  gradient, the accent and a leaf green, on a solid block, on a tilted plate, or glowing), and the nav's highlight (a
-  tint and a bar, a solid block with the active item inked in the canvas's color, or a tint with the icon lit). On a
+  tail, and a starburst where a cleared item drops its leaf. None takes room, and a texture is clear where text sits; a
+  box that clips still paints the reach of that ink and of a focus ring (`clip-reach`). Pulp, a comic in four-color
+  print, takes them all. Starry Skies prints a sky on the canvas instead: stars, clear of the rail, the header, and a
+  page's title, a crescent moon in the window's lower right corner, and a meteor along its foot now and then, all under
+  the panels, so none covers anything. Komorebi lays sunlight through leaves the same way: flecks of sun, and the
+  shadows of leaves, of a bough swaying in that corner, and of a falling leaf, no deeper where two cross; text set on
+  the canvas reads at 4.5:1 under the deepest, which `tokens.test.ts` measures. Koi Pond lays a pond likewise: deeper
+  water under nets of light, lily pads and a koi at rest in that corner, and a koi or a ripple passing now and then;
+  that text reads over its deepest water and each paint of its pads, measured too. Its pads and koi are drawings of
+  several colors, none a green or gold as deep as a status. What moves does so by opacity and transform alone.
+  A palette may also give the shell's signature a form of its own: the aurora (a gradient hairline, a stepped bar or
+  print strip of solid blocks, a line that blooms, or one cut to a wave), the name (the aurora's gradient, the accent
+  and a leaf green or water blues, on a solid block, on a tilted plate, or glowing), and the nav's highlight (a tint and
+  a bar, a solid block with the active item inked in the canvas's color, or a tint with the icon lit or shadowed). On a
   block, a count beside the active item sits on a plate of that ink, where its status color reads. Each form takes the
   room the default does, so a switch moves nothing, and what a form draws past its box stays clear of what is beside it.
-  A palette may tune its section colors too, muted toward a scheme's own set or turned up, but each keeps its hue's
-  family, which says what its page is for: a rose stays a rose, a gold a gold. Each still reads at 4.5:1 there, and
-  stays apart from the status colors and the palette's accent.
+  A palette may tune its section colors too, but each keeps its hue's family, which says what its page is for. Each
+  still reads at 4.5:1 there, and stays apart from the status colors and the palette's accent.
 - **shadcn names** (`primary`, `muted`, `card`, `popover`, `input`, `destructive`, ...) are aliased onto ours so
   generated components render unchanged. New code uses our names. shadcn's own `accent` (a hover tint) is not
   aliased: here `accent` is the brand color, so replace `bg-accent` hover tints in generated code with
@@ -430,9 +430,9 @@ holds only the rules it all keeps; what each one does is written in its code. No
 
 Motion says something arrived or changed, and gives the page some life without asking for attention. It is short
 (at most 700ms), eased out (`cubic-bezier(0.2, 0, 0, 1)`), and never loops on anything but the logo, a running run,
-a skeleton, a palette's stars or leaves, and fun (Fun, above). A loop is the one exception to the length and the
-easing: it keeps the pace of what it draws, a breath or a star's twinkle, since a 700ms loop eased out would read as a
-flash. The
+a skeleton, a palette's stars, leaves, or water, and fun (Fun, above). A loop is the one exception to the length and
+the easing: it keeps the pace of what it draws, a breath, a star's twinkle, or a koi's swim, since a 700ms loop eased
+out would read as a flash. The
 keyframes and utilities are in `src/index.css`.
 
 - Route changes cross-fade through the `<ViewTransition>` around the outlet. The old page stays until the new one is

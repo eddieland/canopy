@@ -139,6 +139,7 @@ export function AppShell() {
                         over its border. */}
                             <span
                                 aria-hidden
+                                data-testid="aurora"
                                 className="pointer-events-none aurora absolute inset-x-0 -bottom-px opacity-90"
                             />
                             <div className="flex items-center gap-2.5">

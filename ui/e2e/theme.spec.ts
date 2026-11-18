@@ -142,6 +142,31 @@ test.describe('palettes', () => {
         )
     })
 
+    // Light has eleven palettes, more than fit beside their description in a narrow window: there the picker drops
+    // under it, and wraps where it is wider than the panel, so every palette stays inside the panel and in reach.
+    for (const width of [1024, 820]) {
+        test(`the settings page keeps each palette picker inside its panel at ${width}px`, async ({ page }) => {
+            await storeTheme(page, 'light')
+            await page.goto('settings')
+            await settled(page)
+            await windowWidth(page, width)
+            for (const name of ['Light palette', 'Dark palette']) {
+                const picker = page.getByRole('radiogroup', { name })
+                const edges = await picker.evaluate((group) => {
+                    const panel = group.parentElement?.parentElement
+                    if (!panel) {
+                        throw new Error('the picker is in no panel')
+                    }
+                    return {
+                        panel: panel.getBoundingClientRect().right,
+                        items: [...group.children].map((item) => item.getBoundingClientRect().right),
+                    }
+                })
+                expect(Math.max(...edges.items), name).toBeLessThanOrEqual(edges.panel)
+            }
+        })
+    }
+
     test("the header's toggle offers the shown theme's palettes on hover, and stays open to try another", async ({
         page,
     }) => {
@@ -306,7 +331,12 @@ test.describe("Starry Skies's stars", () => {
             expect(layer.mask).toMatch(/^linear-gradient\(/u)
         }
         expect(await skyMotion(page)).toEqual(['star-shimmer', 'twinkle', 'meteor', 'meteor-2'])
-        expect(await crosser(page)).toEqual({ mask: 'none', turn: '162deg', long: true })
+        const streak = { image: expect.stringMatching(/^linear-gradient\(/u), mask: 'none', turn: '162deg', long: true }
+        expect(await crosser(page)).toEqual({ ...streak, color: false })
+        // Its two meteors are two of a kind, and its aurora blooms whole: a palette that sets no knob for the second
+        // crosser or for the aurora's mask draws both as it did before there were any.
+        expect(await crosser(page, '::after')).toEqual(await crosser(page))
+        expect(await aurora(page)).toEqual({ image: expect.stringMatching(/^linear-gradient\(90deg, /u), mask: 'none' })
     })
 
     test('hangs its moon under the panels, its phase cut by a mask, and no other palette does', async ({ page }) => {
@@ -367,24 +397,29 @@ test.describe("Komorebi's light", () => {
             'leaf-fall-2, leaf-rock',
         ])
         expect(await crosser(page)).toEqual({
+            image: 'none',
+            color: true,
             mask: expect.stringMatching(/^url\("data:image\/svg[^"]+"\)$/u),
             turn: '0deg',
             long: false,
         })
+        // Both leaves are the one leaf, and its aurora blooms whole, as before the second crosser and the aurora's
+        // mask were knobs.
+        expect(await crosser(page, '::after')).toEqual(await crosser(page))
+        expect(await aurora(page)).toEqual({ image: expect.stringMatching(/^linear-gradient\(90deg, /u), mask: 'none' })
     })
 
     test('carries its leaves in the stylesheet, so no mask waits on a file, and the page loads each', async ({
         page,
     }) => {
-        const asked: string[] = []
-        page.on('request', (request) => asked.push(new URL(request.url()).pathname))
+        const files = svgFiles(page)
         await page.goto('workspace/runs')
         await settled(page)
         // The sprays' two tiles, the bough, and a falling leaf: each a `data:` image, which the content security policy
         // must let the page load, and none a file among the build's assets. Left to files, the shadows would be
         // missing until the files came.
         expect(await maskImages(page)).toEqual([true, true, true, true])
-        expect(asked.filter((path) => path.includes('/assets/') && path.endsWith('.svg'))).toEqual([])
+        expect(files).toEqual([])
     })
 
     test("casts its bough's shadow under the panels, swaying, and no other palette does", async ({ page }) => {
@@ -393,6 +428,7 @@ test.describe("Komorebi's light", () => {
         // It darkens what is under it, as every shadow of Komorebi's does, so two of them go no deeper than one.
         expect(await bough(page)).toEqual({
             painted: true,
+            image: 'none',
             mask: expect.stringMatching(/^url\("data:image\/svg[^"]+"\)$/u),
             blend: 'darken',
             zIndex: '-1',
@@ -403,13 +439,7 @@ test.describe("Komorebi's light", () => {
         await storePalette(page, 'light', 'sage')
         await page.reload()
         await settled(page)
-        expect(await bough(page)).toEqual({
-            painted: false,
-            mask: 'none',
-            blend: 'normal',
-            zIndex: '-1',
-            motion: 'none',
-        })
+        expect(await bough(page)).toEqual(NO_BOUGH)
         expect(await shadeBlend(page)).toEqual(['normal', 'normal', 'normal', 'normal'])
     })
 
@@ -425,22 +455,195 @@ test.describe("Komorebi's light", () => {
     test('keeps its light and shade off the rail, the header, and the page title', async ({ page }) => {
         await page.goto('workspace/runs')
         await settled(page)
-        const rem = await page.evaluate(() => Number.parseFloat(getComputedStyle(document.documentElement).fontSize))
-        const title = await page.getByRole('heading', { level: 1 }).boundingBox()
-        const rail = await page.getByRole('navigation').first().boundingBox()
-        // Both layers' masks are clear to 14rem from the left and 12.5rem from the top (`--shade-clear`).
-        expect((rail?.x ?? 0) + (rail?.width ?? Infinity)).toBeLessThanOrEqual(14 * rem)
-        expect((title?.y ?? 0) + (title?.height ?? Infinity)).toBeLessThanOrEqual(12.5 * rem)
-        const [light, shade] = await canvasTone(page)
-        for (const layer of [light, shade]) {
-            expect(layer?.mask).toContain(`linear-gradient(90deg, rgba(0, 0, 0, 0) ${14 * rem}px`)
-            expect(layer?.mask).toContain(`linear-gradient(rgba(0, 0, 0, 0) ${12.5 * rem}px`)
-        }
+        const [light, shade] = await clearedTone(page)
         // A layer shows only where both gradients do: added instead, each would let it through where the other
         // clears. The shade's two tiles add to each other, inside them.
         expect(light?.composite).toBe('intersect, add')
         expect(shade?.composite).toBe('intersect, intersect, add, add')
     })
+})
+
+test.describe("Koi Pond's water", () => {
+    test.beforeEach(async ({ page }) => {
+        await signIn(page)
+        await storeTheme(page, 'light')
+        await storePalette(page, 'light', 'koi-pond')
+    })
+
+    test('deepens the water on one layer, nets light on the other, masked, and only the light breathes', async ({
+        page,
+    }) => {
+        await page.goto('workspace/runs')
+        await settled(page)
+        const [water, light] = await canvasTone(page)
+        expect(water?.image).toMatch(/^radial-gradient\(.*linear-gradient\(/u)
+        expect(water?.mask).toMatch(/^linear-gradient\(/u)
+        // The light is one color, cut to its nets by the tile, then cleared over the pads and wherever the water is
+        // cleared. The tile is in the stylesheet, a `data:` URL.
+        expect(light?.image).toBe('none')
+        expect(light?.mask).toMatch(/^url\("data:image\/svg[^"]+"\), radial-gradient\(.*linear-gradient\(/u)
+        expect(await skyMotion(page)).toEqual(['none', 'pond-glimmer', 'koi-swim', 'pond-ripple'])
+    })
+
+    test('sends a koi and opens a ripple, each a thing of its own, both unseen at rest', async ({ page }) => {
+        await page.goto('workspace/runs')
+        await settled(page)
+        // The koi is a drawing with colors of its own; the ripple is the light's color through a mask of its rings.
+        expect(await crosser(page)).toEqual({
+            image: expect.stringMatching(/^url\("[^"]*koi[^"]*\.svg"\)$/u),
+            color: false,
+            mask: 'none',
+            turn: '0deg',
+            long: false,
+        })
+        expect(await crosser(page, '::after')).toEqual({
+            image: 'none',
+            color: true,
+            mask: expect.stringMatching(/^url\("data:image\/svg[^"]+"\)$/u),
+            turn: '0deg',
+            long: false,
+        })
+        const atRest = await page.evaluate(() =>
+            (['::before', '::after'] as const).map((layer) => {
+                for (const animation of document.getAnimations()) {
+                    animation.currentTime = 0
+                }
+                return getComputedStyle(document.body, layer).opacity
+            }),
+        )
+        expect(atRest).toEqual(['0', '0'])
+    })
+
+    test('floats its pads in the corner under the panels, a drawing, still, and no other palette does', async ({
+        page,
+    }) => {
+        await page.goto('workspace/runs')
+        await settled(page)
+        await windowWidth(page, 1720)
+        // Nothing of the pond's is a shadow, so each layer paints plainly over the last, and none darkens it.
+        expect(await bough(page)).toEqual({
+            painted: false,
+            image: expect.stringMatching(/^url\("[^"]*pads[^"]*\.svg"\)$/u),
+            mask: 'none',
+            blend: 'normal',
+            zIndex: '-1',
+            motion: 'none',
+        })
+        expect(await shadeBlend(page)).toEqual(['normal', 'normal', 'normal', 'normal'])
+        // Its drawings are files the page fetches itself, which the content security policy must allow.
+        const drawings = await page.evaluate(() => {
+            const root = document.querySelector('#root')
+            return [root ? getComputedStyle(root, '::after') : null, getComputedStyle(document.body, '::before')].map(
+                (style) => style?.backgroundImage.slice(5, -2) ?? '',
+            )
+        })
+        for (const drawing of drawings) {
+            expect((await page.request.get(drawing)).headers()['content-type']).toBe('image/svg+xml')
+        }
+
+        await storePalette(page, 'light', 'sage')
+        await page.reload()
+        await settled(page)
+        expect(await bough(page)).toEqual(NO_BOUGH)
+    })
+
+    // The guide sets its prose on the canvas, so the pads take only the room it leaves: right of its text column,
+    // whole where that is wide enough, and none in a window as narrow as 1280px, where they would lie behind the text.
+    test('gives its pads only the room the guide leaves beside its text', async ({ page }) => {
+        await page.goto('guide/overview')
+        await settled(page)
+        const room = () =>
+            page.evaluate(() => {
+                const root = document.querySelector('#root')
+                const text = document.querySelector('[data-testid=guide-page]')
+                if (!root || !text) {
+                    throw new Error('the page has no #root or no guide page')
+                }
+                const style = getComputedStyle(root, '::after')
+                const wide = Number.parseFloat(style.backgroundSize)
+                // The drawing lies against the right of its box, less the offset its position names.
+                const right = Number.parseFloat(style.left) + Number.parseFloat(style.width)
+                const gap = Number.parseFloat(style.backgroundPositionX.replace(/^calc\(100% - (.*)\)$/u, '$1'))
+                return { wide, left: right - gap - wide, text: text.getBoundingClientRect().right }
+            })
+        await windowWidth(page, 1720)
+        const open = await room()
+        const rem = await page.evaluate(() => Number.parseFloat(getComputedStyle(document.documentElement).fontSize))
+        expect(open.wide).toBeCloseTo(14.5 * rem, 0)
+        expect(open.left).toBeGreaterThan(open.text)
+        await windowWidth(page, 1440)
+        const narrower = await room()
+        expect(narrower.wide).toBeGreaterThan(0)
+        expect(narrower.wide).toBeLessThan(open.wide)
+        expect(narrower.left).toBeGreaterThan(narrower.text)
+        await windowWidth(page, 1280)
+        expect((await room()).wide).toBe(0)
+    })
+
+    test('cuts the aurora to a waterline in the section colors', async ({ page }) => {
+        await page.goto('workspace/runs')
+        await settled(page)
+        expect(await aurora(page)).toEqual({
+            image: expect.stringMatching(/^linear-gradient\(90deg, /u),
+            mask: expect.stringMatching(/^url\("data:image\/svg[^"]+"\)$/u),
+        })
+    })
+
+    test('carries its masks in the stylesheet, so none waits on a file, and fetches only its two drawings', async ({
+        page,
+    }) => {
+        const files = svgFiles(page)
+        await page.goto('workspace/runs')
+        await settled(page)
+        // The net, the ripple, and the wave: each a `data:` image, which the content security policy must let the
+        // page load. A mask left to a file would paint its layer flat until the file came.
+        expect(await maskImages(page)).toEqual([true, true, true])
+        // Only the pads and the koi are files among the build's assets: a drawing not yet arrived paints nothing.
+        expect(files.filter((path) => !/\/(?:pads|koi)-[^/]*\.svg$/u.test(path))).toEqual([])
+    })
+
+    test('holds still and sends no koi under reduced motion, its pads still afloat', async ({ page }) => {
+        await page.emulateMedia({ reducedMotion: 'reduce' })
+        await page.goto('workspace/runs')
+        await settled(page)
+        await windowWidth(page, 1720)
+        expect(await skyMotion(page)).toEqual(['none', 'none', 'none', 'none'])
+        for (const which of ['::before', '::after']) {
+            expect(await page.evaluate((layer) => getComputedStyle(document.body, layer).content, which)).toBe('none')
+        }
+        // The still pond is whole without them: the koi that lives in the corner is part of the pads' drawing.
+        expect((await bough(page)).image).toMatch(/pads/u)
+    })
+
+    test('keeps its water and light off the rail, the header, and the page title', async ({ page }) => {
+        await page.goto('workspace/runs')
+        await settled(page)
+        const [water, light] = await clearedTone(page)
+        // The light's net and its clearing over the pads show only inside the two gradients, as the water does.
+        expect(water?.composite).toBe('intersect, add')
+        expect(light?.composite).toBe('intersect, intersect, intersect, add')
+    })
+
+    // Each crosser's path is clamped against the rail, so a narrow window moves it right rather than let it reach
+    // the rail or a page's title: stepped through its whole period, each stays in the band along the window's foot.
+    for (const width of [1720, 1280, 1024]) {
+        test(`keeps its koi and its ripple in the band along the foot, clear of the rail, at ${width}px`, async ({
+            page,
+        }) => {
+            await page.goto('workspace/runs')
+            await settled(page)
+            await windowWidth(page, width)
+            const rem = await page.evaluate(() =>
+                Number.parseFloat(getComputedStyle(document.documentElement).fontSize),
+            )
+            for (const which of ['::before', '::after'] as const) {
+                const reach = await crossing(page, which)
+                expect(reach.seen).toBeGreaterThan(0)
+                expect(reach.left).toBeGreaterThanOrEqual(23 * rem)
+                expect(reach.top).toBeGreaterThanOrEqual((page.viewportSize()?.height ?? 0) - 9.5 * rem)
+            }
+        })
+    }
 })
 
 /** The animations the sky runs: the canvas's two layers, then its two meteors, each by name, or none. */
@@ -472,23 +675,103 @@ function moon(page: Page): Promise<{ image: string; mask: string; zIndex: string
     })
 }
 
-/** What crosses the canvas: the first one's mask, its turn, and whether it is a streak, far longer than thick. */
-function crosser(page: Page): Promise<{ mask: string; turn: string; long: boolean }> {
-    return page.evaluate(() => {
-        const style = getComputedStyle(document.body, '::before')
+/** One of the two things that cross the canvas, the first unless the second is asked for. */
+interface Crosser {
+    /** The image it paints, or none. */
+    image: string
+    /** Whether it paints a color. */
+    color: boolean
+    /** The mask that cuts it, or none. */
+    mask: string
+    /** Its turn. */
+    turn: string
+    /** Whether it is a streak, far longer than thick. */
+    long: boolean
+}
+
+/** What crosses the canvas: what `which` of the two paints, its mask, its turn, and its shape. */
+function crosser(page: Page, which: '::before' | '::after' = '::before'): Promise<Crosser> {
+    return page.evaluate((layer) => {
+        const style = getComputedStyle(document.body, layer)
         return {
+            image: style.backgroundImage,
+            color: style.backgroundColor !== 'rgba(0, 0, 0, 0)',
             mask: style.maskImage,
             turn: style.rotate,
             long: Number.parseFloat(style.width) > 10 * Number.parseFloat(style.height),
         }
-    })
+    }, which)
 }
 
 /**
- * Whether the bough's box paints a color, the mask that cuts its leaves, how it blends with what is under it, where
- * it sits in the stack, and its sway.
+ * How near the rail and how high a crosser comes while it shows in the window: its animation stepped through one
+ * period, a quarter of a second at a time, and at each step where it is seen and its middle is in the window, its
+ * box's left and top edges, at its size then. `seen` counts those steps.
  */
-function bough(page: Page): Promise<{ painted: boolean; mask: string; blend: string; zIndex: string; motion: string }> {
+function crossing(page: Page, which: '::before' | '::after'): Promise<{ seen: number; left: number; top: number }> {
+    return page.evaluate((layer) => {
+        const animation = document
+            .getAnimations()
+            .find(
+                ({ effect }) =>
+                    effect instanceof KeyframeEffect &&
+                    effect.target === document.body &&
+                    effect.pseudoElement === layer,
+            )
+        const period = Number(animation?.effect?.getComputedTiming().duration)
+        if (!animation || !Number.isFinite(period)) {
+            throw new Error(`nothing crosses on body${layer}`)
+        }
+        animation.pause()
+        const reach = { seen: 0, left: Infinity, top: Infinity }
+        for (let time = 0; time < period; time += 250) {
+            animation.currentTime = time
+            const style = getComputedStyle(document.body, layer)
+            // Where its middle is: its box's own place, moved by `translate`, then by `transform`, whose scale and
+            // `scale`'s size it.
+            const matrix = new DOMMatrixReadOnly(style.transform)
+            const [dx = 0, dy = 0] =
+                style.translate === 'none' ? [] : style.translate.split(' ').map((part) => Number.parseFloat(part))
+            const scale = style.scale === 'none' ? 1 : Number.parseFloat(style.scale)
+            const size = Math.abs(matrix.a * matrix.d - matrix.b * matrix.c) ** 0.5 * scale
+            const half = (Number.parseFloat(style.width) / 2) * size
+            const x = Number.parseFloat(style.left) + Number.parseFloat(style.width) / 2 + dx + matrix.e
+            const y = Number.parseFloat(style.top) + Number.parseFloat(style.height) / 2 + dy + matrix.f
+            if (Number(style.opacity) > 0 && y < innerHeight && x < innerWidth) {
+                reach.seen += 1
+                reach.left = Math.min(reach.left, x - half)
+                reach.top = Math.min(reach.top, y - half)
+            }
+        }
+        animation.play()
+        return reach
+    }, which)
+}
+
+/** The corner's box: what it paints, a color or an image, the mask that cuts it, and how it lies and moves. */
+interface Bough {
+    /** Whether it paints a color. */
+    painted: boolean
+    /** The image it paints, or none. */
+    image: string
+    /** The mask that cuts it, or none. */
+    mask: string
+    /** How it blends with what is under it. */
+    blend: string
+    /** Where it sits in the stack. */
+    zIndex: string
+    /** Its animation's name, or none. */
+    motion: string
+}
+
+/** The corner's box on a palette that lays nothing there. */
+const NO_BOUGH: Bough = { painted: false, image: 'none', mask: 'none', blend: 'normal', zIndex: '-1', motion: 'none' }
+
+/**
+ * What the corner's box paints, the mask that cuts it, how it blends with what is under it, where it sits in the
+ * stack, and its sway.
+ */
+function bough(page: Page): Promise<Bough> {
     return page.evaluate(() => {
         const root = document.querySelector('#root')
         if (!root) {
@@ -497,6 +780,7 @@ function bough(page: Page): Promise<{ painted: boolean; mask: string; blend: str
         const style = getComputedStyle(root, '::after')
         return {
             painted: style.content !== 'none' && style.backgroundColor !== 'rgba(0, 0, 0, 0)',
+            image: style.backgroundImage,
             mask: style.maskImage,
             blend: style.mixBlendMode,
             zIndex: style.zIndex,
@@ -505,7 +789,7 @@ function bough(page: Page): Promise<{ painted: boolean; mask: string; blend: str
     })
 }
 
-/** How the canvas's two layers, then what crosses it, blend with what lies under them: the light never does. */
+/** How the canvas's two layers, then what crosses it, blend with what lies under them: the first layer never does. */
 function shadeBlend(page: Page): Promise<string[]> {
     return page.evaluate(() =>
         [
@@ -518,27 +802,31 @@ function shadeBlend(page: Page): Promise<string[]> {
 }
 
 /**
- * Whether the page itself loads each `data:` image a shadow's mask names, under its own policy: the canvas's second
- * layer's, the bough's, and the first crosser's, in that order.
+ * Whether the page itself loads each `data:` image a palette's masks name, under its own policy, each image once:
+ * those of the canvas's second layer, the corner's box, the two crossers, and the aurora, in that order.
  */
 function maskImages(page: Page): Promise<boolean[]> {
-    return page.evaluate(() => {
+    return page.getByTestId('aurora').evaluate((line) => {
         const root = document.querySelector('#root')
         if (!root) {
             throw new Error('the page has no #root')
         }
-        const layers: [Element, string][] = [
-            [document.documentElement, '::after'],
-            [root, '::after'],
-            [document.body, '::before'],
+        const styles = [
+            getComputedStyle(document.documentElement, '::after'),
+            getComputedStyle(root, '::after'),
+            getComputedStyle(document.body, '::before'),
+            getComputedStyle(document.body, '::after'),
+            getComputedStyle(line),
         ]
-        const urls = layers.flatMap(([element, layer]) =>
-            [...getComputedStyle(element, layer).maskImage.matchAll(/url\("(data:[^"]*)"\)/gu)].map(([, url]) => url),
+        const urls = new Set(
+            styles.flatMap((style) =>
+                [...style.maskImage.matchAll(/url\("(data:[^"]*)"\)/gu)].map(([, url]) => url ?? ''),
+            ),
         )
         return Promise.all(
-            urls.map((url) => {
+            [...urls].map((url) => {
                 const image = new Image()
-                image.src = url ?? ''
+                image.src = url
                 return image.decode().then(
                     () => true,
                     () => false,
@@ -548,17 +836,64 @@ function maskImages(page: Page): Promise<boolean[]> {
     })
 }
 
-/**
- * What the canvas's two tone layers paint, the dots and their swell: each one's background, its mask, and how the
- * mask's layers combine.
- */
-function canvasTone(page: Page): Promise<{ image: string; mask: string; composite: string }[]> {
+/** The SVG files among the build's assets that the page asks for from here on, by path: it fills as the page asks. */
+function svgFiles(page: Page): string[] {
+    const asked: string[] = []
+    page.on('request', (request) => {
+        const { pathname } = new URL(request.url())
+        if (pathname.includes('/assets/') && pathname.endsWith('.svg')) {
+            asked.push(pathname)
+        }
+    })
+    return asked
+}
+
+/** The aurora along the header's foot: the image it paints and the mask that cuts it, or none. */
+function aurora(page: Page): Promise<{ image: string; mask: string }> {
+    return page.getByTestId('aurora').evaluate((line) => {
+        const style = getComputedStyle(line)
+        return { image: style.backgroundImage, mask: style.maskImage }
+    })
+}
+
+/** One of the canvas's two tone layers: its background, its mask, and how the mask's layers combine. */
+interface Tone {
+    /** The image it paints, or none. */
+    image: string
+    /** The mask that cuts it, or none. */
+    mask: string
+    /** How each layer of the mask combines with those under it. */
+    composite: string
+}
+
+/** What the canvas's two tone layers paint, the dots and their swell. */
+function canvasTone(page: Page): Promise<Tone[]> {
     return page.evaluate(() =>
         (['::before', '::after'] as const).map((layer) => {
             const style = getComputedStyle(document.documentElement, layer)
             return { image: style.backgroundImage, mask: style.maskImage, composite: style.maskComposite }
         }),
     )
+}
+
+/**
+ * The canvas's two layers on a palette that keeps both off the rail, the header, and a page's title, once it has held
+ * them to that: the rail ends within 14rem of the window's left and the title within 12.5rem of its top, and each
+ * layer's mask is clear up to those two lines (Komorebi's `--shade-clear`, Koi Pond's `--pond-clear`).
+ */
+async function clearedTone(page: Page): Promise<Tone[]> {
+    const rem = await page.evaluate(() => Number.parseFloat(getComputedStyle(document.documentElement).fontSize))
+    const title = await page.getByRole('heading', { level: 1 }).boundingBox()
+    const rail = await page.getByRole('navigation').first().boundingBox()
+    expect((rail?.x ?? 0) + (rail?.width ?? Infinity)).toBeLessThanOrEqual(14 * rem)
+    expect((title?.y ?? 0) + (title?.height ?? Infinity)).toBeLessThanOrEqual(12.5 * rem)
+    const layers = await canvasTone(page)
+    expect(layers).toHaveLength(2)
+    for (const layer of layers) {
+        expect(layer.mask).toContain(`linear-gradient(90deg, rgba(0, 0, 0, 0) ${14 * rem}px`)
+        expect(layer.mask).toContain(`linear-gradient(rgba(0, 0, 0, 0) ${12.5 * rem}px`)
+    }
+    return layers
 }
 
 test.describe("Pulp's lettering", () => {

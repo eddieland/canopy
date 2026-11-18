@@ -52,16 +52,17 @@
     }
 
     /*
-     * A palette's tone over the canvas, which Pulp, Starry Skies, and Komorebi print: Pulp's dots
+     * A palette's tone over the canvas, which Pulp, Starry Skies, Komorebi, and Koi Pond print: Pulp's dots
      * (`--canvas-texture`) and, outside them, the swell they grow into (`--canvas-swell`), the sky's faint stars and
-     * its bright ones, or the flecks of sun through a canopy and the shadows of its leaves, each where its mask lets
-     * it. Fixed to the window and under everything else, so it is painted once, never on a scroll, and the panels,
-     * the header, and the rail sit over it. By default both are none, and the two layers draw nothing. Each may move
-     * (`--canvas-texture-motion`, `--canvas-swell-motion`), by its opacity alone, which the compositor runs without a
-     * repaint. The second layer blends with what lies under it as `--shade-blend` says, as the bough and what crosses
-     * the canvas do (below): `normal` by default, or `darken` where a palette's three are shadows, so that two of
-     * them go no deeper than one. The first never blends: its light may be lighter than the canvas, which `darken`
-     * would hide.
+     * its bright ones, the flecks of sun through a canopy and the shadows of its leaves, or a pond's deeper water and
+     * the nets of light on its floor, each where its mask lets it. Fixed to the window and under everything else, so
+     * it is painted once, never on a scroll, and the panels, the header, and the rail sit over it. By default both
+     * are none, and the two layers draw nothing. Each may move (`--canvas-texture-motion`, `--canvas-swell-motion`),
+     * by its opacity alone, which the compositor runs without a repaint. The second is the last thing painted under
+     * the page, so it lies over the corner's box and what crosses, below. It blends with what lies under it as
+     * `--shade-blend` says, as those two do: `normal` by default, or `darken` where a palette's three are shadows, so
+     * that two of them go no deeper than one. The first never blends: its light may be lighter than the canvas, which
+     * `darken` would hide.
      */
     html::before,
     html::after {
@@ -102,11 +103,12 @@
     }
 
     /*
-     * A palette's bough, whose shadow only Komorebi casts: a box in the same corner, under the panels too, painting
-     * `--bough` through `--bough-mask`, which cuts its leaves. The box is as wide and as tall as the open canvas
-     * allows, short of the rail and of a page's title, so on a small window what is drawn whole inside it shrinks
-     * rather than reach either. It reaches a little past the window's corner, about which it may sway
-     * (`--bough-motion`), so a sway shows no edge. By default both are none, and it draws nothing.
+     * What a palette lays across that corner: a box, under the panels too, painting `--bough` through `--bough-mask`.
+     * Komorebi casts a bough's shadow there, one color cut to its leaves by the mask; Koi Pond floats its lily pads,
+     * a drawing with no mask. The box is as wide and as tall as the open canvas allows, short of the rail and of a
+     * page's title, so on a small window what is drawn whole inside it shrinks rather than reach either. It reaches
+     * a little past the window's corner, about which it may sway (`--bough-motion`), so a sway shows no edge. By
+     * default both are none, and it draws nothing.
      */
     #root::after {
         content: '';
@@ -124,14 +126,16 @@
     }
 
     /*
-     * What crosses a palette's canvas now and then, under the panels: two of a kind (`--meteor`, cut to
-     * `--meteor-mask` and lit by `--meteor-glow`), each on a path of its own (`--meteor-motion`, `--meteor-motion-2`),
-     * out of step, so no rhythm shows. Starry Skies draws meteors, each a streak that falls down and to the left,
-     * turned about its head, the streak's bright end, so a path names where the head runs; Komorebi draws the shadows
-     * of falling leaves, each the same box at a leaf's size (`--meteor-length`, `--meteor-girth`), unturned
-     * (`--meteor-turn`), and rocking about its middle (`--meteor-origin`). They move by transform and opacity alone,
-     * and rest unseen, so a still page shows none. Under reduced motion nothing over the canvas moves, and neither is
-     * drawn at all.
+     * What crosses a palette's canvas now and then, under the panels: two boxes (`--meteor`, cut to `--meteor-mask`
+     * and lit by `--meteor-glow`), each on a path of its own (`--meteor-motion`, `--meteor-motion-2`), out of step,
+     * so no rhythm shows. Starry Skies draws meteors, each a streak that falls down and to the left, turned about its
+     * head, the streak's bright end, so a path names where the head runs; Komorebi draws the shadows of falling
+     * leaves, each the same box at a leaf's size (`--meteor-length`, `--meteor-girth`), unturned (`--meteor-turn`),
+     * and rocking about its middle (`--meteor-origin`). Theirs are two of a kind. The second box may paint another
+     * thing than the first (`--meteor-2`, `--meteor-mask-2`, each the first's unless a palette sets it), as Koi
+     * Pond's does: the first is a koi, under the corner's box, and the second a ripple, over it. They move by
+     * transform and opacity alone, and rest unseen, so a still page shows none. Under reduced motion nothing over the
+     * canvas moves, and neither is drawn at all.
      */
     @media (prefers-reduced-motion: no-preference) {
         html::before {
@@ -170,6 +174,8 @@
         }
 
         body::after {
+            background: var(--meteor-2);
+            mask: var(--meteor-mask-2);
             animation: var(--meteor-motion-2);
         }
     }
@@ -838,6 +844,117 @@ fall, which moves it by `translate`, so the two compose. */
     }
 }
 
+/* Koi Pond's nets of light breathe (`--canvas-swell-motion`): a seventh dimmer and back, slowly and unevenly, as the
+water above them stirs. Never out, and at their brightest at rest, the first frame. */
+@keyframes pond-glimmer {
+    45% {
+        opacity: 0.86;
+    }
+    75% {
+        opacity: 0.96;
+    }
+}
+
+/* Its koi's two passes in a period (`--meteor-motion`), a koi and then a smaller one, each one slow arc in the band
+along the window's foot, which a page's panels leave open most often. A koi cannot bend, so neither path has a turn in
+it: each is part of a circle, which the koi rounds by turning about a point far below it, so its head always points
+along its path. One transform says it all, read from its end: a turn between two shifts as long as the circle's radius,
+then the koi's size, which shrinks its circle with it, then where the top of the arc is, which each `max` holds clear
+of the rail in a narrow window. It is all in the one property because the build's minifier merges a `translate` or a
+`scale` set beside a `transform` into it, out of order. The first comes up over the window's foot, swims west, and
+goes back under it, a quarter of a minute in all. The second, the same koi smaller and facing east, rises into view,
+swims a shorter, flatter arc, and sinks. Unseen at rest, its first frame, and while it moves to the next start. */
+@keyframes koi-swim {
+    0%,
+    3% {
+        opacity: 0;
+        transform: translate(max(52rem, 100vw - 40rem), calc(100vh - 9.4rem)) scale(1, 1) translateY(36rem)
+            rotate(44deg) translateY(-36rem);
+    }
+    3.3% {
+        opacity: 1;
+    }
+    9.8% {
+        opacity: 1;
+    }
+    10.1% {
+        opacity: 0;
+        transform: translate(max(52rem, 100vw - 40rem), calc(100vh - 9.4rem)) scale(1, 1) translateY(36rem)
+            rotate(-44deg) translateY(-36rem);
+    }
+    10.2%,
+    55% {
+        opacity: 0;
+        transform: translate(max(44rem, 100vw - 34rem), calc(100vh - 10.6rem)) scale(-0.62, 0.62) translateY(58rem)
+            rotate(20deg) translateY(-58rem);
+    }
+    55.6% {
+        opacity: 1;
+    }
+    59.4% {
+        opacity: 1;
+    }
+    60% {
+        opacity: 0;
+        transform: translate(max(44rem, 100vw - 34rem), calc(100vh - 10.6rem)) scale(-0.62, 0.62) translateY(58rem)
+            rotate(-20deg) translateY(-58rem);
+    }
+    60.1%,
+    100% {
+        opacity: 0;
+        transform: translate(max(52rem, 100vw - 40rem), calc(100vh - 9.4rem)) scale(1, 1) translateY(36rem)
+            rotate(44deg) translateY(-36rem);
+    }
+}
+
+/* A ripple's two openings in a period of its own (`--meteor-motion-2`), in one place and then another in that band,
+clear of the pads and, by each `max`, of the rail: its rings open from a fifth of their size, quickly at first and
+slowing as they fade, about five seconds each. Unseen at rest, its first frame, and between. */
+@keyframes pond-ripple {
+    0%,
+    21% {
+        opacity: 0;
+        scale: 0.2;
+        translate: max(38rem, 100vw - 25rem) calc(100vh - 9rem);
+    }
+    21.5% {
+        opacity: 1;
+    }
+    22.6% {
+        opacity: 0.7;
+        scale: 0.62;
+    }
+    24.7% {
+        opacity: 0;
+        scale: 1;
+        translate: max(38rem, 100vw - 25rem) calc(100vh - 9rem);
+    }
+    24.8%,
+    68% {
+        opacity: 0;
+        scale: 0.2;
+        translate: max(34rem, 100vw - 48rem) calc(100vh - 8.4rem);
+    }
+    68.5% {
+        opacity: 1;
+    }
+    69.6% {
+        opacity: 0.7;
+        scale: 0.62;
+    }
+    71.7% {
+        opacity: 0;
+        scale: 1;
+        translate: max(34rem, 100vw - 48rem) calc(100vh - 8.4rem);
+    }
+    71.8%,
+    100% {
+        opacity: 0;
+        scale: 0.2;
+        translate: max(38rem, 100vw - 25rem) calc(100vh - 9rem);
+    }
+}
+
 /* The wordmark's colors flow one period along it: its gradient repeats every 200% of its width (`wordmark`). */
 @keyframes flow {
     to {
@@ -1240,11 +1357,13 @@ fall, which moves it by `translate`, so the two compose. */
 /*
  * The aurora along the header's foot: the nav's section colors, in the nav's order (`SECTIONS` in `lib/sections.ts`),
  * so the header reads as the rail turned on its side. Settings, out of the nav, is out of it too. A palette may give it
- * a form of its own (`tokens.css`): another image (`--aurora-image`), another height (`--aurora-height`), and a bloom,
- * a blurred copy of it over it (`--aurora-bloom`).
+ * a form of its own (`tokens.css`): another image (`--aurora-image`), another height (`--aurora-height`), a bloom, a
+ * blurred copy of it over it (`--aurora-bloom`), and a mask that cuts it and its bloom to a shape (`--aurora-mask`),
+ * as Koi Pond cuts a waterline, so the shape still wears the sections' colors. By default nothing cuts it.
  */
 @utility aurora {
     height: var(--aurora-height, 0.125rem);
+    mask: var(--aurora-mask, none);
     background-image: var(
         --aurora-image,
         linear-gradient(
