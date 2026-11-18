@@ -46,12 +46,11 @@ Only an `implement` or `resume` worker creates issues, the follow-ups its prompt
 method `create`, in the parent issue's repository, with no labels and no assignees. Refer to the parent in the body on a
 line of its own, `Part of #N`, never with a closing keyword. Order the new issues with GitHub's issue dependencies
 ("blocked by") if the server exposes them, otherwise with a line `Blocked by #N` in the later issue's body. Never make
-them sub-issues of the parent: sub-issues are not blockers, and nothing in the loop reads them. The new issue's key is
-`GH-<number>` of the issue created.
+them sub-issues of the parent: sub-issues are not blockers, and nothing in the loop reads them.
 
 ## Comments and ordering
 
-Order comments by their created timestamp, and use the comment id as the cursor. Issue comments and PR comments are
+Use the comment id as the cursor. Issue comments and PR comments are
 separate threads: questions for a human go on the issue, replies to reviewers on the PR.
 
 ## Blockers
