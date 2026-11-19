@@ -305,7 +305,8 @@ def _subclassed(module: ast.Module) -> frozenset[str]:
         for node in ast.walk(module)
         if isinstance(node, ast.ClassDef)
         for base in node.bases
-        if (name := last_name(base)) is not None
+        # A generic base, `Base[int]`, names `Base` as its subscript's value.
+        if (name := last_name(base.value if isinstance(base, ast.Subscript) else base)) is not None
     )
 
 

@@ -791,6 +791,20 @@ class Totals(Base):
         return 0.0
 ```
 
+### A method a class of the module overrides through a generic base
+
+```python
+class Base[T]:
+    def total(self, costs: list[float]) -> float:
+        return sum(costs)
+
+
+class Totals(Base[int]):
+    def total(self, costs: list[float]) -> float:
+        costs.append(1.0)
+        return 0.0
+```
+
 ### A method under an if in a class with a base
 
 ```python
