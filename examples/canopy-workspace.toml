@@ -29,6 +29,11 @@ summary = "Public REST API. Owns the order schema and the generated OpenAPI spec
 # comment on an approved PR for you instead of sending a worker, since the fix would cost the approval. Unset or false,
 # an approval stands whatever is pushed after it, and such a comment gets a worker like any other.
 # push_dismisses_approval = true
+# Optional: a partial clone, for a very large repository. `canopy workspace sync` passes it to `git clone` as --filter:
+# "blob:none" (no file contents until one is needed), "blob:limit=<n>[kmg]" (none larger than that), or "tree:<depth>".
+# git fetches what the clone lacks from origin as it needs it, but the reviewer's and planner's git tools fetch
+# nothing, so their reads of old history fail. A clone already there stays as it was made; unset clones everything.
+# clone_filter = "blob:none"
 
 # Optional: the checks that are not CI, each by its exact name. canopy does not wait on one, count it red, or need it to
 # pass. Every check not named here is CI. "human" waits on a person, such as a deploy approval or an ownership check,

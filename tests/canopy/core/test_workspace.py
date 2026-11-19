@@ -488,7 +488,7 @@ def test_sync_clones_missing_repositories_and_reports_a_different_origin(
     assert "gone: failed: git clone exited 128" in capsys.readouterr().out
 
 
-def test_sync_clones_a_repository_partially_when_its_map_names_a_filter(
+def test_sync_clones_a_repository_partially_only_when_its_map_names_a_filter(
     ws: Ws,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
@@ -496,17 +496,22 @@ def test_sync_clones_a_repository_partially_when_its_map_names_a_filter(
     extra = bare_origin(tmp_path / "origins" / "docs.git", tmp_path)
     git("config", "uploadpack.allowFilter", "true", cwd=extra)
     url = extra.as_uri()  # git ignores --filter for a clone from a plain path
+    # The same origin with no filter is cloned whole, though the server would allow one.
     (ws.root / config.WORKSPACE_FILE_NAME).write_text(
-        map_text(("api", str(ws.origins["api"]))) + f'\n[repos.docs]\nurl = "{url}"\nclone_filter = "blob:none"\n',
+        map_text(("api", str(ws.origins["api"])), ("whole", url))
+        + f'\n[repos.docs]\nurl = "{url}"\nclone_filter = "blob:none"\n',
     )
     assert main(["workspace", "sync", "--dry-run"]) == 0
-    assert f"docs: to clone: {url} into {ws.clone('docs')}, with --filter=blob:none\n" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert f"docs: to clone: {url} into {ws.clone('docs')}, with --filter=blob:none\n" in out
+    assert f"whole: to clone: {url} into {ws.clone('whole')}\n" in out
     assert main(["workspace", "sync"]) == 0
-    assert f"docs: cloning {url} into {ws.clone('docs')}, with --filter=blob:none\ndocs: cloned\n" in (
-        capsys.readouterr().out
-    )
+    out = capsys.readouterr().out
+    assert f"docs: cloning {url} into {ws.clone('docs')}, with --filter=blob:none\ndocs: cloned\n" in out
+    assert f"whole: cloning {url} into {ws.clone('whole')}\nwhole: cloned\n" in out
     assert git("config", "remote.origin.partialclonefilter", cwd=ws.clone("docs")) == "blob:none"
     assert git("log", "--format=%s", cwd=ws.clone("docs")) == "initial docs"
+    assert "promisor" not in git("config", "--get-regexp", r"^remote\.origin\.", cwd=ws.clone("whole"))
 
 
 def test_sync_turns_off_gits_automatic_maintenance_in_every_clone_but_not_in_a_dry_run(ws: Ws, tmp_path: Path) -> None:
