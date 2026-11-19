@@ -57,10 +57,8 @@ RECORDS: Final = "canopy.core.records"
 #: The names a vocabulary's column goes by, each with how its vocabularies' names end: a `status` is a `*Status`.
 WORDS: Final[Mapping[str, str]] = {"status": "Status", "kind": "Kind", "phase": "Phase"}
 
-#: A function's, a lambda's, or a comprehension's node, each of which opens a scope.
-type _Scoped = (
-    ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda | ast.ListComp | ast.SetComp | ast.GeneratorExp | ast.DictComp
-)
+#: A comprehension's node, which opens a scope over the whole of it.
+type _Scoped = ast.ListComp | ast.SetComp | ast.GeneratorExp | ast.DictComp
 
 
 class VocabMembers(Command):
@@ -335,7 +333,9 @@ class _Finder(ast.NodeVisitor):
 
     @override
     def visit_Lambda(self, node: ast.Lambda) -> None:
-        self._scoped(node, dict.fromkeys(_parameters(node.args)))
+        for expression in _defaults(node.args):
+            self.visit(expression)
+        self._within(dict.fromkeys(_parameters(node.args)), [node.body])
 
     @override
     def visit_ListComp(self, node: ast.ListComp) -> None:
@@ -381,8 +381,15 @@ class _Finder(ast.NodeVisitor):
         self.generic_visit(node)
 
     def _function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
-        """Visit a function in a scope of its own, which binds its parameters and the names its body binds."""
+        """Visit a function: its body in a scope of its own, which binds its parameters and the names the body binds.
+
+        Its decorators, defaults, and annotations are visited where Python evaluates them, in the scope around it.
+        """
         arguments = node.args
+        each = (*arguments.posonlyargs, *arguments.args, *arguments.kwonlyargs, *_stars(arguments))
+        annotations = [argument.annotation for argument in each if argument.annotation is not None]
+        for expression in (*node.decorator_list, *_defaults(arguments), *annotations, *filter(None, [node.returns])):
+            self.visit(expression)
         names: dict[str, _Typed | None] = dict.fromkeys(_parameters(arguments))
         for argument in (*arguments.posonlyargs, *arguments.args, *arguments.kwonlyargs):
             if argument.annotation is not None:
@@ -393,12 +400,19 @@ class _Finder(ast.NodeVisitor):
         names.update({name: self._typed(annotation) for name, annotation in bound.annotated.items()})
         for name in bound.assigned:
             names.setdefault(name, None)
-        self._scoped(node, names)
+        self._within(names, node.body)
 
     def _scoped(self, node: _Scoped, names: Mapping[str, _Typed | None]) -> None:
         """Visit a node inside a scope that binds `names`."""
         self.scopes.append(self._scope(names))
         self.generic_visit(node)
+        self.scopes.pop()
+
+    def _within(self, names: Mapping[str, _Typed | None], nodes: Iterable[ast.AST]) -> None:
+        """Visit nodes inside a scope that binds `names`."""
+        self.scopes.append(self._scope(names))
+        for node in nodes:
+            self.visit(node)
         self.scopes.pop()
 
     def _scope(self, names: Mapping[str, _Typed | None]) -> _Scope:
@@ -418,10 +432,12 @@ class _Finder(ast.NodeVisitor):
         members = self.found.members[vocabulary]
         if any(value not in members for value in values):
             return
-        owner = vocabulary
-        if vocabulary not in self.imports.vocabularies and self.imports.vocab_module:
-            owner = f"vocab.{vocabulary}"
-        elif not self.imports.vocabularies.get(vocabulary):
+        through_module = vocabulary not in self.imports.vocabularies and self.imports.vocab_module
+        owner = f"vocab.{vocabulary}" if through_module else vocabulary
+        if self._binds(owner.partition(".")[0]):
+            # A scope the comparison is in binds the name the member would be read through, which would read its own.
+            return
+        if not through_module and not self.imports.vocabularies.get(vocabulary):
             # Imported for the type checker alone, or not at all: the comparison reads it as the program runs.
             self.imported.add(vocabulary)
         self.strings.extend(
@@ -475,6 +491,14 @@ class _Finder(ast.NodeVisitor):
             if not scope.is_class and name in scope.names:
                 return scope.names[name]
         return None
+
+    def _binds(self, name: str) -> bool:
+        """Whether a function's, a lambda's, or a comprehension's scope the finder is in binds a name.
+
+        Returns:
+            True when one does.
+        """
+        return any(name in scope.names for scope in self.scopes if not scope.is_class)
 
     def _typed(self, annotation: ast.expr) -> _Typed:
         """Read what an annotation says a name holds, by the module's imports.
@@ -701,11 +725,27 @@ def _parameters(arguments: ast.arguments) -> Iterator[str]:
     Yields:
         Each name.
     """
-    for argument in (*arguments.posonlyargs, *arguments.args, *arguments.kwonlyargs):
+    for argument in (*arguments.posonlyargs, *arguments.args, *arguments.kwonlyargs, *_stars(arguments)):
         yield argument.arg
-    for star in (arguments.vararg, arguments.kwarg):
-        if star is not None:
-            yield star.arg
+
+
+def _stars(arguments: ast.arguments) -> Iterator[ast.arg]:
+    """A function's or a lambda's `*args` and `**kwargs`, those it has.
+
+    Yields:
+        Each.
+    """
+    yield from (star for star in (arguments.vararg, arguments.kwarg) if star is not None)
+
+
+def _defaults(arguments: ast.arguments) -> Iterator[ast.expr]:
+    """A function's or a lambda's defaults, which Python evaluates in the scope around it.
+
+    Yields:
+        Each default.
+    """
+    yield from arguments.defaults
+    yield from (default for default in arguments.kw_defaults if default is not None)
 
 
 def _comprehension_names(generators: Iterable[ast.comprehension]) -> Iterator[str]:

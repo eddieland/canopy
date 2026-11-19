@@ -300,6 +300,35 @@ def ended(status: vocab.RunStatus) -> bool:
     return status == vocab.RunStatus.DONE
 ```
 
+### The vocabularies' module imported for the type checker alone
+
+```python
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from canopy.core import vocab
+
+
+def ended(status: vocab.RunStatus) -> bool:
+    return status == "done"
+```
+
+```python
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+from canopy.core.vocab import RunStatus
+
+if TYPE_CHECKING:
+    from canopy.core import vocab
+
+
+def ended(status: vocab.RunStatus) -> bool:
+    return status == RunStatus.DONE
+```
+
 ## Left alone
 
 ### A string several vocabularies hold
@@ -454,4 +483,47 @@ from vocab import RunStatus
 
 def ended(status: RunStatus) -> bool:
     return status == "done"
+```
+
+### A vocabulary's name the function binds
+
+```python
+from canopy.core.vocab import RunStatus
+
+
+def ended(status: RunStatus) -> bool:
+    RunStatus = object()
+    return status == "done"
+```
+
+### The vocabularies' module's name a parameter binds
+
+```python
+from canopy.core import vocab
+
+
+def ended(status: vocab.RunStatus, vocab: int) -> bool:
+    return status == "done"
+```
+
+### A default, evaluated outside the function
+
+```python
+from canopy.core.vocab import RunStatus
+
+
+def ended(status: RunStatus, flag: bool = status == "done") -> bool:
+    return flag
+```
+
+### A decorator, evaluated outside the function
+
+```python
+from canopy.core.vocab import RunStatus
+
+
+def outer(status: str) -> None:
+    @register(status == "done")
+    def inner(status: RunStatus) -> None:
+        pass
 ```
