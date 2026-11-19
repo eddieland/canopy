@@ -6,6 +6,11 @@ maintenance tasks that delete no object a pack does not also hold, and so prune 
 combines small packs. Each runs as its own `git maintenance run`, since git's run of both refuses a clone with no pack
 yet; `prune-packed` after them drops what `loose-objects` just packed, which git's own task leaves to its next run.
 
+A partial clone (`clone_filter`) combines no packs, nor a clone whose config git cannot read. A partial clone's fetched
+packs are promisor packs, whose objects may name blobs it never fetched; `incremental-repack` merges them into a pack
+with no promisor mark, so git no longer counts those blobs as promised and `git fsck` finds the clone broken, which no
+later `git gc` repairs. Its loose objects are its own, never promised, so packing them changes nothing git checks.
+
 It also removes what an interrupted fetch or clone left in the pack directory, `tmp_pack_*` and `tmp_idx_*` files a day
 old, which git counts as garbage and never removes.
 
@@ -42,6 +47,11 @@ REPACK: Final = ("maintenance", "run", "--quiet", "--task=incremental-repack")
 STEPS: Final = (("maintenance", "run", "--quiet", "--task=loose-objects"), REPACK, ("prune-packed", "--quiet"))
 _STEP_TIMEOUT_SECONDS: Final = 3600
 _REV_PARSE_TIMEOUT_SECONDS: Final = 30
+_CONFIG_TIMEOUT_SECONDS: Final = 30
+#: The config that makes a clone partial: a promisor remote, as `git clone --filter` names it, or the older extension.
+_PARTIAL_KEYS: Final = r"^(extensions\.partialclone|remote\..+\.promisor)$"
+#: The values git reads as false; a key with no value is true.
+_FALSE: Final = frozenset({"false", "no", "off", "0", ""})
 _MAINTENANCE_LOCK: Final = "objects/maintenance.lock"
 _PACK_DIR: Final = "objects/pack"
 #: The temporary files a fetch or clone writes in the pack directory, and leaves when it is interrupted.
@@ -54,6 +64,13 @@ STATUS: Final[dict[Outcome, UpkeepStatus]] = {
     "skipped": UpkeepStatus.SKIPPED,
     "failed": UpkeepStatus.FAILED,
 }
+#: Why a partial clone's packs are left as they are, as the operator reads it.
+PARTIAL: Final = (
+    "it is a partial clone, whose promisor packs git's incremental-repack would merge into one git no longer trusts "
+    "to name blobs it never fetched"
+)
+#: Why a clone's packs are left as they are when git cannot read its config.
+UNREAD: Final = "git could not read its config to tell whether it is a partial clone"
 
 
 @dataclass(frozen=True)
@@ -95,6 +112,8 @@ def maintain(ctx: Context) -> list[Maintained]:
 def maintain_one(ctx: Context, repo: workspace.Repo) -> Maintained:
     """Run `STEPS` in `repo`'s primary clone, the caller holding the dispatch lock, unless a slot of it is leased.
 
+    A partial clone's packs are left as they are, and its detail says so.
+
     Returns:
         `packed` with the objects before and after, `skipped` when a slot is leased, or `failed` with why.
     """
@@ -109,9 +128,10 @@ def maintain_one(ctx: Context, repo: workspace.Repo) -> Maintained:
         # git skips a run whose lock another holds, and exits 0 saying nothing.
         why = f"{busy} is held: git's own maintenance runs there, or a dead one left it"
         return Maintained(repo.name, "skipped", why)
+    keep_packs = _keep_packs(ctx.runner, repo.path)
     before = gc.count_objects(ctx.runner, repo.path)
     for step in STEPS:
-        if step == REPACK and not (gc.count_objects(ctx.runner, repo.path) or {}).get("packs"):
+        if step == REPACK and (keep_packs or not (gc.count_objects(ctx.runner, repo.path) or {}).get("packs")):
             continue
         try:
             result = ctx.runner.run(
@@ -129,7 +149,8 @@ def maintain_one(ctx: Context, repo: workspace.Repo) -> Maintained:
     removed = _remove_temp_packs(ctx.runner, repo.path)
     after = gc.count_objects(ctx.runner, repo.path)
     temp = f"; removed {removed} temporary pack files an interrupted fetch left" if removed else ""
-    return Maintained(repo.name, "packed", f"{objects(before)} before, {objects(after)} after{temp}")
+    kept = f"; combined no packs: {keep_packs}" if keep_packs else ""
+    return Maintained(repo.name, "packed", f"{objects(before)} before, {objects(after)} after{temp}{kept}")
 
 
 def record(ctx: Context, done: Maintained, *, tick_id: int | None, started_at: datetime) -> None:
@@ -177,6 +198,34 @@ def _maintenance_lock(runner: procs.Runner, clone: Path) -> Path | None:
     """
     path = _git_path(runner, clone, _MAINTENANCE_LOCK)
     return path if path is not None and path.exists() else None
+
+
+def _keep_packs(runner: procs.Runner, clone: Path) -> str | None:
+    """Why `clone`'s packs must not be combined: it is a partial clone, or git cannot say whether it is one.
+
+    A partial clone's config names a promisor remote, or the older partial clone extension. When git cannot read the
+    config the packs are kept too: combining a partial clone's breaks it, and leaving a full clone's costs little.
+
+    Returns:
+        Why, as the operator reads it, or None when the clone is not partial.
+    """
+    try:
+        result = runner.run(
+            hostgit.argv("config", "--get-regexp", _PARTIAL_KEYS),
+            cwd=clone,
+            env=hostgit.ENV,
+            timeout=_CONFIG_TIMEOUT_SECONDS,
+        )
+    except procs.ProcError:
+        return UNREAD
+    # 1 is git's answer when no key is set.
+    if result.timed_out or result.returncode not in {0, 1}:
+        return UNREAD
+    for line in result.stdout.splitlines():
+        key, has_value, value = line.partition(" ")
+        if key == "extensions.partialclone" or not has_value or value.strip().lower() not in _FALSE:
+            return PARTIAL
+    return None
 
 
 def _remove_temp_packs(runner: procs.Runner, clone: Path) -> int:

@@ -47,9 +47,10 @@ def cmd_gc(
     notes and proposals out of force the report counts, and rotates canopy.log. By hand, `--dry-run` removes nothing,
     and `--vacuum` shrinks the journal by its free pages: it runs only while no tick is running and no run is live,
     and when the disk has room for a copy of the journal.
-    `--git` packs each primary clone's loose objects and combines its small packs, pruning nothing, and skips a
-    repository while a slot of its pool is leased; a dispatch waits for it (ROADMAP M47). `--caches` empties each
-    sandbox role's cache under `$XDG_CACHE_HOME/canopy/sandbox/`, skipping one while a run of its role is live.
+    `--git` packs each primary clone's loose objects and combines its small packs, a partial clone's excepted, pruning
+    nothing, and skips a repository while a slot of its pool is leased; a dispatch waits for it (ROADMAP M47).
+    `--caches` empties each sandbox role's cache under `$XDG_CACHE_HOME/canopy/sandbox/`, skipping one while a run of
+    its role is live.
 
     Raises:
         UsageError: not exactly one of `--dry-run`, `--vacuum`, `--git`, and `--caches` is given.

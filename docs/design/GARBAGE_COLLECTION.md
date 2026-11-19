@@ -77,9 +77,11 @@ writes a whole copy first.
 
 `canopy gc --git` runs only git's `loose-objects` and `incremental-repack` maintenance, then `prune-packed`, none of
 which deletes an object no pack holds or prunes a worktree, what made automatic maintenance unsafe for slots in use
-(§18), and removes the temporary pack files an interrupted fetch left a day ago. It holds the dispatch lock for each
-repository in turn, skips one with a leased slot or with git's own maintenance under way, and runs git as the harness
-always does (D107). `canopy gc --caches` empties a role's sandbox cache (§24) while no run of that role is live.
+(§18), and removes the temporary pack files an interrupted fetch left a day ago. A partial clone's packs stay as they
+are: `incremental-repack` merges its promisor packs into one without the mark, and git then finds the blobs it never
+fetched missing. It holds the dispatch lock for each repository in turn, skips one with a leased slot or with git's own
+maintenance under way, and runs git as the harness always does (D107). `canopy gc --caches` empties a role's sandbox
+cache (§24) while no run of that role is live.
 
 ### The pools' upkeep
 
