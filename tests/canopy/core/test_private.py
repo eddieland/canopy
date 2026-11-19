@@ -551,6 +551,29 @@ def test_a_ticket_a_tick_decided_about_without_recording_a_phase_is_seen(scenari
     assert summary() == (None, None)
 
 
+def test_status_counts_the_started_tickets_that_are_done_and_lists_them_with_all(scenario: Scenario) -> None:
+    """`canopy status` lists the started tickets still in progress, and counts the done ones, which `--all` lists."""
+
+    def started(*args: str) -> dict[str, str]:
+        """The Started section of `canopy status ARGS`: each line by its first word, the heading's count by its own."""
+        section = scenario.operator("status", *args).out.split("\nStarted ", 1)[1].split("\n\n", 1)[0]
+        return {line.split()[0]: line for line in section.splitlines()}
+
+    for key in (KEY, "PROJ-2", "PROJ-3"):
+        scenario.operator("start", key)
+    # None done: none counted.
+    assert list(started()) == ["(3):", KEY, "PROJ-2", "PROJ-3"]
+
+    scenario.overseer(ticket_sets("PROJ-2", "PROJ-3", done=True))
+    # The heading counts the tickets listed.
+    shown = started()
+    assert list(shown) == ["(1):", KEY, "(2"]
+    assert shown["(2"] == "  (2 done; `canopy status --all` lists them)"
+    every = started("--all")
+    assert list(every) == ["(3):", KEY, "PROJ-2", "PROJ-3"]
+    assert [every[key].endswith(", done") for key in (KEY, "PROJ-2", "PROJ-3")] == [False, True, True]
+
+
 def test_show_a_run_and_a_chore(scenario: Scenario, git_pool: GitPool) -> None:
     scenario.run(worker=pushes())
     shown = scenario.operator("show", "run:1").out
