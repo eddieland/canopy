@@ -24,7 +24,9 @@ never removed (§26): a later run, a kick, or the operator tells by them which c
 
 Beside the run's log, the harness keeps two diffs per slot, as a review keeps its one (§21, The diff): the run's own
 change, from the commit it started from to the one it left, and the branch against its base, which §29 keeps for its
-threads and which every run now keeps, with or without drafts. A slot the run left unpushed keeps the diff of the last
+threads and which every run now keeps, with or without drafts. A run that brought its base in, by a rebase or a merge,
+keeps none of the base's changes as its own: its change is read against the commit it started from with that base
+merged in, so a conflict shows as the run resolved it. A slot the run left unpushed keeps the diff of the last
 commit the run made there, found as the push check finds what a push left behind, marked as work not on origin, so what
 it did can be read though its commits go with it, and a joint run's slot that pushed is not so marked; a `crashed` run,
 in whose slots no git runs, keeps nothing. Each is kept then or never: the slot is returned, a kick may rewrite the

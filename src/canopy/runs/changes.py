@@ -5,7 +5,9 @@ reads one slot: the commit the branch is at on origin as the push check read it,
 have moved it since, and for a slot left unpushed the last commit the run made there (`checkpoint.left_work`), and the
 merge base of the one it diffs with the base as the slot last fetched it. It keeps two diffs beside the run's log: the
 run's own change, from the commit it started from, and the branch against its base, with the commit it was taken at;
-and it counts each file's lines in the run's own change, which a run's page and its ticket's runs list name. It logs
+and it counts each file's lines in the run's own change, which a run's page and its ticket's runs list name. A run that
+brought its base in, by a rebase or a merge, started from a commit that lacks what the base brought, so its own change
+is read against that commit with the base merged in (`_own_from`), and holds none of the base's changes. It logs
 the commits in the run's range too, bounded, each with canopy's marks on it (TRUST_MODEL T5) and whether the push
 check's own push, not the worker, put it on origin, so who put what on a branch can be told after a kick rewrites it.
 Each is kept then or never: the slot is returned, a kick may rewrite the branch, and the run's objects are deleted with
@@ -81,10 +83,17 @@ def keep(
     head = unpushed or found.end
     if head is None:
         return replace(found, missing="the run left no branch on origin and no commit of its own in its slot")
-    change = _keep(git, start.commit, head, run_changes.change_path(log_path, repo))
+    try:
+        fork = _merge_base(git, base, head)
+    except checkpoint.SetupError as e:
+        fork, against = None, _cut(str(e))
+    else:
+        against = _keep(git, fork, head, review_diff.run_path_for(log_path, repo), at=head)
+    own_from = _own_from(git, base, start.commit, fork)
+    change = _keep(git, own_from, head, run_changes.change_path(log_path, repo))
     if change is not None:
         log.warning("run's change not kept", extra={**fields, "error": change})
-    counted = _count(git, start.commit, head)
+    counted = _count(git, own_from, head)
     if isinstance(counted, str):
         log.warning("run's change not counted", extra={**fields, "error": counted})
     try:
@@ -92,12 +101,6 @@ def keep(
     except checkpoint.SetupError as e:
         log.warning("run's commits not read", extra={**fields, "error": str(e)})
         logged = None
-    try:
-        fork = _merge_base(git, base, head)
-    except checkpoint.SetupError as e:
-        fork, against = None, _cut(str(e))
-    else:
-        against = _keep(git, fork, head, review_diff.run_path_for(log_path, repo), at=head)
     if against is not None:
         log.warning("run's branch against its base not kept", extra={**fields, "base": base, "error": against})
     missing = [
@@ -254,6 +257,34 @@ def _merge_base(git: checkpoint.Git, base: str, head: str) -> str:
     if found.returncode == 1 and not said:
         raise checkpoint.SetupError(f"no merge base of {head[:12]} with {base} in its slot")
     raise checkpoint.SetupError(f"git merge-base exited {found.returncode}: {said or fork}")
+
+
+def _own_from(git: checkpoint.Git, base: str, start: str, fork: str | None) -> str:
+    """Return what the run's own change is a diff against: `start`, with whatever of the base the run brought in.
+
+    `fork` is where the run's end leaves the base. A run that rebased onto a base that had moved, or merged it in,
+    ends on a later fork than `start` has, and a diff from `start` would hold every change the base made between the
+    two. So `start` is merged with `fork`, in memory, and the diff is taken from that tree: what the branch would hold
+    had the base come in and the run done nothing else. Where the two conflict, the tree holds git's conflict markers,
+    and the diff shows how the run resolved them, as `git show --remerge-diff` shows a merge's. The merge writes
+    objects to the slot and no ref. Best effort: when git cannot say, the change is read from `start` as it is.
+
+    Returns:
+        `start`, or the tree of `start` merged with `fork` when `start` leaves the base elsewhere.
+    """
+    if fork is None:
+        return start
+    try:
+        if _merge_base(git, base, start) == fork:
+            return start
+        merged = git.result("merge-tree", "--write-tree", start, fork)
+    except checkpoint.SetupError:
+        return start
+    tree = merged.stdout.split()[:1]
+    # git exits 1 for a merge with conflicts, whose tree it still writes; anything else is no merge.
+    if merged.returncode not in {0, 1} or not tree:
+        return start
+    return tree[0]
 
 
 def _keep(git: checkpoint.Git, fork: str, head: str, path: Path, *, at: str | None = None) -> str | None:
