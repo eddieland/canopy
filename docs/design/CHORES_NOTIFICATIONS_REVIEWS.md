@@ -40,7 +40,9 @@ prompt file, and these keys turn behavior on:
 comes with if any, in the state directory, which its table in the private file names. They stay as installed when
 canopy is upgraded, but for the agent's model. The command owns them, so installing again replaces them whole with the
 shipped ones, and leaves
-every other line of the file as it was or writes nothing.
+every other line of the file as it was or writes nothing. Beside them it keeps what canopy shipped then, so the
+examples' list can say when canopy ships a newer one, and `canopy chore diff` can show what canopy changed since and
+what the operator changed: the two sides a merge by hand needs.
 
 canopy ships `canopy-chore` (§13): no edits, no subagents, no bash, one tool of canopy's, which reads its own chore's
 history, and no MCP write tools where the runtime can deny them by name. A chore using the operator's own read-only

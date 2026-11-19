@@ -12,7 +12,7 @@ from pathlib import Path
 
 import click
 
-from canopy.chores import execute, history, install, start, trial
+from canopy.chores import drift, execute, history, install, start, trial
 from canopy.cli.common import CliError, leave_the_tick, open_context
 from canopy.cli.params import CHORE, EXAMPLE_CHORE, TextType, validated
 from canopy.core import conversation, run_models, run_spans, workspace
@@ -88,11 +88,11 @@ def cmd_chore_install(name: str | None) -> int:
     The prompt goes in the workspace's .canopy/chore-prompts/, the agent the example comes with, if any, in
     .canopy/chore-agents/NAME/, and the [chores.NAME] table in its private config. They stay as installed when canopy
     is upgraded. The command owns them: running it again replaces them with the shipped ones, and an edit to any is
-    lost. Answer a chore with `canopy reply chore:NAME` instead, which survives it.
+    lost; `canopy chore diff NAME` shows the edits to carry over. Answer a chore with `canopy reply chore:NAME`
+    instead, which survives it. The list marks each example installed here, and says when canopy ships a newer one.
     """
     if name is None:
-        for example in install.available():
-            click.echo(example)
+        _list_examples()
         return 0
     try:
         conversation.check_operator()
@@ -113,6 +113,30 @@ def cmd_chore_install(name: str | None) -> int:
         f"Then run `canopy chore try {name}` until its findings are the ones you want; the loop runs it once "
         "capacity.max_chores is above 0.",
     )
+    return 0
+
+
+@chore_group.command("diff")
+@click.argument("name", type=EXAMPLE_CHORE)
+def cmd_chore_diff(name: str) -> int:
+    """Show how example chore NAME, as installed here, and the one canopy ships have moved apart.
+
+    Two unified diffs of its prompt and agent: what canopy changed since it was installed, and what you changed in
+    the copies; the two sides of a merge by hand, before `canopy chore install NAME` puts the shipped one back. For a
+    chore installed before canopy kept what it installed it from, only your copies against what canopy ships now. It
+    writes nothing.
+    """
+    try:
+        conversation.check_operator()
+    except conversation.Refused as r:
+        raise CliError(f"chore diff refused ({r.guard}): {r.reason}") from None
+    try:
+        found = drift.of(workspace.find(Path.cwd()), name)
+    except (ConfigError, OSError) as e:
+        raise CliError(f"chore diff: {e}") from None
+    if found is None:
+        raise CliError(f"chore diff: chore {name} is not installed here; `canopy chore install` lists the examples")
+    click.echo(drift.diff(found), nl=False)
     return 0
 
 
@@ -162,3 +186,24 @@ def cmd_chore_process(click_ctx: click.Context, run_id: int) -> int:
         raise CliError(str(e)) from None
     click.echo(f"chore run {run_id}: {outcome.status}")
     return 0
+
+
+def _list_examples() -> None:
+    """Print each example chore canopy ships, and how it stands when it is installed in the workspace here.
+
+    Raises:
+        CliError: an installed chore's copies cannot be read.
+    """
+    examples = install.available()
+    try:
+        ws = workspace.find(Path.cwd())
+    except ConfigError:
+        ws = None  # outside a workspace, the examples are all there is to say
+    width = max((len(example) for example in examples), default=0)
+    for example in examples:
+        try:
+            found = drift.of(ws, example) if ws is not None else None
+        except OSError as e:
+            raise CliError(f"chore install: {e}") from None
+        standing = f"  {drift.describe(found.standing, example)}" if found is not None else ""
+        click.echo(f"{example:<{width}}{standing}".rstrip())

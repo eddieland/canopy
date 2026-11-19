@@ -84,7 +84,8 @@ canopy runs only in a workspace, even for one repository. Run these anywhere in 
 | `canopy models` | The models OpenCode lists, and the agents `[runtime.models]` gives each; exits 1 when the list cannot be read or an agent's is not on it. |
 | `canopy model KEY [MODEL]` | Sets the ticket's workers' model until `--clear`; `--agent planner` or `reviewer` for its others. MODEL must be one `canopy models` lists. No MODEL prints each agent's next model and where it comes from. |
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. Then `canopy decisions`. |
-| `canopy chore install [NAME]` | Sets up a shipped example chore, replacing its prompt and table; no NAME lists them. |
+| `canopy chore install [NAME]` | Sets up a shipped example chore, replacing its prompt and table; no NAME lists them, marking those installed and those canopy now ships a newer version of. |
+| `canopy chore diff NAME` | An installed example chore's prompt and agent: what canopy changed since the install, and what the operator changed. Read it before installing again, which loses the edits. |
 | `canopy chore try NAME` | Runs a chore now, in the foreground, and records the run, so the operator sees its findings in `canopy status` and the web UI. Suggest `--no-record`, which records nothing, only while a new prompt is first being drafted. |
 | `canopy chore history NAME` | A chore's runs, newest first, with what each found; `--run ID` one in detail. |
 | `canopy loop [--dry-run] [--every MINUTES] [--ticks N]` | The loop, in the foreground. The operator runs this. |
