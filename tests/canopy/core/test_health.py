@@ -175,17 +175,42 @@ def test_refusals_are_by_guard_the_most_first(tmp_path: Path, journals: Journals
     found = health.report(conn, NOW, 7)
     first = found.failures[-1].id
     # Each with what it refused: by the ticket, chore, or PR named and the kind asked for, the most often first.
-    implement = health.Ask("PROJ-1", None, None, RunKind.IMPLEMENT, decisions=2, last_tick=first)
-    resume = health.Ask("PROJ-1", None, None, RunKind.RESUME, decisions=1, last_tick=first + 1)
+    implement = health.Ask("PROJ-1", None, None, RunKind.IMPLEMENT, decisions=2, ticks=1, last_tick=first)
+    resume = health.Ask("PROJ-1", None, None, RunKind.RESUME, decisions=1, ticks=1, last_tick=first + 1)
     assert found.refusals == [
-        health.Refusal("capacity", decisions=3, ticks=2, last_tick=first + 1, asks=[implement, resume]),
+        health.Refusal("capacity", subjects=2, decisions=3, ticks=2, last_tick=first + 1, asks=[implement, resume]),
         health.Refusal(
             "cooldown",
+            subjects=1,
             decisions=1,
             ticks=1,
             last_tick=first,
-            asks=[health.Ask("PROJ-1", None, None, None, decisions=1, last_tick=first)],
+            asks=[health.Ask("PROJ-1", None, None, None, decisions=1, ticks=1, last_tick=first)],
         ),
+    ]
+
+
+def test_one_ask_refused_tick_after_tick_counts_once_beside_its_ticks(tmp_path: Path, journals: Journals) -> None:
+    """A guard stuck on one PR ranks below one that refused more asks, however often it refused that PR (#2448)."""
+    conn = journals.open(tmp_path / "canopy.db")
+    stuck, other = "https://e.test/pr/7", "https://e.test/pr/8"
+    refused = [("reviewed", None, stuck)] * 5 + [("reviewed", None, other)]
+    refused += [("capacity", f"PROJ-{n}", None) for n in range(1, 4)]
+    ticks: list[int] = []
+    for guard, key, pr in refused:
+        ticks.append(tick(conn, earlier(NOW, 1), "ok"))
+        conn.execute(
+            "INSERT INTO decisions (tick_id, ticket_key, pr, action, rationale, created_at) "
+            "VALUES (?, ?, ?, ?, 'r', ?)",
+            (ticks[-1], key, pr, f"refused:{guard}", earlier(NOW, 1)),
+        )
+    capacity, reviewed = health.report(conn, NOW, 7).refusals
+    assert (capacity.guard, capacity.subjects, capacity.decisions) == ("capacity", 3, 3)
+    assert (reviewed.guard, reviewed.subjects, reviewed.decisions, reviewed.ticks) == ("reviewed", 2, 6, 6)
+    # The five refusals of one PR are one ask, with its ticks; the other PR stays an ask of its own.
+    assert reviewed.asks == [
+        health.Ask(None, None, stuck, None, decisions=5, ticks=5, last_tick=ticks[4]),
+        health.Ask(None, None, other, None, decisions=1, ticks=1, last_tick=ticks[5]),
     ]
 
 
@@ -278,7 +303,7 @@ def test_canopy_health_prints_the_report(canopy_env: CanopyEnv, capsys: pytest.C
     assert out[causes + 5].split() == ["3", "other:", "an", "agent's", "summary,", "or", "no", "note"]
     assert out[causes + 6].startswith("    workers, chores, reviews; latest chore:deps run ")
     refused = out.index("Refused by a guard:")
-    assert out[refused + 1].startswith("  capacity: 3 times in 2 ticks, last in tick ")
+    assert out[refused + 1].startswith("  capacity: 2 asks, 3 times in 2 ticks, last in tick ")
     # Where the sandbox stands closes it: here, nowhere, in one line (`tests/canopy/setup/test_sandbox_health.py`).
     assert out[refused + 3 :] == ["", SANDBOX_OFF]
 
@@ -302,10 +327,12 @@ def test_canopy_health_json_is_the_report(canopy_env: CanopyEnv, capsys: pytest.
     assert data["failures"][0]["note"] == "nothing pushed"
     assert {k: v for k, v in data["refusals"][0].items() if k not in {"last_tick", "asks"}} == {
         "guard": "capacity",
+        "subjects": 2,
         "decisions": 3,
         "ticks": 2,
     }
-    assert [(a["kind"], a["decisions"]) for a in data["refusals"][0]["asks"]] == [("implement", 2), ("resume", 1)]
+    asks = [(a["kind"], a["decisions"], a["ticks"]) for a in data["refusals"][0]["asks"]]
+    assert asks == [("implement", 2, 1), ("resume", 1, 1)]
     assert [(c["note"], c["runs"]) for c in data["causes"]][-1] == (None, 3)
 
 

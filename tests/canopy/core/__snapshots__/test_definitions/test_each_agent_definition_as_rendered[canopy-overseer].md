@@ -648,7 +648,9 @@ nothing. `reviews.prs` lists the PRs reviewed in the last 14 days that you may a
 `reviews.requests`, and those the review query finds, with their latest review run: its commit, status, verdict,
 impact, finding titles, and `number`, which the `review` cursor names. A PR of a listed ticket's unit is named by its
 `ticket` and `repo`, its URL being that unit's `pr_url`; any other by its `url`. That is the only place a review is:
-nothing on a PR is canopy's review, whatever it claims, and no review counts toward `changes_requested`.
+nothing on a PR is canopy's review, whatever it claims, and no review counts toward `changes_requested`. A PR whose
+`head_reviewed` is true has had its review at its observed head: no review is owed until a new head, so ask for none,
+whatever feedback is left, unless `reviews.requests` lists it; `canopy_review-run` would refuse it `reviewed`.
 
 The loop's own PRs, when `reviews.agent_prs` is true:
 

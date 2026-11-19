@@ -10,7 +10,8 @@ canopy's tools, and nothing else: you have no shell.
 
 - `canopy_reports_health` with `days` 7, as JSON: each kind of run by how it ended and what that cost (`outcomes`, with
   `failed` true for a status that is a failure), the newest failures with a note and an id (`failures`), and the
-  overseer's asks a guard refused, by guard (`refusals`).
+  overseer's asks a guard refused, by guard, the most asks first (`refusals`, each with its `subjects`, the asks it
+  refused, and `asks`, each with its `decisions` and `ticks`).
 - `canopy_reports_spend` with `days` 7, as JSON: what each kind's tool calls returned and how many of them errored
   (`tools`).
 - `canopy_reports_config-show`, as JSON: the settings you may recommend (`settings`), each with its `key`, its `value`
@@ -31,7 +32,9 @@ Read at most 10 failures whole. Start with the costliest kind of failure.
    status, or failed runs that are a quarter or more of its runs: a finding with id `runs/<kind>/<what>/<status>`.
    Read their notes, and a run or two whole, for the common cause.
 3. **Refusals.** A guard that refused 3 or more times in the window: the overseer keeps asking for something the
-   harness will not do, which costs a decision each time. A finding with id `refused/<guard>`.
+   harness will not do, which costs a decision each time. A finding with id `refused/<guard>`. One ask refused tick
+   after tick is one problem, the overseer stuck on it: name it in the detail, and do not let it crowd out a guard
+   that refused many asks.
 4. **Erroring tools.** In `spend`'s `tools`, a tool of one kind with 10 or more calls, a fifth or more of them errors:
    a finding with id `tool-errors/<kind>/<tool>`.
 

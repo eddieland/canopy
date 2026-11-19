@@ -678,6 +678,27 @@ def test_the_state_block_shows_reviewed_prs(reviewing: CanopyEnv, scenario: Scen
     assert "comment" not in latest
 
 
+def test_the_state_block_says_a_reviewed_head_is_owed_no_review_until_a_new_head(
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+    github_state: Path,
+) -> None:
+    """The overseer asked again, tick after tick, for a head it knew was reviewed (#2448): the block says it is."""
+    sha = head(git_pool)
+    github_state.write_text(json.dumps({"prs": {PR: {"pr": {"head_sha": sha}}}}))
+    scenario.review(reviews(sha, ticket="PROJ-1"), reviewer=reviewer_reports(CLEAN))
+    scenario.tick(*waits("PROJ-1"), dry_run=True)
+    [pr] = scenario.state()["reviews"]["prs"]
+    assert (pr["latest"]["sha"], pr["latest"]["verdict"], pr["head_reviewed"]) == (sha, "clean", True)
+    assert [a for a, _ in scenario.refuses(reviews(sha, ticket="PROJ-1"))] == ["refused:reviewed"]
+    # A push is a new head, owed its review again.
+    github_state.write_text(json.dumps({"prs": {PR: {"pr": {"head_sha": "b" * 40}}}}))
+    scenario.tick(*waits("PROJ-1"), dry_run=True)
+    [pr] = scenario.state()["reviews"]["prs"]
+    assert (pr["latest"]["sha"], pr["head_reviewed"]) == (sha, False)
+
+
 def test_attention_about_a_pr_without_a_ticket(reviewing: CanopyEnv, scenario: Scenario) -> None:
     scenario.tick(
         raises(None, "flaky_rerun", "build failed again on rerun", pr=PR),
