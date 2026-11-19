@@ -77,6 +77,7 @@ canopy runs only in a workspace, even for one repository. Run these anywhere in 
 | `canopy waiting [--since TIME]` | JSON of what waits on the operator: the attention list, open PRs' reviews and unhandled feedback by author, and counts since TIME (default a day). The `briefing` chore reads it. |
 | `canopy config show` | Each number, switch, and choice in the config, its default, and the file that set it; `--json`. |
 | `canopy config commands` | Each agent's command as a run starts it, and the keys it is made of; `--json`. |
+| `canopy instructions check AGENT [FILE]` | Whether a run would take text as AGENT's standing instructions (`worker`, `overseer`, `reviewer`, `chore`): FILE, stdin with `-`, `--text T`, or with none the file its runs read now. Bytes used of 4096; exits 1 when every run would be refused; `--json`. Writes nothing. |
 | `canopy agents` | The MCP servers and skills each canopy agent is offered, after OpenCode merges the operator's config; `--json`. |
 | `canopy personas` | Each persona, canopy's and the operator's in `paths.personas`, and the agents `[personas]` gives it; exits 1 when an agent's would refuse. |
 | `canopy persona KEY [NAME]` | Sets the ticket's workers' persona until `--clear`; `--agent planner` or `reviewer` for its others. No NAME prints each agent's next persona and where it comes from. `--next`: its next run alone, as `canopy start KEY --persona` and `canopy plan KEY --persona` set it. A PR's URL sets its open review request's. |
@@ -118,6 +119,22 @@ Config, later files winning key by key: `canopy-workspace.toml` (shared; it also
 user file `~/.config/canopy/config.toml` (`$XDG_CONFIG_HOME/canopy/config.toml`), personal, for every workspace; and
 the private `.canopy/config.toml`, personal, for this workspace. No code repository holds canopy config. Private keys,
 such as `tracker.labels` and everything under `runtime`, may be set only in the user or private file.
+
+## Editing standing instructions
+
+Each agent's standing instructions (`paths.<agent>_instructions`, or `<agent>.md` in `paths.instructions`) are in every
+run of that agent, and a file a run cannot take refuses every one of them: a worker's dispatch as `bad_prompt`, the
+overseer's whole tick. A run takes at most 4096 bytes of UTF-8. The bound counts bytes, not characters: `…` is three.
+
+Before any edit to one of these files, check the whole text you mean to save, not only what you add:
+
+```sh
+canopy instructions check worker proposed.md      # or `-` for stdin, or --text '...'
+```
+
+Exit 0 means a run would read it, and the line says how many bytes are left. On exit 1, trim and check again; never
+save a file that fails. A `warning` names a character that hides text from a person, by line: take it out unless the
+operator put it there on purpose. After saving, `canopy instructions check worker` checks the file as it stands.
 
 ## Answering "why wasn't KEY picked up?"
 
