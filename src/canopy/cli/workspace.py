@@ -208,10 +208,9 @@ def _clone_or_check(
     if repo.cloned:
         return setup_workspace.check_origin(ctx.runner, repo)
     url = setup_workspace.shown(str(repo.url))
-    partial = "" if repo.clone_filter is None else f", with --filter={repo.clone_filter}"
     if dry_run:
-        return setup_workspace.Checked(repo, "to clone", f"{url} into {repo.path}{partial}")
-    click.echo(f"{repo.name}: cloning {url} into {repo.path}{partial}")
+        return setup_workspace.Checked(repo, "to clone", f"{url} into {repo.path}")
+    click.echo(f"{repo.name}: cloning {url} into {repo.path}")
     return setup_workspace.clone(ctx.runner, ws, repo)
 
 

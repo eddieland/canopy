@@ -60,8 +60,6 @@ GITHUB_URL_RE: Final = re.compile(
     r"(?:https://(?:[^@/\s]+@)?|ssh://git@|git@)github\.com[/:]([A-Za-z0-9-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?/?",
     re.IGNORECASE,
 )
-#: The `--filter` specs a repository's `clone_filter` may name: no blobs, blobs up to a size, or trees to a depth.
-CLONE_FILTER_RE: Final = re.compile(r"blob:none|blob:limit=[0-9]+[kmg]?|tree:[0-9]+")
 
 
 class CheckRole(StrEnum):
@@ -96,12 +94,6 @@ def url_error(value: str) -> str | None:
     if not value.strip() or value.startswith("-") or any(c.isspace() for c in value):
         return "must be a clone URL: not empty, no whitespace, not starting with '-'"
     return None
-
-
-def _clone_filter(value: str) -> str:
-    if not CLONE_FILTER_RE.fullmatch(value):
-        raise ValueError("must be a partial clone filter: 'blob:none', 'blob:limit=<n>[kmg]', or 'tree:<depth>'")
-    return value
 
 
 def _check_name(value: str) -> str:
@@ -164,8 +156,6 @@ class _RepoTable(_Table):
     high_impact_paths: tuple[Annotated[StrictStr, AfterValidator(impact_path)], ...] = ()
     # Whether its host dismisses a PR's approvals when a commit is pushed to it (DESIGN §7). Most keep them.
     push_dismisses_approval: StrictBool = False
-    # What `canopy workspace sync` passes as `--filter` to `git clone`, for a partial clone. Unset clones everything.
-    clone_filter: Annotated[StrictStr, AfterValidator(_clone_filter)] | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -203,10 +193,6 @@ class Repo:
     #: left for the operator as `would_reset_approval`. Elsewhere an approval stands, and a fix after it is a push like
     #: any other (DESIGN §7).
     push_dismisses_approval: bool = False
-    #: The filter `canopy workspace sync` clones it with, `--filter` to `git clone`, for a partial clone whose missing
-    #: objects git fetches from `origin` when it needs them; None clones everything. A clone already there keeps how it
-    #: was made (DESIGN §18).
-    clone_filter: str | None = None
 
     @property
     def cloned(self) -> bool:
@@ -372,7 +358,6 @@ def load(root: Path) -> Workspace:
             checks=table.checks,
             high_impact_paths=table.high_impact_paths,
             push_dismisses_approval=table.push_dismisses_approval,
-            clone_filter=table.clone_filter,
         )
         for name, table in sorted(parsed.repos.items())
     )
