@@ -60,7 +60,7 @@ from canopy.loop import connectors, mcp, spawns
 from canopy.runs import drafted, epic_starts
 from canopy.runtime.implementation import Version
 from canopy.runtime.report import SessionPage, SessionSpend
-from tests.conftest import FAKES_DIR, TRACKER_CMD, TRACKER_SOURCE, CanopyEnv, Journals, git
+from tests.conftest import FAKES_DIR, TRACKER_CMD, TRACKER_SOURCE, CanopyEnv, GitPool, Journals, git
 
 KEY: Final = "PROJ-1"
 #: A plan as a planner writes one, for a test that needs any.
@@ -1876,3 +1876,14 @@ def called(tool: str, given: Mapping[str, object], returned: str) -> Mapping[str
     """A part of a reply: a tool call given `given` that returned `returned`."""
     state = {"status": "completed", "input": given, "content": [{"type": "text", "text": returned}]}
     return {"type": "tool", "id": "call_1", "name": tool, "state": state, "time": {"created": 1}}
+
+
+def main_moves(git_pool: GitPool, name: str) -> None:
+    """Push a commit to `main` on origin that the ticket's branch lacks, touching `name`.txt."""
+    seed = git_pool.slots[1]
+    git("fetch", "--quiet", "origin", cwd=seed)
+    git("checkout", "--quiet", "--detach", "origin/main", cwd=seed)
+    (seed / f"{name}.txt").write_text(f"{name}\n")
+    git("add", f"{name}.txt", cwd=seed)
+    git("commit", "--quiet", "-m", f"main: {name}", cwd=seed)
+    git("push", "--quiet", "origin", "HEAD:refs/heads/main", cwd=seed)

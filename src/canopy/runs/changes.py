@@ -89,7 +89,10 @@ def keep(
         fork, against = None, _cut(str(e))
     else:
         against = _keep(git, fork, head, review_diff.run_path_for(log_path, repo), at=head)
-    own_from = _own_from(git, base, start.commit, fork)
+    own_from = _own_from(git, base, start.commit, head, fork)
+    if isinstance(own_from, _Unmerged):
+        log.warning("run's change read from its start, the base's changes with it", extra={**fields, **own_from.why})
+        own_from = start.commit
     change = _keep(git, own_from, head, run_changes.change_path(log_path, repo))
     if change is not None:
         log.warning("run's change not kept", extra={**fields, "error": change})
@@ -259,31 +262,54 @@ def _merge_base(git: checkpoint.Git, base: str, head: str) -> str:
     raise checkpoint.SetupError(f"git merge-base exited {found.returncode}: {said or fork}")
 
 
-def _own_from(git: checkpoint.Git, base: str, start: str, fork: str | None) -> str:
+@dataclass(frozen=True)
+class _Unmerged:
+    """Why a run's start was not merged with the base the run brought in, for the log."""
+
+    error: str
+
+    @property
+    def why(self) -> dict[str, str]:
+        """The log fields that say so."""
+        return {"error": self.error}
+
+
+def _own_from(git: checkpoint.Git, base: str, start: str, head: str, fork: str | None) -> str | _Unmerged:
     """Return what the run's own change is a diff against: `start`, with whatever of the base the run brought in.
 
-    `fork` is where the run's end leaves the base. A run that rebased onto a base that had moved, or merged it in,
-    ends on a later fork than `start` has, and a diff from `start` would hold every change the base made between the
-    two. So `start` is merged with `fork`, in memory, and the diff is taken from that tree: what the branch would hold
-    had the base come in and the run done nothing else. Where the two conflict, the tree holds git's conflict markers,
-    and the diff shows how the run resolved them, as `git show --remerge-diff` shows a merge's. The merge writes
-    objects to the slot and no ref. Best effort: when git cannot say, the change is read from `start` as it is.
+    `fork` is where the run's end, `head`, leaves the base. A run that rebased onto a base that had moved, or merged
+    it in, ends on a later fork than `start` has, and a diff from `start` would hold every change the base made
+    between the two. So `start` is merged with `fork`, in memory, and the diff is taken from that tree: what the
+    branch would hold had the base come in and the run done nothing else. Where the two conflict, the tree holds git's
+    conflict markers, and the diff shows how the run resolved them, as `git show --remerge-diff` shows a merge's. The
+    merge writes objects to the slot and no ref.
+
+    A base that already holds `head` brought nothing in: the run's commits went into it, and merging them into `start`
+    would leave no change at all. And a merge can run a driver git's config names for a path, on the host, where a
+    diff's driver is switched off by a flag (D107): the slot's config is one a worker can write, so a slot whose git
+    names any merge driver is not merged.
 
     Returns:
-        `start`, or the tree of `start` merged with `fork` when `start` leaves the base elsewhere.
+        `start`, or the tree of `start` merged with `fork` when `start` leaves the base elsewhere; why not, when the
+        merge was called for and not made, so the diff from `start` holds the base's changes too.
     """
-    if fork is None:
+    if fork is None or fork == head:
         return start
     try:
         if _merge_base(git, base, start) == fork:
             return start
-        merged = git.result("merge-tree", "--write-tree", start, fork)
-    except checkpoint.SetupError:
-        return start
+        drivers = git.result("config", "--get-regexp", r"^merge\..*\.driver$", max_stdout=_MAX_REASON)
+        # git exits 1 when no key matches; a config it cannot read may name a driver all the same.
+        if drivers.returncode != 1:
+            return _Unmerged("git's config names a merge driver, which canopy does not run")
+        merged = git.result("merge-tree", "--write-tree", "--no-messages", start, fork, max_stdout=_MAX_REASON)
+    except checkpoint.SetupError as e:
+        return _Unmerged(_cut(str(e)))
+    # The tree is the first line; the conflicted paths after it are not read.
     tree = merged.stdout.split()[:1]
     # git exits 1 for a merge with conflicts, whose tree it still writes; anything else is no merge.
     if merged.returncode not in {0, 1} or not tree:
-        return start
+        return _Unmerged(_cut(f"git merge-tree exited {merged.returncode}: {merged.stderr.strip()}"))
     return tree[0]
 
 

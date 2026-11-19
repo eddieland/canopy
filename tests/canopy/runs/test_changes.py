@@ -23,6 +23,7 @@ from tests.canopy.helpers import (
     context,
     in_tick,
     inline_context,
+    main_moves,
     present,
     private_worker_does,
     worker_does,
@@ -133,17 +134,6 @@ def test_a_resume_starts_from_origins_previous_head_and_its_own_diff_holds_the_f
     assert f"  repo  {before[:12]}..{after[:12]}, merge base {base[:12]}\n" in shown
 
 
-def main_moves(git_pool: GitPool, name: str = "m.txt") -> None:
-    """Put a commit that writes `name` on origin's `main`, which the branch lacks."""
-    moves = git_pool.slots[1]
-    git("fetch", "--quiet", "origin", cwd=moves)
-    git("checkout", "--quiet", "--detach", "origin/main", cwd=moves)
-    (moves / name).write_text("main moved\n")
-    git("add", name, cwd=moves)
-    git("commit", "--quiet", "-m", "main moves", cwd=moves)
-    git("push", "--quiet", "origin", "HEAD:refs/heads/main", cwd=moves)
-
-
 def test_a_run_that_rebased_onto_a_moved_base_keeps_its_own_change_without_the_bases(
     scenario: Scenario,
     git_pool: GitPool,
@@ -151,7 +141,7 @@ def test_a_run_that_rebased_onto_a_moved_base_keeps_its_own_change_without_the_b
     scenario.configures(trust={"rebase": True})
     scenario.run(worker=worker_does(*writes("a.txt", "the change"), push()))
     before = present(git_pool.remote_head(BRANCH))
-    main_moves(git_pool)
+    main_moves(git_pool, "m")
     scenario.time_passes(minutes=31)
     rebases = worker_does(
         *writes("b.txt", "the fix"),
@@ -175,7 +165,7 @@ def test_a_run_that_merged_a_moved_base_in_keeps_its_own_change_without_the_base
     git_pool: GitPool,
 ) -> None:
     scenario.run(worker=worker_does(*writes("a.txt", "the change"), push()))
-    main_moves(git_pool)
+    main_moves(git_pool, "m")
     scenario.time_passes(minutes=31)
     merges = worker_does(
         ["git", "merge", "--quiet", "--no-edit", "origin/main"],
@@ -195,8 +185,8 @@ def test_a_rebase_that_conflicted_keeps_how_the_run_resolved_it_and_none_of_the_
 ) -> None:
     scenario.configures(trust={"rebase": True})
     scenario.run(worker=worker_does(*writes("a.txt", "the change"), push()))
-    main_moves(git_pool)
-    main_moves(git_pool, "a.txt")
+    main_moves(git_pool, "m")
+    main_moves(git_pool, "a")
     scenario.time_passes(minutes=31)
     resolve = "printf 'resolved\\n' > a.txt && git add a.txt && GIT_EDITOR=true git rebase --continue"
     rebases = worker_does(
@@ -208,6 +198,40 @@ def test_a_rebase_that_conflicted_keeps_how_the_run_resolved_it_and_none_of_the_
     assert [f.path for f in run_changes.files_of(scenario.conn, ran.id, "repo")] == ["a.txt"]
     assert "+resolved\n" in change_of(ran)
     assert "-<<<<<<< " in change_of(ran)
+
+
+def test_a_slot_whose_git_names_a_merge_driver_is_not_merged_and_the_change_is_read_from_the_start(
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    """A driver would run on the host, so canopy makes no merge there: the base's change shows."""
+    scenario.configures(trust={"rebase": True})
+    scenario.run(worker=worker_does(*writes("a.txt", "the change"), push()))
+    main_moves(git_pool, "m")
+    ran_driver = git_pool.origin.parent / "driver-ran"
+    git("config", "merge.evil.driver", f"touch {ran_driver}", cwd=git_pool.slots[0])
+    scenario.time_passes(minutes=31)
+    rebases = worker_does(
+        *writes("b.txt", "the fix"),
+        ["git", "rebase", "--quiet", "origin/main"],
+        ["git", "push", "--quiet", "--force-with-lease", "origin", f"HEAD:refs/heads/{BRANCH}"],
+    )
+    ran = scenario.run(dispatches(kind=RunKind.RESUME, reasons=(ResumeReason.CI,)), worker=rebases)
+    assert ran.status == "done", ran.row["result_json"]
+    assert ("b.txt" in change_of(ran), "m.txt" in change_of(ran)) == (True, True)
+    assert not ran_driver.exists()
+
+
+def test_a_run_whose_end_the_base_already_holds_keeps_its_change(scenario: Scenario, git_pool: GitPool) -> None:
+    """The base was moved to the run's own commit before it ended: its change is still the run's, not nothing."""
+    to_main = ["git", "push", "--quiet", "origin", "HEAD:refs/heads/main"]
+    ran = scenario.run(
+        worker=worker_does(*writes("a.txt", "the change"), push(), to_main, ["git", "fetch", "--quiet"]),
+    )
+    [row] = changed(scenario, ran)
+    assert row.merge_base_sha == row.end_sha
+    assert "a.txt" in change_of(ran)
+    assert row.files_changed == 1
 
 
 def test_a_joint_run_records_a_row_and_its_diffs_per_repository(ws_scenario: Scenario, ws: Ws) -> None:
