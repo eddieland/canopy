@@ -45,6 +45,7 @@ from tests.canopy.helpers import (
     present,
     private_worker_does,
     ticket_sets,
+    tracker_unlabels,
     wait_for_run,
     waits,
 )
@@ -285,13 +286,16 @@ def test_a_public_run_does_not_start_once_the_ticket_is_started_privately(
 def test_with_tracker_private_a_labeled_tickets_first_dispatch_starts_it_privately(
     scenario: Scenario,
     git_pool: GitPool,
+    connector_state: Path,
 ) -> None:
     conn = scenario.conn
     scenario.configures(tracker={"private": True})
-    # The label still authorizes the first dispatch: without one there is nothing to start.
+    # The label still authorizes the first dispatch: on a ticket the tracker reads without one, nothing starts.
+    tracker_unlabels(connector_state, KEY)
     [(action, _)] = scenario.refuses(dispatches(label=None))
     assert action == "refused:unauthorized"
     assert db.starts(conn) == []
+    connector_state.unlink()  # the tracker reads it labeled again
 
     run = scenario.run(worker=private_worker_does(*commit_and_push(BRANCH), result=blocked_result()))
     [(_, rationale)] = decisions(conn, int(run.row["tick_id"]))

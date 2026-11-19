@@ -130,7 +130,8 @@ line; the others may break a line, sparingly, where that reads better.
 `canopy_dispatch`'s fields:
 
 - `label`: the configured label you read on this ticket this tick, in its fresh observation, never one you did not
-  see on it. Every dispatch of a public ticket needs it, whatever the kind; a private ticket's takes none.
+  see on it. Leave it out and the harness takes it from that observation, refusing a ticket that carries none; a
+  private ticket's takes none.
 - `repos`: the repositories the run works in, one unit of the ticket each. At least one on every dispatch, even in a
   workspace of one repository (see "Repositories and units").
 - `slug`: for a ticket's first `implement` only, naming the branch every later dispatch continues,

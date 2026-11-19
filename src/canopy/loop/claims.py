@@ -7,7 +7,8 @@ a decision, as every guard's is:
 
 - `stale`: a subject the dispatch rests on was not observed within `connect.max_age_minutes`: a public ticket, the PR of
   each unit a `resume` names, and the PRs of the ticket a stacked dispatch's `base` is the branch of.
-- `unauthorized`: the label was not observed on the ticket; a `resume` for `reply` covers no new comment by an
+- `unauthorized`: the ticket carried no queue label when last observed, or the label the dispatch names was not observed
+  on it; a `resume` for `reply` covers no new comment by an
   authorized replier that is not a worker's, nor a new operator message or comment on one of the ticket's artifacts
   that is authority (DESIGN §38); a `resume` for `review` covers no
   feedback by a trusted reviewer, nor the canopy review it names with `canopy:review` trusted, or covers someone else's
@@ -18,6 +19,9 @@ a decision, as every guard's is:
 - `handled`: a `resume` for `ci` alone has no failure at its PR's head that a worker has not had: each is at or behind
   the unit's `ci` cursor, or repeats, at the same head and context, one that is, so a re-run that went red to red
   starts nothing (PRIOR_ART, CI newness).
+
+A dispatch that names no label takes the first of `tracker.labels` observed on the ticket (`check`), so the overseer
+need not copy one from the block; one it names is kept, and §8's guard holds it to the configured ones.
 
 A `resume` moves each cursor of its reasons it leaves out to the newest item of that kind the block showed, short of the
 first one these checks would refuse it to cover (`default_cursors`, DESIGN §37): an item past the block's bound, or an
@@ -81,24 +85,28 @@ def check(
     cursors: Mapping[str, str],
     review_run: int | None,
     base: str | None,
-) -> None:
-    """Refuse a dispatch whose claims the observations at `now` do not bear out.
+) -> str | None:
+    """Refuse a dispatch whose claims the observations at `now` do not bear out, and return the label it rests on.
 
     `cursors` are the ones the dispatch moves, by name; a unit's (`review`, `ci`) is of the one repository in `repos`.
-    A label left out, a reason on another kind, and a cursor without its reason are left to §8's guards.
+    A label not configured, a reason on another kind, and a cursor without its reason are left to §8's guards.
+
+    Returns:
+        The queue label for §8's guard: `label` if named, else the first of `tracker.labels` observed on the ticket;
+        `label` as given for a private ticket, or one the journal does not hold.
 
     Raises:
         Refusal: `stale`, `unauthorized`, `unobserved`, or `handled`, as the module says.
     """
     if conversation.start_of(ctx.conn, key) is not None:
         # Private, or stopped, which the dispatch guard refuses: its start record, not an observation, authorizes it.
-        return
+        return label
     record = db.get_ticket(ctx.conn, key)
     if record is None:
-        return
+        return label
     reader = observations.Reader.read(ctx, phases.recorded(ctx.conn, tick_id), now, [record])
     units = {u["repo"]: u for u in reader.units(key)}
-    _check_subjects(ctx, reader, key, kind=kind, label=label, repos=repos, units=units, base=base)
+    label = _check_subjects(ctx, reader, key, kind=kind, label=label, repos=repos, units=units, base=base)
     one = repos[0] if len(set(repos)) == 1 else None
     pr = _fresh_pr(units.get(one)) if one is not None else None
     _check_comment(reader, record, cursors.get("comment"))
@@ -108,7 +116,7 @@ def check(
     review = _Review.read(reader, pr, unit, cursors.get("review"), review_run)
     review.check_named()
     if kind != RunKind.RESUME:
-        return
+        return label
     if set(reasons) == {ResumeReason.CI} and pr is not None and unit is not None:
         _check_handled(ctx, reader, pr, unit)
     if ResumeReason.REPLY in reasons:
@@ -116,6 +124,7 @@ def check(
     gated = ResumeReason.REVIEW in reasons and ctx.config.policy.feedback_plan != "approve"
     if gated and pr is not None:
         review.check_authority(ctx, record, cursors.get("message"))
+    return label
 
 
 def check_cursors(
@@ -348,8 +357,11 @@ def _check_subjects(
     repos: Sequence[str],
     units: Mapping[str, observations.UnitObservation],
     base: str | None,
-) -> None:
-    """Refuse a dispatch that rests on a stale subject, or names a label not observed on its ticket.
+) -> str:
+    """Refuse a dispatch that rests on a stale subject, or on a queue label not observed on its ticket.
+
+    Returns:
+        The queue label the dispatch rests on (`_check_label`).
 
     Raises:
         Refusal: `stale` or `unauthorized`.
@@ -357,12 +369,12 @@ def _check_subjects(
     ticket = reader.ticket(key)
     if ticket["observed"] != "fresh":
         raise Refusal("stale", _stale(key, ticket.get("why")))
-    if label is not None:
-        _check_label(reader.observed[key], key, label)
+    found = _check_label(ctx.config.tracker.labels, reader.observed[key], key, label)
     if kind == RunKind.RESUME:
         _check_units(reader, key, repos, units)
     if base is not None:
         _check_blocker(ctx, reader, key, base)
+    return found
 
 
 def _stale(what: str, why: str | None) -> str:
@@ -373,20 +385,32 @@ def _stale(what: str, why: str | None) -> str:
     )
 
 
-def _check_label(seen: records.ObservedTicket, key: str, label: str) -> None:
-    """Refuse a label the tracker source did not observe on the ticket, matched case-insensitively (D051).
+def _check_label(labels: Iterable[str], seen: records.ObservedTicket, key: str, label: str | None) -> str:
+    """Return the queue label observed on the ticket that a dispatch rests on, matched case-insensitively (D051).
 
-    The refusal names no label, as the guard against config names none: the overseer reads them in the block.
+    `labels` are `tracker.labels`. A label named must be one the tracker source observed; with none named, one of
+    `labels` must be. Neither refusal names a configured label, as the guard against config does not: the overseer
+    reads them in the block. It names when the observation was read instead.
+
+    Returns:
+        `label` if named, else the configured spelling of the first of `labels` observed.
 
     Raises:
         Refusal: `unauthorized`.
     """
     observed = {str(x["name"]).casefold() for x in phases.labels_of(seen)}
+    read = f"when the tracker source last read it, at {seen.observed_at}"
+    if label is None:
+        found = next((c for c in labels if c.casefold() in observed), None)
+        if found is None:
+            raise Refusal("unauthorized", f"{key} carried no queue label {read}; nothing authorizes a run of it")
+        return found
     if label.casefold() not in observed:
         raise Refusal(
             "unauthorized",
-            f"{label!r} was not on {key} when the tracker source last read it; name a queue label observed on it",
+            f"{label!r} was not on {key} {read}; name a queue label observed on it, or leave label out",
         )
+    return label
 
 
 def _check_units(

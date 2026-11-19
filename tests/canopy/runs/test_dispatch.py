@@ -27,6 +27,7 @@ from tests.canopy.helpers import (
     slot_of,
     tick_starts,
     tracker_holds,
+    tracker_unlabels,
 )
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
 from tests.conftest import CanopyEnv, GitPool, pool_state
@@ -159,24 +160,28 @@ def test_bad_slugs_are_refused_by_the_tool(scenario: Scenario, slug: str) -> Non
 @pytest.mark.parametrize(
     ("label", "reason"),
     [
-        (None, "label is required: name the queue label you read on PROJ-1"),
-        # The tracker source read the ticket, so the label is checked against what it observed (D051).
+        # Left out, the label is taken from the observation, which carries none (D051).
+        (None, "PROJ-1 carried no queue label when the tracker source last read it, at "),
+        # Named, it is checked against what the tracker source observed.
         (
             "agent-ready-someone-else",
-            "'agent-ready-someone-else' was not on PROJ-1 when the tracker source last read it",
+            "'agent-ready-someone-else' was not on PROJ-1 when the tracker source last read it, at ",
         ),
     ],
 )
-def test_dispatch_without_a_configured_label_is_unauthorized(
+def test_dispatch_without_a_queue_label_observed_is_unauthorized(
     scenario: Scenario,
     treehouse_state: Path,
+    connector_state: Path,
     label: str | None,
     reason: str,
     kind: RunKind,
     mode: str,
 ) -> None:
-    # The overseer must name a queue label, and only one configured and observed on the ticket passes (D051).
+    # Only a queue label configured and observed on the ticket authorizes it (D051).
     conn = scenario.conn
+    if label is None:
+        tracker_unlabels(connector_state, "PROJ-1")
     db.touch_ticket(conn, "PROJ-1", str(scenario.env.root))
     conn.execute("UPDATE tickets SET branch = 'agent/PROJ-1-work' WHERE key = 'PROJ-1'")  # so a resume could
     reasons = [ResumeReason.CI] if kind == RunKind.RESUME else []
@@ -185,20 +190,32 @@ def test_dispatch_without_a_configured_label_is_unauthorized(
         dry_run=mode == "dry run",
     )
     assert action == "refused:unauthorized"
-    assert rationale.startswith(reason)
-    assert "agent-ready-tester" not in rationale  # the refusal never hands the overseer a label to copy
+    # It names when the source read the ticket, and never a configured label for the overseer to copy.
+    [read_at] = conn.execute("SELECT observed_at FROM observed_tickets WHERE key = 'PROJ-1'").fetchone()
+    assert rationale.startswith(f"{reason}{read_at}")
+    assert "agent-ready-tester" not in rationale
     assert not treehouse_state.exists()  # refused before leasing
     assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
 
 
+@pytest.mark.parametrize("mode", ["live", "dry run"])
+def test_a_dispatch_naming_no_label_takes_the_one_observed(scenario: Scenario, git_pool: GitPool, mode: str) -> None:
+    # The overseer need not copy the label: the harness takes it from the ticket's fresh observation, and records it.
+    ticked = scenario.tick(dispatches(label=None), dry_run=mode == "dry run")
+    assert ticked.actions == ["queried", "dispatch:implement"]
+    assert ticked.decisions[1].rationale.endswith("; label agent-ready-tester")
+
+
 def test_unauthorized_is_checked_before_the_other_guards(scenario: Scenario, treehouse_state: Path) -> None:
-    # No branch to continue, a slug a resume does not take, and a bad base: the missing label is still what is reported.
+    # No branch to continue, a slug a resume does not take, and a bad base: the label not observed is still what is
+    # reported.
     def resume(label: str | None) -> Called:
         return dispatches(kind=RunKind.RESUME, label=label, reasons=[ResumeReason.CI], slug="again", base="main")
 
-    assert [action for action, _ in scenario.refuses(resume(None))] == ["refused:unauthorized"]
-    # With the label, the next guard in line refuses instead.
+    assert [action for action, _ in scenario.refuses(resume("bug"))] == ["refused:unauthorized"]
+    # With the label observed, named or not, the next guard in line refuses instead.
     assert [action for action, _ in scenario.refuses(resume(LABEL))][-1] == "refused:bad_slug"
+    assert [action for action, _ in scenario.refuses(resume(None))][-1] == "refused:bad_slug"
     assert not treehouse_state.exists()
 
 

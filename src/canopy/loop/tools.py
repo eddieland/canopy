@@ -341,12 +341,12 @@ class Dispatch(Request):
             "on a unit's PR, before the resume that acts on it.",
         ),
     ]
-    #: The queue label read on the ticket just now; none for a ticket the operator started.
+    #: The queue label read on the ticket just now; left out, the one observed on it. None for a started ticket.
     label: Annotated[
         str | None,
         Field(
-            description="The configured queue label you read on the ticket just now. Required for a public ticket; "
-            "a ticket the operator started needs none.",
+            description="The configured queue label you read on the ticket just now, if you name one. Left out, the "
+            "harness takes it from the ticket's fresh observation; a ticket the operator started needs none.",
         ),
     ] = None
     #: The repositories the run works in, a unit each; several for a joint run.
@@ -463,8 +463,9 @@ def dispatch_run(ctx: Context, request: Dispatch) -> Outcome[Dispatched]:
     try:
         dispatch.check_kind(kind)
         _review_findings(ctx.conn, key, kind, repos, request.review_run)
-        # The claims, checked against what the connectors observed, before §8's other guards (DESIGN §35).
-        claims.check(
+        # The claims, checked against what the connectors observed, before §8's other guards (DESIGN §35); a label
+        # left out is the one observed on the ticket.
+        label = claims.check(
             ctx,
             tick_id,
             now,
@@ -484,7 +485,7 @@ def dispatch_run(ctx: Context, request: Dispatch) -> Outcome[Dispatched]:
                 tick_id=tick_id,
                 key=key,
                 kind=kind,
-                label=request.label,
+                label=label,
                 slug=request.slug,
                 base=request.base,
                 repos=repos,
@@ -499,7 +500,7 @@ def dispatch_run(ctx: Context, request: Dispatch) -> Outcome[Dispatched]:
                 tick_id=tick_id,
                 key=key,
                 kind=kind,
-                label=request.label,
+                label=label,
                 slug=request.slug,
                 base=request.base,
                 # With its default cursors, so the spawn moves what the block showed at the ask (DESIGN §37, §40).
@@ -574,7 +575,7 @@ def spawn_dispatch(ctx: Context, recorded: records.RecordedRun) -> None:
     try:
         review = _review_findings(ctx.conn, key, kind, repos, request.review_run)
         # The claims again too: an observation fresh at the ask may have aged past its bound since (DESIGN §35, §40).
-        claims.check(
+        label = claims.check(
             ctx,
             tick_id,
             datetime.now(UTC),
@@ -592,7 +593,7 @@ def spawn_dispatch(ctx: Context, recorded: records.RecordedRun) -> None:
             tick_id=tick_id,
             key=key,
             kind=kind,
-            label=request.label,
+            label=label,
             slug=request.slug,
             base=request.base,
             context=request.context,

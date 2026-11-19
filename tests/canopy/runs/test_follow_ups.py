@@ -21,6 +21,7 @@ from tests.canopy.helpers import (
     present,
     private_worker_does,
     ticket_sets,
+    tracker_unlabels,
     waits,
     worker_does,
 )
@@ -161,6 +162,7 @@ def test_a_follow_ups_runs_file_none(scenario: Scenario, git_pool: GitPool) -> N
 def test_a_follow_up_authorizes_nothing_and_canopy_tells_the_operator_once(
     scenario: Scenario,
     git_pool: GitPool,
+    connector_state: Path,
 ) -> None:
     takes_runs(scenario)
     run = scenario.run(worker=pushes(created={FOLLOW_UP: "repo", "PROJ-15": None}))
@@ -178,10 +180,11 @@ def test_a_follow_up_authorizes_nothing_and_canopy_tells_the_operator_once(
     scenario.tick(*waits(KEY))
     assert [(i.ticket_key, i.reason) for i in attention.current(scenario.conn)] == [(KEY, "unobserved_pr")]
     assert len(told(scenario)) == 1
-    # Nothing dispatches it without a label: it is a request.
-    assert scenario.refuses(dispatches(FOLLOW_UP, label=None)) == [
-        ("refused:unauthorized", f"label is required: name the queue label you read on {FOLLOW_UP}"),
-    ]
+    # Nothing dispatches it without a label: it is a request, filed with none.
+    tracker_unlabels(connector_state, FOLLOW_UP)
+    [(action, reason)] = scenario.refuses(dispatches(FOLLOW_UP, label=None))
+    assert action == "refused:unauthorized"
+    assert reason.startswith(f"{FOLLOW_UP} carried no queue label when the tracker source last read it")
 
 
 def test_a_run_that_files_nothing_tells_the_sinks_nothing(scenario: Scenario, git_pool: GitPool) -> None:
@@ -212,6 +215,7 @@ def test_the_event_names_at_most_its_bound_and_counts_the_rest(scenario: Scenari
 def test_a_private_run_records_its_follow_up_which_waits_for_the_operator(
     scenario: Scenario,
     git_pool: GitPool,
+    connector_state: Path,
 ) -> None:
     scenario.operator("start", KEY)
     result: dict[str, object] = {"status": "done", "summary": "did it", "created": {FOLLOW_UP: "repo"}}
@@ -227,6 +231,7 @@ def test_a_private_run_records_its_follow_up_which_waits_for_the_operator(
     # canopy starts nothing for it: no start record, so no private dispatch without the operator's start.
     assert conversation.start_of(scenario.conn, FOLLOW_UP) is None
     scenario.tick(*waits(KEY))
+    tracker_unlabels(connector_state, FOLLOW_UP)
     [(action, _)] = scenario.refuses(dispatches(FOLLOW_UP, label=None))
     assert action == "refused:unauthorized"
 
@@ -242,7 +247,8 @@ def test_a_private_run_records_its_follow_up_which_waits_for_the_operator(
     assert "canopy-worker-private" in str(worker["argv"])
 
 
-def test_a_ticket_no_run_recorded_still_needs_a_label(scenario: Scenario) -> None:
+def test_a_ticket_no_run_recorded_still_needs_a_label(scenario: Scenario, connector_state: Path) -> None:
+    tracker_unlabels(connector_state, FOLLOW_UP)
     [(action, _)] = scenario.refuses(dispatches(FOLLOW_UP, label=None))
     assert action == "refused:unauthorized"
 

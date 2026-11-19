@@ -261,10 +261,11 @@ such as a shipped migration, may still cite one, and git history has its text.
 - None offers any-tracker-via-MCP, never merging, no installed service, released worktrees, and a fresh overseer per tick
   (`PRIOR_ART.md`). Take lessons, not code.
 
-## D051. A dispatch names the queue label it relies on, and the worker checks it again
+## D051. A dispatch rests on a queue label the harness checks, and the worker checks it again
 
-- Where a `tracker` source observes the ticket, the label must be one it observed, checked in code (`unauthorized`,
-  DESIGN §7); without one, `--label` stays a claim. Either way the worker re-reads the labels and fails without changes.
+- Where a `tracker` source observes the ticket, a queue label must be among those it observed, checked in code
+  (`unauthorized`, DESIGN §7), and a dispatch that names none takes that one; without one, the label named stays a
+  claim. Either way the worker re-reads the labels and fails without changes.
 
 ## D053. State directories and snapshots must be private to the operator
 

@@ -214,10 +214,11 @@ that starts. What a dispatch claims of a public ticket's subjects a source obser
 block showed, checked in code before §8's other guards; a private ticket, which its start record authorizes (§22), and
 a subject no source observes keep their claims, checked again by the worker (D051). A refusal is a decision:
 
-- `unauthorized`: a `label` not observed on the ticket; a `resume` for `reply` covering no new authorized reply,
-  operator message, or artifact comment that is authority (§38); a `resume` for `review` covering no trusted
-  reviewer's item, nor the canopy review it names with `canopy:review` trusted, or covering anyone else's with no
-  operator message after it. With feedback plans on, §32's approval is the gate instead.
+- `unauthorized`: a ticket observed with no queue label, or a `label` not observed on it (a dispatch that names none
+  takes the one observed); a `resume` for `reply` covering no new authorized reply, operator message, or artifact
+  comment that is authority (§38); a `resume` for `review` covering no trusted reviewer's item, nor the canopy review it
+  names with `canopy:review` trusted, or covering anyone else's with no operator message after it. With feedback plans
+  on, §32's approval is the gate instead.
 - `unobserved`: a cursor naming no item observed for its subject, or passing one the block left out for its bound. A
   tick's `ticket-set` is checked so too, and moves no stale subject's cursor past what it already passed.
 - `stale`: the ticket, the PR of a unit a `resume` names, or a stacked dispatch's blocker's PR (§10), not observed

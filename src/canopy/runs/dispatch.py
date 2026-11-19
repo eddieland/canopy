@@ -564,7 +564,8 @@ def _plan(
     cursors: AbstractSet[str] = frozenset(),
 ) -> Plan:
     private = _check_start(ctx, key)
-    # A started ticket's start record authorizes it, checked in code; a public ticket's `label` is a claim (D051).
+    # A started ticket's start record authorizes it, checked in code; a public ticket's `label` is its queue label
+    # observed, by the claims (D051).
     configured = "" if private else _check_label(ctx.config.tracker.labels, key, label)
     starts = not private and _starts_privately(ctx, key)
     _check_reasons(kind, reasons, cursors, base=base)
@@ -681,10 +682,11 @@ def _starts_privately(ctx: Context, key: str) -> bool:
 def _check_label(labels: Sequence[str], key: str, label: str | None) -> str:
     """Refuse a dispatch that does not name one of the operator's queue labels (DESIGN §8, D051).
 
-    canopy cannot read the tracker, so this cannot prove the label is on the ticket. It makes the overseer name the
-    label it read for every dispatch, a claim recorded with the decision, instead of a check it can skip. Labels match
-    case-insensitively, as GitHub's do; the configured spelling is returned. The refusal never lists the configured
-    labels, so an overseer cannot copy one from it without reading the ticket.
+    This holds the label to config; the claims check it against the tracker source's observation of the ticket first,
+    and give one the overseer left out from that observation (`loop.claims`), so it is a claim only where nothing
+    observes the ticket. It is recorded with the decision. Labels match case-insensitively, as GitHub's do; the
+    configured spelling is returned. The refusal never lists the configured labels, so an overseer cannot copy one from
+    it without reading the ticket.
 
     Returns:
         The configured label `label` names.
