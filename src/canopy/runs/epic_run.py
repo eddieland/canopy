@@ -38,7 +38,7 @@ from canopy.core import (
     sandboxing,
 )
 from canopy.core.config import render_command
-from canopy.core.vocab import RunStatus
+from canopy.core.vocab import PoolKind, RunStatus
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import logs, procs, stopping
 from canopy.runs import attachments, checkpoint, desks, epic_runs, epic_starts, tidy
@@ -184,7 +184,8 @@ def _work(ctx: Context, run: records.EpicRun, out: TextIO, log: logs.TickAdapter
     slots = epic_runs.slots_of(ctx.conn, run.id)
     trees = {slot.repo: Path(slot.slot_path) for slot in slots}
     for slot in slots:
-        checkpoint.check_out(checkpoint.Git(ctx.runner, Path(slot.slot_path), slot.repo), slot.base_branch)
+        git = checkpoint.Git(ctx.runner, Path(slot.slot_path), slot.repo)
+        checkpoint.check_out(git, slot.base_branch, fetched=slot.pool is PoolKind.CANOPY)
     replaced = epics.current_plan(ctx.conn, run.epic_id)
     desk_files = _desk_files(ctx, run, replaced)
     result, text = _run_agent(ctx, run, trees, out, log, desk_files=desk_files)

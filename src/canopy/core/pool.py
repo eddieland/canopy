@@ -278,7 +278,9 @@ class CanopyPool:
     def _lease(self, holder: str, *, base: str | None, fetch: bool, refuse_busy: bool) -> Lease:
         manifest = self._manifest_file()
         if fetch and self._git.ok(self.clone, "remote", "get-url", "origin"):
-            self._git.run(self.clone, "fetch", "--quiet", "origin", timeout=_FETCH_TIMEOUT_SECONDS)
+            # --prune: a run in the slot fetches nothing more (`checkpoint.check_out`), and a remote-tracking ref kept
+            # from an earlier fetch would hide a branch since deleted on origin.
+            self._git.run(self.clone, "fetch", "--quiet", "--prune", "origin", timeout=_FETCH_TIMEOUT_SECONDS)
         branch = self._resolve_base(base)
         commit = _commit(self._git, self.clone, branch)
         with self._locked():
