@@ -157,6 +157,10 @@ export function TranscriptPanel({
     // The search is the events' in order: By call keeps its own, whole.
     const query = callView ? null : findQueryOf(found)
     const words = query === null ? [] : [query]
+    // The rows catch up with the search typed behind the field (`found`), which on a long transcript takes a while:
+    // until they do, they are the last search's, dimmed, and the count says the next is still being searched.
+    const next = callView ? null : findQueryOf(typed)
+    const searching = next !== query
     // Bumped by All open, on or off: each call remounts open or closed, then toggles on its own. It wins over the
     // search it was made under; a new search opens the calls it finds again.
     const [opened, setOpened] = useState<{ open: boolean; round: number; query: string | null }>({
@@ -299,6 +303,7 @@ export function TranscriptPanel({
                                     onChange={setTyped}
                                     lines={query === null ? null : lines}
                                     rows={shown.length}
+                                    searching={searching && next !== null}
                                 />
                             )}
                         </div>
@@ -312,7 +317,7 @@ export function TranscriptPanel({
                             label="transcript rows"
                             // Most of the window, so a page of rows scrolls under the header, its counts, and its
                             // search.
-                            className="max-h-[max(24rem,80dvh)]"
+                            className={cn('max-h-[max(24rem,80dvh)] transition-opacity', searching && 'opacity-60')}
                             data-testid="transcript-scroll"
                         >
                             {callView ? (
@@ -421,18 +426,21 @@ function empty(transcript: Transcript, running: boolean): { short: string; reaso
 
 /**
  * The transcript's search field: a magnifier, the field, how many lines and rows hold the query once there is one,
- * and a clear button. Escape empties it.
+ * or `searching…` while the rows are still being searched for what was typed, so the last search's count never reads
+ * as the answer to this one, and a clear button. Escape empties it.
  */
 function Find({
     value,
     onChange,
     lines,
     rows,
+    searching,
 }: {
     value: string
     onChange: (value: string) => void
     lines: number | null
     rows: number
+    searching: boolean
 }) {
     return (
         <search className="ml-auto w-full @lg:w-72">
@@ -450,9 +458,11 @@ function Find({
                 onClear={() => onChange('')}
                 clearLabel="Clear the transcript's search"
                 end={
-                    lines !== null && (
+                    (searching || lines !== null) && (
                         <span className="shrink-0 readout text-xs text-muted-foreground" data-testid="transcript-found">
-                            {lines} {lines === 1 ? 'line' : 'lines'}, {rows} {rows === 1 ? 'row' : 'rows'}
+                            {searching || lines === null
+                                ? 'searching…'
+                                : `${lines} ${lines === 1 ? 'line' : 'lines'}, ${rows} ${rows === 1 ? 'row' : 'rows'}`}
                         </span>
                     )
                 }

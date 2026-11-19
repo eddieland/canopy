@@ -544,6 +544,33 @@ describe('TranscriptPanel', () => {
         expect(rows().getByText('I will read the failing test first.')).toBeDefined()
     })
 
+    it('says it is searching while the rows still hold the last search, never the last count', () => {
+        // The rows are drawn for `found` behind the field: until they catch up with `typed`, they are the last
+        // search's.
+        const view = { ...VIEW, typed: 'zebra', found: 'login' }
+        const { rerender } = render(
+            <TranscriptPanel transcript={transcript()} running={false} page="run" view={view} />,
+        )
+        expect(screen.getByTestId('transcript-found').textContent).toBe('searching…')
+        expect(call('npm test -- login').open).toBe(true)
+
+        rerender(
+            <TranscriptPanel transcript={transcript()} running={false} page="run" view={{ ...view, found: 'zebra' }} />,
+        )
+        expect(screen.getByTestId('transcript-found').textContent).toBe('0 lines, 0 rows')
+
+        // A space typed at either end searches for the same, so there is nothing to wait for.
+        rerender(
+            <TranscriptPanel
+                transcript={transcript()}
+                running={false}
+                page="run"
+                view={{ ...view, typed: 'login ' }}
+            />,
+        )
+        expect(screen.getByTestId('transcript-found').textContent).toBe('5 lines, 2 rows')
+    })
+
     it('opens and closes every call with All open, over what a search opened, until a new search', () => {
         render(<TranscriptPanel transcript={transcript()} running={false} page="run" />)
         expect(call('npm test -- login').open).toBe(false)
