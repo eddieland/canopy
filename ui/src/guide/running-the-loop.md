@@ -132,7 +132,10 @@ for good. Nor does it delete a branch.
 - `--vacuum`: gives the journal's free pages back to the disk, while no tick or run is going and there's room for a
   copy of the journal.
 - `--git`: packs each primary clone's loose objects and small packs, pruning nothing, skipping a repository while a
-  slot of its pool is leased.
+  slot of its pool is leased. A partial clone, one made with `git clone --filter`, gets its loose objects packed and
+  its packs left alone: git's pack-combining strips the mark that says the blobs it never fetched are on `origin`,
+  and `git fsck` then calls the clone broken. Its lazily fetched packs pile up instead, which is the cheaper of the
+  two problems.
 - `--caches`: empties each sandbox role's cache that no live run is using.
 
 You rarely need `--git`: a live tick runs the same steps on its own in a clone whose pool is idle, once git counts more

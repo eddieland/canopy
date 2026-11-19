@@ -27,7 +27,12 @@ _SIZE_WIDTH: Final = 11
 @click.option("--dry-run", is_flag=True, help="Report what a pass would remove, and remove nothing.")
 @click.option("--json", "as_json", is_flag=True, help="Print the dry run's report as one JSON object instead.")
 @click.option("--vacuum", "vacuum_journal", is_flag=True, help="Give the journal's free pages back to its disk.")
-@click.option("--git", "git_objects", is_flag=True, help="Pack the primary clones' loose objects and small packs.")
+@click.option(
+    "--git",
+    "git_objects",
+    is_flag=True,
+    help="Pack the primary clones' loose objects and small packs, a partial clone's packs excepted.",
+)
 @click.option("--caches", "sandbox_caches", is_flag=True, help="Empty each sandbox role's cache no live run uses.")
 @click.pass_context
 def cmd_gc(
@@ -47,9 +52,10 @@ def cmd_gc(
     notes and proposals out of force the report counts, and rotates canopy.log. By hand, `--dry-run` removes nothing,
     and `--vacuum` shrinks the journal by its free pages: it runs only while no tick is running and no run is live,
     and when the disk has room for a copy of the journal.
-    `--git` packs each primary clone's loose objects and combines its small packs, pruning nothing, and skips a
-    repository while a slot of its pool is leased; a dispatch waits for it (ROADMAP M47). `--caches` empties each
-    sandbox role's cache under `$XDG_CACHE_HOME/canopy/sandbox/`, skipping one while a run of its role is live.
+    `--git` packs each primary clone's loose objects and combines its small packs, a partial clone's excepted, pruning
+    nothing, and skips a repository while a slot of its pool is leased; a dispatch waits for it (ROADMAP M47).
+    `--caches` empties each sandbox role's cache under `$XDG_CACHE_HOME/canopy/sandbox/`, skipping one while a run of
+    its role is live.
 
     Raises:
         UsageError: not exactly one of `--dry-run`, `--vacuum`, `--git`, and `--caches` is given.
