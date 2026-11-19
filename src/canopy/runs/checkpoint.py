@@ -160,7 +160,8 @@ def ensure_pushed(git: Git, branch: str, start: Start, log: logs.TickAdapter, *,
     """Check the checkpoint invariant: the branch on origin is the slot's HEAD. Push HEAD to it once if it is not.
 
     Detached, HEAD is the only thing holding the agent's commits, so an agent that moved it off them leaves them
-    behind: that is unpushed too. With `rebase` (`trust.rebase`), the push may replace the branch, but only if origin
+    behind: that is unpushed too, unless a commit on origin holds their work, as a squash or rebase it pushed does
+    (`_left_behind`). With `rebase` (`trust.rebase`), the push may replace the branch, but only if origin
     still has it where the run started: a worker that rebased and did not push loses nothing anyone else pushed. A
     task's run passes it False whatever `trust.rebase` says (DESIGN §36): its push only ever adds commits.
 

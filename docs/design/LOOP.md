@@ -312,7 +312,8 @@ run. A `plan` writes the ticket's plan before its first `implement`, with guards
 4. Read the result the agent reported with its `result` call (§13); none is `unknown`. A plan (§25) pushes nothing.
 5. If a slot's git links changed, the run is `crashed` and no git runs in its slots, which may now point at a git
    directory the worker made. Otherwise push once where the branch is not on origin, never with force (with
-   `trust.rebase`, leasing what origin held at step 2). A failed push or commits on no pushed branch is `unpushed`.
+   `trust.rebase`, leasing what origin held at step 2). A failed push, or a commit the worker made whose change no
+   commit on origin holds, is `unpushed`; a commit squashed or rebased into one that was pushed is not.
    Then what the run changed in each slot is recorded and its diffs kept (§45).
    A `resume` for `ci` that left a check flaky and pushed nothing may then be kicked (§23).
 6. Always tidy and return each slot, except after SIGKILL, which reconcile handles (§6 step 3); an untidy one is kept.
