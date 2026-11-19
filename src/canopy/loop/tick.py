@@ -63,6 +63,7 @@ from canopy.loop import (
     mcp,
     observations,
     phases,
+    relabel,
     requested_reviews,
     spawns,
     state,
@@ -332,6 +333,7 @@ def _render(
         ),
         units=units,
         last_runs=last_runs,
+        relabeled=relabel.lifted(ctx.conn, frozenset(ctx.config.tracker.labels), last_runs),
         run_slots=db.all_run_slots(ctx.conn, shown),
         run_reasons=db.run_reasons(ctx.conn, shown),
         attempts=policy.attempts(ctx.conn),
@@ -920,7 +922,7 @@ def _record_harness_items(ctx: Context, tick_id: int, archive_unpushed: str | No
 
     `archive_unpushed` is what this tick's archive pass found not pushed, if anything (DESIGN §25).
     """
-    for item in attention.from_runs(ctx.conn):
+    for item in attention.from_runs(ctx.conn, labels=frozenset(ctx.config.tracker.labels)):
         _harness_item(ctx, tick_id, item.ticket_key, item.reason, item.detail)
     # A private ticket's question reaches the operator here: it is on no tracker (DESIGN §22). So does a planner's on a
     # public ticket, since the planner writes nothing to the ticket (DESIGN §25).

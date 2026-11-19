@@ -54,7 +54,7 @@ from canopy.core.items import ACTION_PREFIX, Item, age, fingerprint, one_line, s
 from canopy.core.vocab import Decider, RunKind, RunStatus, TickStatus
 from canopy.infra import logs
 from canopy.infra.text import printable
-from canopy.loop import archive
+from canopy.loop import archive, relabel
 from canopy.notify import deliver
 from canopy.reviews import impact as review_impact
 from canopy.reviews import waiting as review_waiting
@@ -593,20 +593,23 @@ class RunItem:
     detail: str
 
 
-def from_runs(conn: sqlite3.Connection) -> list[RunItem]:
+def from_runs(conn: sqlite3.Connection, *, labels: AbstractSet[str] = frozenset()) -> list[RunItem]:
     """Return an item for each open ticket whose latest run ended in a status that raises a `run_reason`.
 
     The cause holds until a newer run starts for the ticket, the ticket is marked done, or the operator forgets its
     work. It is set aside while the operator has stopped the ticket, which nothing dispatches, so no reply could answer
     it, and holds again once they start it (DESIGN §14, §22). An old triage raises none, however it ended: the ticket
-    is planned next (M55).
+    is planned next (M55). Nor does a run that found its ticket not authorized once a queue label in `labels`, the
+    tracker's, was observed added to it since (`relabel`); with none given, none lifts it.
     """
     done = {str(r[0]) for r in sql.execute(conn, sql.select("key").from_("tickets").where("done = 1"))}
     stopped = set(conversation.stopped(conn))
+    latest = db.latest_runs(conn)
+    relabeled = relabel.lifted(conn, labels, latest)
     items: list[RunItem] = []
-    for key, run in sorted(db.latest_runs(conn).items()):
+    for key, run in sorted(latest.items()):
         reason = run_reason(run.status)
-        if reason is None or key in done or key in stopped or run.kind == RunKind.NEEDS_PLAN:
+        if reason is None or key in done or key in stopped or key in relabeled or run.kind == RunKind.NEEDS_PLAN:
             continue
         items.append(RunItem(key, reason, _detail(run)))
     return items
