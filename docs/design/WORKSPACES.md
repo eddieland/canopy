@@ -81,10 +81,7 @@ never clones or changes a remote: a mapped repository with no clone is attention
 dispatched to. `canopy workspace sync` clones it, with credential prompts and git's `ext::` transport off, and never
 changes an `origin` that differs from the map. It fetches each clone already there and fast-forwards its default branch
 when that is checked out, clean, and behind; the checkout is the operator's, since runs start in slots, so a clone on
-another branch or with work of its own is left as it is. A repository's `clone_filter` opts its clone into a partial
-one, for a large repository: git fetches a missing object from `origin` when it needs it, but the reviewer's and
-planner's git tools fetch nothing (§27), so their reads of history the clone lacks fail. A clone already there keeps
-how it was made. A state directory that is a symlink, someone else's, or open
+another branch or with work of its own is left as it is. A state directory that is a symlink, someone else's, or open
 to others stops every command until removed (D053).
 
 ### Declared repositories and slots
