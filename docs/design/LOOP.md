@@ -67,7 +67,8 @@ in order:
 
    In a dry run (D036), dispatch checks the live guards (§8) and starts nothing, no cursor advances, and nothing is
    marked done. What the overseer writes is rendered into a later prompt, so its tools validate its keys, verbs,
-   reasons, phases (§7), and cursor ids, and bounds its free text.
+   reasons, phases (§7), and cursor ids, and bounds its free text. A dry run by hand may name the model its overseer
+   runs on, to try one; a live tick's is always the one config chooses (§13).
 6. Close the tick with a summary.
 7. **Publish attention** (§14): rewrite `attention.md` from the journal, then deliver to each notification sink (§20)
    what changed since it last heard. This follows the close because the list is the latest `ok` tick's. A failure here

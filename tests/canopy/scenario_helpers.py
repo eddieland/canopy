@@ -586,6 +586,7 @@ class Scenario:
         worker: Worker | None = None,
         workers: Mapping[str, Script] | None = None,
         dry_run: bool = False,
+        model: str | None = None,
         hold: bool = False,
         code: int = 0,
         result: str = TICK_DONE,
@@ -599,13 +600,16 @@ class Scenario:
         Each run's worker does `worker`, the fake's default `done` if None, or what `workers` gives for its ticket: a
         script each ticket's run plays as made for that ticket, so `pushes()` pushes the branch of the ticket it runs
         for. With `hold`, each is held at work instead, and the tick's runs are left `working` for the test to finish
-        or kill. The overseer ends on `result`, by default the line that ends a tick, and runs as `overseer` says
-        (`exit_code`, `says`, ...). The tick must exit `code`, and a failure says how it ended instead.
+        or kill. With `model`, the tick is `canopy tick --model`, its overseer on that model. The overseer ends on
+        `result`, by default the line that ends a tick, and runs as `overseer` says (`exit_code`, `says`, ...). The
+        tick must exit `code`, and a failure says how it ended instead.
 
         Returns:
             What the tick did.
         """
         argv = ["tick", "--dry-run"] if dry_run else ["tick"]
+        if model is not None:
+            argv += ["--model", model]
         with ExitStack() as stack:
             stack.enter_context(overseer_does(*moves, result=result, **overseer))
             if worker is not None:

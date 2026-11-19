@@ -717,6 +717,38 @@ def test_an_overseers_model_the_runtime_does_not_list_closes_the_tick_without_it
     assert [t.tick.model for t in (*halted, failed)] == [None] * 3
 
 
+def test_a_dry_run_tries_the_overseer_on_another_model_and_leaves_config_alone(
+    scenario: Scenario,
+    opencode_state: Path,
+) -> None:
+    """`canopy tick --dry-run --model` runs one tick's overseer on that model, recorded on the tick (DESIGN §6)."""
+    chosen, tried = "acme/fake-model-1", "acme/fake-model-2@high"
+    listed(opencode_state, chosen, "acme/fake-model-2", variants={"acme/fake-model-2": ["high"]})
+    scenario.configures(runtime={"models": {"overseer": chosen}})
+
+    trial = scenario.tick(*waits(KEY), dry_run=True, model=tried)
+    assert (trial.tick.status, trial.tick.dry_run, trial.tick.model) == (TickStatus.OK, 1, tried)
+    assert [d.action for d in trial.decisions if d.ticket_key == KEY] == ["wait"]
+    # The next tick is on the model config chooses, as before.
+    assert scenario.tick(*waits(KEY), dry_run=True).tick.model == chosen
+
+
+def test_a_model_a_tick_cannot_try_starts_no_tick(scenario: Scenario, opencode_state: Path) -> None:
+    """A model the runtime does not list, or a live tick, is refused before a tick starts or an item is raised."""
+    listed(opencode_state, "acme/fake-model-1")
+
+    unlisted = scenario.operator("tick", "--dry-run", "--model", "acme/fake-model-2", code=1)
+    assert unlisted.err.startswith(
+        "Error: tick refused: model_missing: OpenCode does not list the model acme/fake-model-2 chosen by --model",
+    )
+    assert "not-a-model" in scenario.operator("tick", "--dry-run", "--model", "not-a-model", code=1).err
+    assert "--model needs --dry-run" in scenario.operator("tick", "--model", "acme/fake-model-1", code=2).err
+
+    assert scenario.conn.execute("SELECT count(*) FROM ticks").fetchone()[0] == 0
+    assert scenario.attention() == []
+    assert not scenario.agent_log.exists()
+
+
 def test_busy_lock_exits_zero_without_a_tick(
     canopy_env: CanopyEnv,
     treehouse_state: Path,

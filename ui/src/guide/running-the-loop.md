@@ -93,8 +93,10 @@ grows until you empty it (`: > .canopy/daemon.log` is safe while it runs).
 
 `canopy tick` runs one tick and prints how it ended and what it cost. `canopy tick --dry-run` runs the overseer and
 dispatches nothing, and `canopy decisions` then prints what it decided. That's the cheapest way to find out what the
-loop would do without letting it. A hand tick fits between a running loop's ticks; while a tick or a poll holds the
-lock, yours says `lock_busy` and does nothing.
+loop would do without letting it. Add `--model provider/model` to a dry run to see what the overseer would decide on
+a model other than the one `runtime.models` chooses: the tick records that model, and your config stays as it was. A
+model the runtime doesn't list is refused before any tick starts. A hand tick fits between a running loop's ticks;
+while a tick or a poll holds the lock, yours says `lock_busy` and does nothing.
 
 ## Pausing
 
