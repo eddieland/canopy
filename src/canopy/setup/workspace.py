@@ -242,6 +242,9 @@ def missing(ws: workspace.Workspace) -> list[workspace.Repo]:
 def clone(runner: procs.Runner, ws: workspace.Workspace, repo: workspace.Repo) -> Checked:
     """Clone `repo` from the map's URL into `repos/<name>`.
 
+    A clone that fails, times out, or is interrupted leaves nothing at `repos/<name>`: git killed at the timeout leaves
+    a `.git` behind, which the next sync would take for a finished clone (`Repo.cloned`) and fetch into.
+
     Returns:
         `cloned`, or `failed` with why: something not a clone is in the way, or git could not clone it.
     """
@@ -252,12 +255,23 @@ def clone(runner: procs.Runner, ws: workspace.Workspace, repo: workspace.Repo) -
     try:
         result = runner.run(args, cwd=ws.root, env=hostgit.ENV, timeout=_CLONE_TIMEOUT_SECONDS)
     except procs.ProcError as e:
+        _remove_partial_clone(repo.path)
         return Checked(repo, "failed", str(e))
+    except BaseException:
+        _remove_partial_clone(repo.path)
+        raise
     if not result.ok:
+        _remove_partial_clone(repo.path)
         status = "timed out" if result.timed_out else f"exited {result.returncode}"
         output = (result.stderr.strip() or result.stdout.strip()).replace(str(repo.url), shown(str(repo.url)))
-        return Checked(repo, "failed", f"git clone {status}: {output[:500]}")
+        return Checked(repo, "failed", f"git clone {status}: {output[:500]}" if output else f"git clone {status}")
     return Checked(repo, "cloned")
+
+
+def _remove_partial_clone(path: Path) -> None:
+    """Remove what a clone that did not finish left at `path`, which was missing or empty before it started."""
+    if path.is_dir() and not path.is_symlink():
+        shutil.rmtree(path, ignore_errors=True)
 
 
 def check_origin(runner: procs.Runner, repo: workspace.Repo) -> Checked:
