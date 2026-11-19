@@ -323,19 +323,28 @@ def test_sync_waits_for_a_running_tick(
     declare(canopy_env, "slots_per_repo = 1")
     set_slots(treehouse_state, ws, "api", "available")
     ws.journal()
-    held = threading.Event()
+    held, waiting = threading.Event(), threading.Event()
+    hold = lock.hold
 
     def tick() -> None:
-        with lock.hold(ws.state_dir / lock.LOCK_FILE_NAME):
+        # Held until sync has found the lock busy and waits for it, however long sync takes to get there.
+        with hold(ws.state_dir / lock.LOCK_FILE_NAME):
             held.set()
-            threading.Event().wait(0.5)
+            waiting.wait(timeout=60)
+
+    def waits(path: Path, *, wait: bool = False) -> contextlib.AbstractContextManager[None]:
+        if wait:
+            waiting.set()
+        return hold(path, wait=wait)
 
     thread = threading.Thread(target=tick)
     thread.start()
     held.wait()
     try:
-        assert main(["workspace", "sync"]) == 0
+        with mock.patch.object(lock, "hold", autospec=True, side_effect=waits):
+            assert main(["workspace", "sync"]) == 0
     finally:
+        waiting.set()
         thread.join()
     assert "A tick is running; sync starts when it ends.\n" in capsys.readouterr().out
 

@@ -142,6 +142,7 @@ def cmd_tick(click_ctx: click.Context, *, dry_run: bool, model: str | None) -> i
         raise click.UsageError("--model needs --dry-run: a live tick's overseer runs on the model in runtime.models")
     ctx = open_context(click_ctx, migrate=False)
     if model is not None:
+        # Looked up here, before a tick exists, and again by the tick's own check, as any tick's model is.
         try:
             ctx = tick.on_model(ctx, model)
         except tick.ModelRefused as e:
