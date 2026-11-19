@@ -1362,6 +1362,28 @@ def blocked_result() -> dict[str, object]:
     }
 
 
+def branch_behind_main(git_pool: GitPool, branch: str = "agent/PROJ-1-work") -> None:
+    """Put `branch` on origin with two commits of its own, and then a commit on `main` it lacks."""
+    seed = git_pool.slots[1]
+    git("checkout", "--quiet", "-b", branch, "origin/main", cwd=seed)
+    for name in ("a", "b"):
+        (seed / f"{name}.txt").write_text(f"{name}\n")
+        git("add", f"{name}.txt", cwd=seed)
+        git("commit", "--quiet", "-m", f"PROJ-1: {name}", cwd=seed)
+    git("push", "--quiet", "origin", branch, cwd=seed)
+    git("checkout", "--quiet", "--detach", "origin/main", cwd=seed)
+    (seed / "m.txt").write_text("m\n")
+    git("add", "m.txt", cwd=seed)
+    git("commit", "--quiet", "-m", "main moves on", cwd=seed)
+    git("push", "--quiet", "origin", "HEAD:refs/heads/main", cwd=seed)
+    git("checkout", "--quiet", "--detach", cwd=seed)
+
+
+def commit_file(name: str) -> list[str]:
+    """The worker's commit that adds `NAME.txt`, holding its name, as `PROJ-1: NAME`."""
+    return ["sh", "-c", f"echo {name} > {name}.txt && git add {name}.txt && git commit --quiet -m 'PROJ-1: {name}'"]
+
+
 def commit_and_push(branch: str, message: str = "PROJ-1: the change") -> list[list[str]]:
     """The commands a worker runs to commit and push `branch`."""
     return [

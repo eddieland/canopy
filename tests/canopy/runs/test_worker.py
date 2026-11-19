@@ -27,8 +27,10 @@ from canopy.runtime import servers
 from tests.canopy.helpers import (
     InlineRunner,
     agent_runs,
+    branch_behind_main,
     calls,
     commit_and_push,
+    commit_file,
     has_deadline,
     inline_servers,
     pool,
@@ -279,27 +281,6 @@ def test_a_worker_that_pushed_and_then_moved_head_is_done(scenario: Scenario, gi
     assert git_pool.remote_head("agent/PROJ-1-work") != git_pool.remote_head("main")
 
 
-def branch_behind_main(git_pool: GitPool, branch: str = "agent/PROJ-1-work") -> None:
-    """Put `branch` on origin with two commits of its own, and then a commit on `main` it lacks."""
-    seed = git_pool.slots[1]
-    git("checkout", "--quiet", "-b", branch, "origin/main", cwd=seed)
-    for name in ("a", "b"):
-        (seed / f"{name}.txt").write_text(f"{name}\n")
-        git("add", f"{name}.txt", cwd=seed)
-        git("commit", "--quiet", "-m", f"PROJ-1: {name}", cwd=seed)
-    git("push", "--quiet", "origin", branch, cwd=seed)
-    git("checkout", "--quiet", "--detach", "origin/main", cwd=seed)
-    (seed / "m.txt").write_text("m\n")
-    git("add", "m.txt", cwd=seed)
-    git("commit", "--quiet", "-m", "main moves on", cwd=seed)
-    git("push", "--quiet", "origin", "HEAD:refs/heads/main", cwd=seed)
-    git("checkout", "--quiet", "--detach", cwd=seed)
-
-
-def commit_file(name: str) -> list[str]:
-    return ["sh", "-c", f"echo {name} > {name}.txt && git add {name}.txt && git commit --quiet -m 'PROJ-1: {name}'"]
-
-
 def test_a_rebase_dropped_for_the_same_work_pushed_another_way_is_done(scenario: Scenario, git_pool: GitPool) -> None:
     """Issue #293: the worker rebased, could not force-push, and pushed a fix on top of origin's branch instead."""
     branch_behind_main(git_pool)
@@ -314,22 +295,6 @@ def test_a_rebase_dropped_for_the_same_work_pushed_another_way_is_done(scenario:
     assert run.status == "done", run.row["result_json"]
     slot = Path(slot_of(scenario.conn, run.id).slot_path)
     assert git_pool.remote_head("agent/PROJ-1-work") == git("rev-parse", "HEAD", cwd=slot)
-
-
-def test_a_rebase_dropped_with_work_of_its_own_is_unpushed(scenario: Scenario, git_pool: GitPool) -> None:
-    """Only a commit whose change origin already has is dropped from the check: new work left behind still counts."""
-    branch_behind_main(git_pool)
-    run = scenario.run(
-        worker=worker_does(
-            ["git", "rebase", "--quiet", "origin/main"],
-            commit_file("lost"),
-            ["git", "checkout", "--quiet", "--detach", "origin/agent/PROJ-1-work"],
-            commit_file("fix"),
-            ["git", "push", "--quiet", "origin", "HEAD:refs/heads/agent/PROJ-1-work"],
-        ),
-    )
-    assert run.status == "unpushed"
-    assert "the worker moved HEAD off 1 commit(s) not on origin" in json.loads(run.row["result_json"])["harness"]
 
 
 def test_a_rebase_aborted_and_made_again_leaves_nothing_behind(scenario: Scenario, git_pool: GitPool) -> None:
@@ -372,134 +337,6 @@ def test_with_rebase_a_worker_that_rebased_and_squashed_is_done(scenario: Scenar
     assert run.status == "done", run.row["result_json"]
     slot = Path(slot_of(scenario.conn, run.id).slot_path)
     assert git_pool.remote_head("agent/PROJ-1-work") == git("rev-parse", "HEAD", cwd=slot)
-
-
-def test_a_squash_that_dropped_a_commit_is_unpushed(scenario: Scenario, git_pool: GitPool) -> None:
-    """A commit the squash replaced does not cover the commits under it when the squash lacks one of their changes.
-
-    `a`'s copy is reported with `lost`: only `fix` builds on it with `a`'s file as the squash has it.
-    """
-    scenario.configures(trust={"rebase": True})
-    branch_behind_main(git_pool)
-    squash_without_lost = (
-        "git reset --quiet --soft origin/main && git rm --quiet --cached lost.txt && "
-        "git commit --quiet -m 'PROJ-1: squashed'"
-    )
-    run = scenario.run(
-        worker=worker_does(
-            ["git", "rebase", "--quiet", "origin/main"],
-            commit_file("lost"),
-            ["sh", "-c", "echo fix > a.txt && git commit --quiet -am 'PROJ-1: fix'"],
-            ["sh", "-c", squash_without_lost],
-            ["git", "push", "--quiet", "--force-with-lease", "origin", "HEAD:refs/heads/agent/PROJ-1-work"],
-        ),
-    )
-    assert run.status == "unpushed"
-    assert "the worker moved HEAD off 2 commit(s) not on origin" in json.loads(run.row["result_json"])["harness"]
-
-
-#: The worker's push that replaces the branch, as one that squashed or rebased it makes.
-FORCE_PUSH: Final = ["git", "push", "--quiet", "--force-with-lease", "origin", "HEAD:refs/heads/agent/PROJ-1-work"]
-#: The worker's commit of its own that changes `a.txt` again.
-CHANGE_AGAIN: Final = ["sh", "-c", "echo again > a.txt && git commit --quiet -am 'PROJ-1: again'"]
-#: The worker's squash of the branch into one commit on `main`.
-SQUASH: Final = ["sh", "-c", "git reset --quiet --soft origin/main && git commit --quiet -m 'PROJ-1: squashed'"]
-#: The worker's autosquash of the branch onto `main`, which folds each fixup into its target.
-AUTOSQUASH: Final = ["sh", "-c", "GIT_SEQUENCE_EDITOR=: git rebase --quiet -i --autosquash origin/main"]
-
-
-def test_a_squash_pushed_and_changed_again_is_done(scenario: Scenario, git_pool: GitPool) -> None:
-    """Issue #2447: the squash, and then a commit changing a line it holds, were pushed: no commit holds `a` as it was.
-
-    The squash, an earlier commit on origin's branch, holds all the work of the commits it replaced.
-    """
-    scenario.configures(trust={"rebase": True})
-    run = scenario.run(
-        worker=worker_does(
-            commit_file("a"),
-            commit_file("b"),
-            FORCE_PUSH,
-            SQUASH,
-            FORCE_PUSH,
-            CHANGE_AGAIN,
-            FORCE_PUSH,
-        ),
-    )
-    assert run.status == "done", run.row["result_json"]
-
-
-def test_fixups_folded_and_changed_again_are_done(scenario: Scenario, git_pool: GitPool) -> None:
-    """Issue #2447: fixups folded into their target by an autosquash, and a line they changed changed again later."""
-    scenario.configures(trust={"rebase": True})
-    run = scenario.run(
-        worker=worker_does(
-            commit_file("a"),
-            commit_file("b"),
-            ["sh", "-c", "echo a2 > a.txt && git commit --quiet -am 'fixup! PROJ-1: a'"],
-            FORCE_PUSH,
-            AUTOSQUASH,
-            FORCE_PUSH,
-            CHANGE_AGAIN,
-            FORCE_PUSH,
-        ),
-    )
-    assert run.status == "done", run.row["result_json"]
-
-
-def test_fixups_folded_onto_a_moved_base_and_changed_again_are_done(scenario: Scenario, git_pool: GitPool) -> None:
-    """Issue #2447: the autosquash rebased the branch onto `main`, which moved, copying `a` before folding into it."""
-    scenario.configures(trust={"rebase": True})
-    branch_behind_main(git_pool)
-    run = scenario.run(
-        worker=worker_does(
-            ["sh", "-c", "echo a2 > a.txt && git commit --quiet -am 'fixup! PROJ-1: a'"],
-            AUTOSQUASH,
-            FORCE_PUSH,
-            CHANGE_AGAIN,
-            FORCE_PUSH,
-        ),
-    )
-    assert run.status == "done", run.row["result_json"]
-
-
-def test_a_squash_onto_a_moved_base_changed_again_is_done(scenario: Scenario, git_pool: GitPool) -> None:
-    """Issue #2447: the worker's commits, rebased onto `main` and squashed with the branch, and then changed again."""
-    scenario.configures(trust={"rebase": True})
-    branch_behind_main(git_pool)
-    run = scenario.run(
-        worker=worker_does(
-            commit_file("c"),
-            ["sh", "-c", "echo c2 > c.txt && git commit --quiet -am 'PROJ-1: c again'"],
-            ["git", "rebase", "--quiet", "origin/main"],
-            SQUASH,
-            FORCE_PUSH,
-            ["sh", "-c", "echo c3 > c.txt && git commit --quiet -am 'PROJ-1: c once more'"],
-            FORCE_PUSH,
-        ),
-    )
-    assert run.status == "done", run.row["result_json"]
-
-
-def test_a_squash_that_dropped_a_commit_and_changed_again_is_unpushed(scenario: Scenario, git_pool: GitPool) -> None:
-    """A commit whose work no commit on origin's branch holds is lost, however the rest of the work went up."""
-    scenario.configures(trust={"rebase": True})
-    squash_without_lost = (
-        "git reset --quiet --soft origin/main && git rm --quiet --cached lost.txt && "
-        "git commit --quiet -m 'PROJ-1: squashed'"
-    )
-    run = scenario.run(
-        worker=worker_does(
-            commit_file("a"),
-            commit_file("lost"),
-            FORCE_PUSH,
-            ["sh", "-c", squash_without_lost],
-            FORCE_PUSH,
-            CHANGE_AGAIN,
-            FORCE_PUSH,
-        ),
-    )
-    assert run.status == "unpushed"
-    assert "the worker moved HEAD off 1 commit(s) not on origin" in json.loads(run.row["result_json"])["harness"]
 
 
 def test_without_rebase_a_rebased_branch_is_never_forced(scenario: Scenario, git_pool: GitPool) -> None:
