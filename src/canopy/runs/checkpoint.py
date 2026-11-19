@@ -15,13 +15,15 @@ from canopy.core.config import AUTOSQUASH
 from canopy.infra import procs
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Collection, Iterable, Mapping, Sequence
 
     from canopy.infra import logs
 
 _GIT_TIMEOUT_SECONDS: Final = 300
 #: The most commits a note names that lack one of canopy's marks; it counts the rest.
 _MAX_NAMED: Final = 5
+#: The most of origin's commits since the start that `_held` merges a commit left behind into.
+_MAX_FOLDS: Final = 20
 
 
 class SetupError(Exception):
@@ -158,7 +160,8 @@ def ensure_pushed(git: Git, branch: str, start: Start, log: logs.TickAdapter, *,
     """Check the checkpoint invariant: the branch on origin is the slot's HEAD. Push HEAD to it once if it is not.
 
     Detached, HEAD is the only thing holding the agent's commits, so an agent that moved it off them leaves them
-    behind: that is unpushed too. With `rebase` (`trust.rebase`), the push may replace the branch, but only if origin
+    behind: that is unpushed too, unless a commit on origin holds their work, as a squash or rebase it pushed does
+    (`_left_behind`). With `rebase` (`trust.rebase`), the push may replace the branch, but only if origin
     still has it where the run started: a worker that rebased and did not push loses nothing anyone else pushed. A
     task's run passes it False whatever `trust.rebase` says (DESIGN §36): its push only ever adds commits.
 
@@ -410,7 +413,9 @@ def _left_behind(git: Git, branch: str, start: Start, remote: str) -> list[str]:
     pushed the same work another way left nothing behind; one that rebased and pushed with a lease (`trust.rebase`)
     replaced the commits origin had, which were pushed before the run; one that aborted a rebase and made it again left
     the first attempt's copies of commits the second one pushed; and one that squashed its commits left each one's
-    copy, whose change a later commit may have changed again, under the last one, whose work the squash holds.
+    copy, whose change a later commit may have changed again, under the last one, whose work the squash holds. Last,
+    a commit whose work one of origin's commits since the start holds, though a later one changed it again, was pushed
+    too (`_folded`).
 
     Read from HEAD's reflog, the slot's own, so a worker that cleared it hides what it left; this catches a worker that
     checked something else out, not one that tried to hide its work.
@@ -434,7 +439,8 @@ def _left_behind(git: Git, branch: str, start: Start, remote: str) -> list[str]:
     if not lost:
         return []
     whole = [commit for commit in left if _holds_all(git, commit, remote, tree)]
-    return [c for c in lost if not any(git.ok("merge-base", "--is-ancestor", c, later) for later in whole)]
+    lost = [c for c in lost if not any(git.ok("merge-base", "--is-ancestor", c, later) for later in whole)]
+    return _folded(git, branch, start, remote, left=left, lost=lost) if lost else []
 
 
 def _holds_all(git: Git, commit: str, remote: str, tree: str) -> bool:
@@ -469,3 +475,87 @@ def _on_origin(git: Git, commit: str, remote: str, tree: str) -> bool:
     # `-` marks a commit of `commit^..commit` whose patch one of `remote`'s commits that `commit` lacks has too.
     cherry = git.result("cherry", remote, commit, f"{commit}^")
     return cherry.ok and cherry.stdout.split()[:1] == ["-"]
+
+
+def _folded(
+    git: Git,
+    branch: str,
+    start: Start,
+    remote: str,
+    *,
+    left: Sequence[str],
+    lost: Sequence[str],
+) -> list[str]:
+    """Return the commits of `lost` whose work none of the commits origin's `branch` gained since the start holds.
+
+    A squash or an autosquash folds several commits into one, and a later commit may change again a line it holds: no
+    commit on origin then has any one folded commit's change, and origin's head lacks the line as they left it, but the
+    fold holds their work (issue #2447). So a commit is pushed when one of the branch's commits since the start,
+    `remote` or one under it, holds its change, or that and the changes of the commits of `left` that build on it,
+    together. The change counted is the commit's own or that of a commit with the same patch origin's branch held at
+    the start, since an autosquash onto a moved base copies a commit before it folds a fixup into the copy. The test is
+    `_holds_all`'s, a three-way merge, on the commit's first parent: a change counts only when a commit holds it whole.
+
+    Returns:
+        The commits of `lost` whose work no such commit holds, in their order.
+    """
+    since = _since_start(git, branch, start, remote)
+    if not since:
+        return list(lost)
+    tips = [c for c in left if not any(o != c and git.ok("merge-base", "--is-ancestor", c, o) for o in left)]
+    return [c for c in lost if not any(_held(git, s, tips, since) for s in [c, *_copied_from(git, start, c)])]
+
+
+def _since_start(git: Git, branch: str, start: Start, remote: str) -> list[tuple[str, str]]:
+    """The newest commits of `remote`'s that origin's `branch` gained since the start, each with its tree.
+
+    Commits another of origin's branches holds, such as the base's a rebase brought in, are left out, and so are all
+    but the newest `_MAX_FOLDS`, to bound the merges `_held` makes: a commit held only by an older one is reported.
+
+    Returns:
+        Each commit's full hash and its tree's, newest first, none if git could not list them.
+    """
+    listed = git.result(
+        "log",
+        f"--max-count={_MAX_FOLDS}",
+        "--format=%H %T",
+        remote,
+        f"^{start.commit}",
+        "--not",
+        f"--exclude=origin/{branch}",
+        "--remotes=origin",
+        "--",
+    )
+    if not listed.ok:
+        return []
+    return [(commit, tree) for commit, tree in (line.split() for line in listed.stdout.splitlines())]
+
+
+def _copied_from(git: Git, start: Start, commit: str) -> list[str]:
+    """The commits origin's branch held at the start, and `commit` does not, that have `commit`'s patch.
+
+    Returns:
+        Their full hashes, none if origin had no branch at the start or git could not compare them.
+    """
+    if not start.pushed:
+        return []
+    marked = git.result("rev-list", "--left-only", "--cherry-mark", f"{start.pushed}...{commit}", f"^{commit}^")
+    return [line[1:] for line in marked.stdout.split() if line.startswith("=")] if marked.ok else []
+
+
+def _held(git: Git, commit: str, tips: Iterable[str], since: Collection[tuple[str, str]]) -> bool:
+    """Whether a commit of `since` holds `commit`'s change, alone or with what one of `tips` that builds on it adds.
+
+    Returns:
+        True if merging `commit`, or a tip built on it, into one of `since` on `commit`'s first parent is clean and
+        leaves that commit's tree as it is.
+    """
+    if not git.ok("rev-parse", "--verify", "--quiet", f"{commit}^"):
+        return False
+    ends = [commit, *(t for t in tips if t != commit and git.ok("merge-base", "--is-ancestor", commit, t))]
+    for end in ends:
+        for held, tree in since:
+            merged = git.result("merge-tree", "--write-tree", f"--merge-base={commit}^", held, end)
+            if merged.ok and merged.stdout.split()[:1] == [tree]:
+                return True
+    return False
