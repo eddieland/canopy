@@ -50,11 +50,11 @@ is how the git hook (`prek.toml`) runs the codemods on a commit's files.
   `Collection`; indexing, slicing, or `reversed` of a list is `Sequence`; a dict only read is `Mapping`; and a set
   tested with `in` is `AbstractSet`, never `Collection`. It is deliberately narrow, since a wrong widening fails the
   type checker at a call site: it leaves alone a parameter used in any way it does not know to be a read (mutated,
-  stored, returned, yielded, compared, or passed to any call but a few builtins), one bound again or named by a
-  nested function, one never read, one whose function returns the type it takes, every parameter of a function with
-  a decorator but a few plain ones (a click command, an override), and a method of a class with a base, which may
-  override or implement one declared elsewhere. The import goes under `if TYPE_CHECKING:` where the module has that
-  block and postpones its annotations.
+  stored, returned, yielded, compared, or passed to any call but a few builtins whose names the module does not bind),
+  one bound again or named by a nested function, one never read, one whose function returns the type it takes, every
+  parameter of a function with a decorator but a few plain ones (a click command, an override), and a method of a
+  class with a base, or of one the module derives another class from, which may override or be overridden. The import
+  goes under `if TYPE_CHECKING:` where the module has that block and postpones its annotations.
 
 ## Adding one
 

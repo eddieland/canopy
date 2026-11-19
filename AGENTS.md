@@ -100,7 +100,7 @@ If code and the design disagree, the design doc wins until a decision entry says
     its README's steps, rather than a rule for review. `final-constants` annotates every `UPPER_CASE` module
     constant `Final`, `type-aliases` spells a type alias as a `type` statement where nothing reads it at run time,
     `doc-comments` writes the comment above a constant, a dataclass or `NamedTuple` field, or an enum member `#:`,
-    and `general-params` widens a `list`, `dict`, or `set` parameter its function only reads.
+    and `general-params` widens a `list`, `dict`, `set`, or `frozenset` parameter its function only reads.
   - The Playwright screenshot baselines are Git LFS objects, so `make ui-e2e` needs `git-lfs` and `git lfs pull`.
   - Optionally `make hooks`, once per clone: prek's git hooks (`prek.toml`) then run the same formatters and linters
     on each commit's files, and `ui/`'s lint and type check on a push. They stop a commit that fails one; they do not
@@ -163,7 +163,8 @@ If code and the design disagree, the design doc wins until a decision entry says
   `collections.abc.Set`, imported as `AbstractSet`, not `Collection`: a `Collection[str]` would also take a bare `str`,
   where `in` is a substring test. A parameter stays concrete when the function mutates, stores, or returns it, or hands
   it to `json.dumps` or `isinstance`; a click command's parameters stay the tuple click passes. The `general-params`
-  codemod widens a `list`, `dict`, or `set` parameter whose every use it knows to be a read; review holds the rest.
+  codemod widens a `list`, `dict`, `set`, or `frozenset` parameter whose every use it knows to be a read; review holds
+  the rest.
 - A frozen dataclass holds no mutable collection type: a field is typed `Sequence`, `Collection`, `Mapping`, or
   `Set` (as `AbstractSet` where imported so) by what its readers need, as a parameter is, so the type checker refuses
   a change through it. A class that keeps state it changes is not frozen. `tests/canopy/test_frozen.py` fails on a
