@@ -1298,9 +1298,23 @@ def test_a_task_with_no_project_is_not_asked_for_the_tickets_it_filed_and_record
     assert run.status is RunStatus.UNKNOWN
     assert json.loads(present(run.result_json)) == {"harness": "the worker reported no result"}
     assert task_tickets.of_task(inline.conn, 1) == []
-    [worker] = agent_runs(agent_log)
+    # Its start, and the one that asks it again for the result it did not report.
+    worker, _ = agent_runs(agent_log)
     assert "File no tickets in the tracker: the operator submitted this task with no tracker project" in (told(worker))
     assert worker["env"]["CANOPY_RESULT"] == "task"
+
+
+def test_a_task_that_ends_without_a_result_is_asked_once_more_in_its_session(inline: Context, agent_log: Path) -> None:
+    """As a worker's run is (DESIGN §13): what it reports when asked again is the task's result."""
+    submit()
+    [started] = start(inline)
+    with private_worker_does(result={"status": "finished"}, resent=json.dumps(DONE), session="ses_task"):
+        run = run_task(inline, started.run_id)
+    assert run.status is RunStatus.DONE
+    assert json.loads(present(run.result_json))["summary"] == "found it"
+    first, again = agent_runs(agent_log)
+    assert again["argv"][:-2] == first["argv"][:-1]
+    assert again["argv"][-1] == "--session=ses_task"
 
 
 def test_no_row_a_task_that_files_tickets_writes_names_a_ticket(inline: Context) -> None:
