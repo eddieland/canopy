@@ -35,7 +35,6 @@ import ast
 import functools
 import re
 from dataclasses import dataclass, field
-from itertools import pairwise
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, override
 
@@ -79,8 +78,10 @@ class VocabMembers(Command):
         """
         if filename is None:
             return True
-        parts = Path(filename).absolute().parts
-        return ("src", "canopy") in pairwise(parts) and parts[-2:] != ("core", "vocab.py")
+        # Anchored to this repository's package, not to a `src/canopy` anywhere in the path: a clone at `~/src/canopy`
+        # would otherwise cover its tests and other programs too.
+        path = Path(filename).resolve()
+        return PACKAGE in path.parents and path != PACKAGE / "core" / "vocab.py"
 
     @classmethod
     @override
