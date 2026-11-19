@@ -26,6 +26,7 @@ from tests.canopy.helpers import in_tick, in_zone, present
 
 if TYPE_CHECKING:
     import sqlite3
+    from collections.abc import Iterable
 
     from syrupy.assertion import SnapshotAssertion
 
@@ -42,7 +43,7 @@ def at(start: datetime, minutes: float) -> str:
     return db.format_time(start + timedelta(minutes=minutes))
 
 
-def log_of(path: Path, calls: list[Call], *, cost: float = 0.5) -> str:
+def log_of(path: Path, calls: Iterable[Call], *, cost: float = 0.5) -> str:
     """Write a session's log at `path` that makes `calls`, a model call costing `cost` ended after each; its path."""
     lines: list[str] = []
     for tool, given in calls:

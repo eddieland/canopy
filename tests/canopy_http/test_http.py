@@ -5,7 +5,7 @@ import json
 import re
 import ssl
 import threading
-from collections.abc import Generator
+from collections.abc import Generator, Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from email.utils import format_datetime
@@ -209,7 +209,7 @@ def test_a_request_that_never_left_is_sent_again_even_a_write() -> None:
 
 
 @pytest.mark.parametrize(("drawn", "pauses"), [("low", [0.5, 1.5]), ("high", [1.5, 4.5])])
-def test_each_pause_is_moved_at_random_by_up_to_its_jitter(drawn: str, pauses: list[float]) -> None:
+def test_each_pause_is_moved_at_random_by_up_to_its_jitter(drawn: str, pauses: Iterable[float]) -> None:
     """A pause of 1 second is one of 0.5 to 1.5 by default, so programs that failed together spread their tries."""
 
     def draw(low: float, high: float) -> float:

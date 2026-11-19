@@ -13,6 +13,8 @@ from canopy.cli.spend import since_text
 from canopy.core import orientation, spend
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from canopy.core.orientation import Orientation, RoleOrientation
 
 #: How many days the report reads unless told otherwise: the two weeks the milestone's gate is measured over.
@@ -121,7 +123,7 @@ def _number(value: float | None) -> str:
     return str(int(value)) if float(value).is_integer() else f"{value:.1f}"
 
 
-def _line(cells: tuple[str, ...], widths: list[int]) -> str:
+def _line(cells: tuple[str, ...], widths: Sequence[int]) -> str:
     """One line of the table, the role and the repository left-aligned and the rest right-aligned.
 
     Returns:

@@ -14,12 +14,14 @@ from tests.canopy.helpers import Kept, context, recorded, runtime_record, sent
 from tests.canopy.web_helpers import client, signed_in_client
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from canopy.core.context import Context
     from canopy.serve.backend import Backend
     from tests.conftest import CanopyEnv
 
 
-def titles(found: list[dict[str, Any]]) -> list[object]:
+def titles(found: Iterable[dict[str, Any]]) -> list[object]:
     """Each session's title, with its subagents' under it."""
     return [(s["title"], titles(s["subagents"])) if s["subagents"] else s["title"] for s in found]
 

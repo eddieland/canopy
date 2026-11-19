@@ -45,6 +45,7 @@ import os
 import shutil
 import sys
 import uuid
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -107,7 +108,7 @@ def pool_of(state: dict[str, Any]) -> dict[str, Any] | None:
     return state.setdefault("pools", {}).setdefault(str(repo), {"slots": []})
 
 
-def new_slot_path(state: dict[str, Any], args: argparse.Namespace, state_path: Path, name: str) -> Path:
+def new_slot_path(state: Mapping[str, Any], args: argparse.Namespace, state_path: Path, name: str) -> Path:
     root = os.environ.get("TREEHOUSE_ROOT")
     repo = repo_root()
     if not root or repo is None:
@@ -166,7 +167,7 @@ def cmd_get(state: dict[str, Any], args: argparse.Namespace, state_path: Path) -
     return 0
 
 
-def cmd_return(state: dict[str, Any], args: argparse.Namespace) -> int:
+def cmd_return(state: Mapping[str, Any], args: argparse.Namespace) -> int:
     slots = [*state.get("slots", []), *(s for pool in state.get("pools", {}).values() for s in pool.get("slots", []))]
     target = args.target
     slot = next((s for s in slots if target in (s["name"], s["path"])), None)

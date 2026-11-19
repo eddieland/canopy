@@ -48,6 +48,7 @@ import json
 import os
 import sys
 import time
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Final
 
@@ -211,7 +212,7 @@ def api(operation: str) -> int:
     return 0
 
 
-def agents(state: dict[str, Any]) -> dict[str, list[list[str]]]:
+def agents(state: Mapping[str, Any]) -> dict[str, list[list[str]]]:
     """Each agent a definition in the config directory defines, as OpenCode 2 loads it, with its rules in the state."""
     config_dir = os.environ.get("OPENCODE_CONFIG_DIR")
     defined = sorted(p.stem for p in Path(config_dir, "agents").glob("*.md")) if config_dir else []

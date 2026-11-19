@@ -14,6 +14,8 @@ from canopy.core import spend, tool_results
 from canopy.runtime.report import count_text
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from canopy.core.tool_results import RoleResults, ToolResult, ToolResults
 
 #: How many days the report reads unless told otherwise: the two weeks the milestone measures over.
@@ -117,7 +119,7 @@ def _cells(tool: ToolResult) -> tuple[str, ...]:
     )
 
 
-def _line(cells: tuple[str, ...], widths: list[int]) -> str:
+def _line(cells: tuple[str, ...], widths: Sequence[int]) -> str:
     """One line of a tool table, the tool left-aligned and the rest right-aligned.
 
     Returns:

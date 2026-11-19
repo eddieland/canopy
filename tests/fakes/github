@@ -43,6 +43,7 @@ import json
 import os
 import sys
 import time
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -72,7 +73,7 @@ def emit(line: dict[str, object]) -> None:
     print(json.dumps(line), flush=True)
 
 
-def connect(state: dict[str, Any], request: dict[str, Any]) -> int:
+def connect(state: dict[str, Any], request: Mapping[str, Any]) -> int:
     if state.get("hang"):
         Path(state["hang"]).touch()
         time.sleep(60)
@@ -115,7 +116,7 @@ def connect(state: dict[str, Any], request: dict[str, Any]) -> int:
     return 0 if len(whole) == len(asked) else 1
 
 
-def branches(state: dict[str, Any], repositories: list[dict[str, str]]) -> list[str]:
+def branches(state: Mapping[str, Any], repositories: Iterable[dict[str, str]]) -> list[str]:
     """Print each repository's branches, and return the names of those read whole."""
     whole = []
     for repo in repositories:
@@ -186,7 +187,7 @@ def post_pr(state: dict[str, Any], request: dict[str, Any], login: str, outcome:
     return 0
 
 
-def refuses_a_comment(state: dict[str, Any], comments: list[dict[str, Any]]) -> bool:
+def refuses_a_comment(state: Mapping[str, Any], comments: Iterable[dict[str, Any]]) -> bool:
     """Whether GitHub refuses one of a review's comments, a line its diff does not show, saying which."""
     for index, c in enumerate(comments, 1):
         where = f"{c['path']}:{c['line']}"
@@ -201,8 +202,8 @@ def add_comments(
     url: str,
     login: str,
     review_id: int,
-    replies: list[dict[str, Any]],
-    comments: list[dict[str, Any]],
+    replies: Iterable[dict[str, Any]],
+    comments: Iterable[dict[str, Any]],
 ) -> list[dict[str, object]]:
     """Add each reply to its thread and each comment on a thread of its own, returning the lines to print."""
     lines = []
@@ -246,7 +247,7 @@ def add_comments(
     return lines
 
 
-def react(state: dict[str, Any], request: dict[str, Any], login: str) -> bool:
+def react(state: dict[str, Any], request: Mapping[str, Any], login: str) -> bool:
     """Add each reply's reaction, once, as GitHub keeps them, printing a line for each; False if GitHub refused."""
     url = request["pr"]
     for reply in request.get("replies", []):
@@ -264,7 +265,7 @@ def react(state: dict[str, Any], request: dict[str, Any], login: str) -> bool:
     return True
 
 
-def post_issue(state: dict[str, Any], request: dict[str, Any], outcome: str) -> int:
+def post_issue(state: dict[str, Any], request: Mapping[str, Any], outcome: str) -> int:
     if outcome == "unknown" and not state.get("posted"):
         return 1
     comment = {"url": request["issue"], "body": request["body"], "id": next_id(state)}

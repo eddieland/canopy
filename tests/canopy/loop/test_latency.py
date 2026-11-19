@@ -20,6 +20,7 @@ from tests.canopy.helpers import in_zone
 
 if TYPE_CHECKING:
     import sqlite3
+    from collections.abc import Mapping
 
     import pytest
 
@@ -93,7 +94,7 @@ def check_completed(conn: sqlite3.Connection, run_id: int, observed_at: str) -> 
 def ticked(
     conn: sqlite3.Connection,
     started_at: str,
-    decided: dict[str, str],
+    decided: Mapping[str, str],
     *,
     woken_by: str | None = "timer",
     decider: Decider = Decider.OVERSEER,

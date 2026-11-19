@@ -163,7 +163,7 @@ def test_a_failed_migration_rolls_back_every_pending_one(tmp_path: Path, journal
 
 
 @pytest.mark.parametrize("names", [["0001_a.sql", "0003_b.sql"], ["1_a.sql"], ["0002_a.sql"]])
-def test_migration_files_must_be_numbered_in_order(tmp_path: Path, names: list[str]) -> None:
+def test_migration_files_must_be_numbered_in_order(tmp_path: Path, names: Iterable[str]) -> None:
     for name in names:
         (tmp_path / name).write_text("SELECT 1;\n")
     with pytest.raises(db.MigrationError):
