@@ -27,7 +27,12 @@ _SIZE_WIDTH: Final = 11
 @click.option("--dry-run", is_flag=True, help="Report what a pass would remove, and remove nothing.")
 @click.option("--json", "as_json", is_flag=True, help="Print the dry run's report as one JSON object instead.")
 @click.option("--vacuum", "vacuum_journal", is_flag=True, help="Give the journal's free pages back to its disk.")
-@click.option("--git", "git_objects", is_flag=True, help="Pack the primary clones' loose objects and small packs.")
+@click.option(
+    "--git",
+    "git_objects",
+    is_flag=True,
+    help="Pack the primary clones' loose objects and small packs, a partial clone's packs excepted.",
+)
 @click.option("--caches", "sandbox_caches", is_flag=True, help="Empty each sandbox role's cache no live run uses.")
 @click.pass_context
 def cmd_gc(

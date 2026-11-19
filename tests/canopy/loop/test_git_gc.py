@@ -178,16 +178,65 @@ def test_gc_git_combines_no_packs_in_a_partial_clone_and_keeps_it_whole(
     git("fsck", "--no-progress", cwd=clone)
 
 
+def test_gc_git_combines_no_packs_in_a_clone_still_holding_promisor_packs(
+    ws: Ws,
+    treehouse_state: Path,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    treehouse_state.write_text(json.dumps({"pools": {}}))
+    clone = partial_clone(ws, "api", tmp_path)
+    promisor = sorted((clone / ".git" / "objects" / "pack").glob("*.promisor"))
+    assert promisor
+    git("config", "--local", "--unset", "remote.origin.promisor", cwd=clone)
+    git("config", "--local", "--unset", "remote.origin.partialclonefilter", cwd=clone)
+
+    for _ in range(2):
+        assert main(["gc", "--git"]) == 0
+
+    api = [line for line in capsys.readouterr().out.splitlines() if line.startswith("api: ")]
+    assert all(line.endswith(f"; combined no packs: {git_gc.PARTIAL}") for line in api)
+    assert not multi_pack_index(clone)
+    assert all(path.exists() for path in promisor)
+    git("config", "--local", "remote.origin.promisor", "true", cwd=clone)
+    git("fsck", "--no-progress", cwd=clone)
+
+
+def test_gc_git_reads_a_promisor_remote_from_the_clones_own_config_alone(
+    ws: Ws,
+    treehouse_state: Path,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    treehouse_state.write_text(json.dumps({"pools": {}}))
+    git("config", "--local", "remote.origin.promisor", "true", cwd=ws.clone("api"))
+    operators = tmp_path / "gitconfig"
+    operators.write_text('[remote "origin"]\n\tpromisor = true\n')
+
+    with mock.patch.dict(os.environ, {"GIT_CONFIG_GLOBAL": str(operators)}):
+        assert main(["gc", "--git"]) == 0
+
+    lines = capsys.readouterr().out.splitlines()
+    assert next(line for line in lines if line.startswith("api: ")).endswith(f"; combined no packs: {git_gc.PARTIAL}")
+    assert git_gc.PARTIAL not in next(line for line in lines if line.startswith("web: "))
+    assert not multi_pack_index(ws.clone("api"))
+    assert multi_pack_index(ws.clone("web"))
+
+
 def test_gc_git_combines_no_packs_in_a_clone_whose_config_git_cannot_read(
     ws: Ws,
     treehouse_state: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     treehouse_state.write_text(json.dumps({"pools": {}}))
+    for name in ("api", "web"):
+        git("repack", "--quiet", "-a", "-d", cwd=ws.clone(name))
+        assert list((ws.clone(name) / ".git" / "objects" / "pack").glob("*.pack"))
 
     with mock.patch.object(git_gc, "_PARTIAL_KEYS", "("):
         assert main(["gc", "--git"]) == 0
 
-    assert f"; combined no packs: {git_gc.UNREAD}\n" in capsys.readouterr().out
-    assert loose_objects(ws.clone("api")) == 0
+    out = capsys.readouterr().out
+    assert out.count(f"; combined no packs: {git_gc.UNREAD}\n") == 2
     assert not multi_pack_index(ws.clone("api"))
+    assert not multi_pack_index(ws.clone("web"))
