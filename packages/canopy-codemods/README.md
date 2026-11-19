@@ -44,6 +44,17 @@ is how the git hook (`prek.toml`) runs the codemods on a commit's files.
   directive to a tool (`# noqa`, `# type:`, `# fmt:`), or a section's banner; and a comment a blank line separates
   from the name. It cannot tell what a name is from why the code is so, so a note of the second kind is written with
   a blank line below it, or beside the value. The colon can push a line past 120 columns, which the lint then reports.
+- **`vocab-members`** names a closed vocabulary's member where canopy's code compares a bare string with a status, a
+  kind, or a phase: `run.status == "running"` becomes `run.status == RunStatus.RUNNING`, and the vocabulary is imported
+  at run time, out of an `if TYPE_CHECKING:` block if need be. It reads the vocabularies from `core/vocab.py` and the
+  row types from `core/records` by the stdlib's `ast`, and rewrites a string compared by `==`, `!=`, `in`, or a
+  `case` only where it is tied to one vocabulary without inferring a type: a name annotated with the vocabulary in the
+  same function, or `self.field` of a class that annotates the field so; a field of a name annotated with a row type
+  (`run: records.Run`); or a name or attribute called `status`, `kind`, or `phase` with strings one vocabulary alone
+  holds, one whose name ends with that word and that the module imports already. It leaves alone a string several
+  vocabularies hold where nothing ties it to one, a name annotated with anything else (`str`, a `Literal`, a union), a
+  string the vocabulary does not hold, and any string outside a comparison. It covers canopy's own modules alone,
+  under `src/canopy`: the tests assert on the string on purpose, and the other programs import nothing from canopy.
 
 ## Adding one
 
@@ -66,7 +77,8 @@ Two rules keep the check honest and quick:
 - **Say cheaply when a file is not yours.** Parsing a module with LibCST and visiting it takes a few hundred times as
   long as reading it, and the lint runs every codemod over every file. `Command.wants(source)` answers from the text
   alone, before anything is parsed: `final-constants` decides from the stdlib's `ast`, so the whole repository checks
-  in about a second. A codemod without a `wants` parses every file on every lint.
+  in about a second. A codemod without a `wants` parses every file on every lint. A codemod held to some files alone
+  says which in `Command.covers(filename)`, asked before the text is read: `vocab-members` covers `src/canopy`.
 
 A rewrite to run once, such as a migration off an API, needs no entry in the registry: run its command over the
 repository, commit the result, and leave it out, or delete it.
