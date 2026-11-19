@@ -84,7 +84,7 @@ from canopy.runs import (
     reconcile,
     task_starts,
 )
-from canopy.runtime import project_config, servers, stdout
+from canopy.runtime import agents, invocation, project_config, servers, stdout
 
 if TYPE_CHECKING:
     import sqlite3
@@ -135,6 +135,10 @@ class Outcome:
     usage: Usage | None = None  # what the overseer cost, when the runtime reported it
 
 
+class ModelRefused(Exception):  # noqa: N818 a refusal, as `conversation.Refused` is
+    """A dry run cannot try its overseer on the model asked for; the message says why."""
+
+
 def run(ctx: Context, *, dry_run: bool, woken_by: WokenBy | None = None, ui: str | None = None) -> Outcome:
     """Run one tick: take the lock, then everything in DESIGN §6. A busy lock is an outcome, not an error.
 
@@ -159,6 +163,46 @@ def run(ctx: Context, *, dry_run: bool, woken_by: WokenBy | None = None, ui: str
     if not dry_run and outcome.tick_id is not None:
         run_models.read_ended(ctx, "ticks", outcome.tick_id, logs.for_tick(outcome.tick_id))
     return outcome
+
+
+def on_model(ctx: Context, model: str) -> Context:
+    """Return `ctx` for a dry run that tries the overseer on `model` in place of `runtime.models`' (DESIGN §6).
+
+    The model is looked up in the runtime's list first, so a model mistyped starts no tick and raises no attention
+    item. The tick then runs as one whose config chose `model`, and records it as every tick records its model.
+
+    Args:
+        ctx: The command's context.
+        model: The model, spelled as a `runtime.models` value.
+
+    Returns:
+        A context whose config chooses `model` for the overseer, and is otherwise `ctx`'s.
+
+    Raises:
+        ModelRefused: `model` is not a model, `runtime.overseer_cmd` runs no overseer of canopy's to give it to, or
+            the runtime does not list it.
+    """
+    runtime = ctx.config.runtime
+    try:
+        agent_models.check_model(model)
+    except ValueError as e:
+        raise ModelRefused(str(e)) from e
+    if invocation.agent_of(runtime.overseer_cmd) != agents.OVERSEER:
+        raise ModelRefused(f"runtime.overseer_cmd runs no {agents.OVERSEER}, so --model has no overseer to choose for")
+    try:
+        agent_models.check(
+            ctx.runner,
+            ctx.workspace.root,
+            agent_models.parse(model),
+            version=runtime.version,
+            chosen="by --model",
+        )
+    except agent_models.ModelError as e:
+        raise ModelRefused(f"{e.guard}: {e.reason}") from e
+    # Validated above, as config validates a `runtime.models` value: `model_copy` checks nothing.
+    models = {**runtime.models, "overseer": model}
+    config = ctx.config.model_copy(update={"runtime": runtime.model_copy(update={"models": models})})
+    return replace(ctx, config=config)
 
 
 def state_block(

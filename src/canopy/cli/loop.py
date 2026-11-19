@@ -126,10 +126,27 @@ def cmd_loop(
 
 @click.command("tick")
 @click.option("--dry-run", is_flag=True, help="Run the overseer, but dispatch nothing.")
+@click.option(
+    "--model",
+    metavar="MODEL",
+    help="With --dry-run, run the overseer on this model, provider/model. Default: runtime.models'.",
+)
 @click.pass_context
-def cmd_tick(click_ctx: click.Context, *, dry_run: bool) -> int:
-    """Run one tick of the loop."""
+def cmd_tick(click_ctx: click.Context, *, dry_run: bool, model: str | None) -> int:
+    """Run one tick of the loop.
+
+    A dry run on another model shows what that model would decide, in `canopy decisions`, at no risk to the loop: it
+    dispatches nothing, and the next live tick runs on the model your config chooses.
+    """
+    if model is not None and not dry_run:
+        raise click.UsageError("--model needs --dry-run: a live tick's overseer runs on the model in runtime.models")
     ctx = open_context(click_ctx, migrate=False)
+    if model is not None:
+        # Looked up here, before a tick exists, and again by the tick's own check, as any tick's model is.
+        try:
+            ctx = tick.on_model(ctx, model)
+        except tick.ModelRefused as e:
+            raise CliError(f"tick refused: {e}") from None
     outcome = tick.run(ctx, dry_run=dry_run)
     label = f"tick {outcome.tick_id}" if outcome.tick_id is not None else "tick"
     cost = f" (cost {outcome.usage.describe()})" if outcome.usage is not None else ""
