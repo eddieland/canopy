@@ -17,7 +17,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, Literal, NamedTuple, assert_never
 
-from canopy.core import personas
+from canopy.core import memory_text, personas
 from canopy.core.config import (
     CANOPY_REVIEWER,
     DEFAULT_TRAILER_EMAIL,
@@ -1038,6 +1038,50 @@ def chore_instructions(config: Config) -> str:
     return _standing(config.paths.instructions_read("chore"), "chore")
 
 
+class StandingCheck(NamedTuple):
+    """What a run would make of a standing instructions file's bytes, or of text proposed for one."""
+
+    #: How many bytes there are, of the `MAX_STANDING_BYTES` a run takes.
+    size: int
+    #: Why every run of the agent would be refused, in a few words; None when a run would read them.
+    refusal: str | None
+    #: The text as a run would read it; None when it would be refused.
+    text: str | None
+    #: Each character that hides text from a person a model still reads: its line, from 1, and its name. A run reads
+    #: them all the same.
+    hidden: Sequence[tuple[int, str]]
+
+    @property
+    def blank(self) -> bool:
+        """Whether a run would read no instructions in it, `None.`: the text is empty, or only spaces."""
+        return self.text is not None and not self.text.strip()
+
+
+def check_standing(data: bytes, *, size: int | None = None) -> StandingCheck:
+    """Check `data`, the bytes of a standing instructions file or of text proposed for one, as a run reads them.
+
+    Every run's prompt reads its agent's file through this, and so do `canopy instructions check` and the web UI's
+    instructions page, so what they say of a text is what a run would do with it. A character that hides text is found
+    and named, but refuses nothing: the file is the operator's own, and a run reads it as it is.
+
+    Args:
+        data: The bytes, or the start of them when `size` says there are more.
+        size: How many bytes there are in all, when `data` is only their start, at least `MAX_STANDING_BYTES` + 1 of
+            them.
+
+    Returns:
+        What a run would make of them.
+    """
+    size = len(data) if size is None else size
+    if size > MAX_STANDING_BYTES:
+        return StandingCheck(size, f"{size} bytes, over {MAX_STANDING_BYTES}", None, ())
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError as e:
+        return StandingCheck(size, f"not UTF-8, at byte {e.start}", None, ())
+    return StandingCheck(size, None, text, tuple(memory_text.find_hidden(text)))
+
+
 def standing_section(text: str, reader: Reader) -> str:
     """Return `{{STANDING_SECTION}}` for `reader`, from `text` as the functions above return it.
 
@@ -1380,12 +1424,14 @@ def _standing(path: Path | None, reader: str) -> str:
         return "None."
     try:
         data = path.read_bytes()
-        text = data.decode("utf-8")
-    except (OSError, UnicodeDecodeError) as e:
+    except OSError as e:
         raise PromptError(f"cannot read {reader} instructions {path}: {e}") from e
-    if len(data) > MAX_STANDING_BYTES:
-        raise PromptError(f"{reader} instructions {path} are {len(data)} bytes, over {MAX_STANDING_BYTES}")
-    return text.strip() or "None."
+    check = check_standing(data)
+    if check.text is None:
+        if check.size > MAX_STANDING_BYTES:
+            raise PromptError(f"{reader} instructions {path} are {check.refusal}")
+        raise PromptError(f"cannot read {reader} instructions {path}: {check.refusal}")
+    return "None." if check.blank else check.text.strip()
 
 
 def _required_attribution(config: Config) -> tuple[str, ...]:

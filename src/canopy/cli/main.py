@@ -65,6 +65,7 @@ COMMANDS: Final[dict[str, tuple[str, str]]] = {
     "archive": ("plans", "cmd_archive"),
     "memory": ("memory", "memory_group"),
     "config": ("settings", "config_group"),
+    "instructions": ("instructions", "instructions_group"),
     "draft": ("drafts", "draft_group"),
     "_run": ("runs", "cmd_run"),
     "task": ("tasks", "task_group"),
