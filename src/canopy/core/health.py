@@ -10,6 +10,7 @@ beside `canopy spend`, to say which failures recur and what they cost.
 from __future__ import annotations
 
 import bisect
+import collections
 import math
 import statistics
 from dataclasses import dataclass
@@ -383,30 +384,35 @@ def refusals(conn: sqlite3.Connection, since: str, until: str) -> list[Refusal]:
     with db.read_snapshot(conn):
         rows = list(sql.execute(conn, refused))
         asks: dict[str, list[Ask]] = {}
+        # Every ask is counted, but only a guard's first `ASKS` are kept, however many it refused.
+        subjects: collections.Counter[str] = collections.Counter()
         for guard, ticket, chore, pr, kind, n, ticks, last in sql.execute(conn, named):
-            asks.setdefault(str(guard), []).append(
-                Ask(
-                    ticket=_text(ticket),
-                    chore=_text(chore),
-                    pr=_text(pr),
-                    kind=None if kind is None else RunKind(str(kind)),
-                    decisions=int(n),
-                    ticks=int(ticks),
-                    last_tick=int(last),
-                ),
-            )
-    found = [
+            subjects[str(guard)] += 1
+            found = asks.setdefault(str(guard), [])
+            if len(found) < ASKS:
+                found.append(
+                    Ask(
+                        ticket=_text(ticket),
+                        chore=_text(chore),
+                        pr=_text(pr),
+                        kind=None if kind is None else RunKind(str(kind)),
+                        decisions=int(n),
+                        ticks=int(ticks),
+                        last_tick=int(last),
+                    ),
+                )
+    by_guard = [
         Refusal(
             guard=str(guard),
-            subjects=len(asks.get(str(guard), [])),
+            subjects=subjects[str(guard)],
             decisions=int(n),
             ticks=int(ticks),
             last_tick=int(last),
-            asks=asks.get(str(guard), [])[:ASKS],
+            asks=asks.get(str(guard), []),
         )
         for guard, n, ticks, last in rows
     ]
-    return sorted(found, key=lambda r: (-r.subjects, -r.ticks, -r.decisions, r.guard))
+    return sorted(by_guard, key=lambda r: (-r.subjects, -r.ticks, -r.decisions, r.guard))
 
 
 # One kind's ended runs in the window, by sort and status. A run still running has not ended any way yet.
