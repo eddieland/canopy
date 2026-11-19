@@ -22,7 +22,7 @@ import pytest
 
 from canopy.core import pool, pools, workspace
 from canopy.infra import cwds, logs, procs
-from canopy.runs import reconcile
+from canopy.runs import checkpoint, reconcile
 from tests.canopy.helpers import present
 from tests.conftest import HERMETIC_GIT, CanopyEnv, Journals, git
 
@@ -231,3 +231,17 @@ def test_the_shadow_logs_where_canopy_and_treehouse_disagree_and_changes_nothing
         assert call.args == ("pool_shadow_mismatch",)
         assert call.kwargs["extra"] == {"repo": REPO, "slot": str(dirty), "treehouse": "available", "canopy": "dirty"}
         assert (dirty / "scratch.txt").exists()
+
+
+def test_a_lease_prunes_a_branch_origin_dropped_and_the_checkout_after_it_fetches_nothing(ws: Ws) -> None:
+    git("push", "--quiet", "origin", "HEAD:refs/heads/gone", cwd=ws.clone)
+    git("update-ref", "-d", "refs/heads/gone", cwd=ws.origin)
+    lease = ws.pool().lease("PROJ-1")
+    assert not git("for-each-ref", "refs/remotes/origin/gone", cwd=ws.clone)
+    run = procs.SubprocessRunner.run
+    with mock.patch.object(procs.SubprocessRunner, "run", autospec=True, side_effect=run) as ran:
+        slot = checkpoint.Git(procs.SubprocessRunner(), lease.path, REPO)
+        start = checkpoint.check_out(slot, "main", "gone", fetched=True)
+    assert start.commit == git("rev-parse", "refs/heads/main", cwd=ws.origin)
+    assert ran.call_count
+    assert not [call.args[1] for call in ran.call_args_list if "fetch" in call.args[1]]

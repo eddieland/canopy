@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, Final
 from pydantic import BaseModel, ConfigDict, StrictStr, ValidationError
 
 from canopy.core import db, pools
+from canopy.core.vocab import PoolKind
 from canopy.runs import checkpoint
 
 if TYPE_CHECKING:
@@ -230,7 +231,9 @@ def _check_out(ctx: Context, name: str, slot: Path, branch: str) -> None:
         checkpoint.SetupError: The branch is not on origin, or git failed.
     """
     git = checkpoint.Git(ctx.runner, slot, name)
-    git.run("fetch", "--quiet", "--prune", "origin")
+    if ctx.config.pools.backend is not PoolKind.CANOPY:
+        # canopy's own pool fetched and pruned as it leased; another pool's fetch may not prune.
+        git.run("fetch", "--quiet", "--prune", "origin")
     tracking = f"refs/remotes/origin/{branch}"
     if not git.ok("rev-parse", "--verify", "--quiet", tracking):
         raise checkpoint.SetupError(f"{name}: the branch {branch} is not on origin")

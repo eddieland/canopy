@@ -48,7 +48,7 @@ from canopy.core import (
     sandboxing,
 )
 from canopy.core.config import render_command
-from canopy.core.vocab import RunStatus
+from canopy.core.vocab import PoolKind, RunStatus
 from canopy.infra import logs, procs, stopping
 from canopy.runs import (
     attachments,
@@ -376,7 +376,7 @@ def _work(ctx: Context, run: records.TaskRun, link: bytes | None, out: TextIO, l
     _write_checklist(ctx, run)
     slot = Path(run.slot_path)
     git = checkpoint.Git(ctx.runner, slot, run.repo)
-    start = checkpoint.check_out(git, run.base_branch, run.branch)
+    start = checkpoint.check_out(git, run.base_branch, run.branch, fetched=run.pool is PoolKind.CANOPY)
     _place_report(ctx, git, run, log)
     _place_attachments(ctx, git, run, log)
     marks = _marks(ctx)

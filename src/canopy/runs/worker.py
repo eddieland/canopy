@@ -704,6 +704,11 @@ class _Slot:
     link: bytes | None
     pool: PoolKind
 
+    @property
+    def fetched(self) -> bool:
+        """Whether the slot's lease fetched and pruned origin, so the run's checkout need not: canopy's own pool's."""
+        return self.pool is PoolKind.CANOPY
+
     def rewritten(self) -> Path | None:
         """Return the file that says where the slot's git is, if the worker changed it: the `.git` file, or `commondir`.
 
@@ -993,7 +998,7 @@ def _plan(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
         log.info("run not started", extra={"run_id": run["id"], "reason": stopped})
         return Outcome(RunStatus.STOPPED, None, stopped)
     for slot in slots:
-        checkpoint.check_out(slot.git, slot.base)
+        checkpoint.check_out(slot.git, slot.base, fetched=slot.fetched)
     key = str(run["ticket_key"])
     replaced = plans.current(ctx.conn, key)
     copy = plans.read(plans.path_for(ctx.state_dir, key, replaced.run_id)).text if replaced is not None else None
@@ -1166,7 +1171,7 @@ def _feedback_plan(
         return Outcome(RunStatus.STOPPED, None, stopped)
     key = str(run["ticket_key"])
     for slot in slots:
-        checkpoint.check_out(slot.git, slot.base, str(run["branch"]))
+        checkpoint.check_out(slot.git, slot.base, str(run["branch"]), fetched=slot.fetched)
     units = {str(u.repo): str(u.pr_url) for u in db.units(ctx.conn, key) if u.pr_url}
     prs = [units[s.repo] for s in slots if s.repo in units]
     read = observe.read(ctx.conn, ctx.config, ctx.runner, prs, log)
@@ -1281,7 +1286,7 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
         log.info("run not started", extra={"run_id": run["id"], "reason": stopped})
         return Outcome(RunStatus.STOPPED, None, stopped)
     branch = str(run["branch"])
-    starts = [checkpoint.check_out(slot.git, slot.base, branch) for slot in slots]
+    starts = [checkpoint.check_out(slot.git, slot.base, branch, fetched=slot.fetched) for slot in slots]
     for slot in slots:
         _run_setup(ctx, run, slot, out, log)
     # The plan the run follows, and its epic's, each as its own file where it starts (DESIGN §25, §43).

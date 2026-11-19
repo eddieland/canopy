@@ -119,8 +119,11 @@ class Git:
         return result.stdout.strip()
 
 
-def check_out(git: Git, base: str, branch: str = "") -> Start:
+def check_out(git: Git, base: str, branch: str = "", *, fetched: bool = False) -> Start:
     """Check out `base` from origin, detached, or `branch` from origin if it is given and there.
+
+    Origin is fetched first unless the slot's lease just did (`fetched`), as a lease of canopy's own pool does: the
+    slot shares the remote-tracking refs that fetch moved, so a second would ask origin the same again.
 
     A plan reads its base and creates no branch. A worker run passes its branch, which it continues if it was pushed,
     and so does a task's. No run makes a local branch: every slot of a pool shares the repository's branch refs, so one
@@ -132,8 +135,10 @@ def check_out(git: Git, base: str, branch: str = "") -> Start:
     Raises:
         SetupError: a git step failed, or the base branch is not on origin.
     """
-    # --prune: a slot keeps remote-tracking refs from earlier runs, which would hide a branch since deleted on origin.
-    git.run("fetch", "--quiet", "--prune", "origin")
+    if not fetched:
+        # --prune: a slot keeps remote-tracking refs from earlier runs, which would hide a branch since deleted on
+        # origin.
+        git.run("fetch", "--quiet", "--prune", "origin")
     # Checked even when the branch is continued: the worker's prompt targets the PR at the base. A stacked run's base
     # is another ticket's branch, deleted when its PR merged (DESIGN §10).
     if not git.ok("rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{base}"):
