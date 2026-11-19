@@ -609,6 +609,7 @@ def _failure(found: health.Failure) -> HealthFailure:
 def _refusal(found: health.Refusal) -> HealthRefusal:
     return HealthRefusal(
         guard=found.guard,
+        subjects=found.subjects,
         decisions=found.decisions,
         ticks=found.ticks,
         last_tick=found.last_tick,
@@ -619,6 +620,7 @@ def _refusal(found: health.Refusal) -> HealthRefusal:
                 pr=a.pr,
                 kind=a.kind,
                 decisions=a.decisions,
+                ticks=a.ticks,
                 last_tick=a.last_tick,
             )
             for a in found.asks

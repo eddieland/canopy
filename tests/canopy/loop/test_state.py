@@ -14,9 +14,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 from unittest import mock
 
-from canopy.core import config, conversation, db, item_numbers, pools, workspace
+from canopy.core import config, conversation, db, item_numbers, pools, records, review_runs, workspace
 from canopy.core.context import Context
-from canopy.core.vocab import NumberedItem, Phase, ResumeReason, RunStatus, StartStatus, TickStatus
+from canopy.core.vocab import NumberedItem, Phase, ResumeReason, ReviewRunStatus, RunStatus, StartStatus, TickStatus
 from canopy.infra import procs
 from canopy.loop import duties, harness, harness_dispatches, phases, tick
 from canopy.runs import policy, reconcile
@@ -36,6 +36,10 @@ NOW: Final = datetime(2026, 10, 16, 10, 0, tzinfo=UTC)
 #: What a snapshot shows in place of the workspace root, which is in a temporary directory.
 WORKSPACE: Final = "/workspace"
 PR: Final = "https://example.test/acme/repo/pull/7"
+#: The reviewer's command: the fake agent as `canopy-reviewer`.
+REVIEW_CMD: Final = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-reviewer --format json {prompt}"
+#: The head of PR, as it was reviewed.
+HEAD: Final = "c0ffee" * 6 + "c0ff"
 #: A row the harness dispatches for, enabled here as a measurement would enable it (DESIGN §37).
 CONFLICTED: Final = harness_dispatches.Row(ResumeReason.CONFLICT, "The PR conflicts with its base: bring it in.")
 
@@ -51,8 +55,7 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
     # Every section the block can have: a chore, reviews, a notice, tickets in each state the block tells apart, and
     # the harness's dispatches to come.
     prompts(canopy_env, "build-health", "deps")
-    template = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-reviewer --format json {prompt}"
-    user = canopy_env.user_file.read_text().replace("[runtime]\n", f"[runtime]\nreview_cmd = '{template}'\n", 1)
+    user = canopy_env.user_file.read_text().replace("[runtime]\n", f"[runtime]\nreview_cmd = '{REVIEW_CMD}'\n", 1)
     # build-health is the overseer's to decide; deps, with no `when`, is the harness's to run (DESIGN §37).
     canopy_env.write_user(
         user + "\n[review]\nagent_prs = true\n" + chore_toml(extra='when = "Weekdays only."\n') + chore_toml("deps"),
@@ -73,7 +76,7 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
             title="Retry flaky uploads",
             phase=Phase.CI_RUNNING,
             # The tracker source numbers the comments it observes: its comment cursor is a journal number.
-            cursors={"comment": "3"},
+            cursors={"comment": "9"},
         )
         implement = db.insert_run(
             conn,
@@ -169,6 +172,8 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
             "(?, 1, 'PROJ-1', 'thread', 'repo', ?, 501, 'changed', 'sent', 'x', 'x', 'x', 9001, 9000, 'u')",
             (implement, PR),
         )
+        # Its head had a clean review: the block says no review is owed until a new head (#2448).
+        reviewed_at_head(conn, earlier, canopy_env.state_dir / "reviews")
     with clock("09:45"):
         fix = db.insert_run(
             conn,
@@ -269,6 +274,32 @@ def test_a_review_query_not_read_fresh_keeps_no_pr_of_no_ticket(scenario: Scenar
     scenario.tick()
     assert scenario.state()["observations"]["review_query"]["observed"] == "stale"
     assert [pr["url"] for pr in scenario.state()["reviews"].get("prs", [])] == []
+
+
+def reviewed_at_head(conn: sqlite3.Connection, tick_id: int, logs_dir: Path) -> None:
+    """Give PROJ-1's PR a clean review at HEAD, and its read at HEAD, an hour old."""
+    review = review_runs.insert_review_run(
+        conn,
+        tick_id=tick_id,
+        pr_url=PR,
+        sha=HEAD,
+        ticket="PROJ-1",
+        repo="repo",
+        purpose="own",
+        logs_dir=logs_dir,
+    )
+    clean = {"status": "done", "verdict": "clean", "impact": "normal", "summary": "Nothing found."}
+    db.finish_run(conn, "review_runs", review, ReviewRunStatus.DONE, json.dumps(clean))
+    records.insert(
+        records.ObservedPr,
+        url=PR,
+        repository="acme/repo",
+        number=7,
+        head_sha=HEAD,
+        draft=False,
+        observed_at=stamp("09:00"),
+        labels="[]",
+    ).run(conn)
 
 
 def derive_conflicted(conn: sqlite3.Connection, tick_id: int, key: str) -> None:

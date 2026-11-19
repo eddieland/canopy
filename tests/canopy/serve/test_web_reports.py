@@ -391,8 +391,17 @@ def test_the_health_report_groups_failures_by_cause_and_refusals_by_ask(canopy_e
     [refused] = found["refusals"]
     assert (refused["guard"], refused["decisions"], refused["ticks"]) == ("running", 2, 2)
     assert refused["asks"] == [
-        {"ticket": "PROJ-1", "chore": None, "pr": None, "kind": "resume", "decisions": 2, "last_tick": ticks[1]},
+        {
+            "ticket": "PROJ-1",
+            "chore": None,
+            "pr": None,
+            "kind": "resume",
+            "decisions": 2,
+            "ticks": 2,
+            "last_tick": ticks[1],
+        },
     ]
+    assert refused["subjects"] == 1
 
 
 def test_the_health_report_holds_each_sorts_durations_against_its_timeout(canopy_env: CanopyEnv) -> None:
@@ -516,8 +525,15 @@ def test_the_ci_report_reads_kicks_fixes_and_the_cooldown_from_the_journal(canop
         {"url": pr, "ticket_key": "PROJ-1", "phase": None, "kicks": 1, "most": 1, "still_red": 1},
     ]
     assert found["max_flaky_kicks"] == 2
-    asked = {"ticket": "PROJ-1", "chore": None, "pr": None, "kind": None, "decisions": 2, "last_tick": tick}
-    assert found["cooldown"] == {"guard": "cooldown", "decisions": 2, "ticks": 1, "last_tick": tick, "asks": [asked]}
+    asked = {"ticket": "PROJ-1", "chore": None, "pr": None, "kind": None, "decisions": 2, "ticks": 1, "last_tick": tick}
+    assert found["cooldown"] == {
+        "guard": "cooldown",
+        "subjects": 1,
+        "decisions": 2,
+        "ticks": 1,
+        "last_tick": tick,
+        "asks": [asked],
+    }
 
 
 def test_the_ci_report_reads_reruns_heads_by_day_and_time_to_green(canopy_env: CanopyEnv) -> None:

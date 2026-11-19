@@ -10,6 +10,7 @@ beside `canopy spend`, to say which failures recur and what they cost.
 from __future__ import annotations
 
 import bisect
+import collections
 import math
 import statistics
 from dataclasses import dataclass
@@ -151,19 +152,24 @@ class Ask:
     kind: RunKind | None
     #: How many of the guard's decisions refused it.
     decisions: int
+    #: In how many ticks: one ask refused tick after tick is the overseer stuck on it.
+    ticks: int
     #: The latest tick that asked for it.
     last_tick: int
 
 
 @dataclass(frozen=True)
 class Refusal:
-    """How often a guard refused what a tick asked for in the window (DESIGN §4): its decisions and their ticks."""
+    """How often a guard refused what a tick asked for in the window (DESIGN §4): its asks, decisions, and ticks."""
 
     guard: str
+    #: How many asks it refused, each counted once however often it was asked, so one stuck ask cannot rank a guard
+    #: above another that refused many (#2448).
+    subjects: int
     decisions: int
     ticks: int
     last_tick: int
-    #: What it refused most often, at most `ASKS`, the most often first, then the latest.
+    #: What it refused in the most ticks, at most `ASKS`, then the most often, then the latest.
     asks: Sequence[Ask] = ()
 
 
@@ -172,7 +178,7 @@ class Health:
     """The window's runs by how they ended, its newest failures, and its refusals, as `canopy health` reports them.
 
     The window is `spend.breakdown`'s, `[since, until)`. `outcomes` is in `spend.KINDS` order, then by sort and status;
-    `failures` the newest first, at most `FAILURES`; `refusals` the most frequent first.
+    `failures` the newest first, at most `FAILURES`; `refusals` the most asks refused first.
     """
 
     since: str
@@ -355,7 +361,7 @@ def refusals(conn: sqlite3.Connection, since: str, until: str) -> list[Refusal]:
     """What each guard refused the overseer in `[since, until)`, each a journal time, by when the decision was made.
 
     Returns:
-        A row per guard, the most frequent first, each with what it refused most often.
+        A row per guard, the most asks it refused first, then the most ticks, each with what it refused most often.
     """
     window = ("action LIKE ? AND created_at >= ? AND created_at < ?", f"{REFUSED}%", since, until)
     refused = (
@@ -363,20 +369,25 @@ def refusals(conn: sqlite3.Connection, since: str, until: str) -> list[Refusal]:
         .from_("decisions")
         .where(*window)
         .group_by("action")
-        .order_by("count(*) DESC, action")
     )
-    # What each guard refused, by what the decision named, the most often first; a guard's first `ASKS` are its asks.
+    # What each guard refused, by what the decision named, in the most ticks first; a guard's first `ASKS` are its asks.
     named = (
-        sql.select("substr(action, ?), ticket_key, chore, pr, kind, count(*), max(tick_id)", len(REFUSED) + 1)
+        sql.select(
+            "substr(action, ?), ticket_key, chore, pr, kind, count(*), count(DISTINCT tick_id), max(tick_id)",
+            len(REFUSED) + 1,
+        )
         .from_("decisions")
         .where(*window)
         .group_by("action, ticket_key, chore, pr, kind")
-        .order_by("count(*) DESC, max(tick_id) DESC")
+        .order_by("count(DISTINCT tick_id) DESC, count(*) DESC, max(tick_id) DESC")
     )
     with db.read_snapshot(conn):
         rows = list(sql.execute(conn, refused))
         asks: dict[str, list[Ask]] = {}
-        for guard, ticket, chore, pr, kind, n, last in sql.execute(conn, named):
+        # Every ask is counted, but only a guard's first `ASKS` are kept, however many it refused.
+        subjects: collections.Counter[str] = collections.Counter()
+        for guard, ticket, chore, pr, kind, n, ticks, last in sql.execute(conn, named):
+            subjects[str(guard)] += 1
             found = asks.setdefault(str(guard), [])
             if len(found) < ASKS:
                 found.append(
@@ -386,12 +397,14 @@ def refusals(conn: sqlite3.Connection, since: str, until: str) -> list[Refusal]:
                         pr=_text(pr),
                         kind=None if kind is None else RunKind(str(kind)),
                         decisions=int(n),
+                        ticks=int(ticks),
                         last_tick=int(last),
                     ),
                 )
-    return [
+    by_guard = [
         Refusal(
             guard=str(guard),
+            subjects=subjects[str(guard)],
             decisions=int(n),
             ticks=int(ticks),
             last_tick=int(last),
@@ -399,6 +412,7 @@ def refusals(conn: sqlite3.Connection, since: str, until: str) -> list[Refusal]:
         )
         for guard, n, ticks, last in rows
     ]
+    return sorted(by_guard, key=lambda r: (-r.subjects, -r.ticks, -r.decisions, r.guard))
 
 
 # One kind's ended runs in the window, by sort and status. A run still running has not ended any way yet.
