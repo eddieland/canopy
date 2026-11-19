@@ -90,7 +90,8 @@ You can do nothing else. If you want to, record a `skip` for the ticket with a `
    - A failed run. When the ticket's `last_run` ended `crashed`, `unpushed`, `unknown`, `timeout`, or `failed` (and is
      not an old `needs-plan` run), the harness has it on the attention list: record `wait`, unless an authorized
      replier (not a worker) has commented since its `ended_at`, or an `operator` message or artifact comment is dated
-     after it; then decide from the phase as usual.
+     after it, or it has `relabeled_at` (a queue label added after it found the ticket not authorized); then decide
+     from the phase as usual.
 5. **Decide** exactly one action for every ticket, and record it: `canopy_decide` for a `wait`, `skip`, or `done`, with
    a short rationale, line breaks sparingly. A dispatch, a review run or wait, an attention item, or a refusal is
    recorded by its tool and counts too. Record each attention item whose cause holds (see "The attention list"), and

@@ -155,9 +155,13 @@ def cmd_tick(click_ctx: click.Context, *, dry_run: bool, model: str | None) -> i
 
 
 @click.command("status")
+@click.option("--all", "every", is_flag=True, help="List every started ticket, the done ones too.")
 @click.pass_context
-def cmd_status(click_ctx: click.Context) -> int:
-    """Print the attention list, started tickets, running workers, and recent runs."""
+def cmd_status(click_ctx: click.Context, *, every: bool) -> int:
+    """Print the attention list, started tickets, running workers, and recent runs.
+
+    A started ticket that is done is counted, not listed, unless --all.
+    """
     ctx = open_context(click_ctx)
     last = db.last_tick(ctx.conn)
     if last is None:
@@ -190,7 +194,7 @@ def cmd_status(click_ctx: click.Context) -> int:
     _print_replies(ctx)
 
     _print_attention(attention.listed(ctx))
-    _print_started(ctx)
+    _print_started(ctx, every=every)
     _print_review_requests(ctx)
     _print_workers(ctx)
     _print_recent_runs(ctx)
@@ -311,15 +315,21 @@ def _flat(text: str) -> str:
     return " ".join(printable(text).split())
 
 
-def _print_started(ctx: Context) -> None:
-    """A line per ticket the operator started (DESIGN §22): its state, its phase, and whether it waits on a reply."""
-    records = [r for r in db.starts(ctx.conn) if r.subject_kind == conversation.TICKET]
-    if not records:
+def _print_started(ctx: Context, *, every: bool) -> None:
+    """A line per ticket the operator started (DESIGN §22): its state, its phase, and whether it waits on a reply.
+
+    A done ticket is only counted, at the end, unless `every`: it has nothing left for the operator to follow, and the
+    started tickets of a workspace in use are mostly done. The heading counts the tickets listed.
+    """
+    started = [
+        (r, db.get_ticket(ctx.conn, r.subject_id)) for r in db.starts(ctx.conn) if r.subject_kind == conversation.TICKET
+    ]
+    if not started:
         return
-    click.echo(f"\nStarted ({len(records)}):")
-    for r in records:
+    listed = [(r, ticket) for r, ticket in started if every or ticket is None or not ticket.done]
+    click.echo(f"\nStarted ({len(listed)}):")
+    for r, ticket in listed:
         key = r.subject_id
-        ticket = db.get_ticket(ctx.conn, key)
         phase = phase_of(ctx.conn, ticket) if ticket is not None else "not seen by a tick yet"
         done = ", done" if ticket is not None and ticket.done else ""
         waiting = conversation.latest_question(ctx.conn, key) if conversation.is_started(r) else None
@@ -327,6 +337,8 @@ def _print_started(ctx: Context) -> None:
         title = ticket.title if ticket is not None else None
         since = attention.age(r.stopped_at or r.started_at)
         click.echo(f"  {named(key, title)}  {r.status} {since} ago  phase {phase}{done}{note}")
+    if hidden := len(started) - len(listed):
+        click.echo(f"  ({hidden} done; `canopy status --all` lists them)")
 
 
 def _print_review_requests(ctx: Context) -> None:

@@ -14,6 +14,18 @@ class Command(VisitorBasedCodemodCommand):
     """
 
     @classmethod
+    def covers(cls, filename: str | None) -> bool:  # noqa: ARG003
+        """Whether the codemod holds a file at this path to it at all, before its text is read for `wants`.
+
+        Args:
+            filename: The file's path, or None for text with no file, which every codemod covers.
+
+        Returns:
+            True unless the file is outside what the codemod is for. Always True here.
+        """
+        return True
+
+    @classmethod
     def wants(cls, source: str) -> bool:  # noqa: ARG003
         """Whether the codemod might change a module with this text.
 
