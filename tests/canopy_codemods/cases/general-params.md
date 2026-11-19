@@ -408,6 +408,94 @@ def known(item: list[str], seen: Collection[list[str]]) -> bool:
     return item in seen
 ```
 
+### A dict copied
+
+```python
+def copy(row: dict[str, str]) -> int:
+    return len(dict(row))
+```
+
+```python
+from collections.abc import Mapping
+
+def copy(row: Mapping[str, str]) -> int:
+    return len(dict(row))
+```
+
+### Imported again where a function's import cannot serve
+
+```python
+def helper() -> None:
+    from collections.abc import Iterable
+
+
+def total(costs: list[float]) -> float:
+    return sum(costs)
+```
+
+```python
+from collections.abc import Iterable
+
+def helper() -> None:
+    from collections.abc import Iterable
+
+
+def total(costs: Iterable[float]) -> float:
+    return sum(costs)
+```
+
+### Imported again where the checker's import cannot serve
+
+```python
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+
+def total(costs: list[float]) -> float:
+    return sum(costs)
+```
+
+```python
+from typing import TYPE_CHECKING
+from collections.abc import Iterable
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+
+def total(costs: Iterable[float]) -> float:
+    return sum(costs)
+```
+
+### Beside a one-line TYPE_CHECKING suite
+
+```python
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING: from pathlib import Path
+
+
+def total(costs: list[float], path: Path) -> float:
+    return sum(costs)
+```
+
+```python
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+from collections.abc import Iterable
+
+if TYPE_CHECKING: from pathlib import Path
+
+
+def total(costs: Iterable[float], path: Path) -> float:
+    return sum(costs)
+```
+
 ## Left alone
 
 ### Mutated
@@ -667,4 +755,64 @@ def total(*costs: list[float]) -> float:
 ```python
 def larger(a: list[int], b: list[int]) -> list[int] | int:
     return max(a, b)
+```
+
+### A class binds the abstract name
+
+```python
+class Box:
+    Mapping = 3
+
+    def get(self, row: dict[str, str]) -> str:
+        return row["x"]
+```
+
+### A builtin's name bound
+
+```python
+from mylib import sorted
+
+
+def ordered(items: list[str]) -> int:
+    return len(sorted(items))
+```
+
+### A method another class of the module overrides
+
+```python
+class Base:
+    def total(self, costs: list[float]) -> float:
+        return sum(costs)
+
+
+class Totals(Base):
+    def total(self, costs: list[float]) -> float:
+        costs.append(1.0)
+        return 0.0
+```
+
+### A method a class of the module overrides through a generic base
+
+```python
+class Base[T]:
+    def total(self, costs: list[float]) -> float:
+        return sum(costs)
+
+
+class Totals(Base[int]):
+    def total(self, costs: list[float]) -> float:
+        costs.append(1.0)
+        return 0.0
+```
+
+### A method under an if in a class with a base
+
+```python
+import sys
+
+
+class Totals(Base):
+    if sys.version_info >= (3, 12):
+        def total(self, costs: list[float]) -> float:
+            return sum(costs)
 ```

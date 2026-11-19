@@ -1,6 +1,8 @@
 """The `general-params` codemod: what it widens, what it leaves alone, and that it has nothing to do twice."""
 
+import ast
 from typing import Final
+from unittest import mock
 
 import pytest
 from canopy_codemods import run
@@ -37,7 +39,11 @@ def test_a_parameter_is_found_by_the_line_of_its_name() -> None:
 
 
 def test_a_module_that_subscripts_no_concrete_collection_is_never_parsed() -> None:
-    assert not GeneralParams.wants("def f(x: tuple[int, ...]) -> (\n")
+    with mock.patch.object(ast, "parse", autospec=True, side_effect=ast.parse) as parse:
+        assert not GeneralParams.wants("def f(x: tuple[int, ...]) -> int:\n    return 0\n")
+        assert GeneralParams.wants("def f(x: list[int]) -> int:\n    return len(x)\n")
+
+    assert parse.call_count == 1
 
 
 def test_a_module_that_does_not_parse_is_wanted_so_that_it_is_reported() -> None:
