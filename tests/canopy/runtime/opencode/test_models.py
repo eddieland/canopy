@@ -43,8 +43,8 @@ class Models:
         raise AssertionError(args)
 
 
-def printing(stdout: str = "", *, code: int = 0, timed_out: bool = False) -> Models:
-    return Models(lambda args: procs.Result(tuple(args), code, stdout, "", timed_out=timed_out))
+def printing(stdout: str = "", *, code: int = 0, timed_out: bool = False, stderr: str = "") -> Models:
+    return Models(lambda args: procs.Result(tuple(args), code, stdout, stderr, timed_out=timed_out))
 
 
 def test_each_model_listed_is_read_and_any_other_line_passed_over() -> None:
@@ -106,6 +106,7 @@ def test_with_variants_each_models_json_is_read_for_them_in_its_order() -> None:
     assert runner.ran == [(("opencode", "models", "--verbose"), Path("/ws"), models.TIMEOUT_SECONDS, True)]
     assert models.listed(printing(code=1), cwd=Path("/ws"), variants=True) == ModelList(
         error="`opencode models --verbose` exited 1",
+        transient=True,
     )
 
 
@@ -121,7 +122,15 @@ def test_an_opencode_with_no_provider_lists_no_model() -> None:
     ],
 )
 def test_a_list_that_cannot_be_read_says_why_in_canopy_s_words(runner: Models, error: str) -> None:
-    assert models.listed(runner, cwd=Path("/ws")) == ModelList(error=error)
+    """A command that exits non-zero or times out is one that asking again may read (DESIGN §13)."""
+    assert models.listed(runner, cwd=Path("/ws")) == ModelList(error=error, transient=True)
+
+
+def test_a_list_that_fails_keeps_the_end_of_what_opencode_printed_on_stderr() -> None:
+    """Its last lines, its control characters dropped, so the operator sees why without reading the whole of it."""
+    stderr = "".join(f"line {n}\n" for n in range(1, 31)) + "Error: \x1b[31mprovider timed out\x1b[0m\n"
+    found = models.listed(printing(code=1, stderr=stderr), cwd=Path("/ws"))
+    assert found.stderr == "\n".join([*(f"line {n}" for n in range(12, 31)), "Error:  [31mprovider timed out [0m"])
 
 
 def test_opencode_missing_from_path_fails() -> None:

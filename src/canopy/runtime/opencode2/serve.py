@@ -38,6 +38,14 @@ LISTENING_RE: Final = re.compile(r"server listening on (http://127\.0\.0\.1:\d{1
 class FailedError(Exception):
     """The server could not be started, asked, or understood."""
 
+    def __init__(self, message: str, *, transient: bool = False) -> None:
+        """Take what failed, and whether asking again may succeed."""
+        super().__init__(message)
+        #: Whether asking again may succeed: the server or a question of it ran, then exited non-zero or timed out, as
+        #: it does for a cause that passes (a slow provider, a network blip). False when it could not start at all, or
+        #: answered what canopy cannot read, which asking again would not change.
+        self.transient = transient
+
 
 class Serve:
     """`opencode serve`, started with `launcher` in `cwd` with `env` and a password of its own, for one function."""
@@ -78,8 +86,8 @@ class Serve:
         except procs.ProcError as e:
             raise FailedError(f"`opencode serve` could not start: {e}") from None
         if result.timed_out:
-            raise FailedError(f"`opencode serve` did not listen within {TIMEOUT_SECONDS} seconds")
-        raise FailedError(f"`opencode serve` exited {result.returncode}; run it to see why")
+            raise FailedError(f"`opencode serve` did not listen within {TIMEOUT_SECONDS} seconds", transient=True)
+        raise FailedError(f"`opencode serve` exited {result.returncode}; run it to see why", transient=True)
 
 
 class _Answered(Exception):  # noqa: N818 - it is no error: it ends the server once the questions are answered.
@@ -108,10 +116,10 @@ class Client:
         except procs.ProcError as e:
             raise FailedError(f"`opencode api {operation}` could not start: {e}") from None
         if result.timed_out:
-            raise FailedError(f"`opencode api {operation}` took over {ASK_SECONDS} seconds")
+            raise FailedError(f"`opencode api {operation}` took over {ASK_SECONDS} seconds", transient=True)
         if not result.ok:
             # Not what it printed: an error about the config may quote a value of it, and an agent reads this.
-            raise FailedError(f"`opencode api {operation}` exited {result.returncode}")
+            raise FailedError(f"`opencode api {operation}` exited {result.returncode}", transient=True)
         return result.stdout
 
 
