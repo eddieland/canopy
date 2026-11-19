@@ -137,6 +137,10 @@ class RunState(TypedDict):
     #: each repository started from. An unstacked run's base is its repository's own, which no decision reads.
     repos: NotRequired[list[RunRepo]]
     ended_at: str | None
+    #: Present only on a run that found its ticket not authorized, once the `tracker` source observed a queue label
+    #: added to it after the run ended (`loop.relabel`): when the newest was added. The operator's "try again" (DESIGN
+    #: §14), which the attention list no longer holds the ticket for.
+    relabeled_at: NotRequired[str]
 
 
 class RunRepo(TypedDict):
@@ -249,6 +253,7 @@ def state_block(
     dispatches_to_come: ToCome | None = None,
     units: Mapping[str, Sequence[records.TicketUnit]],
     last_runs: Mapping[str, records.Run],
+    relabeled: Mapping[str, str] | None = None,
     run_slots: Mapping[int, Sequence[records.RunSlot]],
     run_reasons: Mapping[int, Sequence[str]] | None = None,
     attempts: Mapping[policy.Unit, Mapping[str, int]],
@@ -292,7 +297,8 @@ def state_block(
     and reviews the operator sent through canopy (`drafts.sent_by_pr`); a unit whose PR has none has no
     `operator_sent` key (DESIGN §29). `observations` is what the connectors last read of every ticket the block lists
     or the query returned, each subject fresh, stale, or unobserved (`observations.section`, DESIGN §35). `numbered`
-    holds the items the cursors name, by journal number.
+    holds the items the cursors name, by journal number. `relabeled` holds, by key, when a queue label was added to a
+    ticket after its latest run found it not authorized (`relabel.lifted`): its run's `relabeled_at`.
 
     Returns:
         The section as Markdown: its heading, whether the tick is a dry run, and the state as a fenced JSON block.
@@ -302,6 +308,7 @@ def state_block(
     planned = planned or {}
     feedback_planned = feedback_planned or {}
     run_reasons = run_reasons or {}
+    relabeled = relabeled or {}
     operator_sent = operator_sent or {}
     no_attempts = dict.fromkeys(policy.KINDS, 0)
 
@@ -336,7 +343,13 @@ def state_block(
             "units": [unit_summary(key, u) for u in its_units],
             "needs_human_since": t.needs_human_since,
             "last_seen_at": t.last_seen_at,
-            "last_run": _run_summary(last_runs.get(key), run_slots, run_reasons, config.trust.branch_prefix),
+            "last_run": _run_summary(
+                last_runs.get(key),
+                run_slots,
+                run_reasons,
+                config.trust.branch_prefix,
+                relabeled_at=relabeled.get(key),
+            ),
         }
         # A private ticket's conversation state, or a public one's new operator messages, each only when it has one.
         if key in private:
@@ -513,10 +526,14 @@ def _run_summary(
     run_slots: Mapping[int, Sequence[records.RunSlot]],
     run_reasons: Mapping[int, Sequence[str]],
     branch_prefix: str,
+    *,
+    relabeled_at: str | None,
 ) -> RunState | None:
     if run is None:
         return None
     summary: RunState = {"run_id": run.id, "kind": run.kind, "status": run.status, "ended_at": run.ended_at}
+    if relabeled_at is not None:
+        summary["relabeled_at"] = relabeled_at
     slots = run_slots.get(run.id, [])
     # A stacked base is always under the prefix, as the dispatch guard checks (DESIGN §10); a repository's own is not.
     if any(_under(branch_prefix, s.base_branch) for s in slots):

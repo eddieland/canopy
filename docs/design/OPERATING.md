@@ -580,7 +580,9 @@ in a notification.
 reason: `crashed`, `unpushed`, `unknown_result` (for `unknown` or `timeout`), or `worker_failed` (for `failed`). The
 cause is gone when a newer run starts or the ticket is done. The overseer does not dispatch such a ticket again until
 an authorized replier comments, or the operator sends a message, after the run ended (§22, D093): that is how a human
-says "try again". `blocked` and `stopped` raise nothing, nor does a ticket the operator stopped (§22). The harness also
+says "try again". For a run that found its ticket without a queue label, adding one is: the cause is also gone once
+the `tracker` source observes a queue label added after the run ended, and the state block says so on the run.
+`blocked` and `stopped` raise nothing, nor does a ticket the operator stopped (§22). The harness also
 raises `awaiting_reply` for a started ticket's, a planner's, or a task's unanswered question (§22, §25, §36),
 `plan_review` on `epic:N` for an epic's plan waiting on the operator (§43),
 `repo_missing` for a mapped repository with no clone and `auto_maintenance_on` for a clone whose config leaves git's
