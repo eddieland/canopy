@@ -523,10 +523,10 @@ REFUSALS: Final = [
         id="dispatch",
     ),
     pytest.param(
-        Verb("dispatch", {"key": "PROJ-1", "kind": "implement", "repos": ["repo"]}, dry_run=True),
+        Verb("dispatch", {"key": "PROJ-1", "kind": "implement", "label": "bug", "repos": ["repo"]}, dry_run=True),
         "dispatch refused (unauthorized)",
         "refused:unauthorized",
-        id="dispatch-without-a-label",
+        id="dispatch-with-a-label-not-observed",
     ),
     pytest.param(
         # A null is the field left out: the guard refuses it, and records it, as it does a call that leaves it out.

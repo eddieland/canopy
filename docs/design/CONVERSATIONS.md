@@ -53,8 +53,8 @@ so no agent can lift a limit that bounds it (TRUST_MODEL T1).
 - The start record is the authorization. Only the operator's commands write it, and, under `tracker.private` (off by
   default, D119), the first dispatch of a labeled ticket canopy never ran; removing the label then does not stop it.
   The label stays visible (REQUIREMENTS R11): the switch hides the conversation, not the work.
-- Dispatch checks the start record in code, where a public ticket's label is a claim (D051), and always runs a started
-  ticket's private worker and prompt.
+- Dispatch checks the start record in code, as it checks a public ticket's label against the observation (D051), and
+  always runs a started ticket's private worker and prompt.
 - `stop` keeps the ticket private and lets nothing dispatch it until it is started again. Stopped now, its run is ended
   as reconcile ends a crashed one (§6) and still counts toward attempt limits. Stopped with a wrap-up, its run is told
   on its next tool call, through a file in its answers directory that canopy's plugin reads (§33, §41), to keep its

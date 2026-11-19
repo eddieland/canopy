@@ -57,12 +57,13 @@ Controls:
   one of `tracker.labels`, and whose replies count for resuming blocked work
   (`trust.authorized_repliers`). All other text is data. Prompts say so.
 - canopy has no tracker code, so it reads labels only through a `tracker` source, and a live tick showed an overseer
-  can skip its label check for a ticket the journal remembers (D051). A dispatch refuses without a `label` naming one of
-  `tracker.labels`; that is a recorded claim a harness guard checks against config, not proof the label is on the
-  ticket. Where a `tracker` source observes the ticket, it is checked against the observation too (below). The
-  independent check is the worker's: every worker prompt has it re-read the ticket's labels and stop,
-  changing nothing, without one, and a worker prompt that cannot carry the labels is refused. Both checks are agent
-  judgment, so they reduce the chance of unlabeled work rather than exclude it; human review of every PR remains.
+  can skip its label check for a ticket the journal remembers (D051). A dispatch of a public ticket is refused unless
+  the source's fresh observation of it carries one of `tracker.labels`: a `label` the overseer names must be one it
+  observed, and one it leaves out is taken from the observation, so the guard is in code rather than a claim. It
+  proves the label was there when last read, not that it still is. The independent check is the worker's: every
+  worker prompt has it re-read the ticket's labels and stop, changing nothing, without one, and a worker prompt that
+  cannot carry the labels is refused. That check is agent judgment, so together they reduce the chance of unlabeled
+  work rather than exclude it; human review of every PR remains.
 - An approved plan (DESIGN §25) is data, not an operator instruction. A planner wrote it from ticket text, which anyone
   who can edit the ticket shapes, so the operator's approval authorizes the `implement`, not what the plan's text asks
   for. A worker's prompt names its copy and gives its outline, never its text, and says the prompt's obligations come
@@ -107,7 +108,8 @@ Controls:
   again, of a candidate the block listed to the overseer this tick alone, cut and marked as the block shows them, and
   records nothing; it refuses a ticket the harness decided, one the block lists no text of, and a key the journal
   lacks. The `dispatch` tool checks the overseer's claims against them in code
-  (DESIGN §7), before its other guards: the label must be one observed on the ticket, a `resume` for `reply` must cover
+  (DESIGN §7), before its other guards: a queue label must be observed on the ticket (a `label` the overseer leaves
+  out is taken from there), a `resume` for `reply` must cover
   a new comment by an authorized replier that is not a worker's or a new operator message, a `resume` for `review` must
   cover a trusted reviewer's item, or anyone else's only with an operator message after it (`unauthorized`), and each
   cursor, a tick's `ticket-set` included, must name an item observed and shown (`unobserved`). A `resume`'s
@@ -183,9 +185,9 @@ Controls:
   (D089). The overseer records `untrusted_review` and keeps its `review` cursor before it until the operator answers in
   canopy, with `canopy reply` or the web UI; the `resume` worker addresses such a comment only as an operator message
   about it says, and is told who is trusted. Where the `vcs` source observes the PR, the harness checks this too
-  (above); elsewhere both checks are agent judgment, as label checks are (D051). canopy's own reviewer is trusted
-  only when the list names `canopy:review`, and is known only from its journal: it posts nothing, so nothing on a PR
-  can claim to be it.
+  (above); elsewhere both checks are agent judgment, as the worker's label check is (D051). canopy's own reviewer is
+  trusted only when the list names `canopy:review`, and is known only from its journal: it posts nothing, so nothing
+  on a PR can claim to be it.
 - With `policy.feedback_plan = "approve"` (DESIGN §32, private), D089's gate becomes the operator's approval of a
   feedback plan, checked in code: every `resume` but one for `no_pr` alone is refused (`unplanned`) until the ticket
   has an approved feedback plan no `resume` has spent, and `plan_changed` once its file differs from the hash approved.
@@ -239,10 +241,10 @@ Controls:
   controls a listed tracker account can answer and resume the ticket's worker as the operator; the words are on the
   tracker, where the operator wrote them; and an edit after canopy read the comment keeps the first words. With
   `tracker.private`
-  set (private), a labeled ticket canopy never ran is started by its first dispatch instead, on the overseer's
-  `label` claim, which the harness checks against config as for any public dispatch (D119). No worker re-reads the
-  labels for it, then or later, and removing the label does not stop it: an overseer that claims a label a ticket
-  does not carry starts it for good, with nothing but its own read to catch it, until the operator runs `canopy stop`.
+  set (private), a labeled ticket canopy never ran is started by its first dispatch instead, on a queue label the
+  harness checks against the observation and config as for any public dispatch (D119). No worker re-reads the
+  labels for it, then or later, and removing the label does not stop it: a label removed since the source's last read
+  starts it for good, with nothing but that read to catch it, until the operator runs `canopy stop`.
   That is the switch's residual, beside D051's; `canopy show` and the dispatch's decision name such a start.
   A dispatch checks the start record in code, in the transaction that inserts the run, so it needs no `label`, and
   `_run` reads it again before the worker starts. A stopped ticket is dispatched by nothing, whatever

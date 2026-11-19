@@ -80,15 +80,42 @@ def observed(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> sqlite3.Connect
 def test_a_label_not_observed_on_the_ticket_is_unauthorized(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
     canopy_env.configure(canopy_env.user_file, TRACKER)
     held(canopy_env, conn, KEY, at=ago(hours=1))
-    observe_ticket(conn, labels={"bug": None}, at=ago())
+    read_at = ago()
+    observe_ticket(conn, labels={"bug": None}, at=read_at)
     branches_read(conn, at=ago())
     action, reason = dispatched(conn, kind="implement", label=LABEL)
     assert action == "refused:unauthorized"
-    assert reason.startswith(f"{LABEL!r} was not on {KEY} when the tracker source last read it")
+    assert reason.startswith(f"{LABEL!r} was not on {KEY} when the tracker source last read it, at {read_at}")
 
 
-def test_a_label_observed_case_insensitively_dispatches(observed: sqlite3.Connection) -> None:
-    assert dispatched(observed, kind="resume", label=LABEL.upper(), reasons=["conflict"])[0] == "dispatch:resume"
+def test_a_ticket_observed_with_no_queue_label_is_unauthorized(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
+    # With no label named, the guard checks the observation itself, and names when it was read, never a label (D051).
+    canopy_env.configure(canopy_env.user_file, TRACKER)
+    held(canopy_env, conn, KEY, at=ago(hours=1))
+    read_at = ago()
+    observe_ticket(conn, labels={"bug": None}, at=read_at)
+    branches_read(conn, at=ago())
+    said = f"{KEY} carried no queue label when the tracker source last read it, at {read_at}; nothing authorizes a run"
+    assert dispatched(conn, kind="implement") == ("refused:unauthorized", f"{said} of it")
+
+
+@pytest.mark.parametrize("named", [LABEL.upper(), None])
+def test_a_label_observed_dispatches_named_or_not(observed: sqlite3.Connection, named: str | None) -> None:
+    # Named case-insensitively, or left out for the harness to take from the observation, it records the configured one.
+    observed.execute("UPDATE observed_tickets SET labels = ?", (json.dumps([{"name": "bug"}, {"name": LABEL}]),))
+    action, rationale = dispatched(observed, kind="resume", label=named, reasons=["conflict"])
+    assert action == "dispatch:resume"
+    assert f"; label {LABEL};" in rationale
+
+
+def test_a_label_named_must_be_a_configured_one_though_observed(observed: sqlite3.Connection) -> None:
+    # The overseer may not pick another label it saw: the one it names must agree with config.
+    observed.execute("UPDATE observed_tickets SET labels = ?", (json.dumps([{"name": "bug"}, {"name": LABEL}]),))
+    action, reason = dispatched(observed, kind="resume", label="bug", reasons=["conflict"])
+    assert (action, reason) == (
+        "refused:unauthorized",
+        f"'bug' is not a configured queue label; name the one you read on {KEY}",
+    )
 
 
 @pytest.mark.parametrize(
@@ -98,11 +125,13 @@ def test_a_label_observed_case_insensitively_dispatches(observed: sqlite3.Connec
         pytest.param("pr", f"{KEY} in repo is stale ({PR} last observed", id="its-units-pr"),
     ],
 )
+@pytest.mark.parametrize("label", [LABEL, None])
 def test_a_dispatch_on_a_stale_subject_is_refused(
     canopy_env: CanopyEnv,
     conn: sqlite3.Connection,
     stale: str,
     why: str,
+    label: str | None,
 ) -> None:
     canopy_env.configure(canopy_env.user_file, {**TRACKER, **TRUST})
     held(canopy_env, conn, KEY, at=ago(hours=2))
@@ -110,7 +139,7 @@ def test_a_dispatch_on_a_stale_subject_is_refused(
     observe_ticket(conn, at=ago(hours=1) if stale == "ticket" else ago())
     observe_pr(conn, at=ago(hours=1) if stale == "pr" else ago())
     branches_read(conn, at=ago())
-    action, reason = dispatched(conn, kind="resume", label=LABEL, reasons=["conflict"])
+    action, reason = dispatched(conn, kind="resume", label=label, reasons=["conflict"])
     assert action == "refused:stale"
     assert reason.startswith(why)
 

@@ -260,6 +260,17 @@ def _vcs_read_lately(conn: sqlite3.Connection, minutes: int) -> bool:
     return bool(query.all(conn))
 
 
+def tracker_unlabels(state: Path, *keys: str) -> None:
+    """The tests' tracker holds `keys` open with no label from its next read on, as a follow-up is filed (DESIGN §18).
+
+    `state` is the `connector_state` fixture's file, which this replaces: the `tracker` source answers for `keys` so,
+    and holds every other ticket labeled, as before.
+    """
+    none: list[dict[str, str]] = []
+    lines = [{"kind": "ticket", "key": key, "title": key, "state": "open", "labels": none} for key in keys]
+    state.write_text(json.dumps({TRACKER_SOURCE: {"lines": lines}}))
+
+
 def tick_starts(runner: procs.Runner | None = None, *, tick_id: int | None = None) -> None:
     """Start the runs a tick recorded, as the tick does once its overseer's run has ended (DESIGN §40).
 
