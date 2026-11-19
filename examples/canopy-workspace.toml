@@ -31,8 +31,11 @@ summary = "Public REST API. Owns the order schema and the generated OpenAPI spec
 # push_dismisses_approval = true
 # Optional: a partial clone, for a very large repository. `canopy workspace sync` passes it to `git clone` as --filter:
 # "blob:none" (no file contents until one is needed), "blob:limit=<n>[kmg]" (none larger than that), or "tree:<depth>".
-# git fetches what the clone lacks from origin as it needs it, but the reviewer's and planner's git tools fetch
-# nothing, so their reads of old history fail. A clone already there stays as it was made; unset clones everything.
+# A worker's git fetches what the clone lacks from origin as it needs it, but the reviewer's and planner's git tools
+# fetch nothing. A review still reads its PR's diff and changed files, which canopy's own diff fetches before it
+# starts; its blame, its log of older commits, and files at the base branch's tip fail, as does any history a plan
+# reads. "blob:none" is for a repository whose reviews and plans you can do without; "blob:limit" fails those reads
+# only on a larger file. A clone already there stays as it was made; unset clones everything.
 # clone_filter = "blob:none"
 
 # Optional: the checks that are not CI, each by its exact name. canopy does not wait on one, count it red, or need it to
