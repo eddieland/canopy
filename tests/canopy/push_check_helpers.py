@@ -41,7 +41,6 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import TYPE_CHECKING, Final
 
-from canopy.core import run_changes
 from canopy.core.vocab import RunStatus
 from tests.canopy.helpers import branch_behind_main, commands_run, commit_file, worker_does
 from tests.conftest import git
@@ -54,6 +53,8 @@ if TYPE_CHECKING:
 
 #: The run's branch, as an `implement` of PROJ-1 with no slug names it.
 BRANCH: Final = "agent/PROJ-1-work"
+#: What `play` has the worker run last: origin's own answer to where BRANCH is, which moves nothing in the slot.
+_ORIGIN_HAS: Final = ("git", "ls-remote", "origin", f"refs/heads/{BRANCH}")
 
 
 class Given(StrEnum):
@@ -85,7 +86,7 @@ def commit(name: str) -> Step:
     Returns:
         The step.
     """
-    return Step(f"commit {name}", commit_file(name))
+    return Step(f"commit {name}", tuple(commit_file(name)))
 
 
 def edit(name: str, to: str = "again") -> Step:
@@ -134,36 +135,36 @@ def new_branch(name: str) -> Step:
     Returns:
         The step.
     """
-    return Step(f"new branch {name}", ["git", "checkout", "--quiet", "-b", name])
+    return Step(f"new branch {name}", ("git", "checkout", "--quiet", "-b", name))
 
 
 def _sh(says: str, script: str) -> Step:
-    return Step(says, ["sh", "-c", script])
+    return Step(says, ("sh", "-c", script))
 
 
 #: The worker pushes HEAD to BRANCH. Origin takes it only if it adds to what BRANCH has.
-PUSH: Final = Step("push", ["git", "push", "--quiet", "origin", f"HEAD:refs/heads/{BRANCH}"])
+PUSH: Final = Step("push", ("git", "push", "--quiet", "origin", f"HEAD:refs/heads/{BRANCH}"))
 #: The worker pushes HEAD to BRANCH with a lease, replacing what origin has, as after a squash or rebase.
 FORCE_PUSH: Final = Step(
     "force-push",
-    ["git", "push", "--quiet", "--force-with-lease", "origin", f"HEAD:refs/heads/{BRANCH}"],
+    ("git", "push", "--quiet", "--force-with-lease", "origin", f"HEAD:refs/heads/{BRANCH}"),
 )
 #: The worker amends its last commit's message alone: a new commit with the same change.
-REWORD: Final = Step("reword", ["git", "commit", "--quiet", "--amend", "-m", "PROJ-1: reworded"])
+REWORD: Final = Step("reword", ("git", "commit", "--quiet", "--amend", "-m", "PROJ-1: reworded"))
 #: The worker commits a revert of its last commit.
-REVERT: Final = Step("revert", ["git", "revert", "--quiet", "--no-edit", "HEAD"])
+REVERT: Final = Step("revert", ("git", "revert", "--quiet", "--no-edit", "HEAD"))
 #: The worker throws its last commit away, `git reset --hard HEAD~1`.
-DROP_LAST: Final = Step("drop last", ["git", "reset", "--quiet", "--hard", "HEAD~1"])
+DROP_LAST: Final = Step("drop last", ("git", "reset", "--quiet", "--hard", "HEAD~1"))
 #: The worker rebases its commits onto origin's `main`.
-REBASE: Final = Step("rebase", ["git", "rebase", "--quiet", "origin/main"])
+REBASE: Final = Step("rebase", ("git", "rebase", "--quiet", "origin/main"))
 #: The worker squashes everything the branch has past `main` into one commit on `main`.
 SQUASH: Final = _sh("squash", "git reset --quiet --soft origin/main && git commit --quiet -m 'PROJ-1: squashed'")
 #: The worker rebases onto origin's `main` with `--autosquash`, which folds each fixup into its target.
 AUTOSQUASH: Final = _sh("autosquash", "GIT_SEQUENCE_EDITOR=: git rebase --quiet -i --autosquash origin/main")
 #: The worker moves HEAD to origin's `main`, off whatever it committed.
-CHECKOUT_MAIN: Final = Step("checkout main", ["git", "checkout", "--quiet", "--detach", "origin/main"])
+CHECKOUT_MAIN: Final = Step("checkout main", ("git", "checkout", "--quiet", "--detach", "origin/main"))
 #: The worker moves HEAD to BRANCH as origin has it, off whatever it committed or rebased.
-CHECKOUT_BRANCH: Final = Step("checkout branch", ["git", "checkout", "--quiet", "--detach", f"origin/{BRANCH}"])
+CHECKOUT_BRANCH: Final = Step("checkout branch", ("git", "checkout", "--quiet", "--detach", f"origin/{BRANCH}"))
 
 
 @dataclass(frozen=True)
@@ -222,8 +223,11 @@ class Story:
 class Telling:
     """A story not yet ended: say what the worker does, whether canopy pushes, and then the verdict."""
 
+    #: What is true before the run.
     given: Sequence[Given] = ()
+    #: What the worker does, in order.
     steps: Sequence[Step] = ()
+    #: Whether canopy's own push puts the worker's HEAD on origin.
     pushes: bool = False
 
     def worker(self, *steps: Step) -> Telling:
@@ -281,15 +285,16 @@ def play(story: Story, scenario: Scenario, git_pool: GitPool) -> None:
         scenario.configures(trust={"rebase": True})
     if BRANCH_BEHIND_MAIN in story.given:
         branch_behind_main(git_pool, BRANCH)
-    run = scenario.run(worker=worker_does(*[list(step.argv) for step in story.steps]))
+    run = scenario.run(worker=worker_does(*[list(step.argv) for step in story.steps], list(_ORIGIN_HAS)))
 
-    ran = commands_run(scenario.agent_log)[-1]
+    # The worker's last command, not a step of the story's, read where origin's branch was when the worker ended.
+    *ran, left = commands_run(scenario.agent_log)[-1]
     for step, command in zip(story.steps, ran, strict=True):
         code, said = command["returncode"], str(command["stderr"]).strip()
         scenario.story.append(f"the worker: {step.says}, exit {code}" + (f": {said}" if code else ""))
     note = json.loads(run.row["result_json"]).get("harness", "")
-    commits = run_changes.commits_of(scenario.conn, run.id).values()
-    pushed = any(commit.harness_pushed for found in commits for commit in found)
+    # Canopy pushed if origin's branch is elsewhere than the worker left it: nothing else pushes after the worker.
+    pushed = next(iter(str(left["stdout"]).split()), None) != git_pool.remote_head(BRANCH)
     scenario.story.append(f"canopy: {'pushes, ' if pushed else ''}{run.status}" + (f": {note}" if note else ""))
     scenario.story.append("origin:\n" + git("log", "--graph", "--all", "--format=%h%d %s", cwd=git_pool.origin))
 
