@@ -14,11 +14,12 @@ from typing import TYPE_CHECKING, Final, TypedDict
 
 from canopy.core import chore_result, contract, epic_outline, review_result
 from canopy.core.db import Event
+from canopy.core.vocab import RunStatus
 
 if TYPE_CHECKING:
     from canopy.core import epic_changes, records, spend
     from canopy.core.config import Config
-    from canopy.core.vocab import ChoreRunStatus, ReviewRunStatus, RunStatus
+    from canopy.core.vocab import ChoreRunStatus, ReviewRunStatus
 
 #: The attention list's diff: a group, and the name a sink takes it by, with no events of its own in the outbox.
 ATTENTION: Final = "attention"
@@ -482,7 +483,7 @@ def run_ended(
         pr_urls: list[str] = [str(u) for u in prs.values() if u] if isinstance(prs, dict) else []
         if not pr_urls and pr:
             pr_urls = [str(pr)]
-        question = result.get("question") if status == "blocked" else None
+        question = result.get("question") if status == RunStatus.BLOCKED else None
         summary = contract.stored_note(result)
         fields: RunEnded = {
             "ticket": run["ticket_key"],
@@ -733,7 +734,7 @@ def task_ended(
     """
     result = contract.stored_object(result_json)
     summary = contract.stored_note(result)
-    question = result.get("question") if status == "blocked" else None
+    question = result.get("question") if status == RunStatus.BLOCKED else None
     prs = result.get("prs")
     listed: list[object] = prs if isinstance(prs, list) else []
     urls = [u for u in listed if isinstance(u, str) and u]
