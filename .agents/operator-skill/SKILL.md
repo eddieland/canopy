@@ -40,7 +40,7 @@ canopy runs only in a workspace, even for one repository. Run these anywhere in 
 
 | Command | What it does |
 |---|---|
-| `canopy status` | The last tick, attention list, running workers, chores, and sinks. Start here. |
+| `canopy status` | The last tick, attention list, started tickets still in progress (`--all` lists the done ones too), running workers, chores, and sinks. Start here. |
 | `canopy show REF` | A ticket's phase, PRs, runs, conversation, and comments; or `run:ID`, `chore:NAME`, or `task:N`. |
 | `canopy task submit TEXT` | Hands canopy one-off work in your words, about no ticket (`-` reads stdin; `--repo`, `--project`). The next tick starts it on `<branch_prefix>task/N`; `canopy task list` lists them. |
 | `canopy reply task:N [TEXT]` | Answers a task (TEXT, or stdin without it or with `-`): the next tick starts its next run, on its branch, with the conversation so far. A waiting loop wakes. |

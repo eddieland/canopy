@@ -122,7 +122,7 @@ def rewrite(source: str, names: Iterable[str], *, filename: str | None = None) -
     """
     for name in names:
         codemod = CODEMODS[name]
-        if not codemod.wants(source):
+        if not codemod.covers(filename) or not codemod.wants(source):
             continue
         result = apply(codemod(CodemodContext(filename=filename)), source)
         match result:
