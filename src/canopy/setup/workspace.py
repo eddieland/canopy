@@ -240,7 +240,7 @@ def missing(ws: workspace.Workspace) -> list[workspace.Repo]:
 
 
 def clone(runner: procs.Runner, ws: workspace.Workspace, repo: workspace.Repo) -> Checked:
-    """Clone `repo` from the map's URL into `repos/<name>`, partially when the map gives it a `clone_filter`.
+    """Clone `repo` from the map's URL into `repos/<name>`.
 
     Returns:
         `cloned`, or `failed` with why: something not a clone is in the way, or git could not clone it.
@@ -248,8 +248,7 @@ def clone(runner: procs.Runner, ws: workspace.Workspace, repo: workspace.Repo) -
     if repo.path.is_symlink() or (repo.path.exists() and (not repo.path.is_dir() or any(repo.path.iterdir()))):
         return Checked(repo, "failed", f"{repo.path} exists and is not a clone; move it away and sync again")
     repo.path.parent.mkdir(parents=True, exist_ok=True)
-    partial = () if repo.clone_filter is None else (f"--filter={repo.clone_filter}",)
-    args = hostgit.argv("clone", "--quiet", *partial, "--", str(repo.url), str(repo.path))
+    args = hostgit.argv("clone", "--quiet", "--", str(repo.url), str(repo.path))
     try:
         result = runner.run(args, cwd=ws.root, env=hostgit.ENV, timeout=_CLONE_TIMEOUT_SECONDS)
     except procs.ProcError as e:

@@ -44,6 +44,17 @@ is how the git hook (`prek.toml`) runs the codemods on a commit's files.
   directive to a tool (`# noqa`, `# type:`, `# fmt:`), or a section's banner; and a comment a blank line separates
   from the name. It cannot tell what a name is from why the code is so, so a note of the second kind is written with
   a blank line below it, or beside the value. The colon can push a line past 120 columns, which the lint then reports.
+- **`general-params`** widens a parameter annotated `list`, `dict`, `set`, or `frozenset` that its function only
+  reads to the most general type its reads need: `def total(costs: list[float])` whose body only sums `costs` becomes
+  `def total(costs: Iterable[float])`. One pass is `Iterable`; `len`, `in`, a truth test, or more than one pass is
+  `Collection`; indexing, slicing, or `reversed` of a list is `Sequence`; a dict only read is `Mapping`; and a set
+  tested with `in` is `AbstractSet`, never `Collection`. It is deliberately narrow, since a wrong widening fails the
+  type checker at a call site: it leaves alone a parameter used in any way it does not know to be a read (mutated,
+  stored, returned, yielded, compared, or passed to any call but a few builtins whose names the module does not bind),
+  one bound again or named by a nested function, one never read, one whose function returns the type it takes, every
+  parameter of a function with a decorator but a few plain ones (a click command, an override), and a method of a
+  class with a base, or of one the module derives another class from, which may override or be overridden. The import
+  goes under `if TYPE_CHECKING:` where the module has that block and postpones its annotations.
 - **`vocab-members`** names a closed vocabulary's member where canopy's code compares a bare string with a status, a
   kind, or a phase: `run.status == "running"` becomes `run.status == RunStatus.RUNNING`, and the vocabulary is imported
   at run time, out of an `if TYPE_CHECKING:` block if need be. It reads the vocabularies from `core/vocab.py` and the

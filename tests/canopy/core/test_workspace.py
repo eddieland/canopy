@@ -99,8 +99,6 @@ def load_both(root: Path, user_file: Path) -> None:
         ('[repos.api]\nurl = "https://x.test/a.git"\n[repos.api.checks]\n"" = "merge"\n', "repos.api.checks"),
         ('[repos.api]\nurl = "https://x.test/a.git"\n[repos.api.checks]\nqueue = "later"\n', "'ci', 'human', 'merge'"),
         ('[repos.api]\nurl = "https://x.test/a.git"\nhigh_impact_paths = "infra/"\n', "repos.api.high_impact_paths"),
-        ('[repos.api]\nurl = "https://x.test/a.git"\nclone_filter = "sparse:oid=HEAD"\n', "a partial clone filter"),
-        ('[repos.api]\nurl = "https://x.test/a.git"\nclone_filter = "--depth=1"\n', "repos.api.clone_filter"),
         # The key is a repository's, in the map, never the config's.
         ('[review]\nhigh_impact_paths = ["infra/"]\n', "review.high_impact_paths"),
         ("[desks]\nx = 1\n", "unknown key desks.x"),
@@ -486,27 +484,6 @@ def test_sync_clones_missing_repositories_and_reports_a_different_origin(
     (ws.root / config.WORKSPACE_FILE_NAME).write_text(map_text(("gone", str(tmp_path / "nowhere.git"))))
     assert main(["workspace", "sync"]) == 1
     assert "gone: failed: git clone exited 128" in capsys.readouterr().out
-
-
-def test_sync_clones_a_repository_partially_when_its_map_names_a_filter(
-    ws: Ws,
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    extra = bare_origin(tmp_path / "origins" / "docs.git", tmp_path)
-    git("config", "uploadpack.allowFilter", "true", cwd=extra)
-    url = extra.as_uri()  # git ignores --filter for a clone from a plain path
-    (ws.root / config.WORKSPACE_FILE_NAME).write_text(
-        map_text(("api", str(ws.origins["api"]))) + f'\n[repos.docs]\nurl = "{url}"\nclone_filter = "blob:none"\n',
-    )
-    assert main(["workspace", "sync", "--dry-run"]) == 0
-    assert f"docs: to clone: {url} into {ws.clone('docs')}, with --filter=blob:none\n" in capsys.readouterr().out
-    assert main(["workspace", "sync"]) == 0
-    assert f"docs: cloning {url} into {ws.clone('docs')}, with --filter=blob:none\ndocs: cloned\n" in (
-        capsys.readouterr().out
-    )
-    assert git("config", "remote.origin.partialclonefilter", cwd=ws.clone("docs")) == "blob:none"
-    assert git("log", "--format=%s", cwd=ws.clone("docs")) == "initial docs"
 
 
 def test_sync_turns_off_gits_automatic_maintenance_in_every_clone_but_not_in_a_dry_run(ws: Ws, tmp_path: Path) -> None:

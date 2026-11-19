@@ -17,7 +17,10 @@ import math
 import re
 import unicodedata
 from collections import Counter
-from typing import Final
+from typing import TYPE_CHECKING, Final
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 #: A key: lowercase words joined by single hyphens, at most 40 characters, as a branch's slug is (DESIGN §8).
 KEY_RE: Final = re.compile(r"(?=[a-z0-9-]{1,40}\Z)[a-z0-9]+(?:-[a-z0-9]+)*")
@@ -113,6 +116,22 @@ def hidden_char(c: str) -> bool:
         True for a control, format, surrogate, private-use, unassigned, or line or paragraph separator character.
     """
     return unicodedata.category(c) in HIDDEN_CATEGORIES
+
+
+def find_hidden(text: str) -> Iterator[tuple[int, str]]:
+    """Find each character of `text` that hides text from a person who reads it, as `visible` would name it.
+
+    Line feeds and tabs are not hidden, nor is a carriage return before a line feed, nor an emoji's joiner.
+
+    Yields:
+        The character's line, counted from 1, and its name: its code point, and what Unicode calls it.
+    """
+    line = 1
+    for i, c in enumerate(text):
+        if c == "\n":
+            line += 1
+        elif c != "\t" and hidden_char(c) and not _emoji_joiner(text, i) and text[i : i + 2] != "\r\n":
+            yield line, _name(c)
 
 
 def looks_secret(text: str) -> bool:

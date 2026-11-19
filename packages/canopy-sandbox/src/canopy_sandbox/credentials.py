@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final, TypeGuard
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable, Iterator, Mapping
 
 #: OpenCode's data directory under XDG_DATA_HOME, and the files in it that hold its logins.
 RUNTIME: Final = "opencode"
@@ -176,7 +176,7 @@ def refreshed_mcp_login(ours: object, theirs: object) -> dict[str, object] | Non
 
 def _merge(
     path: Path,
-    theirs: dict[str, object],
+    theirs: Mapping[str, object],
     refreshed: Callable[[object, object], dict[str, object] | None],
 ) -> list[str]:
     """Write into the operator's file at `path` each of its entries that `theirs` holds a refresh of.

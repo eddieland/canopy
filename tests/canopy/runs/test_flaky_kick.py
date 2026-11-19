@@ -11,7 +11,7 @@ from unittest import mock
 from canopy.core import contract
 from canopy.core.vocab import ResumeReason, RunKind
 from canopy.notify import message
-from tests.canopy.helpers import KEY, READ_PR, WORKER_DONE, Called, messages, raises, waits, worker_does
+from tests.canopy.helpers import KEY, READ_PR, WORKER_DONE, Called, main_moves, messages, raises, waits, worker_does
 from tests.canopy.scenario_helpers import Ran, Scenario, dispatches, pushes
 from tests.conftest import GitPool, git
 
@@ -48,17 +48,6 @@ def committed_at(when: str) -> Iterator[None]:
     """Date every commit made in the block, the harness's included, so a commit made again is a new one."""
     with mock.patch.dict(os.environ, {"GIT_COMMITTER_DATE": when}):
         yield
-
-
-def main_moves(git_pool: GitPool, name: str) -> None:
-    """Push a commit to `main` on origin that the ticket's branch lacks, touching `name`.txt."""
-    seed = git_pool.slots[1]
-    git("fetch", "--quiet", "origin", cwd=seed)
-    git("checkout", "--quiet", "--detach", "origin/main", cwd=seed)
-    (seed / f"{name}.txt").write_text(f"{name}\n")
-    git("add", f"{name}.txt", cwd=seed)
-    git("commit", "--quiet", "-m", f"main: {name}", cwd=seed)
-    git("push", "--quiet", "origin", "HEAD:refs/heads/main", cwd=seed)
 
 
 def harness_note(ran: Ran) -> str:

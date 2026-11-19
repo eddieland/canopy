@@ -26,6 +26,7 @@ from tests.canopy.scenario_helpers import sets_phase
 
 if TYPE_CHECKING:
     import sqlite3
+    from collections.abc import Iterable
     from pathlib import Path
 
     from syrupy.assertion import SnapshotAssertion
@@ -628,7 +629,7 @@ def test_a_ticket_agrees_when_the_overseer_set_a_row_that_held_and_decided_what_
     canopy_env: CanopyEnv,
     conn: sqlite3.Connection,
     phase: str,
-    actions: list[str],
+    actions: Iterable[str],
     verdict: str,
 ) -> None:
     unit(canopy_env, conn)
@@ -659,7 +660,7 @@ def test_a_ticket_agrees_when_the_overseer_set_a_row_that_held_and_decided_what_
 def test_a_wait_agrees_where_the_harness_raised_the_item_the_row_names(
     canopy_env: CanopyEnv,
     conn: sqlite3.Connection,
-    decided: list[tuple[str, Decider]],
+    decided: Iterable[tuple[str, Decider]],
     verdict: str,
 ) -> None:
     # The harness raises `green_unreviewed`'s item from its cause (DESIGN §37), and the overseer waits on it.

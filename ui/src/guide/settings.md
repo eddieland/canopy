@@ -160,7 +160,8 @@ glance. A file you've edited and not saved says `unsaved`, and its panel gets a 
 
 Each file opens in the same editor you write replies in, toolbar and **Preview** included. The count in the panel's
 foot is in bytes, as a run counts them: past 4,096 a run refuses the file outright rather than read half of it, so
-**Save** waits until you trim. **Revert** puts back what the file holds.
+**Save** waits until you trim. **Revert** puts back what the file holds. If you or your agent edit the file by hand
+instead, `canopy instructions check worker FILE` makes the same count before anything is saved.
 
 Every save and delete keeps the file as it was first: the last 10 versions of each agent's, in this workspace's
 `.canopy/`. **Show versions** under a panel lists them, newest first, each with when and before what. **Show** reads

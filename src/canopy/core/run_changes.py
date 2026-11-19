@@ -121,6 +121,8 @@ def crashed(repos: Iterable[str]) -> tuple[Change, ...]:
 def change_path(log_path: str | Path, repo: str) -> Path:
     """Where a run keeps the diff of its own change to `repo`: from the commit it started from to the one it left.
 
+    Without what a base the run brought in, by a rebase or a merge, changed between the two.
+
     Returns:
         `<id>.<repo>.change.diff` beside `log_path`. The file may not exist.
     """

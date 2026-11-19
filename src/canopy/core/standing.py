@@ -410,13 +410,12 @@ def _problem(reading: _Reading) -> str | None:
     Returns:
         The reason, or None.
     """
-    if reading.size > MAX_BYTES:
-        return f"{reading.size} bytes, over the {MAX_BYTES} a run takes: every run of it is refused until it is trimmed"
-    try:
-        (reading.head or b"").decode("utf-8")
-    except UnicodeDecodeError:
-        return "not UTF-8: every run of it is refused until it is"
-    return None
+    check = prompts.check_standing(reading.head or b"", size=reading.size)
+    if check.refusal is None:
+        return None
+    if check.size > MAX_BYTES:
+        return f"{check.size} bytes, over the {MAX_BYTES} a run takes: every run of it is refused until it is trimmed"
+    return f"{check.refusal}: every run of it is refused until it is"
 
 
 def _kept(path: Path, before: _Reading) -> bytes:

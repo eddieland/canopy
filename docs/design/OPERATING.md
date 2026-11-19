@@ -278,7 +278,8 @@ reaches only its own role's prompts, and a role without one has no section for t
 `<agent>.md` in `paths.instructions` (`instructions/` in the user config directory) while it is there, and none
 otherwise. The settings' instructions page (§22) edits each role's file, makes and deletes such a default, never a
 file a key names, never chooses which file, and keeps the newest ten versions of each in the state directory
-(TRUST_MODEL T8, D134).
+(TRUST_MODEL T8, D134). `canopy instructions check` says whether a run would take a text before it is saved, by the
+check every run's prompt makes, and names a character that hides text, which refuses nothing.
 
 `tracker.provider` is a free-form name the harness never branches on; prompts use it to name the `tracker-<provider>`
 skill the workers load (§17). `tracker.query` finds candidates; it does not authorize them (§17). It is shared: the

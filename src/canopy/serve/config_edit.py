@@ -485,7 +485,7 @@ def _set(doc: tomlkit.TOMLDocument, key: Editable, wanted: object, old: Config, 
 def _set_slots(
     table: tomlkit.items.Table | tomlkit.items.InlineTable,
     name: str,
-    wanted: dict[object, object],
+    wanted: Mapping[object, object],
     now: Value,
 ) -> None:
     """Set `capacity.repo_slots`'s counts for the repositories in `wanted`, keeping every other repository's.

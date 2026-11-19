@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Final
 
 from canopy_codemods.doc_comments import DocComments
 from canopy_codemods.final_constants import FinalConstants
+from canopy_codemods.general_params import GeneralParams
 from canopy_codemods.type_aliases import TypeAliases
 from canopy_codemods.vocab_members import VocabMembers
 
@@ -23,5 +24,6 @@ CODEMODS: Final[Mapping[str, type[Command]]] = {
     "final-constants": FinalConstants,
     "type-aliases": TypeAliases,
     "doc-comments": DocComments,
+    "general-params": GeneralParams,
     "vocab-members": VocabMembers,
 }

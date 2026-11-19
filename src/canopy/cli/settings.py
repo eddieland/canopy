@@ -20,7 +20,7 @@ from canopy.cli.common import CliError, open_context
 from canopy.core import config, conversation, definitions, reports, settings
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Collection, Sequence
     from pathlib import Path
 
     from canopy.cli.agent_commands import Command
@@ -92,7 +92,7 @@ def cmd_commands(click_ctx: click.Context, *, as_json: bool) -> int:
     return 0
 
 
-def render(found: list[Setting], files: tuple[Path, Path, Path]) -> list[str]:
+def render(found: Collection[Setting], files: tuple[Path, Path, Path]) -> list[str]:
     """The settings as `canopy config show` prints them: the files, then a key to a line.
 
     Returns:
