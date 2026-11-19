@@ -6,10 +6,11 @@ maintenance tasks that delete no object a pack does not also hold, and so prune 
 combines small packs. Each runs as its own `git maintenance run`, since git's run of both refuses a clone with no pack
 yet; `prune-packed` after them drops what `loose-objects` just packed, which git's own task leaves to its next run.
 
-A partial clone (`clone_filter`) combines no packs, nor a clone whose config git cannot read. A partial clone's fetched
-packs are promisor packs, whose objects may name blobs it never fetched; `incremental-repack` merges them into a pack
-with no promisor mark, so git no longer counts those blobs as promised and `git fsck` finds the clone broken, which no
-later `git gc` repairs. Its loose objects are its own, never promised, so packing them changes nothing git checks.
+A partial clone, one made with `git clone --filter`, combines no packs, nor a clone whose config git cannot read. A
+partial clone's fetched packs are promisor packs, whose objects may name blobs it never fetched; `incremental-repack`
+merges them into a pack with no promisor mark, so git no longer counts those blobs as promised and `git fsck` finds the
+clone broken, which no later `git gc` repairs. Its loose objects are its own, never promised, so packing them changes
+nothing git checks.
 
 It also removes what an interrupted fetch or clone left in the pack directory, `tmp_pack_*` and `tmp_idx_*` files a day
 old, which git counts as garbage and never removes.
