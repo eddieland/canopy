@@ -1,7 +1,7 @@
 """Metrics: off and free until configured, then appended to the metrics file as OTLP JSON, sums as deltas."""
 
 import json
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from pathlib import Path
 from typing import Any, get_args
 
@@ -32,7 +32,7 @@ def exported(path: Path) -> dict[str, dict[str, Any]]:
     return found
 
 
-def labels(point: dict[str, Any]) -> dict[str, object]:
+def labels(point: Mapping[str, Any]) -> dict[str, object]:
     """A point's labels, as a plain dict."""
     return {a["key"]: next(iter(a["value"].values())) for a in point["attributes"]}
 

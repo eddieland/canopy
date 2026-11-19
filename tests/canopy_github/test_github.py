@@ -312,7 +312,7 @@ class Fake:
             return {"data": {"addComment": {"commentEdge": {"node": node}}}}
         raise AssertionError(f"unexpected operation {op}")
 
-    def pull_requests(self, variables: dict[str, Any]) -> Mapping[str, Any]:
+    def pull_requests(self, variables: Mapping[str, Any]) -> Mapping[str, Any]:
         """A batch: each PR under its alias, `p0` and on, with its owner, name, and number in `o0`, `n0`, `k0`."""
         data: dict[str, Any] = {}
         errors: list[dict[str, Any]] = []

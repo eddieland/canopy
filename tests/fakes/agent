@@ -64,6 +64,7 @@ import os
 import subprocess  # noqa: TID251  (stands in for an agent runtime, which runs commands and local MCP servers)
 import sys
 import time
+from collections.abc import Collection, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Final
 
@@ -73,7 +74,7 @@ STEP_TOKENS: Final = {"input": 1000, "output": 200, "reasoning": 30, "cache": {"
 SERVER_TIMEOUT: Final = 60
 
 
-def role(argv: list[str]) -> str:
+def role(argv: Sequence[str]) -> str:
     if "--agent" in argv[:-1]:
         agent = argv[argv.index("--agent") + 1]
         # A chore's own copy of the chore's agent, `canopy-chore-<name>`, plays the chore.
@@ -140,7 +141,7 @@ def call_tools(argv: list[str], name: str = "TOOLS", made: list[list[Any]] | Non
     calls: list[list[Any]] = made if made is not None else json.loads(setting(argv, name, "[]"))
     servers = inline_servers()
 
-    def owner(call: list[Any]) -> str | None:
+    def owner(call: Sequence[Any]) -> str | None:
         # The longest server name the tool's name starts with, as `<server>_<tool>`.
         return max((s for s in servers if call[0].startswith(f"{s}_")), key=len, default=None)
 
@@ -161,7 +162,7 @@ def call_tools(argv: list[str], name: str = "TOOLS", made: list[list[Any]] | Non
     return done
 
 
-def served(entry: dict[str, Any], calls: list[list[Any]]) -> list[tuple[str, bool, int, int]]:
+def served(entry: Mapping[str, Any], calls: Collection[list[Any]]) -> list[tuple[str, bool, int, int]]:
     """Open a session with the local server `entry` names, call each of `calls` in it, and close it.
 
     It gives back each call's text, whether it was a tool error, and when it started and ended, in milliseconds since
@@ -231,7 +232,7 @@ def piped() -> str | None:
     return sys.stdin.read() or None
 
 
-def events(argv: list[str]) -> bool:
+def events(argv: Sequence[str]) -> bool:
     return "--format" in argv[:-1] and argv[argv.index("--format") + 1] == "json"
 
 

@@ -30,6 +30,7 @@ from __future__ import annotations
 import ast
 import re
 from collections import defaultdict
+from collections.abc import Set as AbstractSet
 from typing import Final, override
 
 import libcst as cst
@@ -295,7 +296,7 @@ def _is_argument(expression: ast.expr) -> bool:
             return _is_type(expression)
 
 
-def _typed(small: cst.BaseSmallStatement, names: frozenset[str]) -> cst.BaseSmallStatement:
+def _typed(small: cst.BaseSmallStatement, names: AbstractSet[str]) -> cst.BaseSmallStatement:
     """Rewrite a statement as a `type` statement when it assigns one of `names`.
 
     Returns:

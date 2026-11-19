@@ -936,7 +936,7 @@ def test_threads_hold_tickets_and_reviews_for_a_day_chores_stay_out(threaded: _T
 def test_a_reply_is_shown_in_the_channel_only_for_what_broadcast_names(
     threaded: _Threaded,
     flags: list[str],
-    shown: list[bool],
+    shown: Iterable[bool],
 ) -> None:
     started = [_run("PROJ-1", 1), _run("PROJ-2", 2), _run("PROJ-3", 3)]
     assert threaded(_delivery("2026-09-24T12:30:00Z", started), *flags).exit_code == 0

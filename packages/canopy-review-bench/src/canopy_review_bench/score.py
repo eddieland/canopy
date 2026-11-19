@@ -20,7 +20,7 @@ from canopy_review_bench.bench import BenchError, Side, Spot
 from canopy_review_bench.github import Comment  # noqa: TC001 - pydantic resolves the field's type when it validates.
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Iterable, Mapping, Sequence
     from pathlib import Path
 
 #: The file a run's reviews are appended to, one JSON object a line.
@@ -218,7 +218,7 @@ def _case_score(reviews: Sequence[Review], tolerance: int) -> str:
     return f"{sum(alarms)} false alarms in {len(scored)} reviews"
 
 
-def _strings(settings: dict[str, object], key: str) -> list[str]:
+def _strings(settings: Mapping[str, object], key: str) -> list[str]:
     value = settings.get(key)
     return [str(v) for v in value] if isinstance(value, list) else []
 

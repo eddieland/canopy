@@ -10,7 +10,7 @@ import os
 import re
 import sqlite3
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -458,7 +458,7 @@ def test_a_gate_still_ahead_ends_the_wait_and_one_already_open_does_not(
         pytest.param([25, 5], 1500, id="superseded"),
     ],
 )
-def test_a_head_still_settling_ends_the_wait(canopy_env: CanopyEnv, heads: list[int], expected: float) -> None:
+def test_a_head_still_settling_ends_the_wait(canopy_env: CanopyEnv, heads: Iterable[int], expected: float) -> None:
     canopy_env.append_user("\n[review]\nagent_prs = true\nsettle_minutes = 30\n")
     ctx = context(canopy_env)
     db.migrate(ctx.conn, resources.migrations_dir())

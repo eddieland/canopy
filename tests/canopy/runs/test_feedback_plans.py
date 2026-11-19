@@ -4,6 +4,7 @@ import hashlib
 import json
 import re
 import sqlite3
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Final
@@ -578,7 +579,7 @@ def stale_for(scenario: Scenario) -> list[str]:
 def test_a_change_on_its_pr_marks_a_waiting_plan_stale_with_its_reason(
     scenario: Scenario,
     github_state: Path,
-    shown: dict[str, Any],
+    shown: Mapping[str, Any],
     said: str,
 ) -> None:
     with_a_pr(scenario)

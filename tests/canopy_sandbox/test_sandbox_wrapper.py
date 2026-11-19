@@ -13,7 +13,7 @@ import signal
 import sqlite3
 import sys
 import tempfile
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
@@ -1423,6 +1423,6 @@ def test_a_worker_reads_its_checklist_and_may_write_the_holds_marker_and_notes_i
         assert not covered(only_read, written)
 
 
-def covered(entries: list[str], path: Path) -> bool:
+def covered(entries: Iterable[str], path: Path) -> bool:
     """Whether one of a policy's `entries`, each a path srt reads with `~` for HOME, is `path` or holds it."""
     return any(path.is_relative_to(Path(entry).expanduser()) for entry in entries)

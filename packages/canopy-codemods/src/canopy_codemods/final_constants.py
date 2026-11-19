@@ -21,6 +21,7 @@ from __future__ import annotations
 import ast
 import re
 from collections import Counter
+from collections.abc import Set as AbstractSet
 from typing import Final, override
 
 import libcst as cst
@@ -209,7 +210,7 @@ def last_name(expression: ast.expr) -> str | None:
             return None
 
 
-def _final(small: cst.BaseSmallStatement, names: frozenset[str]) -> cst.BaseSmallStatement:
+def _final(small: cst.BaseSmallStatement, names: AbstractSet[str]) -> cst.BaseSmallStatement:
     """Annotate a statement `Final`, around the annotation it has, when it assigns one of `names`.
 
     Returns:

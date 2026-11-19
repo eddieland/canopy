@@ -46,7 +46,7 @@ def settings(c: TestClient) -> dict[str, object]:
     return found
 
 
-def keys_of(found: dict[str, object]) -> list[dict[str, object]]:
+def keys_of(found: Mapping[str, object]) -> list[dict[str, object]]:
     keys = found["keys"]
     assert isinstance(keys, list)
     return keys

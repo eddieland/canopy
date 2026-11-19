@@ -3,6 +3,7 @@ import importlib
 import os
 import pkgutil
 import sys
+from collections.abc import Iterable
 from importlib.metadata import version
 from pathlib import Path
 from unittest import mock
@@ -90,7 +91,7 @@ def test_the_parameter_types_load_without_the_overseers_tools() -> None:
 
 
 @pytest.mark.parametrize(("argv", "loads"), [(["--version"], set[str]()), (["_mcp", "--help"], {"mcp"})])
-def test_a_command_imports_only_its_own_module(argv: list[str], loads: set[str]) -> None:
+def test_a_command_imports_only_its_own_module(argv: list[str], loads: Iterable[str]) -> None:
     # The runtime starts `canopy _mcp` for each run it gives canopy's tools; each start-up pays for every module it
     # imports.
     code = f"import sys; from canopy.cli.main import main; main({argv!r}); print(*sys.modules, sep='\\n')"
