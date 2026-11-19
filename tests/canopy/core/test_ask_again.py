@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Final
 from unittest import mock
 
 import pytest
@@ -12,7 +13,7 @@ from canopy.runs.task_run import CONTRACT
 from canopy.runtime.implementation import Version
 
 #: How the second start is asked, whatever the first printed.
-AGAIN = ask_again.Again("report your result", ("--session=ses_1",), 120.0)
+AGAIN: Final = ask_again.Again("report your result", ("--session=ses_1",), 120.0)
 
 
 def ran(stdout: str, *, returncode: int = 0, timed_out: bool = False) -> procs.Result:
