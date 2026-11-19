@@ -6,7 +6,8 @@ The commands for one pool's slots, `slots`, `release`, and `remove-slot`, are `c
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Sequence
+from collections.abc import Iterable, Mapping, Sequence
+from pathlib import Path
 from typing import TYPE_CHECKING, Final, assert_never
 
 import click
@@ -38,11 +39,20 @@ workspace_group.add_command(slots.cmd_remove_slot)
 
 @workspace_group.command("sync")
 @click.option("--dry-run", is_flag=True, help="Say what sync would clone, make, and remove, and change nothing.")
+@click.option(
+    "--seed",
+    "seeds",
+    metavar="NAME=PATH",
+    multiple=True,
+    help="Clone repository NAME taking what it can from the clone you already have at PATH, so only what that lacks "
+    "is fetched; the clone made does not depend on it. Repeatable.",
+)
 @click.pass_context
-def cmd_sync(click_ctx: click.Context, *, dry_run: bool) -> int:
+def cmd_sync(click_ctx: click.Context, *, dry_run: bool, seeds: tuple[str, ...]) -> int:
     """Make the workspace match the map and the slots declared for its pools.
 
-    Clones the map's repositories that have no clone, and reports an origin that differs from the map. Fetches each
+    Clones the map's repositories that have no clone, each from the clone --seed names for it, if any, and reports an
+    origin that differs from the map. Fetches each
     clone already there, and fast-forwards its default branch when that is checked out, clean, and behind. With
     capacity.slots_per_repo or capacity.repo_slots set, makes or removes idle slots until each pool has its declared
     size. Removes a clone under repos/ that the map no longer lists, with its slots, when nothing in either would be
@@ -50,7 +60,7 @@ def cmd_sync(click_ctx: click.Context, *, dry_run: bool) -> int:
     local changes or commits. Waits for a running tick to end.
     """
     require_workspace()
-    check_synced(sync(click_ctx, dry_run=dry_run))
+    check_synced(sync(click_ctx, dry_run=dry_run, seeds=_seeds(seeds)))
     return 0
 
 
@@ -85,13 +95,23 @@ def add_repos(ws: workspace.Workspace, repos: Sequence[str]) -> None:
         click.echo(f"{a.name}: {a.outcome}{detail}")
 
 
-def sync(click_ctx: click.Context, *, dry_run: bool, add: Sequence[str] = ()) -> list[setup_workspace.Checked]:
+def sync(
+    click_ctx: click.Context,
+    *,
+    dry_run: bool,
+    add: Sequence[str] = (),
+    seeds: Mapping[str, Path] | None = None,
+) -> list[setup_workspace.Checked]:
     """Add the `[NAME=]URL`s in `add` to the map, then make the workspace match its map and declared slots.
 
-    Both happen between ticks, under the tick lock, which also serializes two of these.
+    Both happen between ticks, under the tick lock, which also serializes two of these. A repository named in `seeds`
+    is cloned taking what objects it can from the clone at its path.
 
     Returns:
         What each sync step found or did.
+
+    Raises:
+        CliError: `seeds` names a repository the map does not list.
     """
     ctx = open_context(click_ctx)
     with between_ticks(ctx, "sync"):
@@ -99,7 +119,10 @@ def sync(click_ctx: click.Context, *, dry_run: bool, add: Sequence[str] = ()) ->
             # Read again under the lock: another add may have written the map since this command opened it.
             add_repos(workspace.load(ctx.repo_root), add)
             ctx = dataclasses.replace(ctx, ws=workspace.load(ctx.repo_root))
-        return _sync(ctx, dry_run=dry_run)
+        seeds = seeds or {}
+        if unknown := sorted(set(seeds) - {r.name for r in ctx.workspace.repos}):
+            raise CliError(f"sync: --seed names {', '.join(unknown)}, which the map does not list")
+        return _sync(ctx, dry_run=dry_run, seeds=seeds)
 
 
 def check_synced(results: Sequence[setup_workspace.Checked]) -> None:
@@ -113,13 +136,36 @@ def check_synced(results: Sequence[setup_workspace.Checked]) -> None:
         raise CliError(f"{unmet} of {len(results)} steps did not reach what is declared; see above")
 
 
-def _sync(ctx: Context, *, dry_run: bool) -> list[setup_workspace.Checked]:
+def _seeds(args: Iterable[str]) -> dict[str, Path]:
+    """Read each `NAME=PATH` of `--seed` into the clone it names, by repository.
+
+    Returns:
+        Each PATH made absolute, by NAME.
+
+    Raises:
+        CliError: an argument is not `NAME=PATH`, names one repository twice, or its PATH is not a directory.
+    """
+    found: dict[str, Path] = {}
+    for arg in args:
+        name, sep, path = arg.partition("=")
+        if not sep or not name or not path:
+            raise CliError(f"sync: --seed {arg!r} is not NAME=PATH")
+        if name in found:
+            raise CliError(f"sync: --seed names {name} twice")
+        seed = Path(path).expanduser().absolute()
+        if not seed.is_dir():
+            raise CliError(f"sync: --seed {name}: {seed} is not a directory")
+        found[name] = seed
+    return found
+
+
+def _sync(ctx: Context, *, dry_run: bool, seeds: Mapping[str, Path]) -> list[setup_workspace.Checked]:
     ws = ctx.workspace
     results: list[setup_workspace.Checked] = []
     if not ws.repos:
         click.echo(f"The map lists no repositories; add them under [repos.<name>] in {ws.map_file}.")
     for repo in ws.repos:
-        checked = _report(_clone_or_check(ctx, ws, repo, dry_run=dry_run))
+        checked = _report(_clone_or_check(ctx, ws, repo, dry_run=dry_run, seed=seeds.get(repo.name)))
         results.append(checked)
         if repo.cloned and not dry_run and (failed := setup_workspace.turn_off_auto_maintenance(ctx.runner, repo)):
             results.append(_report(failed))
@@ -204,14 +250,18 @@ def _clone_or_check(
     repo: workspace.Repo,
     *,
     dry_run: bool,
+    seed: Path | None,
 ) -> setup_workspace.Checked:
     if repo.cloned:
+        if seed is not None:
+            click.echo(f"{repo.name}: --seed not used: it is cloned already")
         return setup_workspace.check_origin(ctx.runner, repo)
     url = setup_workspace.shown(str(repo.url))
+    seeded = f", seeded from {seed}" if seed is not None else ""
     if dry_run:
-        return setup_workspace.Checked(repo, "to clone", f"{url} into {repo.path}")
-    click.echo(f"{repo.name}: cloning {url} into {repo.path}")
-    return setup_workspace.clone(ctx.runner, ws, repo)
+        return setup_workspace.Checked(repo, "to clone", f"{url} into {repo.path}{seeded}")
+    click.echo(f"{repo.name}: cloning {url} into {repo.path}{seeded}")
+    return setup_workspace.clone(ctx.runner, ws, repo, seed=seed)
 
 
 def _report(checked: setup_workspace.Checked) -> setup_workspace.Checked:

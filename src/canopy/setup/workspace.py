@@ -239,8 +239,13 @@ def missing(ws: workspace.Workspace) -> list[workspace.Repo]:
     return [r for r in ws.repos if not r.cloned]
 
 
-def clone(runner: procs.Runner, ws: workspace.Workspace, repo: workspace.Repo) -> Checked:
-    """Clone `repo` from the map's URL into `repos/<name>`.
+def clone(runner: procs.Runner, ws: workspace.Workspace, repo: workspace.Repo, *, seed: Path | None = None) -> Checked:
+    """Clone `repo` from the map's URL into `repos/<name>`, taking what objects it can from the clone at `seed`, if any.
+
+    A seed is a clone the operator already has of the same repository: git copies the objects it holds from local disk
+    and fetches only what it lacks, and the clone made is a whole one that does not depend on the seed afterwards
+    (`--reference-if-able`, `--dissociate`). A seed git cannot use is passed over with a warning, and the clone fetches
+    everything, as it would with none.
 
     A clone that fails, times out, or is interrupted leaves nothing at `repos/<name>`: git killed at the timeout leaves
     a `.git` behind, which the next sync would take for a finished clone (`Repo.cloned`) and fetch into.
@@ -251,7 +256,8 @@ def clone(runner: procs.Runner, ws: workspace.Workspace, repo: workspace.Repo) -
     if repo.path.is_symlink() or (repo.path.exists() and (not repo.path.is_dir() or any(repo.path.iterdir()))):
         return Checked(repo, "failed", f"{repo.path} exists and is not a clone; move it away and sync again")
     repo.path.parent.mkdir(parents=True, exist_ok=True)
-    args = hostgit.argv("clone", "--quiet", "--", str(repo.url), str(repo.path))
+    seeded = ("--reference-if-able", str(seed), "--dissociate") if seed is not None else ()
+    args = hostgit.argv("clone", "--quiet", *seeded, "--", str(repo.url), str(repo.path))
     try:
         result = runner.run(args, cwd=ws.root, env=hostgit.ENV, timeout=_CLONE_TIMEOUT_SECONDS)
     except procs.ProcError as e:
