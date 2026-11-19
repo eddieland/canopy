@@ -194,6 +194,20 @@ def due(ctx: Context, request: Request) -> list[Request]:
     return [replace(request, persona=name, among=frozenset(chosen)) for name in owed]
 
 
+def reviewed_at(runs: Iterable[records.ReviewRun], sha: str, chosen: Collection[str]) -> bool:
+    """Return whether commit `sha` has had its review, given the PR's review runs `runs` (DESIGN §21, §31).
+
+    That is a `done` review of it in each persona of `chosen`, or in any when `chosen` is empty: no review is owed
+    until a new head.
+
+    Returns:
+        True when no review of `sha` is owed.
+    """
+    if chosen:
+        return not owed_by(runs, sha, chosen)
+    return any(r.sha == sha and r.status is ReviewRunStatus.DONE for r in runs)
+
+
 def owed_by(
     runs: Iterable[records.ReviewRun],
     sha: str,

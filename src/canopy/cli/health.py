@@ -52,9 +52,10 @@ def cmd_health(click_ctx: click.Context, *, days: int, as_json: bool) -> int:
 
     Each kind of run by how it ended and what that cost: the overseer's ticks, workers by kind, plan runs, chores by
     name, and reviews. Then the newest ticks and runs that failed, each with its id for `canopy decisions` or
-    `canopy show`, every failure by the harness's note on it, and the overseer's asks a guard refused, by guard. Between
-    them, how long each sort of run took against its timeout. Last, whether each command starts in canopy-sandbox,
-    and, when any does, whether srt is the pinned one and each template in use loads; left out inside canopy's runs.
+    `canopy show`, every failure by the harness's note on it, and the overseer's asks a guard refused, by guard, the
+    most asks first. Between them, how long each sort of run took against its timeout. Last, whether each command
+    starts in canopy-sandbox, and, when any does, whether srt is the pinned one and each template in use loads; left
+    out inside canopy's runs.
     """
     ctx = open_context(click_ctx)
     if as_json:
@@ -216,9 +217,10 @@ def _refusals(found: Health) -> list[str]:
     if not found.refusals:
         return ["No guard refused anything."]
     lines = ["Refused by a guard:"]
+    # Each ask counts once, so one stuck tick after tick reads as one, beside its ticks (#2448).
     lines.extend(
-        f"  {r.guard}: {r.decisions} time{'s' if r.decisions != 1 else ''} in {r.ticks} tick"
-        f"{'s' if r.ticks != 1 else ''}, last in tick {r.last_tick}"
+        f"  {r.guard}: {r.subjects} ask{'s' if r.subjects != 1 else ''}, {r.decisions} time"
+        f"{'s' if r.decisions != 1 else ''} in {r.ticks} tick{'s' if r.ticks != 1 else ''}, last in tick {r.last_tick}"
         for r in found.refusals
     )
     return lines

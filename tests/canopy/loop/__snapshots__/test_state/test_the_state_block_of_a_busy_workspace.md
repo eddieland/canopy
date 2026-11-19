@@ -56,7 +56,7 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
       "title": "Retry flaky uploads",
       "phase": "ci_running",
       "cursors": {
-        "comment": 3
+        "comment": 9
       },
       "units": [
         {
@@ -197,8 +197,26 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
       "max_reviews_per_day": 20,
       "max_reviews_per_pr": 3,
       "settle_minutes": 0,
-      "started_last_24h": 0
-    }
+      "started_last_24h": 1
+    },
+    "prs": [
+      {
+        "ticket": "PROJ-1",
+        "repo": "repo",
+        "review_runs": 1,
+        "latest": {
+          "run_id": 1,
+          "sha": "c0ffeec0ffeec0ffeec0ffeec0ffeec0ffeec0ff",
+          "status": "done",
+          "verdict": "clean",
+          "impact": "normal",
+          "dismissed_findings": 0,
+          "held_findings": 0,
+          "number": 3
+        },
+        "head_reviewed": true
+      }
+    ]
   },
   "notices": [
     {
@@ -234,7 +252,7 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
           {
             "repo": "repo",
             "observed": "stale",
-            "why": "https://example.test/acme/repo/pull/7 never observed"
+            "why": "https://example.test/acme/repo/pull/7 last observed 2026-10-16T09:00:00.000Z"
           }
         ]
       },

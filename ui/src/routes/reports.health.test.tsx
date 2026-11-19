@@ -72,10 +72,11 @@ const REPORT: HealthReport = {
     refusals: [
         {
             guard: 'running',
+            subjects: 1,
             decisions: 5,
             ticks: 5,
             last_tick: 9,
-            asks: [{ ticket: 'PROJ-2', chore: null, pr: null, kind: 'resume', decisions: 5, last_tick: 9 }],
+            asks: [{ ticket: 'PROJ-2', chore: null, pr: null, kind: 'resume', decisions: 5, ticks: 4, last_tick: 9 }],
         },
     ],
     per_day: [

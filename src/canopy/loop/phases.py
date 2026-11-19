@@ -971,11 +971,8 @@ class _World:
     # Whether canopy's reviewer reviewed the PR's head commit: a run on it that ended `done` (DESIGN §21), in each
     # persona of `[personas] reviewers` when it names any (§31).
     def _reviewed(self, key: str, url: str, sha: str | None) -> bool:
-        runs = self._runs_of(url)
         chosen = personas.reviewers_of(self.ctx.conn, self.ctx.config, key)
-        if chosen:
-            return sha is not None and not review_start.owed_by(runs, sha, chosen)
-        return any(r.sha == sha and r.status is ReviewRunStatus.DONE for r in runs)
+        return sha is not None and review_start.reviewed_at(self._runs_of(url), sha, chosen)
 
     # The reviews of the head with findings the operator did not dismiss, which ended after the `review` cursor: its
     # latest, or each persona's when several review it (§31).

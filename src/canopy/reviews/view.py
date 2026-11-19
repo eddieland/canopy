@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Final, NotRequired, TypedDict
 
-from canopy.core import db, personas, review_revisions, review_runs
+from canopy.core import db, personas, records, review_revisions, review_runs
 from canopy.core import review_result as result
 from canopy.core.vocab import ReviewRunStatus
 from canopy.reviews import grants, review_requests, settle
@@ -16,7 +16,6 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from collections.abc import Set as AbstractSet
 
-    from canopy.core import records
     from canopy.core.config import Config
 
 #: PRs reviewed this recently are in the state block, newest first, at most this many.
@@ -87,6 +86,9 @@ class ReviewedPR(TypedDict):
     #: Only one of the loop's own PRs under `[personas] reviewers` has it: the personas with no `done` review of
     #: `latest`'s commit yet, which the commit waits on.
     owed: NotRequired[list[str]]
+    #: Only a PR observed has it: whether its head, as last observed, has had its review (`start.reviewed_at`). True,
+    #: no review is owed until a new head.
+    head_reviewed: NotRequired[bool]
 
 
 class RequestedPR(TypedDict):
@@ -269,6 +271,8 @@ def _pr_summary(conn: sqlite3.Connection, config: Config, url: str) -> ReviewedP
     # Each persona's latest `done` review of the latest's commit, which a `done` latest stands for together (§31).
     newest = {r.persona: r for r in reversed(runs) if r.sha == latest.sha and r.status is ReviewRunStatus.DONE}
     together = [newest[p] for p in dict.fromkeys([latest.persona, *chosen]) if p in newest] if chosen else []
+    observed = records.select(records.ObservedPr).where("url = ?", url).one(conn)
+    head = observed.head_sha if observed is not None else None
     return {
         "url": url,
         "ticket": ticket,
@@ -277,6 +281,8 @@ def _pr_summary(conn: sqlite3.Connection, config: Config, url: str) -> ReviewedP
         **({"granted": granted} if granted else {}),
         "latest": _latest(conn, latest, together),
         **({"owed": review_start.owed_by(runs, latest.sha, chosen)} if chosen else {}),
+        # The overseer asked again for a head reviewed already, tick after tick, when it had to compare commits (#2448).
+        **({"head_reviewed": review_start.reviewed_at(runs, head, chosen)} if head is not None else {}),
     }
 
 

@@ -87,6 +87,8 @@ class HealthAsk(Model):
     and for a refusal recorded before the journal kept it."""
     decisions: int
     """How many of the guard's decisions refused it."""
+    ticks: int
+    """In how many ticks: one ask refused tick after tick is the overseer stuck on it."""
     last_tick: int
     """The latest tick that asked for it."""
 
@@ -96,6 +98,8 @@ class HealthRefusal(Model):
 
     guard: str
     """The guard, as the decision names it: `capacity`, `cooldown`."""
+    subjects: int
+    """How many asks it refused, each counted once however often it was asked."""
     decisions: int
     """How many decisions it refused."""
     ticks: int
@@ -103,8 +107,7 @@ class HealthRefusal(Model):
     last_tick: int
     """The latest of them."""
     asks: list[HealthAsk]
-    """What it refused most often, at most five, the most often first, then the latest: one ask refused tick after
-    tick is the overseer stuck on it."""
+    """What it refused, at most five, in the most ticks first, then the most often, then the latest."""
 
 
 class HealthBins(Model):
@@ -206,7 +209,7 @@ class HealthReport(Model):
     failures: list[HealthFailure]
     """The newest first, at most twenty."""
     refusals: list[HealthRefusal]
-    """The most frequent first."""
+    """The guard that refused the most asks first, then the most ticks, so one stuck ask cannot rank it first."""
     causes: list[HealthCause]
     """Every failure of the window by its cause: the harness's notes, the most runs first, then the newest, and
     `other` last."""
