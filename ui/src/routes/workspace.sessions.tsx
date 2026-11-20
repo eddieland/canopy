@@ -6,6 +6,7 @@ import type { ReactNode } from 'react'
 import { sessionsQuery } from '@/api/queries'
 import type { SessionList, SessionsWhose } from '@/api/types'
 import { Code } from '@/components/code'
+import { CostFilter } from '@/components/cost-filter'
 import { FilterField } from '@/components/filter-field'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { RowList } from '@/components/rows'
@@ -14,6 +15,9 @@ import { Tip } from '@/components/tip'
 import { Button } from '@/components/ui/button'
 import { SEARCH_MAX, searchQueryOf } from '@/lib/search'
 import {
+    costBoundOf,
+    costBoundText,
+    costBoundWords,
     directoryTail,
     indexBehind,
     SESSIONS_LISTED,
@@ -23,6 +27,7 @@ import {
     WHOSE_CHIP,
     WHOSE_LABEL,
 } from '@/lib/sessions'
+import type { CostBound } from '@/lib/sessions'
 import { cn } from '@/lib/utils'
 
 interface SessionsSearch {
@@ -31,6 +36,7 @@ interface SessionsSearch {
     all?: boolean | undefined
     directory?: string | undefined
     q?: string | undefined
+    cost?: string | undefined
 }
 
 /**
@@ -41,7 +47,9 @@ interface SessionsSearch {
  * sessions that ran in that directory exactly, the server narrowing it, so the count and the longest list follow.
  * `?q=`, which the panel's field keeps, finds among them, with the other filters as they are, the sessions whose title
  * holds every word, or at `text` whose title and one message hold them between them, best match first, each with its
- * snippet, a subagent's in a row of its own. Nothing at all while `sessions.search` is `off`. One of Workspace's
+ * snippet, a subagent's in a row of its own. `?cost=`, a comparison and an amount in dollars as `gte:5`, which the
+ * control beside the field keeps, narrows the list to the sessions whose own cost is within it, the server narrowing
+ * it, a subagent's in a row of its own then too. Nothing at all while `sessions.search` is `off`. One of Workspace's
  * pages, beside the runs and the ticks.
  */
 export const Route = createFileRoute('/workspace/sessions')({
@@ -55,6 +63,8 @@ export const Route = createFileRoute('/workspace/sessions')({
             typeof search['directory'] === 'string' && search['directory'] !== '' ? search['directory'] : undefined,
         // A query the server would refuse is dropped, as the search page drops it: the list is then every session.
         q: searchQueryOf(search['q']),
+        // A bound the page does not offer is dropped, and one it does is kept as the control writes it.
+        cost: costOf(search['cost']),
     }),
     component: SessionsPage,
 })
@@ -67,12 +77,18 @@ function ranked(list: SessionList, q: string | undefined): boolean {
     return q !== undefined && list.search === 'text'
 }
 
+function costOf(raw: unknown): string | undefined {
+    const bound = costBoundOf(raw)
+    return bound === undefined ? undefined : costBoundText(bound)
+}
+
 function flag(raw: unknown): true | undefined {
     return raw === true || raw === 'true' ? true : undefined
 }
 
 function SessionsPage() {
-    const { canopy, archived, all, directory, q } = Route.useSearch()
+    const { canopy, archived, all, directory, q, cost } = Route.useSearch()
+    const bound = costBoundOf(cost)
     const navigate = useNavigate({ from: Route.fullPath })
     const whose: SessionsWhose = canopy === true ? 'canopy' : 'outside'
     const query = useQuery(
@@ -81,6 +97,7 @@ function SessionsPage() {
             q,
             archived: archived === true,
             directory,
+            ...(bound !== undefined && { [`cost_${bound.op}`]: bound.usd }),
             limit: all === true ? SESSIONS_MAX : SESSIONS_LISTED,
         }),
     )
@@ -101,7 +118,14 @@ function SessionsPage() {
                             {SESSIONS_WHOSE.map((w) => (
                                 <FilterLink
                                     key={w}
-                                    search={{ canopy: w === 'canopy' ? true : undefined, archived, all, directory, q }}
+                                    search={{
+                                        canopy: w === 'canopy' ? true : undefined,
+                                        archived,
+                                        all,
+                                        directory,
+                                        q,
+                                        cost,
+                                    }}
                                     selected={w === whose}
                                 >
                                     {WHOSE_CHIP[w]}
@@ -110,10 +134,10 @@ function SessionsPage() {
                         </nav>
                         {/* A toggle, not a third choice of whose: set apart by a rule, and pressed or not. */}
                         <span className="flex items-center border-l pl-3">
-                            <ArchivedToggle search={{ canopy, archived, all, directory, q }} />
+                            <ArchivedToggle search={{ canopy, archived, all, directory, q, cost }} />
                         </span>
                         {directory !== undefined && (
-                            <Narrowed directory={directory} search={{ canopy, archived, all, q }} />
+                            <Narrowed directory={directory} search={{ canopy, archived, all, q, cost }} />
                         )}
                         {data !== undefined && data.search !== 'off' && (
                             <span
@@ -129,7 +153,7 @@ function SessionsPage() {
                 </PanelHeader>
                 {/* The field stays while the next list loads, so typing never loses it; none at `off`. */}
                 {data !== undefined && data.search !== 'off' && (
-                    <search className="border-b px-3 py-2">
+                    <search className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-3 py-2">
                         <FilterField
                             q={q}
                             queryOf={searchQueryOf}
@@ -139,13 +163,33 @@ function SessionsPage() {
                             label={`Find sessions by ${FOUND_BY[data.search]}`}
                             placeholder={`Find by ${FOUND_BY[data.search]}`}
                             maxLength={SEARCH_MAX}
+                            className="min-w-48 flex-1"
+                        />
+                        <CostFilter
+                            bound={bound}
+                            onFilter={(next) =>
+                                void navigate({
+                                    search: (prev) => ({
+                                        ...prev,
+                                        cost: next === undefined ? undefined : costBoundText(next),
+                                    }),
+                                    replace: true,
+                                })
+                            }
                         />
                     </search>
                 )}
                 {data === undefined ? (
                     <PanelLoading query={query} className="min-h-72" />
                 ) : (
-                    <Listed list={data} archived={archived === true} all={all === true} directory={directory} q={q} />
+                    <Listed
+                        list={data}
+                        archived={archived === true}
+                        all={all === true}
+                        directory={directory}
+                        q={q}
+                        cost={bound}
+                    />
                 )}
             </Panel>
         </>
@@ -162,12 +206,14 @@ function Listed({
     all,
     directory,
     q,
+    cost,
 }: {
     list: SessionList
     archived: boolean
     all: boolean
     directory: string | undefined
     q: string | undefined
+    cost: CostBound | undefined
 }) {
     if (list.search === 'off' || list.progress === null) {
         return (
@@ -183,8 +229,8 @@ function Listed({
             {list.sessions.length === 0 ? (
                 <Empty size="panel">
                     {q === undefined
-                        ? emptyWords(list.whose, list.progress.read_at, archived, directory)
-                        : unfoundWords(list, directory)}
+                        ? emptyWords(list.whose, list.progress.read_at, archived, directory, cost)
+                        : unfoundWords(list, directory, cost)}
                 </Empty>
             ) : (
                 <RowList kind="session" className="divide-y" data-testid="sessions">
@@ -225,31 +271,37 @@ function Listed({
 }
 
 // What an empty list says: that the loop has read nothing yet, or that the runtime keeps no such session, in the
-// directory the list is narrowed to, or none it has not archived.
+// directory the list is narrowed to, at the cost it is held to, or none it has not archived.
 function emptyWords(
     whose: SessionsWhose,
     readAt: string | null,
     archived: boolean,
     directory: string | undefined,
+    cost: CostBound | undefined,
 ): string {
     if (readAt === null) {
         return "no sessions yet: canopy loop reads the runtime's sessions while it waits between ticks"
     }
-    const noun = whose === 'canopy' ? "no session of canopy's" : 'no session outside canopy'
-    const where = directory === undefined ? noun : `${noun} in ${directory}`
+    const where = noSession(whose, directory, cost)
     return archived ? `${where} yet` : `${where} the runtime has not archived`
 }
 
 // What a list found by words says when it found none: what no session holds, where, and that the index may yet.
-function unfoundWords(list: SessionList, directory: string | undefined): string {
-    const noun = list.whose === 'canopy' ? "no session of canopy's" : 'no session outside canopy'
-    const where = directory === undefined ? noun : `${noun} in ${directory}`
+function unfoundWords(list: SessionList, directory: string | undefined, cost: CostBound | undefined): string {
+    const where = noSession(list.whose, directory, cost)
     if (list.search !== 'text') {
         return `${where} has a title that holds every word`
     }
     return indexBehind(list)
         ? `${where} found yet: the index of what sessions said does not hold every one`
         : `${where} holds every word, in its title or in what it said`
+}
+
+// The sessions an empty list has none of: whose, at what cost, and in which directory.
+function noSession(whose: SessionsWhose, directory: string | undefined, cost: CostBound | undefined): string {
+    const noun = whose === 'canopy' ? "no session of canopy's" : 'no session outside canopy'
+    const costing = cost === undefined ? noun : `${noun} ${costBoundWords(cost)}`
+    return directory === undefined ? costing : `${costing} in ${directory}`
 }
 
 // A filter chip's look, the runs page's: muted, and on the accent's tint while chosen.

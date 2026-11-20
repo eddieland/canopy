@@ -2,7 +2,17 @@ import { describe, expect, it } from 'vitest'
 
 import type { SessionList } from '@/api/types'
 
-import { directoryTail, indexBehind, moreMessages, sessionName, unstopped } from './sessions'
+import {
+    costAmountOf,
+    costBoundOf,
+    costBoundText,
+    costBoundWords,
+    directoryTail,
+    indexBehind,
+    moreMessages,
+    sessionName,
+    unstopped,
+} from './sessions'
 
 describe('directoryTail', () => {
     it.each([
@@ -71,5 +81,40 @@ describe('indexBehind', () => {
 
     it('is true where text is asked for and the index cannot be kept', () => {
         expect(indexBehind({ search: 'titles', index: null, why_titles: 'SQLite 3.40 cannot keep it' })).toBe(true)
+    })
+})
+
+describe('costAmountOf', () => {
+    it.each([
+        ['5', 5],
+        [' 0.5 ', 0.5],
+        ['.5', 0.5],
+        ['5.', 5],
+        ['', undefined],
+        ['-1', undefined],
+        ['1e3', undefined],
+        ['$5', undefined],
+        ['1.2.3', undefined],
+        ['1234567890123', undefined],
+    ])('reads %j as dollars, or as nothing', (text, usd) => {
+        expect(costAmountOf(text)).toBe(usd)
+    })
+})
+
+describe('costBoundOf', () => {
+    it('reads a comparison and an amount, as costBoundText writes them', () => {
+        expect(costBoundOf('gte:5')).toEqual({ op: 'gte', usd: 5 })
+        expect(costBoundOf(costBoundText({ op: 'lt', usd: 0.25 }))).toEqual({ op: 'lt', usd: 0.25 })
+    })
+
+    it.each(['eq:5', 'gte', 'gte:', 'gte:-1', 'gte:5:6', 5, null, undefined])('reads no bound in %j', (raw) => {
+        expect(costBoundOf(raw)).toBeUndefined()
+    })
+})
+
+describe('costBoundWords', () => {
+    it('says the bound as the end of a sentence, the amount as every cost is shown', () => {
+        expect(costBoundWords({ op: 'gte', usd: 5 })).toBe('that cost at least $5.00')
+        expect(costBoundWords({ op: 'lt', usd: 0.5 })).toBe('that cost less than $0.50')
     })
 })

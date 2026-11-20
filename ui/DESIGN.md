@@ -1559,7 +1559,12 @@ reader, so no table repeats them.
   the sessions the filters list (`Find by title`, or at `text` `Find by title or what was said`), each keystroke asking
   the server: the rows are then a search's hits, words marked, snippet under the title, a subagent's in a row of its
   own, and at `text` the count reads `best`; with none, the `Empty` says what no session holds, or that the index may
-  yet. A search page's panel of sessions links to it with the same words (`find in Sessions`, in the accent, before
+  yet. Beside the field, in the same row, a `CostFilter` kept in `?cost=` (`gte:5`) holds the list to a cost: the group
+  word `cost`, a `ToggleGroup` of the four comparisons as their signs (`<`, `≤`, `>`, `≥`, each named in words, `≥`
+  on until another is picked), and an amount field with a `$` before it and a ghost clear button while it holds text,
+  in the failure color while what it holds is no amount. It filters nothing until an amount is typed; the rows are
+  then each session within the bound, a subagent's in a row of its own, and an empty list says the bound. A search
+  page's panel of sessions links to it with the same words (`find in Sessions`, in the accent, before
   the count). A line under the list, in muted text, says how far the loop's read has come, and holds the one link to the
   longest list and back; at `sessions.search = "text"` a second line in the same foot, under no rule of its own, says
   the same of the index: while its first build goes on, that it is still indexing, how many sessions so far, and how

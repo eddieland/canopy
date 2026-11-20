@@ -1,4 +1,5 @@
 import type { RuntimeSession, SessionList, SessionsWhose } from '@/api/types'
+import { costText } from '@/lib/cost-total'
 
 // The server's bounds on a list (core/session_list.py), so the UI never asks for what it would answer with a 422.
 /** How many sessions a list holds unless asked for more. */
@@ -21,6 +22,67 @@ export const WHOSE_LABEL: Record<SessionsWhose, string> = {
 export const WHOSE_CHIP: Record<SessionsWhose, string> = {
     outside: 'outside canopy',
     canopy: "canopy's",
+}
+
+/** How a list holds a session's cost to an amount, in the order the page offers them. */
+export const COST_OPS = ['lt', 'lte', 'gt', 'gte'] as const
+
+/** One way a list holds a session's cost to an amount: below it, at most it, above it, or at least it. */
+export type CostOp = (typeof COST_OPS)[number]
+
+/** A bound on what each session listed cost: the page's `?cost=`, as `gte:5`. */
+export interface CostBound {
+    /** How a session's cost compares with the amount. */
+    op: CostOp
+    /** The amount, in dollars. */
+    usd: number
+}
+
+/** Each comparison's sign, as its button shows it. */
+export const COST_SIGN: Record<CostOp, string> = { lt: '<', lte: '≤', gt: '>', gte: '≥' }
+
+/** Each comparison in words, as its button's name and an empty list say it. */
+export const COST_WORDS: Record<CostOp, string> = {
+    lt: 'less than',
+    lte: 'at most',
+    gt: 'more than',
+    gte: 'at least',
+}
+
+/** The most characters an amount typed may have. */
+export const COST_AMOUNT_MAX = 12
+
+/**
+ * An amount in dollars as typed, `5`, `0.5`, or `.5`, or undefined for anything else: the server takes no negative
+ * amount, and the field no sign or exponent.
+ */
+export function costAmountOf(text: string): number | undefined {
+    const typed = text.trim()
+    if (typed.length > COST_AMOUNT_MAX || !/^(?:\d+\.?\d*|\.\d+)$/u.test(typed)) {
+        return undefined
+    }
+    return Number(typed)
+}
+
+/** A bound as the page keeps it in `?cost=`: its comparison, a colon, and the amount, `gte:5`. */
+export function costBoundText(bound: CostBound): string {
+    return `${bound.op}:${bound.usd}`
+}
+
+/** The bound a `?cost=` names, or undefined when it names none: a comparison the page offers, and an amount. */
+export function costBoundOf(raw: unknown): CostBound | undefined {
+    if (typeof raw !== 'string') {
+        return undefined
+    }
+    const [name, amount, ...rest] = raw.split(':')
+    const op = COST_OPS.find((o) => o === name)
+    const usd = amount === undefined ? undefined : costAmountOf(amount)
+    return op === undefined || usd === undefined || rest.length > 0 ? undefined : { op, usd }
+}
+
+/** A bound as the end of a sentence about the sessions within it: `that cost at least $5.00`. */
+export function costBoundWords(bound: CostBound): string {
+    return `that cost ${COST_WORDS[bound.op]} ${costText(bound.usd)}`
 }
 
 /** A session as words name it: its title, or `session ID` for one with none. */

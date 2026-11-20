@@ -80,6 +80,18 @@ for, "the one in `…/acme/infra` where I mentioned the lockfile", and the only 
 session that matches gets a row of its own here, marked `subagent`, since its parent may not match at all. The words
 live in the address as `?q=`, so a search is a link.
 
+## Filtering by cost
+
+Beside the field sits `cost`: four comparisons, `<`, `≤`, `>`, `≥`, and an amount in dollars. Type `5` under `≥` and
+the list holds only the sessions that cost at least five dollars, which is the fastest way to find out where the money
+went. Leave the amount empty and it filters nothing, whichever comparison is picked. It works with everything else on
+the page: the words, the directory, `archived`, and whose.
+
+The cost is each session's own, the figure on its row. A subagent's spend is not rolled into the session it ran for,
+so while a cost is set each subagent gets a row of its own, marked `subagent`, as it does when you search: the
+forty-cent parent of a nine-dollar subagent shouldn't get to hide it. canopy narrows the list before it picks the
+newest, so the count and the link to the newest 500 follow. The bound lives in the address as `?cost=gte:5`.
+
 Search, the box at the top of every page, finds sessions too, among everything else in the journal, 20 of each kind:
 see [Search](overview#search). Each of its session panels has a `find in Sessions` link that brings the same words
 here. The command line has the same list, `canopy sessions` for yours and

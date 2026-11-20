@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
     from canopy.core.context import Context
     from canopy.core.run_models import RunTable
-    from canopy.core.session_list import Listed, MadeBy, Progress, Whose
+    from canopy.core.session_list import CostBound, Listed, MadeBy, Progress, Whose
     from canopy.runtime.implementation import Version
     from canopy.serve.schema.sessions import SessionRunKind
 
@@ -54,12 +54,14 @@ def listed(
     query: str | None = None,
     archived: bool = False,
     directory: str | None = None,
+    costs: Collection[CostBound] = (),
     limit: int = session_list.LISTED,
 ) -> SessionList:
     """The sessions `whose` names, newest first, or the newest whose title holds every word of `query`.
 
-    `archived` lists the sessions the runtime archived too, and `directory` only those that ran in it exactly; one
-    `sessions.exclude` names lists none. Nothing is read while `sessions.search` is `off`.
+    `archived` lists the sessions the runtime archived too, `directory` only those that ran in it exactly, and `costs`
+    only those whose own cost is within every bound, a subagent's in a row of its own; one `sessions.exclude` names
+    lists none. Nothing is read while `sessions.search` is `off`.
 
     Returns:
         At most `limit` sessions, each of canopy's with its run, each outside canopy with its command, and how far the
@@ -86,6 +88,7 @@ def listed(
             archived=archived,
             directory=directory,
             limit=limit,
+            costs=costs,
             text=version if text else None,
         )
         runs = _runs(ctx.conn, [s.made_by for s in _every(found.sessions) if s.made_by is not None])
