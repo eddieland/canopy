@@ -102,6 +102,7 @@ async function renderPage(
     lists: Partial<Record<SessionList['whose'], SessionList>>,
     directory?: string,
     q?: string,
+    cost?: Pick<SessionsFind, 'cost_gt' | 'cost_gte' | 'cost_lt' | 'cost_lte'>,
 ) {
     // Nothing reads the server: the lists are the ones set here, and every other query stays off.
     const client = new QueryClient({ defaultOptions: { queries: { enabled: false } } })
@@ -114,6 +115,7 @@ async function renderPage(
                     limit,
                     directory,
                     q,
+                    ...cost,
                 }
                 client.setQueryData(keys.sessions(find), list)
             }
@@ -427,10 +429,43 @@ describe('the sessions page', () => {
         expect(await screen.findByText(/^no session outside canopy found yet: the index/u)).toBeTruthy()
     })
 
+    it('asks for the sessions within the cost in its address, and keeps the bound through its filters', async () => {
+        const costly: SessionList = {
+            ...OUTSIDE,
+            sessions: [session('ses_bisect', 'Bisect the flaky checkout test', '2026-10-08T00:30:00Z')],
+        }
+        await renderPage('/workspace/sessions?cost=gte:1', { outside: costly }, undefined, undefined, { cost_gte: 1 })
+        expect(await screen.findByText('Bisect the flaky checkout test')).toBeTruthy()
+        expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'Cost in dollars' }).value).toBe('1')
+        expect(screen.getByRole('radio', { name: 'at least' }).getAttribute('aria-checked')).toBe('true')
+        expect(screen.getByRole('link', { name: "canopy's" }).getAttribute('href')).toBe(
+            '/workspace/sessions?canopy=true&cost=gte%3A1',
+        )
+        expect(screen.getByRole('link', { name: 'archived' }).getAttribute('href')).toBe(
+            '/workspace/sessions?archived=true&cost=gte%3A1',
+        )
+    })
+
+    it('says no session cost what the list is held to, and drops a bound it does not offer', async () => {
+        const none: SessionList = { ...OUTSIDE, sessions: [] }
+        await renderPage('/workspace/sessions?cost=lt:0.5', { outside: none }, undefined, undefined, { cost_lt: 0.5 })
+        expect(
+            await screen.findByText(
+                'no session outside canopy cost less than $0.50, of those the runtime has not archived',
+            ),
+        ).toBeTruthy()
+        cleanup()
+
+        await renderPage('/workspace/sessions?cost=eq:1', { outside: OUTSIDE })
+        expect(await screen.findByText('Why does the deploy script hang on staging?')).toBeTruthy()
+        expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'Cost in dollars' }).value).toBe('')
+    })
+
     it('has no field while sessions.search is off', async () => {
         const off: SessionList = { ...OUTSIDE, search: 'off', sessions: [], progress: null }
         await renderPage('/workspace/sessions', { outside: off })
         await screen.findByText(/in your private config/u)
         expect(screen.queryByRole('searchbox')).toBeNull()
+        expect(screen.queryByRole('group', { name: 'Filter by cost' })).toBeNull()
     })
 })

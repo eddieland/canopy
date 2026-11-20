@@ -31,19 +31,22 @@ const NO_WORDS: readonly string[] = []
  * marked `subagent`. A title is untrusted text, shown as text with `words` marked, and so is the snippet under the
  * title of one found by what it said, with what else the hit says: how many more of its messages hold the words, and
  * whether it was indexed in part. With `narrow`, a row's directory links the Sessions page narrowed to the sessions
- * that ran there, keeping the page's other flags.
+ * that ran there, keeping the page's other flags. With `costly`, for a list held to a cost, each row's cost reads in
+ * the foreground: it is what the list was narrowed by.
  */
 export function SessionRows({
     sessions,
     words = NO_WORDS,
     narrow = false,
+    costly = false,
 }: {
     sessions: readonly RuntimeSession[]
     words?: readonly string[]
     narrow?: boolean
+    costly?: boolean
 }) {
     return sessions.map((s) => (
-        <SessionRow key={s.session_id} session={s} words={words} parent={null} narrow={narrow} />
+        <SessionRow key={s.session_id} session={s} words={words} parent={null} narrow={narrow} costly={costly} />
     ))
 }
 
@@ -138,11 +141,13 @@ function SessionRow({
     words,
     parent,
     narrow,
+    costly,
 }: {
     session: RuntimeSession
     words: readonly string[]
     parent: string | null
     narrow: boolean
+    costly: boolean
 }) {
     const name = sessionName(session)
     const models = sessionModels(session.asked, session.models)
@@ -171,7 +176,10 @@ function SessionRow({
                         <MarkedText text={session.title} words={words} />
                     )}
                 </span>
-                <Cost usd={session.cost_usd} className="text-right text-xs text-muted-foreground" />
+                <Cost
+                    usd={session.cost_usd}
+                    className={cn('text-right text-xs', costly ? 'text-foreground' : 'text-muted-foreground')}
+                />
                 <Age at={session.started_at} variant="ago" className="text-right" />
                 {(snippet !== null || more !== null || session.cut) && (
                     <RowLine from="title">
@@ -230,7 +238,14 @@ function SessionRow({
                 )}
             </ListRow>
             {session.subagents.map((s) => (
-                <SessionRow key={s.session_id} session={s} words={words} parent={name} narrow={narrow} />
+                <SessionRow
+                    key={s.session_id}
+                    session={s}
+                    words={words}
+                    parent={name}
+                    narrow={narrow}
+                    costly={costly}
+                />
             ))}
         </>
     )

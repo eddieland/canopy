@@ -18,13 +18,13 @@ from __future__ import annotations
 import dataclasses
 import json
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Final, Literal, cast
+from typing import TYPE_CHECKING, Final, Literal, LiteralString, cast
 
 from canopy.core import db, memory_search, records, runtime_sessions, session_search, sql
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Collection, Iterable, Sequence
+    from collections.abc import Collection, Iterable, Mapping, Sequence
     from pathlib import Path
 
     from canopy.core.run_models import RunTable
@@ -36,6 +36,16 @@ if TYPE_CHECKING:
 #: journal's runs' and their subagents'.
 type Whose = Literal["outside", "canopy"]
 
+#: How a session's cost is held to a bound: below it, at most it, above it, or at least it.
+type CostOp = Literal["lt", "lte", "gt", "gte"]
+
+#: Each comparison of a session's cost with a bound, as SQL.
+_COST: Final[Mapping[CostOp, LiteralString]] = {
+    "lt": "cost_usd < ?",
+    "lte": "cost_usd <= ?",
+    "gt": "cost_usd > ?",
+    "gte": "cost_usd >= ?",
+}
 #: How many sessions one list holds at most, and how many it holds by default.
 MAX_LISTED: Final = 500
 LISTED: Final = 50
@@ -55,6 +65,14 @@ class MadeBy:
     #: The model canopy asked the runtime for, for the run's own session; None for the runtime's default, or for a
     #: subagent's session, whose model the run did not choose.
     model: str | None = None
+
+
+@dataclass(frozen=True)
+class CostBound:
+    """A bound a list holds each session's own cost to, in dollars: only the sessions that cost `op` `usd`."""
+
+    op: CostOp
+    usd: float
 
 
 @dataclass(frozen=True)
@@ -126,6 +144,7 @@ def listing(
     limit: int = LISTED,
     text: Version | None = None,
     model: str | None = None,
+    costs: Collection[CostBound] = (),
 ) -> Listing:
     """List the runtime's sessions `whose` names, newest first, or find the newest whose title holds every word.
 
@@ -136,7 +155,9 @@ def listing(
     that directory exactly, their subagents' among them, none in one `exclude` names all the same. With `text`, the
     runtime that keeps the record, words are found by the index of what sessions said, the best match first. `model`
     narrows the list to the sessions asked to run on that model, or served by it, named exactly, each on a line of
-    its own as one found by words is: where a router among the models was used, and what it routed to.
+    its own as one found by words is: where a router among the models was used, and what it routed to. `costs`
+    narrows it to the sessions whose own cost, a subagent's apart, is within every bound, each on a line of its own
+    the same way, so a subagent's that is within them is listed though the session it ran for is not.
 
     Returns:
         At most `limit` sessions, within `MAX_LISTED`, and how far the read has come.
@@ -154,10 +175,19 @@ def listing(
             limit=limit,
             version=text,
             model=model,
+            costs=costs,
         )
-    flat = bool(words) or model is not None
+    flat = bool(words) or model is not None or bool(costs)
     with db.read_snapshot(conn):
-        query = _matching(whose, state_dir, exclude, archived=archived, directory=directory, model=model)
+        query = _matching(
+            whose,
+            state_dir,
+            exclude,
+            archived=archived,
+            directory=directory,
+            model=model,
+            costs=costs,
+        )
         for word in words:
             query = query.where("title LIKE ? ESCAPE '\\'", f"%{_escaped(word)}%")
         if not flat and directory is None:
@@ -224,13 +254,22 @@ def _found(
     limit: int,
     version: Version,
     model: str | None,
+    costs: Collection[CostBound],
 ) -> Listing:
     ours = whose == "canopy"
     # Each a word as memory's search reads it, never the index's query syntax.
     words = memory_search.words(" ".join(words))
     ranked = session_search.found(state_dir, words, canopy=ours)
     with db.read_snapshot(conn):
-        query = _matching(whose, state_dir, exclude, archived=archived, directory=directory, model=model).where(
+        query = _matching(
+            whose,
+            state_dir,
+            exclude,
+            archived=archived,
+            directory=directory,
+            model=model,
+            costs=costs,
+        ).where(
             "session_id IN (SELECT value FROM json_each(?))",
             json.dumps([f.session_id for f in ranked]),
         )
@@ -266,8 +305,8 @@ class _Session(records.View):
 
 
 # The sessions `whose` names, never one `exclude` names, an archived one only when `archived`, given a `directory`,
-# only those that ran in it, and, given a `model`, only those asked to run on it, by the runtime's record or by the
-# run that made them, or served by it.
+# only those that ran in it, given a `model`, only those asked to run on it, by the runtime's record or by the
+# run that made them, or served by it, and only those whose cost is within each of `costs`.
 def _matching(
     whose: Whose,
     state_dir: Path,
@@ -276,6 +315,7 @@ def _matching(
     archived: bool,
     directory: str | None,
     model: str | None = None,
+    costs: Collection[CostBound] = (),
 ) -> sql.Select:
     query = (
         sql.select(
@@ -288,6 +328,8 @@ def _matching(
     )
     if directory is not None:
         query = query.where("directory = ?", directory)
+    for bound in costs:
+        query = query.where(_COST[bound.op], bound.usd)
     if model is not None:
         ran = sql.any_of(
             *(

@@ -11,7 +11,7 @@ import pytest
 from canopy.cli import sessions as sessions_cli
 from canopy.cli.main import main
 from canopy.core import db, records, runtime_sessions, session_list
-from canopy.core.session_list import MadeBy
+from canopy.core.session_list import CostBound, MadeBy
 from canopy.runtime.report import ModelUse, SessionPage, SessionSpend
 from tests.canopy.helpers import in_run
 
@@ -40,6 +40,7 @@ def kept(
     archived: bool = False,
     asked: str | None = None,
     served: Sequence[str] = (),
+    cost: float = 0.25,
 ) -> SessionSpend:
     """A session as the runtime reports it to a read that keeps titles, started `minute` minutes after noon.
 
@@ -52,7 +53,7 @@ def kept(
         directory=directory,
         created_ms=at,
         updated_ms=at,
-        cost_usd=0.25,
+        cost_usd=cost,
         input=0,
         output=0,
         reasoning=0,
@@ -82,6 +83,7 @@ def listed(
     directory: str | None = None,
     limit: int = session_list.LISTED,
     model: str | None = None,
+    costs: Sequence[CostBound] = (),
 ) -> list[Listed]:
     """The sessions a list holds."""
     return list(
@@ -95,6 +97,7 @@ def listed(
             directory=directory,
             limit=limit,
             model=model,
+            costs=costs,
         ).sessions,
     )
 
@@ -176,6 +179,28 @@ def test_a_session_names_the_model_it_was_asked_to_run_on_and_those_that_served_
     assert (tick.asked, tick.models) == ("openai/gpt-5@high", ("openai/gpt-5@high",))
     [sub] = tick.subagents
     assert (sub.asked, sub.models) == (None, ("openai/gpt-5-mini",))
+
+
+def test_a_list_held_to_a_cost_holds_the_sessions_within_it_each_on_a_line_of_its_own(conn: sqlite3.Connection) -> None:
+    read(
+        conn,
+        kept("ses_cheap", "Cheap", minute=1, cost=0.5),
+        kept("ses_even", "Even", minute=2, cost=1.0),
+        kept("ses_dear", "Dear", minute=3, cost=2.0),
+        # A subagent's cost is its own: it is listed apart from the session it ran for.
+        kept("ses_sub", "Its subagent", minute=4, parent="ses_cheap", cost=3.0),
+        kept("ses_gone", "Archived", minute=5, cost=2.0, archived=True),
+    )
+
+    assert tree(listed(conn, costs=[CostBound("lt", 1.0)])) == ["ses_cheap"]
+    assert tree(listed(conn, costs=[CostBound("lte", 1.0)])) == ["ses_even", "ses_cheap"]
+    assert tree(listed(conn, costs=[CostBound("gt", 1.0)])) == ["ses_sub", "ses_dear"]
+    assert tree(listed(conn, costs=[CostBound("gte", 1.0)])) == ["ses_sub", "ses_dear", "ses_even"]
+    # Every bound holds, with the list's other filters: a range, the archived, and a title's words.
+    assert tree(listed(conn, costs=[CostBound("gte", 1.0), CostBound("lt", 3.0)])) == ["ses_dear", "ses_even"]
+    assert tree(listed(conn, costs=[CostBound("gte", 2.0)], archived=True)) == ["ses_gone", "ses_sub", "ses_dear"]
+    assert tree(listed(conn, costs=[CostBound("gte", 1.0)], words=["dear"])) == ["ses_dear"]
+    assert listed(conn, costs=[CostBound("gt", 3.0)]) == []
 
 
 def test_a_list_narrowed_to_a_model_holds_the_sessions_asked_for_it_or_served_by_it(conn: sqlite3.Connection) -> None:

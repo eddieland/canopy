@@ -87,3 +87,35 @@ for (const { path, list } of [
         await expect(copy).toHaveCSS('opacity', '1')
     })
 }
+
+test('a cost and a comparison narrow the list to the sessions within it, kept in the address', async ({ page }) => {
+    await page.goto('workspace/sessions')
+    const rows = page.getByTestId('sessions').getByTestId('session')
+    await expect(rows).toHaveCount(5)
+    const filter = page.getByRole('group', { name: 'Filter by cost' })
+    await expect(filter.getByRole('radio', { name: 'at least' })).toBeChecked()
+
+    await filter.getByRole('textbox', { name: 'Cost in dollars' }).fill('1.12')
+    await expect(page).toHaveURL(/\/workspace\/sessions\?cost=gte(:|%3A)1\.12$/u)
+    await expect(rows).toHaveCount(2)
+    await expect(rows.nth(0)).toContainText('XYZ-12 implement')
+    await expect(rows.nth(1)).toContainText('Bisect the flaky checkout test')
+
+    await filter.getByRole('radio', { name: 'more than' }).click()
+    await expect(page).toHaveURL(/\/workspace\/sessions\?cost=gt(:|%3A)1\.12$/u)
+    await expect(rows).toHaveCount(1)
+
+    // Below the cheapest of them, only the subagent, in a row of its own: its cost is its own.
+    await filter.getByRole('radio', { name: 'less than' }).click()
+    await filter.getByRole('textbox', { name: 'Cost in dollars' }).fill('0.2')
+    await expect(rows).toHaveCount(1)
+    await expect(rows.nth(0)).toContainText('Find where deploy.sh waits on the health check')
+    await filter.getByRole('textbox', { name: 'Cost in dollars' }).fill('0.1')
+    await expect(page.getByText('no session outside canopy cost less than $0.10')).toBeVisible()
+
+    // The bound holds through the other filters, and clearing it lists every session again.
+    await expect(page.getByRole('link', { name: 'archived' })).toHaveAttribute('href', /cost=lt(:|%3A)0\.1/u)
+    await filter.getByRole('button', { name: 'Clear the cost' }).click()
+    await expect(page).toHaveURL(/\/workspace\/sessions$/u)
+    await expect(rows).toHaveCount(5)
+})
