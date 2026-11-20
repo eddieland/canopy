@@ -152,7 +152,10 @@ def _seeds(args: Iterable[str]) -> dict[str, Path]:
             raise CliError(f"sync: --seed {arg!r} is not NAME=PATH")
         if name in found:
             raise CliError(f"sync: --seed names {name} twice")
-        seed = Path(path).expanduser().absolute()
+        try:
+            seed = Path(path).expanduser().absolute()
+        except RuntimeError as e:  # a `~user` with no home
+            raise CliError(f"sync: --seed {name}: {e}") from None
         if not seed.is_dir():
             raise CliError(f"sync: --seed {name}: {seed} is not a directory")
         found[name] = seed
@@ -192,10 +195,23 @@ def _sync(ctx: Context, *, dry_run: bool, seeds: Mapping[str, Path]) -> list[set
         elif want is not None and dry_run:
             # Not cloned yet, so it has no pool: a real sync clones it, then makes every slot.
             results.append(_report(setup_workspace.Checked(repo, "slots", f"0 of {want}, would make {want}")))
-    results += [
-        _report(setup_workspace.remove(ctx.runner, ctx.pool(r.name), r, dry_run=dry_run))
-        for r in setup_workspace.undeclared(ws)
-    ]
+    results += _remove_undeclared(ctx, seeds, dry_run=dry_run)
+    return results
+
+
+def _remove_undeclared(ctx: Context, seeds: Mapping[str, Path], *, dry_run: bool) -> list[setup_workspace.Checked]:
+    """Remove each clone the map no longer lists, unless this sync was told to seed from it: the operator wants it.
+
+    Returns:
+        What removing each came to.
+    """
+    seeded = {seed.resolve() for seed in seeds.values()}
+    results: list[setup_workspace.Checked] = []
+    for r in setup_workspace.undeclared(ctx.workspace):
+        if r.path.resolve() in seeded:
+            click.echo(f"{r.name}: kept: it is a seed this sync was given; remove it when you are done with it")
+            continue
+        results.append(_report(setup_workspace.remove(ctx.runner, ctx.pool(r.name), r, dry_run=dry_run)))
     return results
 
 

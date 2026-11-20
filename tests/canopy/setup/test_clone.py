@@ -131,7 +131,7 @@ def test_a_seeded_clone_takes_the_seeds_objects_and_does_not_depend_on_it(ws: Ws
     )
     [docs] = setup_workspace.missing(workspace.find(ws.root))
     checked = setup_workspace.clone(runner, workspace.find(ws.root), docs, seed=ws.clone("api"))
-    assert checked.outcome == "cloned"
+    assert (checked.outcome, checked.detail) == ("cloned", "")
     [call] = runner.run.call_args_list
     assert call.args[0][-6:-3] == ["--reference-if-able", str(ws.clone("api")), "--dissociate"]
     assert git("log", "--format=%s", cwd=docs.path) == git("log", "--format=%s", cwd=ws.clone("api"))
@@ -147,7 +147,25 @@ def test_a_seed_git_cannot_use_is_passed_over(ws: Ws, tmp_path: Path) -> None:
     empty.mkdir()
     checked = setup_workspace.clone(procs.SubprocessRunner(), workspace.find(ws.root), docs, seed=empty)
     assert checked.outcome == "cloned"
+    # What git said of the seed it passed over reaches the operator.
+    assert checked.detail.startswith("the seed was not used: ")
+    assert "is not a local repository" in checked.detail
     assert git("log", "--format=%s", cwd=docs.path) == "initial api"
+
+
+def test_a_seed_where_the_clone_is_made_is_refused_and_left_as_it_was(ws: Ws) -> None:
+    (ws.root / config.WORKSPACE_FILE_NAME).write_text(
+        map_text(*((n, str(o)) for n, o in ws.origins.items()), ("docs", str(ws.origins["api"]))),
+    )
+    [docs] = setup_workspace.missing(workspace.find(ws.root))
+    git("clone", "--quiet", str(ws.origins["api"]), str(staging(docs)), cwd=ws.root)
+    runner = git_leaves_a_clone_behind(AssertionError("git ran"))
+    checked = setup_workspace.clone(runner, workspace.find(ws.root), docs, seed=staging(docs))
+    assert (checked.outcome, checked.detail) == (
+        "failed",
+        f"the seed {staging(docs)} is where the clone is made; name a clone of your own",
+    )
+    assert (staging(docs) / ".git").is_dir()
 
 
 def test_sync_seeds_the_clone_it_names_and_says_so(ws: Ws, capsys: pytest.CaptureFixture[str]) -> None:
@@ -159,10 +177,27 @@ def test_sync_seeds_the_clone_it_names_and_says_so(ws: Ws, capsys: pytest.Captur
     assert (
         f"docs: to clone: {ws.origins['api']} into {ws.clone('docs')}, seeded from {seed}\n" in capsys.readouterr().out
     )
-    assert main(["workspace", "sync", "--seed", f"docs={seed}", "--seed", f"api={seed}"]) == 0
+    real = setup_workspace.clone
+    with mock.patch.object(setup_workspace, "clone", autospec=True, side_effect=real) as cloned:
+        assert main(["workspace", "sync", "--seed", f"docs={seed}", "--seed", f"api={seed}"]) == 0
+    [call] = cloned.call_args_list
+    assert (call.args[2].name, call.kwargs["seed"]) == ("docs", seed)
     out = capsys.readouterr().out
     assert f"docs: cloning {ws.origins['api']} into {ws.clone('docs')}, seeded from {seed}\ndocs: cloned\n" in out
     assert "api: --seed not used: it is cloned already\n" in out
+
+
+def test_sync_keeps_a_seed_the_map_does_not_list(ws: Ws, capsys: pytest.CaptureFixture[str]) -> None:
+    old = ws.root / "repos" / "old-docs"
+    git("clone", "--quiet", str(ws.origins["api"]), str(old), cwd=ws.root)
+    (ws.root / config.WORKSPACE_FILE_NAME).write_text(
+        map_text(*((n, str(o)) for n, o in ws.origins.items()), ("docs", str(ws.origins["api"]))),
+    )
+    assert main(["workspace", "sync", "--seed", f"docs={old}"]) == 0
+    assert "old-docs: kept: it is a seed this sync was given; remove it when you are done with it\n" in (
+        capsys.readouterr().out
+    )
+    assert (old / ".git").is_dir()
 
 
 @pytest.mark.parametrize(
@@ -172,6 +207,7 @@ def test_sync_seeds_the_clone_it_names_and_says_so(ws: Ws, capsys: pytest.Captur
         ("=/tmp", "--seed '=/tmp' is not NAME=PATH"),
         ("nowhere={here}", "--seed names nowhere, which the map does not list"),
         ("api={missing}", "--seed api: {missing} is not a directory"),
+        ("api=~no-such-user-of-canopy/clone", "--seed api: "),
     ],
 )
 def test_sync_refuses_a_seed_it_cannot_use_before_it_changes_anything(

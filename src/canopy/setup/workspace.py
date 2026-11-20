@@ -246,8 +246,8 @@ def clone(runner: procs.Runner, ws: workspace.Workspace, repo: workspace.Repo, *
 
     A seed is a clone the operator already has of the same repository: git copies the objects it holds from local disk
     and fetches only what it lacks, and the clone made is a whole one that does not depend on the seed afterwards
-    (`--reference-if-able`, `--dissociate`). A seed git cannot use is passed over with a warning, and the clone fetches
-    everything, as it would with none.
+    (`--reference-if-able`, `--dissociate`). A seed git cannot use is passed over, with what git said of it in the
+    result, and the clone fetches everything, as it would with none. A seed where the clone is made is refused.
 
     git clones into `repos/.<name>.cloning`, which sync passes over, and the clone moves to `repos/<name>` only once git
     has finished. So a clone that fails, times out, or is killed, by any signal, never leaves a `.git` at `repos/<name>`
@@ -261,6 +261,8 @@ def clone(runner: procs.Runner, ws: workspace.Workspace, repo: workspace.Repo, *
         return Checked(repo, "failed", f"{repo.path} exists and is not a clone; move it away and sync again")
     repo.path.parent.mkdir(parents=True, exist_ok=True)
     staging = repo.path.with_name(f".{repo.name}{_STAGING_SUFFIX}")
+    if seed is not None and seed.resolve().is_relative_to(staging.resolve()):
+        return Checked(repo, "failed", f"the seed {seed} is where the clone is made; name a clone of your own")
     _remove_staging(staging)
     seeded = ("--reference-if-able", str(seed), "--dissociate") if seed is not None else ()
     args = hostgit.argv("clone", "--quiet", *seeded, "--", str(repo.url), str(staging))
@@ -284,7 +286,9 @@ def clone(runner: procs.Runner, ws: workspace.Workspace, repo: workspace.Repo, *
     except OSError as e:
         _remove_staging(staging)
         return Checked(repo, "failed", f"the clone could not be moved to {repo.path}: {e.strerror}; sync again")
-    return Checked(repo, "cloned")
+    # With --quiet, what git says of a clone that worked is about the seed: one it could not use, and fetched past.
+    said = result.stderr.strip() if seed is not None else ""
+    return Checked(repo, "cloned", f"the seed was not used: {said[:500]}" if said else "")
 
 
 def _remove_staging(staging: Path) -> None:
