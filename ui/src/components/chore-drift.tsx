@@ -8,8 +8,9 @@ import { InlineCode } from '@/components/rich-text'
  * both versions and the command that shows how they differ, until the operator puts the two back together. Nothing
  * waits on it, since the copy keeps running as installed, so it wears no status tint.
  */
-export function ChoreDriftBanner({ name, drift }: { name: string; drift: ChoreDrift | null }) {
-    if (drift === null) {
+export function ChoreDriftBanner({ name, drift }: { name: string; drift: ChoreDrift | null | undefined }) {
+    // An API from before the field omits it, as a page left open across an upgrade may still be served.
+    if (drift === null || drift === undefined) {
         return null
     }
     const lead = drift.standing === 'changed' ? 'Canopy ships a newer version' : 'Differs from the version canopy ships'

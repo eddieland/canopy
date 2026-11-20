@@ -155,8 +155,11 @@ def moved(ws: Workspace, name: str) -> Drift | None:
     record that cannot be read is as good as unknown.
 
     Returns:
-        Its three ways when it stands other than current, or None: current, not installed, or not readable.
+        Its three ways when it stands other than current, or None: current, not installed, not readable, or no longer
+        shipped by canopy, which has no newer version to point at and whose `canopy chore diff` refuses it.
     """
+    if name not in install.available():
+        return None
     try:
         found = of(ws, name)
     except OSError:

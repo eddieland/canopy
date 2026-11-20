@@ -37,7 +37,9 @@ describe('ChoreDriftBanner', () => {
     })
 
     it('shows nothing for a chore that has not moved apart from canopy', () => {
-        const { container } = render(<ChoreDriftBanner name="deps" drift={null} />)
-        expect(container.childElementCount).toBe(0)
+        render(<ChoreDriftBanner name="deps" drift={null} />)
+        expect(screen.queryByRole('region')).toBeNull()
+        render(<ChoreDriftBanner name="deps" drift={undefined} />)
+        expect(screen.queryByRole('region')).toBeNull()
     })
 })

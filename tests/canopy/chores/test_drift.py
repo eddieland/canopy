@@ -165,6 +165,9 @@ def test_status_says_when_canopy_ships_a_newer_version_of_an_installed_chore(
         # Copies it cannot read are as good as unknown: status still prints, and says nothing of them.
         with mock.patch.object(drift, "of", autospec=True, side_effect=PermissionError("denied")):
             assert "chore diff" not in status_line(capsys, CHORE)
+    # An example canopy no longer ships has no newer version to point at, and `chore diff` refuses it.
+    with mock.patch.object(install, "available", autospec=True, return_value=[]):
+        assert "chore diff" not in status_line(capsys, CHORE)
     (canopy_env.state_dir / install.ORIGINS_DIR / f"{CHORE}.json").unlink()
     prompt = canopy_env.state_dir / install.PROMPTS_DIR / f"{CHORE}.md"
     prompt.write_text(prompt.read_text().replace("Once a week", "Once a day"))
