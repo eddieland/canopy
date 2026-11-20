@@ -18,8 +18,9 @@ from __future__ import annotations
 
 import contextlib
 import json
+import re
 import shutil
-from collections.abc import Collection, Iterable, Sequence
+from collections.abc import Callable, Collection, Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
@@ -39,6 +40,9 @@ IGNORED: Final = tuple(
 _CLONE_TIMEOUT_SECONDS: Final = 1800
 #: What a repository's name takes, after a dot, for the directory git clones it into before it moves into place.
 _STAGING_SUFFIX: Final = ".cloning"
+#: A line of git's progress, its own or the remote's, as `--progress` prints it: a meter, `Receiving objects:  45%
+#: (450/1000)`, `Enumerating objects: 302, done.`, or the remote's tally, `Total 302 (delta 0), ...`.
+_PROGRESS: Final = re.compile(r"(remote: )?([A-Z][a-z]+( [a-z]+)*: +\d+|Total \d+ \(delta \d+\))")
 _GIT_TIMEOUT_SECONDS: Final = 30
 _FETCH_TIMEOUT_SECONDS: Final = 900
 
@@ -241,7 +245,14 @@ def missing(ws: workspace.Workspace) -> list[workspace.Repo]:
     return [r for r in ws.repos if not r.cloned]
 
 
-def clone(runner: procs.Runner, ws: workspace.Workspace, repo: workspace.Repo, *, seed: Path | None = None) -> Checked:
+def clone(
+    runner: procs.Runner,
+    ws: workspace.Workspace,
+    repo: workspace.Repo,
+    *,
+    seed: Path | None = None,
+    on_progress: Callable[[str], None] | None = None,
+) -> Checked:
     """Clone `repo` from the map's URL into `repos/<name>`, taking what objects it can from the clone at `seed`, if any.
 
     A seed is a clone the operator already has of the same repository: git copies the objects it holds from local disk
@@ -254,6 +265,10 @@ def clone(runner: procs.Runner, ws: workspace.Workspace, repo: workspace.Repo, *
     for the next sync to take as a finished clone (`Repo.cloned`) and fetch into; what it leaves is removed by the next
     clone of that repository, and nothing at `repos/<name>` is ever removed.
 
+    With `on_progress`, git reports its progress, and each line of it goes to `on_progress` as git prints it, one line
+    for each update of its meter, as plain text fit to print: the remote's part of it is text the remote chose. What
+    the result says git said leaves the progress out.
+
     Returns:
         `cloned`, or `failed` with why: something not a clone is in the way, or git could not clone it.
     """
@@ -265,9 +280,17 @@ def clone(runner: procs.Runner, ws: workspace.Workspace, repo: workspace.Repo, *
         return Checked(repo, "failed", f"the seed {seed} is where the clone is made; name a clone of your own")
     _remove_staging(staging)
     seeded = ("--reference-if-able", str(seed), "--dissociate") if seed is not None else ()
-    args = hostgit.argv("clone", "--quiet", *seeded, "--", str(repo.url), str(staging))
+    progress = ("--progress",) if on_progress is not None else ()
+    args = hostgit.argv("clone", "--quiet", *progress, *seeded, "--", str(repo.url), str(staging))
+    on_err_line = None if on_progress is None else _progress_lines(on_progress)
     try:
-        result = runner.run(args, cwd=ws.root, env=hostgit.ENV, timeout=_CLONE_TIMEOUT_SECONDS)
+        result = runner.run(
+            args,
+            cwd=ws.root,
+            env=hostgit.ENV,
+            timeout=_CLONE_TIMEOUT_SECONDS,
+            on_err_line=on_err_line,
+        )
     except procs.ProcError as e:
         _remove_staging(staging)
         return Checked(repo, "failed", str(e))
@@ -277,7 +300,7 @@ def clone(runner: procs.Runner, ws: workspace.Workspace, repo: workspace.Repo, *
     if not result.ok:
         _remove_staging(staging)
         status = "timed out" if result.timed_out else f"exited {result.returncode}"
-        output = (result.stderr.strip() or result.stdout.strip()).replace(str(repo.url), shown(str(repo.url)))
+        output = (_said(result.stderr) or result.stdout.strip()).replace(str(repo.url), shown(str(repo.url)))
         return Checked(repo, "failed", f"git clone {status}: {output[:500]}" if output else f"git clone {status}")
     try:
         if repo.path.is_dir() and not repo.path.is_symlink():
@@ -286,9 +309,25 @@ def clone(runner: procs.Runner, ws: workspace.Workspace, repo: workspace.Repo, *
     except OSError as e:
         _remove_staging(staging)
         return Checked(repo, "failed", f"the clone could not be moved to {repo.path}: {e.strerror}; sync again")
-    # With --quiet, what git says of a clone that worked is about the seed: one it could not use, and fetched past.
-    said = result.stderr.strip() if seed is not None else ""
+    # With --quiet, what git says of a clone that worked, past its progress, is about the seed: one it could not use.
+    said = _said(result.stderr) if seed is not None else ""
     return Checked(repo, "cloned", f"the seed was not used: {said[:500]}" if said else "")
+
+
+def _progress_lines(on_progress: Callable[[str], None]) -> Callable[[str], None]:
+    """Return what takes each line git prints to stderr, and passes `on_progress` those of its progress, made plain."""
+
+    def take(line: str) -> None:
+        if _PROGRESS.match(line):
+            # A control character the remote sent could move the cursor, or worse, on the operator's terminal.
+            on_progress(" ".join("".join(c if c.isprintable() else " " for c in line).split()))
+
+    return take
+
+
+def _said(stderr: str) -> str:
+    """Return what git said on `stderr`, its progress left out."""
+    return "\n".join(line.rstrip() for line in stderr.splitlines() if not _PROGRESS.match(line)).strip()
 
 
 def _remove_staging(staging: Path) -> None:

@@ -1,6 +1,6 @@
 """`canopy workspace sync` clones a missing repository beside its place, from a seed if named, then moves it in."""
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from unittest import mock
 
@@ -240,3 +240,75 @@ def test_sync_reads_the_map_again_once_it_holds_the_lock(ws: Ws, capsys: pytest.
     with mock.patch.object(cli_workspace, "open_context", autospec=True, side_effect=opened_then_added):
         assert main(["workspace", "sync", "--seed", f"docs={ws.clone('api')}"]) == 0
     assert "docs: cloned" in capsys.readouterr().out
+
+
+def test_a_clones_progress_reaches_the_operator_plain_and_stays_out_of_what_git_said(ws: Ws) -> None:
+    docs = docs_repo(ws)
+    printed = (
+        "remote: Counting objects:  50% (1/2)\x1b]0;owned\x07   \n",
+        "Receiving objects: 100% (2/2), done.\n",
+        "remote: Repository not found.        \n",
+        "fatal: early EOF\n",
+    )
+
+    def run(args: Sequence[str], *, on_err_line: Callable[[str], None] | None = None, **_: object) -> procs.Result:
+        assert on_err_line is not None
+        for line in printed:
+            on_err_line(line)
+        return procs.Result(tuple(args), 128, "", "".join(printed))
+
+    runner = mock.create_autospec(procs.SubprocessRunner, instance=True)
+    runner.run.side_effect = run
+    seen: list[str] = []
+    checked = setup_workspace.clone(runner, workspace.find(ws.root), docs, on_progress=seen.append)
+    [call] = runner.run.call_args_list
+    assert "--progress" in call.args[0]
+    # What makes the remote's escape sequence one is gone, as are the spaces it padded its line with.
+    assert seen == ["remote: Counting objects: 50% (1/2) ]0;owned", "Receiving objects: 100% (2/2), done."]
+    assert (checked.outcome, checked.detail) == (
+        "failed",
+        "git clone exited 128: remote: Repository not found.\nfatal: early EOF",
+    )
+
+
+def test_a_clone_from_a_remote_reports_git_s_progress_but_not_as_what_git_said_of_the_seed(
+    ws: Ws,
+    tmp_path: Path,
+) -> None:
+    # A file:// URL, unlike a path, is fetched as a remote is, so git has progress to report.
+    (ws.root / config.WORKSPACE_FILE_NAME).write_text(
+        map_text(*((n, str(o)) for n, o in ws.origins.items()), ("docs", ws.origins["api"].as_uri())),
+    )
+    [docs] = setup_workspace.missing(workspace.find(ws.root))
+    empty = tmp_path / "not-a-clone"
+    empty.mkdir()
+    seen: list[str] = []
+    checked = setup_workspace.clone(
+        procs.SubprocessRunner(),
+        workspace.find(ws.root),
+        docs,
+        seed=empty,
+        on_progress=seen.append,
+    )
+    assert checked.outcome == "cloned"
+    assert "remote: Counting objects: 100% (2/2), done." in seen
+    assert checked.detail.startswith("the seed was not used: ")
+    assert "objects" not in checked.detail
+    assert git("log", "--format=%s", cwd=docs.path) == "initial api"
+
+
+@pytest.mark.parametrize(("seconds", "shown"), [(0, 1), (60, 0)], ids=["long", "quick"])
+def test_sync_echoes_the_progress_of_a_clone_that_runs_long_and_none_of_one_that_does_not(
+    ws: Ws,
+    capsys: pytest.CaptureFixture[str],
+    seconds: int,
+    shown: int,
+) -> None:
+    (ws.root / config.WORKSPACE_FILE_NAME).write_text(
+        map_text(*((n, str(o)) for n, o in ws.origins.items()), ("docs", ws.origins["api"].as_uri())),
+    )
+    with mock.patch.object(cli_workspace, "_PROGRESS_SECONDS", seconds):
+        assert main(["workspace", "sync"]) == 0
+    out = capsys.readouterr().out
+    assert out.count("docs: remote: Counting objects: 100% (2/2), done.\n") == shown
+    assert "docs: cloned\n" in out

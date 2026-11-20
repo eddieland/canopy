@@ -6,6 +6,7 @@ The commands for one pool's slots, `slots`, `release`, and `remove-slot`, are `c
 from __future__ import annotations
 
 import dataclasses
+import time
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, assert_never
@@ -25,6 +26,8 @@ if TYPE_CHECKING:
 
 #: What sync reports for a repository it could not bring to what is declared; any of them makes it exit 1.
 _UNMET: Final = ("failed", "kept")
+#: How long a clone runs before sync echoes its progress, and then how often.
+_PROGRESS_SECONDS: Final = 10
 
 
 @click.group("workspace")
@@ -277,7 +280,29 @@ def _clone_or_check(
     if dry_run:
         return setup_workspace.Checked(repo, "to clone", f"{url} into {repo.path}{seeded}")
     click.echo(f"{repo.name}: cloning {url} into {repo.path}{seeded}")
-    return setup_workspace.clone(ctx.runner, ws, repo, seed=seed)
+    return setup_workspace.clone(ctx.runner, ws, repo, seed=seed, on_progress=_Progress(repo.name))
+
+
+class _Progress:
+    """Echoes a clone's progress, so a long one is not taken for a hang: a line at most every `_PROGRESS_SECONDS`.
+
+    The first comes only once the clone has run that long, so a quick clone prints none.
+    """
+
+    def __init__(self, name: str) -> None:
+        """Echo the progress of the clone of repository `name`."""
+        #: The repository each line names.
+        self.name = name
+        #: When the next line may be echoed, on the monotonic clock.
+        self.after = time.monotonic() + _PROGRESS_SECONDS
+
+    def __call__(self, line: str) -> None:
+        """Echo `line`, a line of git's progress, unless one was echoed too recently."""
+        now = time.monotonic()
+        if now < self.after:
+            return
+        self.after = now + _PROGRESS_SECONDS
+        click.echo(f"{self.name}: {line}")
 
 
 def _report(checked: setup_workspace.Checked) -> setup_workspace.Checked:

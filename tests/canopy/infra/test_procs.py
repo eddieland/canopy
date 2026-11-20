@@ -230,6 +230,53 @@ def test_an_on_line_that_raises_kills_the_child_and_closes_its_pipes() -> None:
     assert [str(w.message) for w in caught if issubclass(w.category, ResourceWarning)] == []
 
 
+def test_on_err_line_gets_each_line_of_stderr_as_it_is_printed_a_carriage_return_ending_one(tmp_path: Path) -> None:
+    """The child waits for a file `on_err_line` makes on its first line, as `on_line`'s test does."""
+    flag = tmp_path / "flag"
+    script = (
+        f"echo one >&2; echo out; while [ ! -e {flag} ]; do sleep 0.01; done; "
+        "printf 'two  1%%\\rtwo 100%%\\r\\nthree' >&2"
+    )
+    seen: list[str] = []
+
+    def on_err_line(line: str) -> None:
+        seen.append(line)
+        flag.touch()
+
+    result = SubprocessRunner().run(["sh", "-c", script], timeout=10, on_err_line=on_err_line)
+    assert result.ok
+    assert seen == ["one\n", "two  1%\n", "two 100%\n", "three"]
+    assert (result.stdout, result.stderr) == ("out\n", "one\ntwo  1%\ntwo 100%\nthree")
+
+
+def test_on_line_and_on_err_line_each_get_their_own_pipe() -> None:
+    out: list[str] = []
+    err: list[str] = []
+    script = "echo a; echo b >&2; echo c; echo d >&2"
+    result = SubprocessRunner().run(["sh", "-c", script], on_line=out.append, on_err_line=err.append)
+    assert (out, err) == (["a\n", "c\n"], ["b\n", "d\n"])
+    assert (result.stdout, result.stderr) == ("a\nc\n", "b\nd\n")
+
+
+def test_on_err_line_with_a_timeout_keeps_what_was_printed_before_the_kill() -> None:
+    seen: list[str] = []
+    result = SubprocessRunner().run(
+        ["sh", "-c", "echo partial >&2; exec sleep 30"],
+        timeout=0.5,
+        on_err_line=seen.append,
+    )
+    assert result.timed_out
+    assert seen == ["partial\n"]
+    assert result.stderr == "partial\n"
+
+
+def test_on_err_line_is_not_with_stdout_to_file_or_max_stdout() -> None:
+    with pytest.raises(ValueError, match="on_err_line"):
+        SubprocessRunner().run(["true"], on_err_line=print, stdout_to_file=True)
+    with pytest.raises(ValueError, match="on_err_line"):
+        SubprocessRunner().run(["true"], on_err_line=print, max_stdout=1)
+
+
 #: A child that writes as a runtime built on Bun does: one write that does not wait for a full pipe to drain, then exit.
 WRITES_ONCE: Final = """
 import contextlib, os, sys
