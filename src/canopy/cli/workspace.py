@@ -116,9 +116,9 @@ def sync(
     ctx = open_context(click_ctx)
     with between_ticks(ctx, "sync"):
         if add:
-            # Read again under the lock: another add may have written the map since this command opened it.
             add_repos(workspace.load(ctx.repo_root), add)
-            ctx = dataclasses.replace(ctx, ws=workspace.load(ctx.repo_root))
+        # Read again under the lock: an add may have written the map since this command opened it.
+        ctx = dataclasses.replace(ctx, ws=workspace.load(ctx.repo_root))
         seeds = seeds or {}
         if unknown := sorted(set(seeds) - {r.name for r in ctx.workspace.repos}):
             raise CliError(f"sync: --seed names {', '.join(unknown)}, which the map does not list")

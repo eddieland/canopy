@@ -4,10 +4,13 @@ from collections.abc import Sequence
 from pathlib import Path
 from unittest import mock
 
+import click
 import pytest
 
+from canopy.cli import workspace as cli_workspace
 from canopy.cli.main import main
 from canopy.core import config, workspace
+from canopy.core.context import Context
 from canopy.infra import procs
 from canopy.setup import workspace as setup_workspace
 from tests.canopy.conftest import Ws, map_text
@@ -221,3 +224,19 @@ def test_sync_refuses_a_seed_it_cannot_use_before_it_changes_anything(
     fill = {"here": str(ws.clone("api")), "missing": str(missing)}
     assert main(["workspace", "sync", "--seed", seed.format(**fill)]) == 1
     assert f"sync: {said.format(**fill)}" in capsys.readouterr().err
+
+
+def test_sync_reads_the_map_again_once_it_holds_the_lock(ws: Ws, capsys: pytest.CaptureFixture[str]) -> None:
+    real = cli_workspace.open_context
+
+    def opened_then_added(click_ctx: click.Context) -> Context:
+        # A `workspace add` that writes the map after sync opened its context, before sync took the lock.
+        ctx = real(click_ctx)
+        (ws.root / config.WORKSPACE_FILE_NAME).write_text(
+            map_text(*((n, str(o)) for n, o in ws.origins.items()), ("docs", str(ws.origins["api"]))),
+        )
+        return ctx
+
+    with mock.patch.object(cli_workspace, "open_context", autospec=True, side_effect=opened_then_added):
+        assert main(["workspace", "sync", "--seed", f"docs={ws.clone('api')}"]) == 0
+    assert "docs: cloned" in capsys.readouterr().out
