@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import contextlib
 import errno
+import io
 import os
 import queue
 import re
@@ -44,6 +45,9 @@ _FLAGS: Final = frozenset(
 )
 #: How many characters of a child's stdout a bounded read takes at a time.
 _CHUNK: Final = 64 * 1024
+#: A line a streamed pipe's reader passes to the calling thread, with what takes it; None in place of the line once the
+#: pipe has reached its end.
+type _Line = tuple[Callable[[str], None], str | None]
 
 
 class ProcError(Exception):
@@ -87,6 +91,7 @@ class Runner(Protocol):
         timeout: float | None = None,
         on_start: Callable[[int], None] | None = None,
         on_line: Callable[[str], None] | None = None,
+        on_err_line: Callable[[str], None] | None = None,
         stdout_to_file: bool = False,
         max_stdout: int | None = None,
     ) -> Result:
@@ -104,6 +109,10 @@ class Runner(Protocol):
             on_line: Called with each line of the child's stdout, its newline kept, as the child prints it, on the
                 calling thread. `stdout` in the result holds the same lines. An exception it raises kills the child
                 and propagates.
+            on_err_line: Called as `on_line` is, with each line of the child's stderr, which the result's `stderr`
+                holds. A carriage return ends a line as a newline does, and reads as one, so each update a progress
+                meter draws over the last arrives as a line of its own, once the child prints the next character,
+                which tells it from a carriage return and newline. Not with `stdout_to_file` or `max_stdout`.
             stdout_to_file: Capture stdout through a temporary file rather than a pipe, read once the child exits, for
                 a child that loses what it has not yet written to a full pipe when it exits. Not with `on_line`.
             max_stdout: Keep at most this many characters of stdout; the rest is read and dropped as the child writes
@@ -116,7 +125,8 @@ class Runner(Protocol):
         Raises:
             CommandNotFoundError: The executable is missing or not executable.
             ProcError: The process could not be started, for example because `cwd` does not exist.
-            ValueError: More than one of `on_line`, `stdout_to_file`, and `max_stdout` was given.
+            ValueError: More than one of `on_line`, `stdout_to_file`, and `max_stdout` was given, or `on_err_line`
+                with either of the last two.
         """
         ...
 
@@ -164,6 +174,7 @@ class SubprocessRunner:
         timeout: float | None = None,
         on_start: Callable[[int], None] | None = None,
         on_line: Callable[[str], None] | None = None,
+        on_err_line: Callable[[str], None] | None = None,
         stdout_to_file: bool = False,
         max_stdout: int | None = None,
     ) -> Result:
@@ -176,12 +187,15 @@ class SubprocessRunner:
             CommandNotFoundError: The executable is missing or not executable.
             ProcError: `cwd` cannot be used as the working directory, or the arguments are too long to start.
             OSError: The process could not be started for any other reason.
-            ValueError: More than one of `on_line`, `stdout_to_file`, and `max_stdout` was given.
+            ValueError: More than one of `on_line`, `stdout_to_file`, and `max_stdout` was given, or `on_err_line`
+                with either of the last two.
         """
         if on_line is not None and stdout_to_file:
             raise ValueError("on_line reads stdout from a pipe, which stdout_to_file replaces")
         if max_stdout is not None and (on_line is not None or stdout_to_file):
             raise ValueError("max_stdout reads stdout from a pipe of its own, which on_line and stdout_to_file replace")
+        if on_err_line is not None and (stdout_to_file or max_stdout is not None):
+            raise ValueError("on_err_line streams as on_line does, which stdout_to_file and max_stdout replace")
         program, subcommand = named(args)
         with tracing.span(f"{program} {subcommand}" if subcommand else program) as traced:
             traced.set_standard({"process.executable.name": program})
@@ -194,6 +208,7 @@ class SubprocessRunner:
                 timeout=timeout,
                 on_start=on_start,
                 on_line=on_line,
+                on_err_line=on_err_line,
                 stdout_to_file=stdout_to_file,
                 max_stdout=max_stdout,
             )
@@ -213,6 +228,7 @@ class SubprocessRunner:
         timeout: float | None,
         on_start: Callable[[int], None] | None,
         on_line: Callable[[str], None] | None,
+        on_err_line: Callable[[str], None] | None,
         stdout_to_file: bool,
         max_stdout: int | None,
     ) -> Result:
@@ -231,6 +247,7 @@ class SubprocessRunner:
                 timeout=timeout,
                 on_start=on_start,
                 on_line=on_line,
+                on_err_line=on_err_line,
                 out=out,
                 max_stdout=max_stdout,
             )
@@ -249,6 +266,7 @@ class SubprocessRunner:
         timeout: float | None,
         on_start: Callable[[int], None] | None,
         on_line: Callable[[str], None] | None,
+        on_err_line: Callable[[str], None] | None,
         out: IO[str] | None,
         max_stdout: int | None,
     ) -> Result:
@@ -287,8 +305,8 @@ class SubprocessRunner:
             try:
                 if on_start is not None:
                     on_start(proc.pid)
-                if on_line is not None:
-                    return _stream(proc, argv, stdin, timeout, on_line)
+                if on_line is not None or on_err_line is not None:
+                    return _stream(proc, argv, stdin, timeout, on_line=on_line, on_err_line=on_err_line)
                 if max_stdout is not None:
                     return _bounded(proc, argv, stdin, timeout, max_stdout)
                 stdout, stderr = proc.communicate(stdin, timeout=timeout)
@@ -493,30 +511,42 @@ def _stream(
     argv: tuple[str, ...],
     stdin: str | None,
     timeout: float | None,
-    on_line: Callable[[str], None],
+    *,
+    on_line: Callable[[str], None] | None,
+    on_err_line: Callable[[str], None] | None,
 ) -> Result:
-    """What `communicate` does, but each line of stdout goes to `on_line`, on this thread, as the child prints it.
+    """What `communicate` does, but each line of a pipe given a callback goes to it, on this thread, as it is printed.
 
     Threads read the pipes and write stdin, so a child that fills one pipe while canopy waits on another never blocks.
-    Only this thread calls `on_line`, so it may use what this thread owns, such as a journal connection.
+    Only this thread calls `on_line` and `on_err_line`, so they may use what this thread owns, such as a journal
+    connection.
 
     Returns:
         The exit code and captured output, `timed_out` set when `timeout` expired and the child's group was killed.
     """
     # `run` opened both as pipes.
     out, err = cast("IO[str]", proc.stdout), cast("IO[str]", proc.stderr)
-    lines: queue.SimpleQueue[str | None] = queue.SimpleQueue()
+    lines: queue.SimpleQueue[_Line] = queue.SimpleQueue()
+    stdout: list[str] = []
     stderr: list[str] = []
-    stderr_reader = threading.Thread(target=_read_all, args=(err, stderr), daemon=True)
-    workers = [threading.Thread(target=_read_lines, args=(out, lines), daemon=True), stderr_reader]
+    streamed = 0
+    readers: list[threading.Thread] = []  # those that read a pipe whole, waited for once the streamed ones end
+    workers: list[threading.Thread] = []
+    for pipe, callback, into in ((out, on_line, stdout), (err, on_err_line, stderr)):
+        if callback is None:
+            readers.append(threading.Thread(target=_read_all, args=(pipe, into), daemon=True))
+        else:
+            streamed += 1
+            workers.append(threading.Thread(target=_read_lines, args=(pipe, lines, _kept(into, callback)), daemon=True))
+    workers += readers
     if stdin is not None:
         workers.append(threading.Thread(target=_write_all, args=(proc.stdin, stdin), daemon=True))
     for worker in workers:
         worker.start()
     deadline = _Deadline(proc.pid, timeout)
     try:
-        stdout = _pump(lines, on_line, deadline)
-        _wait(proc, [stderr_reader], deadline)
+        _pump(lines, streamed, deadline)
+        _wait(proc, readers, deadline)
     except BaseException:
         _kill_group(proc.pid)
         raise
@@ -596,25 +626,40 @@ class _Deadline:
         self.at = None
 
 
-def _pump(lines: queue.SimpleQueue[str | None], on_line: Callable[[str], None], deadline: _Deadline) -> list[str]:
-    stdout: list[str] = []
-    while True:
+def _pump(lines: queue.SimpleQueue[_Line], pipes: int, deadline: _Deadline) -> None:
+    """Pass each line in `lines` to what takes it until each of `pipes` streamed pipes has reached its end."""
+    while pipes:
         try:
-            line = lines.get(timeout=deadline.left())
+            take, line = lines.get(timeout=deadline.left())
         except queue.Empty:
             # What the group printed before the kill is still read, and still passed on.
             deadline.expire()
             continue
         if line is None:
-            return stdout
-        stdout.append(line)
-        on_line(line)
+            pipes -= 1
+        else:
+            take(line)
 
 
-def _read_lines(pipe: IO[str], lines: queue.SimpleQueue[str | None]) -> None:
-    for line in pipe:
-        lines.put(line)
-    lines.put(None)
+def _kept(into: list[str], callback: Callable[[str], None]) -> Callable[[str], None]:
+    """Return what takes a streamed line: it keeps the line in `into`, for the result, then passes it to `callback`."""
+
+    def take(line: str) -> None:
+        into.append(line)
+        callback(line)
+
+    return take
+
+
+def _read_lines(pipe: IO[str], lines: queue.SimpleQueue[_Line], take: Callable[[str], None]) -> None:
+    # A byte the encoding cannot decode, as a remote's message to git may hold, reads as U+FFFD rather than ending this
+    # thread with no end marker, which would leave `_pump` waiting for it past any timeout.
+    cast("io.TextIOWrapper", pipe).reconfigure(errors="replace")
+    try:
+        for line in pipe:
+            lines.put((take, line))
+    finally:
+        lines.put((take, None))
 
 
 def _read_all(pipe: IO[str], into: list[str]) -> None:

@@ -269,6 +269,7 @@ class GitHub(procs.SubprocessRunner):
         timeout: float | None = None,
         on_start: Callable[[int], None] | None = None,
         on_line: Callable[[str], None] | None = None,
+        on_err_line: Callable[[str], None] | None = None,
         stdout_to_file: bool = False,
         max_stdout: int | None = None,
     ) -> procs.Result:
@@ -292,6 +293,7 @@ class GitHub(procs.SubprocessRunner):
             timeout=timeout,
             on_start=on_start,
             on_line=on_line,
+            on_err_line=on_err_line,
             stdout_to_file=stdout_to_file,
             max_stdout=max_stdout,
         )

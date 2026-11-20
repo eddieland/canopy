@@ -33,6 +33,7 @@ class Models:
         timeout: float | None = None,
         on_start: Callable[[int], None] | None = None,  # noqa: ARG002
         on_line: Callable[[str], None] | None = None,  # noqa: ARG002
+        on_err_line: Callable[[str], None] | None = None,  # noqa: ARG002
         stdout_to_file: bool = False,
         max_stdout: int | None = None,  # noqa: ARG002
     ) -> procs.Result:
