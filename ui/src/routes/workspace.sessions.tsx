@@ -107,7 +107,7 @@ function SessionsPage() {
             <PageHeader title="Sessions">
                 Sessions the agent runtime keeps, newest first. Yours come with the command that reopens them;
                 canopy&apos;s open the run that made them. Find one by its title
-                {data?.search === 'text' && ', or by what it said'}.
+                {data?.search === 'text' && ', by what it said,'} or by what it cost.
             </PageHeader>
             {/* The previous list stays while the next one loads, dimmed so it does not read as its answer. */}
             <Panel className={cn('transition-opacity', isPlaceholderData && 'opacity-60')}>
@@ -163,20 +163,23 @@ function SessionsPage() {
                             label={`Find sessions by ${FOUND_BY[data.search]}`}
                             placeholder={`Find by ${FOUND_BY[data.search]}`}
                             maxLength={SEARCH_MAX}
-                            className="min-w-48 flex-1"
+                            className="max-w-xl min-w-48 flex-1"
                         />
-                        <CostFilter
-                            bound={bound}
-                            onFilter={(next) =>
-                                void navigate({
-                                    search: (prev) => ({
-                                        ...prev,
-                                        cost: next === undefined ? undefined : costBoundText(next),
-                                    }),
-                                    replace: true,
-                                })
-                            }
-                        />
+                        {/* At the row's end, over the costs it narrows. */}
+                        <span className="ml-auto">
+                            <CostFilter
+                                bound={bound}
+                                onFilter={(next) =>
+                                    void navigate({
+                                        search: (prev) => ({
+                                            ...prev,
+                                            cost: next === undefined ? undefined : costBoundText(next),
+                                        }),
+                                        replace: true,
+                                    })
+                                }
+                            />
+                        </span>
                     </search>
                 )}
                 {data === undefined ? (
@@ -235,7 +238,12 @@ function Listed({
             ) : (
                 <RowList kind="session" className="divide-y" data-testid="sessions">
                     {/* Narrowed, every row's directory is the list's own: no link to the page it is on. */}
-                    <SessionRows sessions={list.sessions} words={list.words} narrow={directory === undefined} />
+                    <SessionRows
+                        sessions={list.sessions}
+                        words={list.words}
+                        narrow={directory === undefined}
+                        costly={cost !== undefined}
+                    />
                 </RowList>
             )}
             {/* One foot, a line for each read: the titles', then the index's. */}

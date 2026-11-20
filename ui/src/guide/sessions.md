@@ -82,10 +82,10 @@ live in the address as `?q=`, so a search is a link.
 
 ## Filtering by cost
 
-Beside the field sits `cost`: four comparisons, `<`, `≤`, `>`, `≥`, and an amount in dollars. Type `5` under `≥` and
-the list holds only the sessions that cost at least five dollars, which is the fastest way to find out where the money
-went. Leave the amount empty and it filters nothing, whichever comparison is picked. It works with everything else on
-the page: the words, the directory, `archived`, and whose.
+At the end of the same row sits `cost`: four comparisons, `less than`, `at most`, `more than`, and `at least`, and an
+amount in dollars. Type `5` under `at least` and the list holds only the sessions that cost at least five dollars,
+which is the fastest way to find out where the money went. Leave the amount empty and it filters nothing, whichever
+comparison is picked. It works with everything else on the page: the words, the directory, `archived`, and whose.
 
 The cost is each session's own, the figure on its row. A subagent's spend is not rolled into the session it ran for,
 so while a cost is set each subagent gets a row of its own, marked `subagent`, as it does when you search: the

@@ -38,10 +38,7 @@ export interface CostBound {
     usd: number
 }
 
-/** Each comparison's sign, as its button shows it. */
-export const COST_SIGN: Record<CostOp, string> = { lt: '<', lte: '≤', gt: '>', gte: '≥' }
-
-/** Each comparison in words, as its button's name and an empty list say it. */
+/** Each comparison in words, as its button and an empty list say it. */
 export const COST_WORDS: Record<CostOp, string> = {
     lt: 'less than',
     lte: 'at most',

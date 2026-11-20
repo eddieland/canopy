@@ -48,16 +48,20 @@ describe('CostFilter', () => {
         expect(onFilter).toHaveBeenLastCalledWith({ op: 'lte', usd: 3 })
     })
 
-    it('marks what is no amount invalid and filters nothing, and its clear button empties it', () => {
+    it('keeps the digits of what is pasted, and its clear button empties it', () => {
         const onFilter = vi.fn<(bound: CostBound | undefined) => void>()
         render(<CostFilter bound={{ op: 'gt', usd: 1 }} onFilter={onFilter} />)
-        fireEvent.change(amount(), { target: { value: 'lots' } })
-        expect(onFilter).toHaveBeenLastCalledWith(undefined)
-        expect(amount().getAttribute('aria-invalid')).toBe('true')
+        fireEvent.change(amount(), { target: { value: '$1,200.50' } })
+        expect(amount().value).toBe('1200.50')
+        expect(onFilter).toHaveBeenLastCalledWith({ op: 'gt', usd: 1200.5 })
 
+        fireEvent.change(amount(), { target: { value: 'lots' } })
+        expect(amount().value).toBe('')
+        expect(onFilter).toHaveBeenLastCalledWith(undefined)
+
+        fireEvent.change(amount(), { target: { value: '2' } })
         fireEvent.click(screen.getByRole('button', { name: 'Clear the cost' }))
         expect(amount().value).toBe('')
-        expect(amount().getAttribute('aria-invalid')).toBeNull()
         expect(screen.queryByRole('button', { name: 'Clear the cost' })).toBeNull()
     })
 
