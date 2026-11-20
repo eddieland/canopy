@@ -55,7 +55,9 @@ You don't have to start from a blank page. `canopy chore install` lists the chor
 `canopy chore install NAME` copies one's prompt, its table, and the agent it runs if it comes with one into this
 workspace, then says what's left to set up. The copies stay put when canopy is upgraded. The command owns them, though:
 running it again puts the shipped version back over your edits. Steer an installed
-chore with notes instead (below), which it leaves alone.
+chore with notes instead (below), which it leaves alone. The list marks the ones installed here and says when canopy
+ships a newer version than yours, and `canopy chore diff NAME` shows what canopy changed since and what you did, so
+you can carry your edits across by hand instead of finding out which of them mattered the hard way.
 
 [Chores](/chores) lists each chore: whether it's running, how its latest run ended and when, when it's due, its open
 findings and how many you dismissed, its schedule, and what its runs cost over the last day and month. While
