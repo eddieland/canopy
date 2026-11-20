@@ -14,6 +14,10 @@ const PAGE_ROWS = 1000
 // The elements the whole page may hold before a fold is opened: the rail, the header, the Run panel, the context
 // chart, and the rows drawn.
 const MAX_ELEMENTS = 50_000
+// How long a wait on a redraw of a page of rows may take: a search that opens a page of tool calls draws about 150,000
+// nodes, in 1.5 s on an idle 4-core machine and 10 s with its CPU slowed fourfold, as a busy CI runner's can be. The
+// default 5 s failed there (#2444).
+const REDRAWN = { timeout: 20_000 }
 
 const START = Date.parse('2026-10-08T09:00:00Z')
 
@@ -63,6 +67,8 @@ async function serveLongSession(page: Page): Promise<void> {
 }
 
 test.beforeEach(async ({ page }) => {
+    // Each test redraws a page of rows a few times over (REDRAWN).
+    test.slow()
     await signIn(page)
     await serveLongSession(page)
 })
@@ -84,14 +90,14 @@ test('a transcript as long as the server sends draws a page of rows, and a fold 
     const drawnTools = (PAGE_ROWS / (TOOLS_PER_CALL + 2)) * TOOLS_PER_CALL
     await expect(transcript.getByTestId('transcript-tool')).toHaveCount(drawnTools)
     await transcript.getByRole('button', { name: 'All open' }).click()
-    await expect(transcript.locator('details[open]')).toHaveCount(drawnTools)
+    await expect(transcript.locator('details[open]')).toHaveCount(drawnTools, REDRAWN)
     await transcript.getByRole('button', { name: 'All open' }).click()
 
     // The fold says how many rows it holds back, and shows them.
     const fold = transcript.getByTestId('transcript-fold')
     await expect(fold).toHaveText('Show 1,000 more rows')
     await fold.getByRole('button').click()
-    await expect(rows).toHaveCount(MAX_ENTRIES)
+    await expect(rows).toHaveCount(MAX_ENTRIES, REDRAWN)
     await expect(fold).toHaveCount(0)
 })
 
@@ -105,13 +111,13 @@ test('Find finds a row the page has not drawn', async ({ page }) => {
 
     const find = transcript.getByRole('searchbox', { name: 'Find lines in the transcript' })
     await find.fill('KINGFISHER')
-    await expect(transcript.getByTestId('transcript-found')).toHaveText('1 line, 1 row')
+    await expect(transcript.getByTestId('transcript-found')).toHaveText('1 line, 1 row', REDRAWN)
     await expect(rows).toHaveCount(1)
     await expect(transcript.locator('mark')).toHaveText('kingfisher')
 
     // A search that finds more than a page draws a page of them, the fold counting the rest.
     await find.fill('passes in 3ms')
-    await expect(transcript.getByTestId('transcript-found')).toHaveText('1800 lines, 1800 rows')
+    await expect(transcript.getByTestId('transcript-found')).toHaveText('1800 lines, 1800 rows', REDRAWN)
     await expect(rows).toHaveCount(PAGE_ROWS + 1)
     await expect(transcript.getByTestId('transcript-fold')).toHaveText('Show 800 more rows')
 })
@@ -130,7 +136,7 @@ test("the context chart's row is drawn before it is shown, wherever the budget l
         .click()
     await transcript.getByTestId('context-grew').getByRole('button').first().click()
     const shown = transcript.locator('details[open]')
-    await expect(shown).toHaveCount(1)
+    await expect(shown).toHaveCount(1, REDRAWN)
     await expect(shown.locator('summary')).toContainText('part-99-')
     await expect(shown.locator('summary')).toBeFocused()
     await expect(shown.locator('summary')).toBeInViewport()
@@ -155,7 +161,7 @@ test('a search redraws the rows without cross-fading the page, and loses no key 
     // Typed key by key, as the operator does: each key redraws the rows behind the field. Cross-faded, keys were lost.
     await find.pressSequentially('kingfisher', { delay: 100 })
     await expect(find).toHaveValue('kingfisher')
-    await expect(transcript.getByTestId('transcript-found')).toHaveText('1 line, 1 row')
+    await expect(transcript.getByTestId('transcript-found')).toHaveText('1 line, 1 row', REDRAWN)
     const started = await page.evaluate(
         () => (globalThis as typeof globalThis & { viewTransitions: number }).viewTransitions,
     )

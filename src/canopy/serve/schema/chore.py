@@ -6,7 +6,7 @@ Built on `schema.Model`, as every API type is (schema/__init__.py).
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import Field
 
@@ -133,6 +133,18 @@ class ChoreSummary(Model):
     """What its runs cost in the last day and the last 30 days."""
 
 
+class ChoreDrift(Model):
+    """How an installed example chore and the one canopy ships now have moved apart (DESIGN §19)."""
+
+    standing: Literal["changed", "differs"]
+    """`changed`: canopy ships a prompt or an agent other than the one it was installed from. `differs`: it was
+    installed before canopy kept a record of that, and its copies differ from what canopy ships now."""
+    installed_by: str | None = None
+    """The version of canopy that installed it; None when it was installed before canopy kept a record."""
+    shipped_by: str
+    """The version of canopy that ships the other one: the one serving this."""
+
+
 class ChoreDetail(Model):
     """One chore: what `canopy show chore:NAME` prints."""
 
@@ -142,6 +154,10 @@ class ChoreDetail(Model):
     """Its latest 10 runs, newest first."""
     notes: list[Message]
     """The operator's notes its next run reads: the latest 10, oldest first."""
+    drift: ChoreDrift | None = None
+    """For an example chore installed here, how it and the one canopy ships now have moved apart, which
+    `canopy chore diff NAME` shows; None when they have not, when it is no installed example, or when its copies cannot
+    be read."""
 
 
 class ChoreRunFinding(Model):

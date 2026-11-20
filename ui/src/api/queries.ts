@@ -16,6 +16,14 @@ export interface SessionsFind {
     archived?: boolean | undefined
     /** The directory the sessions ran in, exactly; none lists every directory's. */
     directory?: string | undefined
+    /** Only the sessions that cost less than this, in dollars. */
+    cost_lt?: number | undefined
+    /** Only the sessions that cost at most this, in dollars. */
+    cost_lte?: number | undefined
+    /** Only the sessions that cost more than this, in dollars. */
+    cost_gt?: number | undefined
+    /** Only the sessions that cost at least this, in dollars. */
+    cost_gte?: number | undefined
     /** How many at most, newest first. */
     limit?: number | undefined
 }

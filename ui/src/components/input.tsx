@@ -99,3 +99,72 @@ export function SearchField({
         </div>
     )
 }
+
+/**
+ * A field for an amount of money: a `$`, the amount, then while it holds text a ghost clear button, named
+ * `clearLabel`, that calls `onClear`. A filter's, at a search field's height, beside one. It keeps digits and one
+ * decimal point of what is typed or pasted (`$1,200.50` is `1200.50`), so it never holds what is no amount. The rest
+ * of its props are the input's.
+ */
+export function AmountField({
+    value,
+    onAmount,
+    onClear,
+    clearLabel,
+    className,
+    ...props
+}: Omit<ComponentProps<'input'>, 'type' | 'inputMode' | 'value' | 'onChange' | 'className'> & {
+    /** What the field holds. */
+    value: string
+    /** Hears the text after each edit: digits, with at most one decimal point. */
+    onAmount: (text: string) => void
+    /** Empties the field, from its clear button. */
+    onClear: () => void
+    /** The clear button's name, for a screen reader. */
+    clearLabel: string
+    /** Classes for the field's box, such as its width. */
+    className?: string
+}) {
+    return (
+        <div
+            className={cn(
+                'flex h-8 items-center gap-1 rounded-md border border-control bg-surface-raised pr-1 pl-2.5',
+                'focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50',
+                className,
+            )}
+        >
+            <span aria-hidden="true" className="readout text-sm text-muted-foreground">
+                $
+            </span>
+            <input
+                type="text"
+                inputMode="decimal"
+                value={value}
+                onChange={(event) => onAmount(amountText(event.target.value))}
+                className={cn(
+                    'min-w-0 flex-1 bg-transparent readout text-sm text-foreground outline-none',
+                    'placeholder:text-muted-foreground',
+                )}
+                {...props}
+            />
+            {value !== '' && (
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={clearLabel}
+                    onClick={onClear}
+                    className="hover:bg-muted"
+                >
+                    <X aria-hidden />
+                </Button>
+            )}
+        </div>
+    )
+}
+
+// The digits of `text` and the first of its decimal points: what an amount field keeps of what is typed.
+function amountText(text: string): string {
+    const [whole = '', ...rest] = text.replaceAll(/[^\d.]/gu, '').split('.')
+    return rest.length === 0 ? whole : `${whole}.${rest.join('')}`
+}

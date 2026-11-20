@@ -37,6 +37,8 @@ IGNORED: Final = tuple(
     for d in (workspace.REPOS_DIR, workspace.POOLS_DIR, pool.POOLS_DIR, workspace.DESKS_DIR, WORKSPACE_STATE_DIR)
 )
 _CLONE_TIMEOUT_SECONDS: Final = 1800
+#: What a repository's name takes, after a dot, for the directory git clones it into before it moves into place.
+_STAGING_SUFFIX: Final = ".cloning"
 _GIT_TIMEOUT_SECONDS: Final = 30
 _FETCH_TIMEOUT_SECONDS: Final = 900
 
@@ -242,22 +244,49 @@ def missing(ws: workspace.Workspace) -> list[workspace.Repo]:
 def clone(runner: procs.Runner, ws: workspace.Workspace, repo: workspace.Repo) -> Checked:
     """Clone `repo` from the map's URL into `repos/<name>`.
 
+    git clones into `repos/.<name>.cloning`, which sync passes over, and the clone moves to `repos/<name>` only once git
+    has finished. So a clone that fails, times out, or is killed, by any signal, never leaves a `.git` at `repos/<name>`
+    for the next sync to take as a finished clone (`Repo.cloned`) and fetch into; what it leaves is removed by the next
+    clone of that repository, and nothing at `repos/<name>` is ever removed.
+
     Returns:
         `cloned`, or `failed` with why: something not a clone is in the way, or git could not clone it.
     """
     if repo.path.is_symlink() or (repo.path.exists() and (not repo.path.is_dir() or any(repo.path.iterdir()))):
         return Checked(repo, "failed", f"{repo.path} exists and is not a clone; move it away and sync again")
     repo.path.parent.mkdir(parents=True, exist_ok=True)
-    args = hostgit.argv("clone", "--quiet", "--", str(repo.url), str(repo.path))
+    staging = repo.path.with_name(f".{repo.name}{_STAGING_SUFFIX}")
+    _remove_staging(staging)
+    args = hostgit.argv("clone", "--quiet", "--", str(repo.url), str(staging))
     try:
         result = runner.run(args, cwd=ws.root, env=hostgit.ENV, timeout=_CLONE_TIMEOUT_SECONDS)
     except procs.ProcError as e:
+        _remove_staging(staging)
         return Checked(repo, "failed", str(e))
+    except BaseException:
+        _remove_staging(staging)
+        raise
     if not result.ok:
+        _remove_staging(staging)
         status = "timed out" if result.timed_out else f"exited {result.returncode}"
         output = (result.stderr.strip() or result.stdout.strip()).replace(str(repo.url), shown(str(repo.url)))
-        return Checked(repo, "failed", f"git clone {status}: {output[:500]}")
+        return Checked(repo, "failed", f"git clone {status}: {output[:500]}" if output else f"git clone {status}")
+    try:
+        if repo.path.is_dir() and not repo.path.is_symlink():
+            repo.path.rmdir()  # the empty directory checked above; one something wrote to since is refused here
+        staging.rename(repo.path)
+    except OSError as e:
+        _remove_staging(staging)
+        return Checked(repo, "failed", f"the clone could not be moved to {repo.path}: {e.strerror}; sync again")
     return Checked(repo, "cloned")
+
+
+def _remove_staging(staging: Path) -> None:
+    """Remove what a clone left at `staging`, its own directory beside the clone, which nothing else writes to."""
+    if staging.is_symlink() or staging.is_file():
+        staging.unlink()
+    elif staging.is_dir():
+        shutil.rmtree(staging)
 
 
 def check_origin(runner: procs.Runner, repo: workspace.Repo) -> Checked:

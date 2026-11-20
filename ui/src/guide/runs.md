@@ -208,8 +208,10 @@ the minute, whatever the agent makes of the warning.
 The tally above it counts the tool calls, how many failed or were refused, the model calls, and any runtime errors. It
 also says when the log holds more than the page shows, `cut`, and how many events couldn't be read, so a short
 transcript never passes for a short session. **Find lines** searches the transcript and opens the calls that match;
-Escape clears it. **By call** groups the events by model call instead, each call
-one row that opens to the same input and output; a session of one call has nothing to group, so it has no By call.
+Escape clears it. On a long session the rows take a moment to catch up with what you typed: until they do, the count
+says `searching…` and the last search's rows stay, dimmed, so an old count never answers a new question. **By call**
+groups the events by model call instead, each call one row that opens to the same input and output; a session of one
+call has nothing to group, so it has no By call.
 **All open** opens every call at once, for when you'd rather scroll than click.
 
 A long session draws its first 1,000 rows in a box that scrolls on its own, so the panels below the transcript don't

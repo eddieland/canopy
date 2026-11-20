@@ -49,6 +49,22 @@ def sessions(
             description="List only the sessions that ran in this directory, exactly, not one below it.",
         ),
     ] = None,
+    cost_lt: Annotated[
+        float | None,
+        Query(ge=0, allow_inf_nan=False, description="List only the sessions that cost less than this, in dollars."),
+    ] = None,
+    cost_lte: Annotated[
+        float | None,
+        Query(ge=0, allow_inf_nan=False, description="List only the sessions that cost at most this, in dollars."),
+    ] = None,
+    cost_gt: Annotated[
+        float | None,
+        Query(ge=0, allow_inf_nan=False, description="List only the sessions that cost more than this, in dollars."),
+    ] = None,
+    cost_gte: Annotated[
+        float | None,
+        Query(ge=0, allow_inf_nan=False, description="List only the sessions that cost at least this, in dollars."),
+    ] = None,
     limit: Annotated[
         int,
         Query(ge=1, le=session_list.MAX_LISTED, description="How many sessions to list at most, newest first."),
@@ -58,10 +74,18 @@ def sessions(
 
     With `q`, the newest whose title holds every word, subagents' among them; at `text`, those whose title and one
     message hold every word, the best match first, each with a snippet. With `directory`, only those that ran in
-    it; one `sessions.exclude` names lists none. Each outside canopy carries the command that reopens it in the runtime,
-    and each of canopy's the run that made it. While `sessions.search` is `off` it lists none. A query of too many words
-    is a 422, as the search's is.
+    it; one `sessions.exclude` names lists none. With a bound on the cost, only those whose own cost, a subagent's
+    apart, is within every bound given, a subagent's in a row of its own. Each outside canopy carries the command that
+    reopens it in the runtime, and each of canopy's the run that made it. While `sessions.search` is `off` it lists
+    none. A query of too many words is a 422, as the search's is.
     """
+    bounds = (
+        session_list.CostBound("lt", cost_lt) if cost_lt is not None else None,
+        session_list.CostBound("lte", cost_lte) if cost_lte is not None else None,
+        session_list.CostBound("gt", cost_gt) if cost_gt is not None else None,
+        session_list.CostBound("gte", cost_gte) if cost_gte is not None else None,
+    )
+    costs = [bound for bound in bounds if bound is not None]
     with backend.open() as ctx:
         try:
             return session_views.listed(
@@ -70,6 +94,7 @@ def sessions(
                 query=q,
                 archived=archived,
                 directory=directory,
+                costs=costs,
                 limit=limit,
             )
         except search.BadQueryError as e:

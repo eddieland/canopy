@@ -39,17 +39,16 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final, override
 
 import libcst as cst
+from brash.command import Command
+from brash.final_constants import last_name
 from libcst.codemod.visitors import AddImportsVisitor, RemoveImportsVisitor
-
-from canopy_codemods.command import Command
-from canopy_codemods.final_constants import last_name
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping, Sequence
     from collections.abc import Set as AbstractSet
 
 #: canopy's package in the repository the codemods sit in, whose vocabularies and row types are read.
-PACKAGE: Final = Path(__file__).resolve().parents[4] / "src" / "canopy"
+PACKAGE: Final = Path(__file__).resolve().parents[1] / "src" / "canopy"
 #: The module that holds the vocabularies, as canopy imports it.
 VOCAB: Final = "canopy.core.vocab"
 #: The package that holds the row types, as canopy imports it.

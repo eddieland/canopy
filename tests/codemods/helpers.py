@@ -1,4 +1,4 @@
-"""What the codemods' tests share: each codemod's cases, read from a Markdown file of Python snippets.
+"""What the tests of canopy's own codemods share: each codemod's cases, read from a Markdown file of Python snippets.
 
 `cases/<codemod>.md` holds a case under each `###` heading, as fenced `python` blocks: two for a module's text before
 and after the codemod, one for text it must leave as it is. Anything else in the file is prose for its reader. A case

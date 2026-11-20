@@ -9,12 +9,14 @@ from __future__ import annotations
 import math
 from datetime import timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Final, assert_never
+from typing import TYPE_CHECKING, Final, Literal, assert_never
 
+from canopy.chores import drift
 from canopy.core import chore_result, chore_runs, chore_view, contract, conversation, db, run_models
 from canopy.core.vocab import ChoreRunStatus
 from canopy.serve.schema.chore import (
     ChoreDetail,
+    ChoreDrift,
     ChoreFinding,
     ChoreRun,
     ChoreRunDetail,
@@ -44,6 +46,7 @@ if TYPE_CHECKING:
     from canopy.core import records
     from canopy.core.config import Chore
     from canopy.core.context import Context
+    from canopy.core.workspace import Workspace
     from canopy.serve.backend import Backend
     from canopy.serve.schema import RunState
     from canopy.serve.schema.transcript import Transcript
@@ -84,6 +87,7 @@ def chore(backend: Backend, ctx: Context, name: str) -> ChoreDetail | None:
         chore=chore_summary(ctx.conn, state, backend.clock(), ctx.workspace.root),
         runs=_chore_runs(ctx.conn, state.runs[:CHORE_RUNS], ctx.workspace.root),
         notes=[message(m) for m in db.messages_of(ctx.conn, conversation.CHORE, name, conversation.CHORE_NOTES)],
+        drift=_drift(ctx.workspace, name),
     )
 
 
@@ -128,6 +132,27 @@ def chore_summary(conn: sqlite3.Connection, state: chore_view.ChoreState, now: d
             month=_chore_spent(conn, state.name, now, SPEND_MONTH_HOURS),
         ),
     )
+
+
+def _drift(ws: Workspace, name: str) -> ChoreDrift | None:
+    """How chore `name`, when it is an example installed in `ws`, and the one canopy ships now have moved apart.
+
+    Returns:
+        Its standing and both versions, or None when it has not moved apart, is no installed example, or is unreadable.
+    """
+    moved = drift.moved(ws, name)
+    if moved is None:
+        return None
+    match moved.standing:
+        case drift.Standing.CHANGED:
+            standing: Literal["changed", "differs"] = "changed"
+        case drift.Standing.DIFFERS:
+            standing = "differs"
+        case drift.Standing.CURRENT:
+            return None
+        case _:
+            assert_never(moved.standing)
+    return ChoreDrift(standing=standing, installed_by=moved.installed_by, shipped_by=db.CANOPY_VERSION)
 
 
 def _chore_title(chore: Chore) -> str | None:

@@ -186,14 +186,8 @@ def merge(ws: Workspace, name: str, runner: procs.Runner) -> Merged:
             canopy changed which agent it runs, the operator removed its agent, or git cannot merge a file.
         OSError: a copy or the record cannot be read or written.
     """
-    drift = of(ws, name)
-    if drift is None:
-        raise MergeError(f"chore {name} is not installed here; `canopy chore install {name}` installs it")
-    if drift.installed_by is None:
-        raise MergeError(
-            f"chore {name} was installed before canopy kept what it installed it from, so there is nothing to merge "
-            f"from; `canopy chore diff {name}` shows your copy against canopy's",
-        )
+    drift = _mergeable(ws, name)
+    agents = ws.state_dir / install.AGENTS_DIR / name / definitions.AGENTS_SUBDIR
     if drift.standing is Standing.CURRENT:
         return Merged((), {})
     merged: dict[Path, str] = {}
@@ -203,7 +197,6 @@ def merge(ws: Workspace, name: str, runner: procs.Runner) -> Merged:
         if isinstance(text, int):
             conflicts[file.name] = text
         elif text is not None and text != file.installed:
-            agents = ws.state_dir / install.AGENTS_DIR / name / definitions.AGENTS_SUBDIR
             merged[(ws.state_dir / install.PROMPTS_DIR if i == 0 else agents) / file.name] = text
     if conflicts:
         return Merged((), conflicts)
@@ -225,21 +218,73 @@ def merge(ws: Workspace, name: str, runner: procs.Runner) -> Merged:
     return Merged(tuple(merged), {}, advanced=True)
 
 
+def moved(ws: Workspace, name: str) -> Drift | None:
+    """Return how example chore `name`, installed in `ws`, has moved apart from the one canopy ships, if it has.
+
+    For a reader that lists every chore, `canopy status` and the chore's page, which must not fail on one: a copy or
+    record that cannot be read is as good as unknown.
+
+    Returns:
+        Its three ways when it stands other than current, or None: current, not installed, not readable, or no longer
+        shipped by canopy, which has no newer version to point at and whose `canopy chore diff` refuses it.
+    """
+    if name not in install.available():
+        return None
+    try:
+        found = of(ws, name)
+    except OSError:
+        return None
+    return found if found is not None and found.standing is not Standing.CURRENT else None
+
+
 def describe(standing: Standing, name: str) -> str:
     """Return `standing` as `canopy chore install` lists it beside chore `name`.
 
     Returns:
         A few words, with the command that shows more when the chore has moved apart from canopy's.
     """
+    said = moved_text(standing, name)
+    return "installed" if said is None else f"installed; {said}"
+
+
+def moved_text(standing: Standing, name: str) -> str | None:
+    """Return how chore `name` has moved apart from canopy's, as `canopy status` says it after the chore's line.
+
+    Returns:
+        A few words with the command that shows more, or None when it stands current.
+    """
     match standing:
         case Standing.CURRENT:
-            return "installed"
+            return None
         case Standing.CHANGED:
-            return f"installed; canopy ships a newer version, see `canopy chore diff {name}`"
+            return f"canopy ships a newer version, see `canopy chore diff {name}`"
         case Standing.DIFFERS:
-            return f"installed; differs from the version canopy ships, see `canopy chore diff {name}`"
+            return f"differs from the version canopy ships, see `canopy chore diff {name}`"
         case _:
             assert_never(standing)
+
+
+def _mergeable(ws: Workspace, name: str) -> Drift:
+    """Return installed example chore `name`'s three ways, once it is sure there is something a merge can start from.
+
+    Raises:
+        MergeError: the chore is not installed, was installed before canopy kept a record, or the agent copy the record
+            names is gone.
+    """
+    drift = of(ws, name)
+    if drift is None:
+        raise MergeError(f"chore {name} is not installed here; `canopy chore install {name}` installs it")
+    if drift.installed_by is None:
+        raise MergeError(
+            f"chore {name} was installed before canopy kept what it installed it from, so there is nothing to merge "
+            f"from; `canopy chore diff {name}` shows your copy against canopy's",
+        )
+    origin = _origin(ws.state_dir / install.ORIGINS_DIR / f"{name}.json")
+    agents = ws.state_dir / install.AGENTS_DIR / name / definitions.AGENTS_SUBDIR
+    if origin is not None and origin.agent_file is not None and not (agents / origin.agent_file).is_file():
+        # Said before anything else: another file beside it would otherwise read as an agent canopy renamed.
+        raise MergeError(f"your copy of {origin.agent_file} is gone; installing again puts canopy's back")
+    return drift
 
 
 def _merged(file: File, runner: procs.Runner) -> str | int | None:

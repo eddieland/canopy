@@ -277,11 +277,13 @@ Rules:
   is in force, on the `status-blocked` tint, since every run waits on what the operator said, with ghost Edit, Renew,
   and Clear, since the header has no room for a sentence; a chore over its finding limit (`ChoreLimitBanner`, under its
   page's title), on the same tint, since only the operator can settle it, saying by how much and the two ways out, with
-  no button, since both ways out are the operator's words; and changes asked of a plan that no planner has started on
-  (`ChangesAsked`), on the `status-running` tint, since the loop acts on them next, never a muted line a request can
-  hide in; and on the system resources page, what is under pressure, on the worst pressure's tint, each concern in its
-  own pressure's color with what it costs and the way out under it, since the operator arrives from the header's
-  readout to ask exactly that.
+  no button, since both ways out are the operator's words; an installed example chore canopy now ships otherwise
+  (`ChoreDriftBanner`, under the limit's), on `surface-raised` with no status tint, since its copy runs on as
+  installed and nothing waits on it, naming both versions and `canopy chore diff NAME`; and changes asked of a plan
+  that no planner has started on (`ChangesAsked`), on the `status-running` tint, since the loop acts on them next,
+  never a muted line a request can hide in; and on the system resources page, what is under pressure, on the worst
+  pressure's tint, each concern in its own pressure's color with what it costs and the way out under it, since the
+  operator arrives from the header's readout to ask exactly that.
 - **Agent memory** (docs/design §28) shows only while a tier is on, and always says each tier's mode in words, never by
   color alone, so recorded memory is never taken for memory in use: the header's readout, `memory: recording` or
   `memory: in use`, opening the memory page, which is in no section; and a tier's band heading its panel, a chip naming
@@ -566,7 +568,9 @@ whole either side.
   its default buttons. One holding what its form would not send is `aria-invalid`, which draws its border in
   `status-failed`, and says why on its own line under it, as soon as it is typed, never only on submit. A field to
   search or filter with is a `SearchField`: a magnifier, the field, what it says at its end (a count), and a ghost clear
-  button while it holds text, in the place of what sits there empty. No page builds a field by hand.
+  button while it holds text, in the place of what sits there empty. A filter by an amount of money is an
+  `AmountField`, at a search field's height: a `$`, the amount, and the same clear button; it keeps only digits and
+  one decimal point of what is typed or pasted, so it has no invalid state to draw. No page builds a field by hand.
 - **`MarkdownField`** (`src/components/markdown-field.tsx`): a field the operator writes to an agent in, in the Markdown
   `RichText` draws and nothing more, from a `Toolbar` under the text and ⌘B and ⌘E, the rest typed, so what is written
   reads in the thread as it did in the field. It is one box, the text then the toolbar under a hairline, so Tab reaches
@@ -1043,8 +1047,9 @@ reader, so no table repeats them.
   whole is 80,000 elements, in a `PanelScroll` of most of the window's height, so the panels after it stay in reach;
   after them a fold, a row with a ghost `xs` button in a diff's fold's words (below), draws the next 1,000, and only
   adds. A search still reads every entry, drawn or not. The search redraws the rows in a transition behind the field
-  (`inPage`), so a key typed never waits on them. A row shown from the chart or `ended on` is drawn first, with every
-  row before it.
+  (`inPage`), so a key typed never waits on them; until they catch up, the count, a polite live region, says
+  `searching…`, and the last search's rows stay, dimmed to 60%, as the search page's hits do. A row shown from the
+  chart or `ended on` is drawn first, with every row before it.
 - **A transcript's context** (`ContextChart`, `contextShape` in `src/lib/transcript.ts`) sits between the counts and
   the rows once a model call has its tokens. Its line, in the counts' band: a `context` label, the peak, the largest
   single addition as a button in the accent with its tokens and the call it grew, and at its end `Show chart`, a
@@ -1559,7 +1564,14 @@ reader, so no table repeats them.
   the sessions the filters list (`Find by title`, or at `text` `Find by title or what was said`), each keystroke asking
   the server: the rows are then a search's hits, words marked, snippet under the title, a subagent's in a row of its
   own, and at `text` the count reads `best`; with none, the `Empty` says what no session holds, or that the index may
-  yet. A search page's panel of sessions links to it with the same words (`find in Sessions`, in the accent, before
+  yet. At the same row's end, over the costs it narrows, a `CostFilter` kept in `?cost=` (`gte:5`) holds the list to a
+  cost, and reads as a sentence: the group word `cost`, a `ToggleGroup` of the four comparisons in words (`less than`,
+  `at most`, `more than`, `at least`, the last on until another is picked; never their signs, since `<` and `≤` read
+  alike at that size), and an `AmountField`. It filters nothing until an amount is typed; the rows are then each
+  session within the bound, a subagent's in a row of its own, each cost in the foreground, since it is what the list
+  was narrowed by, and an empty list says the bound. The find field stops at a readable width rather than filling the
+  row. A search
+  page's panel of sessions links to it with the same words (`find in Sessions`, in the accent, before
   the count). A line under the list, in muted text, says how far the loop's read has come, and holds the one link to the
   longest list and back; at `sessions.search = "text"` a second line in the same foot, under no rule of its own, says
   the same of the index: while its first build goes on, that it is still indexing, how many sessions so far, and how

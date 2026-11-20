@@ -75,6 +75,36 @@ def test_a_list_narrowed_to_a_directory_holds_its_sessions_alone_and_never_an_ex
     assert c.get("/api/sessions", params={"directory": ""}).status_code == 422
 
 
+def test_a_list_held_to_a_cost_holds_the_sessions_within_it_and_refuses_a_bound_that_is_no_amount(
+    backend: Backend,
+) -> None:
+    c = client(None, backend)
+    dear = c.get("/api/sessions", params={"cost_gte": 1.12}).json()["sessions"]
+    assert [(s["title"], s["cost_usd"]) for s in dear] == [
+        ("XYZ-12 implement: Rate-limit the export endpoint", 1.12),
+        ("Bisect the flaky checkout test", 1.37),
+    ]
+    over = c.get("/api/sessions", params={"cost_gt": 1.12}).json()["sessions"]
+    assert titles(over) == ["Bisect the flaky checkout test"]
+    # A subagent's cost is its own, so it has a row of its own, not one under a session the bound leaves out.
+    cheap = c.get("/api/sessions", params={"cost_lt": 0.21}).json()["sessions"]
+    assert [(s["title"], s["parent_id"]) for s in cheap] == [
+        ("Find where deploy.sh waits on the health check", mock_sessions.DEPLOY),
+    ]
+    under = c.get("/api/sessions", params={"cost_lte": 0.21}).json()["sessions"]
+    assert titles(under) == ["Find where deploy.sh waits on the health check", "Outline the Q4 planning doc"]
+    # Two bounds are a range, and the list's other filters hold with them.
+    between = c.get("/api/sessions", params={"cost_gte": 0.5, "cost_lt": 1.2}).json()["sessions"]
+    assert titles(between) == [
+        "Why does the deploy script hang on staging?",
+        "XYZ-12 implement: Rate-limit the export endpoint",
+    ]
+    assert c.get("/api/sessions", params={"cost_gte": 1, "q": "flaky"}).json()["sessions"][0]["cost_usd"] == 1.37
+    assert c.get("/api/sessions", params={"cost_gte": 1, "q": "deploy"}).json()["sessions"] == []
+    for bad in ("-1", "nan", "inf", "lots"):
+        assert c.get("/api/sessions", params={"cost_gte": bad}).status_code == 422
+
+
 def test_canopys_sessions_each_name_the_run_that_made_them_and_the_page_it_opens(backend: Backend) -> None:
     c = client(None, backend)
     found = c.get("/api/sessions", params={"whose": "canopy", "limit": session_list.MAX_LISTED}).json()
