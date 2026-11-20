@@ -195,10 +195,11 @@ def _list_examples() -> None:
         CliError: an installed chore's copies cannot be read.
     """
     examples = install.available()
+    # Outside a workspace, the examples are all there is to say; in one whose map does not load, that is the answer.
     try:
-        ws = workspace.find(Path.cwd())
-    except ConfigError:
-        ws = None  # outside a workspace, the examples are all there is to say
+        ws = workspace.find(Path.cwd()) if workspace.find_root(Path.cwd()) is not None else None
+    except ConfigError as e:
+        raise CliError(f"chore install: {e}") from None
     width = max((len(example) for example in examples), default=0)
     for example in examples:
         try:

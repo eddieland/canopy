@@ -12,7 +12,7 @@ import pytest
 
 from canopy.chores import install
 from canopy.cli.main import main
-from canopy.core import db
+from canopy.core import config, db
 from canopy.infra import resources
 from tests.canopy.helpers import in_run
 from tests.conftest import CanopyEnv
@@ -133,6 +133,31 @@ def test_diff_refuses_a_chore_not_installed_and_inside_runs(
         assert "chore diff refused (inside_run)" in capsys.readouterr().err
 
 
+def test_an_agent_canopy_renames_with_its_text_unchanged_is_a_newer_version(
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    canopy_env.write_private(PRIVATE)
+    assert main(["chore", "install", CHORE]) == 0
+    capsys.readouterr()
+    with upgraded(tmp_path, agent="changes nothing.", renamed="canopy-memory-to-tickets"):
+        assert listed(capsys)[CHORE] == f"installed; canopy ships a newer version, see `canopy chore diff {CHORE}`"
+        assert main(["chore", "diff", CHORE]) == 0
+    canopys, yours = capsys.readouterr().out.split("\nWhat you changed: ")
+    assert f"renamed: installed-from/{AGENT} -> shipped/canopy-memory-to-tickets.md, the text unchanged\n" in canopys
+    assert yours.endswith("(no change)\n")
+
+
+def test_the_list_in_a_workspace_whose_map_does_not_load_says_why(
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    (canopy_env.root / config.WORKSPACE_FILE_NAME).write_text("[repos.api\n")
+    assert main(["chore", "install"]) == 1
+    assert "chore install: " in capsys.readouterr().err
+
+
 def test_the_list_outside_a_workspace_names_the_examples(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
@@ -150,11 +175,18 @@ def listed(capsys: pytest.CaptureFixture[str]) -> dict[str, str]:
 
 
 @contextlib.contextmanager
-def upgraded(tmp_path: Path, *, agent: str) -> Iterator[None]:
-    """Ship, while the block runs, the examples with the memory chore's agent's `changes nothing.` made `agent`."""
+def upgraded(tmp_path: Path, *, agent: str, renamed: str | None = None) -> Iterator[None]:
+    """Ship, while the block runs, the examples with the memory chore's agent's `changes nothing.` made `agent`.
+
+    With `renamed`, the agent is shipped under that name, its file and the table's command both.
+    """
     shipped = tmp_path / "upgraded"
     shutil.copytree(resources.example_chores_dir(), shipped)
     definition = shipped / "agents" / AGENT
     definition.write_text(definition.read_text().replace("changes nothing.", agent))
+    if renamed is not None:
+        definition.rename(definition.with_name(f"{renamed}.md"))
+        table = shipped / f"{CHORE}.toml"
+        table.write_text(table.read_text().replace(f"--agent {AGENT.removesuffix('.md')} ", f"--agent {renamed} "))
     with mock.patch.object(resources, "example_chores_dir", autospec=True, return_value=shipped):
         yield

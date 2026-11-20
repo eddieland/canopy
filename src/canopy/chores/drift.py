@@ -33,6 +33,8 @@ if TYPE_CHECKING:
 
 #: What `diff` says for a side that changed nothing.
 _UNCHANGED: Final = "(no change)\n"
+#: The label of the side of a diff that is what canopy ships now.
+_SHIPPED: Final = "shipped"
 
 
 class Standing(StrEnum):
@@ -58,6 +60,8 @@ class File:
     shipped: str | None
     #: The workspace's copy, without the model canopy writes into an agent, or None when there is none.
     installed: str | None
+    #: The name canopy ships it under now, when that is not `name`: an agent the example renamed.
+    shipped_name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -74,9 +78,12 @@ class Drift:
     @property
     def standing(self) -> Standing:
         """Where the chore stands against what canopy ships now: the copies stand for the record when there is none."""
+        renamed = any(f.shipped_name is not None for f in self.files)
         if self.installed_by is None:
-            return Standing.CURRENT if all(f.installed == f.shipped for f in self.files) else Standing.DIFFERS
-        return Standing.CURRENT if all(f.installed_from == f.shipped for f in self.files) else Standing.CHANGED
+            same = not renamed and all(f.installed == f.shipped for f in self.files)
+            return Standing.CURRENT if same else Standing.DIFFERS
+        same = not renamed and all(f.installed_from == f.shipped for f in self.files)
+        return Standing.CURRENT if same else Standing.CHANGED
 
 
 def of(ws: Workspace, name: str) -> Drift | None:
@@ -103,12 +110,15 @@ def of(ws: Workspace, name: str) -> Drift | None:
     if shipped_agent is not None:
         agent_names.append(shipped_agent.name)
     if agent_names:
+        # Named as installed: the copy's name, else the record's; canopy may ship it under another now.
+        named = agent_names[0]
         files.append(
             File(
-                agent_names[0],
+                named,
                 origin.agent if origin else None,
                 _text(shipped_agent) if shipped_agent is not None else None,
                 _without_model(copied[0]) if copied else None,
+                shipped_name=shipped_agent.name if shipped_agent is not None and shipped_agent.name != named else None,
             ),
         )
     return Drift(name, origin.version if origin else None, tuple(files))
@@ -128,11 +138,11 @@ def diff(drift: Drift) -> str:
         return (
             f"chore {drift.name} was installed before canopy kept what it installed it from, so this is only your copy "
             f"against what canopy {now} ships; it cannot tell your edits from canopy's changes.\n"
-            + _diffs(drift.files, ("yours", lambda f: f.installed), ("shipped", lambda f: f.shipped))
+            + _diffs(drift.files, ("yours", lambda f: f.installed), (_SHIPPED, lambda f: f.shipped))
         )
     return (
         f"What canopy changed since chore {drift.name} was installed: canopy {by}'s against canopy {now}'s.\n"
-        + _diffs(drift.files, ("installed-from", lambda f: f.installed_from), ("shipped", lambda f: f.shipped))
+        + _diffs(drift.files, ("installed-from", lambda f: f.installed_from), (_SHIPPED, lambda f: f.shipped))
         + f"\nWhat you changed: canopy {by}'s against your copy.\n"
         + _diffs(drift.files, ("installed-from", lambda f: f.installed_from), ("yours", lambda f: f.installed))
     )
@@ -198,13 +208,19 @@ def _diffs(
     out: list[str] = []
     for file in files:
         before, after = old[1](file), new[1](file)
+        # The shipped side carries the name canopy ships it under, so a rename shows though the text is the same.
+        renamed = file.shipped_name is not None and new[0] == _SHIPPED
+        after_name = file.shipped_name if renamed and file.shipped_name is not None else file.name
+        if before == after and not renamed:
+            continue
         if before == after:
+            out.append(f"renamed: {old[0]}/{file.name} -> {new[0]}/{after_name}, the text unchanged\n")
             continue
         lines = difflib.unified_diff(
             (before or "").splitlines(keepends=True),
             (after or "").splitlines(keepends=True),
             fromfile=f"{old[0]}/{file.name}" if before is not None else "/dev/null",
-            tofile=f"{new[0]}/{file.name}" if after is not None else "/dev/null",
+            tofile=f"{new[0]}/{after_name}" if after is not None else "/dev/null",
         )
         out += (line if line.endswith("\n") else f"{line}\n\\ No newline at end of file\n" for line in lines)
     return "".join(out) or _UNCHANGED
