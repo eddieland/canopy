@@ -301,7 +301,8 @@ export function TranscriptPanel({
                                 <Find
                                     value={typed}
                                     onChange={setTyped}
-                                    lines={query === null ? null : lines}
+                                    // Cleared, it says nothing, though the rows still hold the last search.
+                                    lines={query === null || next === null ? null : lines}
                                     rows={shown.length}
                                     searching={searching && next !== null}
                                 />
@@ -458,17 +459,27 @@ function Find({
                 onClear={() => onChange('')}
                 clearLabel="Clear the transcript's search"
                 end={
-                    (searching || lines !== null) && (
-                        <span className="shrink-0 readout text-xs text-muted-foreground" data-testid="transcript-found">
-                            {searching || lines === null
-                                ? 'searching…'
-                                : `${lines} ${lines === 1 ? 'line' : 'lines'}, ${rows} ${rows === 1 ? 'row' : 'rows'}`}
-                        </span>
-                    )
+                    // A live region from the first render, so a screen reader hears the count, and that the next is
+                    // being searched, as they change; `contents`, so it takes no gap in the field while empty.
+                    <output className="contents">
+                        {(searching || lines !== null) && (
+                            <span
+                                className="shrink-0 readout text-xs text-muted-foreground"
+                                data-testid="transcript-found"
+                            >
+                                {searching || lines === null ? 'searching…' : foundCount(lines, rows)}
+                            </span>
+                        )}
+                    </output>
                 }
             />
         </search>
     )
+}
+
+/** How many lines and rows hold a search: `5 lines, 2 rows`. */
+function foundCount(lines: number, rows: number): string {
+    return `${lines} ${lines === 1 ? 'line' : 'lines'}, ${rows} ${rows === 1 ? 'row' : 'rows'}`
 }
 
 /**

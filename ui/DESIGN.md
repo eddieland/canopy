@@ -1043,8 +1043,9 @@ reader, so no table repeats them.
   whole is 80,000 elements, in a `PanelScroll` of most of the window's height, so the panels after it stay in reach;
   after them a fold, a row with a ghost `xs` button in a diff's fold's words (below), draws the next 1,000, and only
   adds. A search still reads every entry, drawn or not. The search redraws the rows in a transition behind the field
-  (`inPage`), so a key typed never waits on them. A row shown from the chart or `ended on` is drawn first, with every
-  row before it.
+  (`inPage`), so a key typed never waits on them; until they catch up, the count, a polite live region, says
+  `searching…`, and the last search's rows stay, dimmed to 60%, as the search page's hits do. A row shown from the
+  chart or `ended on` is drawn first, with every row before it.
 - **A transcript's context** (`ContextChart`, `contextShape` in `src/lib/transcript.ts`) sits between the counts and
   the rows once a model call has its tokens. Its line, in the counts' band: a `context` label, the peak, the largest
   single addition as a button in the accent with its tokens and the call it grew, and at its end `Show chart`, a

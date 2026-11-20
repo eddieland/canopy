@@ -165,6 +165,11 @@ function search(text: string) {
     fireEvent.change(find(), { target: { value: text } })
 }
 
+// What the search field's live region says: its count, `searching…`, or nothing.
+function readout(): string {
+    return screen.getByRole('status').textContent
+}
+
 // The tool call or model call whose row or body holds `text`, as the disclosure it is.
 function call(text: string): HTMLDetailsElement {
     const found = screen
@@ -551,13 +556,13 @@ describe('TranscriptPanel', () => {
         const { rerender } = render(
             <TranscriptPanel transcript={transcript()} running={false} page="run" view={view} />,
         )
-        expect(screen.getByTestId('transcript-found').textContent).toBe('searching…')
+        expect(readout()).toBe('searching…')
         expect(call('npm test -- login').open).toBe(true)
 
         rerender(
             <TranscriptPanel transcript={transcript()} running={false} page="run" view={{ ...view, found: 'zebra' }} />,
         )
-        expect(screen.getByTestId('transcript-found').textContent).toBe('0 lines, 0 rows')
+        expect(readout()).toBe('0 lines, 0 rows')
 
         // A space typed at either end searches for the same, so there is nothing to wait for.
         rerender(
@@ -568,7 +573,11 @@ describe('TranscriptPanel', () => {
                 view={{ ...view, typed: 'login ' }}
             />,
         )
-        expect(screen.getByTestId('transcript-found').textContent).toBe('5 lines, 2 rows')
+        expect(readout()).toBe('5 lines, 2 rows')
+
+        // Cleared before the rows catch up, it says nothing, never the last search's count beside an empty field.
+        rerender(<TranscriptPanel transcript={transcript()} running={false} page="run" view={{ ...view, typed: '' }} />)
+        expect(readout()).toBe('')
     })
 
     it('opens and closes every call with All open, over what a search opened, until a new search', () => {
