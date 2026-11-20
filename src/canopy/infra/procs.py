@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import contextlib
 import errno
+import io
 import os
 import queue
 import re
@@ -651,9 +652,14 @@ def _kept(into: list[str], callback: Callable[[str], None]) -> Callable[[str], N
 
 
 def _read_lines(pipe: IO[str], lines: queue.SimpleQueue[_Line], take: Callable[[str], None]) -> None:
-    for line in pipe:
-        lines.put((take, line))
-    lines.put((take, None))
+    # A byte the encoding cannot decode, as a remote's message to git may hold, reads as U+FFFD rather than ending this
+    # thread with no end marker, which would leave `_pump` waiting for it past any timeout.
+    cast("io.TextIOWrapper", pipe).reconfigure(errors="replace")
+    try:
+        for line in pipe:
+            lines.put((take, line))
+    finally:
+        lines.put((take, None))
 
 
 def _read_all(pipe: IO[str], into: list[str]) -> None:

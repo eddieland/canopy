@@ -270,6 +270,18 @@ def test_on_err_line_with_a_timeout_keeps_what_was_printed_before_the_kill() -> 
     assert result.stderr == "partial\n"
 
 
+def test_a_streamed_line_that_is_not_utf8_is_passed_on_with_replacement_characters() -> None:
+    """A byte the encoding cannot decode, as a remote's message may hold, neither stops the reader nor hangs the run."""
+    out: list[str] = []
+    err: list[str] = []
+    script = r"printf 'ok\377\n'; printf 'remote: \377\376 bad\nafter\n' >&2"
+    result = SubprocessRunner().run(["sh", "-c", script], timeout=10, on_line=out.append, on_err_line=err.append)
+    assert result.ok
+    assert out == ["ok�\n"]
+    assert err == ["remote: �� bad\n", "after\n"]
+    assert result.stderr == "remote: �� bad\nafter\n"
+
+
 def test_on_err_line_is_not_with_stdout_to_file_or_max_stdout() -> None:
     with pytest.raises(ValueError, match="on_err_line"):
         SubprocessRunner().run(["true"], on_err_line=print, stdout_to_file=True)
