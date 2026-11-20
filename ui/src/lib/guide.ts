@@ -243,7 +243,7 @@ export function guidePage(slug: string): GuidePage | undefined {
 /** The pages before and after `slug` in the guide's order, across groups: what its Previous and Next open. */
 export function guideNeighbours(slug: string): { previous: GuidePage | undefined; next: GuidePage | undefined } {
     const at = GUIDE.findIndex((page) => page.slug === slug)
-    return { previous: at > 0 ? GUIDE[at - 1] : undefined, next: at === -1 ? undefined : GUIDE[at + 1] }
+    return { previous: GUIDE[at - 1], next: at === -1 ? undefined : GUIDE[at + 1] }
 }
 
 /** A route's page of the guide, at a heading of it or its top: where the book in that route's header goes. */

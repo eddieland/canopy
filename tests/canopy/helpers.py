@@ -1030,6 +1030,7 @@ class Behavior(TypedDict, total=False):
     session: str  # the `sessionID` on each event, with `--format json`
     step_cost: str  # each model call's cost, verbatim JSON, so a test can make it invalid
     errors: str  # a JSON list, each the `error` of an `error` event it prints at the end, with `--format json`
+    resent: str  # the result it reports when canopy continues its session to ask for one again
 
 
 #: The fake's name for each of Behavior's keys, after its FAKE_<ROLE>_ prefix.
@@ -1040,6 +1041,7 @@ BEHAVIOR_SETTINGS: Final = {
     "session": "SESSION",
     "step_cost": "STEP_COST",
     "errors": "ERRORS",
+    "resent": "RESENT",
 }
 
 
@@ -1325,6 +1327,7 @@ def planner_does(
     result: Mapping[str, object] | None = None,
     tools: Sequence[Called] = (),
     then_tools: Sequence[Called] = (),
+    **behavior: Unpack[Behavior],
 ) -> Iterator[None]:
     """Until the block ends, the fake planner makes the calls `tools` names, writes `plan`, and reports.
 
@@ -1335,7 +1338,7 @@ def planner_does(
     script = "import pathlib, sys; pathlib.Path(sys.argv[1]).write_text(sys.argv[2])"
     write = [["python3", "-c", script, plans.WRITTEN, plan]] if plan is not None else []
     line = json.dumps(result if result is not None else {"status": "done", "summary": "planned it"})
-    with scripted("PLANNER", reported(line, [*write, *commands], tools, then_tools)):
+    with scripted("PLANNER", reported(line, [*write, *commands], tools, then_tools), behavior):
         yield
 
 

@@ -7,16 +7,19 @@ private file: `prompt` names the copy, `cmd` starts by pointing the runtime's co
 the agent apart from any service the runtime shares, so that directory reaches it, and `cwd`, where the example has
 one, is the workspace root. All are the workspace's own: another workspace's copy of the
 same example is filled in apart from it, and an upgraded canopy changes none of them until the chore is installed again.
+Beside them it keeps what it installed them from, `chore-origins/<name>.json` (`Origin`): the prompt and the agent as
+canopy shipped them then, and canopy's version. Against that record `chores.drift` tells whether a later canopy ships
+something else, and shows what it changed since and what the operator changed in the copies, for a merge by hand.
 The one thing canopy writes into an installed agent afterwards is its model, each time the chore runs (`write_model`),
 so the chore runs on the model config chooses for it, as canopy's own agents do (DESIGN §13).
-The state directory is the operator's alone, as a prompt file must be (TRUST_MODEL T7), and neither copy is in
+The state directory is the operator's alone, as a prompt file must be (TRUST_MODEL T7), and no copy is in
 `chores/`, under which a chore with no `cwd` runs.
 
 The command owns what it writes: installing again replaces the prompt, the agent, and the whole `[chores.<name>]` table
-with the shipped ones, and an edit to any is lost. Every other line of the private file stays as it was, or nothing is
-written. The table goes in the private file, since the last file that sets any chore replaces every other file's chores
-whole (`config.load`). With chores in the user file and none in the private file, a table written there would hide them
-all, so installing is refused.
+with the shipped ones, and an edit to any is lost: `canopy chore diff` shows the edits to carry over. Every other line
+of the private file stays as it was, or nothing is written. The table goes in the private file, since the last file
+that sets any chore replaces every other file's chores whole (`config.load`). With chores in the user file and none
+in the private file, a table written there would hide them all, so installing is refused.
 """
 
 from __future__ import annotations
@@ -33,7 +36,9 @@ import tomllib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
-from canopy.core import agent_models, config
+from pydantic import BaseModel, ConfigDict
+
+from canopy.core import agent_models, config, db
 from canopy.infra import logs, resources
 from canopy.runtime import definitions, invocation
 from canopy.runtime.agents import DefinitionsError
@@ -49,6 +54,8 @@ if TYPE_CHECKING:
 PROMPTS_DIR: Final = "chore-prompts"
 #: The directory of the state directory each installed chore's runtime config directory is in, by the chore's name.
 AGENTS_DIR: Final = agent_models.CHORE_AGENTS_DIR
+#: The directory of the state directory each installed chore's `Origin` is in, as `<name>.json`.
+ORIGINS_DIR: Final = "chore-origins"
 #: The comment above an installed table, which says who owns it.
 MARKER: Final = "# Written by `canopy chore install {name}`, which replaces this table whole when run again."
 #: A line that starts a table or an array of tables, and so ends the one before it.
@@ -57,6 +64,25 @@ _HEADER_RE: Final = re.compile(r"[ \t]*\[")
 
 class InstallError(Exception):
     """The example cannot be installed: there is none by that name, or the private file cannot take its table."""
+
+
+class Origin(BaseModel):
+    """What canopy shipped when it installed an example chore, kept beside the copies to compare a later canopy's with.
+
+    Written by `install` and read back by `chores.drift`; the operator's own file, so one that does not parse is read
+    as none.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
+
+    #: The version of canopy that installed it.
+    version: str
+    #: The prompt as canopy shipped it.
+    prompt: str
+    #: The file name of the agent the example came with, or None when it came with none.
+    agent_file: str | None = None
+    #: That agent as canopy shipped it, or None when the example came with none.
+    agent: str | None = None
 
 
 @dataclass(frozen=True)
@@ -142,10 +168,34 @@ def install(ws: Workspace, name: str) -> Installed:
     _check(private, old, new_text, name, table)
     replaced = replaced or prompt.exists() or agent_dir.exists()
     prompt.parent.mkdir(mode=0o700, exist_ok=True)
-    logs.write_private(prompt, (resources.example_chores_dir() / f"{name}.md").read_text(encoding="utf-8"))
-    copied = _copy_agent(agent, agent_dir)
+    prompt_text = (resources.example_chores_dir() / f"{name}.md").read_text(encoding="utf-8")
+    logs.write_private(prompt, prompt_text)
+    agent_text = agent.read_text(encoding="utf-8") if agent is not None else None
+    copied = _copy_agent(agent, agent_text, agent_dir)
+    origin = Origin(
+        version=db.CANOPY_VERSION,
+        prompt=prompt_text,
+        agent_file=agent.name if agent is not None else None,
+        agent=agent_text,
+    )
+    origin_file = ws.state_dir / ORIGINS_DIR / f"{name}.json"
+    origin_file.parent.mkdir(mode=0o700, exist_ok=True)
+    _write(origin_file, origin.model_dump_json(indent=2) + "\n")
     _write(private, new_text)
     return Installed(name, prompt, copied, private, replaced, _next_steps(shipped_text))
+
+
+def shipped_agent(name: str) -> Path | None:
+    """Return the agent example chore `name` comes with as canopy ships it now.
+
+    Returns:
+        Its definition, or None when the example comes with none, or canopy ships no example by that name.
+    """
+    if name not in available():
+        return None
+    shipped = resources.example_chores_dir() / f"{name}.toml"
+    table = tomllib.loads(shipped.read_text(encoding="utf-8"))["chores"][name]
+    return _agent(table.get("cmd"))
 
 
 def write_model(definition: Path, model: Model | None) -> None:
@@ -189,8 +239,8 @@ def _agent(cmd: object) -> Path | None:
     return path if path.is_file() else None
 
 
-def _copy_agent(agent: Path | None, agent_dir: Path) -> Path | None:
-    """Replace `agent_dir` with a runtime config directory holding only a copy of `agent`; with no agent, remove it.
+def _copy_agent(agent: Path | None, text: str | None, agent_dir: Path) -> Path | None:
+    """Replace `agent_dir` with a runtime config directory holding only `agent`'s `text`; with no agent, remove it.
 
     The copy and its directories are readable by the operator alone.
 
@@ -199,13 +249,13 @@ def _copy_agent(agent: Path | None, agent_dir: Path) -> Path | None:
     """
     if agent_dir.exists() or agent_dir.is_symlink():
         shutil.rmtree(agent_dir)
-    if agent is None:
+    if agent is None or text is None:
         return None
     agent_dir.parent.mkdir(mode=0o700, exist_ok=True)
     agent_dir.mkdir(mode=0o700)
     (agent_dir / definitions.AGENTS_SUBDIR).mkdir(mode=0o700)
     copied = agent_dir / definitions.AGENTS_SUBDIR / agent.name
-    logs.write_private(copied, agent.read_text(encoding="utf-8"))
+    logs.write_private(copied, text)
     return copied
 
 

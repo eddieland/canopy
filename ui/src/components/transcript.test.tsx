@@ -165,6 +165,11 @@ function search(text: string) {
     fireEvent.change(find(), { target: { value: text } })
 }
 
+// What the search field's live region says: its count, `searching…`, or nothing.
+function readout(): string {
+    return screen.getByRole('status').textContent
+}
+
 // The tool call or model call whose row or body holds `text`, as the disclosure it is.
 function call(text: string): HTMLDetailsElement {
     const found = screen
@@ -542,6 +547,37 @@ describe('TranscriptPanel', () => {
         fireEvent.keyDown(find(), { key: 'Escape' })
         expect((find() as HTMLInputElement).value).toBe('')
         expect(rows().getByText('I will read the failing test first.')).toBeDefined()
+    })
+
+    it('says it is searching while the rows still hold the last search, never the last count', () => {
+        // The rows are drawn for `found` behind the field: until they catch up with `typed`, they are the last
+        // search's.
+        const view = { ...VIEW, typed: 'zebra', found: 'login' }
+        const { rerender } = render(
+            <TranscriptPanel transcript={transcript()} running={false} page="run" view={view} />,
+        )
+        expect(readout()).toBe('searching…')
+        expect(call('npm test -- login').open).toBe(true)
+
+        rerender(
+            <TranscriptPanel transcript={transcript()} running={false} page="run" view={{ ...view, found: 'zebra' }} />,
+        )
+        expect(readout()).toBe('0 lines, 0 rows')
+
+        // A space typed at either end searches for the same, so there is nothing to wait for.
+        rerender(
+            <TranscriptPanel
+                transcript={transcript()}
+                running={false}
+                page="run"
+                view={{ ...view, typed: 'login ' }}
+            />,
+        )
+        expect(readout()).toBe('5 lines, 2 rows')
+
+        // Cleared before the rows catch up, it says nothing, never the last search's count beside an empty field.
+        rerender(<TranscriptPanel transcript={transcript()} running={false} page="run" view={{ ...view, typed: '' }} />)
+        expect(readout()).toBe('')
     })
 
     it('opens and closes every call with All open, over what a search opened, until a new search', () => {

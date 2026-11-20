@@ -84,6 +84,23 @@ describe('switchTheme', () => {
         )
     })
 
+    it("finishes the last reveal's circle before a transition that would skip it starts", async () => {
+        const start = stubViewTransitions(Promise.resolve())
+        const finish = vi.fn<() => void>()
+        const animate = vi
+            .spyOn(document.documentElement, 'animate')
+            .mockReturnValue({ finish } as unknown as Animation)
+        const { switchTheme } = await load()
+
+        switchTheme('dark', button())
+        await vi.waitFor(() => expect(animate).toHaveBeenCalledTimes(1))
+        expect(finish).not.toHaveBeenCalled()
+
+        switchTheme('light', button())
+        expect(finish).toHaveBeenCalledTimes(1)
+        expect(finish.mock.invocationCallOrder[0]).toBeLessThan(start.mock.invocationCallOrder[1] ?? 0)
+    })
+
     it('keeps the new theme when the browser skips the transition', async () => {
         stubViewTransitions(Promise.reject(new DOMException('skipped', 'AbortError')))
         const animate = vi.spyOn(document.documentElement, 'animate')

@@ -6,7 +6,8 @@ points OpenCode at canopy's definitions rather than the repository's (D040). Wit
 agent in the repository and, not finding it, runs its default agent, which allows everything. It also knows the
 option that would choose a run's model on the command line, beating the model canopy writes into the agent's
 definition (DESIGN §13), and those that would approve every permission an agent's rules leave at `ask` (D021), so
-config can refuse a template that passes one.
+config can refuse a template that passes one, and the option that continues a session rather than start one, which
+canopy adds to a run's own command to ask it once more for the result it ended without (DESIGN §13).
 
 OpenCode 2's commands talk to a server. Unless told otherwise they share a background service, started once and kept
 running, whose environment and config are those of whichever command started it, and whose tools run in its process,
@@ -42,6 +43,8 @@ VARIANT_OPTION: Final = "--variant"
 APPROVE_OPTIONS: Final = frozenset(
     {"--auto", "--yolo", "--dangerously-skip-permissions", "--dangerouslySkipPermissions"},
 )
+#: The option of `opencode run` that continues a session, by its id, rather than start one.
+SESSION_OPTION: Final = "--session"
 #: The option of `opencode run` that chooses what it prints, and its value for one JSON event a line.
 FORMAT_OPTION: Final = "--format"
 EVENTS_FORMAT: Final = "json"
@@ -103,6 +106,17 @@ def on_private_server(command: str) -> str:
     if STANDALONE in shlex.split(command):
         return command
     return _RUN_RE.sub(lambda found: f"{found[1]} {STANDALONE}", command, count=1)
+
+
+def continuing(session_id: str) -> list[str]:
+    """The words that, after a command that runs `opencode run`, continue session `session_id` rather than start one.
+
+    Taken to be 1's, with or without `--standalone`, since 2 keeps every session in one database; not yet run on 2.
+
+    Returns:
+        One word, the option with its value after `=`, so an id that starts with `-` is never read as an option.
+    """
+    return [f"{SESSION_OPTION}={session_id}"]
 
 
 def agent_of(command: str) -> str | None:
