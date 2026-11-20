@@ -134,7 +134,7 @@ not go in the middle of the sequence.
 - [What a run changed](RUN_CHANGES.md): what a worker's or a task's run leaves of its push, the commits its branch went
   from and to and the diff between them, kept for the operator.
   - [45. What a run changed](RUN_CHANGES.md#45-what-a-run-changed)
-- [A code outline for agents](OUTLINE.md): the tree of a repository's code a worker's prompt starts with, opened
+- [A code outline for agents](OUTLINE.md): the tree of a repository's code a run's prompt starts with, opened
   where its work is.
   - [46. A code outline for agents](OUTLINE.md#46-a-code-outline-for-agents)
 

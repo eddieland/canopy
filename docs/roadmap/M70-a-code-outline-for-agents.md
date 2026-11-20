@@ -194,5 +194,13 @@ ticket's words. Beyond aider's split, the commonest words of English prose rank 
 singular, since a ticket is prose where aider's message named identifiers. An opened directory names at most 40 of its
 own files, the ones the work is about first. `index.outline_chars` is 6,000 by default and bounds the trees, the
 section's own sentence apart. A prompt override without `{{OUTLINE}}` gets no outline and is not refused, as it must
-carry nothing to do its work. A privately started ticket has no observation, so its tree is opened by size. Next: the
-planner's, the reviewer's, and a task's, then Accept's live checks and the two weeks at `tree`.
+carry nothing to do its work. A privately started ticket has no observation, so its tree is opened by size. The
+planner's, the reviewer's, and a task's built 2026-11-20 against the fakes, with DESIGN §46 and TRUST_MODEL T1 and T3
+for them. A plan's tree is its base's, opened by the ticket's words, and a feedback plan's its branch's, opened by what
+the branch changed, as a `resume`'s. A review's is the reviewed commit's, opened by the PR's diff against its base, and
+read at the review's start from what the lease fetched, as a worker's is at dispatch, since the review fetches the
+commit only once `_review` runs: a commit the slot does not hold then, as a fork's PR's, gets no outline, logged, rather
+than a fetch in the tick. A task's tree is its base's, opened by the task's text, a later run's too, though its branch
+may hold earlier runs' pushes. Chosen conservatively, for the operator to change. An epic's planner gets none: its run
+starts on a path of its own, and an epic's text would rank across repositories as no ticket's does, so it waits on the
+two weeks' numbers. Next: Accept's live checks and the two weeks at `tree`.

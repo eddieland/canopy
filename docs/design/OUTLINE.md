@@ -12,33 +12,38 @@ So the harness renders, into the prompt, an outline of the code the run's work i
 throughout, never a map, which is the workspace's.
 
 Off by default: with the private `index.outline` at `off`, every prompt is the bytes it is without one. At `tree`, a
-dispatch (§8 step 3) gives an `implement`'s and a `resume`'s worker a directory tree of each repository the run works
-in, a joint run's (§18) one per repository. The planner, the reviewer, and a task's agent get none yet.
+dispatch (§8 step 3) gives a worker and a planner, a feedback planner's among them, a directory tree of each repository
+the run works in, a joint run's (§18) one per repository; a review's start (§21) gives the reviewer the PR's, and a
+task's start (§36) its agent its repository's. An epic's planner (§43) gets none yet.
 
 ### The tree
 
 The tree is what git holds, read from its objects in the slot the run leased and never from a working tree, which a
-run writes (§24): an `implement`'s is its base branch's, and a `resume`'s its own branch's, each as the lease last
-fetched it, and the outline names the ref. Directories the work is about are opened to their files; the rest are a
+run writes (§24): an `implement`'s, a plan's, and a task's is its base branch's, and a `resume`'s and a feedback
+plan's its own branch's, each as the lease last fetched it, and the outline names the ref. A review's is the commit it
+reviews, read at its start, before the review fetches it (§21): a commit the slot does not hold yet, as a fork's PR's,
+gets none. Directories the work is about are opened to their files; the rest are a
 name and a count of the files under them, outermost first, until the private `index.outline_chars` is reached, a bound
 a joint run's repositories share. The outline says how many files it does not name. Files the private `index.exclude`
 covers, compared as `high_impact_paths` are (§21), are left out and not counted.
 
-What the work is about is found by words and used only to rank, rendered nowhere: for an `implement`, the words of the
-ticket's title and body as the tracker connector last observed it (§30), split as identifiers are and matched against
-the words of each path's components; for a `resume`, the paths its branch already changed, and the ticket's words
-while it has changed none. A ticket with no observation, or whose words name no path, gets the tree opened by size
+What the work is about is found by words and used only to rank, rendered nowhere: for an `implement` and a plan, the
+words of the ticket's title and body as the tracker connector last observed it (§30), split as identifiers are and
+matched against the words of each path's components; for a `resume` and a feedback plan, the paths its branch already
+changed, and the ticket's words while it has changed none; for a review, the paths the PR's diff changed; for a task,
+the words of its own text. A ticket with no observation, or whose words name no path, gets the tree opened by size
 alone.
 
-The outline is rendered once, at dispatch, so a run's prompt stays the one record the journal can show. It is best
-effort: a tree git cannot list, or does not list in time, is left out and logged, and the run starts without it.
+The outline is rendered once, at dispatch or a start, so a run's prompt stays the one record the journal can show. It
+is best effort: a tree git cannot list, or does not list in time, is left out and logged, and the run starts without
+it.
 
 ### Data, not instructions
 
 Paths are the repository's text, which any contributor writes (TRUST_MODEL T1). The outline is framed as data, every
 line of a tree quoted as a ticket note's is (§28); a path is bounded, and one holding a character that can hide text is
-dropped and counted, never rendered. The ticket's text chooses what is opened and appears nowhere in the outline. A
-run's outline is of its own repositories' trees alone, never a path an agent or a ticket names (T6).
+dropped and counted, never rendered. The ticket's or the task's text chooses what is opened and appears nowhere in the
+outline. A run's outline is of its own repositories' trees alone, never a path an agent or a ticket names (T6).
 
 ### Rejected
 
@@ -50,7 +55,6 @@ run's outline is of its own repositories' trees alone, never a path an agent or 
 
 ### Open
 
-- The planner's, the reviewer's, and a task's outline, a plan's from its ticket's words, a review's from the PR's
-  diff and of the PR's own tree, and a task's from its own text.
+- An epic's planner's outline, from the epic's text.
 - Definitions inside the tree, from a symbol index, and lookups over it, each only if the measurement before it says
   the tree is not enough (`docs/roadmap/`, M70).

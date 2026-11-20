@@ -1751,8 +1751,9 @@ class Index(Section):
     (TRUST_MODEL T7).
     """
 
-    #: `off`, the default: every prompt is the bytes it is without an outline. `tree`: a worker's prompt holds a
-    #: directory tree of each repository it works in, the directories its work is about opened to their files.
+    #: `off`, the default: every prompt is the bytes it is without an outline. `tree`: a worker's, a planner's, a
+    #: reviewer's, and a task's prompt holds a directory tree of each repository it works in, the directories its work
+    #: is about opened to their files.
     outline: Annotated[Outline, Scope.PRIVATE] = "off"
     #: The most characters of a prompt the outline takes, shared among a joint run's repositories.
     outline_chars: Annotated[

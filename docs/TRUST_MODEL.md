@@ -68,10 +68,13 @@ Controls:
   for. A worker's prompt names its copy and gives its outline, never its text, and says the prompt's obligations come
   before it, as before the standing instructions; a plan cannot widen what a worker may do. The worker reads the
   approved text alone: `_run` checks the file against the hash the operator approved before it writes the copy.
-- A run's code outline, which `index.outline` renders (DESIGN §46), is the repository's text: the paths of the tree
-  git holds, which any contributor names. It is data in the prompt, framed as such, every line quoted so none passes
-  for the prompt's own, each path bounded, and one holding a character that can hide text dropped, never rendered. The
-  ticket's text picks which directories the outline opens and is rendered nowhere in it.
+- A run's code outline, which `index.outline` renders (DESIGN §46) for a worker, a planner, a reviewer, and a task's
+  agent, is the repository's text: the paths of the tree git holds, which any contributor names, a review's the tree
+  of the PR's own commit. It is data in the prompt, framed as such, every line quoted so none passes for the prompt's
+  own, each path bounded, and one holding a character that can hide text dropped, never rendered. The ticket's or the
+  task's text, or the paths a branch or a PR changed, pick which directories the outline opens, and the text is
+  rendered nowhere in it. A review's is read from git's objects alone, by listing and diffing names, so nothing of the
+  PR is checked out or run for it (DESIGN §21).
 - A session's title, which `sessions.search` keeps (DESIGN §13), is whatever the runtime made of the session's first
   words or a run named it, ticket and PR text among them: data, kept on one line, bounded, with every control and
   hidden character dropped, rendered as text, and put in no prompt. A search of titles is words found as text, never
@@ -604,7 +607,7 @@ Controls in code, not prompts:
   So a stream of comments or pushes from a bot spends a bounded number of plan runs.
 - The code outline (DESIGN §46): bounded by `index.outline_chars` whatever a repository's size, read by one git
   listing with a time limit and a bound on what is read, and left out when either is passed, so no repository's size
-  holds a dispatch or fills a prompt.
+  holds a dispatch, a review's or a task's start, or fills a prompt.
 - Follow-ups (DESIGN §18): at most `policy.max_follow_ups` recorded per run, 5 by default (0 records none, and a
   repository may only lower it), and one generation deep: a follow-up's runs record none. A ticket past them, or one a
   run that rewrote its slot's git reported, is not recorded, and the harness raises `follow_up_unrecorded` naming it.

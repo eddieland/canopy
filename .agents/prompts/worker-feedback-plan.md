@@ -159,7 +159,7 @@ The repositories this plan covers, each at its PR's head on branch `{{BRANCH}}`:
 
 {{REPOSITORIES}}
 
-Their pull requests: {{PULL_REQUESTS}}.{{WORKSPACE_LESSONS}}
+Their pull requests: {{PULL_REQUESTS}}.{{WORKSPACE_LESSONS}}{{OUTLINE}}
 
 {{#MAP}}
 

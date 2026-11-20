@@ -39,7 +39,7 @@ from canopy.core import review_result as result
 from canopy.core.vocab import RecordedKind, ReviewRunStatus
 from canopy.infra import lock, logs, procs
 from canopy.infra.text import quoted
-from canopy.reviews import findings, grants, review_requests, settle
+from canopy.reviews import findings, grants, outlines, review_requests, settle
 
 if TYPE_CHECKING:
     import sqlite3
@@ -258,7 +258,7 @@ def start(
         )
         lease = lease_slot(ctx, run_id, repo, base=_base(ctx.conn, request.pr))
         with returned_on_failure(ctx, repo, lease):
-            prompt = _prompt(ctx, run_id, request, lease, attempt=attempt, context=context, persona=persona)
+            prompt = _prompt(ctx, run_id, request, lease, repo=repo, attempt=attempt, context=context, persona=persona)
             return spawn(ctx, run_id, lease, prompt)
 
 
@@ -464,11 +464,12 @@ def _prompt(
     request: Request,
     lease: pools.Lease,
     *,
+    repo: str,
     attempt: int,
     context: str | None,
     persona: personas.Persona,
 ) -> str:
-    """Render the reviewer's prompt for review run `run_id`.
+    """Render the reviewer's prompt for review run `run_id`, in `repo`'s slot `lease`.
 
     Returns:
         The prompt.
@@ -493,6 +494,8 @@ def _prompt(
         limit=grants.limit(ctx.conn, cfg, request.pr),
         context=context,
     )
+    # The tree of the commit reviewed, as data (DESIGN §46): empty with `index.outline` off.
+    values[outlines.OUTLINE] = outlines.for_review(ctx, run, repo, lease.path)
     try:
         prompt = prompts.render_reviewer(
             cfg,

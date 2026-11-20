@@ -97,7 +97,7 @@ is taken, end your run. The detail goes in your report; your result's `summary` 
 ## Run
 
 You are working on task {{TASK_ID}} in {{SLOT}}: a worktree of `{{REPO}}`, and your branch is `{{BRANCH}}`, whose base
-branch is `{{BASE}}`.
+branch is `{{BASE}}`.{{OUTLINE}}
 
 ## The operator's text
 
