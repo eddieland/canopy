@@ -95,9 +95,11 @@ If code and the design disagree, the design doc wins until a decision entry says
   Every formatter and linter is cheap, so it runs them all; the tests it runs are the ones its change reaches.
   - Always `make fmt` and `make lint`: every formatter, then every linter and the type checker, over the whole
     repository, in seconds. A change under `ui/` also runs `npm --prefix ui run lint` and `typecheck`.
-  - `make fmt` also applies the codemods (`packages/canopy-codemods`, LibCST), and `make lint` fails with the diff
-    where one would still change a file. A convention that can be applied mechanically becomes a codemod there, by
-    its README's steps, rather than a rule for review. `final-constants` annotates every `UPPER_CASE` module
+  - `make fmt` also applies the codemods, with `brash` (github.com/eddieland/brash, LibCST), and `make lint` fails
+    with the diff where one would still change a file. A convention that can be applied mechanically becomes a
+    codemod, rather than a rule for review: in brash, by its README's steps, when any project could use it, and in
+    `codemods/` here, registered under `[tool.brash.codemods]` in `pyproject.toml` and tested in `tests/codemods/`,
+    when it reads canopy's own source. `final-constants` annotates every `UPPER_CASE` module
     constant `Final`, `type-aliases` spells a type alias as a `type` statement where nothing reads it at run time,
     `doc-comments` writes the comment above a constant, a dataclass or `NamedTuple` field, or an enum member `#:`,
     `general-params` widens a `list`, `dict`, `set`, or `frozenset` parameter its function only reads, and
@@ -131,8 +133,8 @@ If code and the design disagree, the design doc wins until a decision entry says
   (D074, only in `canopy.serve`), `tomlkit` for its edits to the private config (D129, only in `canopy.serve`), and
   `httpx2` for its test client (D079) and, only in the workspace member `canopy-http`, for every HTTP request the
   programs canopy ships make (D130), `syrupy` for snapshot tests (dev only), `jsonschema` to hold an MCP tool's
-  result to its output schema (dev only), `libcst` for the codemods (dev only, in the workspace member
-  `canopy-codemods`), and `opentelemetry-sdk` for telemetry (D132, only in `canopy.infra`).
+  result to its output schema (dev only), `brash` to run the codemods, and `libcst` with it for canopy's own
+  (dev only, in `codemods/`), and `opentelemetry-sdk` for telemetry (D132, only in `canopy.infra`).
 - The web UI lives in `ui/` (D079) and has its own rules: read `ui/AGENTS.md` before touching it. It needs Node 22.12+
   and npm; `make check` runs its checks, and `make ui-e2e` its Playwright tests.
 - Nothing tracker- or VCS-API-specific is ever imported by the harness, `src/canopy`. No Jira client, no GitHub

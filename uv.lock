@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.14'",
@@ -11,7 +11,6 @@ resolution-markers = [
 members = [
     "canopy",
     "canopy-artifacts",
-    "canopy-codemods",
     "canopy-github",
     "canopy-http",
     "canopy-jira",
@@ -68,6 +67,15 @@ wheels = [
 ]
 
 [[package]]
+name = "brash"
+version = "0.0.1.dev10+881f0c4"
+source = { git = "https://github.com/eddieland/brash?rev=881f0c48fbd0965cbd18f1cf2c10571b221cc0a3#881f0c48fbd0965cbd18f1cf2c10571b221cc0a3" }
+dependencies = [
+    { name = "click" },
+    { name = "libcst" },
+]
+
+[[package]]
 name = "canopy"
 source = { editable = "." }
 dependencies = [
@@ -92,12 +100,13 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "actionlint-py" },
-    { name = "canopy-codemods" },
+    { name = "brash" },
     { name = "canopy-review-bench" },
     { name = "editorconfig-checker" },
     { name = "httpx2" },
     { name = "hypothesis" },
     { name = "jsonschema" },
+    { name = "libcst" },
     { name = "prek" },
     { name = "pyrefly" },
     { name = "pytest" },
@@ -134,12 +143,13 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "actionlint-py", specifier = ">=1.7.12.25" },
-    { name = "canopy-codemods", editable = "packages/canopy-codemods" },
+    { name = "brash", git = "https://github.com/eddieland/brash?rev=881f0c48fbd0965cbd18f1cf2c10571b221cc0a3" },
     { name = "canopy-review-bench", editable = "packages/canopy-review-bench" },
     { name = "editorconfig-checker", specifier = ">=3.11.1" },
     { name = "httpx2", specifier = ">=2.16.0" },
     { name = "hypothesis", specifier = ">=6.170.15" },
     { name = "jsonschema", specifier = ">=4.26.0" },
+    { name = "libcst", specifier = ">=1.9.0" },
     { name = "prek", specifier = ">=0.5.10" },
     { name = "pyrefly", specifier = ">=1.4.1" },
     { name = "pytest", specifier = ">=9.2.0" },
@@ -167,20 +177,6 @@ requires-dist = [
     { name = "canopy-mcp", editable = "packages/canopy-mcp" },
     { name = "click", specifier = ">=8.5.1" },
     { name = "pydantic", specifier = ">=2.14.3" },
-]
-
-[[package]]
-name = "canopy-codemods"
-source = { editable = "packages/canopy-codemods" }
-dependencies = [
-    { name = "click" },
-    { name = "libcst" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "click", specifier = ">=8.5.1" },
-    { name = "libcst", specifier = ">=1.9.0" },
 ]
 
 [[package]]

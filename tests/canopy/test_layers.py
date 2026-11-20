@@ -14,6 +14,8 @@ PACKAGE: Final = Path(__file__).resolve().parents[2] / "src" / "canopy"
 TESTS: Final = Path(__file__).resolve().parents[1]
 #: The workspace members' packages (D041), each `packages/NAME/src/PACKAGE`.
 MEMBERS: Final = Path(__file__).resolve().parents[2] / "packages"
+#: canopy's own codemods, a package at the repository's root that brash imports (`[tool.brash.codemods]`).
+CODEMODS: Final = Path(__file__).resolve().parents[2] / "codemods"
 
 #: Top to bottom. A module may import from its own package and from any package in a lower layer. It may not import
 #: from a higher layer or from another package in its own layer: features stay independent of each other, and code two
@@ -47,15 +49,16 @@ PROGRAMS: Final = frozenset({"notify/desktop.py", "serve/__main__.py"})
 #: programs, and the Jira connector hold secrets and open connections, which the harness never does (DESIGN §20, §29,
 #: §30), and the local artifact store holds what workers publish, which stays out of the journal (§38). The review bench
 #: is a dev tool canopy never runs, which scores another reviewer through git and gh, and the codemods are another,
-#: which rewrite canopy's own source.
+#: which rewrite canopy's own source: brash, and canopy's own beside `src/`, which brash runs with its own.
 SEPARATE: Final = frozenset(
     {
+        "brash",
         "canopy_artifacts",
-        "canopy_codemods",
         "canopy_github",
         "canopy_jira",
         "canopy_notify_slack",
         "canopy_review_bench",
+        "codemods",
     },
 )
 #: The HTTP stack those programs share (D130), and its transport: the harness opens no connection but its opt-in OTLP
@@ -355,12 +358,14 @@ from tests.canopy import test_web
 def test_the_tests_mirror_the_packages() -> None:
     """A test module sits in the directory parallel to the package it tests.
 
-    `tests/canopy/runs/` for `canopy.runs`, and `tests/canopy_sandbox/` for the workspace member `canopy_sandbox`.
+    `tests/canopy/runs/` for `canopy.runs`, `tests/canopy_sandbox/` for the workspace member `canopy_sandbox`, and
+    `tests/codemods/` for canopy's own codemods.
     Tests of canopy as a whole, such as this one, sit in `tests/canopy/`, and tests of the fakes in `tests/`.
     """
     packages = [PACKAGE, *(p.parent for p in PACKAGE.rglob("*/__init__.py"))]
     allowed = {TESTS, *(TESTS / "canopy" / p.relative_to(PACKAGE) for p in packages)}
     allowed |= {TESTS / p.parent.name for p in MEMBERS.glob("*/src/*/__init__.py")}
+    allowed.add(TESTS / CODEMODS.name)
     found = [
         f"{path.relative_to(TESTS.parent)}: in no directory parallel to a package"
         for path in under_tests("test_*.py")

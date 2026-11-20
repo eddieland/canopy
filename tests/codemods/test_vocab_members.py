@@ -4,10 +4,10 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from canopy_codemods import run
-from canopy_codemods.vocab_members import PACKAGE, VocabMembers, rewrites
+from brash import registry, run
 
-from tests.canopy_codemods.helpers import cases
+from codemods.vocab_members import PACKAGE, VocabMembers, rewrites
+from tests.codemods.helpers import cases
 
 NAME: Final = "vocab-members"
 CASES: Final = cases(NAME)
@@ -24,7 +24,14 @@ def ended(status: RunStatus) -> bool:
 
 
 def rewrite(source: str, filename: str | None = None) -> str:
-    return run.rewrite(source, [NAME], filename=filename)
+    return run.rewrite(source, [NAME], filename=filename, codemods={NAME: VocabMembers})
+
+
+def test_brash_runs_it_after_its_own_from_anywhere_in_the_repository() -> None:
+    found = registry.registered(REPO / "src" / "canopy")
+
+    assert list(found)[-1] == NAME
+    assert found[NAME] is VocabMembers
 
 
 @pytest.mark.parametrize(("before", "after"), CASES.rewritten)
