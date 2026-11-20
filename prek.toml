@@ -17,9 +17,9 @@ repo = "local"
 # First, as in `make fmt`: ruff then sorts an import a codemod added.
 [[repos.hooks]]
 id = "codemods"
-name = "canopy-codemods"
+name = "brash"
 language = "system"
-entry = "uv run --no-sync canopy-codemods"
+entry = "uv run --no-sync brash"
 types = ["python"]
 
 [[repos.hooks]]

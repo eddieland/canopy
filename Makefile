@@ -17,9 +17,9 @@ check: lint test ui-check ## Verify without modifying files: lint, test, the UI'
 
 ##@ Development
 
-# The codemods (packages/canopy-codemods) go first: ruff then sorts an import one added and formats what it wrote.
+# The codemods (brash, with canopy's own in codemods/) go first: ruff then sorts an import one added and formats it.
 fmt: ui-fmt ## Run autoformatters (codemods, ruff imports and trailing commas, ruff format, rumdl, oxfmt for ui/)
-	uv run canopy-codemods .
+	uv run brash .
 	uv run ruff check --select I,COM812 --fix .
 	uv run ruff format .
 	uv run rumdl fmt .
@@ -27,11 +27,11 @@ fmt: ui-fmt ## Run autoformatters (codemods, ruff imports and trailing commas, r
 # ruff owns Python and rumdl Markdown; editorconfig-checker holds every other file to .editorconfig.
 # zizmor runs offline, so the lint needs no GitHub token and gives the same answer on every machine.
 # tsc checks the JSDoc types of the plugin canopy ships for its agents against the pinned OpenCode's (tests/plugins).
-# canopy-codemods --check prints the diff a codemod would make and fails on one; `make fmt` applies it.
+# brash --check prints the diff a codemod would make and fails on one; `make fmt` applies it.
 lint: tests/plugins/node_modules ## Lint and type check: ruff, codemods, pyrefly, rumdl, ec, shellcheck, actionlint, ...
 	uv run ruff format --check .
 	uv run ruff check .
-	uv run canopy-codemods --check .
+	uv run brash --check .
 	uv run pyrefly check
 	uv run rumdl check .
 	uv run ec
