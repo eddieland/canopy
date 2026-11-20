@@ -118,3 +118,6 @@ system temp directory; receive any prompt byte for byte; die at a timeout, leavi
 
 - Bazel's caches: a sandboxed run may not write them, so it builds cold until it has caches of its own.
 - Credential scoping: a GitHub token limited to the pool's repositories closes most of the network residual.
+- Refused hosts: the operator learns one only from the tool's error in the run's log. `srt` prints its proxy's
+  refusals only under `--debug`, on the stderr the command shares and beside the whole prompt, so the wrapper cannot
+  tell them from the command's output; naming them waits on `srt` reporting them on a channel of its own.
