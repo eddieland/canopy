@@ -19,7 +19,8 @@ it back if it changed. The `commondir` file in the slot's own git directory name
 that rewrites it does the same to every git in the slot; it is checked against where git put it, and put back.
 
 `tracked` asks git which of a workspace's own paths it tracks, so that config can refuse a state directory that came
-out of a checkout (DESIGN §12, TRUST_MODEL T7).
+out of a checkout (DESIGN §12, TRUST_MODEL T7). `merge_file` merges three texts as `git merge-file` does, outside any
+repository, for `canopy chore install --merge` (DESIGN §19).
 """
 
 from __future__ import annotations
@@ -29,6 +30,8 @@ import os
 import re
 import shutil
 import stat
+import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
@@ -62,6 +65,19 @@ COMMONDIR_CONTENT: Final = b"../..\n"
 _LINK_PREFIX: Final = b"gitdir:"
 _LS_FILES_TIMEOUT_SECONDS: Final = 30
 _CONFIG_TIMEOUT_SECONDS: Final = 30
+_MERGE_FILE_TIMEOUT_SECONDS: Final = 30
+#: The most conflicts `git merge-file` counts in its exit code; a higher code is an error.
+_MERGE_FILE_MOST_CONFLICTS: Final = 127
+
+
+@dataclass(frozen=True)
+class Merge:
+    """Three texts merged by `merge_file`."""
+
+    #: The merged text, with conflict markers where there are conflicts.
+    text: str
+    #: How many conflicts the merge has, 127 standing for at least that many as git counts them; 0 when it is clean.
+    conflicts: int
 
 
 def argv(*args: str) -> list[str]:
@@ -88,6 +104,38 @@ def tracked(runner: procs.Runner, root: Path, path: str) -> list[str] | None:
     if not result.ok:
         return None
     return [name for name in result.stdout.split("\0") if name]
+
+
+def merge_file(
+    runner: procs.Runner,
+    ours: str,
+    base: str,
+    theirs: str,
+    *,
+    labels: tuple[str, str, str],
+) -> Merge | None:
+    """Merge the change from `base` to `theirs` into `ours`, as `git merge-file` does, in no repository.
+
+    `labels` name ours, base, and theirs in the conflict markers. The texts are written to a temporary directory only
+    the operator can read, and gone when it returns.
+
+    Returns:
+        The merge, or None when git could not merge them: it is missing, or failed, as on a binary text.
+    """
+    with tempfile.TemporaryDirectory(prefix="canopy-merge-") as scratch:
+        files: list[str] = []
+        for name, text in (("ours", ours), ("base", base), ("theirs", theirs)):
+            path = Path(scratch) / name
+            path.write_text(text, encoding="utf-8")
+            files.append(str(path))
+        args = argv("merge-file", "-p", "--diff3", *(arg for label in labels for arg in ("-L", label)), *files)
+        try:
+            result = runner.run(args, cwd=Path(scratch), env=ENV, timeout=_MERGE_FILE_TIMEOUT_SECONDS)
+        except procs.ProcError:
+            return None
+    if result.timed_out or not 0 <= result.returncode <= _MERGE_FILE_MOST_CONFLICTS:
+        return None
+    return Merge(result.stdout, result.returncode)
 
 
 def maintenance_left_on(runner: procs.Runner, clone: Path) -> list[str] | None:
