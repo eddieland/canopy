@@ -58,7 +58,9 @@ export function costAmountOf(text: string): number | undefined {
     if (typed.length > COST_AMOUNT_MAX || !/^(?:\d+\.?\d*|\.\d+)$/u.test(typed)) {
         return undefined
     }
-    return Number(typed)
+    // One too small to write back without an exponent could not be read from the address again.
+    const usd = Number(typed)
+    return String(usd).includes('e') ? undefined : usd
 }
 
 /** A bound as the page keeps it in `?cost=`: its comparison, a colon, and the amount, `gte:5`. */
@@ -77,9 +79,9 @@ export function costBoundOf(raw: unknown): CostBound | undefined {
     return op === undefined || usd === undefined || rest.length > 0 ? undefined : { op, usd }
 }
 
-/** A bound as the end of a sentence about the sessions within it: `that cost at least $5.00`. */
+/** A bound as what the sessions within it did: `cost at least $5.00`. */
 export function costBoundWords(bound: CostBound): string {
-    return `that cost ${COST_WORDS[bound.op]} ${costText(bound.usd)}`
+    return `cost ${COST_WORDS[bound.op]} ${costText(bound.usd)}`
 }
 
 /** A session as words name it: its title, or `session ID` for one with none. */

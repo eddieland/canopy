@@ -111,7 +111,7 @@ test('a cost and a comparison narrow the list to the sessions within it, kept in
     await expect(rows).toHaveCount(1)
     await expect(rows.nth(0)).toContainText('Find where deploy.sh waits on the health check')
     await filter.getByRole('textbox', { name: 'Cost in dollars' }).fill('0.1')
-    await expect(page.getByText('no session outside canopy that cost less than $0.10')).toBeVisible()
+    await expect(page.getByText('no session outside canopy cost less than $0.10')).toBeVisible()
 
     // The bound holds through the other filters, and clearing it lists every session again.
     await expect(page.getByRole('link', { name: 'archived' })).toHaveAttribute('href', /cost=lt(:|%3A)0\.1/u)

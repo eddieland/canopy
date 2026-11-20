@@ -450,7 +450,9 @@ describe('the sessions page', () => {
         const none: SessionList = { ...OUTSIDE, sessions: [] }
         await renderPage('/workspace/sessions?cost=lt:0.5', { outside: none }, undefined, undefined, { cost_lt: 0.5 })
         expect(
-            await screen.findByText('no session outside canopy that cost less than $0.50 the runtime has not archived'),
+            await screen.findByText(
+                'no session outside canopy cost less than $0.50, of those the runtime has not archived',
+            ),
         ).toBeTruthy()
         cleanup()
 

@@ -96,6 +96,9 @@ describe('costAmountOf', () => {
         ['$5', undefined],
         ['1.2.3', undefined],
         ['1234567890123', undefined],
+        // Too small to write in the address without an exponent.
+        ['0.0000001', undefined],
+        ['0.000001', 0.000001],
     ])('reads %j as dollars, or as nothing', (text, usd) => {
         expect(costAmountOf(text)).toBe(usd)
     })
@@ -113,8 +116,8 @@ describe('costBoundOf', () => {
 })
 
 describe('costBoundWords', () => {
-    it('says the bound as the end of a sentence, the amount as every cost is shown', () => {
-        expect(costBoundWords({ op: 'gte', usd: 5 })).toBe('that cost at least $5.00')
-        expect(costBoundWords({ op: 'lt', usd: 0.5 })).toBe('that cost less than $0.50')
+    it('says the bound as what a session did, the amount as every cost is shown', () => {
+        expect(costBoundWords({ op: 'gte', usd: 5 })).toBe('cost at least $5.00')
+        expect(costBoundWords({ op: 'lt', usd: 0.5 })).toBe('cost less than $0.50')
     })
 })

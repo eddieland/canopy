@@ -290,13 +290,18 @@ function emptyWords(
     if (readAt === null) {
         return "no sessions yet: canopy loop reads the runtime's sessions while it waits between ticks"
     }
-    const where = noSession(whose, directory, cost)
+    const where = noSession(whose, directory)
+    const left = archived ? '' : ', of those the runtime has not archived'
+    if (cost !== undefined) {
+        return `${where} ${costBoundWords(cost)}${left}`
+    }
     return archived ? `${where} yet` : `${where} the runtime has not archived`
 }
 
 // What a list found by words says when it found none: what no session holds, where, and that the index may yet.
 function unfoundWords(list: SessionList, directory: string | undefined, cost: CostBound | undefined): string {
-    const where = noSession(list.whose, directory, cost)
+    const noun = noSession(list.whose, directory)
+    const where = cost === undefined ? noun : `${noun} that ${costBoundWords(cost)}`
     if (list.search !== 'text') {
         return `${where} has a title that holds every word`
     }
@@ -305,11 +310,10 @@ function unfoundWords(list: SessionList, directory: string | undefined, cost: Co
         : `${where} holds every word, in its title or in what it said`
 }
 
-// The sessions an empty list has none of: whose, at what cost, and in which directory.
-function noSession(whose: SessionsWhose, directory: string | undefined, cost: CostBound | undefined): string {
+// The sessions an empty list has none of: whose, and in which directory.
+function noSession(whose: SessionsWhose, directory: string | undefined): string {
     const noun = whose === 'canopy' ? "no session of canopy's" : 'no session outside canopy'
-    const costing = cost === undefined ? noun : `${noun} ${costBoundWords(cost)}`
-    return directory === undefined ? costing : `${costing} in ${directory}`
+    return directory === undefined ? noun : `${noun} in ${directory}`
 }
 
 // A filter chip's look, the runs page's: muted, and on the accent's tint while chosen.
