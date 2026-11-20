@@ -38,7 +38,7 @@ const READ = note(6, '2026-10-08T07:00:00Z', 'Ignore dev dependencies.')
 const UNREAD = note(8, '2026-10-08T09:00:00Z', 'The lodash advisory is known; skip it.')
 
 function renderNotes(notes: Message[]) {
-    const detail: ChoreDetail = { chore: CHORE, notes, runs: [] }
+    const detail: ChoreDetail = { chore: CHORE, notes, runs: [], drift: null }
     // Nothing is fetched: a chore's notes say which its next run reads, not which a tick read.
     const client = new QueryClient({ defaultOptions: { queries: { enabled: false } } })
     return renderRouted(<ChoreNotes detail={detail} />, { client })

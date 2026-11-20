@@ -5,6 +5,7 @@ import { ApiError } from '@/api/client'
 import { choreQuery } from '@/api/queries'
 import type { ChoreDetail, ChoreRun, ChoreSpend, ChoreSpendWindow } from '@/api/types'
 import { Age } from '@/components/age'
+import { ChoreDriftBanner } from '@/components/chore-drift'
 import { ChoreFindingRow } from '@/components/chore-finding'
 import { ChoreLimitBanner } from '@/components/chore-limit'
 import { ChoreRunLink } from '@/components/chore-link'
@@ -93,6 +94,7 @@ function Chore({ detail }: { detail: ChoreDetail }) {
                 {choreHealth(chore, now)}
             </PageHeader>
             <ChoreLimitBanner chore={chore} />
+            <ChoreDriftBanner name={chore.name} drift={detail.drift} />
             {/* The detail skeleton (DESIGN.md): what it is, then its main content, its open findings and the runs that
                 found them, then its notes and spend. Wide, findings and runs take the wide column beside the rest; the
                 source keeps the reading order. */}

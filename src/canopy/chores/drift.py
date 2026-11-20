@@ -148,19 +148,45 @@ def diff(drift: Drift) -> str:
     )
 
 
+def moved(ws: Workspace, name: str) -> Drift | None:
+    """Return how example chore `name`, installed in `ws`, has moved apart from the one canopy ships, if it has.
+
+    For a reader that lists every chore, `canopy status` and the chore's page, which must not fail on one: a copy or
+    record that cannot be read is as good as unknown.
+
+    Returns:
+        Its three ways when it stands other than current, or None: current, not installed, or not readable.
+    """
+    try:
+        found = of(ws, name)
+    except OSError:
+        return None
+    return found if found is not None and found.standing is not Standing.CURRENT else None
+
+
 def describe(standing: Standing, name: str) -> str:
     """Return `standing` as `canopy chore install` lists it beside chore `name`.
 
     Returns:
         A few words, with the command that shows more when the chore has moved apart from canopy's.
     """
+    said = moved_text(standing, name)
+    return "installed" if said is None else f"installed; {said}"
+
+
+def moved_text(standing: Standing, name: str) -> str | None:
+    """Return how chore `name` has moved apart from canopy's, as `canopy status` says it after the chore's line.
+
+    Returns:
+        A few words with the command that shows more, or None when it stands current.
+    """
     match standing:
         case Standing.CURRENT:
-            return "installed"
+            return None
         case Standing.CHANGED:
-            return f"installed; canopy ships a newer version, see `canopy chore diff {name}`"
+            return f"canopy ships a newer version, see `canopy chore diff {name}`"
         case Standing.DIFFERS:
-            return f"installed; differs from the version canopy ships, see `canopy chore diff {name}`"
+            return f"differs from the version canopy ships, see `canopy chore diff {name}`"
         case _:
             assert_never(standing)
 
