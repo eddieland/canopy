@@ -10,7 +10,7 @@ from unittest import mock
 
 import pytest
 
-from canopy.chores import install
+from canopy.chores import drift, install
 from canopy.cli.main import main
 from canopy.core import config, db
 from canopy.infra import resources
@@ -149,6 +149,33 @@ def test_an_agent_canopy_renames_with_its_text_unchanged_is_a_newer_version(
     assert yours.endswith("(no change)\n")
 
 
+def test_status_says_when_canopy_ships_a_newer_version_of_an_installed_chore(
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    canopy_env.write_private(PRIVATE)
+    assert main(["chore", "install", CHORE]) == 0
+    capsys.readouterr()
+    assert "chore diff" not in status_line(capsys, CHORE)
+    with upgraded(tmp_path, agent="changes nothing. Upgraded."):
+        assert status_line(capsys, CHORE).endswith(
+            f"; canopy ships a newer version, see `canopy chore diff {CHORE}`",
+        )
+        # Copies it cannot read are as good as unknown: status still prints, and says nothing of them.
+        with mock.patch.object(drift, "of", autospec=True, side_effect=PermissionError("denied")):
+            assert "chore diff" not in status_line(capsys, CHORE)
+    # An example canopy no longer ships has no newer version to point at, and `chore diff` refuses it.
+    with mock.patch.object(install, "available", autospec=True, return_value=[]):
+        assert "chore diff" not in status_line(capsys, CHORE)
+    (canopy_env.state_dir / install.ORIGINS_DIR / f"{CHORE}.json").unlink()
+    prompt = canopy_env.state_dir / install.PROMPTS_DIR / f"{CHORE}.md"
+    prompt.write_text(prompt.read_text().replace("Once a week", "Once a day"))
+    assert status_line(capsys, CHORE).endswith(
+        f"; differs from the version canopy ships, see `canopy chore diff {CHORE}`",
+    )
+
+
 def test_the_list_in_a_workspace_whose_map_does_not_load_says_why(
     canopy_env: CanopyEnv,
     capsys: pytest.CaptureFixture[str],
@@ -172,6 +199,13 @@ def listed(capsys: pytest.CaptureFixture[str]) -> dict[str, str]:
     assert main(["chore", "install"]) == 0
     lines = capsys.readouterr().out.splitlines()
     return {name: rest.strip() for name, _, rest in (line.partition(" ") for line in lines)}
+
+
+def status_line(capsys: pytest.CaptureFixture[str], name: str) -> str:
+    """Run `canopy status`, and return the line of its chores that names chore `name`."""
+    assert main(["status"]) == 0
+    [line] = [line for line in capsys.readouterr().out.splitlines() if line.startswith(f"  {name}  ")]
+    return line
 
 
 @contextlib.contextmanager

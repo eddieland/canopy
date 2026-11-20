@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Final
 import click
 from rich.console import Console
 
+from canopy.chores import drift
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import TICKET_KEY
 from canopy.core import (
@@ -434,7 +435,10 @@ def _print_recent_runs(ctx: Context) -> None:
 
 
 def _print_chores(ctx: Context) -> None:
-    """A line per configured chore, with how many findings are dismissed or not listed; nothing without chores (§19)."""
+    """A line per configured chore, with how many findings are dismissed or not listed; nothing without chores (§19).
+
+    An installed example chore canopy now ships otherwise says so, with the command that shows how.
+    """
     states = chore_view.states(ctx.conn, ctx.config, ctx.workspace)
     if not states:
         return
@@ -446,6 +450,9 @@ def _print_chores(ctx: Context) -> None:
         note = f"; {dismissed} finding{'s' if dismissed != 1 else ''} dismissed" if dismissed else ""
         more = state.more_findings()
         note += f"; {chore_result.more_text(more)}" if more else ""
+        moved = drift.moved(ctx.workspace, state.name)
+        said = drift.moved_text(moved.standing, state.name) if moved is not None else None
+        note += f"; {said}" if said else ""
         click.echo(f"  {state.name}  {chore_line(state, now)}{note}")
 
 

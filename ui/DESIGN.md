@@ -277,11 +277,13 @@ Rules:
   is in force, on the `status-blocked` tint, since every run waits on what the operator said, with ghost Edit, Renew,
   and Clear, since the header has no room for a sentence; a chore over its finding limit (`ChoreLimitBanner`, under its
   page's title), on the same tint, since only the operator can settle it, saying by how much and the two ways out, with
-  no button, since both ways out are the operator's words; and changes asked of a plan that no planner has started on
-  (`ChangesAsked`), on the `status-running` tint, since the loop acts on them next, never a muted line a request can
-  hide in; and on the system resources page, what is under pressure, on the worst pressure's tint, each concern in its
-  own pressure's color with what it costs and the way out under it, since the operator arrives from the header's
-  readout to ask exactly that.
+  no button, since both ways out are the operator's words; an installed example chore canopy now ships otherwise
+  (`ChoreDriftBanner`, under the limit's), on `surface-raised` with no status tint, since its copy runs on as
+  installed and nothing waits on it, naming both versions and `canopy chore diff NAME`; and changes asked of a plan
+  that no planner has started on (`ChangesAsked`), on the `status-running` tint, since the loop acts on them next,
+  never a muted line a request can hide in; and on the system resources page, what is under pressure, on the worst
+  pressure's tint, each concern in its own pressure's color with what it costs and the way out under it, since the
+  operator arrives from the header's readout to ask exactly that.
 - **Agent memory** (docs/design §28) shows only while a tier is on, and always says each tier's mode in words, never by
   color alone, so recorded memory is never taken for memory in use: the header's readout, `memory: recording` or
   `memory: in use`, opening the memory page, which is in no section; and a tier's band heading its panel, a chip naming

@@ -8,12 +8,14 @@ import dataclasses
 import json
 from collections.abc import Collection
 from typing import Any, Final
+from unittest import mock
 
 import pytest
 
-from canopy.chores import start
+from canopy.chores import drift, install, start
 from canopy.core import chore_runs, chore_view, conversation, db, records
-from canopy.serve import mock
+from canopy.infra import resources
+from canopy.serve import mock as serve_mock
 from canopy.serve.backend import Backend
 from tests.canopy.helpers import json_block
 from tests.canopy.web_helpers import SECRET, at, client, signed_in
@@ -75,7 +77,7 @@ def test_a_chore_and_its_run_say_how_many_findings_it_did_not_list(backend: Back
         ctx.conn.execute(
             "INSERT INTO chore_runs (tick_id, chore, started_at, ended_at, status, result_json, log_path) "
             "VALUES (1, 'deps', ?, ?, 'ok', ?, 'x.log')",
-            (mock.at(-10), mock.at(-5), json.dumps({"status": "ok", "findings": [], "more_findings": 7})),
+            (serve_mock.at(-10), serve_mock.at(-5), json.dumps({"status": "ok", "findings": [], "more_findings": 7})),
         )
     page = client(None, backend).get("/api/chores/deps").json()
     assert (page["chore"]["max_findings"], page["chore"]["more_findings"], page["chore"]["findings"]) == (5, 7, [])
@@ -84,19 +86,19 @@ def test_a_chore_and_its_run_say_how_many_findings_it_did_not_list(backend: Back
 
 def test_a_chore_runs_page_names_the_models_that_served_it_or_why_it_cannot(backend: Backend) -> None:
     c = client(None, backend)
-    served = c.get(f"/api/chores/{mock.CHORE}/runs/1").json()["models"]
+    served = c.get(f"/api/chores/{serve_mock.CHORE}/runs/1").json()["models"]
     assert [(m["model"], m["cost_usd"]) for m in served["models"]] == [("anthropic/claude-haiku-4-5", 0.21)]
     # The runtime no longer keeps run 2's session, and run 4 is still running.
-    assert c.get(f"/api/chores/{mock.CHORE}/runs/2").json()["models"]["status"] == "missing"
+    assert c.get(f"/api/chores/{serve_mock.CHORE}/runs/2").json()["models"]["status"] == "missing"
     assert c.get("/api/chores/build-health/runs/4").json()["models"]["status"] == "running"
 
 
 def test_a_chore_runs_page_names_the_model_its_agent_asked_for(backend: Backend) -> None:
     c = client(None, backend)
-    assert c.get(f"/api/chores/{mock.CHORE}/runs/1").json()["model"] is None
+    assert c.get(f"/api/chores/{serve_mock.CHORE}/runs/1").json()["model"] is None
     with backend.open() as ctx:
         records.update(records.ChoreRun).set(model="anthropic/claude-haiku-4-5").where("id = ?", 1).run(ctx.conn)
-    assert c.get(f"/api/chores/{mock.CHORE}/runs/1").json()["model"] == "anthropic/claude-haiku-4-5"
+    assert c.get(f"/api/chores/{serve_mock.CHORE}/runs/1").json()["model"] == "anthropic/claude-haiku-4-5"
 
 
 def test_a_chores_runs_name_the_models_that_served_them_so_the_runs_page_lists_them_by_model(
@@ -117,7 +119,7 @@ def test_each_chore_carries_what_its_runs_cost_in_the_last_day_and_the_last_30_d
             ctx.conn.execute(
                 "INSERT INTO chore_runs (tick_id, chore, started_at, ended_at, status, log_path, cost_usd) "
                 "VALUES (1, 'deps', ?, ?, 'failed', 'x.log', ?)",
-                (mock.at(started), mock.at(started + 5), cost),
+                (serve_mock.at(started), serve_mock.at(started + 5), cost),
             )
     c = client(None, backend)
     health, deps = c.get("/api/chores").json()
@@ -135,7 +137,7 @@ def test_a_chores_p99_is_by_nearest_rank_so_one_dear_run_in_a_hundred_does_not_s
         ctx.conn.executemany(
             "INSERT INTO chore_runs (tick_id, chore, started_at, ended_at, status, log_path, cost_usd) "
             "VALUES (1, 'build-health', ?, ?, 'ok', 'x.log', 0.1)",
-            [(mock.at(-2 * 24 * 60), mock.at(-2 * 24 * 60 + 5))] * 198,
+            [(serve_mock.at(-2 * 24 * 60), serve_mock.at(-2 * 24 * 60 + 5))] * 198,
         )
     health, _ = client(None, backend).get("/api/chores").json()
 
@@ -180,6 +182,42 @@ def test_a_chores_page_is_what_canopy_show_prints_and_any_other_name_is_refused(
     assert missing.json()["detail"] == "no chore 'nope' is defined for this workspace"
     bad = c.get("/api/chores/Not_A_Name")
     assert (bad.status_code, bad.json()["detail"]["guard"]) == (409, "bad_ref")
+
+
+def test_a_chores_page_says_when_canopy_ships_another_version_of_the_example_it_was_installed_from(
+    backend: Backend,
+) -> None:
+    c = client(None, backend)
+    # The mock's build-health is an example canopy ships, defined by hand: not installed, so there is nothing to say.
+    assert c.get("/api/chores/build-health").json()["drift"] is None
+    with backend.open() as ctx:
+        state = ctx.workspace.state_dir
+    shipped = (resources.example_chores_dir() / "build-health.md").read_text()
+    (state / install.PROMPTS_DIR).mkdir(parents=True, exist_ok=True)
+    (state / install.PROMPTS_DIR / "build-health.md").write_text(shipped)
+    (state / install.ORIGINS_DIR).mkdir(parents=True, exist_ok=True)
+    origin = state / install.ORIGINS_DIR / "build-health.json"
+    origin.write_text(json.dumps({"version": "0.9.0", "prompt": shipped}))
+    assert c.get("/api/chores/build-health").json()["drift"] is None
+    origin.write_text(json.dumps({"version": "0.9.0", "prompt": "# Build health\nAs canopy 0.9.0 shipped it.\n"}))
+    assert c.get("/api/chores/build-health").json()["drift"] == {
+        "standing": "changed",
+        "installed_by": "0.9.0",
+        "shipped_by": db.CANOPY_VERSION,
+    }
+    # Installed before canopy kept a record, with a copy other than what canopy ships now.
+    origin.unlink()
+    (state / install.PROMPTS_DIR / "build-health.md").write_text(shipped + "My own line.\n")
+    assert c.get("/api/chores/build-health").json()["drift"] == {
+        "standing": "differs",
+        "installed_by": None,
+        "shipped_by": db.CANOPY_VERSION,
+    }
+    # A copy it cannot read leaves the page as it was, without the notice.
+    with mock.patch.object(drift, "of", autospec=True, side_effect=PermissionError("denied")):
+        page = c.get("/api/chores/build-health")
+    assert (page.status_code, page.json()["drift"]) == (200, None)
+    assert c.get("/api/chores/deps").json()["drift"] is None
 
 
 def test_a_chore_turned_off_by_max_chores_leaves_the_list_but_keeps_its_page(backend: Backend) -> None:
