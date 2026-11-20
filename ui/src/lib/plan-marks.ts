@@ -55,7 +55,7 @@ export const SECTION_LEVEL = 2
 export function planSections(doc: ProseMirrorNode): PlanSection[] {
     const found: { text: string; pos: number; body: string[] }[] = []
     // The words of the section open, none before the first or after a heading that ends one without opening another.
-    let body: string[] | undefined = undefined
+    let body: string[] | undefined
     doc.forEach((node, pos) => {
         const level = node.type.name === 'heading' ? Number(node.attrs['level']) : undefined
         if (level !== undefined && level <= SECTION_LEVEL) {

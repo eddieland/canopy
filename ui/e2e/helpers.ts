@@ -609,7 +609,7 @@ export async function clickIn(target: Locator): Promise<void> {
 
 // Whether the plan's editor holds its cursor inside `element`.
 function holdsCursor(element: Element): boolean {
-    const root = element.closest('[contenteditable]') as (Element & { editor: { view: PlanView } }) | null
+    const root = element.closest<Element & { editor: { view: PlanView } }>('[contenteditable]')
     if (root === null) {
         return false
     }
@@ -666,7 +666,7 @@ function startPoint(element: Element): { x: number; y: number } {
 
 // Whether the plan's editor holds its cursor, and nothing selected, at the start of `element`'s content.
 function holdsCursorAtStart(element: Element): boolean {
-    const root = element.closest('[contenteditable]') as (Element & { editor: { view: PlanView } }) | null
+    const root = element.closest<Element & { editor: { view: PlanView } }>('[contenteditable]')
     if (root === null) {
         return false
     }
@@ -698,7 +698,7 @@ function endPoint(element: Element): { x: number; y: number } {
 
 // Whether the plan's editor holds its cursor, and nothing selected, at the end of `element`'s content.
 function holdsCursorAtEnd(element: Element): boolean {
-    const root = element.closest('[contenteditable]') as (Element & { editor: { view: PlanView } }) | null
+    const root = element.closest<Element & { editor: { view: PlanView } }>('[contenteditable]')
     if (root === null) {
         return false
     }
