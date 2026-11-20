@@ -57,7 +57,10 @@ workspace, then says what's left to set up. The copies stay put when canopy is u
 running it again puts the shipped version back over your edits. Steer an installed
 chore with notes instead (below), which it leaves alone. The list marks the ones installed here and says when canopy
 ships a newer version than yours, and `canopy chore diff NAME` shows what canopy changed since and what you did, so
-you can carry your edits across by hand instead of finding out which of them mattered the hard way.
+you can carry your edits across by hand instead of finding out which of them mattered the hard way. Or let
+`canopy chore install NAME --merge` carry them: it merges canopy's change into your copies and keeps your table as it
+is. Where its change and yours touch the same lines, it writes nothing and names the file, and the diff is yours to
+merge.
 
 [Chores](/chores) lists each chore: whether it's running, how its latest run ended and when, when it's due, its open
 findings and how many you dismissed, its schedule, and what its runs cost over the last day and month. While

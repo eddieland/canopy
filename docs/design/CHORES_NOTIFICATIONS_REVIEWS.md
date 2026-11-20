@@ -42,7 +42,8 @@ canopy is upgraded, but for the agent's model. The command owns them, so install
 shipped ones, and leaves
 every other line of the file as it was or writes nothing. Beside them it keeps what canopy shipped then, so the
 examples' list can say when canopy ships a newer one, and `canopy chore diff` can show what canopy changed since and
-what the operator changed: the two sides a merge by hand needs.
+what the operator changed: the two sides a merge by hand needs. `--merge` makes that merge three ways, keeping the
+operator's edits and the table, and writes nothing on a conflict.
 
 canopy ships `canopy-chore` (§13): no edits, no subagents, no bash, one tool of canopy's, which reads its own chore's
 history, and no MCP write tools where the runtime can deny them by name. A chore using the operator's own read-only

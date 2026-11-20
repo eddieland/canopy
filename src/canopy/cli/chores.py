@@ -13,7 +13,7 @@ from pathlib import Path
 import click
 
 from canopy.chores import drift, execute, history, install, start, trial
-from canopy.cli.common import CliError, leave_the_tick, open_context
+from canopy.cli.common import CliError, leave_the_tick, open_context, runner_of
 from canopy.cli.params import CHORE, EXAMPLE_CHORE, TextType, validated
 from canopy.core import conversation, run_models, run_spans, workspace
 from canopy.core.config import ConfigError
@@ -82,22 +82,35 @@ def cmd_chore_try(click_ctx: click.Context, name: str, context: str | None, *, n
 
 @chore_group.command("install")
 @click.argument("name", type=EXAMPLE_CHORE, required=False)
-def cmd_chore_install(name: str | None) -> int:
+@click.option(
+    "--merge",
+    is_flag=True,
+    help="Merge what canopy changed since NAME was installed into your copies, keeping your edits; write nothing on a "
+    "conflict.",
+)
+@click.pass_context
+def cmd_chore_install(click_ctx: click.Context, name: str | None, *, merge: bool) -> int:
     """Set up example chore NAME, one canopy ships, in this workspace; with no NAME, list them.
 
     The prompt goes in the workspace's .canopy/chore-prompts/, the agent the example comes with, if any, in
     .canopy/chore-agents/NAME/, and the [chores.NAME] table in its private config. They stay as installed when canopy
     is upgraded. The command owns them: running it again replaces them with the shipped ones, and an edit to any is
-    lost; `canopy chore diff NAME` shows the edits to carry over. Answer a chore with `canopy reply chore:NAME`
-    instead, which survives it. The list marks each example installed here, and says when canopy ships a newer one.
+    lost; `canopy chore diff NAME` shows the edits to carry over, and --merge carries them: it merges what canopy
+    changed in the prompt and the agent since the install into your copies, leaves the table as it is, and writes
+    nothing where a change conflicts with yours. Answer a chore with `canopy reply chore:NAME` instead, which survives
+    it. The list marks each example installed here, and says when canopy ships a newer one.
     """
     if name is None:
+        if merge:
+            raise click.UsageError("--merge needs the NAME of an installed chore")
         _list_examples()
         return 0
     try:
         conversation.check_operator()
     except conversation.Refused as r:
         raise CliError(f"chore install refused ({r.guard}): {r.reason}") from None
+    if merge:
+        return _merge(click_ctx, name)
     try:
         installed = install.install(workspace.find(Path.cwd()), name)
     except (install.InstallError, ConfigError) as e:
@@ -116,13 +129,44 @@ def cmd_chore_install(name: str | None) -> int:
     return 0
 
 
+def _merge(click_ctx: click.Context, name: str) -> int:
+    """Merge what canopy changed in installed example chore `name` into the copies, and say what it did.
+
+    Returns:
+        0 once merged, or when there was nothing to merge; 1 on a conflict, with nothing written.
+
+    Raises:
+        CliError: it cannot be merged.
+    """
+    try:
+        merged = drift.merge(workspace.find(Path.cwd()), name, runner_of(click_ctx))
+    except (drift.MergeError, ConfigError, OSError) as e:
+        raise CliError(f"chore install --merge: {e}") from None
+    if merged.conflicts:
+        each = ", ".join(f"{file} ({count})" for file, count in merged.conflicts.items())
+        click.echo(
+            f"chore install --merge: canopy's change conflicts with yours in {each}, so nothing was written; "
+            f"`canopy chore diff {name}` shows both sides",
+            err=True,
+        )
+        return 1
+    if not merged.written:
+        click.echo(f"chore {name}: canopy ships what it was installed from; nothing to merge")
+        return 0
+    for path in merged.written:
+        click.echo(f"merged canopy's change into {path}")
+    click.echo(f"[chores.{name}] is left as it was; `canopy chore diff {name}` shows what you changed")
+    return 0
+
+
 @chore_group.command("diff")
 @click.argument("name", type=EXAMPLE_CHORE)
 def cmd_chore_diff(name: str) -> int:
     """Show how example chore NAME, as installed here, and the one canopy ships have moved apart.
 
     Two unified diffs of its prompt and agent: what canopy changed since it was installed, and what you changed in
-    the copies; the two sides of a merge by hand, before `canopy chore install NAME` puts the shipped one back. For a
+    the copies; the two sides of a merge by hand, before `canopy chore install NAME` puts the shipped one back, or
+    of the merge `canopy chore install NAME --merge` makes. For a
     chore installed before canopy kept what it installed it from, only your copies against what canopy ships now. It
     writes nothing.
     """
