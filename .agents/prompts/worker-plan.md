@@ -174,7 +174,7 @@ You are planning ticket {{KEY}}, attempt {{ATTEMPT}} of {{MAX_ATTEMPTS}}, in {{S
 
 The repositories this plan covers, as the overseer chose them:
 
-{{REPOSITORIES}}{{WORKSPACE_LESSONS}}
+{{REPOSITORIES}}{{WORKSPACE_LESSONS}}{{OUTLINE}}
 
 {{#MAP}}
 

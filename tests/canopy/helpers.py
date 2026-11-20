@@ -1595,6 +1595,32 @@ def log_file() -> tuple[Console, io.StringIO]:
     return Console(file=out, width=200, highlight=False), out
 
 
+# Code outlines (DESIGN §46)
+
+#: The heading a prompt's code outline starts with.
+OUTLINE_HEADING = "## Code outline"
+
+
+def tracked(origin: Path, slots: Sequence[Path], tmp_path: Path, files: Sequence[str]) -> None:
+    """Commit `files` to `origin`'s `main`, and fetch it in each of `slots`, as a pool's lease does."""
+    work = tmp_path / f"tracked-{origin.stem}"
+    git("clone", "--quiet", str(origin), str(work), cwd=tmp_path)
+    for name in files:
+        (work / name).parent.mkdir(parents=True, exist_ok=True)
+        (work / name).write_text(f"{name}\n")
+    git("add", ".", cwd=work)
+    git("commit", "--quiet", "-m", "the code", cwd=work)
+    git("push", "--quiet", "origin", "HEAD:main", cwd=work)
+    for slot in slots:
+        git("fetch", "--quiet", "origin", cwd=slot)
+
+
+def outline_of(prompt: str) -> list[str]:
+    """The tree's lines in `prompt`'s code outline, each without its quote mark, up to the prompt's next section."""
+    section = prompt.partition(f"{OUTLINE_HEADING}\n")[2].partition("\n## ")[0]
+    return [line.removeprefix("> ") for line in section.splitlines() if line.startswith("> ")]
+
+
 # Migrations
 
 

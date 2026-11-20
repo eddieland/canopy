@@ -127,7 +127,7 @@ This is review {{ATTEMPT}} of at most {{MAX_ATTEMPTS}} of this PR.
 - Commit: `{{SHA}}`
 - Checkout: `{{CHECKOUT}}`
 - Base: `{{BASE}}`
-- Ticket: {{TICKET}}
+- Ticket: {{TICKET}}{{OUTLINE}}
 
 {{#PLAN}}
 

@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING
 from canopy.core import agent_models, cards, checklist_answers, checklists, conversation, db, notice, pools, prompts
 from canopy.core.vocab import Decider, RunStatus
 from canopy.infra import lock, logs, procs
-from canopy.runs import attachments, tasks
+from canopy.runs import attachments, outlines, tasks
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -222,6 +222,9 @@ def _spawn(ctx: Context, task: records.Task, run_id: int, lease: pools.Lease) ->
             lease.path / attachments.RUN_DIR,
             attachments.sizes(attachments.held_at(ctx.conn, _ref(task), run.started_at)),
         ),
+        # The tree of its repository's code, opened by the task's text, as data (DESIGN §46): empty with
+        # `index.outline` off.
+        outlines.OUTLINE: outlines.for_task(ctx, run.tick_id, task, slot=lease.path, base=lease.base_branch),
     }
     log_path = Path(run.log_path)
     try:

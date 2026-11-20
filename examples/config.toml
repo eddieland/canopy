@@ -333,12 +333,12 @@ cmd = "canopy-connect-jira --site acme.atlassian.net"
 # search = "off"                         # or "titles"
 # exclude = ["~/clients/*"]
 
-# An outline of each repository's code at the start of a worker's prompt (DESIGN §46), so it need not search for where
-# its work is. Off by default, and private. At "tree", an implement's and a resume's prompt holds a directory tree of
-# each repository the run works in, read from git: the directories the ticket's words name, or the branch already
-# changed, are opened to their files, and the rest are a name and a count. outline_chars bounds it, shared among a
-# joint run's repositories. exclude leaves tracked files out of it, each a path or pattern from a repository's root,
-# as high_impact_paths are written.
+# An outline of each repository's code at the start of an agent's prompt (DESIGN §46), so it need not search for where
+# its work is. Off by default, and private. At "tree", a worker's, a planner's, a reviewer's, and a task's prompt holds
+# a directory tree of each repository the run works in, read from git: the directories the ticket's or the task's words
+# name, or the branch or the PR already changed, are opened to their files, and the rest are a name and a count.
+# outline_chars bounds it, shared among a joint run's repositories. exclude leaves tracked files out of it, each a path
+# or pattern from a repository's root, as high_impact_paths are written.
 # [index]
 # outline = "off"                        # or "tree"
 # outline_chars = 6000                   # 500 to 50000

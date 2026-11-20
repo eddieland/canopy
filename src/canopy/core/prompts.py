@@ -1159,6 +1159,8 @@ def render_reviewer(
     """
     persona = persona or _default_persona(config, REVIEWER)
     values = {
+        # The outline of the PR's tree (DESIGN §46): empty unless the review's start rendered one, as a worker's is.
+        "OUTLINE": "",
         **values,
         **_standing_values(reviewer_instructions(config), "reviewer"),
         "NOTICE": notice,
@@ -1198,6 +1200,8 @@ def render_task(
         "ATTACHMENTS": None,
         # Empty for a run in a repository without a checklist (DESIGN §42), whose push is never held.
         "CHECKLIST": "",
+        # The outline of its repository's tree (DESIGN §46): empty unless the task's start rendered one.
+        "OUTLINE": "",
         **values,
         **_standing_values(standing_instructions(config), "private"),
         "NOTICE": notice,
