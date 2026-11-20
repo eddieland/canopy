@@ -127,9 +127,6 @@ members = ["packages/*"]
 cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true } }]
 
 [tool.uv.sources]
-# Until brash's first release is on PyPI: the commit of eddieland/brash#1. Then this line goes, the dev dependency
-# becomes `brash>=0.1.0`, and uv.lock is locked again.
-brash = { git = "https://github.com/eddieland/brash", rev = "881f0c48fbd0965cbd18f1cf2c10571b221cc0a3" }
 canopy-artifacts = { workspace = true }
 canopy-github = { workspace = true }
 canopy-http = { workspace = true }
@@ -144,7 +141,7 @@ dev = [
     "actionlint-py>=1.7.12.25",
     # The codemods canopy's own code is held to: `make fmt` applies them and `make lint` fails on a file one would
     # change. It also runs canopy's own, in codemods/, which [tool.brash.codemods] below registers.
-    "brash",
+    "brash>=0.1.0",
     # A program of its own that scores another code review bot on blind PRs (packages/canopy-review-bench); canopy
     # never runs it, so it is here for its tests and type checks, not among canopy's dependencies.
     "canopy-review-bench",

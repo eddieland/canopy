@@ -68,11 +68,15 @@ wheels = [
 
 [[package]]
 name = "brash"
-version = "0.0.1.dev10+881f0c4"
-source = { git = "https://github.com/eddieland/brash?rev=881f0c48fbd0965cbd18f1cf2c10571b221cc0a3#881f0c48fbd0965cbd18f1cf2c10571b221cc0a3" }
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
     { name = "libcst" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/48/a5/054843647f8603f9bf8556f2f55dbeff577544ce00639e7029a179695ff5/brash-0.1.0.tar.gz", hash = "sha256:d0af90c8cea5870d149588045d1717a8a904fcb88bb6f7841b2af48d8ed3bbb8", size = 70422, upload-time = "2026-11-20T04:38:53.665Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1a/84/5ada785f1055fd751722a98177a51e465457d6419aa85e633e9295663e78/brash-0.1.0-py3-none-any.whl", hash = "sha256:ac645d0aca036059bef1e99fd99bdad08229dd3c7225653be937ab6bb8d026d6", size = 30947, upload-time = "2026-11-20T04:38:52.603Z" },
 ]
 
 [[package]]
@@ -143,7 +147,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "actionlint-py", specifier = ">=1.7.12.25" },
-    { name = "brash", git = "https://github.com/eddieland/brash?rev=881f0c48fbd0965cbd18f1cf2c10571b221cc0a3" },
+    { name = "brash", specifier = ">=0.1.0" },
     { name = "canopy-review-bench", editable = "packages/canopy-review-bench" },
     { name = "editorconfig-checker", specifier = ">=3.11.1" },
     { name = "httpx2", specifier = ">=2.16.0" },
