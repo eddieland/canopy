@@ -109,6 +109,9 @@ def of(ws: Workspace, name: str) -> Drift | None:
     files = [File(f"{name}.md", origin.prompt if origin else None, shipped_prompt, prompt)]
     shipped_agent = install.shipped_agent(name)
     copied = sorted((ws.state_dir / install.AGENTS_DIR / name / definitions.AGENTS_SUBDIR).glob("*.md"))
+    if origin is not None and origin.agent_file is not None:
+        # The copy the record names, where it is there, ahead of any other file the operator put beside it.
+        copied.sort(key=lambda path: path.name != origin.agent_file)
     agent_names = [path.name for path in copied[:1]]
     if origin is not None and origin.agent_file is not None:
         agent_names.append(origin.agent_file)
@@ -162,6 +165,9 @@ class Merged:
     #: Each file whose merge conflicts, by name, with how many conflicts, as `git merge-file` counts them; when any
     #: does, nothing was written.
     conflicts: Mapping[str, int]
+    #: Whether the record now names what canopy ships, where it named an older version: false when canopy changed
+    #: nothing since the install, or a file conflicts.
+    advanced: bool = False
 
 
 def merge(ws: Workspace, name: str, runner: procs.Runner) -> Merged:
@@ -201,6 +207,8 @@ def merge(ws: Workspace, name: str, runner: procs.Runner) -> Merged:
             merged[(ws.state_dir / install.PROMPTS_DIR if i == 0 else agents) / file.name] = text
     if conflicts:
         return Merged((), conflicts)
+    for path in merged:
+        _check_utf8(path)
     for path, text in merged.items():
         install.replace_private(path, text)
     prompt, agent = drift.files[0], drift.files[1] if len(drift.files) > 1 else None
@@ -214,7 +222,7 @@ def merge(ws: Workspace, name: str, runner: procs.Runner) -> Merged:
             agent=agent.shipped if agent is not None else None,
         ),
     )
-    return Merged(tuple(merged), {})
+    return Merged(tuple(merged), {}, advanced=True)
 
 
 def describe(standing: Standing, name: str) -> str:
@@ -250,16 +258,30 @@ def _merged(file: File, runner: procs.Runner) -> str | int | None:
             f"canopy changed which agent the chore runs ({file.name}), which a merge does not carry; `canopy chore "
             "diff` shows both sides, and installing again puts canopy's back",
         )
+    if ours is None:
+        if base is None:
+            return None
+        raise MergeError(f"your copy of {file.name} is gone; installing again puts canopy's back")
     if base is None or theirs is None or base == theirs:
         return ours
-    if ours is None:
-        raise MergeError(f"your copy of {file.name} is gone; installing again puts canopy's back")
     if ours in {base, theirs}:
         return theirs
     result = hostgit.merge_file(runner, ours, base, theirs, labels=("yours", "installed-from", _SHIPPED))
     if result is None:
         raise MergeError(f"git could not merge {file.name}")
     return result.conflicts or result.text
+
+
+def _check_utf8(path: Path) -> None:
+    """Make sure the copy at `path`, which a merge is about to replace, is UTF-8, as its text was read to merge.
+
+    Raises:
+        MergeError: it is not, so a merge would write the replacement characters it was read with over its bytes.
+    """
+    try:
+        path.read_bytes().decode("utf-8")
+    except UnicodeDecodeError:
+        raise MergeError(f"your copy of {path.name} is not UTF-8, so a merge would change bytes you wrote") from None
 
 
 def _text(path: Path) -> str | None:

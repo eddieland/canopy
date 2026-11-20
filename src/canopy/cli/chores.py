@@ -151,7 +151,10 @@ def _merge(click_ctx: click.Context, name: str) -> int:
         )
         return 1
     if not merged.written:
-        click.echo(f"chore {name}: canopy ships what it was installed from; nothing to merge")
+        said = (
+            "your copies already hold canopy's change" if merged.advanced else "canopy ships what it was installed from"
+        )
+        click.echo(f"chore {name}: {said}; nothing to merge")
         return 0
     for path in merged.written:
         click.echo(f"merged canopy's change into {path}")
