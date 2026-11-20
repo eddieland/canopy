@@ -8,6 +8,9 @@ import type { ResolvedTheme, ThemePreference } from './store'
 const REDUCED_MOTION = '(prefers-reduced-motion: reduce)'
 const DURATION_MS = 420
 
+/** The circle of the reveal now running, if one is: the next reveal finishes it before it starts. */
+let revealing: Animation | undefined
+
 /**
  * Switches to `preference` with a circular reveal growing from the center of `origin`.
  *
@@ -57,18 +60,22 @@ async function reveal(change: () => void, origin?: HTMLElement | null): Promise<
     const y = rect.top + rect.height / 2
     const radius = Math.hypot(Math.max(x, window.innerWidth - x), Math.max(y, window.innerHeight - y))
 
+    // A transition started while the last one's circle still grows skips that one, and Chromium 158's renderer
+    // crashes when the circle it skips is still running: grow the circle to its end first, so nothing runs to skip.
+    revealing?.finish()
     const transition = document.startViewTransition(commit)
     transition.ready
-        .then(() =>
-            document.documentElement.animate(
+        .then(() => {
+            revealing = document.documentElement.animate(
                 { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${radius}px at ${x}px ${y}px)`] },
                 {
                     duration: DURATION_MS,
                     easing: 'cubic-bezier(0.2, 0, 0, 1)',
                     pseudoElement: '::view-transition-new(root)',
                 },
-            ),
-        )
+            )
+            return revealing
+        })
         .catch(() => {
             // Skipped (another transition started, or the tab is hidden): the theme is already applied.
         })
