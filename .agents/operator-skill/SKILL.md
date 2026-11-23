@@ -162,38 +162,38 @@ repository and per dependency:
   breaks its build until `jobs` changes too. `api`'s PR merges first.
 ```
 
-Hold each line to one test: without it, would the overseer choose other repositories, or would a plan order its steps
-or name its contracts differently?
+Hold each line to one test: without it, would the overseer choose other repositories, or would a plan order its
+steps, name its contracts, or list its risks differently?
 
-- Every repository has an entry, under its name in `canopy-workspace.toml`: a plan has only its own repositories'
-  summaries, and an epic plan none. It says what the repository owns in the words a ticket uses, without repeating
-  its `summary`, and what looks like its work and is not: another repository's, or no ticket's, such as what a bot
-  does. A fact about two repositories goes once, in the owner's entry.
+- Every repository has an entry, under its name in `canopy-workspace.toml`: a ticket's plan has only its own
+  repositories' summaries, and an epic plan none. It says in a few words what the repository owns, as a ticket would
+  put it, and what looks like its work and is not: another repository's, or no ticket's, such as what a bot does. Work
+  that looks like two repositories' is said once, in the owner's entry.
 - A dependency's entry names provider and consumer, the contract and its path, and how the consumer gets a change (a
   release, a pin, a vendored copy). A build or test that fails until both change means jointly; a consumer that waits
   on what has landed means in sequence, provider first. Write the fact that shows it: "always change both" shows
   nothing. The overseer starts the consumer once the provider's PR has merged, whatever must follow the merge: name a
-  step that stands between, such as a release a person tags, for a plan to list as a risk. One entry covers the
-  repositories that share a dependency, and a pair with none gets no line.
-- Take each fact from the default branch of the clones under `repos/`, and ask the operator only what the code cannot
-  show.
+  step that stands between, such as a release a person tags, for a plan to list as a risk. Several consumers of one
+  contract share an entry, and a pair with no dependency gets no line.
+- Take each fact from `origin`'s default branch in the clones under `repos/`, and ask the operator only what the code
+  cannot show.
 - Leave out one repository's inside (layout, commands, conventions): it belongs in that repository's own `AGENTS.md`,
-  and the workers that change code are not given `MAP.md`. Leave out rules for workers: they go in standing
-  instructions, a checklist, or that `AGENTS.md`. Leave out history, rationale, and people, and anything private: the
-  file is outside `.canopy/`, and a shared workspace shares it.
+  and the workers that change code are not given `MAP.md`. Leave out rules: an agent's go in its standing
+  instructions, a repository's in a checklist or its `AGENTS.md`. Leave out history, rationale, and people, and
+  anything private: the file is outside `.canopy/`, and a shared workspace shares it.
 
 Each read by the overseer and each plan run pays for the whole file: say each fact once, in a list and not an aligned
 table or a comment. A plan's prompt takes the first 20,000 characters (`wc -m MAP.md`) and drops the rest mid-line,
 with no warning to the operator; canopy does not cut the overseer's read. The `summary` (one line, at most 200
-characters) is cheaper still, since the overseer has it without a read: what routes most tickets goes there first, and
-a running loop takes a changed one at a reload or restart. `canopy init` writes a skeleton, which is sent as it stands:
-replace it whole. In a workspace of one repository, empty the file: plans then leave it out, though the overseer is
-still given its path.
+characters) is cheaper still, since the overseer has it without a read: what routes most tickets goes there too, and a
+running loop takes a changed one at a reload (SIGHUP, or the web UI's settings page) or a restart. `canopy init` writes
+a skeleton, which is sent as it stands: replace it whole. In a workspace of one repository, empty the file: plans then
+leave it out, though the overseer is still given its path.
 
-No command checks or updates `MAP.md`. Revise it when a repository joins, leaves, or changes what it owns, and when
-`canopy decisions` shows a dispatch to the wrong repositories, a joint run that could have gone in sequence, or
-`multi_repo` for work that belongs together: a stale line misleads, where a missing one leaves the choice to the
-ticket and the summaries.
+No command checks or updates `MAP.md`. Revise it when a repository joins, leaves, or changes what it owns; when
+`canopy decisions` shows a dispatch to the wrong repositories, or a joint run that could have gone in sequence; and
+when the attention list holds `multi_repo` for work that belongs together. A stale line misleads, where a missing one
+leaves the choice to the ticket and the summaries.
 
 ## Answering "why wasn't KEY picked up?"
 
