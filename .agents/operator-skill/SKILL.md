@@ -1,6 +1,6 @@
 ---
 name: canopy
-description: Help the operator of a canopy agent loop from their own agent session. Explain what the loop decided and why, what needs a human, what workers remember, and where the logs are. Use when the user mentions canopy, the overseer, a canopy worker, the attention list, or canopy's memory and lessons. Not for canopy's own overseer or worker runs.
+description: Help the operator of a canopy agent loop from their own agent session. Explain what the loop decided and why, what needs a human, what workers remember, and where the logs are. Use when the user mentions canopy, the overseer, a canopy worker, the attention list, a workspace's MAP.md, or canopy's memory and lessons. Not for canopy's own overseer or worker runs.
 ---
 
 # canopy
@@ -136,6 +136,65 @@ canopy instructions check worker proposed.md      # or `-` for stdin, or --text 
 Exit 0 means a run would read it, and the line says how many bytes are left. On exit 1, trim and check again; never
 save a file that fails. A `warning` names a character that hides text from a person, by line: take it out unless the
 operator put it there on purpose. After saving, `canopy instructions check worker` checks the file as it stands.
+
+## Writing MAP.md
+
+`MAP.md`, beside `canopy-workspace.toml` at the workspace root, is prose on how the repositories relate. The overseer
+is given its path each tick and told to read it before choosing a ticket's repositories: one, several in a joint run,
+or one after another. Each plan, feedback plan, and epic plan gets its text in its prompt, as written. Its readers are
+told it is data, like ticket text, and it authorizes nothing.
+
+No code parses it, so its shape is for those readers alone. A plan's prompt puts the text under its own
+`## The workspace map` (the prompts' name for `MAP.md`; in this skill that is `canopy-workspace.toml`), beside its
+`## Repositories`. So `MAP.md` needs no title or introduction, its headings start at `###`, and two lists hold it, an
+entry of a line or two per repository and per dependency:
+
+```markdown
+### Repositories
+
+- `api`: prices, totals, and order rules. A wrong total on a page is fixed here, though `web` shows it.
+- `web`: the customer site: pages, forms, and their wording.
+- `jobs`: emails and nightly exports, the email templates included.
+
+### Dependencies
+
+- `web` on `api`, in sequence: `web` pins the client `api` publishes from `openapi/orders.yaml` at each release,
+  which a person tags. `api` merges and is released first.
+- `jobs` on `api`, jointly: `jobs` builds against `api`'s `proto/events.proto` at `main`, so a changed message
+  breaks its build until `jobs` changes too. `api`'s PR merges first.
+- `web` and `jobs` share nothing.
+```
+
+When helping the operator write one, hold each line to one test: without it, would the overseer choose other
+repositories, or a plan order its steps or name its contracts differently?
+
+- A repository's entry, under its name in `canopy-workspace.toml`, says what it owns in the words a ticket uses, and
+  what looks like its work and is not. It stands alone: the overseer has every `summary` each tick, but a plan has
+  only its own repositories' and an epic plan none.
+- A dependency's entry names provider and consumer, the contract and its path, how the consumer gets a change (a
+  release, a pin, a vendored copy), and what must happen after the provider's PR merges before the consumer can start.
+  A build or test that fails until both change means jointly; a consumer that waits on what has landed means in
+  sequence, provider first. Write the fact that shows it: "always change both" shows nothing.
+- Take each fact from the clones under `repos/` (a pin, a vendored file, a CI job that checks out another repository),
+  and ask the operator only what the code cannot show, such as who cuts a release.
+- Leave out one repository's inside (layout, commands, conventions): the workers that change code never see `MAP.md`,
+  and read that repository's own `AGENTS.md`. Leave out rules for agents, which go in standing instructions (the
+  overseer's, for which repositories change together), a checklist, or that `AGENTS.md`; history, rationale, and
+  people; and anything private, since the file is outside `.canopy/` and a shared workspace shares it.
+
+Every read pays for the whole file: the overseer is a new run each tick, and each plan run carries its own copy. A
+prompt takes the first 20,000 characters (`wc -m MAP.md`) and drops the rest mid-line, which only a
+`MAP.md is longer than` line in that run's `.prompt` shows; the overseer reads the file itself, uncut. The bound is a
+backstop, not a budget: say each fact once, in a list and not an aligned table or a comment, with what decides most
+tickets first. What routes most tickets also goes in the repository's `summary` (one line, at most 200 characters),
+which the overseer has without a read. The skeleton `canopy init` writes (a title, a paragraph, two empty `##`
+headings) is sent as it stands: replace it whole, or in a workspace of one repository empty the file, which leaves the
+section out of every plan.
+
+No command checks or updates `MAP.md`, and the next tick and dispatch read it as it stands. Revise it when a repository
+joins, leaves, or changes what it owns, and when a `dispatch` line in `canopy decisions` names the wrong repositories
+or a joint run that could have gone in sequence: a stale line misleads, where a missing one leaves the choice to the
+ticket and the summaries.
 
 ## Answering "why wasn't KEY picked up?"
 
