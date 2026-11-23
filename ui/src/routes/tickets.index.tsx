@@ -17,6 +17,7 @@ import { TicketState } from '@/components/ticket-state'
 import { TicketTitle } from '@/components/ticket-title'
 import { Tip } from '@/components/tip'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { UnsentDraftsChip } from '@/components/unsent-drafts-chip'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { phaseMeaning } from '@/lib/meanings'
 import { phaseLabel, phaseWord } from '@/lib/phase'
@@ -186,7 +187,7 @@ function TextFilter() {
 
 /**
  * A ticket: where it stands (its run, waiting on you, done, or open), its key, its phase, public or private, its
- * title, and its age.
+ * title, how many drafts for it and its PRs wait on the operator (`UnsentDraftsChip`), and its age.
  */
 function Row({ ticket }: { ticket: TicketSummary }) {
     return (
@@ -200,7 +201,10 @@ function Row({ ticket }: { ticket: TicketSummary }) {
             <span className="flex">
                 <Chip>{ticket.private ? `private, ${ticket.start ?? ''}` : 'public'}</Chip>
             </span>
-            <TicketTitle title={ticket.title} />
+            <span className="flex min-w-0 items-center gap-2">
+                <TicketTitle title={ticket.title} />
+                <UnsentDraftsChip ticketKey={ticket.key} />
+            </span>
             <Age at={ticket.active_at} variant="ago" className="text-right" />
         </ListRow>
     )

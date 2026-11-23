@@ -255,6 +255,7 @@ describe('RailFooter', () => {
         ticket_url: null,
         version: '0.4.0+abc123',
         workspace_root: '/w',
+        routers: [],
         attachment_limits: mockAttachmentLimits,
         repos: ['repo'],
     }

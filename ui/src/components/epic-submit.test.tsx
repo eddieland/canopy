@@ -72,6 +72,7 @@ function renderForm(repos: string[], dictation = false, limits = mockAttachmentL
         ticket_url: null,
         version: '0.4.0',
         workspace_root: '/w',
+        routers: [],
         attachment_limits: limits,
         repos,
     }

@@ -49,7 +49,9 @@ Hover it for each one whole, with its cost. Until canopy reads the session it na
 plan's, names no model at all. A run that got none of what it asked for says so, asked first,
 `asked claude-opus-4-1 ≠ claude-sonnet-4-5`, as [its page](#a-runs-page) does. A router is the exception: ask for
 `github-copilot/auto` and something else serving is the whole idea, so that reads `asked auto → gpt-5`, an arrow
-rather than a complaint. A run that got what it asked for and switched partway
+rather than a complaint. canopy takes any model whose id ends in `/auto` for a router; one that goes by another name
+you list yourself, `routers = ["github-copilot/fusion"]` under `[runtime]` in your private config, and it gets the
+arrow here and everywhere else a router does. A run that got what it asked for and switched partway
 leads with it and sets the `+1` apart. Neither is amber: a run that went elsewhere waits on nothing, it just bears
 knowing. Asking for `openai/gpt-5@medium`, the default effort, and being served `openai/gpt-5` is no surprise either,
 since the session names a variant only when it isn't the default. A ticket's Runs panel shows the same line, so a

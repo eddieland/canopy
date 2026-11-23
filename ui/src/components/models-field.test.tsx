@@ -1,6 +1,8 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
+import { keys } from '@/api/queries'
 import type { ModelsServed } from '@/api/types'
 
 import { Fields } from './fields'
@@ -8,11 +10,16 @@ import { ModelsField } from './models-field'
 
 afterEach(cleanup)
 
-function renderModels(models: ModelsServed, asked: string | null = null) {
+// Nothing reads the server: the routers are those set here, as `runtime.routers` would name them.
+function renderModels(models: ModelsServed, asked: string | null = null, routers: string[] = []) {
+    const client = new QueryClient({ defaultOptions: { queries: { enabled: false } } })
+    client.setQueryData(keys.meta, { routers })
     return render(
-        <Fields>
-            <ModelsField models={models} asked={asked} />
-        </Fields>,
+        <QueryClientProvider client={client}>
+            <Fields>
+                <ModelsField models={models} asked={asked} />
+            </Fields>
+        </QueryClientProvider>,
     )
 }
 
@@ -99,6 +106,21 @@ describe('ModelsField', () => {
             'github-copilot/auto',
         )
         expect(screen.getByText(/^asked/u).textContent).toBe('asked github-copilot/auto → served github-copilot/gpt-5')
+    })
+
+    it('takes a model runtime.routers names as a router too', () => {
+        renderModels(
+            {
+                status: 'found',
+                models: [{ model: 'github-copilot/gpt-5', replies: 3, cost_usd: 0 }],
+                error: null,
+            },
+            'github-copilot/fusion',
+            ['github-copilot/fusion'],
+        )
+        expect(screen.getByText(/^asked/u).textContent).toBe(
+            'asked github-copilot/fusion → served github-copilot/gpt-5',
+        )
     })
 
     it("says what canopy asked for and what served, in the field's color, when it served none of the replies", () => {

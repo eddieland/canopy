@@ -15,13 +15,14 @@ import type { LucideIcon } from 'lucide-react'
 import { Fragment } from 'react'
 import type { CSSProperties } from 'react'
 
-import { loopQuery, reviewsQuery } from '@/api/queries'
+import { loopQuery, reviewsQuery, unsentDraftsQuery } from '@/api/queries'
 import type { ReviewSummary } from '@/api/types'
 import { useAttention } from '@/hooks/use-attention'
 import { useSection } from '@/hooks/use-section'
 import { breakdown, breakdownText, countBySeverity } from '@/lib/attention'
 import type { BreakdownPart, Severity } from '@/lib/attention'
 import { counted } from '@/lib/descriptions'
+import { draftsText, unsentCount } from '@/lib/drafts'
 import { REPORT_PAGES } from '@/lib/report-pages'
 import { verdictTone } from '@/lib/reviews'
 import { SECTION_FILL, SECTION_LABEL, SECTION_TEXT, SECTION_TINT } from '@/lib/sections'
@@ -60,6 +61,7 @@ interface SubPage {
         | '/workspace/checklists'
         | '/workspace/sessions'
         | '/pull-requests/reviews'
+        | '/pull-requests/drafts'
         | '/reports/spend'
         | '/reports/checklist'
         | '/reports/health'
@@ -102,6 +104,11 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string; pages?: SubPage[] }[
                 to: '/pull-requests/reviews',
                 label: 'Reviews',
                 hint: "canopy's reviews of PRs, newest first, each finding on its line of the diff",
+            },
+            {
+                to: '/pull-requests/drafts',
+                label: 'Drafts',
+                hint: 'Every reply a run wrote and left for you to send, by its PR or ticket',
             },
         ],
     },
@@ -196,6 +203,7 @@ export function Nav({ compact = false }: { compact?: boolean }) {
     const counts = attention.data === undefined ? undefined : countBySeverity(attention.data)
     const waiting = useQuery(loopQuery).data?.memory?.proposals_waiting ?? 0
     const unseen = unseenOf(useQuery(reviewsQuery).data)
+    const unsent = unsentCount(useQuery(unsentDraftsQuery).data ?? [])
     const section = useSection()
     const matchRoute = useMatchRoute()
     // The pages open under the section shown, and the one of them shown, if any.
@@ -271,7 +279,7 @@ export function Nav({ compact = false }: { compact?: boolean }) {
                             )}
                             {to === '/memory' && waiting > 0 && <ProposalCount waiting={waiting} compact={compact} />}
                         </Link>
-                        {to === section && pages.length > 0 && <SubPages section={to} pages={pages} />}
+                        {to === section && pages.length > 0 && <SubPages section={to} pages={pages} unsent={unsent} />}
                     </Fragment>
                 )
             })}
@@ -305,7 +313,7 @@ function highlightAt(item: number, page: number): CSSProperties {
  * hairline in the section's color down the middle of its icon. The one shown, or the one a page shown is under, is
  * active, as a section's item is.
  */
-function SubPages({ section, pages }: { section: Section; pages: SubPage[] }) {
+function SubPages({ section, pages, unsent }: { section: Section; pages: SubPage[]; unsent: number }) {
     return (
         <div className="relative flex flex-col gap-0.5">
             <span
@@ -319,13 +327,14 @@ function SubPages({ section, pages }: { section: Section; pages: SubPage[] }) {
                     title={hint}
                     activeOptions={{ exact: false }}
                     className={cn(
-                        'relative ml-6.5 flex h-7 items-center rounded-sm px-2.5 text-sm text-muted-foreground',
+                        'group relative ml-6.5 flex h-7 items-center rounded-sm px-2.5 text-sm text-muted-foreground',
                         'transition-colors hover:bg-surface-raised hover:text-foreground',
                         SECTION_ACTIVE_INK[section],
                         'data-[status=active]:font-medium data-[status=active]:hover:bg-transparent',
                     )}
                 >
                     {label}
+                    {to === '/pull-requests/drafts' && unsent > 0 && <DraftCount unsent={unsent} />}
                 </Link>
             ))}
         </div>
@@ -398,6 +407,25 @@ function ReviewCount({ unseen, compact }: { unseen: ReviewSummary[]; compact: bo
             data-testid="nav-reviews-count"
         >
             <span aria-hidden>{unseen.length}</span>
+            <span className="sr-only">{said}</span>
+        </span>
+    )
+}
+
+/**
+ * How many drafts wait on the operator beside the Drafts page's nav item, in the color of what waits on them, and said
+ * in words on hover and to a screen reader (`3 drafts waiting on you`). The section's own item counts none: the
+ * attention list's count already holds them.
+ */
+function DraftCount({ unsent }: { unsent: number }) {
+    const said = `${draftsText(unsent)} waiting on you`
+    return (
+        <span
+            className={cn('ml-auto readout text-xs text-status-blocked', ON_BLOCK.wide)}
+            title={said}
+            data-testid="nav-drafts-count"
+        >
+            <span aria-hidden>{unsent}</span>
             <span className="sr-only">{said}</span>
         </span>
     )

@@ -102,35 +102,46 @@ export function sameModel(asked: string, served: string): boolean {
 
 /**
  * Whether `model`, as `provider/model[@variant]`, is a router: a name a provider serves by picking one of its models
- * for each request, as `github-copilot/auto` does, so no session ever names it as what served. By its name alone: the
- * last part of its id is `auto`, which is how the providers that have one name it.
+ * for each request, as `github-copilot/auto` does, so no session ever names it as what served. By its name: the last
+ * part of its id is `auto`, which is how most providers that have one name it, or it is one of `routers`, the models
+ * `runtime.routers` names (`useRouters`), at any variant, whichever variant config named it at.
  */
-export function isRouter(model: string): boolean {
-    const id = pickerModel(model).variant === null ? model : model.slice(0, model.lastIndexOf('@'))
-    return id.slice(id.lastIndexOf('/') + 1) === 'auto'
+export function isRouter(model: string, routers: readonly string[]): boolean {
+    const id = withoutVariant(model)
+    return id.slice(id.lastIndexOf('/') + 1) === 'auto' || routers.some((router) => withoutVariant(router) === id)
+}
+
+/** A model as `provider/model[@variant]` without its variant, as `pickerModel` reads one. */
+function withoutVariant(model: string): string {
+    return pickerModel(model).variant === null ? model : model.slice(0, model.lastIndexOf('@'))
 }
 
 /**
- * The mark between the model canopy `asked` for and one that served instead: `→` for a router, which served as it was
- * asked to by sending the run on, and `≠` for any other, which did not serve at all.
+ * The mark between the model canopy `asked` for and one that served instead: `→` for a router (`isRouter`, with the
+ * `routers` config names), which served as it was asked to by sending the run on, and `≠` for any other, which did
+ * not serve at all.
  */
-export function insteadMark(asked: string): string {
-    return isRouter(asked) ? '→' : '≠'
+export function insteadMark(asked: string, routers: readonly string[]): string {
+    return isRouter(asked, routers) ? '→' : '≠'
 }
 
 /**
  * What a session's row says of its models: the one `asked` for, and those that `served` it when they differ, as a
- * router's do (`auto → gpt-5`); null when neither is known. A model at a variant asked and the model alone served are
- * the same (`sameModel`).
+ * router's do (`auto → gpt-5`), `routers` being those config names; null when neither is known. A model at a variant
+ * asked and the model alone served are the same (`sameModel`).
  */
-export function sessionModels(asked: string | null, served: readonly string[]): string | null {
+export function sessionModels(
+    asked: string | null,
+    served: readonly string[],
+    routers: readonly string[],
+): string | null {
     if (asked === null) {
         return served.length === 0 ? null : served.join(', ')
     }
     if (served.every((model) => sameModel(asked, model))) {
         return asked
     }
-    return `${asked} ${insteadMark(asked)} ${served.join(', ')}`
+    return `${asked} ${insteadMark(asked, routers)} ${served.join(', ')}`
 }
 
 /**

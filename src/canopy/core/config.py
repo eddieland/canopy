@@ -959,6 +959,11 @@ class Runtime(Section):
     #: `*@xhigh` a variant of every model. It hides, never forbids: `models` or a ticket may still name one (DESIGN
     #: §13). Private, as `models` is.
     hide_models: Annotated[tuple[NonBlank, ...], Scope.PRIVATE] = ()
+    #: Models, each as `provider/model`, that are routers: a name a provider serves by picking one of its models for
+    #: each request, so another model serving its run is its job, and the web UI says the run was sent on, not that
+    #: the model missed. A model whose id ends in `/auto` is one already and need not be named. Private, as `models`
+    #: is.
+    routers: Annotated[tuple[ModelId, ...], Scope.PRIVATE] = ()
     #: The repositories, by name, whose runs canopy starts in the sandbox wrapper itself: each worker run's commands,
     #: `setup_cmd`, and a review's, with the role each takes (DESIGN §24). Names need not be in this workspace's map,
     #: as the user file serves every workspace. Private: it decides what a run may reach (TRUST_MODEL T4, T7).

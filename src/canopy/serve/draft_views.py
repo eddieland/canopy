@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Final, cast
 
 from canopy.core import db, records, sql
 from canopy.core.vocab import DraftKind
-from canopy.runs import drafts, drafts_manage
+from canopy.runs import drafted, drafts, drafts_manage
 from canopy.serve.schema.draft import (
     Draft,
     DraftFromPlan,
@@ -19,6 +19,7 @@ from canopy.serve.schema.draft import (
     DraftStatusName,
     ProposalName,
     ReactionName,
+    UnsentDrafts,
 )
 
 if TYPE_CHECKING:
@@ -91,3 +92,28 @@ def of_ticket(conn: sqlite3.Connection, key: str) -> list[Draft]:
         .all(conn)
     )
     return [draft(conn, d) for d in found]
+
+
+def unsent(conn: sqlite3.Connection) -> list[UnsentDrafts]:
+    """Every draft that waits on the operator, by the PR or the ticket it is for, as the attention list counts them.
+
+    Returns:
+        A group for each PR with a draft unsent and each ticket with one of its own, by ticket, a ticket's own after
+        its PRs': every one, so the counts made from them match the attention list's.
+    """
+    groups: dict[tuple[str, str | None], list[records.Draft]] = {}
+    for found in drafted.unsent(conn):
+        groups.setdefault((found.ticket_key, found.pr_url), []).append(found)
+    titles = {
+        t.key: t.title for t in records.select(records.Ticket).where_in("key", sorted({k for k, _ in groups})).all(conn)
+    }
+    return [
+        UnsentDrafts(
+            ticket_key=key,
+            ticket_title=titles.get(key),
+            pr_url=url,
+            since=db.parse_time(min(d.created_at for d in held)),
+            drafts=[draft(conn, d) for d in held],
+        )
+        for (key, url), held in groups.items()
+    ]
