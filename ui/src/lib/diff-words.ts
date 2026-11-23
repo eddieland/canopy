@@ -28,6 +28,9 @@ const MAX_WORDS = 160
 const ALIKE = 0.5
 // A run of removed lines by one of added lines with more pairs to try than this is left unmarked.
 const MAX_PAIRS = 400
+// How many pairs of words a file's lines are compared over before the rest of its lines go unmarked: a diff of
+// thousands of long lines, each replaced, would otherwise hold the page while it is drawn.
+const MAX_COMPARED = 3_000_000
 // A line's words: each run of letters, digits, and underscores, in any script, each run of spaces, and each other
 // character alone.
 const WORDS = /[\p{L}\p{N}\p{M}_]+|\s+|[^\p{L}\p{N}\p{M}_\s]/gu
@@ -41,7 +44,8 @@ const SPACE = /^\s/u
  * shares too little with it to be the same line edited; empty for a line whose pair only added to it.
  */
 export function changedWords(file: DiffFile): (Changed[] | undefined)[][] {
-    return file.hunks.map((hunk) => hunkChanges(hunk))
+    const budget = { left: MAX_COMPARED }
+    return file.hunks.map((hunk) => hunkChanges(hunk, budget))
 }
 
 /** A hunk's ranges as git writes them, `-4,6 +4,8`, from its lines' numbers: where it starts and how far it runs. */
@@ -96,7 +100,13 @@ export function lineParts(
         }))
 }
 
-function hunkChanges(hunk: DiffHunk): (Changed[] | undefined)[] {
+/** What is left of a file's comparisons (`MAX_COMPARED`), spent as its lines are compared. */
+interface Budget {
+    /** The pairs of words still to compare. */
+    left: number
+}
+
+function hunkChanges(hunk: DiffHunk, budget: Budget): (Changed[] | undefined)[] {
     const { lines } = hunk
     const changes = Array.from<Changed[] | undefined>({ length: lines.length })
     let at = 0
@@ -108,7 +118,7 @@ function hunkChanges(hunk: DiffHunk): (Changed[] | undefined)[] {
         let next = at + dels
         for (let k = at; k < at + (dels * adds > MAX_PAIRS ? 0 : dels); k += 1) {
             for (let j = next; j < at + dels + adds; j += 1) {
-                const pair = pairChanges(lines[k]?.text ?? '', lines[j]?.text ?? '')
+                const pair = pairChanges(lines[k]?.text ?? '', lines[j]?.text ?? '', budget)
                 if (pair !== undefined) {
                     changes[k] = pair[0]
                     changes[j] = pair[1]
@@ -140,7 +150,7 @@ interface Word extends Changed {
 // What differs between a removed line and the added one that replaced it, on each, or undefined when the two are not
 // alike. Each line is read from the end of its own indent, so a line only moved in or out has nothing marked, and one
 // edited as it moved has its edit alone.
-function pairChanges(wasLine: string, nowLine: string): [Changed[], Changed[]] | undefined {
+function pairChanges(wasLine: string, nowLine: string, budget: Budget): [Changed[], Changed[]] | undefined {
     if (wasLine.length > MAX_LINE || nowLine.length > MAX_LINE) {
         return undefined
     }
@@ -149,14 +159,38 @@ function pairChanges(wasLine: string, nowLine: string): [Changed[], Changed[]] |
     if (was.length > MAX_WORDS || now.length > MAX_WORDS) {
         return undefined
     }
-    const [wasKept, nowKept] = shared(was, now)
     const most = Math.max(weight(was), weight(now))
-    const kept = weight(was.filter((_, i) => wasKept[i]))
     // Lines of punctuation alone, a closing brace and the like, are alike only when they are the same.
-    if (most === 0 ? wasLine.trim() !== nowLine.trim() : kept < ALIKE * most) {
+    if (most === 0 && wasLine.trim() !== nowLine.trim()) {
+        return undefined
+    }
+    // Lines that hold too few of the same words, in any order, cannot share enough in order: no need to look.
+    if (inCommon(was, now) < ALIKE * most || budget.left < was.length * now.length) {
+        return undefined
+    }
+    budget.left -= was.length * now.length
+    const [wasKept, nowKept] = shared(was, now)
+    if (weight(was.filter((_, i) => wasKept[i])) < ALIKE * most) {
         return undefined
     }
     return [stretches(was, wasKept), stretches(now, nowKept)]
+}
+
+// How much of two lines' words proper are the same words, whatever their order: no less than what they share in order.
+function inCommon(was: readonly Word[], now: readonly Word[]): number {
+    const counts = new Map<string, number>()
+    for (const word of was) {
+        counts.set(word.text, (counts.get(word.text) ?? 0) + 1)
+    }
+    let common = 0
+    for (const word of now) {
+        const count = counts.get(word.text) ?? 0
+        if (count > 0 && WORD.test(word.text)) {
+            counts.set(word.text, count - 1)
+            common += word.text.length
+        }
+    }
+    return common
 }
 
 // A line's words past its indent.
@@ -175,17 +209,19 @@ function weight(words: readonly Word[]): number {
     return words.reduce((sum, word) => sum + (WORD.test(word.text) ? word.text.length : 0), 0)
 }
 
-// Which words of each line are in the longest run of words the two share in order, by each line's index.
+// Which words of each line are in the run of words the two share in order that weighs most, by each line's index.
+// A word proper weighs by its length, as `weight` counts it, and anything else a little, so punctuation the two share
+// never wins a place from a word they share, and of two runs of the same words the one that keeps more is taken.
 function shared(was: readonly Word[], now: readonly Word[]): [boolean[], boolean[]] {
     const width = now.length + 1
-    // The length of the longest shared run of the words from `i` and from `j` on, at `i * width + j`.
+    // The weight of the heaviest shared run of the words from `i` and from `j` on, at `i * width + j`: at most four
+    // times a line's length and its words, well within 16 bits.
     const runs = new Uint16Array((was.length + 1) * width)
     for (let i = was.length - 1; i >= 0; i -= 1) {
         for (let j = now.length - 1; j >= 0; j -= 1) {
-            runs[i * width + j] =
-                was[i]?.text === now[j]?.text
-                    ? (runs[(i + 1) * width + j + 1] ?? 0) + 1
-                    : Math.max(runs[(i + 1) * width + j] ?? 0, runs[i * width + j + 1] ?? 0)
+            const skipped = Math.max(runs[(i + 1) * width + j] ?? 0, runs[i * width + j + 1] ?? 0)
+            const kept = was[i]?.text === now[j]?.text ? (runs[(i + 1) * width + j + 1] ?? 0) + worth(was[i]) : 0
+            runs[i * width + j] = Math.max(skipped, kept)
         }
     }
     const wasKept = was.map(() => false)
@@ -193,18 +229,24 @@ function shared(was: readonly Word[], now: readonly Word[]): [boolean[], boolean
     let i = 0
     let j = 0
     while (i < was.length && j < now.length) {
-        if (was[i]?.text === now[j]?.text) {
+        const here = runs[i * width + j] ?? 0
+        if (was[i]?.text === now[j]?.text && here === (runs[(i + 1) * width + j + 1] ?? 0) + worth(was[i])) {
             wasKept[i] = true
             nowKept[j] = true
             i += 1
             j += 1
-        } else if ((runs[(i + 1) * width + j] ?? 0) >= (runs[i * width + j + 1] ?? 0)) {
+        } else if (here === (runs[(i + 1) * width + j] ?? 0)) {
             i += 1
         } else {
             j += 1
         }
     }
     return [wasKept, nowKept]
+}
+
+// What keeping a word is worth to the run that keeps it.
+function worth(word: Word | undefined): number {
+    return word === undefined ? 0 : 1 + (WORD.test(word.text) ? 4 * word.text.length : 0)
 }
 
 // The stretches of a line its pair does not share: each run of words not kept, two runs with only spaces kept between

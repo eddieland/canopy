@@ -27,6 +27,11 @@ function marked(diff: DiffFile): (string[] | null)[] {
     )
 }
 
+/** A line of forty words of its own, by its number. */
+function long(n: number): string {
+    return Array.from({ length: 40 }, (_, i) => `word${n}x${i}`).join(' ')
+}
+
 describe('changedWords', () => {
     it('marks the whole words that differ between a removed line and the one that replaced it', () => {
         expect(marked(file(' a', '-    run(onSearch(value))', '+    run(search(value))'))).toEqual([
@@ -55,6 +60,22 @@ describe('changedWords', () => {
             ['größe'],
             ['größer'],
         ])
+    })
+
+    it('keeps a long word two lines share over more, shorter things they share', () => {
+        // Kept by count alone, `a, b, c` and its commas would win, and the name both lines turn on would be marked.
+        const marks = marked(file('-a, b, c, configuration', '+configuration, a, b, c')).flat()
+        expect(marks.join(' ')).not.toContain('configuration')
+    })
+
+    it('stops marking a file whose lines would take too long to compare, and marks none wrongly', () => {
+        // 600 lines, each replaced by one that differs in its last word: more to compare than a file is given.
+        const written = Array.from({ length: 600 }, (_, n) => [`-${long(n)} old`, `+${long(n)} new`]).flat()
+        const marks = marked(file(...written))
+        expect(marks[0]).toEqual(['old'])
+        expect(marks[1]).toEqual(['new'])
+        expect(marks.at(-1)).toBeNull()
+        expect(marks.every((mark) => mark === null || mark[0] === 'old' || mark[0] === 'new')).toBe(true)
     })
 
     it('marks a phrase rewritten as one stretch, its spaces with it', () => {
