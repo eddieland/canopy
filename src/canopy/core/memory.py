@@ -862,14 +862,8 @@ def seconds(conn: sqlite3.Connection, memory_ids: Collection[int]) -> dict[int, 
 
 def pending_count(conn: sqlite3.Connection) -> int:
     """Return how many proposals wait on the operator, as `pending_proposals` lists them."""
-    row = sql.execute(
-        conn,
-        sql.select("count(*)")
-        .from_("memories")
-        .where("scope = ?", MemoryScope.PROPOSAL)
-        .where("status = ?", MemoryStatus.PENDING),
-    ).fetchone()
-    return int(row[0])
+    waiting = records.select(records.Memory).where("scope = ?", MemoryScope.PROPOSAL)
+    return waiting.where("status = ?", MemoryStatus.PENDING).count(conn)
 
 
 def active_lessons(conn: sqlite3.Connection) -> list[records.Memory]:
@@ -928,13 +922,12 @@ def version(conn: sqlite3.Connection, found: records.Memory) -> int:
     """Return which version of its memory `found` is: 1 for one that superseded none, one more for each before it."""
     if found.supersedes is None:
         return 1
-    row = sql.execute(
-        conn,
+    versions = (
         sql.select("count(*)")
         .with_("back(id) AS ({})", sql.union(sql.select("?", found.id), _EARLIER), recursive=True)
-        .from_("back"),
-    ).fetchone()
-    return int(row[0])
+        .from_("back")
+    )
+    return records.fetch_value(conn, int, versions) or 0
 
 
 def edited(found: records.Memory) -> bool:

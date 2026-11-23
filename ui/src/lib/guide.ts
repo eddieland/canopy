@@ -155,6 +155,7 @@ export const PAGE_GUIDES = {
     '/pull-requests/': 'pull-requests',
     '/pull-requests/pr': 'pull-requests#the-pull-requests-page',
     '/pull-requests/reviews/': 'pull-requests#the-reviews-page',
+    '/pull-requests/drafts': 'pull-requests#the-drafts-page',
     '/pull-requests/reviews/$id': 'pull-requests#a-reviews-page',
     '/pull-requests/reviews/$id_/run': 'pull-requests#a-reviews-run',
     '/workspace/': 'runs#the-workspace-page',

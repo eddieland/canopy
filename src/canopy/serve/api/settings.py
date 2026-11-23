@@ -50,7 +50,6 @@ def read_config(backend: BackendDep) -> ConfigSettings:
                 source=s.source,
                 kind=s.key.kind,
                 bound=s.key.bound,
-                looser=s.key.looser,
                 forever_at_zero=s.key.forever_at_zero,
                 choices=list(s.key.choices),
                 default=_shown(s.default),
@@ -71,7 +70,7 @@ def save_config(body: ConfigPatch, backend: BackendDep) -> ConfigSaved:
     """Write the changes to the workspace's private file, then ask the loop to read its config again, as Reload does.
 
     Refused, writing nothing: `inside_run`; `not_editable` for a key `GET /config` does not list; `past_bound` for a
-    limit loosened past its bound; `not_stricter` for a trust setting loosened; `stale` when the file changed since
+    retention shortened past its floor; `not_stricter` for a trust setting loosened; `stale` when the file changed since
     `hash` was read; `unsafe_file` for a private file that is a symlink or not the operator's; `config_invalid` with
     the loader's message.
     """

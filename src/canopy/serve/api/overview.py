@@ -22,7 +22,8 @@ def meta(backend: BackendDep, spa: SpaDep) -> Meta:
     """The server's version and UI build, whether its data is mock, its link templates, and the workspace.
 
     The workspace is its root and the names of its repositories. It also says whether a field may offer dictation, and
-    the limits a form that attaches files as it submits checks them against.
+    the limits a form that attaches files as it submits checks them against, and names the models the operator calls
+    routers.
     """
     return Meta(
         version=version("canopy"),
@@ -34,6 +35,7 @@ def meta(backend: BackendDep, spa: SpaDep) -> Meta:
         repos=[r.name for r in backend.workspace.repos],
         dictation=bool(backend.config.serve.dictation_cmd),
         attachment_limits=views.attachment_limits(backend.config.policy),
+        routers=list(backend.config.runtime.routers),
     )
 
 

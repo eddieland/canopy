@@ -240,6 +240,11 @@ If code and the design disagree, the design doc wins until a decision entry says
   table adds the field too. A status, kind, or phase column is a field of its `core/vocab.py` enum, so the row carries
   the member and refuses a value the vocabulary does not hold. A helper that reads the same columns from several tables,
   some still untyped, reads them through `records.columns`.
+- A query read for less than a record ends in a typed read as well, never an index into a bare row:
+  `records.select(records.Run).where(...).exists(conn)` or `.count(conn)`, `records.exists` and `records.count` for a
+  statement built with `sql`, and `records.fetch_value(conn, int, query)` or `fetch_values` for a query of one column,
+  read as the type named and checked as a field of that type is. `fetch_values` refuses a NULL, so a column that may
+  hold one is read as a `View`.
 - A write starts from its table's row type too: `records.insert`, `insert_rows`, `insert_from`, `update`, or `delete`,
   ended by its `run(conn)`, `returned(conn)` for the rows it wrote read back as the row type, or `Insert.many` for many
   rows. Each column it names must be a field, and each value one the field reads back, a vocabulary's member included,

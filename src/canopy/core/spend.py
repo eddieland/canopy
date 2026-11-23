@@ -654,7 +654,7 @@ def costs(conn: sqlite3.Connection, since: str, until: str, *, state_dir: Path) 
                 .where("{}", which)
                 .where("started_at >= ? AND started_at < ?", since, until)
             )
-            found[kind] = sql.execute(conn, summed).fetchone()[0]
+            found[kind] = records.fetch_value(conn, float, summed)
         outside = runtime_sessions.outside(conn, since, until, state_dir=state_dir)
     found["outside"] = outside.cost_usd if outside.sessions else None
     for name in _SERIES:

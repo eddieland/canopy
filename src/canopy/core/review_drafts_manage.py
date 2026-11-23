@@ -474,7 +474,7 @@ def check_none_staged(conn: sqlite3.Connection, pr: str) -> None:
         sql.select("1").from_("drafts").where("pr_url = ?", pr).where("status = ?", DraftStatus.STAGED),
         sql.select("1").from_("review_drafts").where("pr_url = ?", pr).where("status = ?", ReviewDraftStatus.STAGED),
     )
-    if sql.execute(conn, staged).fetchone():
+    if records.exists(conn, staged):
         raise conversation.Refused("staged", f"{pr} holds a review you staged: {_FINISH}")
 
 
