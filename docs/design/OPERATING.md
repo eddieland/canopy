@@ -492,6 +492,9 @@ promises:
   variant, or a list that cannot be read, refuses the run with an attention item, spending no attempt and leasing no
   slot, so the work resumes once the model is back: a task waits, and a tick closes without its overseer (§6 step 5).
   It never falls back to the default, since a run on a model nobody chose would read as the one the operator chose.
+  A list that times out or fails is asked for again twice, after a short wait, before the run is refused, since such
+  a failure often passes; the item then names the attempts, and, on OpenCode 1, ends with the runtime's stderr. A
+  model missing from a list that was read is refused at once.
   The list is OpenCode's once its providers have listed their own models, which one that fetches them, such as
   GitHub Copilot with its router `github-copilot/auto`, does only after it starts: canopy gives a model it looks up
   seconds to be listed, and a run's first prompt waits the same way (§33). A run on a router records the models it was

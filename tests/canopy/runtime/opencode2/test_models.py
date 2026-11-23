@@ -183,8 +183,10 @@ def test_a_list_that_cannot_be_read_says_why_in_canopy_s_words() -> None:
     def exits(args: Sequence[str]) -> procs.Result | None:
         return procs.Result(tuple(args), 1, "", "") if args[-1] == "model.list" else None
 
+    # One that exits non-zero may read the next time it is asked; one that printed what canopy cannot read would not.
     assert models.listed(Serve([], fail=exits), cwd=Path("/ws")) == ModelList(
         error="`opencode api model.list` exited 1",
+        transient=True,
     )
 
     # What it printed is not quoted: a model's settings may hold a provider's key.
@@ -202,4 +204,5 @@ def test_a_server_that_cannot_start_fails() -> None:
     def exits(args: Sequence[str]) -> procs.Result | None:
         return procs.Result(tuple(args), 2, "", "")
 
-    assert models.listed(Serve([], fail=exits), cwd=Path("/ws")).error == "`opencode serve` exited 2; run it to see why"
+    exited = models.listed(Serve([], fail=exits), cwd=Path("/ws"))
+    assert (exited.error, exited.transient) == ("`opencode serve` exited 2; run it to see why", True)
