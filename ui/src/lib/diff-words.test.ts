@@ -18,10 +18,12 @@ function file(...written: string[]): DiffFile {
 }
 
 /** The words marked on each line of the file's one hunk, null for a line with none. */
-function marked(diff: DiffFile): (string | null)[] {
+function marked(diff: DiffFile): (string[] | null)[] {
     const lines = diff.hunks[0]?.lines ?? []
     return (changedWords(diff)[0] ?? []).map((changed, i) =>
-        changed === undefined ? null : (lines[i]?.text.slice(changed.from, changed.to) ?? null),
+        changed === undefined || changed.length === 0
+            ? null
+            : changed.map(({ from, to }) => lines[i]?.text.slice(from, to) ?? ''),
     )
 }
 
@@ -29,29 +31,43 @@ describe('changedWords', () => {
     it('marks the whole words that differ between a removed line and the one that replaced it', () => {
         expect(marked(file(' a', '-    run(onSearch(value))', '+    run(search(value))'))).toEqual([
             null,
-            'onSearch',
-            'search',
+            ['onSearch'],
+            ['search'],
+        ])
+    })
+
+    it('marks each of two edits to a line, and leaves what is between them', () => {
+        expect(marked(file('-const wait = send(query, 250)', '+let wait = send(query, WAIT_MS)'))).toEqual([
+            ['const', '250'],
+            ['let', 'WAIT_MS'],
+        ])
+    })
+
+    it('marks a phrase rewritten as one stretch, its spaces with it', () => {
+        expect(marked(file('-return the first value here', '+return a second value here'))).toEqual([
+            ['the first'],
+            ['a second'],
         ])
     })
 
     it('pairs a removed line with the added line like it, past one that was only added', () => {
         expect(
             marked(file('-return send(query, 250)', '+const wait = useWait()', '+return send(query, wait)')),
-        ).toEqual(['250', null, 'wait'])
+        ).toEqual([['250'], null, ['wait']])
     })
 
     it('leaves a line replaced by an unlike one to its own tint', () => {
-        expect(marked(file('-    const a = first()', '+    return other.thing'))).toEqual([null, null])
+        expect(marked(file('-    const a = first(x)', '+    return other.thing(x)'))).toEqual([null, null])
     })
 
     it('marks only the added side when the new line only adds to the old', () => {
-        expect(marked(file('-call(a)', '+call(a, b)'))).toEqual([null, ', b'])
+        expect(marked(file('-call(a)', '+call(a, b)'))).toEqual([null, [', b']])
     })
 
     it('marks nothing on a line only moved in or out, and only the edit on one edited as it moved', () => {
         expect(
             marked(file('-run(query)', '-    .then(read)', '+    run(query, signal)', '+        .then(read)')),
-        ).toEqual([null, null, ', signal', null])
+        ).toEqual([null, null, [', signal'], null])
     })
 
     it('marks nothing on lines with no pair', () => {
@@ -59,7 +75,7 @@ describe('changedWords', () => {
     })
 
     it('never cuts a character written as two code units', () => {
-        expect(marked(file('-say("😀 hello there")', '+say("😃 hello there")'))).toEqual(['😀', '😃'])
+        expect(marked(file('-say("😀 hello there")', '+say("😃 hello there")'))).toEqual([['😀'], ['😃']])
     })
 })
 
@@ -91,7 +107,7 @@ describe('lineParts', () => {
                 { kind: 'function', text: 'search' },
                 { kind: 'text', text: '(value)' },
             ],
-            { from: 7, to: 15 },
+            [{ from: 7, to: 15 }],
         )
         expect(parts.map((part) => [part.changed, part.text])).toEqual([
             [false, 'return '],
@@ -104,10 +120,17 @@ describe('lineParts', () => {
         ])
     })
 
-    it('spells a line with no tokens as its text, and leaves out an empty end', () => {
-        expect(lineParts('abc', undefined, { from: 0, to: 2 })).toEqual([
+    it('spells a line with no tokens as its text, each stretch marked, and leaves out an empty end', () => {
+        expect(
+            lineParts('abcde', undefined, [
+                { from: 0, to: 2 },
+                { from: 3, to: 4 },
+            ]),
+        ).toEqual([
             { changed: true, text: 'ab', tokens: undefined },
             { changed: false, text: 'c', tokens: undefined },
+            { changed: true, text: 'd', tokens: undefined },
+            { changed: false, text: 'e', tokens: undefined },
         ])
     })
 })

@@ -1,7 +1,7 @@
 import type { DiffFile, DiffHunk, DiffLine } from '@/api/types'
 import type { CodeToken } from '@/lib/highlight'
 
-/** The stretch of a line's text that differs from the line it replaced, or that replaced it, in characters. */
+/** A stretch of a line's text that differs from the line it replaced, or that replaced it, in characters. */
 export interface Changed {
     /** Where the stretch starts in the line's text. */
     from: number
@@ -19,23 +19,27 @@ export interface LinePart {
     tokens: CodeToken[] | undefined
 }
 
-// A line longer than this is not compared: a minified file's line would be marked nearly whole, at a cost.
+// A line longer than this, or of more words, is not compared: a minified file's line would be marked nearly whole,
+// at a cost.
 const MAX_LINE = 500
-// The share of the longer line the two must have in common, at their ends, to count as one line edited rather than
+const MAX_WORDS = 160
+// The share of the longer line's words the two must have in common, in order, to count as one line edited rather than
 // one line replaced by another, which the line's own tint already says.
-const ALIKE = 0.4
+const ALIKE = 0.5
 // A run of removed lines by one of added lines with more pairs to try than this is left unmarked.
 const MAX_PAIRS = 400
-const WORD = /\w/u
+// A line's words: each run of word characters, each run of spaces, and each other character alone.
+const WORDS = /\w+|\s+|[^\w\s]/gu
+const WORD = /^\w/u
+const SPACE = /^\s/u
 
 /**
  * What changed within each line of each of `file`'s hunks, by hunk and then line: where added lines follow removed
- * ones, each removed line is paired with the next added one like it, and the pair's differing middle, widened to whole
- * words, is what changed, so an edit to a long line shows where.
- * Undefined for a line with no pair, one whose pair shares too little with it to be the same line edited, and one
- * with nothing to mark, as a removed line whose pair only added to it.
+ * ones, each removed line is paired with the next added one like it, and the words the pair does not share, in order,
+ * are what changed, so two edits to a long line each show where. Undefined for a line with no pair, or one whose pair
+ * shares too little with it to be the same line edited; empty for a line whose pair only added to it.
  */
-export function changedWords(file: DiffFile): (Changed | undefined)[][] {
+export function changedWords(file: DiffFile): (Changed[] | undefined)[][] {
     return file.hunks.map((hunk) => hunkChanges(hunk))
 }
 
@@ -67,15 +71,21 @@ export function fileLines(file: DiffFile): { added: number; removed: number } {
 }
 
 /**
- * A line as up to three parts, the middle one its `changed` stretch: its `tokens` cut at the stretch's ends, each
- * piece keeping its kind, or its plain `text` when it has none. The parts spell the line, character for character.
+ * A line as its parts in order, those in `changed` marked so: its `tokens` cut at each stretch's ends, each piece
+ * keeping its kind, or its plain `text` when it has none. The parts spell the line, character for character.
  */
-export function lineParts(text: string, tokens: readonly CodeToken[] | undefined, changed: Changed): LinePart[] {
-    const cuts: [number, number, boolean][] = [
-        [0, changed.from, false],
-        [changed.from, changed.to, true],
-        [changed.to, text.length, false],
-    ]
+export function lineParts(
+    text: string,
+    tokens: readonly CodeToken[] | undefined,
+    changed: readonly Changed[],
+): LinePart[] {
+    const cuts: [number, number, boolean][] = []
+    let at = 0
+    for (const { from, to } of changed) {
+        cuts.push([at, from, false], [from, to, true])
+        at = to
+    }
+    cuts.push([at, text.length, false])
     return cuts
         .filter(([from, to]) => to > from)
         .map(([from, to, marked]) => ({
@@ -85,9 +95,9 @@ export function lineParts(text: string, tokens: readonly CodeToken[] | undefined
         }))
 }
 
-function hunkChanges(hunk: DiffHunk): (Changed | undefined)[] {
+function hunkChanges(hunk: DiffHunk): (Changed[] | undefined)[] {
     const { lines } = hunk
-    const changes = Array.from<Changed | undefined>({ length: lines.length })
+    const changes = Array.from<Changed[] | undefined>({ length: lines.length })
     let at = 0
     while (at < lines.length) {
         const dels = runOf(lines, at, 'del')
@@ -120,68 +130,100 @@ function runOf(lines: readonly DiffLine[], from: number, kind: DiffLine['kind'])
     return n
 }
 
-// What differs between a removed line and the added one that replaced it, on each; undefined for a side with nothing
-// to mark, and for both when the two are not alike. Each line is read from the end of its own indent, so a line only
-// moved in or out has nothing marked, and one edited as it moved has its edit alone.
-function pairChanges(wasLine: string, nowLine: string): [Changed | undefined, Changed | undefined] | undefined {
+/** One word of a line, and where it is in it. */
+interface Word extends Changed {
+    /** Its text. */
+    text: string
+}
+
+// What differs between a removed line and the added one that replaced it, on each, or undefined when the two are not
+// alike. Each line is read from the end of its own indent, so a line only moved in or out has nothing marked, and one
+// edited as it moved has its edit alone.
+function pairChanges(wasLine: string, nowLine: string): [Changed[], Changed[]] | undefined {
     if (wasLine.length > MAX_LINE || nowLine.length > MAX_LINE) {
         return undefined
     }
-    const was = wasLine.trimStart()
-    const now = nowLine.trimStart()
-    const short = Math.min(was.length, now.length)
-    let head = 0
-    while (head < short && was[head] === now[head]) {
-        head += 1
-    }
-    let tail = 0
-    while (tail < short - head && was.at(-1 - tail) === now.at(-1 - tail)) {
-        tail += 1
-    }
-    if (head + tail < ALIKE * Math.max(was.trimEnd().length, now.trimEnd().length)) {
+    const was = wordsOf(wasLine)
+    const now = wordsOf(nowLine)
+    if (was.length > MAX_WORDS || now.length > MAX_WORDS) {
         return undefined
     }
-    // Never half of a character written as two code units, which the two may share.
-    if (lowSurrogate(was, head)) {
-        head -= 1
+    const [wasKept, nowKept] = shared(was, now)
+    const most = Math.max(weight(was), weight(now))
+    const kept = weight(was.filter((_, i) => wasKept[i]))
+    // Lines of punctuation alone, a closing brace and the like, are alike only when they are the same.
+    if (most === 0 ? wasLine.trim() !== nowLine.trim() : kept < ALIKE * most) {
+        return undefined
     }
-    if (lowSurrogate(was, was.length - tail)) {
-        tail -= 1
-    }
-    // An end that cuts a word on either line moves out to the word's end on both: what they share there is the same.
-    if (cutsWord(was, head) || cutsWord(now, head)) {
-        while (inWord(was, head - 1)) {
-            head -= 1
+    return [stretches(was, wasKept), stretches(now, nowKept)]
+}
+
+// A line's words past its indent.
+function wordsOf(line: string): Word[] {
+    const indent = line.length - line.trimStart().length
+    return [...line.slice(indent).matchAll(WORDS)].map((match) => ({
+        text: match[0],
+        from: indent + match.index,
+        to: indent + match.index + match[0].length,
+    }))
+}
+
+// How much of a line a set of its words is: the characters of its words proper, which say what a line is as its
+// punctuation, the same on most lines of code, does not.
+function weight(words: readonly Word[]): number {
+    return words.reduce((sum, word) => sum + (WORD.test(word.text) ? word.text.length : 0), 0)
+}
+
+// Which words of each line are in the longest run of words the two share in order, by each line's index.
+function shared(was: readonly Word[], now: readonly Word[]): [boolean[], boolean[]] {
+    const width = now.length + 1
+    // The length of the longest shared run of the words from `i` and from `j` on, at `i * width + j`.
+    const runs = new Uint16Array((was.length + 1) * width)
+    for (let i = was.length - 1; i >= 0; i -= 1) {
+        for (let j = now.length - 1; j >= 0; j -= 1) {
+            runs[i * width + j] =
+                was[i]?.text === now[j]?.text
+                    ? (runs[(i + 1) * width + j + 1] ?? 0) + 1
+                    : Math.max(runs[(i + 1) * width + j] ?? 0, runs[i * width + j + 1] ?? 0)
         }
     }
-    if (cutsWord(was, was.length - tail) || cutsWord(now, now.length - tail)) {
-        while (tail > 0 && inWord(was, was.length - tail)) {
-            tail -= 1
+    const wasKept = was.map(() => false)
+    const nowKept = now.map(() => false)
+    let i = 0
+    let j = 0
+    while (i < was.length && j < now.length) {
+        if (was[i]?.text === now[j]?.text) {
+            wasKept[i] = true
+            nowKept[j] = true
+            i += 1
+            j += 1
+        } else if ((runs[(i + 1) * width + j] ?? 0) >= (runs[i * width + j + 1] ?? 0)) {
+            i += 1
+        } else {
+            j += 1
         }
     }
-    return [
-        stretch(wasLine.length - was.length, head, was.length - tail),
-        stretch(nowLine.length - now.length, head, now.length - tail),
-    ]
+    return [wasKept, nowKept]
 }
 
-// A line's changed stretch, past its `indent`, or undefined when it has none: the other line only added here.
-function stretch(indent: number, from: number, to: number): Changed | undefined {
-    return to > from ? { from: indent + from, to: indent + to } : undefined
-}
-
-function cutsWord(text: string, at: number): boolean {
-    return inWord(text, at - 1) && inWord(text, at)
-}
-
-function inWord(text: string, at: number): boolean {
-    const char = text[at]
-    return char !== undefined && WORD.test(char)
-}
-
-function lowSurrogate(text: string, at: number): boolean {
-    const code = text.codePointAt(at) ?? 0
-    return code >= 56_320 && code <= 57_343
+// The stretches of a line its pair does not share: each run of words not kept, two runs with only spaces kept between
+// them as one, so a phrase rewritten is one mark rather than a mark a word.
+function stretches(words: readonly Word[], kept: readonly boolean[]): Changed[] {
+    const changed: Changed[] = []
+    // Whether a word proper is kept since the last stretch, which sets the next apart from it.
+    let apart = true
+    for (const [i, word] of words.entries()) {
+        const last = changed.at(-1)
+        if (kept[i]) {
+            apart ||= !SPACE.test(word.text)
+        } else if (last === undefined || apart) {
+            changed.push({ from: word.from, to: word.to })
+            apart = false
+        } else {
+            last.to = word.to
+        }
+    }
+    return changed
 }
 
 // One side's range: its first number and how many lines it has, `-4,6`; `-0,0` for a side with none, as git writes.
