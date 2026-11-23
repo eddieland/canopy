@@ -1402,12 +1402,13 @@ reader, so no table repeats them.
   leaves once the limit is above its runs. A limit with room left shows nothing.
 - **A review request** (`ReviewRequestForm`, `ReviewRequestStatus`) is how the operator has canopy review a PR the loop
   does not own (DESIGN §21). The reviews page leads with a `Review a PR` panel above the list. Its form is laid out by
-  its own width (a container query), never by who renders it: one column in a narrow box, as the review dialog's and a
-  narrow window's are, and across a wide panel two, the URL under a label of its own beside the notes, so the panel is
-  filled and half as tall. In either: the PR's URL in a monospace field, and under it a line it always holds, so
-  nothing below moves
+  its own width (a container query), never by who renders it. In a narrow box, as the review dialog's and a narrow
+  window's are, it is one column. Across a wide panel it is one line, as the tasks page's form is: the URL, `Notes`
+  and its field, one line high and as tall as what is written in it, then who reviews it and `Review` at the line's
+  end; in a panel too narrow for the line, who reviews it wraps under the fields, at their right edge. In either: the
+  PR's URL in a monospace field, and under it a line it always holds, so nothing below moves
   as it changes: the PR's reference once canopy would take the URL, that it is not a PR's URL, before it is sent, or,
-  empty, that a link into the PR will do. Then the notes, always open since the operator often has some, under a
+  empty, that a link into the PR will do. Then the notes, always open since the operator often has some, with a
   sentence-case field label, never a `panel-label`. Then who reviews it, one row with nothing folded: `Persona` and its
   menu, `Model` and its menu (A choice of model), and at the row's end `Review`, the form's primary, with its keycap
   and the CLI's command on hover. The form ends on one quiet line saying its review is a draft that posts nothing until
