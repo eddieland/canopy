@@ -313,7 +313,7 @@ def state_section(
     )
     if not needed_now and newest is None and run is None and attempts == 0:
         return None
-    replied = sql.execute(conn, _replied(ticket)).fetchone()[0]
+    replied = records.fetch_value(conn, str, _replied(ticket))
     blocked = (
         run is not None
         and run.status is RunStatus.BLOCKED
@@ -369,8 +369,8 @@ def changes_asked(conn: sqlite3.Connection, ticket: records.Ticket) -> str | Non
         .from_("runs")
         .where("ticket_key = ? AND kind = ? AND id > ?", key, RunKind.PLAN, ticket.forgotten_run_id or 0)
     )
-    started = sql.execute(conn, latest_run).fetchone()[0]
-    replied = sql.execute(conn, _replied(ticket)).fetchone()[0]
+    started = records.fetch_value(conn, str, latest_run)
+    replied = records.fetch_value(conn, str, _replied(ticket))
     since = max(
         newest.created_at if newest is not None and newest.status is not PlanStatus.SUPERSEDED else "",
         str(started) if started is not None else "",
@@ -669,14 +669,12 @@ def unrevised(
         return False
     since = max(replaced.created_at, replaced.approved_at or "")
     wrote = (
-        sql.select("1")
-        .from_("messages")
+        records.select(records.Message)
         .where("subject_kind = ? AND subject_id = ? AND source = 'operator'", subject.kind, subject.id)
         .where("at > ? AND at <= ?", since, started_at)
         .where("coalesce(submission, '') NOT GLOB ?", f"{conversation.INSTRUCTION}*")
-        .limit(1)
     )
-    return sql.execute(conn, wrote).fetchone() is not None
+    return wrote.exists(conn)
 
 
 def approve(
@@ -953,8 +951,7 @@ def supersede(conn: sqlite3.Connection, key: str) -> int | None:
         .where("ticket_key = ? AND status != ?", key, PlanStatus.SUPERSEDED)
         .returning("id")
     )
-    row = superseding.run(conn).fetchone()
-    return int(row[0]) if row is not None else None
+    return records.fetch_value(conn, int, superseding)
 
 
 def _private_dir(parent_fd: int | None, path: Path | str, *, what: str = "plan") -> int:

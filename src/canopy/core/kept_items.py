@@ -170,7 +170,7 @@ def ended_tickets(conn: sqlite3.Connection, keys: Collection[str]) -> set[str]:
         .where("subject_kind = ? AND status = 'stopped'", conversation.TICKET)
         .where_in("subject_id", keys)
     )
-    return {str(r[0]) for r in sql.execute(conn, done)} | {str(r[0]) for r in sql.execute(conn, stopped)}
+    return {*records.fetch_values(conn, str, done), *records.fetch_values(conn, str, stopped)}
 
 
 def _answers(conn: sqlite3.Connection, keys: Collection[str]) -> dict[str, list[str]]:

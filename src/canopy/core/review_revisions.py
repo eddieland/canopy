@@ -93,7 +93,7 @@ def on(conn: sqlite3.Connection, config: Config) -> bool:
     """
     if config.capacity.max_reviews <= 0:
         return False
-    return sql.execute(conn, sql.select("1").from_("({}) w", _WANTED).limit(1)).fetchone() is not None
+    return records.exists(conn, _WANTED)
 
 
 def pending(conn: sqlite3.Connection, draft_id: int) -> list[records.ReviewDraftNote]:
@@ -126,8 +126,8 @@ def limit(conn: sqlite3.Connection, config: Config, draft_id: int) -> int:
 
 def granted(conn: sqlite3.Connection, draft_id: int) -> int:
     """Return the revisions the operator granted draft `draft_id` past the policy's limit, 0 for none."""
-    query = sql.select("coalesce(sum(runs), 0)").from_("review_draft_grants").where("draft_id = ?", draft_id)
-    return int(sql.execute(conn, query).fetchone()[0])
+    query = sql.select("sum(runs)").from_("review_draft_grants").where("draft_id = ?", draft_id)
+    return records.fetch_value(conn, int, query) or 0
 
 
 def hint(review_run_id: int) -> str:
