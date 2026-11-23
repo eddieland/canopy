@@ -341,7 +341,10 @@ function sameNumbers(numbers: number[], was: ConfigValue): boolean {
     return Array.isArray(was) && was.length === numbers.length && numbers.every((n, i) => was[i] === n)
 }
 
-/** The count `text` holds when it differs from `was`; null when empty or the same; `invalid` when not a number. */
+/**
+ * The count `text` holds when it differs from `was`; null when empty or the same; `invalid` when not a number, or one
+ * too large to send as typed.
+ */
 function wholeNumber(text: string, was: number | null): number | 'invalid' | null {
     const typed = text.trim()
     if (typed === '') {
@@ -351,6 +354,9 @@ function wholeNumber(text: string, was: number | null): number | 'invalid' | nul
         return 'invalid'
     }
     const count = Number(typed)
+    if (!Number.isSafeInteger(count)) {
+        return 'invalid'
+    }
     return count === was ? null : count
 }
 

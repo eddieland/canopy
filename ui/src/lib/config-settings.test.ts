@@ -136,6 +136,10 @@ describe('config settings', () => {
             errors: {},
         })
         expect(configForm([PACE], { 'loop.interval_minutes': '1' }).errors).toEqual({})
+        // A count too large to send as typed is refused here, never rounded.
+        expect(configForm(KEYS, { 'capacity.max_workers': '9007199254740993' }).errors).toEqual({
+            'capacity.max_workers': 'not a whole number',
+        })
         // A retention the file set under its floor may be lengthened, though still under it, never shortened.
         expect(configForm([{ ...RUN_FILES, value: 3 }], { 'retention.run_files_days': '5' }).errors).toEqual({})
         expect(configForm([{ ...RUN_FILES, value: 3 }], { 'retention.run_files_days': '2' }).errors).toEqual({

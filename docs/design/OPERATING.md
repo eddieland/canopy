@@ -167,11 +167,10 @@ secret, and a replier added through a stolen session would go on steering worker
 | `trust.max_flaky_kicks` | lowered only |
 | `trust.commit_trailer` | to `true` only |
 
-The bounds sit well above what one machine runs today, so the page serves the operator's real changes; what they stop
-is a stolen session turning spend up without limit. A raise within them outlives a new secret, and that residual is
-spend, which the page and the log show. `capacity.repo_slots` is edited as its entries: the page lists the
-repositories with a count of their own and takes a name to give another one, so a workspace of many repositories
-shows the few that differ from `capacity.slots_per_repo`. A save:
+With no ceiling of the page's own, a stolen session can turn spend up as far as the file could. That raise outlives a
+new secret, and the residual is spend, which the page and the log show. `capacity.repo_slots` is edited as its entries:
+the page lists the repositories with a count of their own and takes a name to give another one, so a workspace of many
+repositories shows the few that differ from `capacity.slots_per_repo`. A save:
 
 - writes the private file only, never the workspace file (T7), a shared `policy.*` key included, nor the user file,
   which serves every workspace. A key whose value comes from the user file is written to the private file whole, where
