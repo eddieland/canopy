@@ -484,7 +484,7 @@ def owned(conn: sqlite3.Connection, dest: Path) -> list[str]:
         only names `dest` holds, never a link.
     """
     planned = sql.union(sql.select("ticket_key").from_("plans"), sql.select("ticket_key").from_("feedback_plans"))
-    keys = (str(r[0]) for r in sql.execute(conn, planned))
+    keys = records.fetch_values(conn, str, planned)
     names = sorted(
         key
         for key in keys

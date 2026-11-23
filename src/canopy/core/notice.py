@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Final
 
-from canopy.core import db, records, sql
+from canopy.core import db, records
 from canopy.core.conversation import Refused
 
 if TYPE_CHECKING:
@@ -170,8 +170,7 @@ def moved_after(conn: sqlite3.Connection, since: str) -> bool:
     Returns:
         True if a notice was set, cleared, or replaced after `since`.
     """
-    row = sql.execute(conn, sql.select("1").from_("notices").where("set_at > ? OR ended_at > ?", since, since).limit(1))
-    return row.fetchone() is not None
+    return records.select(records.Notice).where("set_at > ? OR ended_at > ?", since, since).exists(conn)
 
 
 def lapses(conn: sqlite3.Connection, now: datetime) -> datetime | None:

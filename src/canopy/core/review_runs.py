@@ -228,10 +228,10 @@ def revision_runs_of(conn: sqlite3.Connection, draft_id: int) -> list[records.Re
 
 def is_unit_pr(conn: sqlite3.Connection, key: str, pr_url: str, *, repo: str | None = None) -> bool:
     """Return whether `pr_url` is the PR of one of ticket `key`'s units, or its unit in `repo`: one the loop opened."""
-    query = sql.select("1").from_("ticket_units").where("ticket_key = ? AND pr_url = ?", key, pr_url)
+    query = records.select(records.TicketUnit).where("ticket_key = ? AND pr_url = ?", key, pr_url)
     if repo is not None:
         query = query.where("repo = ?", repo)
-    return sql.execute(conn, query).fetchone() is not None
+    return query.exists(conn)
 
 
 def review_runs_of_prs(conn: sqlite3.Connection, pr_urls: Sequence[str]) -> dict[str, list[records.ReviewRun]]:

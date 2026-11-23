@@ -234,9 +234,9 @@ def migrate(conn: sqlite3.Connection, migrations_dir: Path) -> list[int]:
     applied_now: list[int] = []
     # IMMEDIATE takes the write lock before reading what is applied, so two processes cannot both apply a migration.
     with transaction(conn):
-        has_table = sql.execute(conn, _table_named("schema_migrations")).fetchone()
+        has_table = records.exists(conn, _table_named("schema_migrations"))
         applied = (
-            {int(r[0]) for r in sql.execute(conn, sql.select("version").from_("schema_migrations"))}
+            set(records.fetch_values(conn, int, sql.select("version").from_("schema_migrations")))
             if has_table
             else set()
         )
@@ -274,7 +274,7 @@ def live_runs(conn: sqlite3.Connection) -> list[str]:
     live: list[str] = []
     # Every table of detached runs: each process writes its own row when it ends.
     for table in RUN_TABLES:
-        if not sql.execute(conn, _table_named(table)).fetchone():
+        if not records.exists(conn, _table_named(table)):
             continue
         rows = sql.execute(
             conn,
@@ -404,8 +404,7 @@ def last_query_at(conn: sqlite3.Connection) -> str | None:
         .from_("ticks")
         .where("status = 'ok' AND dry_run = 0 AND coalesce(query_due, 1) = 1")
     )
-    row = sql.execute(conn, query).fetchone()
-    return None if row is None or row[0] is None else str(row[0])
+    return records.fetch_value(conn, str, query)
 
 
 def previous_tick(conn: sqlite3.Connection, tick_id: int) -> records.Tick | None:
@@ -420,10 +419,7 @@ def runs_moved_after(conn: sqlite3.Connection, since: str) -> bool:
         True if at least one did.
     """
     return any(
-        sql.execute(
-            conn,
-            sql.select("1").from_(table).where("started_at > ? OR ended_at > ?", since, since).limit(1),
-        ).fetchone()
+        records.exists(conn, sql.select("1").from_(table).where("started_at > ? OR ended_at > ?", since, since))
         for table in RUN_TABLES
     )
 
@@ -434,10 +430,7 @@ def runs_ended_after(conn: sqlite3.Connection, since: str) -> bool:
     Returns:
         True if at least one did.
     """
-    return any(
-        sql.execute(conn, sql.select("1").from_(table).where("ended_at > ?", since).limit(1)).fetchone()
-        for table in RUN_TABLES
-    )
+    return any(records.exists(conn, sql.select("1").from_(table).where("ended_at > ?", since)) for table in RUN_TABLES)
 
 
 def starts_moved_after(conn: sqlite3.Connection, since: str) -> bool:
@@ -446,8 +439,7 @@ def starts_moved_after(conn: sqlite3.Connection, since: str) -> bool:
     Returns:
         True if a start record's latest start or stop is newer.
     """
-    query = sql.select("1").from_("starts").where("started_at > ? OR stopped_at > ?", since, since).limit(1)
-    return sql.execute(conn, query).fetchone() is not None
+    return records.select(records.Start).where("started_at > ? OR stopped_at > ?", since, since).exists(conn)
 
 
 def granted_after(conn: sqlite3.Connection, since: str) -> bool:
@@ -457,10 +449,7 @@ def granted_after(conn: sqlite3.Connection, since: str) -> bool:
         True if at least one grant is newer.
     """
     tables: tuple[Literal["attempt_grants", "review_grants"], ...] = ("attempt_grants", "review_grants")
-    return any(
-        sql.execute(conn, sql.select("1").from_(table).where("granted_at > ?", since).limit(1)).fetchone()
-        for table in tables
-    )
+    return any(records.exists(conn, sql.select("1").from_(table).where("granted_at > ?", since)) for table in tables)
 
 
 def phases(conn: sqlite3.Connection) -> dict[tuple[str, str | None], str | None]:
@@ -484,8 +473,7 @@ def acknowledged_message_id(conn: sqlite3.Connection) -> int | None:
         That message's id, or None.
     """
     query = sql.select("message_id").from_("ticks").where("status = 'ok'").order_by("id DESC").limit(1)
-    row = sql.execute(conn, query).fetchone()
-    return None if row is None or row[0] is None else int(row[0])
+    return records.fetch_value(conn, int, query)
 
 
 def abandon_unfinished_ticks(conn: sqlite3.Connection) -> list[int]:
@@ -495,7 +483,7 @@ def abandon_unfinished_ticks(conn: sqlite3.Connection) -> list[int]:
         The ids of the ticks marked `abandoned`.
     """
     running = sql.select("id").from_("ticks").where("status = ?", TickStatus.RUNNING)
-    ids = [int(r[0]) for r in sql.execute(conn, running)]
+    ids = records.fetch_values(conn, int, running)
     abandon = (
         records.update(records.Tick)
         .set(ended_at=sql.ROW, status=TickStatus.ABANDONED, summary="the tick process exited without finishing")
@@ -516,8 +504,8 @@ def tick_neighbours(conn: sqlite3.Connection, tick_id: int) -> tuple[int | None,
     Returns:
         The previous tick's id and the next one's, found by query rather than by counting, so a gap is stepped over.
     """
-    before = sql.execute(conn, sql.select("max(id)").from_("ticks").where("id < ?", tick_id)).fetchone()[0]
-    after = sql.execute(conn, sql.select("min(id)").from_("ticks").where("id > ?", tick_id)).fetchone()[0]
+    before = records.fetch_value(conn, int, sql.select("max(id)").from_("ticks").where("id < ?", tick_id))
+    after = records.fetch_value(conn, int, sql.select("min(id)").from_("ticks").where("id > ?", tick_id))
     return before, after
 
 
@@ -1017,13 +1005,13 @@ def finish_ticket_run(
     with transaction(conn):
         if not _close_run(conn, "runs", run_id, status, result_json):
             return False
-        key = sql.execute(conn, sql.select("ticket_key").from_("runs").where("id = ?", run_id)).fetchone()[0]
+        [key] = records.fetch_values(conn, str, sql.select("ticket_key").from_("runs").where("id = ?", run_id))
         last: int | None = None
         for kind, body in messages:
             last = insert_message(
                 conn,
                 SUBJECT_TICKET,
-                str(key),
+                key,
                 source="worker",
                 kind=kind,
                 channel="run",
@@ -1352,8 +1340,7 @@ def persona_text(conn: sqlite3.Connection, digest: str) -> str | None:
 
 def has_runs(conn: sqlite3.Connection, key: str) -> bool:
     """Return whether any run was ever dispatched for `key`."""
-    query = sql.select("1").from_("runs").where("ticket_key = ?", key).limit(1)
-    return sql.execute(conn, query).fetchone() is not None
+    return records.select(records.Run).where("ticket_key = ?", key).exists(conn)
 
 
 def decisions_for_tick(conn: sqlite3.Connection, tick_id: int) -> list[records.Decision]:
@@ -1404,8 +1391,7 @@ def last_decision_of(conn: sqlite3.Connection, key: str) -> str | None:
         .order_by("d.id DESC")
         .limit(1)
     )
-    row = sql.execute(conn, query).fetchone()
-    return None if row is None else str(row[0])
+    return records.fetch_value(conn, str, query)
 
 
 def recent_ticks(conn: sqlite3.Connection, limit: int, *, idle: bool = False) -> list[tuple[records.Tick, int]]:
@@ -1441,8 +1427,7 @@ def with_decision_counts(conn: sqlite3.Connection, ticks: Iterable[records.Tick]
 
 def decision_count(conn: sqlite3.Connection, tick_id: int) -> int:
     """Return how many decisions a tick recorded."""
-    row = sql.execute(conn, sql.select("count(*)").from_("decisions").where("tick_id = ?", tick_id)).fetchone()
-    return int(row[0])
+    return records.select(records.Decision).where("tick_id = ?", tick_id).count(conn)
 
 
 # Conversations (DESIGN §22)
@@ -1480,9 +1465,9 @@ def insert_message(
             .from_("messages")
             .where("subject_kind = ? AND subject_id = ? AND submission = ?", subject_kind, subject_id, submission)
         )
-        found = sql.execute(conn, query).fetchone()
+        found = records.fetch_value(conn, int, query)
         if found is not None:
-            return int(found[0])
+            return found
     if comment is not None:
         recorded = comment_message(conn, subject_kind, subject_id, comment.id)
         if recorded is not None:
@@ -1557,7 +1542,7 @@ def latest_message_id(conn: sqlite3.Connection, *, source: str | None = None, su
         query = query.where("source = ?", source)
     if subject_kind is not None:
         query = query.where("subject_kind = ?", subject_kind)
-    return int(sql.execute(conn, query).fetchone()[0] or 0)
+    return records.fetch_value(conn, int, query) or 0
 
 
 def get_start(conn: sqlite3.Connection, subject_kind: str, subject_id: str) -> records.Start | None:
@@ -1762,8 +1747,7 @@ def latest_message_of(conn: sqlite3.Connection, subject_kind: str, subject_id: s
     query = (
         sql.select("max(id)").from_("messages").where("subject_kind = ? AND subject_id = ?", subject_kind, subject_id)
     )
-    row = sql.execute(conn, query).fetchone()
-    return None if row[0] is None else int(row[0])
+    return records.fetch_value(conn, int, query)
 
 
 def set_seen(conn: sqlite3.Connection, kind: SeenKind, subjects: Iterable[str], *, channel: str) -> list[str]:
@@ -1786,7 +1770,7 @@ def set_seen(conn: sqlite3.Connection, kind: SeenKind, subjects: Iterable[str], 
 def seen_among(conn: sqlite3.Connection, kind: SeenKind, subjects: Iterable[str]) -> frozenset[str]:
     """Return which of `subjects` of `kind` the operator has seen: a read by key, however many they have seen."""
     query = sql.select("subject").from_("seen").where("kind = ?", kind).where_in("subject", list(subjects))
-    return frozenset(str(r[0]) for r in sql.execute(conn, query))
+    return frozenset(records.fetch_values(conn, str, query))
 
 
 def forget_ticket(conn: sqlite3.Connection, key: str, *, channel: str, branch: str | None, prs: Iterable[str]) -> None:
@@ -1856,7 +1840,7 @@ def holds_nothing_of(conn: sqlite3.Connection, key: str) -> bool:
         sql.select("1").from_("tickets").where("key = ? AND (branch IS NOT NULL OR plan_setting IS NOT NULL)", key),
         every=True,
     )
-    return sql.execute(conn, sql.select("NOT EXISTS ({})", held)).fetchone()[0] == 1
+    return not records.exists(conn, held)
 
 
 def remove_ticket(conn: sqlite3.Connection, key: str) -> None:
@@ -1896,11 +1880,10 @@ def worked_since_forget(conn: sqlite3.Connection, ticket: records.Ticket) -> boo
     )
     any_units = sql.select("1").from_("ticket_units").where("ticket_key = ?", ticket.key)
     work = sql.select("EXISTS ({}) OR EXISTS ({}) OR EXISTS ({})", later_runs, later_messages, any_units)
-    row = sql.execute(conn, work).fetchone()
-    return bool(row[0])
+    return records.fetch_value(conn, bool, work) is True
 
 
 def forgotten_message_id(conn: sqlite3.Connection, key: str) -> int:
     """Return the newest message of `key` the operator forgot with its work, or 0: the loop reads only later ones."""
-    row = sql.execute(conn, sql.select("forgotten_message_id").from_("tickets").where("key = ?", key)).fetchone()
-    return int(row[0] or 0) if row is not None else 0
+    forgotten = sql.select("forgotten_message_id").from_("tickets").where("key = ?", key)
+    return records.fetch_value(conn, int, forgotten) or 0

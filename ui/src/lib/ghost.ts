@@ -93,6 +93,13 @@ export const GHOST_TIPS = {
         'Scanning... I review you too. Verdict: still alive. Mostly my doing.',
         "Dear Traveler, canopy reviewed a PR and told nobody. I respect a Hunter's discretion.",
     ],
+    '/pull-requests/drafts': [
+        'Eyes up, Guardian. Unsent words. They only fire when you pull the trigger.',
+        'Field report: replies holding position, awaiting your order to send.',
+        "Grimoire: a draft dropped is a shot not taken. Sometimes that's the win.",
+        'Scanning... a run wrote these in your voice. I do your voice too. Better, frankly.',
+        'Dear Traveler, my Guardian reads every word before it leaves. Unlike certain Titans.',
+    ],
     '/pull-requests/reviews/$id': [
         'Eyes up, Guardian. Findings. Tick them before they tick you.',
         'Scanning... severity: high. That is what I said about Oryx.',
@@ -284,7 +291,7 @@ export const GHOST_TIPS = {
     ],
     '/settings_/limits': [
         "Eyes up, Guardian. Limits. I have one: I can't open doors any faster. Hold them off.",
-        'Field report: the ceiling is 32 workers. A fireteam is three. Show-offs.',
+        'Field report: no ceiling on workers here. A fireteam is three. Show-offs.',
         'Grimoire: trust here only gets stricter. Like Zavala, every season.',
         'Scanning... the comments in your config are love letters. This page keeps every one.',
         "Dear Traveler, they dropped a trusted reviewer. I checked. I'm still trusted. Phew.",

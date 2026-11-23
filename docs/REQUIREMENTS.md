@@ -223,7 +223,7 @@ able to change those from the web UI's settings page and have the loop take them
 settings may be changed from the page only toward stricter: removing an authorized replier or a trusted reviewer,
 turning `trust.rebase` off, turning the commit trailer on. Loosening one, or changing any key that runs a command,
 chooses a prompt, or moves the listener, stays an edit to the file. The Loop settings page under Settings does
-this, writing the workspace's private file within ceilings in code (§12, TRUST_MODEL T8, D128).
+this, writing the workspace's private file (§12, TRUST_MODEL T8, D128).
 
 ### R17. Review a coworker's PR on request, once or for as long as it is open
 

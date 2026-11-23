@@ -1133,13 +1133,13 @@ def task_question(conn: sqlite3.Connection, task_id: int) -> records.Message | N
     )
     if row is None:
         return None
-    replied = (
-        sql.select("1")
-        .from_("messages")
-        .where("subject_kind = ? AND subject_id = ? AND source = 'operator' AND id > ?", TASK, str(task_id), row.id)
-        .limit(1)
+    replied = records.select(records.Message).where(
+        "subject_kind = ? AND subject_id = ? AND source = 'operator' AND id > ?",
+        TASK,
+        str(task_id),
+        row.id,
     )
-    return None if sql.execute(conn, replied).fetchone() is not None else row
+    return None if replied.exists(conn) else row
 
 
 @dataclass(frozen=True)
@@ -1178,8 +1178,7 @@ def stopped(conn: sqlite3.Connection) -> list[str]:
         .where("subject_kind = ? AND status = 'stopped'", TICKET)
         .order_by("subject_id")
     )
-    rows = sql.execute(conn, stops).fetchall()
-    return [str(row[0]) for row in rows]
+    return records.fetch_values(conn, str, stops)
 
 
 def operator_messages_after(conn: sqlite3.Connection, key: str, after: int) -> list[records.Message]:
@@ -1319,13 +1318,11 @@ def has_operator_messages(conn: sqlite3.Connection, key: str) -> bool:
         the operator told one run, the next still hears.
     """
     query = (
-        sql.select("1")
-        .from_("messages")
+        records.select(records.Message)
         .where("subject_kind = ? AND subject_id = ? AND source = 'operator'", TICKET, key)
         .where("id > ?", db.forgotten_message_id(conn, key))
-        .limit(1)
     )
-    return sql.execute(conn, query).fetchone() is not None
+    return query.exists(conn)
 
 
 def prompt_operator_messages(

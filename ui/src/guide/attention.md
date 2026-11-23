@@ -116,7 +116,8 @@ Under its head, an item leads with whatever its reason asks of you, so the thing
   button to the PR's page, straight to the plan, where you approve it item by item
   ([The feedback plan](pull-requests#the-feedback-plan)). The resume waits on it, so the item stays unanswered until
   you approve it; a plan nobody approves is a very patient way to stall a PR.
-- **Replies waiting on you** (`drafts waiting`): a button to the PR's page, where each reply a run drafted sits on the
+- **Replies waiting on you** (`drafts waiting`), all of which [Drafts](pull-requests#the-drafts-page) lists in one
+  place: a button to the PR's page, where each reply a run drafted sits on the
   thread it answers, or for a comment on the ticket itself, the draft right here, with **Send**. See
   [Pull requests](pull-requests#replying-to-your-coworkers-reviews).
 - **A review's draft** (`review waiting`, `review unsettled`): a button to the review's page, where its draft is

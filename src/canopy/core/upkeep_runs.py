@@ -44,7 +44,8 @@ def record(
         status=status,
         detail=detail,
     ).returning("id")
-    return int(statement.run(conn).fetchone()[0])
+    [run_id] = records.fetch_values(conn, int, statement)
+    return run_id
 
 
 def latest(

@@ -316,7 +316,7 @@ def canopy_among(conn: sqlite3.Connection, sessions: Iterable[SessionHead], stat
             ran,
         )
     )
-    return {str(row[0]) for row in sql.execute(conn, query)}
+    return set(records.fetch_values(conn, str, query))
 
 
 def sessions_in(since: str, until: str | None, state_dir: Path) -> sql.Select:
