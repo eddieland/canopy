@@ -36,15 +36,14 @@ const FIELD_LABEL = 'text-xs font-medium'
  * `canopy start URL --review --notes TEXT --persona NAME --model M` from the reviews page (DESIGN §13, §21, §22, §31):
  * the same two rows at every width (ui/DESIGN.md, "A review request"): the fields, then who reviews it. A PR the loop
  * does not own, by its URL, with the PR's reference under it once canopy would take it, or a line saying it would not;
- * beside the URL, what
- * its reviewer should know; then who reviews it, on one row: the personas to review it in, one review each, or none
- * for `[personas] reviewer`'s, and the model its reviews run on, config's by default; and at the row's end `Review`,
- * the form's primary. The personas start as those the operator prefers in Settings, which the row says. canopy reviews
- * it once, at its head, in whichever of the workspace's repositories it is in, and the form opens the PR's page, where
- * the request stands. Its review becomes a draft the operator may publish as their own; nothing posts until they do,
- * and nothing is reviewed now: the next tick does it. The reviews page and the Review a PR dialog (`ReviewDialog`),
- * which `R` opens from anywhere, both render it, so the two cannot drift; the dialog's says so on a quiet line, since
- * the reviews page's description already does.
+ * beside the URL, what its reviewer should know; then who reviews it, on one row: the personas to review it in, one
+ * review each, or none for `[personas] reviewer`'s, and the model its reviews run on, config's by default; and at the
+ * row's end `Review`, the form's primary. The personas start as those the operator prefers in Settings, which the row
+ * says. canopy reviews it once, at its head, in whichever of the workspace's repositories it is in, and the form opens
+ * the PR's page, where the request stands. Its review becomes a draft the operator may publish as their own; nothing
+ * posts until they do, and nothing is reviewed now: the next tick does it. The reviews page and the Review a PR dialog
+ * (`ReviewDialog`), which `R` opens from anywhere, both render it, so the two cannot drift; the dialog's says so on a
+ * quiet line, since the reviews page's description already does.
  */
 export function ReviewRequestForm({
     className,
@@ -120,7 +119,7 @@ export function ReviewRequestForm({
                     aria-describedby={`${id}-ref`}
                     placeholder="https://github.com/org/repo/pull/123"
                     title="R opens this form from any page, and so does pasting a PR's URL"
-                    className="max-w-full min-w-80 flex-2 font-mono text-xs"
+                    className="min-w-0 grow-2 basis-80 font-mono text-xs"
                     value={url}
                     onChange={(event) => {
                         setUrl(event.target.value)
@@ -135,7 +134,7 @@ export function ReviewRequestForm({
                     // One line high, as the URL beside it is, and as tall as what is written in it.
                     rows={1}
                     className={cn(
-                        'field-sizing-content max-h-40 min-h-9 max-w-full min-w-72 flex-3 resize-none py-1.75',
+                        'field-sizing-content max-h-40 min-h-9 min-w-0 grow-3 basis-72 resize-none py-1.75',
                         'text-xs leading-5',
                     )}
                     value={notes}
