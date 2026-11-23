@@ -1450,10 +1450,10 @@ reader, so no table repeats them.
   path holds, of each file with a check once viewed, its cards counted, and its lines, which brings the one picked to
   the top of the page. It opens from an outline `xs` button above the first file, `5 files, 2 viewed`, and from a
   ghost icon button in every file's header, which is sticky, so another file is one click from anywhere. Above the
-  first file, an
-  outline `xs` button names the file types shown and opens a menu of them, each a checkbox item, so several flip in one
-  go; a link from the findings list to a card ticks its file's type and opens its panel, so a link never lands on
-  nothing. A finding's card (`FindingCard`) sits right under the line it names, or under its file's header when the
+  first file, an outline `xs` button names the file types shown and opens a menu of them, each a checkbox item, so
+  several flip in one go; a link from the findings list to a card ticks its file's type and opens its panel, viewed or
+  not, so a link never lands on nothing. A finding's card (`FindingCard`) sits right under the line it names, or under
+  its file's header when the
   diff does not show the line, or in a Not in the diff panel after the files. A card holds its number, its severity as
   a chip (`blocking` in `status-failed`, `major` in `status-blocked`, as the attention list's reasons; `minor` plain),
   its title, its location, and its detail as rich text, with `dismiss` at the end of its head line; a dismissed one has

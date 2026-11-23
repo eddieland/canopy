@@ -180,9 +180,12 @@ export function DiffPanels<T>({
     // Held here rather than in each file's panel, which the filter unmounts, so a file it hides keeps its fold, and the
     // lines opened in it, for when it comes back. Both are by the file's index.
     const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set())
-    // A file marked viewed, here or on a page that showed the same change, starts folded: it has been read.
+    // A file marked viewed, here or on a page that showed the same change, starts folded: it has been read. Not the
+    // file the page was opened at a card on, which a link must never land on folded.
     const viewed = viewedOf(diff.files, useViewedFiles())
-    const [folded, setFolded] = useState<ReadonlySet<number>>(() => new Set(viewed.flatMap((on, i) => (on ? [i] : []))))
+    const [folded, setFolded] = useState<ReadonlySet<number>>(
+        () => new Set(viewed.flatMap((on, i) => (on && i !== wanted?.file ? [i] : []))),
+    )
     const [opened, setOpened] = useState<ReadonlyMap<number, Span[]>>(new Map())
     // A file just wanted is shown as the page draws it, before the router scrolls to the card on it.
     const [seen, setSeen] = useState(wanted)
