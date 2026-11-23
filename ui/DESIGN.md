@@ -49,7 +49,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `status-failed` | A run that failed, crashed, or left no result. Also shadcn's `destructive` and refusals. |
 | `section-attention`, `-runs`, `-worktrees`, ... | Each nav section's color (rules below). Identity, never state. |
 | `nav-label-attention`, `-runs`, ... | The nav's active label: its section's color, shaded by `nav-label-shade`. |
-| `diff-add`, `diff-del` | A diff's added and removed lines: a 12% tint behind a line, and its `+` or `-`. |
+| `diff-add`, `diff-del` | A diff's added and removed lines: a 12% tint behind a line, 25% more behind the words that changed in it, and its `+` or `-`. |
 | `spend-overseer`, `-idle`, `-workers`, `-plans`, `-chores`, `-reviews`, `-tasks`, `-dry-run` | Spend series fills. |
 | `spend-outside` | The spend series of the sessions outside canopy: no run of canopy's. |
 | `context-carried`, `context-added` | The context chart's fills: what a model call carried, and what it added. |
@@ -1420,7 +1420,16 @@ reader, so no table repeats them.
   came for, then the `harness` line when the harness decided the status, then the verdict, in its worst finding's color
   with its impact chip (its one home), the PR, with the PR's other reviews on a muted line under it, the ticket, the
   commit, when it ended, and what it spent. A diff is a monospace table: the old and new line numbers, the `+` or `-`
-  in `diff-add` or `diff-del`, and the line, its row on that token's tint; a hunk's header on `surface-raised`; long
+  in `diff-add` or `diff-del`, and the line, its row on that token's tint. The numbers are a gutter, as narrow as the
+  file's longest number, a hairline between it and the code; a side no line is on has no column, so a new file's code
+  starts a column sooner. A hunk's header, on `surface-raised`, is git's own line, `@@ -4,6 +4,8 @@` with what follows
+  it, its ranges from the lines' numbers, so the row says where the hunk is even when git names no function. Where
+  added lines follow removed ones, each removed line is paired with the next added one like it
+  (`src/lib/diff-words.ts`), and the words that differ wear a second layer of the tint, 25%, in `foreground`: no
+  `syntax-*` color reads at 4.5:1 on both layers, and the plain ink is part of the mark. Lines too unlike to be one
+  line edited keep their row's tint alone. A file's header leads with its name, its directory muted and cut first
+  when the path is too long, then the lines it adds and removes in `diff-add` and `diff-del`, as a run's file list
+  counts them; it is a sticky `PanelHeader`, so a long file keeps its name in view. Long
   lines scroll sideways inside the panel, while a finding's card and a fold keep to the panel's width at its left edge,
   so one long line never carries a card's text out of reach. The code is colored by the file's language
   (`src/lib/languages.ts`) in the `syntax-*` tokens, each read at 4.5:1 on an added or removed line's tint too; Shiki

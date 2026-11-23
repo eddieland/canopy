@@ -250,3 +250,22 @@ describe('FindingCard', () => {
         )
     })
 })
+
+describe('ReviewDiffPanels lines', () => {
+    it("says how many lines a file adds and removes, and each hunk's ranges as git writes them", () => {
+        const lines: DiffLine[] = [
+            { kind: 'ctx', old: 4, new: 4, text: 'function send() {' },
+            { kind: 'del', old: 5, new: null, text: '    return post(query, 250)' },
+            { kind: 'add', old: null, new: 5, text: '    return post(query, WAIT)' },
+        ]
+        const files = { truncated: false, files: [{ ...small('src/a.txt'), hunks: [{ header: 'send', lines }] }] }
+        render(diff([], { files }))
+
+        expect(screen.getByTestId('diff-file-lines').textContent).toBe('+1 −1')
+        expect(screen.getByText('@@ -4,2 +4,2 @@ send')).toBeDefined()
+        // The words that changed are still the line's own text, whole.
+        expect(screen.getByText('250')).toBeDefined()
+        expect(screen.getByText('WAIT')).toBeDefined()
+        expect(screen.getAllByRole('row').map((row) => row.textContent)).toContain('5+    return post(query, WAIT)')
+    })
+})
