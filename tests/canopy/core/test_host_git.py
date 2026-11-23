@@ -5,8 +5,10 @@ The pool here is what treehouse makes: slots that are worktrees of one primary c
 
 import ast
 import json
+import os
 from pathlib import Path
 from typing import Final
+from unittest import mock
 
 import pytest
 
@@ -222,6 +224,22 @@ def test_restore_link_removes_what_is_there_without_following_it(tmp_path: Path)
     hostgit.restore_link(worktree, b"gitdir: /y\n")
     assert hostgit.read_link(worktree) == b"gitdir: /y\n"
     assert (outside / "keep").read_text() == "the operator's"
+
+
+def test_merge_file_merges_three_texts_and_counts_conflicts() -> None:
+    runner = SubprocessRunner()
+    labels = ("yours", "base", "theirs")
+    clean = hostgit.merge_file(runner, "mine\nb\nc\n", "a\nb\nc\n", "a\nb\ntheirs\n", labels=labels)
+    assert clean == hostgit.Merge("mine\nb\ntheirs\n", 0)
+    conflict = hostgit.merge_file(runner, "mine\n", "a\n", "theirs\n", labels=labels)
+    assert conflict is not None
+    assert conflict.conflicts == 1
+    assert "<<<<<<< yours\nmine\n||||||| base\na\n=======\ntheirs\n>>>>>>> theirs\n" in conflict.text
+
+
+def test_merge_file_is_none_without_git(tmp_path: Path) -> None:
+    with mock.patch.dict(os.environ, {"PATH": str(tmp_path)}):
+        assert hostgit.merge_file(SubprocessRunner(), "a\n", "b\n", "c\n", labels=("x", "y", "z")) is None
 
 
 def test_every_git_the_harness_runs_goes_through_hostgit() -> None:
