@@ -163,7 +163,7 @@ dev = [
     "rumdl>=0.3.4",
     "shellcheck-py>=0.11.0.1",
     # Snapshot tests: what canopy renders whole, held to a file under a test's `__snapshots__/` (AGENTS.md, Testing).
-    "syrupy>=6.1.1",
+    "syrupy>=7.0.0",
     # Security lint for the GitHub workflows, beside actionlint's correctness checks: pins, triggers, token handling.
     # jsonschema's types, for the type checker.
     "types-jsonschema>=4.26.0.20261006",
