@@ -350,11 +350,12 @@ function FilePanel<T>({
                 <PanelHeader label="File" level={level} spoken={named} sticky>
                     {/* Its heading names it to a screen reader, which this line would say again. */}
                     <span aria-hidden className="flex min-w-0 flex-1 font-mono text-xs" title={named}>
-                        <span className="truncate text-muted-foreground">
+                        {/* The directory gives way first; a name too long for the header alone is cut too. */}
+                        <span className="shrink-999 truncate text-muted-foreground">
                             {file.old_path !== null && `${file.old_path} → `}
                             {file.path.slice(0, slash)}
                         </span>
-                        <span className="shrink-0">{file.path.slice(slash)}</span>
+                        <span className="truncate">{file.path.slice(slash)}</span>
                     </span>
                     {added + removed > 0 && (
                         <span className="readout text-xs whitespace-nowrap" data-testid="diff-file-lines">
