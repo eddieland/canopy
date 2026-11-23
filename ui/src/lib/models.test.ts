@@ -145,6 +145,9 @@ describe('isRouter', () => {
         expect(isRouter('acme/fusion', routers)).toBe(false)
         expect(isRouter('github-copilot/fusion-mini', routers)).toBe(false)
         expect(insteadMark('github-copilot/fusion', routers)).toBe('→')
+        // Named at a variant, it is a router at any.
+        expect(isRouter('acme/fusion@low', ['acme/fusion@high'])).toBe(true)
+        expect(isRouter('acme/fusion', ['acme/fusion@high'])).toBe(true)
     })
 
     it('marks what served in place of a router as sent on, and in place of any other model as not it', () => {

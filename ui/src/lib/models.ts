@@ -104,11 +104,16 @@ export function sameModel(asked: string, served: string): boolean {
  * Whether `model`, as `provider/model[@variant]`, is a router: a name a provider serves by picking one of its models
  * for each request, as `github-copilot/auto` does, so no session ever names it as what served. By its name: the last
  * part of its id is `auto`, which is how most providers that have one name it, or it is one of `routers`, the models
- * `runtime.routers` names (`useRouters`), at any variant.
+ * `runtime.routers` names (`useRouters`), at any variant, whichever variant config named it at.
  */
 export function isRouter(model: string, routers: readonly string[]): boolean {
-    const id = pickerModel(model).variant === null ? model : model.slice(0, model.lastIndexOf('@'))
-    return id.slice(id.lastIndexOf('/') + 1) === 'auto' || routers.includes(id) || routers.includes(model)
+    const id = withoutVariant(model)
+    return id.slice(id.lastIndexOf('/') + 1) === 'auto' || routers.some((router) => withoutVariant(router) === id)
+}
+
+/** A model as `provider/model[@variant]` without its variant, as `pickerModel` reads one. */
+function withoutVariant(model: string): string {
+    return pickerModel(model).variant === null ? model : model.slice(0, model.lastIndexOf('@'))
 }
 
 /**
