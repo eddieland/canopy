@@ -15,6 +15,11 @@ an agent's text mentions it: the name still opens the PR's page, and the icon ta
 column is only as wide as the longest name in the list, and in a narrow window the phase goes first, then the age, so
 the title keeps the room. The **Reviews** link over the list opens [the reviews page](#the-reviews-page), with your
 filter kept, and says how many results you haven't opened yet: the same count the nav shows beside Pull requests.
+The **Drafts** link beside it opens [the drafts page](#the-drafts-page), and says how many replies wait on you.
+
+A PR holding replies a run wrote and you haven't sent wears an amber chip after its title, `4 drafts`. Click it and
+you land on the PR's page at its list of them. A ticket's row on [Tickets](/tickets) wears the same chip, counting its
+own drafts and its PRs' together.
 
 On a PR the loop doesn't own, a chip after the verdict says where your own review of it stands: `draft` while it waits
 on you, `staged` once it's a pending review on GitHub for you to submit, `unconfirmed` while canopy doesn't know whether
@@ -148,6 +153,25 @@ card warns you that your edits didn't come along. A draft is never posted twice;
 whether it worked reads `unconfirmed` until canopy's next read of the PR settles it.
 
 The [attention list](attention) holds a `drafts waiting` item while any draft for the PR waits on you.
+
+## The drafts page
+
+**Drafts**, under [Pull requests](/pull-requests), lists every reply that waits on you in one place, so you don't
+have to remember which PR had them. It holds what the attention list counts: drafts still `waiting`, ones
+canopy hasn't checked against the PR's threads yet (`unchecked`), and ones in a review you `staged` on GitHub. Sent,
+dropped, refused, and replaced drafts aren't here, and neither are the drafts of a PR that has since merged or closed.
+
+Each PR gets a group, the one whose oldest draft has waited longest first: the PR, its ticket, how many drafts, and how
+long the oldest has sat there. Under it is a row per draft with its status, its run and number, its first line, and
+what it is (`changed, on a thread`, `the review's body`). The first line opens that draft's card on the PR's page, and
+**Read and send** opens the page at its list of them. Sending stays there on purpose: a PR's drafts go out together,
+as one review, and you should see the threads they answer before they do.
+
+A ticket's own drafts, the comments a run would have posted on the issue, are a group with no PR. Those are whole
+cards, with **Send**, **Edit**, and **Drop** right there, since each goes out alone.
+
+The nav shows the count beside Drafts while any wait. When it shows nothing, you're caught up, which is worth a moment
+of quiet satisfaction before the next review lands.
 
 ## The feedback plan
 

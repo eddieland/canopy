@@ -254,7 +254,8 @@ agent works in it; between runs, the pushed branch is the checkpoint. See
 
 A reply a run wrote for you to send, on a PR's review thread or on its ticket, kept until you **Send**, **Edit**, or
 **Drop** it. With `trust.review_replies = "approve"`, the default, nothing a worker writes to a coworker goes out any
-other way. See [Pull requests and reviews](pull-requests#replying-to-your-coworkers-reviews).
+other way. [Drafts](pull-requests#the-drafts-page) lists every one that waits. See
+[Pull requests and reviews](pull-requests#replying-to-your-coworkers-reviews).
 
 ### Finding
 

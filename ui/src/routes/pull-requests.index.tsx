@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 
-import { pullRequestsQuery, reviewsQuery } from '@/api/queries'
+import { pullRequestsQuery, reviewsQuery, unsentDraftsQuery } from '@/api/queries'
 import type { PullRequest } from '@/api/types'
 import { Age } from '@/components/age'
 import { None } from '@/components/none'
@@ -17,6 +17,8 @@ import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
 import { Clipped } from '@/components/tip'
+import { UnsentDraftsChip } from '@/components/unsent-drafts-chip'
+import { draftsText, unsentCount } from '@/lib/drafts'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { phaseMeaning } from '@/lib/meanings'
 import { countText, filterWords, prQueryOf, pullRequestShown, reposOf } from '@/lib/pull-request-filter'
@@ -30,7 +32,8 @@ import { NO_TICKET } from '@/lib/words'
 /**
  * Every PR the journal knows, most recent activity first, whoever's it is. `?repo=` keeps the PRs in its repositories,
  * and `?q=` those whose name, ticket, or title holds every word. canopy's reviews are under it, at
- * `/pull-requests/reviews`, linked with how many results the operator has not opened, as the nav counts them.
+ * `/pull-requests/reviews`, linked with how many results the operator has not opened, as the nav counts them, and the
+ * drafts that wait on the operator at `/pull-requests/drafts`, linked with how many there are.
  */
 export const Route = createFileRoute('/pull-requests/')({
     // Typed search params, as the tickets page's: every key returned, undefined when the page does not offer it.
@@ -48,6 +51,7 @@ function PullRequestsPage() {
     const filtered = filter.repo !== undefined || filter.q !== undefined
     const order = useListOrder('pull-requests')
     const unseen = unseenOf(useQuery(reviewsQuery).data).length
+    const unsent = unsentCount(useQuery(unsentDraftsQuery).data ?? [])
     return (
         <>
             <PageHeader title="Pull requests">
@@ -66,6 +70,14 @@ function PullRequestsPage() {
                             data-testid="pull-requests-reviews-link"
                         >
                             {unseen > 0 ? `Reviews, ${unseen} new` : 'Reviews'}
+                        </Link>
+                        <Link
+                            to="/pull-requests/drafts"
+                            className="text-xs text-accent underline-offset-4 hover:underline"
+                            title={unsent > 0 ? `${draftsText(unsent)} unsent` : undefined}
+                            data-testid="pull-requests-drafts-link"
+                        >
+                            {unsent > 0 ? `Drafts, ${unsent} unsent` : 'Drafts'}
                         </Link>
                         {shown !== undefined && shown.length > 1 && <OrderToggle list="pull-requests" />}
                         <span className="readout text-xs text-muted-foreground" data-testid="pull-requests-count">
@@ -102,7 +114,8 @@ function PullRequestsPage() {
 
 /**
  * A PR: where it stands, the PR (`org/repo#123` for GitHub's), its unit's phase, its ticket (or `none`, why on hover,
- * for any PR canopy only reviews) and title, and its age. The title is the PR's own once a worker reports it, else its
+ * for any PR canopy only reviews) and title, how many of its drafts wait on the operator (`UnsentDraftsChip`), and its
+ * age. The title is the PR's own once a worker reports it, else its
  * ticket's.
  * Where it stands is the run working it, while one does, then its latest review's verdict and whether the operator's
  * review request on it is open.
@@ -122,6 +135,7 @@ function Row({ pr }: { pr: PullRequest }) {
                     <TicketLink ticketKey={pr.ticket_key} className="shrink-0" />
                 )}
                 {(pr.ticket_key !== null || pr.title !== null) && <TicketTitle title={pr.title ?? pr.ticket_title} />}
+                <UnsentDraftsChip url={pr.url} />
             </span>
             <Age at={pr.active_at} variant="ago" className="text-right" />
         </ListRow>

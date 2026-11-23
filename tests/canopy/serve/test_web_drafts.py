@@ -252,3 +252,31 @@ def test_a_tickets_own_draft_is_on_its_page_and_sent_from_there(scenario: Scenar
         {"issue": issue, "ticket": "PROJ-1", "body": "Which base should this target?"},
     ]
     assert c.get("/api/tickets/PROJ-1").json()["drafts"][0]["status"] == "sent"
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_the_unsent_drafts_are_listed_by_their_pr_until_they_are_sent(scenario: Scenario, github_state: Path) -> None:
+    c, write, run_id = drafted(scenario, github_state)
+    [group] = c.get("/api/drafts").json()
+    assert (group["ticket_key"], group["pr_url"]) == (KEY, PR)
+    # The refused draft waits on nobody: only the thread's reply and the review's body are unsent.
+    assert [(d["run"], d["number"], d["kind"], d["status"]) for d in group["drafts"]] == [
+        (run_id, 1, "thread", "waiting"),
+        (run_id, 2, "pr", "waiting"),
+    ]
+    assert group["since"] == min(d["created_at"] for d in group["drafts"])
+    wanted = [{"run": d["run"], "number": d["number"], "hash": d["hash"]} for d in group["drafts"]]
+    assert c.post("/api/drafts/send", json={"drafts": wanted}, headers=write).status_code == 200
+    assert c.get("/api/drafts").json() == []
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_tickets_own_unsent_draft_is_a_group_with_no_pr(scenario: Scenario, github_state: Path) -> None:
+    scenario.configures("private", trust=APPROVE, connect=TRACKER_POSTS)
+    github_has(github_state)
+    ticket = {"on": "ticket", "url": "https://github.com/acme/api/issues/1", "text": "Which base?"}
+    scenario.run(dispatches(slug="work"), worker=sends_drafts([ticket]))
+    c, _ = signed_in_client(migrated(scenario.env))
+    [group] = c.get("/api/drafts").json()
+    assert (group["ticket_key"], group["pr_url"]) == (KEY, None)
+    assert [(d["kind"], d["text"]) for d in group["drafts"]] == [("ticket", "Which base?")]

@@ -231,7 +231,7 @@ test('an agent with no instructions gets a file created on its page, and loses i
     ).toHaveCount(0)
 })
 
-test('the settings page saves a limit and drops a trusted reviewer, but offers nothing past its ceiling', async ({
+test('the settings page saves a limit and drops a trusted reviewer, but shortens no retention past its floor', async ({
     page,
 }) => {
     await page.goto('settings')
@@ -265,12 +265,11 @@ test('the settings page saves a limit and drops a trusted reviewer, but offers n
     await expect(workers).toHaveAttribute('aria-invalid', 'true')
     await expect(form.getByTestId('capacity.max_workers-error')).toHaveText('not a whole number')
     await expect(form.getByTestId('config-save')).toBeDisabled()
-    await workers.fill('33')
-    await expect(form.getByTestId('capacity.max_workers-error')).toHaveText(
-        'at most 32 from here; set more in the file',
-    )
     await expect(form.getByTestId('config-pending')).toHaveText('1 unsaved change, 1 to fix before saving')
-    await expect(form.getByTestId('config-save')).toBeDisabled()
+    // A count has no ceiling of the page's own.
+    await workers.fill('33')
+    await expect(form.getByTestId('capacity.max_workers-error')).toHaveCount(0)
+    await expect(form.getByTestId('config-save')).toBeEnabled()
 
     await workers.fill(after)
     await form.getByTestId('trust.trusted_reviewers-lint-bot').click()

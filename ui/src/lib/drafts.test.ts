@@ -1,8 +1,22 @@
 import { describe, expect, it } from 'vitest'
 
-import { draft, pullRequestThreads, reviewThread } from '@/api/mocks'
+import { draft, pullRequestThreads, reviewThread, unsentDrafts } from '@/api/mocks'
 
-import { draftAnchor, draftChars, listDrafts, movedHead, open, placeThreads, threadWhere, waiting } from './drafts'
+import {
+    draftAnchor,
+    draftChars,
+    draftGoes,
+    draftLine,
+    draftsText,
+    listDrafts,
+    longestWaiting,
+    movedHead,
+    open,
+    placeThreads,
+    threadWhere,
+    unsentCount,
+    waiting,
+} from './drafts'
 
 describe('waiting', () => {
     it("takes the review's body first, then each thread's, and only what waits", () => {
@@ -108,5 +122,46 @@ describe('movedHead', () => {
 describe('draftChars', () => {
     it('counts code points, as the bound does', () => {
         expect(draftChars('a😀b')).toBe(3)
+    })
+})
+
+describe('draftLine', () => {
+    it("is the draft's first line with text, or its reaction when it sends that alone", () => {
+        expect(draftLine(draft({ text: '\n  \nFixed.\nAnd more.' }))).toBe('Fixed.')
+        expect(draftLine(draft({ text: '', reaction: '+1' }))).toBe('Thumbs up, alone')
+    })
+})
+
+describe('draftGoes', () => {
+    it('says what the run did about a thread, or where else the draft goes', () => {
+        expect(draftGoes(draft({ stance: 'declined' }))).toBe('declined, on a thread')
+        expect(draftGoes(draft({ stance: null }))).toBe('a thread')
+        expect(draftGoes(draft({ kind: 'pr', stance: null }))).toBe("the review's body")
+        expect(draftGoes(draft({ kind: 'ticket', stance: null }))).toBe('the ticket')
+    })
+})
+
+describe('the unsent drafts', () => {
+    const OTHER = 'https://github.com/acme/api/pull/7'
+    const groups = [
+        unsentDrafts({ drafts: [draft(), draft({ number: 2 })] }),
+        unsentDrafts({ pr_url: null, since: '2026-10-08T09:00:00Z', drafts: [draft({ kind: 'ticket' })] }),
+        unsentDrafts({ ticket_key: 'ABC-100', pr_url: OTHER, since: '2026-10-07T09:00:00Z' }),
+    ]
+
+    it('are counted in all, for one PR, or for one ticket and its PRs', () => {
+        expect(unsentCount(groups)).toBe(4)
+        expect(unsentCount(groups, { url: OTHER })).toBe(1)
+        expect(unsentCount(groups, { ticket: 'ABC-099' })).toBe(3)
+        expect(unsentCount(groups, { ticket: 'ABC-1' })).toBe(0)
+    })
+
+    it('are listed by how long each has waited, the longest first', () => {
+        expect(longestWaiting(groups).map((g) => g.pr_url)).toEqual([OTHER, null, groups[0]?.pr_url])
+    })
+
+    it('are counted in words', () => {
+        expect(draftsText(1)).toBe('1 draft')
+        expect(draftsText(3)).toBe('3 drafts')
     })
 })

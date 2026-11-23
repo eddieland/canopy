@@ -24,6 +24,7 @@ import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
 import { Clipped, Tip } from '@/components/tip'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
+import { useRouters } from '@/hooks/use-routers'
 import { costText } from '@/lib/cost-total'
 import { insteadMark, isUnread, modelNames, runModelIds, sameModel, UNREAD, unservedReason } from '@/lib/models'
 import { choreRunRef } from '@/lib/refs'
@@ -493,6 +494,7 @@ function namesModel(run: Run): boolean {
  * read named none, the word in muted sans as no id; a run with no session to read names no model.
  */
 function RunModel({ run, names, className }: { run: Run; names: ModelNames; className?: string }) {
+    const routers = useRouters()
     const name = (id: string) => names.get(id) ?? id
     const asked = run.model
     const served = run.models?.status === 'found' ? run.models.models : []
@@ -534,7 +536,7 @@ function RunModel({ run, names, className }: { run: Run; names: ModelNames; clas
             <span className={cn('text-muted-foreground', className)} data-testid="run-model">
                 {match === undefined && asked !== null ? (
                     <>
-                        asked {name(asked)} {insteadMark(asked)}{' '}
+                        asked {name(asked)} {insteadMark(asked, routers)}{' '}
                         <span className="text-foreground">
                             {name(first?.model ?? '')}
                             {rest.length > 0 && ` +${rest.length}`}

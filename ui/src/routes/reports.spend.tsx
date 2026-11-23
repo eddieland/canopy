@@ -34,6 +34,7 @@ import { Clipped, Hinted, Tip } from '@/components/tip'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { UnnamedModel } from '@/components/unnamed-model'
 import { WindowToggle } from '@/components/window-toggle'
+import { useRouters } from '@/hooks/use-routers'
 import { barPercent } from '@/lib/chart'
 import { useClock } from '@/lib/clock'
 import { counted } from '@/lib/descriptions'
@@ -1095,6 +1096,7 @@ const ASKED_HINT =
  * model says so after it, `via auto` for a router that sent them on and `asked X` for a model that did not serve.
  */
 function ModelName({ model: m, of, listed }: { model: ModelRow; of: RunsKind; listed: ReadonlySet<string> }) {
+    const routers = useRouters()
     if (m.model === null) {
         return (
             <Tip fact={unnamedHint(m.unread)}>
@@ -1130,7 +1132,7 @@ function ModelName({ model: m, of, listed }: { model: ModelRow; of: RunsKind; li
             {link}
             <Tip fact={ASKED_HINT}>
                 <span className="shrink-0 font-mono text-xs text-muted-foreground" data-testid="spend-model-asked">
-                    {isRouter(m.asked) ? 'via' : 'asked'} {m.asked}
+                    {isRouter(m.asked, routers) ? 'via' : 'asked'} {m.asked}
                 </span>
             </Tip>
         </span>

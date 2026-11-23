@@ -50,6 +50,7 @@ function renderForm(repos: string[], tasks: Pick<TaskSummary, 'repo'>[] = [], fi
         ticket_url: null,
         version: '0.4.0',
         workspace_root: '/w',
+        routers: [],
         attachment_limits: mockAttachmentLimits,
         repos,
     }

@@ -1482,9 +1482,10 @@ reader, so no table repeats them.
 - **A PR** (`/pull-requests`, `/pull-requests/pr?url=`) has a section of its own. A PR's row: where it stands, which is
   the run working it now while one does, then its latest review and its verdict, in its worst finding's color (`not
   reviewed` muted), its draft's chip, and `requested` while the operator's request is open; the PR; its unit's phase as
-  a chip; then its ticket and title in the free column, and its age. The ticket shares the free column with its title:
-  a column of its own would not fit a 1280px window. Its page: the PR's name as the title, then its own title as its
-  worker reported it, else its ticket's, with its phase as a chip; its description is where it stands, as its row leads
+  a chip; then its ticket and title in the free column, with its unsent drafts' chip, and its age. The ticket shares
+  the free column with its title: a column of its own would not fit a 1280px window. Its page: the PR's name as the
+  title, then its own title as its worker reported it, else its ticket's, with its phase as a chip; its description is
+  where it stands, as its row leads
   with it, and for a PR canopy only reviews, `canopy only reviews it`, said there alone. A link out follows, saying
   where it goes rather than repeating the title. Then panels: its fields, with a grant of another review in its foot
   when it is at its review limit; its review threads when canopy has read them or holds a draft for it, led by its
@@ -1538,7 +1539,17 @@ reader, so no table repeats them.
   (`Notice`), in `canopy draft`'s words, and a toast says what a send did as well, since a send speaks for the operator
   outside canopy and the line under the card leaves with its attention item at the next tick. A ticket's own drafts
   (`TicketDrafts`) are a `Drafts for the ticket` panel under the ticket page's grid, shown only when it has any, each
-  card naming the issue it goes to in monospace, as text and never a link, since a worker named it.
+  card naming the issue it goes to in monospace, as text and never a link, since a worker named it. Outside those
+  pages the drafts that wait on the operator (unchecked, waiting, or staged, as the attention list counts them) are a
+  count: `UnsentDraftsChip`, a `status-blocked` chip with the reply icon and `4 drafts`, after the title in a PR's row
+  and a ticket's, a link to where they are sent, and in a list too narrow for its columns its icon and number alone.
+  The drafts page (`/pull-requests/drafts`, under Pull requests in the nav, with the count in `status-blocked` beside
+  its item, and linked over the PRs list as `Drafts, 4 unsent`) lists them all in one panel, a group per PR or ticket,
+  the longest waiting first: a head line of the PR, its ticket and title, the count as a chip, the oldest draft's age,
+  and an outline `Read and send` to the PR's page; then a `thread-draft` row per draft, as the PR's own list has, ending
+  in what the draft is. A ticket's own drafts are their cards there, with their verbs, since each is sent alone; a PR's
+  are never sent from the list, since they go as one review beside the threads they answer. A link to a draft's card
+  or to a PR's list of drafts from another page is scrolled to once the threads are read.
 - **Search** sits atop the nav on every page (`SearchBox`, a `SearchField`): a magnifier, the field, and `/` in a
   keycap, its shortcut from anywhere but a text field; while the field holds text, a ghost clear button takes the
   keycap's place. An empty field empties the search page if it is open, and leaves any other page as it is. Enter on a

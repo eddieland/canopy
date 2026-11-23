@@ -134,7 +134,7 @@ def _scrub(conn: sqlite3.Connection, where: sql.Composable, *, why: sql.Arg) -> 
         How many bodies were deleted, and whether the checkpoint completed: a reader can hold it back, and the next
         checkpoint completes it.
     """
-    before = int(sql.execute(conn, sql.frag("PRAGMA secure_delete")).fetchone()[0])
+    [before] = records.fetch_values(conn, int, sql.frag("PRAGMA secure_delete"))
     sql.execute(conn, _SECURE_DELETE[1])
     try:
         with db.transaction(conn):
