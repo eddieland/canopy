@@ -1457,10 +1457,14 @@ reader, so no table repeats them.
   first file, an outline `xs` button names the file types shown and opens a menu of them, each a checkbox item, so
   several flip in one go; a link from the findings list to a card ticks its file's type and opens its panel, viewed or
   not, so a link never lands on nothing. A finding's card (`FindingCard`) sits right under the line it names, or under
-  its file's header when the
-  diff does not show the line, or in a Not in the diff panel after the files. A card holds its number, its severity as
+  its file's header when the diff does not show the line, or in a Not in the diff panel after the files. Under its
+  line a card is a band of the row on `surface-raised`, edge to edge between the row's hairlines, with no frame of its
+  own and no location: the file's header and the line above it say where it is, and a box inside the row inside the
+  panel is one frame too many. Anywhere else it is a box, and says its location. A draft's card keeps its frame under
+  a line too, since its edge says whether it waits. A card holds its number, its severity as
   a chip (`blocking` in `status-failed`, `major` in `status-blocked`, as the attention list's reasons; `minor` plain),
-  its title, its location, and its detail as rich text, with `dismiss` at the end of its head line; a dismissed one has
+  its title, and its detail as rich text in `foreground`, no wider than 96 characters, since what a finding says is
+  what the card is for; `dismiss` is at the end of its head line; a dismissed one has
   a `dismissed` chip, its title muted, `undo` in place of `dismiss`, as on a chore's finding. On a review of one of the
   loop's own PRs, each finding in the list the operator has not dismissed has a checkbox before its number, and under
   the list `send to a worker` sends the ticked ones together, as `canopy send` does. The list of reviews is a
@@ -1531,7 +1535,8 @@ reader, so no table repeats them.
   its own (`proposal-*`), so `change`, the one that edits code, stands out, `decline` and `ask` sit apart from it and
   from each other, and `leave`, which does nothing, stays plain. Then the diff (`DiffPanels`), each thread's card
   (`ThreadCard`, `surface-raised`) under its line, under its file's header when outdated or off the diff, and a `Not in
-  the diff` panel for the rest. A thread's card: where it is in muted monospace, `outdated` and `resolved` chips, each
+  the diff` panel for the rest. A thread's card: where it is in muted monospace, unless it is under its line, as a
+  finding's is, `outdated` and `resolved` chips, each
   comment's author, a `bot` chip, `sent by you` on one the operator sent, its age, a `LinkOut` to it, and its body as
   `MemoryText`, plain, never Markdown or a link; a draft's text the same. A thread the feedback plan covers carries its
   proposal above its drafts (`PlanProposal`, an inset rule on the thread's card, not a card of its own); a `change` its

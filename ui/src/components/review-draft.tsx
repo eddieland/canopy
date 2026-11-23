@@ -30,6 +30,7 @@ import { SendKeycap } from '@/components/send-keycap'
 import { Chip } from '@/components/status'
 import { Tip } from '@/components/tip'
 import { Button } from '@/components/ui/button'
+import { useOnDiffLine } from '@/hooks/use-on-diff-line'
 import { useToast } from '@/hooks/use-toast'
 import { reviewDraftDescription } from '@/lib/descriptions'
 import {
@@ -778,6 +779,8 @@ export function ReviewPointCard({ run, numbered, draft }: { run: number; numbere
     const [editing, setEditing] = useState(false)
     const [said, setSaid] = useState<string | null>(null)
     const out = point.kind === 'out'
+    // Under its line, the file's header and the line say where it is.
+    const onLine = useOnDiffLine()
     return (
         <DraftCardFrame
             id={findingAnchor(n)}
@@ -789,7 +792,7 @@ export function ReviewPointCard({ run, numbered, draft }: { run: number; numbere
                     <span className="readout text-xs text-muted-foreground">{n}</span>
                     <Chip tone={SEVERITY_TONE[finding.severity]}>{finding.severity}</Chip>
                     <span className={cn('font-medium', out && 'text-muted-foreground')}>{finding.title}</span>
-                    {finding.location && (
+                    {finding.location && !onLine && (
                         <span className="font-mono text-xs break-all text-muted-foreground">{finding.location}</span>
                     )}
                     <Chip>{POINT_CHIP[point.kind]}</Chip>
