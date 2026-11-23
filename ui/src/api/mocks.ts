@@ -25,6 +25,7 @@ import type {
     TaskRun,
     TaskSummary,
     TicketSummary,
+    UnsentDrafts,
 } from './types'
 
 /** The default limits on a ticket's, a task's, or an epic's attachments: five files, 512 KiB each, 1 MiB in all. */
@@ -907,6 +908,18 @@ export function draft(fields: Partial<Draft> = {}): Draft {
         reacted: null,
         created_at: '2026-10-08T11:38:00Z',
         from_plan: null,
+        ...fields,
+    }
+}
+
+/** PR 88's unsent drafts: run 45's reply to alice's thread, for ABC-099, `fields` over it. */
+export function unsentDrafts(fields: Partial<UnsentDrafts> = {}): UnsentDrafts {
+    return {
+        ticket_key: 'ABC-099',
+        ticket_title: 'Debounce search input',
+        pr_url: 'https://github.com/acme/web/pull/88',
+        since: '2026-10-08T11:38:00Z',
+        drafts: [draft()],
         ...fields,
     }
 }

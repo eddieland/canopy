@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
-from canopy.core import observe, review_drafts_manage, sql
+from canopy.core import observe, records, review_drafts_manage, sql
 from canopy.core.vocab import DraftStatus, PrState
 from canopy.runs import drafts, drafts_manage
 
@@ -103,7 +103,7 @@ def waiting(conn: sqlite3.Connection) -> list[Item]:
         )
         .from_("drafts d")
         .left_join("observed_prs p ON p.url = d.pr_url")
-        .where_in("d.status", (DraftStatus.UNCHECKED, DraftStatus.WAITING, DraftStatus.STAGED))
+        .where_in("d.status", _UNSENT)
         .where("p.state IS NULL OR p.state = ?", PrState.OPEN)
         .group_by("d.ticket_key, d.repo, d.pr_url")
         .order_by("d.ticket_key, d.repo IS NULL, d.repo, d.pr_url"),
@@ -122,3 +122,20 @@ def waiting(conn: sqlite3.Connection) -> list[Item]:
             detail += f"; its threads could not be read yet, so {unchecked} cannot be sent until they are"
         found.append(Item(str(r["ticket_key"]), str(r["repo"]), n, detail, str(r["since"])))
     return found
+
+
+def unsent(conn: sqlite3.Connection, limit: int) -> list[records.Draft]:
+    """Return the drafts `waiting` counts, each whole: at most `limit`, in its items' order, then by run and number."""
+    return (
+        records.select(records.Draft, "d")
+        .where_in("d.status", _UNSENT)
+        .where("NOT EXISTS (SELECT 1 FROM observed_prs p WHERE p.url = d.pr_url AND p.state != ?)", PrState.OPEN)
+        .order_by("d.ticket_key, d.repo IS NULL, d.repo, d.pr_url, d.run_id, d.number")
+        .limit(limit)
+        .all(conn)
+    )
+
+
+#: The statuses of a draft that waits on the operator: to send it, once a read has checked it, or to submit on GitHub
+#: the review they staged it in.
+_UNSENT: Final = (DraftStatus.UNCHECKED, DraftStatus.WAITING, DraftStatus.STAGED)

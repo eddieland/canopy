@@ -93,6 +93,13 @@ export const GHOST_TIPS = {
         'Scanning... I review you too. Verdict: still alive. Mostly my doing.',
         "Dear Traveler, canopy reviewed a PR and told nobody. I respect a Hunter's discretion.",
     ],
+    '/pull-requests/drafts': [
+        'Eyes up, Guardian. Unsent words. They only fire when you pull the trigger.',
+        'Field report: replies holding position, awaiting your order to send.',
+        "Grimoire: a draft dropped is a shot not taken. Sometimes that's the win.",
+        'Scanning... a run wrote these in your voice. I do your voice too. Better, frankly.',
+        'Dear Traveler, my Guardian reads every word before it leaves. Unlike certain Titans.',
+    ],
     '/pull-requests/reviews/$id': [
         'Eyes up, Guardian. Findings. Tick them before they tick you.',
         'Scanning... severity: high. That is what I said about Oryx.',

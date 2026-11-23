@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
+import { Link, useLocation } from '@tanstack/react-router'
 import { Eraser, GitPullRequestDraft, Send, Undo2 } from 'lucide-react'
-import { useId, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 
 import { dropDraft, editDraft, refreshThreads, sendDrafts, stageDrafts } from '@/api/mutations'
 import { pullRequestThreadsQuery } from '@/api/queries'
@@ -27,9 +27,12 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useToast } from '@/hooks/use-toast'
 import {
     DRAFT_TONE,
+    DRAFTS_ANCHOR,
+    DRAFT_ANCHOR_PREFIX,
     REACTIONS,
     REACTION_LOOKS,
     draftAnchor,
+    draftLine,
     listDrafts,
     movedHead,
     open,
@@ -76,6 +79,17 @@ export function ReviewThreads({ url }: { url: string }) {
     const [settled, setSettled] = useState<{ id: number; leads: boolean } | null>(null)
     if (plan !== null && settled?.id !== plan.id) {
         setSettled({ id: plan.id, leads: plan.status === 'waiting' || plan.status === 'stale' })
+    }
+    // A link from another page to a draft's card (`#draft-45-1`), read once the threads are: its file shown, as a link
+    // followed in the list shows it.
+    const hash = useLocation({ select: (location) => location.hash })
+    const [arrived, setArrived] = useState<string | null>(null)
+    if (data !== undefined && hash !== arrived) {
+        setArrived(hash)
+        const file = listDrafts(data, placeThreads(data)).find((l) => draftAnchor(l.draft) === hash)?.file
+        if (file !== undefined && file !== null) {
+            setWanted({ file })
+        }
     }
     if (data === undefined) {
         return (
@@ -167,6 +181,14 @@ function RepliesPanel({
 }) {
     const [said, setSaid] = useState<string | null>(null)
     const toast = useToast()
+    // A link from another page to the list of drafts or to a draft's card names what the page had not drawn when it
+    // opened: brought into view now that it has.
+    const hash = useLocation({ select: (location) => location.hash })
+    useEffect(() => {
+        if (hash === DRAFTS_ANCHOR || hash.startsWith(DRAFT_ANCHOR_PREFIX)) {
+            document.querySelector(`#${CSS.escape(hash)}`)?.scrollIntoView({ block: 'start' })
+        }
+    }, [hash])
     const sendable = waiting(threads)
     const held = staged(threads)
     const send = useMutation({
@@ -338,7 +360,7 @@ function DraftList({
         return null
     }
     return (
-        <div className="border-t" data-testid="draft-list">
+        <div id={DRAFTS_ANCHOR} className="scroll-mt-16 border-t" data-testid="draft-list">
             <span className="block px-3 pt-3 panel-label">
                 Drafts <span className="readout text-muted-foreground">{listed.length}</span>
             </span>
@@ -364,7 +386,7 @@ function DraftList({
                                 (draft.status === 'superseded' || draft.status === 'dropped') && 'line-through',
                             )}
                         >
-                            <MemoryText text={rowText(draft)} className="whitespace-nowrap" />
+                            <MemoryText text={draftLine(draft)} className="whitespace-nowrap" />
                         </Link>
                         <span className="max-w-56 truncate font-mono text-xs text-muted-foreground" title={where}>
                             {where}
@@ -374,16 +396,6 @@ function DraftList({
             </RowList>
         </div>
     )
-}
-
-// What a draft's row shows: its first line with text, as its card shows the rest, or its reaction when it sends that
-// alone, so the row's link is never empty.
-function rowText(draft: Pick<Draft, 'text' | 'reaction'>): string {
-    const line = draft.text.split('\n').find((l) => l.trim() !== '')
-    if (line === undefined && draft.reaction !== null) {
-        return `${REACTION_LOOKS[draft.reaction].label}, alone`
-    }
-    return line ?? draft.text
 }
 
 // What `canopy draft send` takes for the drafts, run by run, for the button's hover.

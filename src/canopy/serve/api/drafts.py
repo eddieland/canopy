@@ -16,7 +16,7 @@ from canopy.core import contract, conversation
 from canopy.core.vocab import Reaction
 from canopy.infra import logs
 from canopy.runs import drafts_manage
-from canopy.serve import threads
+from canopy.serve import draft_views, threads
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, RefusedError, RunId, not_found
 from canopy.serve.schema import ErrorResponse
@@ -27,6 +27,7 @@ from canopy.serve.schema.draft import (
     DraftSendRequest,
     DraftsSent,
     PullRequestThreads,
+    UnsentDrafts,
 )
 
 TAG: Final = "review replies"
@@ -42,6 +43,13 @@ PrUrl = Annotated[
     ),
 ]
 DraftNumber = Annotated[int, Path(ge=1, le=30, description="The draft's number in its run's drafts, from 1.")]
+
+
+@router.get("/drafts", operation_id="listUnsentDrafts", summary="List the drafts that wait on the operator")
+def unsent(backend: BackendDep) -> list[UnsentDrafts]:
+    """Every draft unsent, by the PR or the ticket it is for: what `drafts_waiting` counts on the attention list."""
+    with backend.open() as ctx:
+        return draft_views.unsent(ctx.conn)
 
 
 @router.get(

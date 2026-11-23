@@ -859,6 +859,7 @@ export async function refreshThreads(client: QueryClient, url: string): Promise<
     await Promise.all([
         client.invalidateQueries({ queryKey: keys.pullRequestThreads(url) }),
         client.invalidateQueries({ queryKey: keys.attention }),
+        client.invalidateQueries({ queryKey: keys.unsentDrafts }),
     ])
 }
 
@@ -870,6 +871,7 @@ export async function refreshTicketDrafts(client: QueryClient, key: string): Pro
     await Promise.all([
         client.invalidateQueries({ queryKey: keys.ticket(key) }),
         client.invalidateQueries({ queryKey: keys.attention }),
+        client.invalidateQueries({ queryKey: keys.unsentDrafts }),
     ])
 }
 

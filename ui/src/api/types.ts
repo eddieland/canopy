@@ -535,6 +535,8 @@ export type DiffHunk = Schemas['DiffHunk']
 export type DiffLine = Schemas['DiffLine']
 /** A PR's review threads on the diff a run kept, and every draft for it (DESIGN §29). */
 export type PullRequestThreads = Schemas['PullRequestThreads']
+/** The drafts for one PR, or one ticket itself, that wait on the operator. */
+export type UnsentDrafts = Schemas['UnsentDrafts']
 /** Why a PR's page has no diff to put its threads on: the latest run that left its work on origin kept none. */
 export type MissingDiff = Schemas['MissingDiff']
 /** One review thread as canopy's reader last read it, where it sits on the diff, and the drafts answering it. */
