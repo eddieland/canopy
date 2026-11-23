@@ -1,12 +1,16 @@
-"""`canopy workspace sync` clones a missing repository beside its place, and moves it there only once it finished."""
+"""`canopy workspace sync` clones a missing repository beside its place, from a seed if named, then moves it in."""
 
 from collections.abc import Sequence
 from pathlib import Path
 from unittest import mock
 
+import click
 import pytest
 
+from canopy.cli import workspace as cli_workspace
+from canopy.cli.main import main
 from canopy.core import config, workspace
+from canopy.core.context import Context
 from canopy.infra import procs
 from canopy.setup import workspace as setup_workspace
 from tests.canopy.conftest import Ws, map_text
@@ -120,3 +124,119 @@ def test_something_in_the_way_of_a_clone_is_left_as_it_was(ws: Ws) -> None:
     checked = setup_workspace.clone(runner, workspace.find(ws.root), docs)
     assert checked.outcome == "failed"
     assert sorted(p.name for p in docs.path.iterdir()) == ["notes.txt"]
+
+
+def test_a_seeded_clone_takes_the_seeds_objects_and_does_not_depend_on_it(ws: Ws) -> None:
+    runner = mock.create_autospec(procs.SubprocessRunner, instance=True)
+    runner.run.side_effect = procs.SubprocessRunner().run
+    (ws.root / config.WORKSPACE_FILE_NAME).write_text(
+        map_text(*((n, str(o)) for n, o in ws.origins.items()), ("docs", str(ws.origins["api"]))),
+    )
+    [docs] = setup_workspace.missing(workspace.find(ws.root))
+    checked = setup_workspace.clone(runner, workspace.find(ws.root), docs, seed=ws.clone("api"))
+    assert (checked.outcome, checked.detail) == ("cloned", "")
+    [call] = runner.run.call_args_list
+    assert call.args[0][-6:-3] == ["--reference-if-able", str(ws.clone("api")), "--dissociate"]
+    assert git("log", "--format=%s", cwd=docs.path) == git("log", "--format=%s", cwd=ws.clone("api"))
+    assert not (docs.path / ".git" / "objects" / "info" / "alternates").exists()
+
+
+def test_a_seed_git_cannot_use_is_passed_over(ws: Ws, tmp_path: Path) -> None:
+    (ws.root / config.WORKSPACE_FILE_NAME).write_text(
+        map_text(*((n, str(o)) for n, o in ws.origins.items()), ("docs", str(ws.origins["api"]))),
+    )
+    [docs] = setup_workspace.missing(workspace.find(ws.root))
+    empty = tmp_path / "not-a-clone"
+    empty.mkdir()
+    checked = setup_workspace.clone(procs.SubprocessRunner(), workspace.find(ws.root), docs, seed=empty)
+    assert checked.outcome == "cloned"
+    # What git said of the seed it passed over reaches the operator.
+    assert checked.detail.startswith("the seed was not used: ")
+    assert "is not a local repository" in checked.detail
+    assert git("log", "--format=%s", cwd=docs.path) == "initial api"
+
+
+def test_a_seed_where_the_clone_is_made_is_refused_and_left_as_it_was(ws: Ws) -> None:
+    (ws.root / config.WORKSPACE_FILE_NAME).write_text(
+        map_text(*((n, str(o)) for n, o in ws.origins.items()), ("docs", str(ws.origins["api"]))),
+    )
+    [docs] = setup_workspace.missing(workspace.find(ws.root))
+    git("clone", "--quiet", str(ws.origins["api"]), str(staging(docs)), cwd=ws.root)
+    runner = git_leaves_a_clone_behind(AssertionError("git ran"))
+    checked = setup_workspace.clone(runner, workspace.find(ws.root), docs, seed=staging(docs))
+    assert (checked.outcome, checked.detail) == (
+        "failed",
+        f"the seed {staging(docs)} is where the clone is made; name a clone of your own",
+    )
+    assert (staging(docs) / ".git").is_dir()
+
+
+def test_sync_seeds_the_clone_it_names_and_says_so(ws: Ws, capsys: pytest.CaptureFixture[str]) -> None:
+    (ws.root / config.WORKSPACE_FILE_NAME).write_text(
+        map_text(*((n, str(o)) for n, o in ws.origins.items()), ("docs", str(ws.origins["api"]))),
+    )
+    seed = ws.clone("api")
+    assert main(["workspace", "sync", "--dry-run", "--seed", f"docs={seed}"]) == 0
+    assert (
+        f"docs: to clone: {ws.origins['api']} into {ws.clone('docs')}, seeded from {seed}\n" in capsys.readouterr().out
+    )
+    real = setup_workspace.clone
+    with mock.patch.object(setup_workspace, "clone", autospec=True, side_effect=real) as cloned:
+        assert main(["workspace", "sync", "--seed", f"docs={seed}", "--seed", f"api={seed}"]) == 0
+    [call] = cloned.call_args_list
+    assert (call.args[2].name, call.kwargs["seed"]) == ("docs", seed)
+    out = capsys.readouterr().out
+    assert f"docs: cloning {ws.origins['api']} into {ws.clone('docs')}, seeded from {seed}\ndocs: cloned\n" in out
+    assert "api: --seed not used: it is cloned already\n" in out
+
+
+def test_sync_keeps_a_seed_the_map_does_not_list(ws: Ws, capsys: pytest.CaptureFixture[str]) -> None:
+    old = ws.root / "repos" / "old-docs"
+    git("clone", "--quiet", str(ws.origins["api"]), str(old), cwd=ws.root)
+    (ws.root / config.WORKSPACE_FILE_NAME).write_text(
+        map_text(*((n, str(o)) for n, o in ws.origins.items()), ("docs", str(ws.origins["api"]))),
+    )
+    assert main(["workspace", "sync", "--seed", f"docs={old}"]) == 0
+    assert "old-docs: kept: it is a seed this sync was given; remove it when you are done with it\n" in (
+        capsys.readouterr().out
+    )
+    assert (old / ".git").is_dir()
+
+
+@pytest.mark.parametrize(
+    ("seed", "said"),
+    [
+        ("docs", "--seed 'docs' is not NAME=PATH"),
+        ("=/tmp", "--seed '=/tmp' is not NAME=PATH"),
+        ("nowhere={here}", "--seed names nowhere, which the map does not list"),
+        ("api={missing}", "--seed api: {missing} is not a directory"),
+        ("api=~no-such-user-of-canopy/clone", "--seed api: "),
+    ],
+)
+def test_sync_refuses_a_seed_it_cannot_use_before_it_changes_anything(
+    ws: Ws,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    seed: str,
+    said: str,
+) -> None:
+    missing = tmp_path / "missing"
+    fill = {"here": str(ws.clone("api")), "missing": str(missing)}
+    assert main(["workspace", "sync", "--seed", seed.format(**fill)]) == 1
+    assert f"sync: {said.format(**fill)}" in capsys.readouterr().err
+
+
+def test_sync_reads_the_map_again_once_it_holds_the_lock(ws: Ws, capsys: pytest.CaptureFixture[str]) -> None:
+    real = cli_workspace.open_context
+
+    def opened_then_added(click_ctx: click.Context) -> Context:
+        # A `workspace add` that writes the map after sync opened its context, before sync took the lock.
+        ctx = real(click_ctx)
+        (ws.root / config.WORKSPACE_FILE_NAME).write_text(
+            map_text(*((n, str(o)) for n, o in ws.origins.items()), ("docs", str(ws.origins["api"]))),
+        )
+        return ctx
+
+    with mock.patch.object(cli_workspace, "open_context", autospec=True, side_effect=opened_then_added):
+        assert main(["workspace", "sync", "--seed", f"docs={ws.clone('api')}"]) == 0
+    assert "docs: cloned" in capsys.readouterr().out

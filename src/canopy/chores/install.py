@@ -178,10 +178,8 @@ def install(ws: Workspace, name: str) -> Installed:
         agent_file=agent.name if agent is not None else None,
         agent=agent_text,
     )
-    origin_file = ws.state_dir / ORIGINS_DIR / f"{name}.json"
-    origin_file.parent.mkdir(mode=0o700, exist_ok=True)
-    _write(origin_file, origin.model_dump_json(indent=2) + "\n")
-    _write(private, new_text)
+    write_origin(ws, name, origin)
+    replace_private(private, new_text)
     return Installed(name, prompt, copied, private, replaced, _next_steps(shipped_text))
 
 
@@ -198,6 +196,24 @@ def shipped_agent(name: str) -> Path | None:
     return _agent(table.get("cmd"))
 
 
+def write_origin(ws: Workspace, name: str, origin: Origin) -> None:
+    """Keep `origin` as what example chore `name`, installed in `ws`, was installed from, in place of any record."""
+    origin_file = ws.state_dir / ORIGINS_DIR / f"{name}.json"
+    origin_file.parent.mkdir(mode=0o700, exist_ok=True)
+    replace_private(origin_file, origin.model_dump_json(indent=2) + "\n")
+
+
+def replace_private(path: Path, text: str) -> None:
+    """Replace `path` with `text` in one step, readable only by the operator, as the private file must be."""
+    # Named apart from any other write of it, another thread's of this process included.
+    temporary = path.with_name(f".{path.name}.tmp-{os.getpid()}-{secrets.token_hex(4)}")
+    try:
+        logs.write_private(temporary, text)
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def write_model(definition: Path, model: Model | None) -> None:
     """Write `model` into `definition`, a chore's installed agent, in place of the one canopy wrote there before.
 
@@ -212,7 +228,7 @@ def write_model(definition: Path, model: Model | None) -> None:
         text = definition.read_text(encoding="utf-8")
         new = definitions.set_model(text, definition.name, model)
         if new != text:
-            _write(definition, new)
+            replace_private(definition, new)
     except OSError as e:
         raise InstallError(f"cannot write the chore's model into its agent, {definition}: {e.strerror}") from e
     except UnicodeDecodeError as e:
@@ -336,17 +352,6 @@ def _check(private: Path, old: Mapping[str, object], new_text: str, name: str, t
             f"cannot replace [chores.{name}] in {private} without changing anything else in it; remove that table, "
             "then install again",
         )
-
-
-def _write(path: Path, text: str) -> None:
-    """Replace `path` with `text` in one step, readable only by the operator, as the private file must be."""
-    # Named apart from any other write of it, another thread's of this process included.
-    temporary = path.with_name(f".{path.name}.tmp-{os.getpid()}-{secrets.token_hex(4)}")
-    try:
-        logs.write_private(temporary, text)
-        temporary.replace(path)
-    finally:
-        temporary.unlink(missing_ok=True)
 
 
 def _next_steps(shipped_text: str) -> tuple[str, ...]:
