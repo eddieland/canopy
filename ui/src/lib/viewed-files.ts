@@ -18,6 +18,10 @@ export const MAX_VIEWED = 2000
 export function viewedMark(file: DiffFile): string {
     // FNV-1a over the change as git would print it: fast, and no secret, so a rare collision costs one unread file.
     let hash = 2_166_136_261
+    // Where it was renamed from is part of the change.
+    for (const char of `${file.old_path ?? ''}\n`) {
+        hash = Math.imul(hash ^ (char.codePointAt(0) ?? 0), 16_777_619)
+    }
     for (const hunk of file.hunks) {
         for (const line of hunk.lines) {
             const text = `${line.kind}${line.text}\n`
@@ -69,7 +73,8 @@ export function filesSummary(viewed: readonly boolean[]): string {
 
 /** Marks a file's change viewed, or not, stores it, and applies it now. */
 export function setViewed(mark: string, viewed: boolean): void {
-    setting.set(withViewed(setting.get(), mark, viewed))
+    // From what is stored now, not this tab's copy, so a mark another tab made since is kept.
+    setting.edit((stored) => JSON.stringify(withViewed(parseViewed(stored), mark, viewed)))
 }
 
 const setting = storedSetting({ key: STORAGE_KEY, parse: parseViewed, serialize: JSON.stringify })

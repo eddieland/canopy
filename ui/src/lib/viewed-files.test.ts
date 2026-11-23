@@ -19,6 +19,7 @@ describe('viewedMark', () => {
         expect(viewedMark(file('a.ts', 'one'))).toBe(viewedMark(file('a.ts', 'one')))
         expect(viewedMark(file('a.ts', 'one'))).not.toBe(viewedMark(file('b.ts', 'one')))
         expect(viewedMark(file('a.ts', 'one'))).not.toBe(viewedMark(file('a.ts', 'two')))
+        expect(viewedMark(file('a.ts', 'one'))).not.toBe(viewedMark({ ...file('a.ts', 'one'), old_path: 'b.ts' }))
     })
 })
 
