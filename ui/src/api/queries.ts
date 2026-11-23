@@ -127,6 +127,8 @@ export const keys = {
     pullRequest: (url: string) => ['pull-requests', url] as const,
     // Under the PR's key, so what marks its page stale marks its threads stale too.
     pullRequestThreads: (url: string) => ['pull-requests', url, 'threads'] as const,
+    // Every draft that waits on the operator, across PRs and tickets.
+    unsentDrafts: ['drafts', 'unsent'] as const,
     loop: ['loop'] as const,
     // Agent memory: every tier's, read again at each tick; a ticket's under its ticket's key, so the stream's
     // `ticket.changed` marks it stale with the ticket; a run's, read again when the run's status changes.
@@ -851,6 +853,16 @@ export function pullRequestThreadsQuery(url: string) {
         placeholderData: undefined,
     })
 }
+
+/**
+ * Every draft that waits on the operator, by the PR or the ticket it is for (DESIGN §29), as the attention list counts
+ * them. The stream does not carry it: it is read again when the attention list or a ticket changes, and after a verb
+ * on a draft.
+ */
+export const unsentDraftsQuery = queryOptions({
+    queryKey: keys.unsentDrafts,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/drafts', { signal })),
+})
 
 /** One review run in full: its findings, and the diff they sit on, read back from beside its log on every fetch. */
 export function reviewQuery(id: number) {

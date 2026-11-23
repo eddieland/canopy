@@ -146,6 +146,13 @@ export const TIPS = {
         'Dear diary, canopy reviewed a PR and told nobody. Finally, someone who gets me.',
         'Riddle: when is a finding not a finding? When nobody posts it. Deep, I know.',
     ],
+    '/pull-requests/drafts': [
+        "It looks like you're about to speak for yourself. A run wrote it, but still. Bold.",
+        'Unhelpful tip: a draft sends faster if you press Send.',
+        'Fun fact: nothing here has been posted. It is the most polite page in canopy.',
+        'Hot take: Drop is also a kind of reply.',
+        "Dear diary, a run wrote my operator's replies today. I write my own. Nobody sends them.",
+    ],
     '/pull-requests/reviews/$id': [
         "It looks like you're ticking findings. Would you like me to tick them louder?",
         'Unhelpful tip: every finding is a compliment, if you squint.',
