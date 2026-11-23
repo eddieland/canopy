@@ -708,6 +708,8 @@ export function DraftCommentCard({
         onSuccess: (saved) => void showReviewDraft(client, run, saved),
     })
     const open = editable(draft)
+    // Under its line, the file's header and the line say where it is.
+    const onLine = useOnDiffLine()
     return (
         <DraftCardFrame
             id={commentAnchor(comment.number)}
@@ -717,9 +719,11 @@ export function DraftCommentCard({
                 <>
                     <span className="panel-label">Comment {comment.number}</span>
                     <Chip>{comment.finding === null ? 'yours' : `from finding ${comment.finding}`}</Chip>
-                    <span className="font-mono text-xs break-all text-muted-foreground">
-                        {comment.path}:{comment.line}
-                    </span>
+                    {!onLine && (
+                        <span className="font-mono text-xs break-all text-muted-foreground">
+                            {comment.path}:{comment.line}
+                        </span>
+                    )}
                 </>
             }
         >
@@ -817,7 +821,8 @@ export function ReviewPointCard({ run, numbered, draft }: { run: number; numbere
                     <MemoryText text={point.comment.text} lines className="mt-1.5 block" />
                 ))}
             {point.kind !== 'comment' && finding.detail && (
-                <RichText text={finding.detail} className="mt-1.5 text-muted-foreground" />
+                // As a finding's card says it, and muted only where the point is left out of the review.
+                <RichText text={finding.detail} className={cn('mt-1.5 max-w-[96ch]', out && 'text-muted-foreground')} />
             )}
             {point.kind === 'body' && (
                 <p className="mt-1.5 text-xs text-muted-foreground">
@@ -850,6 +855,7 @@ export function ReviewPointCard({ run, numbered, draft }: { run: number; numbere
  */
 export function NewCommentCard({ run, adding, onDone }: { run: number; adding: Adding; onDone: () => void }) {
     const client = useQueryClient()
+    const onLine = useOnDiffLine()
     return (
         <DraftCardFrame
             waiting
@@ -857,9 +863,11 @@ export function NewCommentCard({ run, adding, onDone }: { run: number; adding: A
             header={
                 <>
                     <span className="panel-label">New comment</span>
-                    <span className="font-mono text-xs break-all text-muted-foreground">
-                        {adding.path}:{adding.line}
-                    </span>
+                    {!onLine && (
+                        <span className="font-mono text-xs break-all text-muted-foreground">
+                            {adding.path}:{adding.line}
+                        </span>
+                    )}
                 </>
             }
         >

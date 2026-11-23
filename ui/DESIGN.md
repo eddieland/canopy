@@ -1463,8 +1463,8 @@ reader, so no table repeats them.
   panel is one frame too many. Anywhere else it is a box, and says its location. A draft's card keeps its frame under
   a line too, since its edge says whether it waits. A card holds its number, its severity as
   a chip (`blocking` in `status-failed`, `major` in `status-blocked`, as the attention list's reasons; `minor` plain),
-  its title, and its detail as rich text in `foreground`, no wider than 96 characters, since what a finding says is
-  what the card is for; `dismiss` is at the end of its head line; a dismissed one has
+  its title, and its detail as rich text in `foreground`, held to a width a line is read at, since what a finding
+  says is what the card is for; `dismiss` is at the end of its head line; a dismissed one has
   a `dismissed` chip, its title muted, `undo` in place of `dismiss`, as on a chore's finding. On a review of one of the
   loop's own PRs, each finding in the list the operator has not dismissed has a checkbox before its number, and under
   the list `send to a worker` sends the ticked ones together, as `canopy send` does. The list of reviews is a
