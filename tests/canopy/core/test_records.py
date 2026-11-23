@@ -220,6 +220,14 @@ def test_a_query_says_whether_it_matches_a_row_and_how_many(conn: sqlite3.Connec
     assert decisions.order_by("id").limit(2).count(conn) == 2
     assert decisions.limit(5, offset=2).count(conn) == 1
     assert decisions.unique().count(conn) == 3
+    # A query whose rows depend on its columns keeps them: a DISTINCT past its OFFSET, a GROUP BY of one by position.
+    assert decisions.unique().limit(5, offset=2).exists(conn)
+    assert not decisions.unique().limit(5, offset=3).exists(conn)
+    assert decisions.group_by("3").count(conn) == 2
+    assert decisions.group_by("3").having("count(*) > 1").exists(conn)
+    # An ORDER BY may name a column by position, and changes neither answer.
+    assert decisions.order_by("3 DESC").exists(conn)
+    assert decisions.order_by("3 DESC").limit(2).count(conn) == 2
 
 
 def test_any_query_says_whether_it_returns_a_row_and_how_many(conn: sqlite3.Connection) -> None:
@@ -279,6 +287,13 @@ def test_a_value_that_does_not_fit_the_type_named_is_refused(
 def test_a_type_no_column_holds_is_refused(conn: sqlite3.Connection) -> None:
     with pytest.raises(records.RowError, match="a row's fields are int, float, str"):
         records.fetch_value(conn, list, sql.select("1"))
+
+
+def test_a_value_is_not_read_as_a_type_or_none(conn: sqlite3.Connection) -> None:
+    # A NULL would pass as the None of `int | None`, where `fetch_values` promises none.
+    optional = typing.cast("type[int]", int | None)
+    with pytest.raises(records.RowError, match=re.escape("a value is read as a type, not as int | None")):
+        records.fetch_values(conn, optional, sql.select("NULL"))
 
 
 @pytest.mark.parametrize(

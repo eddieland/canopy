@@ -258,7 +258,7 @@ class Query[R: Row](sql.Select):
         Returns:
             True when it matches one.
         """
-        return exists(conn, self._but(columns=_ONE))
+        return exists(conn, self._rows_only())
 
     def count(self, conn: sqlite3.Connection) -> int:
         """Run it on `conn` to count the rows it matches, within its LIMIT if it has one, reading none.
@@ -266,8 +266,20 @@ class Query[R: Row](sql.Select):
         Returns:
             The number of rows.
         """
-        # A DISTINCT counts its rows' own columns: of `1` it would count one.
-        return count(conn, self if self.distinct else self._but(columns=_ONE))
+        return count(conn, self._rows_only())
+
+    def _rows_only(self) -> sql.Select:
+        """This query, selecting `1` for each row it matches where that leaves its rows the same.
+
+        A DISTINCT, a GROUP BY, or a HAVING may depend on the columns selected, so such a query keeps them. The ORDER
+        BY goes with the columns: it may name one by position, and no order changes how many rows there are.
+
+        Returns:
+            The query to run for its rows alone.
+        """
+        if self.distinct or self.groups is not None or self.having_conditions:
+            return self
+        return self._but(columns=_ONE, order=None)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -519,8 +531,14 @@ def _as_value(value_type: type) -> _Field:
 
     Returns:
         The field.
+
+    Raises:
+        RowError: `value_type` is a `| None` type, which would let a NULL through `fetch_values`.
     """
-    return _field(f"a value read as {value_type.__name__}", value_type)
+    field = _field(f"a value read as {getattr(value_type, '__name__', value_type)}", value_type)
+    if field.optional:
+        raise RowError(f"a value is read as a type, not as {value_type}: no row and a NULL are already None")
+    return field
 
 
 def _names(cur: sqlite3.Cursor) -> tuple[str, ...]:
