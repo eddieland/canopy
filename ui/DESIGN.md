@@ -1425,7 +1425,8 @@ reader, so no table repeats them.
   starts a column sooner. A hunk's header, on `surface-raised`, is git's own line, `@@ -4,6 +4,8 @@` with what follows
   it, its ranges from the lines' numbers, so the row says where the hunk is even when git names no function. Where
   added lines follow removed ones, each removed line is paired with the next added one like it
-  (`src/lib/diff-words.ts`), and the words that differ wear a second layer of the tint, 25%, in `foreground`: no
+  (`src/lib/diff-words.ts`), and the words the two do not share, in order, wear a second layer of the tint, 25%, each
+  edit its own mark, a phrase rewritten one mark, in `foreground`: no
   `syntax-*` color reads at 4.5:1 on both layers, and the plain ink is part of the mark. Lines too unlike to be one
   line edited keep their row's tint alone. A file's header leads with its name, its directory muted and cut first
   when the path is too long, then the lines it adds and removes in `diff-add` and `diff-del`, as a run's file list

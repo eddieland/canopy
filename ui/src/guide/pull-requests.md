@@ -392,9 +392,9 @@ own after the files. A long diff shows the lines around each finding at first, w
 file is headed `old → new`, and a binary one is marked `binary`. Each file's header counts the lines it adds and
 removes, and stays at the top of the page while you scroll through the file, so you always know whose line 412 you are
 reading. Where a line was edited rather than replaced, the words that changed are marked more strongly than the rest of
-it, which saves you playing spot the difference with two 110-character lines. A diff too long to keep whole says so at
-its end. A review that holds a draft of yours leads with the draft instead, and folds all this but the diff under it
-([Publishing your review](#publishing-your-review)).
+it, each edit on its own and a rewritten phrase as one, which saves you playing spot the difference with two
+110-character lines. A diff too long to keep whole says so at its end. A review that holds a draft of yours leads with
+the draft instead, and folds all this but the diff under it ([Publishing your review](#publishing-your-review)).
 
 An old review may have no diff kept, either from before canopy kept them or because your `[retention]` removed it with
 the review's log, which the page says as `removed after 30 days`. Its findings list is then the cards themselves, each

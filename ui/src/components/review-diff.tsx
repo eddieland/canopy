@@ -350,11 +350,12 @@ function FilePanel<T>({
                 <PanelHeader label="File" level={level} spoken={named} sticky>
                     {/* Its heading names it to a screen reader, which this line would say again. */}
                     <span aria-hidden className="flex min-w-0 flex-1 font-mono text-xs" title={named}>
-                        <span className="truncate text-muted-foreground">
+                        {/* The directory gives way first; a name too long for the header alone is cut too. */}
+                        <span className="shrink-999 truncate text-muted-foreground">
                             {file.old_path !== null && `${file.old_path} → `}
                             {file.path.slice(0, slash)}
                         </span>
-                        <span className="shrink-0">{file.path.slice(slash)}</span>
+                        <span className="truncate">{file.path.slice(slash)}</span>
                     </span>
                     {added + removed > 0 && (
                         <span className="readout text-xs whitespace-nowrap" data-testid="diff-file-lines">
@@ -404,7 +405,7 @@ function pieceRows<T>(
     }: {
         file: DiffFile
         highlighted: (CodeToken[] | undefined)[][] | undefined
-        changed: (Changed | undefined)[][]
+        changed: (Changed[] | undefined)[][]
         sides: Sides
         onLine: Map<number, T[]> | undefined
         show: (span: Span) => void
@@ -412,6 +413,8 @@ function pieceRows<T>(
         add: ((line: number) => void) | undefined
     },
 ): ReactNode[] {
+    // The mark and the code, and a column for each side numbered.
+    const columns = 2 + Number(sides.old) + Number(sides.new)
     switch (piece.kind) {
         case 'hunk': {
             const hunk = file.hunks[piece.hunk]
@@ -420,7 +423,7 @@ function pieceRows<T>(
             }
             return [
                 <tr key={`hunk-${piece.hunk}`} className="bg-surface-raised text-muted-foreground">
-                    <td colSpan={4} className="px-3 py-1 whitespace-pre">
+                    <td colSpan={columns} className="px-3 py-1 whitespace-pre">
                         {/* Git's own line, its ranges from the lines' numbers, kept at the panel's left edge. */}
                         <span className="sticky left-3">
                             @@ {hunkRange(hunk)} @@{hunk.header !== '' && ` ${hunk.header}`}
@@ -449,7 +452,7 @@ function pieceRows<T>(
                         />
                         {cards !== undefined && (
                             <tr>
-                                <td colSpan={4} className="border-y bg-surface p-0">
+                                <td colSpan={columns} className="border-y bg-surface p-0">
                                     <InView className="flex flex-col gap-2 px-3 py-2 font-sans">
                                         {cards.map((item) => renderCard(item))}
                                     </InView>
@@ -461,7 +464,14 @@ function pieceRows<T>(
             })
         }
         case 'fold': {
-            return [<Fold key={`fold-${piece.span.from}`} span={piece.span} onShow={() => show(piece.span)} />]
+            return [
+                <Fold
+                    key={`fold-${piece.span.from}`}
+                    span={piece.span}
+                    columns={columns}
+                    onShow={() => show(piece.span)}
+                />,
+            ]
         }
     }
 }
@@ -475,10 +485,10 @@ function InView({ className, children }: { className?: string; children: ReactNo
 }
 
 /** A run of lines the page does not draw yet, and a button to draw the next of them. */
-function Fold({ span, onShow }: { span: Span; onShow: () => void }) {
+function Fold({ span, columns, onShow }: { span: Span; columns: number; onShow: () => void }) {
     return (
         <tr className="border-y bg-surface-raised/50" data-testid="diff-fold">
-            <td colSpan={4} className="px-1 py-0.5">
+            <td colSpan={columns} className="px-1 py-0.5">
                 {/* At the panel's left edge, as a card is, while the lines scroll sideways. */}
                 <FoldButton label={foldLabel(span)} onShow={onShow} className="sticky left-1" />
             </td>
@@ -500,7 +510,7 @@ function Line({
 }: {
     line: DiffLine
     tokens: CodeToken[] | undefined
-    changed: Changed | undefined
+    changed: readonly Changed[] | undefined
     sides: Sides
     add?: { label: string; pick: () => void }
 }) {
@@ -535,7 +545,7 @@ function Line({
                 {MARK[line.kind]}
             </td>
             <td className="pr-3 whitespace-pre" data-highlighted={tokens !== undefined || undefined}>
-                {changed === undefined ? (
+                {changed === undefined || changed.length === 0 ? (
                     <Code text={line.text} tokens={tokens} />
                 ) : (
                     // A line's parts never reorder.
