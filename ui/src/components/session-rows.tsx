@@ -15,6 +15,7 @@ import { TaskRunLink } from '@/components/task-link'
 import { TickLink } from '@/components/tick-link'
 import { Timestamp } from '@/components/timestamp'
 import { Tip } from '@/components/tip'
+import { useRouters } from '@/hooks/use-routers'
 import { sessionModels } from '@/lib/models'
 import { directoryTail, moreMessages, sessionName, unstopped } from '@/lib/sessions'
 import { byteSize } from '@/lib/ticks'
@@ -150,7 +151,7 @@ function SessionRow({
     costly: boolean
 }) {
     const name = sessionName(session)
-    const models = sessionModels(session.asked, session.models)
+    const models = sessionModels(session.asked, session.models, useRouters())
     const snippet = session.snippet !== null && session.snippet.length > 0 ? session.snippet : null
     const more = moreMessages(session.more_messages)
     return (

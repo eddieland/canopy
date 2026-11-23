@@ -92,6 +92,9 @@ class Meta(Model):
     attachment_limits: AttachmentLimits
     """The limits `policy` holds each subject's attachments to, which a form that attaches files as it submits checks
     them against before it sends anything."""
+    routers: list[str] = []
+    """`runtime.routers`: the models, each as `provider/model`, the operator names as routers beside any whose id ends
+    in `/auto`. A run that asked for one and was served by another was sent on, as a router does, not missed."""
 
 
 class Session(Model):

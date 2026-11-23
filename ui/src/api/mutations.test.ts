@@ -115,10 +115,13 @@ describe('refreshReloaded', () => {
         client.setQueryData(keys.configModels, {})
         client.setQueryData(keys.models, { models: [], variants: {}, hidden: [], error: null })
         client.setQueryData(keys.skills, {})
+        client.setQueryData(keys.meta, {})
         await refreshReloaded(client)
         expect(stale(client, keys.config)).toBe(true)
         expect(stale(client, keys.configModels)).toBe(true)
         expect(stale(client, keys.models)).toBe(true)
+        // The meta names `runtime.routers`.
+        expect(stale(client, keys.meta)).toBe(true)
         expect(stale(client, keys.skills)).toBe(false)
     })
 })
