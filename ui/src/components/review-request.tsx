@@ -34,9 +34,9 @@ const FIELD_LABEL = 'text-xs font-medium'
 
 /**
  * `canopy start URL --review --notes TEXT --persona NAME --model M` from the reviews page (DESIGN §13, §21, §22, §31):
- * one column in a narrow box, as the dialog's is, and one line across a wide panel, as the reviews page's is, by the
- * form's own width (ui/DESIGN.md, "A review request"). A PR the loop does not own, by its URL, with
- * the PR's reference under it once canopy would take it, or a line saying it would not; then what
+ * the same two rows at every width (ui/DESIGN.md, "A review request"): the fields, then who reviews it. A PR the loop
+ * does not own, by its URL, with the PR's reference under it once canopy would take it, or a line saying it would not;
+ * then what
  * its reviewer should know; then who reviews it, on one row: the personas to review it in, one review each, or none
  * for `[personas] reviewer`'s, and the model its reviews run on, config's by default; and at the row's end `Review`,
  * the form's primary. The personas start as those the operator prefers in Settings, which the row says. canopy reviews
@@ -99,7 +99,7 @@ export function ReviewRequestForm({
     const ready = url.trim() !== '' && !request.isPending
     return (
         <form
-            className={cn('@container flex flex-col gap-3 p-3', className)}
+            className={cn('flex flex-col gap-3 p-3', className)}
             aria-label="Review a PR"
             aria-keyshortcuts="R"
             data-testid="review-request-form"
@@ -110,10 +110,10 @@ export function ReviewRequestForm({
                 }
             }}
         >
-            {/* One column in a narrow box, as the dialog's is; one line across a wide panel, as the tasks page's,
-                who reviews it wrapping under the fields, at their right edge, in a panel between the two. */}
-            <div className="flex flex-col gap-3 @3xl:flex-row @3xl:flex-wrap @3xl:items-start">
-                <div className="flex flex-col gap-1.5 @3xl:w-96 @3xl:shrink-0">
+            {/* The same two rows at every width, with no breakpoint, the dialog's too: the fields share the first,
+                the notes going under the URL only where the two do not fit side by side. */}
+            <div className="flex flex-wrap items-start gap-3">
+                <div className="flex min-w-80 flex-2 flex-col gap-1.5">
                     <Input
                         // oxlint-disable-next-line jsx-a11y/no-autofocus -- the dialog opens on a key, to type in.
                         autoFocus={focused === 'url'}
@@ -131,84 +131,76 @@ export function ReviewRequestForm({
                     />
                     <PullRequestReference id={`${id}-ref`} url={url.trim()} />
                 </div>
-                <div className="flex min-w-0 flex-col gap-1.5 @3xl:min-w-72 @3xl:flex-1 @3xl:flex-row @3xl:gap-2">
-                    {/* On the line it is `Notes`, as `Persona` and `Model` are, each before its control. */}
-                    <label className={cn(FIELD_LABEL, '@3xl:shrink-0 @3xl:leading-9')} htmlFor={`${id}-notes`}>
-                        Notes<span className="@3xl:hidden"> for the reviewer</span>{' '}
-                        <span className="font-normal text-muted-foreground @3xl:hidden">(optional)</span>
-                    </label>
-                    <Textarea
-                        // oxlint-disable-next-line jsx-a11y/no-autofocus -- the dialog opens on a key, to type in.
-                        autoFocus={focused === 'notes'}
-                        id={`${id}-notes`}
-                        // One line high on the line, as the fields beside it are, and as tall as what it holds.
-                        rows={1}
-                        className={cn(
-                            'min-h-16 text-xs',
-                            '@3xl:field-sizing-content @3xl:max-h-40 @3xl:min-h-9 @3xl:min-w-0 @3xl:flex-1',
-                            '@3xl:resize-none @3xl:py-1.75 @3xl:leading-5',
-                        )}
-                        value={notes}
-                        maxLength={MAX_NOTES}
-                        onChange={(event) => {
-                            setNotes(event.target.value)
-                            change({ notes: event.target.value })
-                        }}
-                        onKeyDown={sendKeys.onKeyDown}
-                        placeholder="What the author asked for, or what worries you"
-                        data-testid="review-request-notes"
-                    />
-                </div>
-                {/* Who reviews it, then the primary at the row's end, on the fields' right edge. */}
-                <div
-                    className="flex flex-wrap items-center gap-x-4 gap-y-2 @3xl:ml-auto @3xl:min-h-9 @3xl:shrink-0"
-                    data-testid="review-request-reviewer"
-                >
-                    <span className="flex flex-wrap items-center gap-2">
-                        <span className={FIELD_LABEL} aria-hidden>
-                            Persona
-                        </span>
-                        <PersonasMenu
-                            personas={personas}
-                            chosen={chosen}
-                            disabled={request.isPending}
-                            onChange={(next) => {
-                                setPicked(next)
-                                change({ picked: next })
-                            }}
-                            title="canopy start URL --review --persona NAME"
-                            testId="review-request-personas"
-                        />
-                        {picked === null && chosen.length > 0 && (
-                            <span className="text-xs text-muted-foreground">as Settings prefers</span>
-                        )}
-                        {chosen.length > 1 && (
-                            <span className="text-xs text-muted-foreground">one review in each, side by side</span>
-                        )}
+                <Textarea
+                    // oxlint-disable-next-line jsx-a11y/no-autofocus -- the dialog opens on a key, to type in.
+                    autoFocus={focused === 'notes'}
+                    aria-label="Notes for the reviewer (optional)"
+                    // One line high, as the URL beside it is, and as tall as what is written in it.
+                    rows={1}
+                    className={cn(
+                        'field-sizing-content max-h-40 min-h-9 min-w-72 flex-3 resize-none py-1.75',
+                        'text-xs leading-5',
+                    )}
+                    value={notes}
+                    maxLength={MAX_NOTES}
+                    onChange={(event) => {
+                        setNotes(event.target.value)
+                        change({ notes: event.target.value })
+                    }}
+                    onKeyDown={sendKeys.onKeyDown}
+                    placeholder="Notes for the reviewer, optional"
+                    title="What the author asked for, or the part of the change that worries you"
+                    data-testid="review-request-notes"
+                />
+            </div>
+            {/* Who reviews it, then the primary, at the fields' right edge. */}
+            <div
+                className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2"
+                data-testid="review-request-reviewer"
+            >
+                <span className="flex flex-wrap items-center gap-2">
+                    <span className={FIELD_LABEL} aria-hidden>
+                        Persona
                     </span>
-                    <ReviewModelMenu
-                        model={model}
+                    <PersonasMenu
+                        personas={personas}
+                        chosen={chosen}
                         disabled={request.isPending}
                         onChange={(next) => {
-                            setModel(next)
-                            change({ model: next })
+                            setPicked(next)
+                            change({ picked: next })
                         }}
-                        testId="review-request-model"
-                        labelClassName={FIELD_LABEL}
+                        title="canopy start URL --review --persona NAME"
+                        testId="review-request-personas"
                     />
-                    <Button
-                        type="submit"
-                        className="ml-auto"
-                        disabled={!ready}
-                        title="canopy start URL --review"
-                        aria-keyshortcuts={sendKeys.shortcut}
-                        data-testid="review-request-submit"
-                    >
-                        <ScanSearch />
-                        Review
-                        <SendKeycap keys={sendKeys.shortcut} />
-                    </Button>
-                </div>
+                    {picked === null && chosen.length > 0 && (
+                        <span className="text-xs text-muted-foreground">as Settings prefers</span>
+                    )}
+                    {chosen.length > 1 && (
+                        <span className="text-xs text-muted-foreground">one review in each, side by side</span>
+                    )}
+                </span>
+                <ReviewModelMenu
+                    model={model}
+                    disabled={request.isPending}
+                    onChange={(next) => {
+                        setModel(next)
+                        change({ model: next })
+                    }}
+                    testId="review-request-model"
+                    labelClassName={FIELD_LABEL}
+                />
+                <Button
+                    type="submit"
+                    disabled={!ready}
+                    title="canopy start URL --review"
+                    aria-keyshortcuts={sendKeys.shortcut}
+                    data-testid="review-request-submit"
+                >
+                    <ScanSearch />
+                    Review
+                    <SendKeycap keys={sendKeys.shortcut} />
+                </Button>
             </div>
             <Notice error={request.error}>
                 {notice && 'For a PR the loop does not own. Nothing posts until you publish its draft.'}

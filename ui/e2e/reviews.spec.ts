@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import type { Locator } from '@playwright/test'
 
 import { settled, signIn } from './helpers.ts'
 
@@ -233,26 +234,29 @@ test('settings prefers the personas a review request starts from, apart from the
     await expect(reviewer).not.toContainText('as Settings prefers')
 })
 
-test("Review a PR lays its notes beside the URL across the page's panel, and under it in the dialog", async ({
-    page,
-}) => {
+// Whether a Review a PR form's notes start on the URL's line, and its reviewer row sits under the URL.
+async function reviewFormRows(form: Locator) {
+    const box = async (testId: string) => (await form.getByTestId(testId).boundingBox()) ?? { y: 0, height: 0 }
+    const url = await box('review-request-url')
+    const notes = await box('review-request-notes')
+    const reviewer = await box('review-request-reviewer')
+    return { beside: Math.abs(notes.y - url.y) <= 1, under: reviewer.y > url.y + url.height }
+}
+
+test('Review a PR is the same two rows on the page and in the dialog, its notes beside the URL', async ({ page }) => {
     await page.goto('pull-requests/reviews')
     await settled(page)
-    // The form takes the layout its own width gives it. The page's panel is wide: two fields on one line.
-    const form = page.getByRole('main').getByTestId('review-request-form')
-    const top = async (testId: string) => (await form.getByTestId(testId).boundingBox())?.y ?? 0
-    await expect
-        .poll(async () => Math.abs((await top('review-request-notes')) - (await top('review-request-url'))))
-        .toBeLessThanOrEqual(1)
+    const main = page.getByRole('main').getByTestId('review-request-form')
+    await expect.poll(() => reviewFormRows(main)).toEqual({ beside: true, under: true })
 
-    // The dialog's box is narrow: the same form, in one column.
+    // The dialog holds the same form, laid out the same way.
     await page.getByRole('heading', { level: 1 }).click()
     await page.keyboard.press('r')
     const dialog = page.getByRole('dialog', { name: 'Review a PR' })
     await expect(dialog).toBeVisible()
-    const url = await dialog.getByTestId('review-request-url').boundingBox()
-    const notes = await dialog.getByTestId('review-request-notes').boundingBox()
-    expect(notes?.y ?? 0).toBeGreaterThan((url?.y ?? 0) + (url?.height ?? 0))
+    await expect
+        .poll(() => reviewFormRows(dialog.getByTestId('review-request-form')))
+        .toEqual({ beside: true, under: true })
 })
 
 test("a request's reviews in two personas sit together in the lists, the second named by its persona", async ({
