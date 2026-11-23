@@ -234,13 +234,19 @@ test('settings prefers the personas a review request starts from, apart from the
     await expect(reviewer).not.toContainText('as Settings prefers')
 })
 
-// Whether a Review a PR form's notes start on the URL's line, and its reviewer row sits under the URL.
+// Whether a Review a PR form's notes sit on the URL's line, after it, and its reviewer row sits under the URL: null
+// while any of the three is not on the page.
 async function reviewFormRows(form: Locator) {
-    const box = async (testId: string) => (await form.getByTestId(testId).boundingBox()) ?? { y: 0, height: 0 }
-    const url = await box('review-request-url')
-    const notes = await box('review-request-notes')
-    const reviewer = await box('review-request-reviewer')
-    return { beside: Math.abs(notes.y - url.y) <= 1, under: reviewer.y > url.y + url.height }
+    const url = await form.getByTestId('review-request-url').boundingBox()
+    const notes = await form.getByTestId('review-request-notes').boundingBox()
+    const reviewer = await form.getByTestId('review-request-reviewer').boundingBox()
+    if (url === null || notes === null || reviewer === null) {
+        return null
+    }
+    return {
+        beside: Math.abs(notes.y - url.y) <= 1 && notes.x >= url.x + url.width,
+        under: reviewer.y >= url.y + url.height,
+    }
 }
 
 test('Review a PR is the same two rows on the page and in the dialog, its notes beside the URL', async ({ page }) => {
