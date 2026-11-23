@@ -1280,14 +1280,14 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   no `every_minutes`, hours, or `capacity.max_chores` (DESIGN §19), and only a run of the same chore already running
   refuses it.
 - Its config writes (DESIGN §12, §22, D128) are an allowlist in code, by key name, never a section's wildcard, so a key
-  added later is not writable until it is named. Limits may be raised or lowered, but not past a bound in code (a
-  count's ceiling, such as `capacity.max_workers` at 32, or a pace's floor): the counts in `capacity`, the attempt,
+  added later is not writable until it is named. Limits may be raised or lowered to anything the config loader
+  takes, with no bound of the page's own: the counts in `capacity`, the attempt,
   follow-up, and epic limits, the attachment limits under their own ceilings, and the CI cooldown, feedback quiet time,
   and feedback's wait on pending checks in `policy`, the paces and free-disk floor in `loop`, the tracker query's
   spacing, the connectors' poll and stale age, a review's settle time, the worker's, reviewer's, overseer's, and
-  setup's timeouts in `runtime`, and `spend.monthly_budget_usd`, which spends nothing but would silence the sink that
-  hears the month reached it. The day counts in `retention` may be lengthened, set to 0 (forever), or shortened to a
-  floor, never past it: a shorter one removes the transcripts that show what a run did, and a removal outlives a new
+  setup's timeouts in `runtime`, and `spend.monthly_budget_usd`, which spends nothing but, raised, silences the sink
+  that hears the month reached it. The day counts in `retention` may be lengthened, set to 0 (forever), or shortened to
+  a floor, never past it: a shorter one removes the transcripts that show what a run did, and a removal outlives a new
   secret. `spend.budget_alerts` is set whole, to any list the loader takes: none silences the 100% alert. Trust
   settings move only toward stricter: `policy.stacking` to `"never"`, `policy.plan` and `policy.feedback_plan` to
   `"approve"`, `policy.planner_may_approve` toward `"off"`, an entry removed from `trust.authorized_repliers` or
@@ -1332,11 +1332,12 @@ for the rest. A local user on a
 shared machine can reach loopback, and is stopped only by the secret. A browser sends a host's cookies to every port
 on it, so a local service on another port that the operator's browser visits receives the session cookie; it can then
 read the UI, and write with it only by also reading the token, which takes a same-origin page. A signed-in session
-cannot be ended alone before its 30 days: a new secret ends them all. Whoever holds a session can raise the limits up
-to their ceilings for that workspace, and that outlives a new secret until the operator reads the private file or the
-log: the residual is spend, bounded by the ceilings, never authority. It can also shorten a retention to its floor, so a
-tick removes history older than that, the floor's worth always kept. Plain HTTP on a private address can be read on
-the network (D076), transcripts included: a secret a worker's tool printed into its log is then on the network too.
+cannot be ended alone before its 30 days: a new secret ends them all. Whoever holds a session can raise the limits
+for that workspace as far as the file could, and that outlives a new secret until the operator reads the private file
+or the log: the residual is spend, which no ceiling of the page's bounds, never authority. It can also shorten a
+retention to its floor, so a tick removes history older than that, the floor's worth always kept. Plain HTTP on a
+private address can be read on the network (D076), transcripts included: a secret a worker's tool printed into its log
+is then on the network too.
 So are the titles of the operator's own sessions, at `titles`, and whoever holds a session reads what the operator's
 sessions in other directories were about, by title; `off`, the default, serves none. Tick now, asked again and again,
 runs the overseer back to back, past `loop.min_gap_minutes`, as `t` held down at the loop's terminal would.

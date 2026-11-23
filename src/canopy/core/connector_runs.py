@@ -122,15 +122,15 @@ def query_result(conn: sqlite3.Connection) -> list[str]:
     Returns:
         The keys; none when no run has.
     """
-    row = sql.execute(
-        conn,
+    newest = (
         sql.select("query_result")
         .from_("connector_runs")
         .where("query_result IS NOT NULL")
         .order_by("id DESC")
-        .limit(1),
-    ).fetchone()
-    return [str(k) for k in json.loads(str(row[0]))] if row is not None else []
+        .limit(1)
+    )
+    found = records.fetch_value(conn, str, newest)
+    return [str(k) for k in json.loads(found)] if found is not None else []
 
 
 def read_whole(conn: sqlite3.Connection, tick_id: int) -> bool | None:

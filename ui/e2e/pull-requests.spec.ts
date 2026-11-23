@@ -190,3 +190,44 @@ test("a feedback plan's file opens laid out as a document, its table and diagram
     // Named by its `accTitle`, as a titled diagram is.
     await expect(plan.getByRole('img', { name: 'The search inputs read one debounce' })).toBeVisible()
 })
+
+test('the drafts that wait are a chip on their PR and their ticket, and listed whole on the drafts page', async ({
+    page,
+}) => {
+    await page.goto('pull-requests')
+    await settled(page)
+    // Run 45 left four drafts on PR 88 (canopy/serve/mock/drafts.py): its row says so, and no other row does.
+    const rows = page.getByTestId('pull-requests').getByTestId('pull-request')
+    await expect(rows.getByTestId('unsent-drafts-chip')).toHaveCount(1)
+    await expect(rows.filter({ hasText: 'acme/web#88' }).getByRole('link', { name: '4 drafts' })).toBeVisible()
+
+    await page.getByTestId('pull-requests-drafts-link').click()
+    await expect(page).toHaveURL(/\/pull-requests\/drafts$/u)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Drafts')
+    const nav = page.getByRole('navigation', { name: 'Main' })
+    await expect(nav.getByRole('link', { name: 'Drafts 4 drafts waiting on you' })).toHaveAttribute(
+        'aria-current',
+        'page',
+    )
+    await expect(page.getByTestId('unsent-drafts-count')).toHaveText('4')
+    const group = page.getByRole('region', { name: 'Drafts for acme/web#88' })
+    await expect(group).toContainText('ABC-099')
+    await expect(group.getByRole('listitem')).toHaveCount(4)
+    await expect(group.getByRole('listitem').first()).toContainText('waiting')
+    await expect(group.getByRole('listitem').nth(2)).toContainText("the review's body")
+
+    // A draft's row opens its card on the PR's page, where it is sent with the others.
+    await group
+        .getByRole('listitem')
+        .first()
+        .getByRole('link', { name: /^Moved/u })
+        .click()
+    await expect(page).toHaveURL(/\/pull-requests\/pr\?url=.*#draft-45-1$/u)
+    await expect(page.locator('#draft-45-1')).toBeInViewport()
+
+    // The ticket's row carries the same count, and opens the drafts page at the ticket.
+    await page.goto('tickets')
+    await settled(page)
+    await page.getByTestId('ticket-ABC-099').getByTestId('unsent-drafts-chip').click()
+    await expect(page).toHaveURL(/\/pull-requests\/drafts#drafts-ABC-099$/u)
+})

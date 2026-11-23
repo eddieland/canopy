@@ -43,7 +43,6 @@ function settings(plan: 'off' | 'approve'): ConfigSettings {
                 source: 'default',
                 kind: 'stricter',
                 bound: null,
-                looser: null,
                 forever_at_zero: false,
                 choices: ['off', 'approve'],
                 default: 'off',

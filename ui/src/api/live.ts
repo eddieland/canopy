@@ -21,13 +21,15 @@ import type {
  * again only if a page shows them. A run's transcript is read again when its status, latest tool call, or cost moves,
  * as its worker prints; a chore run's when its status does, and a tick's when the tick changes, the only times their
  * logs can. A review's page is read again when its row in the reviews list moves, and the PRs when a review request is
- * made or ends. The loop's pause arrives whole, as a list does. Unknown event types are ignored, so the server can add
- * some.
+ * made or ends, and the drafts that wait when the attention list or a ticket changes. The loop's pause arrives whole,
+ * as a list does. Unknown event types are ignored, so the server can add some.
  */
 export function applyStreamEvent(client: QueryClient, event: StreamEvent): void {
     switch (event.type) {
         case 'attention.updated': {
             client.setQueryData(keys.attention, event.items)
+            // A draft written, sent, or dropped moves its attention item: the drafts that wait, which no event carries.
+            void client.invalidateQueries({ queryKey: keys.unsentDrafts, refetchType: 'active' })
             break
         }
         case 'runs.updated': {
@@ -151,6 +153,8 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
             void client.invalidateQueries({ queryKey: keys.ticket(event.key), refetchType: 'active' })
             // A run of the ticket started or ended: the runs a PR's page shows, and the PRs list's run working now.
             void client.invalidateQueries({ queryKey: keys.pullRequests, refetchType: 'active' })
+            // A run that ended may have left drafts, before the tick that raises them.
+            void client.invalidateQueries({ queryKey: keys.unsentDrafts, refetchType: 'active' })
             break
         }
         case 'spend.updated': {

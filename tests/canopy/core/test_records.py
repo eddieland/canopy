@@ -206,6 +206,96 @@ def test_fetch_one_is_none_when_the_query_returns_nothing(conn: sqlite3.Connecti
     assert records.fetch_one(conn, records.Decision, sql.frag("SELECT * FROM decisions WHERE id = ?", 1)) is None
 
 
+def test_a_query_says_whether_it_matches_a_row_and_how_many(conn: sqlite3.Connection) -> None:
+    tick = db.start_tick(conn, dry_run=True)
+    for key in ("PROJ-1", "PROJ-2", "PROJ-2"):
+        db.record_decision(conn, tick, key, "wait", "checks running")
+    decisions = records.select(records.Decision)
+    assert decisions.exists(conn)
+    assert not decisions.where("ticket_key = ?", "PROJ-9").exists(conn)
+    assert decisions.count(conn) == 3
+    assert decisions.where("ticket_key = ?", "PROJ-2").count(conn) == 2
+    assert decisions.where("ticket_key = ?", "PROJ-9").count(conn) == 0
+    # Within its LIMIT, as its rows would be; and a DISTINCT counts each row once.
+    assert decisions.order_by("id").limit(2).count(conn) == 2
+    assert decisions.limit(5, offset=2).count(conn) == 1
+    assert decisions.unique().count(conn) == 3
+    # A query whose rows depend on its columns keeps them: a DISTINCT past its OFFSET, a GROUP BY of one by position.
+    assert decisions.unique().limit(5, offset=2).exists(conn)
+    assert not decisions.unique().limit(5, offset=3).exists(conn)
+    assert decisions.group_by("3").count(conn) == 2
+    assert decisions.group_by("3").having("count(*) > 1").exists(conn)
+    # An ORDER BY may name a column by position, and changes neither answer.
+    assert decisions.order_by("3 DESC").exists(conn)
+    assert decisions.order_by("3 DESC").limit(2).count(conn) == 2
+
+
+def test_any_query_says_whether_it_returns_a_row_and_how_many(conn: sqlite3.Connection) -> None:
+    tick = db.start_tick(conn, dry_run=True)
+    for key in ("PROJ-1", "PROJ-2", "PROJ-2"):
+        db.record_decision(conn, tick, key, "wait", "checks running")
+    keys = sql.select("ticket_key").unique().from_("decisions")
+    assert records.exists(conn, keys)
+    assert not records.exists(conn, keys.where("tick_id > ?", tick))
+    assert records.count(conn, keys) == 2
+    assert records.count(conn, sql.union(keys, sql.select("'PROJ-3'"))) == 3
+    assert records.count(conn, keys.where("tick_id > ?", tick)) == 0
+
+
+def test_a_query_of_one_column_reads_its_values_as_the_type_named(conn: sqlite3.Connection) -> None:
+    tick = db.start_tick(conn, dry_run=True)
+    for key in ("PROJ-1", "PROJ-2"):
+        db.record_decision(conn, tick, key, "wait", "checks running")
+    keys = sql.select("ticket_key").from_("decisions").order_by("id")
+    assert records.fetch_values(conn, str, keys) == ["PROJ-1", "PROJ-2"]
+    assert records.fetch_value(conn, str, keys) == "PROJ-1"
+    assert records.fetch_value(conn, int, sql.select("max(id)").from_("ticks")) == tick
+    # A vocabulary, a flag, and a whole REAL are converted as a record's field is.
+    assert records.fetch_values(conn, Decider, sql.select("decider").unique().from_("decisions")) == [Decider.OVERSEER]
+    assert records.fetch_value(conn, bool, sql.select("dry_run").from_("ticks")) is True
+    whole = records.fetch_value(conn, float, sql.select("1"))
+    assert (whole, type(whole)) == (1.0, float)
+
+
+def test_a_value_is_none_for_no_row_and_for_a_null(conn: sqlite3.Connection) -> None:
+    assert records.fetch_value(conn, int, sql.select("id").from_("ticks")) is None
+    assert records.fetch_value(conn, int, sql.select("max(id)").from_("ticks")) is None
+    assert records.fetch_values(conn, int, sql.select("id").from_("ticks")) == []
+
+
+@pytest.mark.parametrize(
+    ("columns", "value_type", "error"),
+    [
+        ("id, tick_id", int, "a query read for one int returns 2 columns: id, tick_id"),
+        ("ticket_key", int, "a value read as int is str, not int"),
+        ("chore", str, "a value read as str is NoneType, not str"),
+        ("'nobody'", Decider, "a value read as Decider holds 'nobody', which is not a Decider"),
+    ],
+)
+def test_a_value_that_does_not_fit_the_type_named_is_refused(
+    conn: sqlite3.Connection,
+    columns: str,
+    value_type: type,
+    error: str,
+) -> None:
+    tick = db.start_tick(conn, dry_run=True)
+    db.record_decision(conn, tick, "PROJ-1", "wait", "checks running")
+    with pytest.raises(records.RowError, match=f"^{re.escape(error)}$"):
+        records.fetch_values(conn, value_type, made(f"SELECT {columns} FROM decisions"))  # noqa: S608
+
+
+def test_a_type_no_column_holds_is_refused(conn: sqlite3.Connection) -> None:
+    with pytest.raises(records.RowError, match="a row's fields are int, float, str"):
+        records.fetch_value(conn, list, sql.select("1"))
+
+
+def test_a_value_is_not_read_as_a_type_or_none(conn: sqlite3.Connection) -> None:
+    # A NULL would pass as the None of `int | None`, where `fetch_values` promises none.
+    optional = typing.cast("type[int]", int | None)
+    with pytest.raises(records.RowError, match=re.escape("a value is read as a type, not as int | None")):
+        records.fetch_values(conn, optional, sql.select("NULL"))
+
+
 @pytest.mark.parametrize(
     ("query", "error"),
     [

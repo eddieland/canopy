@@ -25,7 +25,7 @@ from collections.abc import Collection, Iterable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
-from canopy.core import db, records, review_diff, review_result, review_runs, sql
+from canopy.core import db, records, review_diff, review_result, review_runs
 from canopy.core.memory_text import TextRefused, check_text
 from canopy.core.replies import MAX_DRAFT_CHARS, MAX_DRAFTS
 from canopy.core.vocab import ReviewDraftAuthor, ReviewDraftStatus, ReviewRunStatus
@@ -116,8 +116,7 @@ def draftable(conn: sqlite3.Connection, run: records.ReviewRun) -> bool:
     """
     if run.purpose == OWN or run.ticket_key is not None:
         return False
-    held = sql.select("1").from_("ticket_units").where("pr_url = ?", run.pr_url).limit(1)
-    return sql.execute(conn, held).fetchone() is None
+    return not records.select(records.TicketUnit).where("pr_url = ?", run.pr_url).exists(conn)
 
 
 def of_review(conn: sqlite3.Connection, run_id: int) -> records.ReviewDraft | None:

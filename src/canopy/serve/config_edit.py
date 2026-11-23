@@ -1,9 +1,10 @@
 """The keys the web UI's settings page edits in the workspace's private config, and the save (DESIGN §12, §22, D128).
 
 Only the keys `EDITABLE` names, never a section's wildcard: a key added to a section later is not editable until it
-is named here. A limit may be raised or lowered, but the page cannot loosen one past its bound, a count's ceiling or a
-pace's floor; the file can set any value, and the page may still tighten one the file set past its bound. A
-retention is a pace whose 0 keeps forever: the page may always set 0, and from 0 only days within the floor. A trust key
+is named here. A limit may be set to anything the loader takes: the operator settled that the page's own ceilings and
+floors cost more than the spend they capped (TRUST_MODEL T8). A retention alone keeps a floor, since what a shorter one
+removes cannot be brought back: the page cannot shorten one past it, 0 keeps forever and may always be set, the file
+can set any value, and the page may still lengthen one the file set under its floor. A trust key
 moves only toward stricter: a config write outlives the listener secret, so a replier added through a stolen session
 would go on steering workers after a new secret ended it (TRUST_MODEL T8): a list only loses entries, a switch or a
 choice moves only to a stricter side, and a count only goes down. The budget's alerts are set whole, to anything the
@@ -60,90 +61,74 @@ class Editable:
     """A key the settings page may change, and how far."""
 
     name: str
-    #: `limit`: raised or lowered, within `bound`. `stricter`: only toward stricter. `free`: set to anything the loader
-    #: takes, for a key no value of which loosens a guard.
+    #: `limit`: raised or lowered to anything the loader takes, a retention no shorter than `bound`. `stricter`: only
+    #: toward stricter. `free`: set whole to anything the loader takes, for a key no value of which loosens a guard.
     kind: Literal["limit", "stricter", "free"]
-    #: A limit's loosest value from the page: a count's ceiling, or a pace's floor in minutes.
+    #: A retention's floor from the page, in days: the shortest it may be made. None for every other key.
     bound: int | None = None
-    #: Which way loosens a limit: a count's higher spends more, a pace's lower does.
-    looser: Literal["higher", "lower"] | None = None
     #: A stricter choice's values, loosest first: the page may move it only later in the list.
     choices: Sequence[str] = ()
     #: Whether 0 keeps that kind forever, as a retention's does: the strictest value, which the page may always set,
-    #: and one any number of days is looser than.
+    #: and one any number of days is shorter than.
     forever_at_zero: bool = False
 
 
-def _count(name: str, ceiling: int) -> Editable:
-    return Editable(name, "limit", ceiling, "higher")
-
-
-def _pace(name: str, floor: int) -> Editable:
-    return Editable(name, "limit", floor, "lower")
+def _limit(name: str) -> Editable:
+    return Editable(name, "limit")
 
 
 def _keep(name: str, floor: int) -> Editable:
-    return Editable(name, "limit", floor, "lower", forever_at_zero=True)
+    return Editable(name, "limit", floor, forever_at_zero=True)
 
 
 def _choice(name: str, *choices: str) -> Editable:
     return Editable(name, "stricter", choices=choices)
 
 
-#: In the order the page shows them. The bounds stop a stolen session from turning one operator's spend up without
-#: limit: a raise within them outlives a new secret, a residual the page and the log show (TRUST_MODEL T8). They are set
-#: well above what one machine runs today, so the page is for the operator's real changes and the file for the rest.
+#: In the order the page shows them. A limit has no bound of the page's own: whoever holds a session can set one as far
+#: as the loader lets the file, a residual the page and the log show (TRUST_MODEL T8).
 EDITABLE: Final[tuple[Editable, ...]] = (
-    _count("capacity.max_workers", 32),
-    _count("capacity.max_chores", 16),
-    _count("capacity.max_reviews", 16),
-    _count("capacity.max_reviews_per_day", 500),
-    _count("capacity.max_tasks", 16),
-    # A floor, as a pace's: a lower one lets ticks dispatch on a fuller disk, and 0 turns the check off.
-    _pace("loop.min_free_disk_mib", 512),
-    _count("capacity.slots_per_repo", 32),
-    # Each repository's entry is bounded alike; the request names only the repositories whose count changes.
-    _count("capacity.repo_slots", 32),
-    _count("policy.max_implement_attempts", 10),
-    _count("policy.max_resume_attempts", 10),
-    _count("policy.max_reviews_per_pr", 25),
-    _count("policy.max_plan_attempts", 10),
-    _count("policy.max_feedback_plan_attempts", 20),
-    _count("policy.max_revisions_per_draft", 10),
-    _count("policy.max_follow_ups", 20),
-    _count("policy.max_epic_tickets", 50),
-    # The page's bound is the key's own ceiling: attachments cost a run reading them, never another run.
-    _count("policy.max_attachments", config.ATTACHMENTS_CEILING),
-    _count("policy.max_attachment_kib", config.ATTACHMENT_KIB_CEILING),
-    _count("policy.max_attachments_total_kib", config.ATTACHMENTS_TOTAL_KIB_CEILING),
-    _pace("policy.ci_cooldown_minutes", 5),
-    _pace("policy.feedback_quiet_minutes", 2),
-    # How long feedback waits on pending checks: sooner may spend a resume on a build still to come.
-    _pace("policy.feedback_ci_wait_minutes", 5),
-    # A floor of 0, the key's own: an earlier review is one more of a PR's `max_reviews_per_pr`, never another.
-    _pace("review.settle_minutes", 0),
-    _pace("loop.interval_minutes", 2),
-    _pace("loop.idle_max_minutes", 2),
-    _pace("loop.min_gap_minutes", 1),
-    # A floor of 0, the key's default: the query runs in a tick the overseer runs anyway.
-    _pace("tracker.query_every_minutes", 0),
-    # The connectors' commands run between ticks, at no model's cost.
-    _pace("connect.every_minutes", 1),
-    # A later stale mark keeps an old observation in front of the overseer longer: bounded as a count is.
-    _count("connect.max_age_minutes", 240),
-    # A longer run may spend more: bounded as a count is.
-    _count("runtime.worker_timeout_minutes", 240),
-    _count("runtime.review_timeout_minutes", 120),
-    _count("runtime.overseer_timeout_minutes", 60),
-    _count("runtime.setup_timeout_minutes", 120),
+    _limit("capacity.max_workers"),
+    _limit("capacity.max_chores"),
+    _limit("capacity.max_reviews"),
+    _limit("capacity.max_reviews_per_day"),
+    _limit("capacity.max_tasks"),
+    _limit("loop.min_free_disk_mib"),
+    _limit("capacity.slots_per_repo"),
+    # The request names only the repositories whose count changes.
+    _limit("capacity.repo_slots"),
+    _limit("policy.max_implement_attempts"),
+    _limit("policy.max_resume_attempts"),
+    _limit("policy.max_reviews_per_pr"),
+    _limit("policy.max_plan_attempts"),
+    _limit("policy.max_feedback_plan_attempts"),
+    _limit("policy.max_revisions_per_draft"),
+    _limit("policy.max_follow_ups"),
+    _limit("policy.max_epic_tickets"),
+    _limit("policy.max_attachments"),
+    _limit("policy.max_attachment_kib"),
+    _limit("policy.max_attachments_total_kib"),
+    _limit("policy.ci_cooldown_minutes"),
+    _limit("policy.feedback_quiet_minutes"),
+    _limit("policy.feedback_ci_wait_minutes"),
+    _limit("review.settle_minutes"),
+    _limit("loop.interval_minutes"),
+    _limit("loop.idle_max_minutes"),
+    _limit("loop.min_gap_minutes"),
+    _limit("tracker.query_every_minutes"),
+    _limit("connect.every_minutes"),
+    _limit("connect.max_age_minutes"),
+    _limit("runtime.worker_timeout_minutes"),
+    _limit("runtime.review_timeout_minutes"),
+    _limit("runtime.overseer_timeout_minutes"),
+    _limit("runtime.setup_timeout_minutes"),
     # Shorter removes history sooner, the transcripts that show what a run did among it: a floor, and 0, forever,
     # always (TRUST_MODEL T8). The log's rotation is not here: its files hold the same lines the journal does.
     _keep("retention.run_files_days", 7),
     _keep("retention.tick_files_days", 1),
     _keep("retention.journal_days", 30),
     _keep("retention.memory_days", 7),
-    # Spends nothing itself, but a raised budget keeps a sink from hearing the month reached it: bounded the same way.
-    _count("spend.monthly_budget_usd", 10000),
+    _limit("spend.monthly_budget_usd"),
     # Free: an alert dropped is a warning less, but the 100% alert is always sent, whatever the list holds.
     Editable("spend.budget_alerts", "free"),
     _choice("policy.stacking", "auto", "never"),
@@ -256,7 +241,7 @@ def save(root: Path, user_file: Path, expected: str, changes: Mapping[str, objec
             (D053), or whose backup cannot be written; `not_roundtrip` for one tomlkit would not write back byte for
             byte; `stale` when the file's hash is not `expected`; `config_invalid` for a value of None, for a
             workspace with no state directory, or when the files, before or after, do not load; `past_bound` for a
-            limit loosened past its bound; `not_stricter` for a trust key loosened.
+            retention shortened past its floor; `not_stricter` for a trust key loosened.
     """
     conversation.check_operator()
     target = config.private_config_path(root)
@@ -521,8 +506,8 @@ def _check(key: Editable, change: Change, old: Config, path: Path) -> None:
     """Refuse a change that loosens `key` further than the page may.
 
     Raises:
-        Refused: `past_bound` for a limit past its bound and looser than before; `not_stricter` for a trust key
-            loosened.
+        Refused: `past_bound` for a retention under its floor and shorter than before; `not_stricter` for a trust
+            key loosened.
     """
     if key.kind == "free":
         return
@@ -549,28 +534,19 @@ def _check(key: Editable, change: Change, old: Config, path: Path) -> None:
 
 
 def _past(key: Editable, was: object, now: object) -> bool:
-    """Whether `now` is past `key`'s bound and looser than `was`.
+    """Whether `now` is under `key`'s floor and shorter than `was`.
 
     Returns:
-        True when the page may not set `now`. An unmanaged pool (None) bounds nothing, so any count past the bound is.
-        For a key that keeps forever at 0, 0 is never past, and any count past the floor is past from 0.
+        True when the page may not set `now`. A key with no floor refuses nothing. 0, forever, is never past, and any
+        count of days under the floor is past from 0.
     """
     if not isinstance(now, int) or key.bound is None:
         return False
-    if key.looser == "higher":
-        return now > key.bound and (not isinstance(was, int) or now > was)
-    if key.forever_at_zero:
-        # Forever is the strictest: always allowed, and any count of days looser than it.
-        return now != 0 and now < key.bound and (not isinstance(was, int) or was == 0 or now < was)
-    return now < key.bound and (not isinstance(was, int) or now < was)
+    return now != 0 and now < key.bound and (not isinstance(was, int) or was == 0 or now < was)
 
 
 def _past_reason(key: Editable, name: str, path: Path) -> str:
-    if key.looser == "higher":
-        return f"{name} may be at most {key.bound} from the web UI; set more in {path}"
-    if key.forever_at_zero:
-        return f"{name} may be at least {key.bound}, or 0 to keep forever, from the web UI; set less in {path}"
-    return f"{name} may be at least {key.bound} from the web UI; set less in {path}"
+    return f"{name} may be at least {key.bound}, or 0 to keep forever, from the web UI; set less in {path}"
 
 
 def _stricter(key: Editable, was: Value, now: Value) -> bool:

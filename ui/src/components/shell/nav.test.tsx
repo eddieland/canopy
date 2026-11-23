@@ -2,9 +2,9 @@ import { QueryClient } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { mockAttention, mockCapacity, mockReviews } from '@/api/mocks'
+import { draft, mockAttention, mockCapacity, mockReviews, unsentDrafts } from '@/api/mocks'
 import { keys } from '@/api/queries'
-import type { AttentionItem, LoopState, MemoryState, ReviewSummary } from '@/api/types'
+import type { AttentionItem, LoopState, MemoryState, ReviewSummary, UnsentDrafts } from '@/api/types'
 import { setFindingsHidden } from '@/lib/attention-findings'
 import { renderRouted } from '@/test-utils'
 
@@ -29,13 +29,17 @@ function ended(id: number, fields: Partial<ReviewSummary>): ReviewSummary {
 
 const TIER: MemoryState['lessons'] = { mode: 'record', words: 'recording', band: 'Recording only.' }
 
-function renderNav({ at = '/attention', items, compact = false, waiting, reviews }: Partial<NavSetup> = {}) {
+function renderNav({ at = '/attention', items, compact = false, waiting, reviews, drafts }: Partial<NavSetup> = {}) {
     const client = new QueryClient()
     // Nothing is fetched: the attention list, the loop's state, and the reviews are what the test seeds, as the stream
     // would send.
     client.setQueryDefaults(keys.attention, { enabled: false })
     client.setQueryDefaults(keys.loop, { enabled: false })
     client.setQueryDefaults(keys.reviews, { enabled: false })
+    client.setQueryDefaults(keys.unsentDrafts, { enabled: false })
+    if (drafts !== undefined) {
+        client.setQueryData(keys.unsentDrafts, drafts)
+    }
     if (items !== undefined) {
         client.setQueryData(keys.attention, items)
     }
@@ -63,6 +67,8 @@ interface NavSetup {
     waiting: number | undefined
     // The reviews list; not arrived when undefined.
     reviews: ReviewSummary[] | undefined
+    // The drafts that wait on the operator; not arrived when undefined.
+    drafts: UnsentDrafts[] | undefined
 }
 
 // The Reports section's links with its pages open: the section, then each report.
@@ -120,7 +126,7 @@ describe('Nav', () => {
 
     it.each([
         ['Workspace', '/workspace', ['Workspace', 'Runs', 'Ticks', 'Worktrees', 'Checklists', 'Sessions'], 'Workspace'],
-        ['Pull requests', '/pull-requests', ['Pull requests', 'Reviews'], 'Pull requests'],
+        ['Pull requests', '/pull-requests', ['Pull requests', 'Reviews', 'Drafts'], 'Pull requests'],
         ['Reports', '/reports?month=2026-08', REPORTS, 'Reports'],
     ] as const)("opens %s's pages under it on %s, the section current", async (_, at, opened, page) => {
         await renderNav({ at, items: [] })
@@ -142,7 +148,7 @@ describe('Nav', () => {
             '/workspace/sessions?canopy=true',
             ['Workspace', 'Runs', 'Ticks', 'Worktrees', 'Checklists', 'Sessions'],
         ],
-        ['Reviews', '/pull-requests/reviews', ['Pull requests', 'Reviews']],
+        ['Reviews', '/pull-requests/reviews', ['Pull requests', 'Reviews', 'Drafts']],
         ['Spend', '/reports/spend?days=30', REPORTS],
         ['Checklist', '/reports/checklist?days=14', REPORTS],
         ['Health', '/reports/health?days=30', REPORTS],
@@ -251,6 +257,16 @@ describe('Nav', () => {
         expect(screen.getByRole('link', { name: 'Pull requests 2 new reviews to read' })).toBeDefined()
         expect(screen.getByTitle('2 new reviews to read').textContent).toBe('22 new reviews to read')
         expect(screen.getByTestId('nav-reviews-count').className).toContain('text-status-blocked')
+    })
+
+    it('counts the drafts that wait beside Drafts, under Pull requests, and none when none waits', async () => {
+        const drafts = [unsentDrafts({ drafts: [draft(), draft({ number: 2 })] })]
+        const { unmount } = await renderNav({ at: '/pull-requests', items: [], drafts })
+        expect(screen.getByRole('link', { name: 'Drafts 2 drafts waiting on you' })).toBeDefined()
+        expect(screen.getByTestId('nav-drafts-count').className).toContain('text-status-blocked')
+        unmount()
+        await renderNav({ at: '/pull-requests', items: [], drafts: [] })
+        expect(screen.getByRole('link', { name: 'Drafts' }).textContent).toBe('Drafts')
     })
 
     it('shows no count beside Pull requests when every result is seen', async () => {

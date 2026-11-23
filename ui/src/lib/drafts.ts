@@ -1,4 +1,4 @@
-import type { Draft, DraftStatus, PullRequestThreads, Reaction, ReviewThread } from '@/api/types'
+import type { Draft, DraftStatus, PullRequestThreads, Reaction, ReviewThread, UnsentDrafts } from '@/api/types'
 import { place } from '@/lib/reviews'
 import type { Placed } from '@/lib/reviews'
 import type { Tone } from '@/lib/tone'
@@ -115,9 +115,12 @@ export function threadWhere(thread: Pick<ReviewThread, 'path' | 'line'>): string
     return thread.line === null ? thread.path : `${thread.path}:${thread.line}`
 }
 
+/** What every draft's card's element id starts with. */
+export const DRAFT_ANCHOR_PREFIX = 'draft-'
+
 /** The element id a draft's card has on the page, which the head of the PR's threads links to. */
 export function draftAnchor(draft: Pick<Draft, 'run' | 'number'>): string {
-    return `draft-${draft.run}-${draft.number}`
+    return `${DRAFT_ANCHOR_PREFIX}${draft.run}-${draft.number}`
 }
 
 /**
@@ -133,6 +136,55 @@ export function movedHead(threads: Pick<PullRequestThreads, 'head_sha' | 'diff_h
 export function draftChars(text: string): number {
     // oxlint-disable-next-line typescript/no-misused-spread -- code points are what the bound counts, as Python's len.
     return [...text].length
+}
+
+/**
+ * What a draft's row shows of its text: its first line with text, as its card shows the rest, or its reaction when it
+ * sends that alone, so the row's link is never empty.
+ */
+export function draftLine(draft: Pick<Draft, 'text' | 'reaction'>): string {
+    const line = draft.text.split('\n').find((l) => l.trim() !== '')
+    if (line === undefined && draft.reaction !== null) {
+        return `${REACTION_LOOKS[draft.reaction].label}, alone`
+    }
+    return line ?? draft.text
+}
+
+/** What a draft is, in the words its row ends with: what its run did about the thread, or where else it goes. */
+export function draftGoes(draft: Pick<Draft, 'kind' | 'stance'>): string {
+    if (draft.kind === 'thread') {
+        return draft.stance === null ? 'a thread' : `${draft.stance}, on a thread`
+    }
+    return draft.kind === 'pr' ? "the review's body" : 'the ticket'
+}
+
+/** The unsent drafts by how long each PR's or ticket's have waited, the longest first. */
+export function longestWaiting(groups: UnsentDrafts[]): UnsentDrafts[] {
+    return groups.toSorted((a, b) => Date.parse(a.since) - Date.parse(b.since))
+}
+
+/** How many drafts wait in the groups: all of them, or those for one PR, or for one ticket and its PRs. */
+export function unsentCount(groups: UnsentDrafts[], of: { url?: string; ticket?: string } = {}): number {
+    return groups
+        .filter(
+            (g) =>
+                (of.url === undefined || g.pr_url === of.url) &&
+                (of.ticket === undefined || g.ticket_key === of.ticket),
+        )
+        .reduce((sum, g) => sum + g.drafts.length, 0)
+}
+
+/** `3 drafts` or `1 draft`: a count of drafts in words. */
+export function draftsText(count: number): string {
+    return count === 1 ? '1 draft' : `${count} drafts`
+}
+
+/** The element id of a PR's list of its drafts, on its page, which a PR's chip links to. */
+export const DRAFTS_ANCHOR = 'drafts'
+
+/** The element id a ticket's drafts start at on the drafts page, which a ticket's chip links to. */
+export function unsentAnchor(ticketKey: string): string {
+    return `drafts-${ticketKey}`
 }
 
 // A thread's drafts as listed, on the file of the diff its card sits on, or null.

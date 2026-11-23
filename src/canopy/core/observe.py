@@ -694,7 +694,7 @@ def _record(
         if kind is SourceKind.TRACKER:
             for key in sorted(whole.tickets):
                 records.delete(records.ObservedTicket).where("key = ?", key).run(conn)
-            known = {str(r[0]) for r in sql.execute(conn, sql.select("key").from_("tickets"))}
+            known = set(records.fetch_values(conn, str, sql.select("key").from_("tickets")))
         else:
             known = set[str]()
             for url in sorted(whole.prs):

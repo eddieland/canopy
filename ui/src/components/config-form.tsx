@@ -66,12 +66,13 @@ const CHANGED_ROW = 'relative before:absolute before:inset-y-0 before:left-0 bef
 
 /**
  * The Loop settings form: the keys the loop reads that the web UI may change, edited in place (DESIGN §22, M41):
- * counts, paces, and retentions within the bounds the server sets, and trust settings only toward stricter. The keys
- * come in bands by what they govern (`CONFIG_GROUPS`), a band of several kinds in labelled parts, each key in words
- * over its name in the file. A changed row is marked, and a save bar, kept in view at the page's foot once something
- * changed, lists the changes and writes them at once. A save writes the workspace's private file alone, keeping its
- * comments, then asks the loop to read it again as Reload does. An index of the bands sits beside the form, sticking as
- * it scrolls, or in a line over it in a narrower pane; each row is its key's anchor, `#policy.max_resume_attempts`.
+ * counts and paces freely, retentions down to the floor the server sets, and trust settings only toward stricter. The
+ * keys come in bands by what they govern (`CONFIG_GROUPS`), a band of several kinds in labelled parts, each key in
+ * words over its name in the file. A changed row is marked, and a save bar, kept in view at the page's foot once
+ * something changed, lists the changes and writes them at once. A save writes the workspace's private file alone,
+ * keeping its comments, then asks the loop to read it again as Reload does. An index of the bands sits beside the
+ * form, sticking as it scrolls, or in a line over it in a narrower pane; each row is its key's anchor,
+ * `#policy.max_resume_attempts`.
  */
 export function ConfigForm({
     q,

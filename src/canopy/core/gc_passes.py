@@ -70,7 +70,8 @@ def record(
         failures=failures,
         error=error,
     ).returning("id")
-    return int(statement.run(conn).fetchone()[0])
+    [pass_id] = records.fetch_values(conn, int, statement)
+    return pass_id
 
 
 def latest(conn: sqlite3.Connection) -> records.GcPass | None:
@@ -99,5 +100,4 @@ def removed_after(conn: sqlite3.Connection, ended_at: str | None, rule: Rule) ->
             query = sql.select("tick_files_days").from_("gc_passes").where("tick_cutoff > ?", ended_at)
         case _:
             assert_never(rule)
-    found = sql.execute(conn, query.order_by("id").limit(1)).fetchone()
-    return int(found[0]) if found is not None else None
+    return records.fetch_value(conn, int, query.order_by("id").limit(1))

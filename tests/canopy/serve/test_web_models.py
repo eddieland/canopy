@@ -71,6 +71,13 @@ def test_the_list_names_what_hide_models_hides_and_a_hidden_model_may_still_be_c
     assert chosen.json()["model"] == "copilot/fake-model-2"
 
 
+def test_the_meta_names_the_models_the_operator_calls_routers(ctx: Context) -> None:
+    assert signed_in_client(ctx)[0].get("/api/meta").json()["routers"] == []
+    runtime = ctx.config.runtime.model_copy(update={"routers": ("github-copilot/fusion",)})
+    c, _ = signed_in_client(dataclasses.replace(ctx, config=ctx.config.model_copy(update={"runtime": runtime})))
+    assert c.get("/api/meta").json()["routers"] == ["github-copilot/fusion"]
+
+
 def test_a_list_that_could_not_be_read_is_never_kept(ctx: Context, opencode_state: Path) -> None:
     backend, _ = kept(ctx)
     opencode_state.write_text(json.dumps({"exit": 1}))

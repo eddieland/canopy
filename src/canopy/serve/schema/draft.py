@@ -94,6 +94,21 @@ class Draft(Model):
     """For a thread's draft whose run followed a feedback plan covering its thread, the item it started from."""
 
 
+class UnsentDrafts(Model):
+    """The drafts for one PR, or for one ticket itself, that wait on the operator, as the attention list counts them."""
+
+    ticket_key: str
+    """The ticket the drafts' runs were for."""
+    ticket_title: str | None = None
+    """That ticket's title, as the overseer named it; None until it does."""
+    pr_url: str | None = None
+    """The PR the drafts are for, whose page sends them; None for the ticket's own, sent where they are listed."""
+    since: datetime
+    """When the oldest of them was drafted."""
+    drafts: list[Draft]
+    """The drafts, by run and number: each unchecked, waiting, or staged."""
+
+
 class ThreadComment(Model):
     """One comment on a PR's review thread, as canopy's reader last read it: someone else's text, untrusted."""
 

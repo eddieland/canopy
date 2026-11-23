@@ -163,7 +163,7 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
   a trusted reviewer on the web UI's Settings, Loop settings page. Expect the next tick to lease under the new size
   and its overseer's state block to carry the shorter list, and the workspace's private file, `.canopy/config.toml`, to
   keep its comments, with only those two values changed, and `~/.config/canopy/config.toml` untouched. Then try a
-  count past its ceiling and adding a reviewer back by hand-crafting the request: expect each refused, naming its
+  retention under its floor and adding a reviewer back by hand-crafting the request: expect each refused, naming its
   guard, and the files unchanged.
 - **S77. A task keeps to its own work** (M61). `canopy task submit --project <project>` a planning task whose text
   names an existing ticket and the code it is about, and asks for a PR. Expect its branch under `task/`, its PR a
