@@ -1401,17 +1401,21 @@ reader, so no table repeats them.
   is something to type. What the grant did goes under the rows (`Notice`), untinted once nothing is stuck; the row
   leaves once the limit is above its runs. A limit with room left shows nothing.
 - **A review request** (`ReviewRequestForm`, `ReviewRequestStatus`) is how the operator has canopy review a PR the loop
-  does not own (DESIGN §21). The reviews page leads with a `Review a PR` panel above the list, whose form is one column
-  capped at `max-w-3xl`: the PR's URL in a monospace field, and under it a line it always holds, so nothing below moves
-  as it changes: the PR's reference once canopy would take the URL, that it is not a PR's URL, before it is sent, or,
-  empty, that a link into the PR will do. Then the notes, always open since the operator often has some, under a
-  sentence-case field label, never a `panel-label`. Then who reviews it, one row with nothing folded: `Persona` and its
-  menu, `Model` and its menu (A choice of model), and at the row's end `Review`, the form's primary, with its keycap
-  and the CLI's command on hover. The form ends on one quiet line saying its review is a draft that posts nothing until
-  published, which a refusal replaces. On success the form opens the PR's page. It takes no repository: the overseer
-  finds the PR's. A PR with an open request wears a `requested` chip after its review in the list. On a PR's page the
-  request is a line in the foot of its Pull request panel, with an outline `Stop` while it is open, or how it ended;
-  while none is open on a PR the loop does not own, the line's end holds the menus and an outline `Review this PR`.
+  does not own (DESIGN §21). The reviews page leads with a `Review a PR` panel above the list. Its form is the same two
+  rows at every width, with no breakpoint, so the page and the review dialog differ only in how wide they are. The first
+  row is its fields: the PR's URL in a monospace field, then the notes, always open since the operator often has some,
+  one line high and as tall as what is written in them, named by their placeholder as the tasks form's fields are; the
+  notes go under the URL only where the two do not fit side by side, in a very narrow window. The second row starts,
+  under the URL, with a line it always holds, so nothing moves as it changes: the PR's reference once canopy would take
+  the URL, that it is not a PR's URL, before it is sent, or, empty, that a link into the PR will do. At the row's other
+  end, the fields' right edge, is who reviews it, with nothing folded: `Persona` and its menu, `Model` and its menu (A
+  choice of model), then `Review`, the form's primary, with its keycap and the CLI's command on hover; in a box too
+  narrow for both, as the dialog's is, they go under the line. The form ends on one quiet line saying its review is a
+  draft that posts nothing until published, which a refusal replaces. On success the form opens the PR's page. It takes
+  no repository: the overseer finds the PR's. A PR with an open request wears a `requested` chip after its review in the
+  list. On a PR's page the request is a line in the foot of its Pull request panel, with an outline `Stop` while it is
+  open, or how it ended; while none is open on a PR the loop does not own, the line's end holds the menus and an outline
+  `Review this PR`.
 - **A review** (`/pull-requests/reviews/$id`) is canopy's shadow PR review, kept in the journal (D114); on a PR the loop
   does not own it is also a draft the operator may publish, word for word, as their own (A review's draft). The page
   holds the review's fields, its findings as a list linking to each one's card, and the diff, a panel per file. Its

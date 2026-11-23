@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import type { Locator } from '@playwright/test'
 
 import { settled, signIn } from './helpers.ts'
 
@@ -231,6 +232,37 @@ test('settings prefers the personas a review request starts from, apart from the
     await settled(page)
     await expect(form.getByRole('button', { name: 'Persona: canopy (default)' })).toBeVisible()
     await expect(reviewer).not.toContainText('as Settings prefers')
+})
+
+// Whether a Review a PR form's notes sit on the URL's line, after it, and its reviewer row sits under the URL: null
+// while any of the three is not on the page.
+async function reviewFormRows(form: Locator) {
+    const url = await form.getByTestId('review-request-url').boundingBox()
+    const notes = await form.getByTestId('review-request-notes').boundingBox()
+    const reviewer = await form.getByTestId('review-request-reviewer').boundingBox()
+    if (url === null || notes === null || reviewer === null) {
+        return null
+    }
+    return {
+        beside: Math.abs(notes.y - url.y) <= 1 && notes.x >= url.x + url.width,
+        under: reviewer.y >= url.y + url.height,
+    }
+}
+
+test('Review a PR is the same two rows on the page and in the dialog, its notes beside the URL', async ({ page }) => {
+    await page.goto('pull-requests/reviews')
+    await settled(page)
+    const main = page.getByRole('main').getByTestId('review-request-form')
+    await expect.poll(() => reviewFormRows(main)).toEqual({ beside: true, under: true })
+
+    // The dialog holds the same form, laid out the same way.
+    await page.getByRole('heading', { level: 1 }).click()
+    await page.keyboard.press('r')
+    const dialog = page.getByRole('dialog', { name: 'Review a PR' })
+    await expect(dialog).toBeVisible()
+    await expect
+        .poll(() => reviewFormRows(dialog.getByTestId('review-request-form')))
+        .toEqual({ beside: true, under: true })
 })
 
 test("a request's reviews in two personas sit together in the lists, the second named by its persona", async ({
