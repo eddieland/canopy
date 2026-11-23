@@ -455,11 +455,11 @@ def prs_of(conn: sqlite3.Connection, plan_id: int) -> list[str]:
     Returns:
         Their URLs, in order; none for a plan recorded before snapshots were.
     """
-    rows = sql.execute(
+    return records.fetch_values(
         conn,
+        str,
         sql.select("pr_url").from_("feedback_plan_prs").where("plan_id = ?", plan_id).order_by("pr_url"),
     )
-    return [str(r[0]) for r in rows]
 
 
 def said(found: Sequence[Change]) -> str:
@@ -662,14 +662,13 @@ def _covered_comments(conn: sqlite3.Connection, key: str, pr: str) -> frozenset[
     Returns:
         Their observed ids.
     """
-    rows = sql.execute(
-        conn,
+    covered = (
         sql.select("i.item_id")
         .from_("feedback_plan_items i")
         .join("feedback_plans p ON p.id = i.plan_id")
-        .where("p.ticket_key = ? AND i.pr_url = ? AND i.item = ?", key, pr, ReviewItem.COMMENT),
+        .where("p.ticket_key = ? AND i.pr_url = ? AND i.item = ?", key, pr, ReviewItem.COMMENT)
     )
-    return frozenset(int(r[0]) for r in rows)
+    return frozenset(records.fetch_values(conn, int, covered))
 
 
 class _Handled:
@@ -683,18 +682,18 @@ class _Handled:
 
     def __init__(self, conn: sqlite3.Connection, key: str) -> None:
         self._conn = conn
-        rows = sql.execute(
-            conn,
-            sql.select("i.pr_url, i.item, i.item_id, max(p.id)")
+        rows = (
+            records.view(_Covered, "i.pr_url, i.item, i.item_id, max(p.id) AS plan_id")
             .from_("feedback_plan_items i")
             .join("feedback_plans p ON p.id = i.plan_id")
             .join("runs r ON r.id = p.spent_run_id")
             .where("p.ticket_key = ? AND NOT i.left_out", key)
             .where_in("r.status", (RunStatus.RUNNING, RunStatus.DONE, RunStatus.BLOCKED))
-            .group_by("i.pr_url, i.item, i.item_id"),
+            .group_by("i.pr_url, i.item, i.item_id")
+            .all(conn)
         )
         #: The plan that last covered each handled item.
-        self._by: dict[Key, int] = {(str(r[0]), PlanItem(r[1]), int(r[2])): int(r[3]) for r in rows}
+        self._by: dict[Key, int] = {(r.pr_url, r.item, r.item_id): r.plan_id for r in rows}
         self._seen: dict[int, dict[Key, records.FeedbackPlanSeen]] = {}
 
     def still(self, thread: _Thread) -> bool:
@@ -735,6 +734,16 @@ class _Handled:
         if plan_id not in self._seen:
             self._seen[plan_id] = _seen(self._conn, plan_id)
         return self._seen[plan_id]
+
+
+@dataclass(frozen=True)
+class _Covered(records.View):
+    """An item a `resume` went ahead on, and the plan that last covered it."""
+
+    pr_url: str
+    item: PlanItem
+    item_id: int
+    plan_id: int
 
 
 def _seen(conn: sqlite3.Connection, plan_id: int) -> dict[Key, records.FeedbackPlanSeen]:
@@ -784,8 +793,7 @@ def _raised_id(item: PlanItem, pr: str, head: str, what: str) -> int:
 
 
 def _pr_author(conn: sqlite3.Connection, pr: str) -> str | None:
-    found = sql.execute(conn, sql.select("author").from_("observed_prs").where("url = ?", pr)).fetchone()
-    return None if found is None or found[0] is None else str(found[0])
+    return records.fetch_value(conn, str, sql.select("author").from_("observed_prs").where("url = ?", pr))
 
 
 def _offer(
@@ -931,17 +939,25 @@ def _merged_blocker(conn: sqlite3.Connection, pr: records.ObservedPr) -> tuple[s
     """
     if pr.state is not PrState.OPEN or pr.base_ref is None:
         return None
-    found = sql.execute(
-        conn,
-        sql.select("u.ticket_key, o.url")
+    found = (
+        records.view(_Blocker, "u.ticket_key, o.url")
         .from_("ticket_units u")
         .join("observed_prs o ON o.url = u.pr_url")
         .where("u.branch = ? AND o.url != ?", pr.base_ref, pr.url)
         .where("o.repository = ? AND o.state = ?", pr.repository, PrState.MERGED)
         .order_by("o.url")
-        .limit(1),
-    ).fetchone()
-    return None if found is None else (str(found[0]), str(found[1]))
+        .limit(1)
+        .one(conn)
+    )
+    return None if found is None else (found.ticket_key, found.url)
+
+
+@dataclass(frozen=True)
+class _Blocker(records.View):
+    """A ticket whose merged PR another PR is stacked on, and that PR's URL."""
+
+    ticket_key: str
+    url: str
 
 
 def _merged_blocker_pr(conn: sqlite3.Connection, pr: records.ObservedPr) -> str | None:

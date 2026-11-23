@@ -6,9 +6,10 @@ A chore run's lifecycle, from its claim to its close, is the one every run table
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import db, records, sql
+from canopy.core import db, records
 
 if TYPE_CHECKING:
     import sqlite3
@@ -74,15 +75,21 @@ def chore_costs_since(conn: sqlite3.Connection, chore: str, since: str) -> tuple
     Returns:
         The runs, a running one included, and the costs reported, in US dollars, cheapest first.
     """
-    query = sql.select("cost_usd").from_("chore_runs").where("chore = ? AND started_at >= ?", chore, since)
-    rows = sql.execute(conn, query).fetchall()
-    return len(rows), sorted(float(r[0]) for r in rows if r[0] is not None)
+    rows = records.view(_Cost).from_("chore_runs").where("chore = ? AND started_at >= ?", chore, since).all(conn)
+    return len(rows), sorted(r.cost_usd for r in rows if r.cost_usd is not None)
+
+
+@dataclass(frozen=True)
+class _Cost(records.View):
+    """What one run cost, as `chore_costs_since` reads it: None for a run that reported none."""
+
+    cost_usd: float | None
 
 
 def dismissals(conn: sqlite3.Connection, chore: str) -> dict[str, str]:
     """Return when the operator dismissed each of `chore`'s findings it dismissed, by finding id (DESIGN §19)."""
-    query = sql.select("finding_id, dismissed_at").from_("finding_dismissals").where("chore = ?", chore)
-    return {str(r["finding_id"]): str(r["dismissed_at"]) for r in sql.execute(conn, query)}
+    dismissed = records.select(records.FindingDismissal).where("chore = ?", chore).all(conn)
+    return {d.finding_id: d.dismissed_at for d in dismissed}
 
 
 def set_dismissal(conn: sqlite3.Connection, chore: str, finding_id: str, *, channel: str) -> None:

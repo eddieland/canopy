@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal, assert_never
 
-from canopy.core import db, plan_export, plans, records, sql
+from canopy.core import db, plan_export, plans, records
 from canopy.core.vocab import PlanItem, PlanStatus
 from canopy.runs import feedback_items, feedback_plans
 from canopy.serve.schema import FeedbackPlanWritten, WaitingFeedbackPlan
@@ -37,11 +37,11 @@ def for_pr(ctx: Context, url: str, thread_of: Mapping[int, str]) -> FeedbackPlan
         ticket has no current feedback plan of its repository.
     """
     conn = ctx.conn
-    unit = sql.execute(conn, sql.select("ticket_key, repo").from_("ticket_units").where("pr_url = ?", url)).fetchone()
+    unit = records.select(records.TicketUnit).where("pr_url = ?", url).one(conn)
     if unit is None:
         return None
-    plan = feedback_plans.current(conn, str(unit["ticket_key"]))
-    if plan is None or str(unit["repo"]) not in feedback_plans.repos(conn, plan):
+    plan = feedback_plans.current(conn, unit.ticket_key)
+    if plan is None or str(unit.repo) not in feedback_plans.repos(conn, plan):
         return None
     # Feedback after an approval waits for the next plan, so only a waiting plan is stale (DESIGN §32).
     changes: list[feedback_items.Change] = (

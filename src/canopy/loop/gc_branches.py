@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
-from canopy.core import hostgit, sql
+from canopy.core import hostgit, records, sql
 from canopy.core.vocab import RunStatus
 from canopy.infra import procs
 from canopy.runs import dispatch, tasks
@@ -92,8 +92,8 @@ def _named(conn: sqlite3.Connection, prefix: str) -> set[str]:
         sql.select("branch").from_("task_runs").where("status = ? OR task_id IN ({})", RunStatus.RUNNING, open_tasks),
         sql.select("base_branch").from_("task_runs").where("status = ?", RunStatus.RUNNING),
     )
-    found = {str(r[0]) for r in sql.execute(conn, names)}
-    found.update(tasks.branch(prefix, int(r[0])) for r in sql.execute(conn, open_tasks))
+    found = set(records.fetch_values(conn, str, names))
+    found.update(tasks.branch(prefix, task_id) for task_id in records.fetch_values(conn, int, open_tasks))
     return found
 
 
@@ -104,18 +104,38 @@ def _made(conn: sqlite3.Connection, prefix: str, repo: str) -> dict[str, tuple[s
         Each branch's name, and the ticket or the task it is of, as `Branch`'s last two fields.
     """
     made: dict[str, tuple[str | None, int | None]] = {}
-    runs = sql.select("r.ticket_key, r.branch").unique().from_("runs r").join("run_slots s ON s.run_id = r.id")
-    for r in sql.execute(conn, runs.where("s.repo = ?", repo)):
-        key, branch = str(r["ticket_key"]), str(r["branch"])
-        start = f"{prefix}{key}-"
-        if branch.startswith(start) and dispatch.valid_slug(branch.removeprefix(start)):
-            made[branch] = (key, None)
-    task_runs = sql.select("task_id, branch").unique().from_("task_runs").where("repo = ?", repo)
-    for r in sql.execute(conn, task_runs):
-        task_id, branch = int(r["task_id"]), str(r["branch"])
-        if branch == tasks.branch(prefix, task_id):
-            made[branch] = (None, task_id)
+    runs = (
+        records.view(_RunBranch, "r.ticket_key, r.branch")
+        .unique()
+        .from_("runs r")
+        .join("run_slots s ON s.run_id = r.id")
+        .where("s.repo = ?", repo)
+    )
+    for run in runs.all(conn):
+        start = f"{prefix}{run.ticket_key}-"
+        if run.branch.startswith(start) and dispatch.valid_slug(run.branch.removeprefix(start)):
+            made[run.branch] = (run.ticket_key, None)
+    task_runs = records.view(_TaskBranch).unique().from_("task_runs").where("repo = ?", repo)
+    for task_run in task_runs.all(conn):
+        if task_run.branch == tasks.branch(prefix, task_run.task_id):
+            made[task_run.branch] = (None, task_run.task_id)
     return made
+
+
+@dataclass(frozen=True)
+class _RunBranch(records.View):
+    """A branch a ticket's run worked on."""
+
+    ticket_key: str
+    branch: str
+
+
+@dataclass(frozen=True)
+class _TaskBranch(records.View):
+    """A branch a task's run worked on."""
+
+    task_id: int
+    branch: str
 
 
 def _remote_heads(runner: procs.Runner, clone: Path, prefix: str) -> dict[str, str] | None:

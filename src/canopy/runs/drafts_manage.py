@@ -357,7 +357,7 @@ def _check_none_staged(conn: sqlite3.Connection, prs: Iterable[str]) -> None:
             .where("pr_url = ?", pr)
             .where("status = ?", ReviewDraftStatus.STAGED),
         )
-        if sql.execute(conn, staged).fetchone():
+        if records.exists(conn, staged):
             raise conversation.Refused("staged", f"{pr} holds a review you staged: {_FINISH}")
 
 
@@ -632,16 +632,16 @@ def _left_pending(conn: sqlite3.Connection, pr: str) -> str | None:
     Returns:
         Its node id, or None when no post left one.
     """
-    row = sql.execute(
+    return records.fetch_value(
         conn,
+        str,
         sql.select("pending_review")
         .from_("drafts")
         .where("pr_url = ?", pr)
         .where("pending_review IS NOT NULL")
         .where_not_in("status", (DraftStatus.UNCONFIRMED, DraftStatus.STAGED))
         .limit(1),
-    ).fetchone()
-    return None if row is None else str(row["pending_review"])
+    )
 
 
 def _post_lines(stdout: str) -> dict[str, dict[str, object]]:
@@ -980,13 +980,20 @@ def unsettled_prs(conn: sqlite3.Connection) -> list[str]:
     Returns:
         The PRs' URLs, in order.
     """
-    rows = sql.execute(
-        conn,
-        sql.select("pr_url")
+    rows = (
+        records.view(_Pr)
         .unique()
         .from_("drafts")
         .where_in("status", (DraftStatus.UNCONFIRMED, DraftStatus.STAGED))
         .where("pending_review_id IS NOT NULL")
-        .order_by("pr_url"),
+        .order_by("pr_url")
+        .all(conn)
     )
-    return [str(r["pr_url"]) for r in rows]
+    return [str(r.pr_url) for r in rows]
+
+
+@dataclass(frozen=True)
+class _Pr(records.View):
+    """A PR some draft names, by its URL."""
+
+    pr_url: str | None

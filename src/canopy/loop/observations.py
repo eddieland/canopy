@@ -478,7 +478,7 @@ class Reader:
         cutoff = _cutoff(ctx, now)
         listed = {t.key: t for t in tickets}
         stopped = set(conversation.stopped(conn))
-        done = {str(r[0]) for r in sql.execute(conn, sql.select("key").from_("tickets").where("done = 1"))}
+        done = set(records.fetch_values(conn, str, sql.select("key").from_("tickets").where("done = 1")))
         runs = _query_runs(conn)
         tracker = runs.get(SourceKind.TRACKER)
         queried = [] if tracker is None else _result(tracker.query_result)

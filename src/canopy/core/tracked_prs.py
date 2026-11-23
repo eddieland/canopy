@@ -11,7 +11,7 @@ import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import contract, records, sql
+from canopy.core import contract, records
 
 if TYPE_CHECKING:
     import sqlite3
@@ -116,15 +116,15 @@ def read(conn: sqlite3.Connection, until: str) -> Namings:
     """
     runs: list[Naming] = []
     pushed = (
-        sql.select("ticket_key, started_at, result_json")
+        records.view(_Reported)
         .from_("runs")
         .where("started_at < ? AND result_json IS NOT NULL", until)
         .order_by("started_at, id")
     )
-    for key, started, result in sql.execute(conn, pushed):
-        named = tuple(contract.stored_prs(contract.stored_object(result)))
+    for run in pushed.all(conn):
+        named = tuple(contract.stored_prs(contract.stored_object(run.result_json)))
         if named:
-            runs.append(Naming(ticket=str(key), started_at=str(started), prs=named))
+            runs.append(Naming(ticket=run.ticket_key, started_at=run.started_at, prs=named))
     urls = sorted({url for run in runs for url in run.prs})
     units = (
         records.select(records.TicketUnit)
@@ -132,3 +132,12 @@ def read(conn: sqlite3.Connection, until: str) -> Namings:
         .all(conn)
     )
     return Namings(until=until, runs=runs, units={u.pr_url: u for u in units if u.pr_url is not None})
+
+
+@dataclass(frozen=True)
+class _Reported(records.View):
+    """A run that reported a result: its ticket, when it started, and the result as stored."""
+
+    ticket_key: str
+    started_at: str
+    result_json: str

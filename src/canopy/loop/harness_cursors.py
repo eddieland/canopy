@@ -226,7 +226,7 @@ def _review_items(
     named = {(r.item, r.id): _needs_none(r, trust, comments, reviewed) for r in reviews}
     found = [_Item(r.number, named[r.item, r.id] or _wrapper(r, reviews, named)) for r in reviews]
     runs = sql.select("number").from_("review_runs").where("pr_url = ? AND number IS NOT NULL", url)
-    found.extend(_Item(int(row[0]), None) for row in sql.execute(conn, runs))
+    found.extend(_Item(number, None) for number in records.fetch_values(conn, int, runs))
     return found
 
 

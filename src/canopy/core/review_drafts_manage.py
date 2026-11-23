@@ -752,15 +752,14 @@ def expire_claims(conn: sqlite3.Connection, config: Config) -> list[int]:
     minutes = config.connect.vcs().timeout_minutes + CLAIM_MARGIN_MINUTES
     before = db.format_time(datetime.now(UTC) - timedelta(minutes=minutes))
     with db.transaction(conn):
-        rows = (
+        stopped = (
             records.update(records.ReviewDraft)
             .set(status=ReviewDraftStatus.UNCONFIRMED, why="the publish stopped before the post said how it ended")
             .where("status = ?", ReviewDraftStatus.PUBLISHING)
             .where("publish_started_at < ?", before)
             .returning("id")
-            .run(conn)
-        ).fetchall()
-    return [int(r["id"]) for r in rows]
+        )
+        return records.fetch_values(conn, int, stopped)
 
 
 def settle_by_read(conn: sqlite3.Connection, whole: Iterable[str]) -> list[records.ReviewDraft]:
@@ -840,12 +839,11 @@ def unsettled_prs(conn: sqlite3.Connection) -> list[str]:
     Returns:
         The PRs' URLs, in order.
     """
-    rows = sql.execute(
-        conn,
+    prs = (
         sql.select("pr_url")
         .unique()
         .from_("review_drafts")
         .where_in("status", (ReviewDraftStatus.UNCONFIRMED, ReviewDraftStatus.STAGED))
-        .order_by("pr_url"),
+        .order_by("pr_url")
     )
-    return [str(r["pr_url"]) for r in rows]
+    return records.fetch_values(conn, str, prs)

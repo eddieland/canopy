@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from canopy.core import db, epic_changes, epics, plans, prompts, sql
+from canopy.core import db, epic_changes, epics, plans, prompts, records, sql
 from canopy.core.vocab import PlanStatus, ReplyMode, RunKind
 from canopy.runs import feedback_plans, policy
 
@@ -210,14 +210,13 @@ def planner_model(ctx: Context, plan_id: int | None, feedback_plan_id: int | Non
         return _model_of(ctx, feedback.run_id) if feedback is not None else None
     if plan_id is None:
         return None
-    row = sql.execute(ctx.conn, sql.select("run_id").from_("plans").where("id = ?", plan_id)).fetchone()
-    return None if row is None else _model_of(ctx, int(row[0]))
+    run_id = records.fetch_value(ctx.conn, int, sql.select("run_id").from_("plans").where("id = ?", plan_id))
+    return None if run_id is None else _model_of(ctx, run_id)
 
 
 def _model_of(ctx: Context, run_id: int) -> str | None:
     # The model a run asked for (`runs.model`), not the ones its session says served it, which canopy reads later.
-    row = sql.execute(ctx.conn, sql.select("model").from_("runs").where("id = ?", run_id)).fetchone()
-    return None if row is None or row[0] is None else str(row[0])
+    return records.fetch_value(ctx.conn, str, sql.select("model").from_("runs").where("id = ?", run_id))
 
 
 def planner_may_approve(ctx: Context, key: str, kind: str) -> bool:

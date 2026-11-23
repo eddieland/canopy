@@ -332,17 +332,27 @@ def _slot_repos(conn: sqlite3.Connection, run_ids: Collection[int]) -> dict[int,
     Returns:
         A run's id to its repositories.
     """
-    query = (
-        sql.select("DISTINCT run_id, repo")
+    slots = (
+        records.view(_RunRepo)
+        .unique()
         .from_("run_slots")
         .where("repo IS NOT NULL")
         .where_in("run_id", run_ids)
         .order_by("run_id, repo")
+        .all(conn)
     )
     found: dict[int, list[str]] = defaultdict(list)
-    for row in sql.execute(conn, query):
-        found[int(row[0])].append(str(row[1]))
+    for slot in slots:
+        found[slot.run_id].append(slot.repo)
     return {run: "+".join(names) for run, names in found.items()}
+
+
+@dataclass(frozen=True)
+class _RunRepo(records.View):
+    """A repository one of a run's slots came from."""
+
+    run_id: int
+    repo: str
 
 
 def _measure(ran: _Ran, *, state_dir: Path, version: Version) -> RunOrientation | None:
