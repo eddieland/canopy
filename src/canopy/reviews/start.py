@@ -752,12 +752,12 @@ def _check_running(
         (
             r
             for r in db.running_runs(ctx.conn, "review_runs")
-            if r["pr_url"] == request.pr and (r["persona"] == request.persona or r["persona"] not in request.among)
+            if r.pr_url == request.pr and (r.persona == request.persona or r.persona not in request.among)
         ),
         None,
     )
     if running is not None:
-        raise Refusal("running", f"review run {running['id']} of this PR is running")
+        raise Refusal("running", f"review run {running.id} of this PR is running")
     held = list(held)
     waiting = next(
         (
@@ -775,7 +775,7 @@ def _check_running(
         raise Refusal("running", "this dry run already reviewed this PR")
     if request.ticket is None:
         return
-    worker = next((r for r in db.running_runs(ctx.conn, "runs") if r["ticket_key"] == request.ticket), None)
+    worker = next((r for r in db.running_runs(ctx.conn, "runs") if r.ticket_key == request.ticket), None)
     recorded = any(r.kind is RecordedKind.DISPATCH and r.ticket_key == request.ticket for r in held)
     if worker is not None or recorded or any(d.ticket_key == request.ticket for d in planned_runs):
         # A review must not race the push it is meant to judge.

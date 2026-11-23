@@ -56,7 +56,7 @@ def test_a_run_on_a_chosen_model_records_it_and_its_definition_names_it(
     listed(opencode_state, "a plugin says hello", MODEL, OTHER)
     scenario.configures(runtime={"models": {"worker": MODEL}})
     run = scenario.run(worker=pushes())
-    assert run.row["model"] == MODEL
+    assert run.row.model == MODEL
     # What the run records is what it ran on: the snapshot made for the config it ran under names the model.
     digest = snapshot_of(scenario, run)
     snapshot = scenario.env.root / ".canopy" / definitions.RUNTIME_DIR / digest
@@ -64,7 +64,7 @@ def test_a_run_on_a_chosen_model_records_it_and_its_definition_names_it(
     # The list is read in the workspace root, not in the run's slot, whose own runtime config could change it: at the
     # ask, and again as the tick starts the run (DESIGN §40).
     assert calls(opencode_state) == [(model_list(scenario.env.runtime)[0], str(scenario.env.root))] * 2
-    assert f"  model {MODEL}  log {run.row['log_path']}\n" in scenario.operator("status").out
+    assert f"  model {MODEL}  log {run.row.log_path}\n" in scenario.operator("status").out
     # Its commits credit the model that did the work (TRUST_MODEL T5).
     assert f"`Co-authored-by: {MODEL} (canopy worker) <noreply@canopy.invalid>`" in run.prompt_file.read_text()
 
@@ -75,7 +75,7 @@ def test_a_run_with_no_model_chosen_goes_to_the_runtimes_default_and_reads_no_li
     git_pool: GitPool,
 ) -> None:
     run = scenario.run(worker=pushes())
-    assert run.row["model"] is None
+    assert run.row.model is None
     assert calls(opencode_state) == []
     assert "  model " not in scenario.operator("status").out
     assert "`Co-authored-by: canopy worker <noreply@canopy.invalid>`" in run.prompt_file.read_text()
@@ -104,9 +104,9 @@ def test_each_agents_model_reaches_its_runs_and_no_other(
     listed(opencode_state, MODEL, OTHER)
     scenario.configures(runtime={"models": {"planner": OTHER}})
     plan = scenario.run(PLAN, worker=planner_does(plan="# Plan for PROJ-1\n\nAdd the button.\n"))
-    assert plan.row["model"] == OTHER
+    assert plan.row.model == OTHER
     scenario.operator("plan", KEY, "--skip")
-    assert scenario.run(worker=pushes()).row["model"] is None
+    assert scenario.run(worker=pushes()).row.model is None
 
 
 def test_a_worker_following_an_approved_plan_credits_the_planners_model_and_its_own(
@@ -150,7 +150,7 @@ def test_a_model_the_runtime_does_not_list_is_refused_with_an_attention_item(
     dry = scenario.refuses(dispatches(), dry_run=True)
     assert dry == [("refused:model_missing", reason), ("attention:model_missing", reason)]
     listed(opencode_state, OTHER, MODEL)
-    assert scenario.run(worker=pushes()).row["model"] == MODEL
+    assert scenario.run(worker=pushes()).row.model == MODEL
 
 
 def test_a_run_at_a_variant_records_it_and_its_definition_names_it(
@@ -161,7 +161,7 @@ def test_a_run_at_a_variant_records_it_and_its_definition_names_it(
     listed(opencode_state, MODEL, OTHER, variants={MODEL: ["low", "high"]})
     scenario.configures(runtime={"models": {"worker": f"{MODEL}@high"}})
     run = scenario.run(worker=pushes())
-    assert run.row["model"] == f"{MODEL}@high"
+    assert run.row.model == f"{MODEL}@high"
     digest = snapshot_of(scenario, run)
     worker = scenario.env.root / ".canopy" / definitions.RUNTIME_DIR / digest / "agents" / "canopy-worker.md"
     assert f'\nmodel: "{MODEL}"\nvariant: "high"\n' in worker.read_text()
@@ -213,22 +213,22 @@ def test_an_override_reaches_every_run_of_its_agent_for_the_ticket_until_cleared
     said = scenario.operator("model", KEY, OTHER).out
     assert said == f"{KEY}'s worker runs use {OTHER} from their next run: this ticket's override.\n"
     plan = scenario.run(PLAN, worker=planner_does(plan="# Plan for PROJ-1\n\nAdd the button.\n"))
-    assert plan.row["model"] is None
+    assert plan.row.model is None
     assert ran_on(agent_log, "canopy-planner") is None
     scenario.operator("plan", KEY, "--skip")
     first = scenario.run(worker=pushes())
-    assert first.row["model"] == OTHER
+    assert first.row.model == OTHER
     # What the run recorded is what it ran on: its definition names the override's model.
     assert ran_on(agent_log) == OTHER
-    assert scenario.run(RESUME, worker=pushes()).row["model"] == OTHER
-    assert scenario.run(dispatches("PROJ-2"), worker=pushes()).row["model"] is None
+    assert scenario.run(RESUME, worker=pushes()).row.model == OTHER
+    assert scenario.run(dispatches("PROJ-2"), worker=pushes()).row.model is None
     assert ran_on(agent_log) is None
     # It outlasts a forget, as the ticket's persona does.
     scenario.operator("forget", KEY)
     assert scenario.operator("model", KEY).out.splitlines()[1] == f"  worker    {OTHER}  (this ticket's override)"
     said = scenario.operator("model", KEY, "--clear").out
     assert said == f"{KEY}'s worker runs use OpenCode's default from their next run: nothing sets one.\n"
-    assert scenario.run(worker=pushes()).row["model"] is None
+    assert scenario.run(worker=pushes()).row.model is None
 
 
 def test_an_override_takes_the_place_of_the_agents_model_in_config(
@@ -250,7 +250,7 @@ def test_an_override_takes_the_place_of_the_agents_model_in_config(
         "  reviewer  OpenCode's default  (nothing sets one)",
     ]
     plan = scenario.run(PLAN, worker=planner_does(plan="# Plan for PROJ-1\n\nAdd the button.\n"))
-    assert plan.row["model"] == OTHER
+    assert plan.row.model == OTHER
     assert ran_on(agent_log, "canopy-planner") == OTHER
     said = scenario.operator("model", KEY, "--agent", "planner", "--clear").out
     assert said == f"{KEY}'s planner runs use {MODEL} from their next run: [runtime.models].\n"
@@ -309,7 +309,7 @@ def test_an_override_at_a_variant_reaches_the_tickets_runs_and_one_naming_none_d
     assert said == f"{KEY}'s worker runs use {MODEL}@low from their next run: this ticket's override.\n"
     # The variants were read to look it up, as they are again when the run starts.
     assert calls(opencode_state) == [(model_list(scenario.env.runtime, variants=True)[0], str(scenario.env.root))]
-    assert scenario.run(worker=pushes()).row["model"] == f"{MODEL}@low"
+    assert scenario.run(worker=pushes()).row.model == f"{MODEL}@low"
     assert ran_on(agent_log) == f"{MODEL}@low"
     err = scenario.operator("model", KEY, f"{MODEL}@max", code=1).err
     assert err == (
@@ -322,7 +322,7 @@ def test_an_override_at_a_variant_reaches_the_tickets_runs_and_one_naming_none_d
         f"{KEY}'s worker runs use {MODEL} from their next run: this ticket's override (config's variant `high` no "
         "longer applies).\n"
     )
-    assert scenario.run(RESUME, worker=pushes()).row["model"] == MODEL
+    assert scenario.run(RESUME, worker=pushes()).row.model == MODEL
     assert ran_on(agent_log) == MODEL
     said = scenario.operator("model", KEY, "--clear").out
     assert said == f"{KEY}'s worker runs use {MODEL}@high from their next run: [runtime.models].\n"
@@ -351,7 +351,7 @@ def test_an_override_whose_model_was_dropped_refuses_the_tickets_next_dispatch(
 ) -> None:
     listed(opencode_state, MODEL, OTHER)
     scenario.operator("model", KEY, OTHER)
-    assert scenario.run(worker=pushes()).row["model"] == OTHER
+    assert scenario.run(worker=pushes()).row.model == OTHER
     listed(opencode_state, MODEL)
     reason = (
         f"OpenCode does not list the model {OTHER} chosen for {KEY}'s worker runs (`canopy model {KEY}`), so a run "
@@ -383,7 +383,7 @@ def test_a_tickets_reviewer_override_reaches_its_reviews_alone(
     assert scenario.review(ticketed, reviewer=reviewer_reports(CLEAN)).row.model == OTHER
     assert ran_on(agent_log, "canopy-reviewer") == OTHER
     # Nor does a worker's run: the override is the reviewer's alone.
-    assert scenario.run(worker=pushes()).row["model"] is None
+    assert scenario.run(worker=pushes()).row.model is None
     assert ran_on(agent_log) is None
 
 

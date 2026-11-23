@@ -7,8 +7,11 @@ subquery or a condition, goes in as a `{}` and keeps its own values. A table or 
 from a `Literal` type, which the type checker holds to the names it lists, or through `name`, which takes only an
 identifier. So no clause can carry text that came from outside canopy's code, and the type checker says so.
 
-    q = sql.select("id, pid").from_(table).where("status = ?", RunStatus.RUNNING).order_by("id")
-    rows = sql.execute(conn, q).fetchall()
+    q = sql.select("id").from_(table).where("status = ?", RunStatus.RUNNING).order_by("id")
+    ids = records.fetch_values(conn, int, q)
+
+A statement's rows are read through `records`, as a row type, a view, or a value of a type named: nothing else
+fetches a cursor's rows, so `execute` is called for a write, or a statement with no rows to read.
 
 Each builder is immutable: a method returns a new statement, so a partial query can be kept in a constant and
 finished by each caller. A statement run once per row, by `execute_many`, takes `ROW` where a value differs per row:

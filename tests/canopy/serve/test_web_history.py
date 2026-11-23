@@ -150,7 +150,7 @@ def test_the_tickets_list_is_what_weighing_every_ticket_finds(journals: Journals
             "VALUES ('chore', 'K-1', '99', 'operator', 'reply', 'cli', 'b')",
         )
     for limit in range(1, len(keys) + 2):
-        found = [(r["key"], r["active_at"]) for r in db.recent_tickets(conn, limit)]
+        found = [(r.key, r.active_at) for r in db.recent_tickets(conn, limit)]
         assert found == every_ticket(conn, limit), limit
 
 

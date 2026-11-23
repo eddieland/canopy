@@ -49,10 +49,10 @@ def test_dispatch_leases_records_and_spawns(
         tick_starts(runner)
 
         run = present(db.get_run(conn, 1))
-        assert (run["ticket_key"], run["kind"], run["status"]) == ("PROJ-1", "implement", "running")
-        assert run["branch"] == "agent/PROJ-1-add-login"
-        assert run["pid"] == os.getpid()
-        assert run["log_path"] == str(canopy_env.state_dir / "runs" / "1.log")
+        assert (run.ticket_key, run.kind, run.status) == ("PROJ-1", "implement", "running")
+        assert run.branch == "agent/PROJ-1-add-login"
+        assert run.pid == os.getpid()
+        assert run.log_path == str(canopy_env.state_dir / "runs" / "1.log")
         leased = slot_of(conn, 1)
         assert (leased.repo, leased.base_branch, leased.lease_holder) == ("repo", "main", "canopy:PROJ-1")
         [slot] = [s for s in pool(treehouse_state) if s["status"] == "leased"]
@@ -121,10 +121,10 @@ def test_an_override_that_ignores_the_pr_skill_is_refused(
 
 def test_detached_run_finishes_on_its_own(scenario: Scenario, git_pool: GitPool, treehouse_state: Path) -> None:
     [run] = scenario.tick(dispatches(), worker=pushes()).runs
-    assert run.status == "done", Path(run.row["log_path"]).read_text()
+    assert run.status == "done", Path(run.row.log_path).read_text()
     assert git_pool.remote_head("agent/PROJ-1-work") is not None
     assert all(s["status"] == "available" for s in pool(treehouse_state))
-    log = Path(run.row["log_path"])
+    log = Path(run.row.log_path)
     assert log.stat().st_mode & 0o777 == 0o600
     assert "--- worker stdout ---" in log.read_text()
     assert not lifelock_left(run.row)
@@ -287,8 +287,8 @@ def test_spawn_failure_returns_the_slot_and_closes_the_run(
         tick_starts(runner)
         assert decisions(conn, tick_id) == [("refused:spawn_failed", "no processes left")]
         run = present(db.get_run(conn, 1))
-        assert run["status"] == "crashed"
-        assert json.loads(run["result_json"]) == {"harness": "could not start the worker: no processes left"}
+        assert run.status == "crashed"
+        assert json.loads(run.result_json) == {"harness": "could not start the worker: no processes left"}
         assert all(s["status"] == "available" for s in pool(treehouse_state))
 
 

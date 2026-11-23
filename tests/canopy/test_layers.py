@@ -317,6 +317,69 @@ def run(command: str) -> str:
     assert [v.split(": ", 1)[0] for v in found] == ["canopy/runs/example.py:4", "canopy/runs/example.py:9"]
 
 
+#: The module that alone reads a cursor's rows, as the records every other module is given (`canopy.core.orm`).
+READS_ROWS: Final = "core/orm.py"
+#: What reads a cursor's rows as they come, untyped.
+FETCHES: Final = frozenset({"fetchone", "fetchall", "fetchmany"})
+
+
+def test_only_the_orm_reads_a_bare_row() -> None:
+    """No module but `canopy.core.orm` fetches a cursor's rows or names `sqlite3.Row`: a read is a record's.
+
+    A row read by hand is untyped, so nothing checks a column's name or what its value is. `records` reads every
+    query as a row type, a view, or a value of a type named. `db.connect` alone still gives its connection's bare
+    rows a factory, for the tests that query a journal by hand.
+    """
+    found = [v for path in modules() for v in reading_bare_rows(path, path.read_text())]
+    assert not found, "\n".join(found)
+
+
+def reading_bare_rows(path: Path, source: str) -> list[str]:
+    """Each place in `source`, the text of the module at `path`, that fetches a cursor's rows or names `sqlite3.Row`."""
+    if path.relative_to(PACKAGE).as_posix() == READS_ROWS:
+        return []
+    tree = ast.parse(source, filename=str(path))
+    # A connection's row factory is set, not read.
+    factories = {
+        id(node.value)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Assign)
+        and any(isinstance(t, ast.Attribute) and t.attr == "row_factory" for t in node.targets)
+    }
+    where = path.relative_to(PACKAGE.parent)
+    found: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Attribute) or id(node) in factories:
+            continue
+        if node.attr in FETCHES:
+            found.append(f"{where}:{node.lineno}: calls {node.attr}, which only canopy/{READS_ROWS} may")
+        elif node.attr == "Row" and isinstance(node.value, ast.Name) and node.value.id == "sqlite3":
+            found.append(f"{where}:{node.lineno}: names sqlite3.Row, which only canopy/{READS_ROWS} may")
+    return found
+
+
+def test_the_check_catches_a_bare_row_read_or_named() -> None:
+    source = """
+import sqlite3
+
+
+def connect(path: str) -> sqlite3.Connection:
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def first(conn: sqlite3.Connection) -> sqlite3.Row | None:
+    return conn.execute("SELECT 1").fetchone()
+"""
+    found = reading_bare_rows(PACKAGE / "runs" / "example.py", source)
+    assert found == [
+        "canopy/runs/example.py:11: names sqlite3.Row, which only canopy/core/orm.py may",
+        "canopy/runs/example.py:12: calls fetchone, which only canopy/core/orm.py may",
+    ]
+    assert reading_bare_rows(PACKAGE / "core" / "orm.py", source) == []
+
+
 def test_no_test_module_imports_another() -> None:
     """What two test modules share lives in a helpers module (`tests/canopy/helpers.py`) or a conftest, not in one."""
     found = [v for path in under_tests("*.py") for v in imported_tests(path, path.read_text())]

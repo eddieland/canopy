@@ -24,7 +24,6 @@ from canopy.serve import views
 from canopy.serve.schema.worktree import Pool, Process, ReviewHold, TaskHold, Worktree, WorktreeState
 
 if TYPE_CHECKING:
-    import sqlite3
     from collections.abc import Sequence
     from pathlib import Path
 
@@ -71,11 +70,11 @@ def pools(backend: Backend, ctx: Context) -> list[Pool]:
         instead of worktrees.
     """
     running = db.running_runs(ctx.conn, "runs")
-    by_lease: dict[str, sqlite3.Row] = {}
-    for run_id, slots in db.all_run_slots(ctx.conn, [int(r["id"]) for r in running]).items():
-        row = next(r for r in running if int(r["id"]) == run_id)
+    by_lease: dict[str, db.ShownRun] = {}
+    for run_id, slots in db.all_run_slots(ctx.conn, [int(r.id) for r in running]).items():
+        row = next(r for r in running if int(r.id) == run_id)
         by_lease |= {str(s.lease_id): row for s in slots}
-    reviews = {str(r["lease_id"]): r for r in db.running_runs(ctx.conn, "review_runs") if r["lease_id"]}
+    reviews = {str(r.lease_id): r for r in db.running_runs(ctx.conn, "review_runs") if r.lease_id}
     # A task's run holds a slot too (DESIGN §36), matched by lease id as a ticket's run is.
     for_tasks = {r.lease_id: r for r in tasks.running(ctx.conn)}
     root = ctx.workspace.root
@@ -112,8 +111,8 @@ def pools(backend: Backend, ctx: Context) -> list[Pool]:
 
 def worktree(
     slot: Slot,
-    run: sqlite3.Row | None,
-    review: sqlite3.Row | None,
+    run: db.ShownRun | None,
+    review: records.ReviewRun | None,
     *,
     root: Path,
     repo: str,
@@ -157,9 +156,9 @@ def worktree(
         run=views.run(run, root) if run is not None else None,
         review=(
             ReviewHold(
-                id=int(review["id"]),
-                pr_url=str(review["pr_url"]),
-                started_at=db.parse_time(str(review["started_at"])),
+                id=int(review.id),
+                pr_url=str(review.pr_url),
+                started_at=db.parse_time(str(review.started_at)),
             )
             if review is not None
             else None
@@ -174,14 +173,14 @@ def worktree(
     )
 
 
-def _run_branch(run: sqlite3.Row | None, task: records.TaskRun | None) -> str | None:
+def _run_branch(run: records.Run | None, task: records.TaskRun | None) -> str | None:
     """The branch a run or task's run that holds a detached slot works on, or None when neither holds it.
 
     Returns:
         The branch on one line, or None.
     """
     if run is not None:
-        return _text(str(run["branch"]))
+        return _text(str(run.branch))
     return _text(task.branch) if task is not None else None
 
 

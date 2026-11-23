@@ -621,7 +621,7 @@ class _World:
         branches: dict[str, list[records.ObservedBranch]] = {}
         for b in records.select(records.ObservedBranch).all(conn):
             branches.setdefault(b.repository, []).append(b)
-        running = {str(r["ticket_key"]) for r in db.running_runs(conn, "runs")}
+        running = {str(r.ticket_key) for r in db.running_runs(conn, "runs")}
         return cls(
             ctx=ctx,
             now=now,

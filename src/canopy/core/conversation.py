@@ -1399,9 +1399,9 @@ def prompt_previous_runs(conn: sqlite3.Connection, key: str) -> str | None:
     """
     blocks: list[str] = []
     for run in db.ended_runs_of(conn, key, PREVIOUS_RUNS, skip_kind=RunKind.NEEDS_PLAN):
-        ended = f" at {run['ended_at']}" if run["ended_at"] else ""
-        lines = [f"Run {run['id']}, `{run['kind']}`, ended `{run['status']}`{ended}."]
-        for m in db.run_messages(conn, int(run["id"])):
+        ended = f" at {run.ended_at}" if run.ended_at else ""
+        lines = [f"Run {run.id}, `{run.kind}`, ended `{run.status}`{ended}."]
+        for m in db.run_messages(conn, run.id):
             lines += [f"Its {m.kind}:", quoted(m.body)]
         blocks.append("\n".join(lines))
     return "\n\n".join(blocks) or None
@@ -1514,7 +1514,7 @@ def run_messages(status: RunStatus, result_json: str | None) -> list[tuple[str, 
 def close_run(
     conn: sqlite3.Connection,
     config: Config,
-    run: sqlite3.Row,
+    run: records.Run,
     status: RunStatus,
     result_json: str | None,
     *,
@@ -1529,7 +1529,7 @@ def close_run(
     """
     return db.finish_ticket_run(
         conn,
-        int(run["id"]),
+        run.id,
         status,
         result_json,
         messages=run_messages(status, result_json),

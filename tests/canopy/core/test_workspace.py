@@ -357,7 +357,7 @@ def test_dispatch_names_one_repository_and_leases_from_its_pool(
         "{pool}/{slot}/{repo}",
     ]
     assert where == {"cwd": str(ws.clone("api")), "treehouse_root": str(ws.root)}
-    assert decisions(conn, int(run.row["tick_id"])) == [
+    assert decisions(conn, int(run.row.tick_id)) == [
         ("dispatch:implement", f"run {run.id}: agent/PROJ-1-login in api at {slot.slot_path}; label {LABEL}"),
     ]
 
@@ -386,7 +386,7 @@ def test_two_tickets_in_two_repositories_end_to_end(
 
     slots = [db.run_slots(conn, run.id)[0] for run in ticked.runs]
     for run, slot in zip(ticked.runs, slots, strict=True):
-        assert run.status == "done", Path(run.row["log_path"]).read_text()
+        assert run.status == "done", Path(run.row.log_path).read_text()
         # Every worktree is under the workspace root.
         assert Path(slot.slot_path).is_relative_to(ws.root / ".treehouse")
     assert [s.repo for s in slots] == ["api", "web"]
@@ -418,7 +418,7 @@ def test_reconcile_returns_leases_in_each_pool(ws_scenario: Scenario, ws: Ws, tr
     ws_scenario.tick(*waits("PROJ-1", rationale="its run crashed"), dry_run=True)
 
     run = present(db.get_run(conn, working.id))
-    assert run["status"] == "crashed"
+    assert run.status == "crashed"
     state = json.loads(treehouse_state.read_text())
     assert [s["status"] for p in state["pools"].values() for s in p["slots"]] == ["available", "available"]
     returns = [(c, x) for c, x in zip(state["calls"], state["contexts"], strict=True) if c[0] == "return"]

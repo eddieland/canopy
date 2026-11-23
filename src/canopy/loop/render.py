@@ -22,14 +22,14 @@ if TYPE_CHECKING:
 DIGEST_WIDTH: Final = 12
 
 
-def run_kind(row: sqlite3.Row) -> str:
+def run_kind(row: records.Run) -> str:
     """A run's kind as a line shows it: a `resume` with its reasons, `resume (ci, review)` (DESIGN §8).
 
     Returns:
         The kind, followed by its reasons in parentheses when the run has any.
     """
     reasons = db.reasons_in(row)
-    return f"{row['kind']} ({', '.join(reasons)})" if reasons else str(row["kind"])
+    return f"{row.kind} ({', '.join(reasons)})" if reasons else str(row.kind)
 
 
 def named(key: object, title: object) -> str:
@@ -53,7 +53,7 @@ def phase_of(conn: sqlite3.Connection, ticket: records.Ticket) -> str:
     return f"not recorded, last decision {decided}" if decided is not None else "not seen by a tick yet"
 
 
-def result_of(run: sqlite3.Row | records.Row) -> dict[str, object]:
+def result_of(run: records.Row) -> dict[str, object]:
     """A run's stored result as an object; {} when it has none or it does not parse.
 
     Returns:
@@ -71,7 +71,7 @@ def prs_of(result: Mapping[str, object]) -> list[str]:
     return contract.stored_prs(result)
 
 
-def spent(row: sqlite3.Row | records.Row) -> str:
+def spent(row: records.Row) -> str:
     """What a run or a tick cost, as `  $0.25, 12.3k tokens`, or "" when the runtime reported nothing.
 
     Returns:
@@ -81,26 +81,26 @@ def spent(row: sqlite3.Row | records.Row) -> str:
     return f"  {usage.describe()}" if usage is not None else ""
 
 
-def persona_of(row: sqlite3.Row) -> str:
+def persona_of(row: records.Run | records.ReviewRun) -> str:
     """The persona a run or a review ran in (DESIGN §31), as `  persona skeptic 1a2b3c4d5e6f`, its digest cut short.
 
     Returns:
         The name and digest with two leading spaces, to append to a line, or "" for a run that recorded none.
     """
-    if row["persona"] is None:
+    if row.persona is None:
         return ""
-    return f"  persona {row['persona']} {str(row['persona_digest'])[:DIGEST_WIDTH]}"
+    return f"  persona {row.persona} {str(row.persona_digest)[:DIGEST_WIDTH]}"
 
 
-def model_of(row: sqlite3.Row) -> str:
+def model_of(row: records.Run) -> str:
     """The model canopy chose for a worker run's agent (DESIGN §13), as `  model provider/model`.
 
     Returns:
         The model with two leading spaces, to append to a line, or "" for a run on the runtime's default.
     """
-    if row["model"] is None:
+    if row.model is None:
         return ""
-    return f"  model {row['model']}"
+    return f"  model {row.model}"
 
 
 def chore_line(state: chore_view.ChoreState, now: datetime) -> str:

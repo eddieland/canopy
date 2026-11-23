@@ -57,8 +57,6 @@ from canopy.runs import (
 )
 
 if TYPE_CHECKING:
-    import sqlite3
-
     from canopy.core import records
     from canopy.core.context import Context
 
@@ -940,7 +938,7 @@ def _guard(
 def _check_running(
     ctx: Context,
     key: str,
-    running: Iterable[sqlite3.Row],
+    running: Iterable[records.Run],
     planned: Sequence[str],
     *,
     spawning: int | None,
@@ -955,8 +953,8 @@ def _check_running(
         Refusal: (`running`) `key` has a run running, recorded, or dispatched by this dry run.
     """
     for run in running:
-        if run["ticket_key"] == key:
-            raise Refusal("running", f"run {run['id']} is already working {key}")
+        if run.ticket_key == key:
+            raise Refusal("running", f"run {run.id} is already working {key}")
     held = recorded_runs.holding(ctx.conn, but=spawning)
     for recorded in held:
         if recorded.kind is RecordedKind.DISPATCH and recorded.ticket_key == key:
@@ -1298,7 +1296,7 @@ def _launch(ctx: Context, run_id: int, prompt: str) -> int:
         logs.write_private(prompt_file(ctx, run_id), prompt)
         # `python -m canopy`, not `canopy` from PATH: the child is this same installation.
         argv = [sys.executable, "-m", "canopy", "_run", str(run_id)]
-        pid = ctx.runner.spawn(argv, cwd=ctx.repo_root, log_path=Path(run["log_path"]))
+        pid = ctx.runner.spawn(argv, cwd=ctx.repo_root, log_path=Path(run.log_path))
     except (OSError, procs.ProcError) as e:
         note = json.dumps({"harness": f"could not start the worker: {e}"})
         conversation.close_run(ctx.conn, ctx.config, run, RunStatus.CRASHED, note)

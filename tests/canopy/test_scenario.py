@@ -90,7 +90,7 @@ def test_the_step_that_failed_is_in_the_story(scenario: Scenario) -> None:
 
 def test_a_held_run_is_at_work_until_the_story_says_what_becomes_of_it(scenario: Scenario, git_pool: GitPool) -> None:
     working = scenario.starts(worker=pushes())
-    assert working.row["status"] == "running"
+    assert working.row.status == "running"
     scenario.refuses(dispatches())
     assert working.finishes().status == "done"
     slot = git_pool.slots[0]  # run 1 gave it back
@@ -322,7 +322,7 @@ def test_every_role_a_run_plays_is_held(scenario: Scenario, git_pool: GitPool) -
 
 def test_a_worker_sends_drafts_beside_its_pr(scenario: Scenario, git_pool: GitPool) -> None:
     ran = scenario.run(worker=sends_drafts([{"on": "pr", "pr": DRAFTS_PR, "text": "Ready for review."}]))
-    assert json.loads(ran.row["result_json"])["prs"] == {"repo": DRAFTS_PR}
+    assert json.loads(present(ran.row.result_json))["prs"] == {"repo": DRAFTS_PR}
     # What the worker reported, as the run log carries it; canopy keeps the drafts where `trust.review_replies` says.
     # It is the input of its `result` call, one of the events the worker printed.
     events = [json.loads(line) for line in ran.printed.out.splitlines() if line.startswith('{"type"')]

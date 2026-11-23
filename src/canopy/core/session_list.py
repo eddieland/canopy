@@ -400,7 +400,11 @@ def _made_by(conn: sqlite3.Connection, ids: Sequence[str]) -> dict[str, MadeBy]:
         every=True,
     )
     query = (
-        sql.select("u.session_id, r.run_table, r.run_id, r.model, u.depth")
+        # A model that is not text, which no run of canopy's writes, is read as none, never refused.
+        records.view(
+            _Maker,
+            "u.session_id, r.run_table, r.run_id, CASE typeof(r.model) WHEN 'text' THEN r.model END AS model, u.depth",
+        )
         .with_(
             "up(session_id, at, depth) AS ("
             "SELECT value, value, 0 FROM json_each(?)"
@@ -417,11 +421,24 @@ def _made_by(conn: sqlite3.Connection, ids: Sequence[str]) -> dict[str, MadeBy]:
     )
     # The nearest is read last, so it is the one kept.
     made: dict[str, MadeBy] = {}
-    for session_id, table, run_id, model, depth in sql.execute(conn, query):
-        if table in runtime_sessions.RUN_TABLES and isinstance(run_id, int):
-            asked = model if depth == 0 and isinstance(model, str) else None
-            made[str(session_id)] = MadeBy(cast("RunTable", table), run_id, asked)
+    for maker in query.all(conn):
+        if maker.run_table in runtime_sessions.RUN_TABLES:
+            asked = maker.model if maker.depth == 0 else None
+            made[maker.session_id] = MadeBy(cast("RunTable", maker.run_table), maker.run_id, asked)
     return made
+
+
+@dataclass(frozen=True)
+class _Maker(records.View):
+    """A run that made one of the sessions asked about, or a session it ran for, and how far up that session is."""
+
+    #: The session asked about.
+    session_id: str
+    run_table: str
+    run_id: int
+    model: str | None
+    #: 0 for the session's own run, and one more for each session between them.
+    depth: int
 
 
 # The sessions listed, each with its subagents' under it, from those `below` them, oldest first.

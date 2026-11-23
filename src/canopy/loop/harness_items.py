@@ -357,7 +357,7 @@ class _Limits:
         return cls(
             ctx,
             {(u.ticket_key, u.repo): u.pr_url for found in units for u in found if u.repo and u.pr_url},
-            frozenset(str(r["ticket_key"]) for r in db.running_runs(ctx.conn, "runs")),
+            frozenset(str(r.ticket_key) for r in db.running_runs(ctx.conn, "runs")),
             policy.attempts(ctx.conn),
             policy.grants(ctx.conn),
             policy.feedback_plan_attempts(ctx.conn),

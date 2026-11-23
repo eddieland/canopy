@@ -305,7 +305,7 @@ def test_a_run_under_approve_keeps_its_diff_at_its_pushed_head(scenario: Scenari
     scenario.configures("private", trust=APPROVE)
     github_has(github_state, comment(501))
     run = scenario.run(WORK, worker=sends_drafts([thread(501)]))
-    diff = review_diff.run_path_for(str(run.row["log_path"]), "repo")
+    diff = review_diff.run_path_for(str(run.row.log_path), "repo")
     assert diff.is_file()
     assert review_diff.read(diff) is not None
     head = review_diff.read_head(diff)
@@ -327,13 +327,13 @@ def test_a_diff_that_cannot_be_kept_leaves_the_run_and_its_drafts_as_they_are(
     assert run.status == "done"
     [draft] = drafts.of_run(scenario.conn, run.id)
     assert draft.status is DraftStatus.WAITING
-    assert not review_diff.run_path_for(str(run.row["log_path"]), "repo").exists()
+    assert not review_diff.run_path_for(str(run.row.log_path), "repo").exists()
 
 
 def test_a_run_under_post_keeps_its_diff_at_its_pushed_head_too(scenario: Scenario, git_pool: GitPool) -> None:
     """Every run keeps its branch against its base (DESIGN §45), so the PR's page has it whatever the setting."""
     scenario.configures("private", trust={"review_replies": "post"})
     run = scenario.run(WORK, worker=sends_drafts([]))
-    diff = review_diff.run_path_for(str(run.row["log_path"]), "repo")
+    diff = review_diff.run_path_for(str(run.row.log_path), "repo")
     assert review_diff.read(diff) is not None
     assert review_diff.read_head(diff) == git_pool.remote_head("agent/PROJ-1-work")

@@ -234,6 +234,21 @@ def test_columns_are_matched_by_name_not_position(conn: sqlite3.Connection) -> N
     assert (row.ticket_key, row.action, row.rationale) == ("PROJ-1", "wait", "checks running")
 
 
+def test_rows_are_read_one_at_a_time_and_the_statement_ends_when_the_read_is_closed(conn: sqlite3.Connection) -> None:
+    tick = db.start_tick(conn, dry_run=True)
+    for key in ("PROJ-1", "PROJ-2", "PROJ-3"):
+        db.record_decision(conn, tick, key, "wait", "checks running")
+    query = records.select(records.Decision).order_by("id")
+    assert [d.ticket_key for d in records.fetch_each(conn, records.Decision, query)] == ["PROJ-1", "PROJ-2", "PROJ-3"]
+    rows = records.fetch_each(conn, records.Decision, query)
+    assert present(next(rows)).ticket_key == "PROJ-1"
+    rows.close()
+    # The read no longer holds the journal: a write that would wait on an open statement's snapshot goes through.
+    sql.execute(conn, sql.frag("PRAGMA wal_checkpoint(TRUNCATE)"))
+    with pytest.raises(records.RowError, match=r"^query does not fit Decision: missing"):
+        next(records.fetch_each(conn, records.Decision, sql.select("id").from_("decisions")))
+
+
 def test_fetch_one_is_none_when_the_query_returns_nothing(conn: sqlite3.Connection) -> None:
     assert records.fetch_one(conn, records.Decision, sql.frag("SELECT * FROM decisions WHERE id = ?", 1)) is None
 

@@ -58,7 +58,7 @@ def owed(
     *,
     tickets: Iterable[records.Ticket],
     stopped: Iterable[str],
-    recently_done: Iterable[sqlite3.Row],
+    recently_done: Iterable[db.DoneTicket],
     decided: Iterable[str] = (),
     chores: Iterable[chore_view.ChoreSummary],
 ) -> Duties:
@@ -73,7 +73,7 @@ def owed(
     recorded = db.decisions_for_tick(conn, tick_id)
     return Duties(
         tickets=frozenset(t.key for t in tickets),
-        exempt=frozenset([*stopped, *(str(t["key"]) for t in recently_done), *decided]),
+        exempt=frozenset([*stopped, *(str(t.key) for t in recently_done), *decided]),
         chores=frozenset(c["name"] for c in chores if c["due"] and not c["running"]),
         harness=max((d.id for d in recorded), default=0),
     )

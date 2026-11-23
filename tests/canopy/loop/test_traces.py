@@ -56,7 +56,7 @@ def test_a_run_is_a_trace_of_its_own_linked_to_the_tick_that_started_it(scenario
     assert run["attributes"].pop("canopy.journal_seconds")
     # What canopy chose for it, besides its id; it chose no model, so the runtime's default ran it.
     assert run["attributes"] == {
-        "canopy.run_id": str(ran.row["id"]),
+        "canopy.run_id": str(ran.row.id),
         "canopy.role": "worker",
         "canopy.kind": "implement",
         "canopy.attempt": "1",
@@ -75,7 +75,7 @@ def test_a_run_that_fails_without_raising_is_a_failed_span_of_its_kind_and_attem
     listed(opencode_state, MODEL)
     scenario.configures("private", telemetry={"traces": "file"})
     scenario.configures(runtime={"models": {"worker": MODEL}})
-    assert [scenario.run(worker=fails()).row["status"] for _ in range(2)] == ["failed", "failed"]
+    assert [scenario.run(worker=fails()).row.status for _ in range(2)] == ["failed", "failed"]
     run = last_of_each(scenario)["run"]
     assert run["status"] == {"code": ERROR, "message": "failed"}
     attributes = run["attributes"]

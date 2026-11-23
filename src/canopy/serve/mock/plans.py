@@ -155,6 +155,6 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str], ro
             created_at=at(minutes),
             resolved_at=at(minutes + 1) if resolved else None,
         ).returning("id")
-        thread_id = thread.run(conn).fetchone()[0]
+        [thread_id] = records.fetch_values(conn, int, thread)
         for reply in replies:
             records.insert(records.PlanReply, thread_id=thread_id, body=reply, created_at=at(minutes + 2)).run(conn)

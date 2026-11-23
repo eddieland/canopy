@@ -82,7 +82,7 @@ def test_a_worker_that_rewrites_the_git_link_crashes_the_run_and_the_link_is_put
 
     assert run.status == "crashed"
     slot = Path(slot_of(scenario.conn, run.id).slot_path)
-    result = json.loads(run.row["result_json"])
+    result = json.loads(present(run.row.result_json))
     assert result["harness"] == f"repo: the worker rewrote {slot / '.git'}; nothing was checked or pushed"
     assert result["status"] == "done"  # what the worker claimed is kept
     # No git ran after the worker: its commit was not pushed for it.
@@ -133,7 +133,7 @@ def test_a_worker_that_rewrites_commondir_crashes_the_run_and_commondir_is_put_b
     assert run.status == "crashed"
     slot = Path(slot_of(scenario.conn, run.id).slot_path)
     own = present(commondirs[slot])
-    result = json.loads(run.row["result_json"])
+    result = json.loads(present(run.row.result_json))
     assert result["harness"] == f"repo: the worker rewrote {own / 'commondir'}; nothing was checked or pushed"
     assert not fired.exists()  # no git ran in the slot after the worker
     assert git_pool.remote_head("agent/PROJ-1-work") is None

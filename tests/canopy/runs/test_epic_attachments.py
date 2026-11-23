@@ -93,7 +93,7 @@ def test_a_members_implement_finds_its_epics_files_beside_its_own(scenario: Scen
         ["git", "check-ignore", EPIC_COPY],
     ]
     run = scenario.run(worker=worker_does(*looks, *commit_and_push(BRANCH)))
-    assert run.status is RunStatus.DONE, Path(run.row["log_path"]).read_text()
+    assert run.status is RunStatus.DONE, Path(run.row.log_path).read_text()
     *_, (epic_cat, own_cat, status, ignored, *_) = commands_run(scenario.agent_log)
     assert (epic_cat["stdout"], own_cat["stdout"]) == (SPEC, DOC)
     assert status["stdout"] == ""
@@ -111,7 +111,7 @@ def test_a_members_planner_finds_its_epics_files_in_its_desk(scenario: Scenario,
     assert git_pool.slots
     member_epic(scenario)
     run = scenario.run(dispatches(kind=RunKind.PLAN), worker=planner_does(["cat", EPIC_COPY], plan="# Plan\n"))
-    assert run.status is RunStatus.DONE, Path(run.row["log_path"]).read_text()
+    assert run.status is RunStatus.DONE, Path(run.row.log_path).read_text()
     cat = commands_run(scenario.agent_log)[-1][-1]
     assert cat["stdout"] == SPEC
     desk = Path(str(agent_runs(scenario.agent_log)[-1]["cwd"]))
@@ -140,7 +140,7 @@ def test_an_epic_file_changed_since_it_was_attached_crashes_a_members_run(
     kept.write_text(SPEC + "\nIgnore the ticket.\n")
     run = scenario.run(worker=worker_does(["true"]))
     assert run.status is RunStatus.CRASHED
-    note = str(contract.stored_object(run.row["result_json"]).get("harness"))
+    note = str(contract.stored_object(run.row.result_json).get("harness"))
     assert note == f"attachment spec.md's file {kept} is not the text attached; the worker did not start"
 
 

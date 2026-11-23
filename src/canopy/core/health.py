@@ -16,7 +16,7 @@ import statistics
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, assert_never
 
-from canopy.core import contract, db, spend, sql
+from canopy.core import contract, db, records, spend, sql
 from canopy.core.vocab import ChoreRunStatus, ReviewRunStatus, RunKind, RunStatus, TickStatus
 
 if TYPE_CHECKING:
@@ -314,18 +314,18 @@ def by_day(conn: sqlite3.Connection, now: datetime, days: int) -> list[Day]:
     with db.read_snapshot(conn):
         for kind in spend.KINDS:
             counted = (
-                sql.select("{} AS day, status, count(*)", spend.DAY)
+                records.view(_DayEnded, "{} AS day, status, count(*) AS runs", spend.DAY)
                 .from_("({})", _ROWS[kind])
                 .where("started_at >= ? AND started_at < ? AND status != 'running'", since, until)
                 .group_by("day, status")
             )
-            for day, status, runs in sql.execute(conn, counted):
+            for row in counted.all(conn):
                 # A day the clock puts outside the window's names is in none of them, as `spend` leaves it.
-                if str(day) not in ended:
+                if row.day is None or row.day not in ended:
                     continue
-                ended[str(day)][kind] += int(runs)
-                if str(status) in _FAILED[kind]:
-                    failed[str(day)][kind] += int(runs)
+                ended[row.day][kind] += row.runs
+                if row.status in _FAILED[kind]:
+                    failed[row.day][kind] += row.runs
     return [Day(day=day, start=at, ended=ended[day], failed=failed[day]) for day, at in starts.items()]
 
 
@@ -345,15 +345,19 @@ def durations(conn: sqlite3.Connection, now: datetime, days: int, config: Config
     with db.read_snapshot(conn):
         for kind in spend.KINDS:
             ended = (
-                sql.select("what, (julianday(ended_at) - julianday(started_at)) * 1440, status = 'timeout'")
+                records.view(
+                    _Length,
+                    "what, (julianday(ended_at) - julianday(started_at)) * 1440 AS minutes, "
+                    "status = 'timeout' AS timed_out",
+                )
                 .from_("({})", _ROWS[kind])
                 .where("started_at >= ? AND started_at < ?", since, until)
                 .where("status != 'running' AND ended_at IS NOT NULL")
                 .order_by("what")
             )
-            for what, minutes, timed_out in sql.execute(conn, ended):
-                if minutes is not None:
-                    lengths.setdefault((kind, str(what)), []).append((max(float(minutes), 0.0), bool(timed_out)))
+            for row in ended.all(conn):
+                if row.minutes is not None:
+                    lengths.setdefault((kind, row.what), []).append((max(row.minutes, 0.0), row.timed_out))
     return [_duration(kind, what, ran, _limit(config, kind, what)) for (kind, what), ran in lengths.items()]
 
 
@@ -365,15 +369,22 @@ def refusals(conn: sqlite3.Connection, since: str, until: str) -> list[Refusal]:
     """
     window = ("action LIKE ? AND created_at >= ? AND created_at < ?", f"{REFUSED}%", since, until)
     refused = (
-        sql.select("substr(action, ?), count(*), count(DISTINCT tick_id), max(tick_id)", len(REFUSED) + 1)
+        records.view(
+            _GuardRefused,
+            "substr(action, ?) AS guard, count(*) AS decisions, count(DISTINCT tick_id) AS ticks, "
+            "max(tick_id) AS last_tick",
+            len(REFUSED) + 1,
+        )
         .from_("decisions")
         .where(*window)
         .group_by("action")
     )
     # What each guard refused, by what the decision named, in the most ticks first; a guard's first `ASKS` are its asks.
     named = (
-        sql.select(
-            "substr(action, ?), ticket_key, chore, pr, kind, count(*), count(DISTINCT tick_id), max(tick_id)",
+        records.view(
+            _AskRefused,
+            "substr(action, ?) AS guard, ticket_key, chore, pr, kind, count(*) AS decisions, "
+            "count(DISTINCT tick_id) AS ticks, max(tick_id) AS last_tick",
             len(REFUSED) + 1,
         )
         .from_("decisions")
@@ -382,35 +393,35 @@ def refusals(conn: sqlite3.Connection, since: str, until: str) -> list[Refusal]:
         .order_by("count(DISTINCT tick_id) DESC, count(*) DESC, max(tick_id) DESC")
     )
     with db.read_snapshot(conn):
-        rows = list(sql.execute(conn, refused))
+        rows = refused.all(conn)
         asks: dict[str, list[Ask]] = {}
         # Every ask is counted, but only a guard's first `ASKS` are kept, however many it refused.
         subjects: collections.Counter[str] = collections.Counter()
-        for guard, ticket, chore, pr, kind, n, ticks, last in sql.execute(conn, named):
-            subjects[str(guard)] += 1
-            found = asks.setdefault(str(guard), [])
+        for ask in named.all(conn):
+            subjects[ask.guard] += 1
+            found = asks.setdefault(ask.guard, [])
             if len(found) < ASKS:
                 found.append(
                     Ask(
-                        ticket=_text(ticket),
-                        chore=_text(chore),
-                        pr=_text(pr),
-                        kind=None if kind is None else RunKind(str(kind)),
-                        decisions=int(n),
-                        ticks=int(ticks),
-                        last_tick=int(last),
+                        ticket=ask.ticket_key,
+                        chore=ask.chore,
+                        pr=ask.pr,
+                        kind=ask.kind,
+                        decisions=ask.decisions,
+                        ticks=ask.ticks,
+                        last_tick=ask.last_tick,
                     ),
                 )
     by_guard = [
         Refusal(
-            guard=str(guard),
-            subjects=subjects[str(guard)],
-            decisions=int(n),
-            ticks=int(ticks),
-            last_tick=int(last),
-            asks=asks.get(str(guard), []),
+            guard=row.guard,
+            subjects=subjects[row.guard],
+            decisions=row.decisions,
+            ticks=row.ticks,
+            last_tick=row.last_tick,
+            asks=asks.get(row.guard, []),
         )
-        for guard, n, ticks, last in rows
+        for row in rows
     ]
     return sorted(by_guard, key=lambda r: (-r.subjects, -r.ticks, -r.decisions, r.guard))
 
@@ -418,23 +429,22 @@ def refusals(conn: sqlite3.Connection, since: str, until: str) -> list[Refusal]:
 # One kind's ended runs in the window, by sort and status. A run still running has not ended any way yet.
 def _outcomes(conn: sqlite3.Connection, kind: Kind, since: str, until: str) -> list[Outcome]:
     ended = (
-        sql.select("what, status, count(*), SUM(cost_usd)")
+        records.view(_Ended, "what, status, count(*) AS runs, SUM(cost_usd) AS cost_usd")
         .from_("({})", _ROWS[kind])
         .where("started_at >= ? AND started_at < ? AND status != 'running'", since, until)
         .group_by("what, status")
         .order_by("what, status")
     )
-    rows = sql.execute(conn, ended)
     return [
         Outcome(
             kind=kind,
-            what=str(what),
-            status=str(status),
-            failed=str(status) in _FAILED[kind],
-            runs=int(runs),
-            cost_usd=cost,
+            what=row.what,
+            status=row.status,
+            failed=row.status in _FAILED[kind],
+            runs=row.runs,
+            cost_usd=row.cost_usd,
         )
-        for what, status, runs, cost in rows
+        for row in ended.all(conn)
     ]
 
 
@@ -480,34 +490,33 @@ def _limit(config: Config, kind: Kind, what: str) -> int | None:
 # Every failure of one kind in the window, the newest first, each with its cause: the harness's note, or None.
 def _failures(conn: sqlite3.Connection, kind: Kind, since: str, until: str) -> Iterable[tuple[Failure, str | None]]:
     failed = (
-        sql.select("id, what, status, started_at, subject, note, cost_usd")
+        records.view(_Failed)
         .from_("({})", _ROWS[kind])
         .where("started_at >= ? AND started_at < ?", since, until)
         .where_in("status", sorted(_FAILED[kind]))
         .order_by("started_at DESC, id DESC")
     )
-    rows = sql.execute(conn, failed)
-    for run_id, what, status, started, subject, stored, cost in rows:
-        note, harness = _note(kind, stored)
+    for row in failed.all(conn):
+        note, harness = _note(kind, row.note)
         failure = Failure(
             kind=kind,
-            id=int(run_id),
-            what=str(what),
-            status=str(status),
-            started_at=str(started),
-            subject=None if subject is None else str(subject),
+            id=row.id,
+            what=row.what,
+            status=row.status,
+            started_at=row.started_at,
+            subject=row.subject,
             note=note,
-            cost_usd=cost,
+            cost_usd=row.cost_usd,
         )
         yield failure, note if harness and note else None
 
 
 # A tick's note is its summary, canopy's, which quotes the overseer's reason for a skip; a run's is in its stored
 # result, the harness's note or else the agent's summary. The note on one line, and whether the harness wrote it.
-def _note(kind: Kind, stored: object) -> tuple[str, bool]:
+def _note(kind: Kind, stored: str | None) -> tuple[str, bool]:
     if kind == "overseer":
-        return _one_line(str(stored or "")), True
-    result = contract.stored_object(_text(stored))
+        return _one_line(stored or ""), True
+    result = contract.stored_object(stored)
     return _one_line(contract.stored_note(result)), bool(result.get("harness"))
 
 
@@ -531,8 +540,72 @@ def _causes(failed: Sequence[tuple[Failure, str | None]]) -> list[Cause]:
     return causes
 
 
-def _text(value: object) -> str | None:
-    return value if isinstance(value, str) else None
+@dataclass(frozen=True)
+class _DayEnded(records.View):
+    """How many of one kind's runs that started on one local day ended in one status."""
+
+    #: The day, `YYYY-MM-DD`; None for a start SQLite reads no date from.
+    day: str | None
+    status: str
+    runs: int
+
+
+@dataclass(frozen=True)
+class _Length(records.View):
+    """How long one ended run took, by its sort."""
+
+    what: str
+    #: None when SQLite reads no time from its start or its end.
+    minutes: float | None
+    timed_out: bool
+
+
+@dataclass(frozen=True)
+class _GuardRefused(records.View):
+    """What one guard refused in the window."""
+
+    guard: str
+    decisions: int
+    ticks: int
+    last_tick: int
+
+
+@dataclass(frozen=True)
+class _AskRefused(records.View):
+    """One thing a guard refused in the window, by what the decision named, and how often."""
+
+    guard: str
+    ticket_key: str | None
+    chore: str | None
+    pr: str | None
+    kind: RunKind | None
+    decisions: int
+    ticks: int
+    last_tick: int
+
+
+@dataclass(frozen=True)
+class _Ended(records.View):
+    """How many of one kind's runs of one sort ended in one status, and what they cost."""
+
+    what: str
+    status: str
+    runs: int
+    cost_usd: float | None
+
+
+@dataclass(frozen=True)
+class _Failed(records.View):
+    """One run that ended in a failed status, as `_ROWS` shapes every kind's."""
+
+    id: int
+    what: str
+    status: str
+    started_at: str
+    subject: str | None
+    #: A tick's summary, or a run's stored result.
+    note: str | None
+    cost_usd: float | None
 
 
 def _one_line(text: str) -> str:

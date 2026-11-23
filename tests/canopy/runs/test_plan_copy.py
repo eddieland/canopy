@@ -53,7 +53,7 @@ def test_an_implement_finds_the_approved_plan_ignored_and_it_is_gone_after(
     approved(scenario)
     looks = [["cat", plans.COPY], ["git", "status", "--porcelain"], ["git", "check-ignore", plans.COPY]]
     run = scenario.run(worker=worker_does(*looks, *commit_and_push(BRANCH)))
-    assert run.status == RunStatus.DONE, Path(run.row["log_path"]).read_text()
+    assert run.status == RunStatus.DONE, Path(run.row.log_path).read_text()
     *_, (cat, status, ignored, *_) = commands_run(scenario.agent_log)
     assert cat["stdout"] == TEXT
     assert status["stdout"] == ""
@@ -75,7 +75,7 @@ def test_an_implement_finds_the_approved_plan_ignored_and_it_is_gone_after(
     )
     exclude = Path(common.stdout.strip()) / "info" / "exclude"
     assert exclude.read_text().splitlines().count(f"/{plans.COPY}") == 1
-    assert contract.stored_object(run.row["result_json"]).get("harness") is None
+    assert contract.stored_object(run.row.result_json).get("harness") is None
 
 
 def test_without_an_approved_plan_the_prompt_has_no_plan_section(scenario: Scenario, git_pool: GitPool) -> None:
@@ -126,7 +126,7 @@ def test_a_plan_changed_between_dispatch_and_run_is_not_the_one_the_prompt_names
     workers_before = len(agent_runs(scenario.agent_log))
     run = dispatched_then(scenario, between, ["test", "-e", plans.COPY])
     assert run.status == RunStatus.CRASHED
-    note = str(contract.stored_object(run.row["result_json"]).get("harness"))
+    note = str(contract.stored_object(run.row.result_json).get("harness"))
     assert note == (
         "plan 1, which the worker's prompt names, is no longer the plan approved for PROJ-1 when the run was "
         "dispatched; the worker did not start"
@@ -143,7 +143,7 @@ def test_a_plan_approved_after_dispatch_is_not_copied_for_a_run_its_prompt_named
     run = dispatched_then(scenario, lambda: scenario.operator("plan", KEY, "--approve"), ["test", "-e", plans.COPY])
     *_, [exists] = commands_run(scenario.agent_log)
     assert exists["returncode"] == 1
-    assert run.row["plan_id"] is None
+    assert run.row.plan_id is None
     assert "## The plan" not in run.prompt
 
 
@@ -157,7 +157,7 @@ def test_an_edit_between_dispatch_and_run_crashes_the_run_before_the_worker(
     # The edit lands after the dispatch's check and before `_run`'s.
     run = dispatched_then(scenario, lambda: path.write_text(TEXT + "\nAnd more.\n"), ["true"])
     assert run.status == RunStatus.CRASHED
-    note = str(contract.stored_object(run.row["result_json"]).get("harness"))
+    note = str(contract.stored_object(run.row.result_json).get("harness"))
     assert note == f"plan 1's file {path} is no longer the text the operator approved; the worker did not start"
     assert len(agent_runs(scenario.agent_log)) == workers_before
 
@@ -168,7 +168,7 @@ def test_a_pushed_branch_holding_the_copy_gets_a_harness_note(scenario: Scenario
     push = ["git", "push", "--quiet", "origin", f"HEAD:refs/heads/{BRANCH}"]
     run = scenario.run(worker=worker_does(*adds, push))
     assert run.status == RunStatus.DONE
-    note = contract.stored_object(run.row["result_json"]).get("harness")
+    note = contract.stored_object(run.row.result_json).get("harness")
     assert note == f"repo: the pushed {BRANCH} holds {plans.COPY}, the plan's copy, committed by the worker"
 
 

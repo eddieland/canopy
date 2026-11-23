@@ -50,7 +50,7 @@ def test_a_tick_and_the_run_it_starts_are_counted(scenario: Scenario) -> None:
     [ran] = ticked.runs
     path = scenario.env.state_dir / metrics.METRICS_FILE_NAME
     # The run's own process sent its count as it exited.
-    assert worker_run_counted(path) == [{"role": "worker", "status": ran.row["status"], "kind": ran.row["kind"]}]
+    assert worker_run_counted(path) == [{"role": "worker", "status": ran.row.status, "kind": ran.row.kind}]
     # This process ran the tick: turning metrics off sends what it recorded.
     metrics.configure(Path(), "off")
     found = points(path)

@@ -232,15 +232,17 @@ If code and the design disagree, the design doc wins until a decision entry says
   or `+` into SQL.
 - A query that returns a table's whole rows reads them as that table's row type in `core/records/`, not as
   `sqlite3.Row`: `records.select(records.Run).where(...).all(conn)`, which names the table and its columns from the row
-  type, or `records.fetch_all`/`fetch_one` for a statement built elsewhere. New code reads a query of some columns, or
-  of a join, as a `records.View` defined beside it, not as `sqlite3.Row`, its query started by `records.view`, which
-  selects the view's fields by name or the columns written out; older code converts when a PR is already changing it.
+  type, or `records.fetch_all`/`fetch_one` for a statement built elsewhere, and `fetch_each` for a read that stops
+  before the last row. A query of some columns, or of a join, is read as a `records.View` defined beside it, its query
+  started by `records.view`, which selects the view's fields by name or the columns written out; a table's rows with
+  a column or two beside them are a subclass of its row type, as `db.ShownRun` is of `records.Run`. Nothing outside
+  `core/orm.py` fetches a cursor's rows or names `sqlite3.Row`; `tests/canopy/test_layers.py` fails otherwise.
   Every table has a row type, and a new table gets its row type in the PR that adds it, in its domain's module of
   `core/records/`.
   `tests/canopy/core/test_records.py` holds each row type to its table, so a migration that adds a column to a typed
   table adds the field too. A status, kind, or phase column is a field of its `core/vocab.py` enum, so the row carries
-  the member and refuses a value the vocabulary does not hold. A helper that reads the same columns from several tables,
-  some still untyped, reads them through `records.columns`.
+  the member and refuses a value the vocabulary does not hold. A helper that reads the same columns from several tables
+  takes a union of their row types, such as `db.AnyRun`, or reads them through `records.columns`.
 - A query read for less than a record ends in a typed read as well, never an index into a bare row:
   `records.select(records.Run).where(...).exists(conn)` or `.count(conn)`, `records.exists` and `records.count` for a
   statement built with `sql`, and `records.fetch_value(conn, int, query)` or `fetch_values` for a query of one column,

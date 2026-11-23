@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from importlib.metadata import version
 from pathlib import Path
-from typing import TYPE_CHECKING, Final, Literal, LiteralString, assert_never
+from typing import TYPE_CHECKING, Final, Literal, LiteralString, assert_never, overload
 
 from canopy.core import event_names, item_numbers, records, run_metrics, sql
 from canopy.core.vocab import (
@@ -27,6 +27,7 @@ from canopy.core.vocab import (
     PoolKind,
     ResumeReason,
     RunKind,
+    RunStatus,
     SeenKind,
     StartStatus,
     TickStatus,
@@ -35,7 +36,7 @@ from canopy.infra import procs, tracing
 from canopy.runtime.report import ToolUse, Usage
 
 if TYPE_CHECKING:
-    from canopy.core.vocab import AnyRunStatus, RunStatus
+    from canopy.core.vocab import AnyRunStatus
 
 DB_FILE_NAME: Final = "canopy.db"
 #: How long a connection waits for another to release the write lock before its write fails as `database is locked`.
@@ -172,7 +173,8 @@ def connect(path: Path) -> sqlite3.Connection:
     """Open the journal at `path` in WAL mode with foreign keys on, creating its directory.
 
     Returns:
-        An autocommit connection whose rows are `sqlite3.Row`. The caller closes it.
+        An autocommit connection. The caller closes it. A statement run on it bare gives `sqlite3.Row`s, which
+        canopy's own code never reads: its reads go through `records`, and only tests query a journal by hand.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path, autocommit=True, timeout=BUSY_SECONDS)
@@ -680,30 +682,55 @@ def open_tickets(conn: sqlite3.Connection) -> list[records.Ticket]:
     return records.select(records.Ticket).where("done = 0").order_by("key").all(conn)
 
 
-def recently_done(conn: sqlite3.Connection, since: str) -> list[sqlite3.Row]:
+@dataclass(frozen=True)
+class DoneTicket(records.View):
+    """A ticket marked done, and when."""
+
+    key: str
+    #: The time of its newest `done` decision.
+    done_at: str
+
+
+def recently_done(conn: sqlite3.Connection, since: str) -> list[DoneTicket]:
     """Return the tickets marked done whose newest `done` decision is at or after `since`, by key (DESIGN §7).
 
-    Each row has `key` and `done_at`, that decision's time. Not one: a ticket marked done with no `done` decision since
+    Not one: a ticket marked done with no `done` decision since
     the operator last forgot it, or whose newest one says `closed`, since the tracker reports a closed ticket closed,
     and leaving it out lets the query find it again once it is reopened.
     """
     # Each done ticket's newest decision by `decisions_ticket`, not a scan of every decision ever recorded.
     newest_done = sql.select("max(id)").from_("decisions").where("ticket_key = t.key AND action = 'done'")
     query = (
-        sql.select("t.key, d.created_at AS done_at")
+        records.view(DoneTicket, "t.key, d.created_at AS done_at")
         .from_("tickets t")
         .join("decisions d ON d.id = ({})", newest_done)
         .where("t.done = 1 AND d.created_at >= ? AND d.rationale != ?", since, CLOSED_RATIONALE)
         .where("t.forgotten_at IS NULL OR d.created_at > t.forgotten_at")
         .order_by("t.key")
     )
-    return sql.execute(conn, query).fetchall()
+    return query.all(conn)
 
 
 # The run lifecycle (DESIGN §6, §8): what every table of detached runs shares
 
+
+@dataclass(frozen=True)
+class ShownRun(records.Run):
+    """A run with what showing it needs from beside it (DESIGN §8, §13, §22): a `records.Run`, and read as one."""
+
+    #: Its ticket's title, None for a ticket the journal has no row for or no title of.
+    ticket_title: str | None
+    #: A `resume`'s reasons, comma-separated, None for a run with none: read them with `reasons_in`.
+    reasons: str | None
+    #: Whether the operator stopped its ticket.
+    ticket_stopped: bool
+
+
+#: A run of any run table as `running_runs` reads it: a ticket's run with what showing it needs, any other as it is.
+type AnyRun = ShownRun | records.ChoreRun | records.ReviewRun | records.TaskRun | records.EpicRun
+
 #: A run with its ticket's title as `ticket_title`, a `resume`'s reasons as `reasons`, comma-separated (read them with
-#: `reasons_in`), and whether the operator stopped its ticket as `ticket_stopped`, for display (DESIGN §8, §13, §22).
+#: `reasons_in`), and whether the operator stopped its ticket as `ticket_stopped`, for display: a `ShownRun`'s columns.
 #: Every query a page or `canopy status` shows runs from starts here.
 _RUNS: Final = (
     sql.select(
@@ -725,9 +752,32 @@ _RUN_SELECT: Final[Mapping[RunTable, sql.Select]] = {
 }
 
 
-def running_runs(conn: sqlite3.Connection, table: RunTable) -> list[sqlite3.Row]:
-    """Return `table`'s runs with status `running`, oldest first."""
-    return sql.execute(conn, _RUN_SELECT[table].where("r.status = 'running'").order_by("r.started_at")).fetchall()
+#: The record each run table's rows are read as, by `_RUN_SELECT`'s query of it.
+_RUN_TYPES: Final[Mapping[RunTable, type[AnyRun]]] = {
+    "runs": ShownRun,
+    "chore_runs": records.ChoreRun,
+    "review_runs": records.ReviewRun,
+    "task_runs": records.TaskRun,
+    "epic_runs": records.EpicRun,
+}
+
+
+@overload
+def running_runs(conn: sqlite3.Connection, table: Literal["runs"]) -> list[ShownRun]: ...
+@overload
+def running_runs(conn: sqlite3.Connection, table: Literal["chore_runs"]) -> list[records.ChoreRun]: ...
+@overload
+def running_runs(conn: sqlite3.Connection, table: Literal["review_runs"]) -> list[records.ReviewRun]: ...
+@overload
+def running_runs(conn: sqlite3.Connection, table: Literal["task_runs"]) -> list[records.TaskRun]: ...
+@overload
+def running_runs(conn: sqlite3.Connection, table: Literal["epic_runs"]) -> list[records.EpicRun]: ...
+@overload
+def running_runs(conn: sqlite3.Connection, table: RunTable) -> list[AnyRun]: ...
+def running_runs(conn: sqlite3.Connection, table: RunTable) -> Sequence[AnyRun]:
+    """Return `table`'s runs with status `running`, oldest first, each as its table's row type."""
+    query = _RUN_SELECT[table].where("r.status = 'running'").order_by("r.started_at")
+    return records.fetch_all(conn, _RUN_TYPES[table], query)
 
 
 def busy_workers(conn: sqlite3.Connection) -> int:
@@ -990,10 +1040,9 @@ def run_reasons(conn: sqlite3.Connection, run_ids: Sequence[int]) -> dict[int, t
     return {run_id: tuple(r for r in ResumeReason if r in named) for run_id, named in found.items()}
 
 
-def reasons_in(row: sqlite3.Row) -> tuple[ResumeReason, ...]:
+def reasons_in(row: records.Row) -> tuple[ResumeReason, ...]:
     """Return a run row's reasons, in the vocabulary's order: none for a row not read with them, or a run without."""
-    # `keys()`, since `in` a Row tests its values.
-    named: list[str] = str(row["reasons"] or "").split(",") if "reasons" in row.keys() else []  # noqa: SIM118
+    named = (row.reasons or "").split(",") if isinstance(row, ShownRun) else []
     return tuple(r for r in ResumeReason if r in named)
 
 
@@ -1013,10 +1062,9 @@ def all_run_slots(conn: sqlite3.Connection, run_ids: Sequence[int]) -> dict[int,
     return found
 
 
-def get_run(conn: sqlite3.Connection, run_id: int) -> sqlite3.Row | None:
+def get_run(conn: sqlite3.Connection, run_id: int) -> ShownRun | None:
     """Return the run with `run_id`, or None."""
-    row: sqlite3.Row | None = sql.execute(conn, _RUNS.where("r.id = ?", run_id)).fetchone()
-    return row
+    return records.fetch_one(conn, ShownRun, _RUNS.where("r.id = ?", run_id))
 
 
 def set_slot_link(conn: sqlite3.Connection, run_id: int, repo: str, link: bytes | None) -> None:
@@ -1154,7 +1202,7 @@ def set_progress(
             running.set(activity_tool=tool, activity=what, activity_at=now()).run(conn)
 
 
-def usage_of(row: sqlite3.Row | records.Row) -> Usage | None:
+def usage_of(row: records.Row) -> Usage | None:
     """What a run, chore run, review run, or tick row says its agent cost, or None when the runtime reported nothing.
 
     Returns:
@@ -1272,32 +1320,50 @@ def spent_ever(conn: sqlite3.Connection) -> float | None:
     return spent_since(conn, "")
 
 
-def recent_runs(conn: sqlite3.Connection, limit: int) -> list[sqlite3.Row]:
+def recent_runs(conn: sqlite3.Connection, limit: int) -> list[ShownRun]:
     """Return the `limit` runs that ended most recently, the one that ended last first."""
     query = _RUNS.where("r.status != 'running'").order_by("r.ended_at DESC, r.id DESC").limit(limit)
-    return sql.execute(conn, query).fetchall()
+    return records.fetch_all(conn, ShownRun, query)
 
 
-def ended_run_results(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+@dataclass(frozen=True)
+class EndedResult(records.View):
+    """When a run ended, and the result it stored."""
+
+    ended_at: str
+    #: The run's result as stored, None for a run that reported none.
+    result_json: str | None
+
+
+def ended_run_results(conn: sqlite3.Connection) -> list[EndedResult]:
     """Return every ended run's end and stored result, for counting what ended and the PRs results name."""
-    return sql.execute(conn, sql.select("ended_at, result_json").from_("runs").where("ended_at IS NOT NULL")).fetchall()
+    return records.view(EndedResult).from_("runs").where("ended_at IS NOT NULL").all(conn)
 
 
-def ended_runs_of(conn: sqlite3.Connection, key: str, limit: int, *, skip_kind: str | None = None) -> list[sqlite3.Row]:
-    """Return a ticket's latest `limit` ended runs since any forget, oldest first: id, kind, status, and end.
+@dataclass(frozen=True)
+class EndedRun(records.View):
+    """A run that ended, as a ticket's history lists it."""
+
+    id: int
+    kind: RunKind
+    status: RunStatus
+    ended_at: str | None
+
+
+def ended_runs_of(conn: sqlite3.Connection, key: str, limit: int, *, skip_kind: str | None = None) -> list[EndedRun]:
+    """Return a ticket's latest `limit` ended runs since any forget, oldest first.
 
     Runs of `skip_kind`, if given, are left out, and do not count toward `limit`.
     """
     query = (
-        sql.select("r.id, r.kind, r.status, r.ended_at")
+        records.view(EndedRun, "r.id, r.kind, r.status, r.ended_at")
         .from_("runs r")
         .left_join("tickets t ON t.key = r.ticket_key")
         .where("r.ticket_key = ? AND r.status != 'running' AND r.id > coalesce(t.forgotten_run_id, 0)", key)
     )
     if skip_kind is not None:
         query = query.where("r.kind != ?", skip_kind)
-    rows = sql.execute(conn, query.order_by("r.id DESC").limit(limit)).fetchall()
-    return rows[::-1]
+    return query.order_by("r.id DESC").limit(limit).all(conn)[::-1]
 
 
 def latest_runs(conn: sqlite3.Connection) -> dict[str, records.Run]:
@@ -1661,18 +1727,30 @@ def running_run_of(conn: sqlite3.Connection, key: str) -> records.Run | None:
     )
 
 
-def runs_of(conn: sqlite3.Connection, key: str, limit: int | None) -> list[sqlite3.Row]:
+def runs_of(conn: sqlite3.Connection, key: str, limit: int | None) -> list[ShownRun]:
     """Return a ticket's latest `limit` runs, newest first; with None, every one."""
     # SQLite reads a negative LIMIT as none.
     query = _RUNS.where("r.ticket_key = ?", key).order_by("r.id DESC").limit(-1 if limit is None else limit)
-    return sql.execute(conn, query).fetchall()
+    return records.fetch_all(conn, ShownRun, query)
 
 
-def ticket_cost(conn: sqlite3.Connection, key: str) -> sqlite3.Row:
+@dataclass(frozen=True)
+class TicketCost(records.View):
+    """What a ticket's runs, and the review runs naming it, cost together."""
+
+    #: How many runs the ticket has, and how many review runs name it.
+    runs: int
+    reviews: int
+    #: How many of them reported a cost.
+    priced: int
+    #: What those cost, None when none did.
+    cost_usd: float | None
+
+
+def ticket_cost(conn: sqlite3.Connection, key: str) -> TicketCost:
     """Return what a ticket's runs and the review runs naming it cost, however long ago they ran (§13).
 
-    The row has `runs` and `reviews`, how many of each; `priced`, how many of them reported a cost; and `cost_usd`,
-    what those cost, NULL when none did. Not the overseer's: a tick's cost is the whole workspace's.
+    Not the overseer's: a tick's cost is the whole workspace's.
     """
 
     def spent(table: RunTable) -> sql.Select:
@@ -1682,16 +1760,26 @@ def ticket_cost(conn: sqlite3.Connection, key: str) -> sqlite3.Row:
             .where("ticket_key = ?", key)
         )
 
-    query = sql.select(
+    query = records.view(
+        TicketCost,
         "r.n AS runs, v.n AS reviews, r.priced + v.priced AS priced, "
         "CASE WHEN r.priced + v.priced > 0 THEN coalesce(r.cost, 0) + coalesce(v.cost, 0) END AS cost_usd",
     ).from_("({}) r, ({}) v", spent("runs"), spent("review_runs"))
-    row: sqlite3.Row = sql.execute(conn, query).fetchone()
-    return row
+    # Each side is an aggregate of its whole table, so the join is always one row.
+    [cost] = query.all(conn)
+    return cost
 
 
-def recent_tickets(conn: sqlite3.Connection, limit: int, *, key: str | None = None) -> list[sqlite3.Row]:
-    """Return the `limit` tickets with the most recent activity, most recently active first, each row with `active_at`.
+@dataclass(frozen=True)
+class ActiveTicket(records.Ticket):
+    """A ticket with when it was last active: a `records.Ticket`, and read as one."""
+
+    #: The newest of its messages, its runs' starts and ends, its start or stop, and its own last change.
+    active_at: str
+
+
+def recent_tickets(conn: sqlite3.Connection, limit: int, *, key: str | None = None) -> list[ActiveTicket]:
+    """Return the `limit` tickets with the most recent activity, most recently active first.
 
     Activity is a message, a run starting or ending, a start or stop, or a change to the ticket (`changed_at`), not a
     tick that only sees it. Every one of those times is the journal's own format, so the newest is the greatest
@@ -1707,7 +1795,7 @@ def recent_tickets(conn: sqlite3.Connection, limit: int, *, key: str | None = No
         return _weighed_tickets(conn, json.dumps(keys), limit)
 
 
-def _weighed_tickets(conn: sqlite3.Connection, keys: str, limit: int) -> list[sqlite3.Row]:
+def _weighed_tickets(conn: sqlite3.Connection, keys: str, limit: int) -> list[ActiveTicket]:
     query = (
         sql.select(
             "t.*, max("
@@ -1725,7 +1813,7 @@ def _weighed_tickets(conn: sqlite3.Connection, keys: str, limit: int) -> list[sq
         .order_by("active_at DESC, t.key")
         .limit(limit)
     )
-    return sql.execute(conn, query).fetchall()
+    return records.fetch_all(conn, ActiveTicket, query)
 
 
 #: Each source of a ticket's activity as `recent_tickets` weighs it: a ticket key and a time, newest first, read in
@@ -1734,15 +1822,21 @@ def _weighed_tickets(conn: sqlite3.Connection, keys: str, limit: int) -> list[sq
 #: ticket the journal has no row for, which the join leaves out, so one never takes a real ticket's place; CROSS JOIN
 #: keeps SQLite reading the start records in order from their index, rather than sorting every one.
 _TICKET_ACTIVITY: Final = (
-    sql.select("key, changed_at").from_("tickets").order_by("changed_at DESC"),
-    sql.select("m.subject_id, m.at")
+    sql.select("key, changed_at AS at").from_("tickets").order_by("changed_at DESC"),
+    sql.select("m.subject_id AS key, m.at")
     .from_("messages m")
     .join("tickets t ON t.key = m.subject_id")
     .where("m.subject_kind = 'ticket'")
     .order_by("m.at DESC"),
-    sql.select("ticket_key, ended_at").from_("runs").where("ended_at IS NOT NULL").order_by("ended_at DESC"),
-    sql.select("ticket_key, started_at").from_("runs").where("status = 'running'").order_by("started_at DESC"),
-    sql.select("s.subject_id, coalesce(s.stopped_at, s.started_at) AS at")
+    sql.select("ticket_key AS key, ended_at AS at")
+    .from_("runs")
+    .where("ended_at IS NOT NULL")
+    .order_by("ended_at DESC"),
+    sql.select("ticket_key AS key, started_at AS at")
+    .from_("runs")
+    .where("status = 'running'")
+    .order_by("started_at DESC"),
+    sql.select("s.subject_id AS key, coalesce(s.stopped_at, s.started_at) AS at")
     .from_("starts s CROSS JOIN tickets t ON t.key = s.subject_id")
     .where("s.subject_kind = 'ticket'")
     .order_by("at DESC"),
@@ -1752,8 +1846,8 @@ _TICKET_ACTIVITY: Final = (
 def candidates(conn: sqlite3.Connection, sources: Iterable[sql.Select], limit: int) -> list[str]:
     """The keys that may be among the `limit` with the most recent activity: each source's newest `limit`.
 
-    Each source is a query of a key and a time, newest first, read in order from an index. A key's activity is its
-    newest time in any source. Every key newer than it in that source is newer overall too, so a key among the
+    Each source is a query of a `key` and a time, `at`, newest first, read in order from an index. A key's activity is
+    its newest time in any source. Every key newer than it in that source is newer overall too, so a key among the
     `limit` newest overall is among the `limit` newest of that source. Keys tied with the last of a source's are read
     as well, so a tie never decides which one is left out.
 
@@ -1784,18 +1878,26 @@ def read_snapshot(conn: sqlite3.Connection) -> Generator[None]:
         sql.execute(conn, sql.frag("COMMIT"))
 
 
+@dataclass(frozen=True)
+class _Activity(records.View):
+    """A row of a source `candidates` reads: something that happened to what `key` names, and when."""
+
+    key: str
+    at: str
+
+
 def _newest(conn: sqlite3.Connection, source: sql.Select, limit: int) -> list[str]:
     seen: dict[str, None] = {}
     cutoff: str | None = None
     # Closed when the walk stops early, so the statement does not hold its read open in autocommit.
-    with closing(sql.execute(conn, source)) as rows:
-        for key, at in rows:
-            if cutoff is not None and at < cutoff:
+    with closing(records.fetch_each(conn, _Activity, source)) as rows:
+        for row in rows:
+            if cutoff is not None and row.at < cutoff:
                 break
-            if key not in seen:
-                seen[str(key)] = None
+            if row.key not in seen:
+                seen[row.key] = None
                 if len(seen) == limit:
-                    cutoff = at
+                    cutoff = row.at
     return list(seen)
 
 

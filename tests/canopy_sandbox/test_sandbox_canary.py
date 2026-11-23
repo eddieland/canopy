@@ -833,7 +833,7 @@ def test_canopys_sandboxed_worker_is_pushed(
         assert main(["_run", str(run_id)], runner=runner) == 0
 
     run = present(db.get_run(conn, run_id))
-    assert run["status"] == "done"
+    assert run.status == "done"
     pushed = present(git_pool.remote_head("agent/PROJ-1-work"))
     primary, _ = worktree_pool
     assert not SubprocessRunner().run(["git", "cat-file", "-e", pushed], cwd=primary).ok

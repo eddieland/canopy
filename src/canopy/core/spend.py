@@ -95,9 +95,9 @@ _SERIES: Final = ("overseer", "idle", "dry_run")
 #: than one, each for a `?` the run's table fills; and the chore it ran, for the `{}`.
 _FIRST_CALL: Final[LiteralString] = (
     "r.definitions_digest, r.tokens_first_call, r.tokens_first_cache_write, r.tokens_first_cache_read, r.started_at, "
-    "(SELECT m.runtime_version FROM run_model_reads m WHERE m.run_table = ? AND m.run_id = r.id), "
+    "(SELECT m.runtime_version FROM run_model_reads m WHERE m.run_table = ? AND m.run_id = r.id) AS runtime_version, "
     "(SELECT CASE WHEN count(*) = 1 THEN max(m.model) END FROM run_models m "
-    "WHERE m.run_table = ? AND m.run_id = r.id), {}"
+    "WHERE m.run_table = ? AND m.run_id = r.id) AS model, {} AS chore"
 )
 #: The chore a run ran: only a chore's run names one. Fixed, never input (D125).
 _CHORE: Final = sql.frag("r.chore")
@@ -674,6 +674,16 @@ class _Buckets:
     name_of: Callable[[str], str]
 
 
+@dataclass(frozen=True)
+class _BucketCost(records.View):
+    """What the runs that started in one bucket cost together."""
+
+    #: The bucket; None for a start SQLite reads no time from.
+    day: str | None
+    #: None when none of them reported a cost.
+    cost_usd: float | None
+
+
 def _local_hour(at: datetime) -> str:
     return at.astimezone().strftime(_HOUR_FORMAT)
 
@@ -698,22 +708,22 @@ def _breakdown(
         by_day: dict[str, dict[str, float | None]] = {}
         for kind, (table, which) in _TABLES.items():
             costs = (
-                sql.select("{} AS day, SUM(cost_usd)", buckets.expression)
+                records.view(_BucketCost, "{} AS day, SUM(cost_usd) AS cost_usd", buckets.expression)
                 .from_(table)
                 .where("{}", which)
                 .where("started_at >= ? AND started_at < ?", since, until)
                 .group_by("day")
             )
-            for day, cost in sql.execute(conn, costs):
-                by_day.setdefault(str(day), {})[kind] = cost
+            for bucket in costs.all(conn):
+                by_day.setdefault(str(bucket.day), {})[kind] = bucket.cost_usd
         outside = (
-            sql.select("{} AS day, SUM(cost_usd)", buckets.expression)
+            records.view(_BucketCost, "{} AS day, SUM(cost_usd) AS cost_usd", buckets.expression)
             .from_("({}) AS s", runtime_sessions.sessions_in(since, until, state_dir))
             .where("NOT ours")
             .group_by("day")
         )
-        for day, cost in sql.execute(conn, outside):
-            by_day.setdefault(str(day), {})["outside"] = cost
+        for bucket in outside.all(conn):
+            by_day.setdefault(str(bucket.day), {})["outside"] = bucket.cost_usd
         unpriced = _unpriced(conn, since, until, rows)
         done = done_in(conn, since, until)
         tickets = _tickets(conn, since, until, done)
@@ -811,33 +821,49 @@ def _tick_rows(conn: sqlite3.Connection, since: str, until: str, bucket: sql.Fra
     # A tick from before `overseer_ran` was recorded ran its overseer if it got that far. One that ran none spent
     # nothing, so it counts at nothing, and never among the runs that reported no cost (§39).
     grouped = (
-        sql.select(
-            "{} AS day, dry_run, status, idle, woken_by, overseer_ran IS NOT 0 AS ran, count(*), SUM(cost_usd), "
-            "count(*) - count(cost_usd)",
+        records.view(
+            _TickGroup,
+            "{} AS day, dry_run, status, idle, woken_by, overseer_ran IS NOT 0 AS ran, count(*) AS ticks, "
+            "SUM(cost_usd) AS cost_usd, count(*) - count(cost_usd) AS unpriced",
             bucket,
         )
         .from_("ticks")
         .where("started_at >= ? AND started_at < ?", since, until)
         .group_by("day, dry_run, status, idle, woken_by, ran")
     )
-    rows = sql.execute(conn, grouped).fetchall()
     return [
         _TickRow(
-            day=str(day),
-            dry=bool(dry),
-            group=_group(str(status), idle, dry=bool(dry)),
-            woken_by=None if woken is None else str(woken),
-            ran=bool(ran),
-            ticks=int(count),
-            cost_usd=cost if ran else (cost or 0.0),
-            unpriced=int(unpriced) if ran else 0,
+            day=str(g.day),
+            dry=g.dry_run,
+            group=_group(g.status, idle=g.idle, dry=g.dry_run),
+            woken_by=g.woken_by,
+            ran=g.ran,
+            ticks=g.ticks,
+            cost_usd=g.cost_usd if g.ran else (g.cost_usd or 0.0),
+            unpriced=g.unpriced if g.ran else 0,
         )
-        for day, dry, status, idle, woken, ran, count, cost, unpriced in rows
+        for g in grouped.all(conn)
     ]
 
 
+@dataclass(frozen=True)
+class _TickGroup(records.View):
+    """The ticks of one bucket that share a status, a cause, and whether they ran their overseer, as the journal has."""
+
+    #: The bucket; None for a start SQLite reads no time from.
+    day: str | None
+    dry_run: bool
+    status: str
+    idle: bool | None
+    woken_by: str | None
+    ran: bool
+    ticks: int
+    cost_usd: float | None
+    unpriced: int
+
+
 # A still running tick is in no group yet.
-def _group(status: str, idle: int | None, *, dry: bool) -> Group | None:
+def _group(status: str, *, idle: bool | None, dry: bool) -> Group | None:
     if status == "running":
         return None
     if dry:
@@ -913,14 +939,22 @@ def _unpriced(conn: sqlite3.Connection, since: str, until: str, rows: Iterable[_
     found = [Unpriced(kind="overseer", runs=sum(r.ticks for r in ended), unpriced=sum(r.unpriced for r in ended))]
     for kind, (table, which) in _TABLES.items():
         counted = (
-            sql.select("count(*), count(*) - count(cost_usd)")
+            records.view(_Counted, "count(*) AS runs, count(*) - count(cost_usd) AS unpriced")
             .from_(table)
             .where("{}", which)
             .where("started_at >= ? AND started_at < ? AND status != 'running'", since, until)
         )
-        runs, unpriced = sql.execute(conn, counted).fetchone()
-        found.append(Unpriced(kind=kind, runs=int(runs), unpriced=int(unpriced)))
+        [ended_runs] = counted.all(conn)
+        found.append(Unpriced(kind=kind, runs=ended_runs.runs, unpriced=ended_runs.unpriced))
     return found
+
+
+@dataclass(frozen=True)
+class _Counted(records.View):
+    """How many of a kind's runs ended, and how many of those reported no cost."""
+
+    runs: int
+    unpriced: int
 
 
 def done_in(conn: sqlite3.Connection, since: str, until: str) -> dict[str, tuple[Done, str]]:
@@ -1106,28 +1140,41 @@ def _first_call_rows(conn: sqlite3.Connection, since: str, until: str) -> list[_
     for kind in KINDS:
         table, which = KIND_TABLES[kind]
         first = (
-            sql.select(_FIRST_CALL, table, table, _CHORE if kind == "chores" else _NO_CHORE)
+            records.view(_FirstCalled, _FIRST_CALL, table, table, _CHORE if kind == "chores" else _NO_CHORE)
             .from_("{} r", sql.name(table))
             .where("{}", which)
             .where("r.started_at >= ? AND r.started_at < ? AND r.tokens_first_call IS NOT NULL", since, until)
             .order_by("r.started_at, r.id")
         )
-        for digest, sent, written, was_read, started, version, model, chore in sql.execute(conn, first):
-            read = None if was_read is None else int(was_read)
-            found.append(
-                _FirstCall(
-                    kind=kind,
-                    digest=None if digest is None else str(digest),
-                    sent=int(sent),
-                    cold=_cold(int(sent), int(written or 0), read),
-                    started=str(started),
-                    read=read,
-                    runtime_version=None if version is None else str(version),
-                    chore=None if chore is None else str(chore),
-                    model=None if model is None else str(model),
-                ),
+        found.extend(
+            _FirstCall(
+                kind=kind,
+                digest=call.definitions_digest,
+                sent=call.tokens_first_call,
+                cold=_cold(call.tokens_first_call, call.tokens_first_cache_write or 0, call.tokens_first_cache_read),
+                started=call.started_at,
+                read=call.tokens_first_cache_read,
+                runtime_version=call.runtime_version,
+                chore=call.chore,
+                model=call.model,
             )
+            for call in first.all(conn)
+        )
     return found
+
+
+@dataclass(frozen=True)
+class _FirstCalled(records.View):
+    """What `_FIRST_CALL` reads of one run that made a first model call."""
+
+    definitions_digest: str | None
+    tokens_first_call: int
+    tokens_first_cache_write: int | None
+    tokens_first_cache_read: int | None
+    started_at: str
+    runtime_version: str | None
+    model: str | None
+    chore: str | None
 
 
 # Each kind's first calls grouped by the snapshot their runs loaded, in the order the calls come.
@@ -1219,29 +1266,44 @@ def _hit_rate(calls: Sequence[tuple[int, int]]) -> float | None:
 def _tools(conn: sqlite3.Connection, since: str, until: str) -> list[ToolSpend]:
     found: list[ToolSpend] = []
     for kind in KINDS:
-        for tool, runs, calls, errors, chars in sql.execute(conn, _tools_of(kind, since, until)):
-            found.append(
-                ToolSpend(
-                    kind=kind,
-                    tool=str(tool),
-                    runs=int(runs),
-                    calls=int(calls),
-                    errors=int(errors),
-                    result_chars=int(chars),
-                    est_tokens=int(chars) // CHARS_PER_TOKEN,
-                ),
+        found.extend(
+            ToolSpend(
+                kind=kind,
+                tool=used.tool,
+                runs=used.runs,
+                calls=used.calls,
+                errors=used.errors,
+                result_chars=used.result_chars,
+                est_tokens=used.result_chars // CHARS_PER_TOKEN,
             )
+            for used in _tools_of(kind, since, until).all(conn)
+        )
     return sorted(found, key=lambda t: (-t.result_chars, KINDS.index(t.kind), t.tool))
+
+
+@dataclass(frozen=True)
+class _ToolUsed(records.View):
+    """One tool's calls by a kind's runs in a window: the runs that called it, and what its calls came to."""
+
+    tool: str
+    runs: int
+    calls: int
+    errors: int
+    result_chars: int
 
 
 # One kind's tool calls in a window, from its runs that started in it. The run table leads, through its `_spent` index
 # on `started_at`, and `run_tools` is read by its key's prefix: `CROSS JOIN` keeps SQLite from
 # reordering them, which with no statistics it would, reading every `run_tools` row of the kind ever recorded. The
 # kind's condition names only the run table's columns, which `run_tools` shares none of.
-def _tools_of(kind: Kind, since: str, until: str) -> sql.Select:
+def _tools_of(kind: Kind, since: str, until: str) -> records.Query[_ToolUsed]:
     table, which = KIND_TABLES[kind]
     return (
-        sql.select("t.tool, count(*), SUM(t.calls), SUM(t.errors), SUM(t.result_chars)")
+        records.view(
+            _ToolUsed,
+            "t.tool, count(*) AS runs, SUM(t.calls) AS calls, SUM(t.errors) AS errors, "
+            "SUM(t.result_chars) AS result_chars",
+        )
         .from_("{} r CROSS JOIN run_tools t ON t.run_table = ? AND t.run_id = r.id", sql.name(table), table)
         .where("r.started_at >= ? AND r.started_at < ?", since, until)
         .where("{}", which)
@@ -1287,21 +1349,34 @@ def models(
 # those of its runs no session named a model for, under None, the unread ones first.
 def _models_of(conn: sqlite3.Connection, kind: Kind, since: str, until: str, ticket: str | None) -> list[ModelSpend]:
     found = [
-        ModelSpend(
-            kind=kind,
-            model=str(model),
-            runs=int(runs),
-            replies=int(replies),
-            cost_usd=float(cost),
-            asked=str(asked) if asked is not None else None,
-        )
-        for model, asked, runs, replies, cost in sql.execute(conn, _named_models(kind, since, until, ticket))
+        ModelSpend(kind=kind, model=m.model, runs=m.runs, replies=m.replies, cost_usd=m.cost_usd, asked=m.asked)
+        for m in _named_models(kind, since, until, ticket).all(conn)
     ]
     found.extend(
-        ModelSpend(kind=kind, model=None, runs=int(runs), replies=0, cost_usd=cost, unread=bool(unread))
-        for unread, runs, cost in sql.execute(conn, _unnamed_models(kind, since, until, ticket))
+        ModelSpend(kind=kind, model=None, runs=u.runs, replies=0, cost_usd=u.cost_usd, unread=bool(u.unread))
+        for u in _unnamed_models(kind, since, until, ticket).all(conn)
     )
     return found
+
+
+@dataclass(frozen=True)
+class _NamedModel(records.View):
+    """What a kind's runs spent on one model, apart by the model they asked for where it was another."""
+
+    model: str
+    asked: str | None
+    runs: int
+    replies: int
+    cost_usd: float
+
+
+@dataclass(frozen=True)
+class _UnnamedModel(records.View):
+    """A kind's runs no session named a model for, those canopy has yet to read apart from the rest."""
+
+    unread: bool | None
+    runs: int
+    cost_usd: float | None
 
 
 # A ticket's row with the workspace's for the same kind and model beside it. The ticket's runs are among the
@@ -1315,10 +1390,14 @@ def _beside(row: ModelSpend, workspace: ModelSpend | None) -> ModelSpend:
 # One kind's spend by model in a window, read as `_tools_of` reads `run_tools`: the run table leads, by its `_spent`
 # index, and `run_models` is read by its key's prefix. With a ticket, only the runs naming it. A model's runs that
 # asked for another are grouped apart, under what they asked for.
-def _named_models(kind: Kind, since: str, until: str, ticket: str | None = None) -> sql.Select:
+def _named_models(kind: Kind, since: str, until: str, ticket: str | None = None) -> records.Query[_NamedModel]:
     table, which = KIND_TABLES[kind]
     return (
-        sql.select("m.model, {} AS asked, count(*), SUM(m.replies), SUM(m.cost_usd)", sql.frag(_ASKED_ANOTHER))
+        records.view(
+            _NamedModel,
+            "m.model, {} AS asked, count(*) AS runs, SUM(m.replies) AS replies, SUM(m.cost_usd) AS cost_usd",
+            sql.frag(_ASKED_ANOTHER),
+        )
         .from_("{} r CROSS JOIN run_models m ON m.run_table = ? AND m.run_id = r.id", sql.name(table), table)
         .where("r.started_at >= ? AND r.started_at < ?", since, until)
         .where("{}", which)
@@ -1330,10 +1409,14 @@ def _named_models(kind: Kind, since: str, until: str, ticket: str | None = None)
 
 # One kind's runs in a window that no session named a model for, and what they reported they cost: those canopy has
 # yet to read, then the rest, a row each of them that has a run.
-def _unnamed_models(kind: Kind, since: str, until: str, ticket: str | None = None) -> sql.Select:
+def _unnamed_models(kind: Kind, since: str, until: str, ticket: str | None = None) -> records.Query[_UnnamedModel]:
     table, which = KIND_TABLES[kind]
     return (
-        sql.select("{} AS unread, count(*), SUM(r.cost_usd)", run_models.unread(table))
+        records.view(
+            _UnnamedModel,
+            "{} AS unread, count(*) AS runs, SUM(r.cost_usd) AS cost_usd",
+            run_models.unread(table),
+        )
         .from_("{} r", sql.name(table))
         .where("r.started_at >= ? AND r.started_at < ?", since, until)
         .where("{}", which)

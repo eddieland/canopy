@@ -401,25 +401,36 @@ def _connect(state_dir: Path) -> sqlite3.Connection:
 
 
 def _state(idx: sqlite3.Connection) -> _State:
-    row = sql.execute(
-        idx,
-        sql.select(
-            "setting, front_ms, front_id, back_ms, back_id, built, read_at, swept_at, passed_over, error",
-        ).from_("meta"),
-    ).fetchone()
-    if row is None:
+    meta = records.view(_Meta).from_("meta").one(idx)
+    if meta is None:
         raise sqlite3.DatabaseError("the index has no state")
-    setting, front_ms, front_id, back_ms, back_id, built, read_at, swept_at, passed_over, error = row
     return _State(
-        setting=str(setting),
-        front=(int(front_ms), str(front_id)) if front_ms is not None and front_id is not None else None,
-        back=(int(back_ms), str(back_id)) if back_ms is not None and back_id is not None else None,
-        built=bool(built),
-        read_at=read_at,
-        swept_at=swept_at,
-        passed_over=int(passed_over),
-        error=error,
+        setting=meta.setting,
+        front=(meta.front_ms, meta.front_id) if meta.front_ms is not None and meta.front_id is not None else None,
+        back=(meta.back_ms, meta.back_id) if meta.back_ms is not None and meta.back_id is not None else None,
+        built=bool(meta.built),
+        read_at=meta.read_at,
+        swept_at=meta.swept_at,
+        passed_over=meta.passed_over,
+        error=meta.error,
     )
+
+
+@dataclass(frozen=True)
+class _Meta(records.View):
+    """The index's one row of state, as `meta` holds it."""
+
+    setting: str
+    front_ms: int | None
+    front_id: str | None
+    back_ms: int | None
+    back_id: str | None
+    #: Whether the first build is done: 0 or not, as the index wrote it.
+    built: int
+    read_at: str | None
+    swept_at: str | None
+    passed_over: int
+    error: str | None
 
 
 def _write_state(idx: sqlite3.Connection, state: _State) -> None:
@@ -447,6 +458,14 @@ def _sweep_due(state: _State, now: datetime) -> bool:
     return state.swept_at is None or db.parse_time(state.swept_at) <= now - SWEEP_EVERY
 
 
+@dataclass(frozen=True)
+class _Indexed(records.View):
+    """A session the index holds, and the runtime's record it was read from."""
+
+    session_id: str
+    record: str
+
+
 # Drop each session the runtime's records no longer keep: of a record read, those it does not hold; of one that is
 # gone, every one. What a record that could not be read holds stays. Returns how many were dropped, or None when the
 # runtime's record could not be read, so nothing was.
@@ -455,9 +474,9 @@ def _sweep(idx: sqlite3.Connection, version: Version) -> int | None:
     if kept.outcome == "failed":
         return None
     gone = [
-        str(session_id)
-        for session_id, record in sql.execute(idx, sql.select("session_id, record").from_("sessions"))
-        if str(record) not in kept.unread and session_id not in kept.records.get(str(record), frozenset())
+        s.session_id
+        for s in records.view(_Indexed).from_("sessions").all(idx)
+        if s.record not in kept.unread and s.session_id not in kept.records.get(s.record, frozenset())
     ]
     _drop(idx, gone)
     return len(gone)

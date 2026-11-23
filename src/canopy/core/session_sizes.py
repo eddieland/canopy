@@ -400,9 +400,9 @@ def _finished(trial: _Trial, words: Sequence[str], session_of: Sequence[str], cl
     if words:
         start = clock()
         match = " AND ".join(f'"{w}"' for w in words)
-        hits = sql.execute(trial.conn, sql.select("rowid").from_("idx").where("idx MATCH ?", match)).fetchall()
+        hits = records.fetch_values(trial.conn, int, sql.select("rowid").from_("idx").where("idx MATCH ?", match))
         took = clock() - start
-        found = Found(seconds=_seconds(took), sessions=len({session_of[int(r[0]) - 1] for r in hits}))
+        found = Found(seconds=_seconds(took), sessions=len({session_of[row - 1] for row in hits}))
     return TrialIndex(
         positions=trial.positions,
         size_bytes=trial.path.stat().st_size,

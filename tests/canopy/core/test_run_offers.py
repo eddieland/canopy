@@ -161,7 +161,7 @@ def test_each_run_records_what_the_runtime_offered_its_agent(
         ("tracker-jira",),
     )
     [run] = ticked.runs
-    assert run.status == "done", Path(run.row["log_path"]).read_text()
+    assert run.status == "done", Path(run.row.log_path).read_text()
     assert offered(scenario.conn, "runs", run.id) == (
         "canopy-worker",
         None,
@@ -216,7 +216,7 @@ def test_each_run_records_what_opencode_2_offered_its_agent(
         ("tracker-jira",),
     )
     [run] = ticked.runs
-    assert run.status == "done", Path(run.row["log_path"]).read_text()
+    assert run.status == "done", Path(run.row.log_path).read_text()
     assert offered(scenario.conn, "runs", run.id) == (
         "canopy-worker",
         None,

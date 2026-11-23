@@ -240,8 +240,8 @@ def run_raw_output(ctx: Context, run_id: int) -> RawOutput | None:
     row = db.get_run(ctx.conn, run_id)
     if row is None:
         return None
-    log = Path(str(row["log_path"]))
-    return raw_output(log, removed_after(ctx.conn, log, row["ended_at"], "run_files_days"))
+    log = Path(str(row.log_path))
+    return raw_output(log, removed_after(ctx.conn, log, row.ended_at, "run_files_days"))
 
 
 def run_change_diff(ctx: Context, run_id: int, repo: str) -> ReviewDiff | None:
@@ -254,7 +254,7 @@ def run_change_diff(ctx: Context, run_id: int, repo: str) -> ReviewDiff | None:
     row = db.get_run(ctx.conn, run_id)
     if row is None:
         return None
-    return change_views.run_diff(ctx.conn, run_id, repo, log_path=str(row["log_path"]))
+    return change_views.run_diff(ctx.conn, run_id, repo, log_path=str(row.log_path))
 
 
 def run_detail(ctx: Context, run_id: int) -> Run | None:
@@ -270,23 +270,23 @@ def run_detail(ctx: Context, run_id: int) -> Run | None:
         return None
     root = ctx.workspace.root
     held = db.all_run_slots(ctx.conn, [run_id])[run_id]
-    served = models_served(ctx.conn, "runs", run_id, ended=row["ended_at"] is not None, session_id=row["session_id"])
-    wrote = feedback_plan_views.written(ctx, run_id) if row["kind"] == RunKind.FEEDBACK_PLAN else None
+    served = models_served(ctx.conn, "runs", run_id, ended=row.ended_at is not None, session_id=row.session_id)
+    wrote = feedback_plan_views.written(ctx, run_id) if row.kind == RunKind.FEEDBACK_PLAN else None
     limit = ctx.config.runtime.worker_timeout_minutes
     worktrees = [run_worktree(s, root) for s in held]
     answers = checklist_views.run_answers(ctx.conn, run_id)
     stretches, left_out = checklist_views.run_stretches(
         ctx.conn,
         run_id,
-        log_path=str(row["log_path"]),
-        ended_at=row["ended_at"],
+        log_path=str(row.log_path),
+        ended_at=row.ended_at,
     )
     changed = change_views.run_changes_of(
         ctx.conn,
         run_id,
-        log_path=str(row["log_path"]),
-        ended_at=row["ended_at"],
-        prs={u.repo: u.pr_url for u in db.units(ctx.conn, str(row["ticket_key"])) if u.repo and u.pr_url},
+        log_path=str(row.log_path),
+        ended_at=row.ended_at,
+        prs={u.repo: u.pr_url for u in db.units(ctx.conn, str(row.ticket_key)) if u.repo and u.pr_url},
     )
     return run(
         row,
@@ -328,11 +328,11 @@ def run_transcript(ctx: Context, run_id: int) -> Transcript | None:
     row = db.get_run(ctx.conn, run_id)
     if row is None:
         return None
-    log = Path(str(row["log_path"]))
-    removed = removed_after(ctx.conn, log, row["ended_at"], "run_files_days")
+    log = Path(str(row.log_path))
+    removed = removed_after(ctx.conn, log, row.ended_at, "run_files_days")
     return session_transcript(
         log,
-        row["session_id"],
+        row.session_id,
         removed,
         run_models.replies_of(ctx.conn, "runs", run_id),
         version=ctx.config.runtime.version,
@@ -374,7 +374,7 @@ def runs(ctx: Context) -> list[Run]:
     """
     running = db.running_runs(ctx.conn, "runs")
     recent = db.recent_runs(ctx.conn, RECENT_RUNS)
-    slots = db.all_run_slots(ctx.conn, [int(r["id"]) for r in running])
+    slots = db.all_run_slots(ctx.conn, [int(r.id) for r in running])
     root = ctx.workspace.root
     running_models = ModelsServed(status="running")
     limit = ctx.config.runtime.worker_timeout_minutes
@@ -383,7 +383,7 @@ def runs(ctx: Context) -> list[Run]:
             run(
                 r,
                 root,
-                [run_worktree(s, root) for s in slots[int(r["id"])]],
+                [run_worktree(s, root) for s in slots[int(r.id)]],
                 running_models,
                 timeout_minutes=limit,
             )
@@ -393,16 +393,16 @@ def runs(ctx: Context) -> list[Run]:
     ]
 
 
-def runs_served(conn: sqlite3.Connection, rows: Sequence[sqlite3.Row]) -> list[ModelsServed]:
+def runs_served(conn: sqlite3.Connection, rows: Sequence[records.Run]) -> list[ModelsServed]:
     """Which models served each of the `runs` table's `rows`, as `models_served` says for one, in one read.
 
     Returns:
         Each row's models, in the order of `rows`.
     """
-    ids = [int(r["id"]) for r in rows]
+    ids = [int(r.id) for r in rows]
     reads, models = run_models.reads_of(conn, "runs", ids), run_models.of_runs(conn, "runs", ids)
     return [
-        _served(reads.get(i), models[i], ended=r["ended_at"] is not None, session_id=r["session_id"])
+        _served(reads.get(i), models[i], ended=r.ended_at is not None, session_id=r.session_id)
         for i, r in zip(ids, rows, strict=True)
     ]
 
@@ -421,8 +421,8 @@ def runs_since(ctx: Context, since: datetime) -> RunsSince:
     named_before: set[str] = set()
     named_since: set[str] = set()
     for row in db.ended_run_results(ctx.conn):
-        prs = contract.stored_prs(contract.stored_object(row["result_json"]))
-        if str(row["ended_at"]) >= cut:
+        prs = contract.stored_prs(contract.stored_object(row.result_json))
+        if str(row.ended_at) >= cut:
             ended += 1
             named_since.update(prs)
         else:
@@ -456,7 +456,7 @@ def run_worktree(slot: records.RunSlot, root: Path) -> RunWorktree:
 
 
 def run(
-    row: sqlite3.Row,
+    row: db.ShownRun,
     root: Path,
     worktrees: list[RunWorktree] | None = None,
     models: ModelsServed | None = None,
@@ -480,34 +480,34 @@ def run(
     Returns:
         The run as the API sends it. A status it does not know reads as `failed`.
     """
-    result = contract.stored_object(row["result_json"])
-    status = str(row["status"])
+    result = contract.stored_object(row.result_json)
+    status = str(row.status)
     return Run(
-        id=int(row["id"]),
-        ticket_key=str(row["ticket_key"]),
-        ticket_title=ticket_title(row["ticket_title"]),
-        kind=str(row["kind"]),
+        id=int(row.id),
+        ticket_key=str(row.ticket_key),
+        ticket_title=ticket_title(row.ticket_title),
+        kind=str(row.kind),
         reasons=list(db.reasons_in(row)),
         status=status,
         state=run_state(status),
-        private=bool(row["private"]),
-        ticket_stopped=bool(row["ticket_stopped"]),
-        branch=str(row["branch"]) or None,
-        started_at=db.parse_time(str(row["started_at"])),
-        ended_at=db.parse_time(str(row["ended_at"])) if row["ended_at"] else None,
+        private=bool(row.private),
+        ticket_stopped=bool(row.ticket_stopped),
+        branch=str(row.branch) or None,
+        started_at=db.parse_time(str(row.started_at)),
+        ended_at=db.parse_time(str(row.ended_at)) if row.ended_at else None,
         summary=said(row),
         prs=contract.stored_prs(result),
-        session_id=str(row["session_id"]) if row["session_id"] else None,
-        cost_usd=float(row["cost_usd"]) if row["cost_usd"] is not None else None,
+        session_id=str(row.session_id) if row.session_id else None,
+        cost_usd=float(row.cost_usd) if row.cost_usd is not None else None,
         new_tokens=new_tokens(row),
-        peak_context=int(row["tokens_peak_context"]) if row["tokens_peak_context"] is not None else None,
+        peak_context=int(row.tokens_peak_context) if row.tokens_peak_context is not None else None,
         worktrees=worktrees or [],
-        log_path=shown_path(str(row["log_path"]), root),
+        log_path=shown_path(str(row.log_path), root),
         activity=activity(row) if status == "running" else None,
         card=card(row, running=status == "running", timeout_minutes=timeout_minutes),
-        persona=str(row["persona"]) if row["persona"] is not None else None,
-        persona_digest=str(row["persona_digest"]) if row["persona_digest"] is not None else None,
-        model=str(row["model"]) if row["model"] is not None else None,
+        persona=str(row.persona) if row.persona is not None else None,
+        persona_digest=str(row.persona_digest) if row.persona_digest is not None else None,
+        model=str(row.model) if row.model is not None else None,
         models=models,
         feedback_plan=feedback_plan,
         checklist=list(checklist),
@@ -515,11 +515,11 @@ def run(
         checklist_stretches_left_out=stretches_left_out,
         changes=list(changes),
         ranges=list(ranges),
-        records_changes=row["ended_at"] is not None and changes_kept.recorded(str(row["kind"])),
+        records_changes=row.ended_at is not None and changes_kept.recorded(str(row.kind)),
     )
 
 
-def card(row: sqlite3.Row | records.Row, *, running: bool, timeout_minutes: int | None) -> RunCard | None:
+def card(row: records.Row, *, running: bool, timeout_minutes: int | None) -> RunCard | None:
     """A run's, a review run's, or a task run's progress as the API sends it (DESIGN §41), or None when it wrote none.
 
     `timeout_minutes`, the run's time limit, says when a working step is stuck; with None, none is.
@@ -611,17 +611,16 @@ def _served(
             assert_never(read.status)
 
 
-def activity(row: sqlite3.Row | records.Tick) -> RunActivity | None:
+def activity(row: records.Run | records.Tick) -> RunActivity | None:
     """A run's or a tick's latest tool call, as the API sends it (DESIGN §8).
 
     Returns:
         The call; None before the first.
     """
-    values = records.columns(row)
-    tool, at = values["activity_tool"], values["activity_at"]
+    tool, at = row.activity_tool, row.activity_at
     if tool is None or at is None:
         return None
-    return RunActivity(tool=str(tool), did=str(values["activity"] or ""), at=db.parse_time(str(at)))
+    return RunActivity(tool=str(tool), did=str(row.activity or ""), at=db.parse_time(str(at)))
 
 
 def run_state(status: str) -> RunState:
@@ -666,7 +665,9 @@ def review_state(status: ReviewRunStatus) -> RunState:
             assert_never(status)
 
 
-def new_tokens(row: sqlite3.Row | records.Row) -> int | None:
+def new_tokens(
+    row: records.Run | records.ChoreRun | records.ReviewRun | records.TaskRun | records.Tick,
+) -> int | None:
     """A run's, a chore run's, or a tick's tokens, every kind but cache reads; None when the runtime reported none.
 
     Cache reads are left out: each model call reads again what the calls before it were sent, so their sum grows with
@@ -675,18 +676,17 @@ def new_tokens(row: sqlite3.Row | records.Row) -> int | None:
     Returns:
         The sum of the counts the runtime reported, a missing one counting as none.
     """
-    values = records.columns(row)
-    found = [values[c] for c in ("tokens_input", "tokens_output", "tokens_reasoning", "tokens_cache_write")]
+    found = [row.tokens_input, row.tokens_output, row.tokens_reasoning, row.tokens_cache_write]
     return sum(int(t) for t in found if t is not None) if any(t is not None for t in found) else None
 
 
-def said(row: sqlite3.Row | records.Row) -> str | None:
+def said(row: records.Run | records.ChoreRun | records.EpicRun | records.TaskRun) -> str | None:
     """What a run's or a chore run's result says, the harness's note first, with its line breaks, and cut.
 
     Returns:
         At most `SUMMARY_LENGTH` characters, or None when the result says nothing.
     """
-    note = contract.stored_note(contract.stored_object(records.columns(row)["result_json"]))
+    note = contract.stored_note(contract.stored_object(row.result_json))
     return lines(note)[:SUMMARY_LENGTH].rstrip() or None
 
 
@@ -717,7 +717,7 @@ def tickets(ctx: Context) -> list[TicketSummary]:
     return [summary(ctx, row) for row in db.recent_tickets(ctx.conn, TICKETS)]
 
 
-def summary(ctx: Context, row: sqlite3.Row) -> TicketSummary:
+def summary(ctx: Context, row: db.ActiveTicket) -> TicketSummary:
     """A ticket row, with `active_at` as `db.recent_tickets` adds it, as the tickets list shows it.
 
     Returns:
@@ -725,7 +725,7 @@ def summary(ctx: Context, row: sqlite3.Row) -> TicketSummary:
         whether its plan or its feedback plan waits on the operator.
     """
     conn = ctx.conn
-    key = str(row["key"])
+    key = str(row.key)
     record = conversation.start_of(conn, key)
     status: StartStatus | None = None
     if record is not None:
@@ -738,14 +738,14 @@ def summary(ctx: Context, row: sqlite3.Row) -> TicketSummary:
     ticket = db.get_ticket(conn, key)
     return TicketSummary(
         key=key,
-        title=ticket_title(row["title"]),
+        title=ticket_title(row.title),
         private=record is not None,
         start=status,
-        phase=str(row["phase"]) if row["phase"] else None,
+        phase=str(row.phase) if row.phase else None,
         last_decision=db.last_decision_of(conn, key),
-        done=bool(row["done"]),
-        branch=str(row["branch"]) if row["branch"] else None,
-        active_at=db.parse_time(str(row["active_at"])),
+        done=bool(row.done),
+        branch=str(row.branch) if row.branch else None,
+        active_at=db.parse_time(str(row.active_at)),
         latest_message_id=db.latest_message_of(conn, conversation.TICKET, key),
         awaiting=waiting.id if waiting is not None else None,
         running_run=running.id if running is not None else None,
@@ -765,7 +765,7 @@ def ticket(backend: Backend, ctx: Context, key: str) -> TicketDetail | None:
         return None
     [row] = rows
     ran = db.runs_of(ctx.conn, key, TICKET_RUNS)
-    ranges = change_views.ranges_of(ctx.conn, [int(r["id"]) for r in ran])
+    ranges = change_views.ranges_of(ctx.conn, [int(r.id) for r in ran])
     served = ticket_models.last_served(ctx.conn, key)
     units = [
         Unit(
@@ -790,7 +790,7 @@ def ticket(backend: Backend, ctx: Context, key: str) -> TicketDetail | None:
                 r,
                 ctx.workspace.root,
                 models=m,
-                ranges=ranges.get(int(r["id"]), ()),
+                ranges=ranges.get(int(r.id), ()),
                 timeout_minutes=ctx.config.runtime.worker_timeout_minutes,
             )
             for r, m in zip(ran, runs_served(ctx.conn, ran), strict=True)
@@ -975,11 +975,11 @@ def forget(found: records.Forget) -> TicketForget:
 
 def _ticket_cost(conn: sqlite3.Connection, key: str) -> CostTotal:
     row = db.ticket_cost(conn, key)
-    cost = row["cost_usd"]
+    cost = row.cost_usd
     return CostTotal(
-        runs=int(row["runs"]),
-        reviews=int(row["reviews"]),
-        priced=int(row["priced"]),
+        runs=int(row.runs),
+        reviews=int(row.reviews),
+        priced=int(row.priced),
         cost_usd=float(cost) if cost is not None else None,
         models=[ModelCost(model=m.model, runs=m.runs, cost_usd=m.cost_usd) for m in run_models.of_ticket(conn, key)],
         unread_cost_usd=run_models.unread_of_ticket(conn, key),

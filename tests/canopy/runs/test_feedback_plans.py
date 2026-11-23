@@ -132,8 +132,8 @@ def test_a_resume_waits_on_a_feedback_plan_the_operator_approved_and_goes_ahead_
     assert feedback_plans.changes_asked(conn, present(db.get_ticket(conn, KEY))) is None
     resume = scenario.run(RESUME, worker=pushes())
     assert resume.status == RunStatus.DONE
-    assert resume.row["feedback_plan_id"] == plan.id
-    assert resume.row["plan_id"] is None
+    assert resume.row.feedback_plan_id == plan.id
+    assert resume.row.plan_id is None
     assert "is the feedback plan the operator approved for this round of the PR's feedback" in resume.prompt
     assert f"1. id 501, on {PR}: change\n2. id 502, on {PR}: decline" in resume.prompt
     assert present(feedback_plans.get(conn, plan.id)).spent_run_id == resume.id
@@ -252,7 +252,7 @@ def test_a_resume_for_no_pr_alone_waits_on_no_plan(scenario: Scenario) -> None:
     scenario.configures("private", policy={"feedback_plan": "approve"})
     run = scenario.run(dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.NO_PR]), worker=pushes())
     assert run.status == RunStatus.DONE
-    assert run.row["feedback_plan_id"] is None
+    assert run.row.feedback_plan_id is None
 
 
 @pytest.mark.usefixtures("git_pool")
@@ -268,7 +268,7 @@ def test_off_plans_no_feedback_and_resumes_as_before(scenario: Scenario, github_
     covered = {"review": review_number(scenario.conn, 501)}
     run = scenario.run(dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REVIEW], cursors=covered), worker=pushes())
     assert run.status == RunStatus.DONE
-    assert run.row["feedback_plan_id"] is None
+    assert run.row.feedback_plan_id is None
     assert "feedback plan" not in run.prompt
 
 
@@ -314,7 +314,7 @@ def test_a_feedback_plan_revision_starts_as_the_plan_it_replaces_and_is_refused_
     scenario.operator("reply", KEY, "Accept bob's point instead.")
     untouched = scenario.run(FEEDBACK_PLAN, worker=planner_does(["cat", plans.WRITTEN], plan=None, result=PLANNED))
     assert untouched.status == RunStatus.UNKNOWN
-    assert plans.UNREVISED in str(untouched.row["result_json"])
+    assert plans.UNREVISED in str(untouched.row.result_json)
     [*_, [cat]] = commands_run(scenario.agent_log)
     assert cat["stdout"] == TEXT
     assert [(p.run_id, p.status) for p in feedback_plans.history(scenario.conn, KEY)] == [(first, PlanStatus.PROPOSED)]
@@ -322,7 +322,7 @@ def test_a_feedback_plan_revision_starts_as_the_plan_it_replaces_and_is_refused_
     scenario.operator("reply", KEY, "Accept bob's point instead, please.")
     edit = edits_plan("Rename it.", "Rename it to fetch.")
     edited = scenario.run(FEEDBACK_PLAN, worker=planner_does(edit, plan=None, result=PLANNED))
-    assert edited.status == RunStatus.DONE, edited.row["result_json"]
+    assert edited.status == RunStatus.DONE, edited.row.result_json
     assert plan_file(scenario.env, edited.id).read_text() == TEXT.replace("Rename it.", "Rename it to fetch.")
 
 
@@ -421,7 +421,7 @@ def test_a_feedback_plan_takes_no_persona_so_an_unusable_one_refuses_it_not(
     with_a_pr(scenario)
     (personas_dir(scenario.env) / "canopy.md").write_text("Be kind.\u200b\n")
     run = present(db.get_run(scenario.conn, feedback_planned(scenario, github_state)))
-    assert (run["persona"], run["persona_digest"]) == (None, None)
+    assert (run.persona, run.persona_digest) == (None, None)
     [(refused, _), (raised, _)] = scenario.refuses(dispatches("PROJ-2"))
     assert (refused, raised) == ("refused:bad_persona", "attention:bad_persona")
 
@@ -681,7 +681,7 @@ def test_a_re_plans_desk_carries_the_old_plan_what_changed_and_each_reply_beside
     given = json.loads(items["stdout"])
     assert [(i["id"], [r["id"] for r in i["replies"]]) for i in given[:3]] == [(501, [503]), (502, []), (601, [])]
     assert given[0]["replies"][0]["body"] == "Never mind."
-    assert "503, which is no item of its PRs" in str(again.row["result_json"])
+    assert "503, which is no item of its PRs" in str(again.row.result_json)
 
 
 @pytest.mark.usefixtures("git_pool")
@@ -704,7 +704,7 @@ def test_approving_a_stale_plan_is_refused_once_and_what_changed_waits_for_the_n
     assert present(feedback_plans.get(conn, plan.id)).status is PlanStatus.PROPOSED
     scenario.operator("plan", KEY, "--approve")
     resume = scenario.run(RESUME, worker=pushes())
-    assert resume.row["feedback_plan_id"] == plan.id
+    assert resume.row.feedback_plan_id == plan.id
     # The resume handled what the plan covered; carol's comment is the next round's.
     trust = load(scenario.env.root, scenario.env.user_file).trust
     assert [o.id for o in feedback_items.offered(conn, trust, KEY, [PR])] == [601]
@@ -1005,7 +1005,7 @@ def test_each_approval_writes_a_message_of_its_own_and_the_overseers_resume_read
     dispatch = dispatches(kind=RunKind.RESUME, reasons=reasons, cursors={"message": str(newest)})
     [resume] = scenario.tick(dispatch, worker=pushes()).runs
     assert resume.status == RunStatus.DONE
-    assert resume.row["feedback_plan_id"] == plan.id
+    assert resume.row.feedback_plan_id == plan.id
     assert f"The operator's message {newest} above is that approval" in resume.prompt
     assert f"1. id 501, on {PR}: change\n2. id 502, on {PR}: decline" in resume.prompt
     assert "They left out" not in resume.prompt
@@ -1053,7 +1053,7 @@ def test_a_stale_plan_is_approved_by_item_once_its_refusal_was_shown(scenario: S
     approved = scenario.operator("plan", KEY, "--approve", "--item", "1")
     assert "Left out, for the next plan: item 2 (id 502)." in approved.out
     resume = scenario.run(RESUME, worker=pushes())
-    assert resume.row["feedback_plan_id"] == plan.id
+    assert resume.row.feedback_plan_id == plan.id
     assert "They left out its item 2 (id 502)" in resume.prompt
     # bob's item, left out, and carol's, new since the plan, are the next plan's.
     trust = load(scenario.env.root, scenario.env.user_file).trust

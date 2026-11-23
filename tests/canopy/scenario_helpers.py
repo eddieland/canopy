@@ -292,7 +292,7 @@ class Printed:
 class Ran:
     """A worker run as it ended: its row, why it ran if it is a resume, and the prompt its worker was given."""
 
-    row: sqlite3.Row
+    row: db.ShownRun
     reasons: tuple[ResumeReason, ...]
     prompt_file: Path
     #: What its `canopy _run` printed, the run log among it, when the scenario ran it in this process (`Scenario.run`).
@@ -301,33 +301,32 @@ class Ran:
     @property
     def id(self) -> int:
         """The run's id."""
-        return int(self.row["id"])
+        return self.row.id
 
     @property
     def key(self) -> str:
         """The key of the ticket the run was for."""
-        return str(self.row["ticket_key"])
+        return self.row.ticket_key
 
     @property
     def kind(self) -> RunKind:
         """What the run was dispatched to do."""
-        return RunKind(self.row["kind"])
+        return self.row.kind
 
     @property
     def status(self) -> RunStatus:
         """How the run ended."""
-        return RunStatus(self.row["status"])
+        return self.row.status
 
     @property
     def branch(self) -> str | None:
         """The branch the run worked on."""
-        branch: str | None = self.row["branch"]
-        return branch
+        return self.row.branch
 
     @property
     def ended_at(self) -> datetime:
         """When the run ended."""
-        return db.parse_time(str(self.row["ended_at"]))
+        return db.parse_time(str(self.row.ended_at))
 
     @property
     def prompt(self) -> str:
@@ -336,7 +335,7 @@ class Ran:
 
     def __str__(self) -> str:
         """The run in a line, for a failed step's message: what it was for, how it ended, and what its result said."""
-        result: dict[str, Any] = json.loads(self.row["result_json"] or "{}")
+        result: dict[str, Any] = json.loads(self.row.result_json or "{}")
         said = [str(result[k]) for k in ("summary", "question", "harness") if result.get(k)]
         return ": ".join([_named(self.row, self.reasons), self.status, *said])
 
@@ -353,7 +352,7 @@ class Working:
     reasons: tuple[ResumeReason, ...]
 
     @property
-    def row(self) -> sqlite3.Row:
+    def row(self) -> db.ShownRun:
         """The run's row as it stands."""
         return present(db.get_run(self.scenario.conn, self.id))
 
@@ -363,7 +362,7 @@ class Working:
         Returns:
             The run, still at work.
         """
-        _recorded(calls, lambda: int(self.row["tool_calls"]), str(self))
+        _recorded(calls, lambda: self.row.tool_calls, str(self))
         return self
 
     def finishes(self) -> Ran:
@@ -383,7 +382,7 @@ class Working:
         Its row stays `running`, and the worker it started stays at work, as they would for the next tick's reconcile
         to find.
         """
-        _killed(int(self.row["pid"]), f"run {self.id}'s `canopy _run`")
+        _killed(present(self.row.pid), f"run {self.id}'s `canopy _run`")
         self.scenario.story.append(
             f"{_named(self.row, self.reasons)}: its `canopy _run` dies, its worker still at work",
         )
@@ -973,15 +972,14 @@ class Scenario:
             items = [f"unread ({e})"]
         return "\n".join([*steps, f"The attention list now: {', '.join(items)}."])
 
-    def ran(self, row: sqlite3.Row) -> Ran:
+    def ran(self, row: db.ShownRun) -> Ran:
         """The run `row` as it ended.
 
         Returns:
             The run, with why it ran and where its prompt is.
         """
-        run_id = int(row["id"])
-        reasons = db.run_reasons(self.conn, [run_id]).get(run_id, ())
-        return Ran(row, reasons, self.env.state_dir / "runs" / f"{run_id}.prompt")
+        reasons = db.run_reasons(self.conn, [row.id]).get(row.id, ())
+        return Ran(row, reasons, self.env.state_dir / "runs" / f"{row.id}.prompt")
 
     def close(self) -> None:
         """Stop what is left of every run and review run held at work, as the test ends.
@@ -990,10 +988,10 @@ class Scenario:
         """
         for run_id in self.held:
             row = present(db.get_run(self.conn, run_id))
-            if row["status"] == RunStatus.RUNNING:
-                for pid in (row["pid"], row["worker_pid"]):
+            if row.status == RunStatus.RUNNING:
+                for pid in (row.pid, row.worker_pid):
                     if pid is not None:
-                        procs.kill_group(int(pid))
+                        procs.kill_group(pid)
         for run_id in self.held_reviews:
             review = present(review_runs.get_review_run(self.conn, run_id))
             if review.status == ReviewRunStatus.RUNNING:
@@ -1031,9 +1029,9 @@ class Scenario:
         while True:
             row = present(db.get_run(self.conn, run_id))
             # The worker's pid too, which `_run` records just after it starts the worker, so `close` knows what to stop.
-            if working.exists() and row["worker_pid"] is not None:
+            if working.exists() and row.worker_pid is not None:
                 break
-            assert row["status"] == RunStatus.RUNNING, f"{self.ran(row)}, before its worker was at work"
+            assert row.status == RunStatus.RUNNING, f"{self.ran(row)}, before its worker was at work"
             assert time.monotonic() < deadline, f"run {run_id}'s worker was not at work after {HOLD_TIMEOUT}s"
             time.sleep(0.02)
         reasons = db.run_reasons(self.conn, [run_id]).get(run_id, ())
@@ -1414,9 +1412,9 @@ def _printing(command: Callable[[], int]) -> tuple[int, Printed]:
     return exited, Printed(out.getvalue(), err.getvalue())
 
 
-def _named(row: sqlite3.Row, reasons: Sequence[ResumeReason]) -> str:
+def _named(row: records.Run, reasons: Sequence[ResumeReason]) -> str:
     why = f" for {', '.join(reasons)}" if reasons else ""
-    return f"run {row['id']}, {row['kind']} of {row['ticket_key']}{why}"
+    return f"run {row.id}, {row.kind} of {row.ticket_key}{why}"
 
 
 def _reviewed(row: records.ReviewRun) -> str:

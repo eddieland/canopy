@@ -219,9 +219,9 @@ def _check_running(
     Raises:
         start.Refusal: (`running`) one is.
     """
-    busy = next((r for r in db.running_runs(ctx.conn, "review_runs") if r["pr_url"] == review.pr_url), None)
+    busy = next((r for r in db.running_runs(ctx.conn, "review_runs") if r.pr_url == review.pr_url), None)
     if busy is not None:
-        raise start.Refusal("running", f"review run {busy['id']} of this PR is running")
+        raise start.Refusal("running", f"review run {busy.id} of this PR is running")
     waiting = next((r for r in held if r.kind in recorded_runs.HOLDS_REVIEW and r.pr_url == review.pr_url), None)
     if waiting is not None:
         raise start.Refusal("running", f"recorded review {waiting.id} of this PR starts once the overseer's run ends")

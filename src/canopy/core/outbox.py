@@ -8,7 +8,6 @@ and kept to one line.
 
 from __future__ import annotations
 
-import sqlite3
 from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING, Final, TypedDict
 
@@ -462,7 +461,7 @@ def run_started(
 
 def run_ended(
     config: Config,
-    run: sqlite3.Row,
+    run: records.Run,
     status: RunStatus,
     result_json: str | None,
 ) -> Callable[[int | None], Event | None]:
@@ -486,11 +485,11 @@ def run_ended(
         question = result.get("question") if status == RunStatus.BLOCKED else None
         summary = contract.stored_note(result)
         fields: RunEnded = {
-            "ticket": run["ticket_key"],
-            "run": run["id"],
-            "run_kind": run["kind"],
+            "ticket": run.ticket_key,
+            "run": run.id,
+            "run_kind": run.kind,
             "status": status,
-            "branch": run["branch"],
+            "branch": run.branch,
             "pr": cut(pr_urls[0], DETAIL_LIMIT) if pr_urls else None,
             "prs": [cut(u, DETAIL_LIMIT) for u in pr_urls],
             "summary": cut(summary, SUMMARY_LIMIT) if summary else None,

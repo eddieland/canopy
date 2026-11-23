@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Final, LiteralString
 
@@ -615,7 +616,7 @@ def _attention(ctx: Context) -> list[Item]:
 
 def _end_run(ctx: Context, run: records.Run) -> bool:
     current = db.get_run(ctx.conn, run.id)
-    if current is None or current["status"] != "running":
+    if current is None or current.status is not RunStatus.RUNNING:
         return False
     note = json.dumps({"harness": "the operator stopped the ticket (mock: no process was killed)"})
     return conversation.close_run(ctx.conn, ctx.config, current, RunStatus.STOPPED, note)
@@ -641,7 +642,7 @@ def _limits(ctx: Context, key: str) -> list[Limit]:
     base = {"implement": p.max_implement_attempts, "resume": p.max_resume_attempts}
     counts: dict[str, dict[str, int]] = {}
     counted = (
-        sql.select("s.repo, r.kind, count(DISTINCT r.id)")
+        records.view(_UnitRuns, "s.repo, r.kind, count(DISTINCT r.id) AS runs")
         .from_("runs r")
         .join("run_slots s ON s.run_id = r.id")
         .where("r.ticket_key = ?", key)
@@ -650,21 +651,33 @@ def _limits(ctx: Context, key: str) -> list[Limit]:
         .where("s.repo IS NOT NULL")
         .group_by("s.repo, r.kind")
     )
-    for repo, kind, runs in sql.execute(ctx.conn, counted):
-        of = counts.setdefault(str(repo), dict.fromkeys(base, 0))
-        of[_counted_as(str(kind))] += int(runs)
+    for run in counted.all(ctx.conn):
+        of = counts.setdefault(run.repo, dict.fromkeys(base, 0))
+        of[_counted_as(run.kind)] += run.runs
     granted: dict[tuple[str, str], int] = {}
     grants = (
-        sql.select("repo, kind, sum(runs)").from_("attempt_grants").where("ticket_key = ?", key).group_by("repo, kind")
+        records.view(_UnitRuns, "repo, kind, sum(runs) AS runs")
+        .from_("attempt_grants")
+        .where("ticket_key = ?", key)
+        .group_by("repo, kind")
     )
-    for r in sql.execute(ctx.conn, grants):
-        unit = (str(r[0]), _counted_as(str(r[1])))
-        granted[unit] = granted.get(unit, 0) + int(r[2])
+    for grant in grants.all(ctx.conn):
+        unit = (grant.repo, _counted_as(grant.kind))
+        granted[unit] = granted.get(unit, 0) + grant.runs
     return [
         Limit(kind, repo, None, runs, granted.get((repo, kind), 0), base[kind] + granted.get((repo, kind), 0))
         for repo, of in sorted(counts.items())
         for kind, runs in of.items()
     ]
+
+
+@dataclass(frozen=True)
+class _UnitRuns(records.View):
+    """How many runs of one kind a unit has had, or has been granted."""
+
+    repo: str
+    kind: str
+    runs: int
 
 
 def _counted_as(kind: str) -> str:
@@ -676,11 +689,8 @@ def _review_limit(ctx: Context, url: str) -> Limit | None:
     runs = len(review_runs.review_runs_of(ctx.conn, url))
     if runs == 0:
         return None
-    row = sql.execute(
-        ctx.conn,
-        sql.select("coalesce(sum(runs), 0)").from_("review_grants").where("pr_url = ?", url),
-    ).fetchone()
-    granted = int(row[0])
+    grants = sql.select("sum(runs)").from_("review_grants").where("pr_url = ?", url)
+    granted = records.fetch_value(ctx.conn, int, grants) or 0
     return Limit("review", None, url, runs, granted, ctx.config.policy.max_reviews_per_pr + granted)
 
 
@@ -745,9 +755,9 @@ def _try_chore(ctx: Context, name: str) -> int:
     Raises:
         Refused: (`running`) a run of the chore is running.
     """
-    running = next((r for r in db.running_runs(ctx.conn, "chore_runs") if r["chore"] == name), None)
+    running = next((r for r in db.running_runs(ctx.conn, "chore_runs") if r.chore == name), None)
     if running is not None:
-        raise conversation.Refused("running", f"chore run {running['id']} of {name} is running")
+        raise conversation.Refused("running", f"chore run {running.id} of {name} is running")
     run_id = chore_runs.insert_chore_run(
         ctx.conn,
         tick_id=None,

@@ -619,7 +619,7 @@ def test_the_stream_reads_every_list_from_one_snapshot(backend: Backend) -> None
     recent = db.recent_tickets
     replied: list[bool] = []
 
-    def then_a_reply(conn: sqlite3.Connection, limit: int, *, key: str | None = None) -> list[sqlite3.Row]:
+    def then_a_reply(conn: sqlite3.Connection, limit: int, *, key: str | None = None) -> list[db.ActiveTicket]:
         rows = recent(conn, limit, key=key)
         if not replied:
             replied.append(True)

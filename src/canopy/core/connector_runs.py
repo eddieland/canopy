@@ -312,8 +312,10 @@ def between(conn: sqlite3.Connection, config: Config, start: datetime, end: date
     until = db.format_time(end)
     window = ("started_at >= ? AND started_at < ?", since, until)
     each = (
-        sql.select(
-            "source, kind, status, tick_id IS NOT NULL, (julianday(ended_at) - julianday(started_at)) * 1440, {}",
+        records.view(
+            _Started,
+            "source, kind, status, tick_id IS NOT NULL AS by_tick, "
+            "(julianday(ended_at) - julianday(started_at)) * 1440 AS minutes, {} AS day",
             spend.DAY,
         )
         .from_("connector_runs")
@@ -321,7 +323,7 @@ def between(conn: sqlite3.Connection, config: Config, start: datetime, end: date
         .order_by("id")
     )
     with db.read_snapshot(conn):
-        ran = [_ran(row) for row in sql.execute(conn, each)]
+        ran = [_ran(row) for row in each.all(conn)]
         recorded = _lines(conn, "recorded", since, until)
         refused = _lines(conn, "refused", since, until)
         newest = (
@@ -381,13 +383,20 @@ def _observed_at(
 ) -> dict[str, str]:
     if not subjects:
         return {}
-    rows = sql.execute(
-        conn,
-        sql.select("{}, observed_at", sql.name(column))
+    seen = (
+        records.view(_Seen, "{} AS subject, observed_at", sql.name(column))
         .from_(table)
-        .where("{} IN (SELECT value FROM json_each(?))", sql.name(column), json.dumps(sorted(subjects))),
+        .where("{} IN (SELECT value FROM json_each(?))", sql.name(column), json.dumps(sorted(subjects)))
     )
-    return {str(r[0]): str(r[1]) for r in rows}
+    return {s.subject: s.observed_at for s in seen.all(conn)}
+
+
+@dataclass(frozen=True)
+class _Seen(records.View):
+    """When canopy last observed a ticket or a PR, by its key or URL."""
+
+    subject: str
+    observed_at: str
 
 
 class _Ran(NamedTuple):
@@ -405,16 +414,29 @@ class _Ran(NamedTuple):
 
 
 # A row of `between`'s read: source, kind, status, whether a tick made it, its length in minutes, and its local day.
-def _ran(row: Sequence[object]) -> _Ran:
-    source, kind, status, by_tick, minutes, day = row
+def _ran(row: _Started) -> _Ran:
     return _Ran(
-        source=str(source),
-        kind=SourceKind(str(kind)),
-        status=ConnectorRunStatus(str(status)),
-        by_tick=bool(by_tick),
-        minutes=max(float(minutes) if isinstance(minutes, (int, float)) else 0.0, 0.0),
-        day=str(day),
+        source=row.source,
+        kind=row.kind,
+        status=row.status,
+        by_tick=row.by_tick,
+        minutes=max(row.minutes or 0.0, 0.0),
+        day=str(row.day),
     )
+
+
+@dataclass(frozen=True)
+class _Started(records.View):
+    """One run of a window, as the journal has it."""
+
+    source: str
+    kind: SourceKind
+    status: ConnectorRunStatus
+    by_tick: bool
+    #: How long it took; None when SQLite reads no time from its start or its end.
+    minutes: float | None
+    #: The local day it started on; None for a start SQLite reads no date from.
+    day: str | None
 
 
 # The sources that ran, in the order a tick runs those configured, then those no longer configured, by name.
@@ -464,13 +486,28 @@ def _per_day(ran: Iterable[_Ran], names: Sequence[str], start: datetime, end: da
 # and when the latest of those started.
 def _lines(conn: sqlite3.Connection, column: _Lines, since: str, until: str) -> dict[str, list[Lines]]:
     summed = (
-        sql.select("r.source, j.key, sum(j.value), count(DISTINCT r.id), max(r.started_at)")
+        records.view(
+            _Summed,
+            "r.source, j.key AS line, sum(j.value) AS lines, count(DISTINCT r.id) AS runs, max(r.started_at) AS last",
+        )
         .from_("connector_runs AS r, json_each(r.{}) AS j", sql.name(column))
         .where("r.started_at >= ? AND r.started_at < ?", since, until)
         .where("j.value > 0")
         .group_by("r.source, j.key")
     )
     found: dict[str, list[Lines]] = {}
-    for source, line, lines, runs, last in sql.execute(conn, summed):
-        found.setdefault(str(source), []).append(Lines(str(source), str(line), int(lines), int(runs), str(last)))
+    for row in summed.all(conn):
+        found.setdefault(row.source, []).append(Lines(row.source, row.line, int(row.lines), row.runs, row.last))
     return found
+
+
+@dataclass(frozen=True)
+class _Summed(records.View):
+    """One kind of line a source's runs recorded, or canopy refused, in a window."""
+
+    source: str
+    line: str
+    #: How many, a float where a run wrote one as such.
+    lines: float
+    runs: int
+    last: str
