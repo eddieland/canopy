@@ -104,7 +104,7 @@ def attempts(conn: sqlite3.Connection, *, ticket: str | None = None) -> dict[Uni
     """
     counts: dict[Unit, dict[str, int]] = {}
     query = (
-        sql.select("r.ticket_key, s.repo, r.kind, count(DISTINCT r.id)")
+        records.view(_KindRuns, "r.ticket_key, s.repo, r.kind, count(DISTINCT r.id) AS runs")
         .from_("runs r")
         .join("run_slots s ON s.run_id = r.id")
         .where_not_in("r.kind", _APART)
@@ -112,10 +112,21 @@ def attempts(conn: sqlite3.Connection, *, ticket: str | None = None) -> dict[Uni
     )
     if ticket is not None:
         query = query.where("r.ticket_key = ?", ticket)
-    for row in sql.execute(conn, query):
-        counts_of = counts.setdefault(unit(str(row[0]), row[1]), dict.fromkeys(KINDS, 0))
-        counts_of[counted_as(str(row[2]))] += int(row[3])
+    for row in query.all(conn):
+        counts_of = counts.setdefault(unit(row.ticket_key, row.repo), dict.fromkeys(KINDS, 0))
+        counts_of[counted_as(row.kind)] += row.runs
     return counts
+
+
+@dataclass(frozen=True)
+class _KindRuns(records.View):
+    """How many runs of one kind a unit has, or was granted."""
+
+    ticket_key: str
+    repo: str | None
+    #: The kind as its column holds it, which may be one since retired.
+    kind: str
+    runs: int
 
 
 def feedback_plan_attempts(conn: sqlite3.Connection) -> dict[Unit, int]:
@@ -123,15 +134,24 @@ def feedback_plan_attempts(conn: sqlite3.Connection) -> dict[Unit, int]:
 
     A feedback plan run leases its unit's slot, so it counts in each repository it read, as a `resume` would.
     """
-    rows = sql.execute(
-        conn,
-        sql.select("r.ticket_key, s.repo, count(DISTINCT r.id)")
+    rows = (
+        records.view(_UnitRuns, "r.ticket_key, s.repo, count(DISTINCT r.id) AS runs")
         .from_("runs r")
         .join("run_slots s ON s.run_id = r.id")
         .where("r.kind = ?", FEEDBACK_PLAN)
-        .group_by("r.ticket_key, s.repo"),
+        .group_by("r.ticket_key, s.repo")
+        .all(conn)
     )
-    return {unit(str(row[0]), row[1]): int(row[2]) for row in rows}
+    return {unit(row.ticket_key, row.repo): row.runs for row in rows}
+
+
+@dataclass(frozen=True)
+class _UnitRuns(records.View):
+    """How many runs a unit has."""
+
+    ticket_key: str
+    repo: str | None
+    runs: int
 
 
 def feedback_plan_limit(config: Config, granted: Mapping[str, int]) -> int:
@@ -142,14 +162,16 @@ def feedback_plan_limit(config: Config, granted: Mapping[str, int]) -> int:
 def grants(conn: sqlite3.Connection) -> dict[Unit, dict[str, int]]:
     """Return the runs of each kind the operator granted each unit past its policy limit. Units without are missing."""
     granted: dict[Unit, dict[str, int]] = {}
-    rows = sql.execute(
-        conn,
-        sql.select("ticket_key, repo, kind, sum(runs)").from_("attempt_grants").group_by("ticket_key, repo, kind"),
+    rows = (
+        records.view(_KindRuns, "ticket_key, repo, kind, sum(runs) AS runs")
+        .from_("attempt_grants")
+        .group_by("ticket_key, repo, kind")
+        .all(conn)
     )
     for row in rows:
-        of_unit = granted.setdefault(unit(str(row[0]), str(row[1])), {})
-        kind = counted_as(str(row[2]))
-        of_unit[kind] = of_unit.get(kind, 0) + int(row[3])
+        of_unit = granted.setdefault(unit(row.ticket_key, str(row.repo)), {})
+        kind = counted_as(row.kind)
+        of_unit[kind] = of_unit.get(kind, 0) + row.runs
     return granted
 
 
@@ -253,11 +275,16 @@ def ticket_limit(conn: sqlite3.Connection, config: Config, key: str, kind: str) 
 
 def ticket_grants(conn: sqlite3.Connection, kind: str) -> dict[str, int]:
     """Return the runs of `kind` the operator granted each ticket past its policy limit. Tickets without are missing."""
-    rows = sql.execute(
-        conn,
-        sql.select("ticket_key, sum(runs)").from_("ticket_grants").where("kind = ?", kind).group_by("ticket_key"),
-    )
-    return {str(r[0]): int(r[1]) for r in rows}
+    granted = records.view(_TicketRuns, "ticket_key, sum(runs) AS runs").from_("ticket_grants")
+    return {r.ticket_key: r.runs for r in granted.where("kind = ?", kind).group_by("ticket_key").all(conn)}
+
+
+@dataclass(frozen=True)
+class _TicketRuns(records.View):
+    """How many runs of one kind a ticket has, or was granted."""
+
+    ticket_key: str
+    runs: int
 
 
 def ticket_attempts(conn: sqlite3.Connection, kind: str) -> dict[str, int]:
@@ -265,11 +292,8 @@ def ticket_attempts(conn: sqlite3.Connection, kind: str) -> dict[str, int]:
 
     Tickets with no such run are missing.
     """
-    rows = sql.execute(
-        conn,
-        sql.select("ticket_key, count(*)").from_("runs").where("kind = ?", kind).group_by("ticket_key"),
-    )
-    return {str(r[0]): int(r[1]) for r in rows}
+    ran = records.view(_TicketRuns, "ticket_key, count(*) AS runs").from_("runs")
+    return {r.ticket_key: r.runs for r in ran.where("kind = ?", kind).group_by("ticket_key").all(conn)}
 
 
 def unit_attempts(conn: sqlite3.Connection, key: str, repo: str | None) -> dict[str, int]:
@@ -322,20 +346,28 @@ def ci_cooldowns(conn: sqlite3.Connection, config: Config, now: datetime) -> dic
     until: dict[Unit, datetime] = {}
     for_ci = sql.select("1").from_("run_reasons w").where("w.run_id = r.id AND w.reason = ?", ResumeReason.CI)
     worked_on_ci = (
-        sql.select("r.ticket_key, s.repo, max(r.ended_at)")
+        records.view(_LastEnded, "r.ticket_key, s.repo, max(r.ended_at) AS ended_at")
         .from_("runs r")
         .join("run_slots s ON s.run_id = r.id")
         .where("r.ended_at IS NOT NULL")
         .where("r.kind = ? OR (r.kind = ? AND EXISTS ({}))", RETIRED, RunKind.RESUME, for_ci)
         .group_by("r.ticket_key, s.repo")
     )
-    rows = sql.execute(conn, worked_on_ci)
-    for row in rows:
-        ends = db.parse_time(str(row[2])) + window
-        name = unit(str(row[0]), row[1])
+    for row in worked_on_ci.all(conn):
+        ends = db.parse_time(row.ended_at) + window
+        name = unit(row.ticket_key, row.repo)
         if ends > now and (name not in until or ends > until[name]):
             until[name] = ends
     return until
+
+
+@dataclass(frozen=True)
+class _LastEnded(records.View):
+    """When the last of a unit's runs that worked on CI ended."""
+
+    ticket_key: str
+    repo: str | None
+    ended_at: str
 
 
 def blocked(

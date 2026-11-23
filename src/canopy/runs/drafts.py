@@ -93,18 +93,14 @@ def record_run(conn: sqlite3.Connection, run_id: int, fields: Fields | None) -> 
     rendered = run_replies(conn, run_id)
     if rendered is None or rendered.mode is not ReplyMode.APPROVE or fields is None or fields.drafts is None:
         return []
-    run = sql.execute(
-        conn,
-        sql.select("ticket_key, tick_id, started_at, feedback_plan_id").from_("runs").where("id = ?", run_id),
-    ).fetchone()
-    plan_id = run["feedback_plan_id"]
+    [run] = records.view(_Run).from_("runs").where("id = ?", run_id).all(conn)
     writing = _Writing(
         run_id=run_id,
-        ticket_key=str(run["ticket_key"]),
-        basis=str(run["started_at"]),
-        prs=_run_prs(conn, run_id, str(run["ticket_key"])),
+        ticket_key=run.ticket_key,
+        basis=run.started_at,
+        prs=_run_prs(conn, run_id, run.ticket_key),
         ticket_drafts=rendered.ticket_drafts,
-        plan_id=None if plan_id is None else int(plan_id),
+        plan_id=run.feedback_plan_id,
     )
     entries: list[JsonValue] = fields.drafts if isinstance(fields.drafts, list) else []
     if not isinstance(fields.drafts, list):
@@ -123,10 +119,20 @@ def record_run(conn: sqlite3.Connection, run_id: int, fields: Fields | None) -> 
         .where("run_id = ?", run_id)
         .run(conn)
     )
-    log = logs.for_tick(int(run["tick_id"]))
+    log = logs.for_tick(run.tick_id)
     for r in writing.refused:
         log.info("draft refused", extra={"run_id": run_id, **r.as_json()})
     return writing.refused
+
+
+@dataclass(frozen=True)
+class _Run(records.View):
+    """What a run's drafts take from its row."""
+
+    ticket_key: str
+    tick_id: int
+    started_at: str
+    feedback_plan_id: int | None
 
 
 @dataclass
@@ -150,10 +156,16 @@ def _run_prs(conn: sqlite3.Connection, run_id: int, key: str) -> dict[str, str]:
     Returns:
         Each PR's URL, to its repository.
     """
-    repos = {
-        str(r["repo"]) for r in sql.execute(conn, sql.select("repo").from_("run_slots").where("run_id = ?", run_id))
-    }
+    slots = records.view(_Repo).from_("run_slots").where("run_id = ?", run_id).all(conn)
+    repos = {str(s.repo) for s in slots}
     return {str(u.pr_url): str(u.repo) for u in db.units(conn, key) if u.pr_url and u.repo in repos}
+
+
+@dataclass(frozen=True)
+class _Repo(records.View):
+    """The repository of a slot a run leased."""
+
+    repo: str | None
 
 
 def _write(conn: sqlite3.Connection, writing: _Writing, number: int, entry: JsonValue) -> None:
@@ -246,17 +258,17 @@ def _thread_of(conn: sqlite3.Connection, plan_id: int, pr: str, comment: int) ->
     Returns:
         The thread's id, or None when neither holds the comment.
     """
-    seen = sql.execute(
-        conn,
-        sql.select("thread_id")
+    seen = (
+        records.view(_Thread)
         .from_("feedback_plan_seen")
         .where("plan_id = ?", plan_id)
         .where("pr_url = ?", pr)
         .where("item = ?", ReviewItem.COMMENT)
-        .where("item_id = ?", comment),
-    ).fetchone()
+        .where("item_id = ?", comment)
+        .one(conn)
+    )
     if seen is not None:
-        return str(seen["thread_id"])
+        return str(seen.thread_id)
     return records.fetch_value(
         conn,
         str,
@@ -266,6 +278,13 @@ def _thread_of(conn: sqlite3.Connection, plan_id: int, pr: str, comment: int) ->
         .where("item = ?", ReviewItem.COMMENT)
         .where("id = ?", comment),
     )
+
+
+@dataclass(frozen=True)
+class _Thread(records.View):
+    """The thread a review comment is in, as a read of its PR recorded it."""
+
+    thread_id: str | None
 
 
 def _words(kind: DraftKind, entry: Mapping[str, JsonValue]) -> tuple[str, Reaction | None]:
@@ -378,7 +397,8 @@ def sent_by_pr(conn: sqlite3.Connection, prs: Collection[str] | None = None) -> 
     """
     found: dict[str, dict[str, list[int]]] = {}
     query = (
-        sql.select(
+        records.view(
+            _Sent,
             "pr_url, sent_comment_id, CASE WHEN status = ? THEN pending_review_id ELSE sent_review_id END "
             "AS sent_review_id",
             DraftStatus.STAGED,
@@ -388,14 +408,21 @@ def sent_by_pr(conn: sqlite3.Connection, prs: Collection[str] | None = None) -> 
         .where("pr_url IS NOT NULL")
         .order_by("pr_url, sent_at IS NULL, sent_at, id")
     )
-    rows = sql.execute(conn, query if prs is None else query.where_in("pr_url", sorted(prs)))
-    for r in rows:
-        sent = found.setdefault(str(r["pr_url"]), {"comments": [], "reviews": []})
-        for name, column in (("comments", "sent_comment_id"), ("reviews", "sent_review_id")):
-            value = r[column]
-            if value is not None and int(value) not in sent[name]:
-                sent[name].append(int(value))
+    for r in (query if prs is None else query.where_in("pr_url", sorted(prs))).all(conn):
+        sent = found.setdefault(r.pr_url, {"comments": [], "reviews": []})
+        for name, value in (("comments", r.sent_comment_id), ("reviews", r.sent_review_id)):
+            if value is not None and value not in sent[name]:
+                sent[name].append(value)
     return found
+
+
+@dataclass(frozen=True)
+class _Sent(records.View):
+    """What a sent or staged draft left on its PR: the comment's id, or the review's, staged or submitted."""
+
+    pr_url: str
+    sent_comment_id: int | None
+    sent_review_id: int | None
 
 
 def was_sent(review: records.ObservedReview, sent: Mapping[str, Mapping[str, Sequence[int]]]) -> bool:
@@ -425,11 +452,15 @@ def unchecked_prs(conn: sqlite3.Connection) -> list[str]:
     Returns:
         The PRs' URLs, in order.
     """
-    rows = sql.execute(
-        conn,
-        sql.select("pr_url").unique().from_("drafts").where("status = ?", DraftStatus.UNCHECKED).order_by("pr_url"),
-    )
-    return [str(r["pr_url"]) for r in rows]
+    unchecked = records.view(_Pr).unique().from_("drafts").where("status = ?", DraftStatus.UNCHECKED)
+    return [str(r.pr_url) for r in unchecked.order_by("pr_url").all(conn)]
+
+
+@dataclass(frozen=True)
+class _Pr(records.View):
+    """A PR some draft names, by its URL."""
+
+    pr_url: str | None
 
 
 def check(conn: sqlite3.Connection, whole: Collection[str]) -> list[records.Draft]:
@@ -461,18 +492,18 @@ def check(conn: sqlite3.Connection, whole: Collection[str]) -> list[records.Draf
 def _check_one(conn: sqlite3.Connection, draft: records.Draft, now: str) -> None:
     thread: str | None = None
     if draft.kind is DraftKind.THREAD:
-        row = sql.execute(
-            conn,
-            sql.select("thread_id")
+        row = (
+            records.view(_Thread)
             .from_("observed_reviews")
             .where("pr_url = ?", draft.pr_url)
             .where("item = 'comment'")
-            .where("id = ?", draft.comment_id),
-        ).fetchone()
+            .where("id = ?", draft.comment_id)
+            .one(conn)
+        )
         if row is None:
             _refuse(conn, draft, f"unknown_thread: {draft.pr_url} has no review comment {draft.comment_id}")
             return
-        thread = str(row["thread_id"])
+        thread = str(row.thread_id)
         twin = records.fetch_value(
             conn,
             int,

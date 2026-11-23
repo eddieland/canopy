@@ -330,12 +330,19 @@ def not_ci(conn: sqlite3.Connection, roles: CheckRoles, prs: Iterable[str]) -> d
     Returns:
         Their names, by PR URL; none for a PR no unit has, or whose repository the map does not have.
     """
-    rows = sql.execute(conn, sql.select("pr_url, repo").from_("ticket_units").where_in("pr_url", tuple(prs)))
+    units = records.view(_UnitPr).from_("ticket_units").where_in("pr_url", tuple(prs)).all(conn)
     found: dict[str, frozenset[str]] = {}
-    for row in rows:
-        repo = None if row[1] is None else str(row[1])
-        found[str(row[0])] = frozenset(name for name, role in roles(repo).items() if role is not CheckRole.CI)
+    for unit in units:
+        found[unit.pr_url] = frozenset(name for name, role in roles(unit.repo).items() if role is not CheckRole.CI)
     return found
+
+
+@dataclass(frozen=True)
+class _UnitPr(records.View):
+    """A unit's PR and repository, as `not_ci` reads them."""
+
+    pr_url: str
+    repo: str | None
 
 
 def _window(

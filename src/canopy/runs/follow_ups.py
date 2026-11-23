@@ -220,7 +220,7 @@ def unrecorded(conn: sqlite3.Connection) -> list[Item]:
         One item per ticket, by key.
     """
     refused = (
-        sql.select("r.id, r.ticket_key, r.result_json")
+        records.view(_ReportedRun, "r.id, r.ticket_key, r.result_json")
         .from_("runs r")
         .join("tickets t ON t.key = r.ticket_key")
         .where("t.done = 0")
@@ -229,13 +229,12 @@ def unrecorded(conn: sqlite3.Connection) -> list[Item]:
         .where("json_type(r.result_json, ?) = 'object'", f"$.{STORED}")
         .order_by("r.ticket_key, r.id")
     )
-    rows = sql.execute(conn, refused).fetchall()
     by_ticket: dict[str, list[str]] = {}
-    for row in rows:
-        stored = contract.stored_object(row["result_json"]).get(STORED)
+    for row in refused.all(conn):
+        stored = contract.stored_object(row.result_json).get(STORED)
         said = _said(cast("Mapping[str, object]", stored)) if isinstance(stored, dict) else ""
         if said:
-            by_ticket.setdefault(str(row["ticket_key"]), []).append(f"run:{row['id']} reported {said}")
+            by_ticket.setdefault(row.ticket_key, []).append(f"run:{row.id} reported {said}")
     return [
         Item(
             key,
@@ -247,6 +246,15 @@ def unrecorded(conn: sqlite3.Connection) -> list[Item]:
         )
         for key, runs in sorted(by_ticket.items())
     ]
+
+
+@dataclass(frozen=True)
+class _ReportedRun(records.View):
+    """A run whose stored result holds follow-ups canopy did not record."""
+
+    id: int
+    ticket_key: str
+    result_json: str
 
 
 def known_ticket(conn: sqlite3.Connection, key: str) -> bool:

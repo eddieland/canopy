@@ -980,13 +980,20 @@ def unsettled_prs(conn: sqlite3.Connection) -> list[str]:
     Returns:
         The PRs' URLs, in order.
     """
-    rows = sql.execute(
-        conn,
-        sql.select("pr_url")
+    rows = (
+        records.view(_Pr)
         .unique()
         .from_("drafts")
         .where_in("status", (DraftStatus.UNCONFIRMED, DraftStatus.STAGED))
         .where("pending_review_id IS NOT NULL")
-        .order_by("pr_url"),
+        .order_by("pr_url")
+        .all(conn)
     )
-    return [str(r["pr_url"]) for r in rows]
+    return [str(r.pr_url) for r in rows]
+
+
+@dataclass(frozen=True)
+class _Pr(records.View):
+    """A PR some draft names, by its URL."""
+
+    pr_url: str | None

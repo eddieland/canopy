@@ -138,25 +138,33 @@ def _kept_diff(conn: sqlite3.Connection, url: str) -> tuple[int, Path] | None:
     Returns:
         The run's id and its diff's path, or None when no run kept one.
     """
-    unit = sql.execute(conn, sql.select("ticket_key, repo").from_("ticket_units").where("pr_url = ?", url)).fetchone()
+    unit = records.view(_Unit).from_("ticket_units").where("pr_url = ?", url).one(conn)
     if unit is None:
         return None
     query = (
         sql.select("r.id, r.log_path")
         .from_("runs r")
         .join("run_changes c ON c.run_id = r.id")
-        .where("r.ticket_key = ?", unit["ticket_key"])
-        .where("c.repo = ?", unit["repo"])
+        .where("r.ticket_key = ?", unit.ticket_key)
+        .where("c.repo = ?", unit.repo)
         .where("c.branch_kept = 1")
         .where("c.unpushed_sha IS NULL")
         .order_by("r.id DESC")
         .limit(20)
     )
     for r in records.fetch_all(conn, _KeptBy, query):
-        path = review_diff.run_path_for(r.log_path, str(unit["repo"]))
+        path = review_diff.run_path_for(r.log_path, str(unit.repo))
         if path.is_file():
             return r.id, path
     return None
+
+
+@dataclass(frozen=True)
+class _Unit(records.View):
+    """The unit a PR is of: its ticket and its repository."""
+
+    ticket_key: str
+    repo: str | None
 
 
 @dataclass(frozen=True)
@@ -174,15 +182,15 @@ def _missing_diff(conn: sqlite3.Connection, url: str) -> MissingDiff | None:
         That run, and why its end kept no diff of the branch, or that retention removed it; None when no run of the
         PR's unit recorded what it left on origin.
     """
-    unit = sql.execute(conn, sql.select("ticket_key, repo").from_("ticket_units").where("pr_url = ?", url)).fetchone()
+    unit = records.view(_Unit).from_("ticket_units").where("pr_url = ?", url).one(conn)
     if unit is None:
         return None
     query = (
         sql.select("r.id, r.log_path, r.ended_at, c.branch_kept, c.missing")
         .from_("runs r")
         .join("run_changes c ON c.run_id = r.id")
-        .where("r.ticket_key = ?", unit["ticket_key"])
-        .where("c.repo = ?", unit["repo"])
+        .where("r.ticket_key = ?", unit.ticket_key)
+        .where("c.repo = ?", unit.repo)
         .where("c.unpushed_sha IS NULL")
         .order_by("r.id DESC")
         .limit(1)
@@ -193,7 +201,7 @@ def _missing_diff(conn: sqlite3.Connection, url: str) -> MissingDiff | None:
     if not found.branch_kept:
         # Its end recorded why, as a crashed run's does.
         return MissingDiff(run=found.id, missing=found.missing)
-    path = review_diff.run_path_for(found.log_path, str(unit["repo"]))
+    path = review_diff.run_path_for(found.log_path, str(unit.repo))
     return MissingDiff(run=found.id, removed_after_days=removed_after(conn, path, found.ended_at, "run_files_days"))
 
 

@@ -140,10 +140,11 @@ def read_whole(conn: sqlite3.Connection, tick_id: int) -> bool | None:
         True when each of its runs read everything it was asked, False when one did not, and None when it ran no
         source: none is configured, or its reconcile failed.
     """
-    rows = sql.execute(conn, sql.select("status").from_("connector_runs").where("tick_id = ?", tick_id)).fetchall()
-    if not rows:
+    query = sql.select("status").from_("connector_runs").where("tick_id = ?", tick_id)
+    statuses = records.fetch_values(conn, ConnectorRunStatus, query)
+    if not statuses:
         return None
-    return all(row[0] == ConnectorRunStatus.OK for row in rows)
+    return all(status is ConnectorRunStatus.OK for status in statuses)
 
 
 @dataclass(frozen=True)

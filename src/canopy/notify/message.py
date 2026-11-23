@@ -509,8 +509,16 @@ def titles(conn: sqlite3.Connection) -> dict[str, str]:
     Returns:
         Titles by ticket key. A ticket with no title is left out.
     """
-    q = sql.select("key, title").from_("tickets").where("title IS NOT NULL")
-    return {str(r[0]): str(r[1]) for r in sql.execute(conn, q)}
+    titled = records.view(_Titled).from_("tickets").where("title IS NOT NULL").all(conn)
+    return {t.key: t.title for t in titled}
+
+
+@dataclass(frozen=True)
+class _Titled(records.View):
+    """A ticket that has a title."""
+
+    key: str
+    title: str
 
 
 def digest(

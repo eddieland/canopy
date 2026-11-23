@@ -119,15 +119,15 @@ def last_served(conn: sqlite3.Connection, ticket: str) -> dict[Agent, str]:
     served: LiteralString = "run_models m ON m.run_table = ? AND m.run_id = r.id"
     latest_first: LiteralString = "r.started_at DESC, r.id DESC, m.cost_usd DESC, m.model"
     workers = (
-        sql.select("r.kind, m.model")
+        records.view(_Served, "r.kind, m.model")
         .from_("runs r")
         .join(served, "runs")
         .where("r.ticket_key = ?", ticket)
         .order_by(latest_first)
     )
     found: dict[Agent, str] = {}
-    for row in sql.execute(conn, workers):
-        found.setdefault(agent_of(str(row[0])), str(row[1]))
+    for served_run in workers.all(conn):
+        found.setdefault(agent_of(served_run.kind), served_run.model)
     reviews = (
         sql.select("m.model")
         .from_("review_runs r")
@@ -136,9 +136,18 @@ def last_served(conn: sqlite3.Connection, ticket: str) -> dict[Agent, str]:
         .order_by(latest_first)
         .limit(1)
     )
-    for row in sql.execute(conn, reviews):
-        found["reviewer"] = str(row[0])
+    reviewer = records.fetch_value(conn, str, reviews)
+    if reviewer is not None:
+        found["reviewer"] = reviewer
     return found
+
+
+@dataclass(frozen=True)
+class _Served(records.View):
+    """A model that served one of a ticket's worker runs, with the run's kind."""
+
+    kind: str
+    model: str
 
 
 def choose(

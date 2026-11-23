@@ -7,10 +7,11 @@ through a link, as `canopy show task:N` reads it.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
-from canopy.core import contract, conversation, db, plans, run_models, sql
+from canopy.core import contract, conversation, db, plans, records, run_models
 from canopy.core.vocab import RunStatus
 from canopy.runs import task_tickets, tasks
 from canopy.serve import change_views, checklist_views, views
@@ -23,7 +24,6 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from collections.abc import Set as AbstractSet
 
-    from canopy.core import records
     from canopy.core.context import Context
     from canopy.serve.schema import ReviewDiff
     from canopy.serve.schema.task import TaskStanding
@@ -265,8 +265,16 @@ def _run_counts(conn: sqlite3.Connection) -> dict[int, int]:
     Returns:
         The counts.
     """
-    query = sql.select("task_id, count(*)").from_("task_runs").group_by("task_id")
-    return {int(r[0]): int(r[1]) for r in sql.execute(conn, query)}
+    counted = records.view(_Runs, "task_id, count(*) AS runs").from_("task_runs").group_by("task_id")
+    return {task.task_id: task.runs for task in counted.all(conn)}
+
+
+@dataclass(frozen=True)
+class _Runs(records.View):
+    """How many runs a task has had."""
+
+    task_id: int
+    runs: int
 
 
 def _ticket(row: records.TaskTicket) -> TaskTicket:

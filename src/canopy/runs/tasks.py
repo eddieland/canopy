@@ -254,12 +254,20 @@ def newest_messages(conn: sqlite3.Connection) -> dict[int, int]:
         The ids.
     """
     query = (
-        sql.select("subject_id, max(id)")
+        records.view(_Newest, "subject_id, max(id) AS message_id")
         .from_("messages")
         .where("subject_kind = ?", conversation.TASK)
         .group_by("subject_id")
     )
-    return {int(r[0]): int(r[1]) for r in sql.execute(conn, query)}
+    return {int(r.subject_id): r.message_id for r in query.all(conn)}
+
+
+@dataclass(frozen=True)
+class _Newest(records.View):
+    """A task's newest message, the task named as its messages name it."""
+
+    subject_id: str
+    message_id: int
 
 
 def runs_of(conn: sqlite3.Connection, task_id: int) -> list[records.TaskRun]:

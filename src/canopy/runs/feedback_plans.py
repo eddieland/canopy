@@ -271,11 +271,15 @@ def repos(conn: sqlite3.Connection, plan: records.FeedbackPlan) -> tuple[str, ..
     Returns:
         Their names, in order.
     """
-    rows = sql.execute(
-        conn,
-        sql.select("repo").from_("run_slots").where("run_id = ?", plan.run_id).order_by("repo"),
-    ).fetchall()
-    return tuple(str(r[0]) for r in rows)
+    rows = records.view(_Repo).from_("run_slots").where("run_id = ?", plan.run_id).order_by("repo").all(conn)
+    return tuple(str(r.repo) for r in rows)
+
+
+@dataclass(frozen=True)
+class _Repo(records.View):
+    """The repository of a slot a run leased."""
+
+    repo: str | None
 
 
 def rationales(text: str) -> dict[int, str]:

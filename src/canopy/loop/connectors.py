@@ -105,17 +105,22 @@ def tracker_request(ctx: Context) -> observe.Request:
     """
     stopped = conversation.stopped(ctx.conn)
     keys = [t.key for t in db.open_tickets(ctx.conn) if t.key not in stopped]
-    newest = {
-        str(r[0]): str(r[1])
-        for r in sql.execute(
-            ctx.conn,
-            sql.select("ticket, max(commented_at)").from_("observed_comments").group_by("ticket"),
-        )
-    }
+    commented = (
+        records.view(_Commented, "ticket, max(commented_at) AS newest").from_("observed_comments").group_by("ticket")
+    )
+    newest = {c.ticket: c.newest for c in commented.all(ctx.conn)}
     return observe.Request(
         query=ctx.config.tracker.query,
         tickets=[observe.AskedTicket(key, newest.get(key)) for key in keys],
     )
+
+
+@dataclass(frozen=True)
+class _Commented(records.View):
+    """A ticket and when its newest comment the connector recorded was made."""
+
+    ticket: str
+    newest: str
 
 
 def vcs_request(ctx: Context) -> observe.Request:

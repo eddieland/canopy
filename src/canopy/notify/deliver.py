@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Final
 
 from canopy.core import contract, db, outbox, records, run_metrics, spend, sql
 from canopy.core.config import Sink, notify_words
+from canopy.core.vocab import TickStatus
 from canopy.infra import procs
 from canopy.notify import journal, message
 
@@ -191,13 +192,11 @@ def status(ctx: Context) -> list[SinkStatus]:
 
 def _record_loop_events(ctx: Context) -> None:
     """Record `loop.failing` once when the latest ticks all failed, and `loop.recovered` at the first `ok` after it."""
-    latest = sql.execute(
-        ctx.conn,
-        sql.select("id, status").from_("ticks").where("status != 'running'").order_by("id DESC").limit(1),
-    ).fetchone()
+    ended = records.view(_Ended).from_("ticks").where("status != 'running'").order_by("id DESC").limit(1)
+    latest = ended.one(ctx.conn)
     if latest is None:
         return
-    tick_id, status = int(latest[0]), str(latest[1])
+    tick_id, status = latest.id, latest.status
     # Pruning always keeps the newest of these (journal.prune_events), so a long streak is never taken for a new one.
     last = records.fetch_value(
         ctx.conn,
@@ -209,14 +208,22 @@ def _record_loop_events(ctx: Context) -> None:
         .limit(1),
     )
     failing = last == "loop.failing"
-    if status == "ok":
+    if status is TickStatus.OK:
         if failing:
             db.record_event(ctx.conn, outbox.loop_recovered(_failed_before(ctx.conn, tick_id)))
         return
     streak = _failed_before(ctx.conn, tick_id + 1)
     if streak >= FAILING_AFTER and not failing:
         log_path = ctx.state_dir / "ticks" / f"{tick_id}.log"
-        db.record_event(ctx.conn, outbox.loop_failing(streak, status, tick_id, str(log_path)))
+        db.record_event(ctx.conn, outbox.loop_failing(streak, status.value, tick_id, str(log_path)))
+
+
+@dataclass(frozen=True)
+class _Ended(records.View):
+    """A tick that ended, and how."""
+
+    id: int
+    status: TickStatus
 
 
 def _record_budget_event(ctx: Context, now: datetime) -> None:

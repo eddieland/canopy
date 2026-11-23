@@ -132,7 +132,7 @@ def running_marks(conn: sqlite3.Connection) -> dict[str, tuple[int, int]]:
         a ticket whose running runs were sent none is not listed.
     """
     query = (
-        sql.select("r.ticket_key, count(m.delivered_at), count(m.fetched_at)")
+        records.view(_Sent, "r.ticket_key, count(m.delivered_at) AS delivered, count(m.fetched_at) AS fetched")
         .from_("runs r")
         # Through the ticket's own messages, which the subject's index finds, rather than every message's run.
         .join(
@@ -142,7 +142,16 @@ def running_marks(conn: sqlite3.Connection) -> dict[str, tuple[int, int]]:
         .where("r.status = ?", RunStatus.RUNNING)
         .group_by("r.ticket_key")
     )
-    return {str(r[0]): (int(r[1]), int(r[2])) for r in sql.execute(conn, query)}
+    return {sent.ticket_key: (sent.delivered, sent.fetched) for sent in query.all(conn)}
+
+
+@dataclass(frozen=True)
+class _Sent(records.View):
+    """The messages sent to one ticket's running runs: how many canopy wrote out, and how many the agents fetched."""
+
+    ticket_key: str
+    delivered: int
+    fetched: int
 
 
 def mark_sent(conn: sqlite3.Connection, table: MessageTable, run_id: int, message_id: int) -> None:

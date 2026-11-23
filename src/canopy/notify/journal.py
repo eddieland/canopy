@@ -166,13 +166,8 @@ def diff(conn: sqlite3.Connection, sink_name: str, items: Sequence[Item], dismis
         The items the sink was not told of, and those it was told of that are no longer open, by subject and reason,
         each marked whether it was dismissed.
     """
-    told = {
-        str(r["fingerprint"]): (r["ticket_key"], str(r["reason"]), r["repo"])
-        for r in sql.execute(
-            conn,
-            sql.select("fingerprint, ticket_key, reason, repo").from_("notifications").where("sink = ?", sink_name),
-        )
-    }
+    sent = records.select(records.Notification).where("sink = ?", sink_name).all(conn)
+    told = {n.fingerprint: (n.ticket_key, n.reason, n.repo) for n in sent}
     now_open = {item_fingerprint(i) for i in items}
     added = [i for i in items if item_fingerprint(i) not in told]
     gone = sorted(

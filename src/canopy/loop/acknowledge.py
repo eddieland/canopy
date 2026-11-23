@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
 from canopy.core import conversation, db, records, sql
@@ -42,7 +43,7 @@ def note(conn: sqlite3.Connection, tick_id: int) -> dict[str, int]:
     if tick is None or tick.message_id is None:
         return {}
     unanswered = (
-        sql.select("id, subject_id")
+        records.view(_Read)
         .from_("messages")
         .where(
             "subject_kind = ? AND source = 'operator' AND id > ? AND id <= ?",
@@ -52,10 +53,9 @@ def note(conn: sqlite3.Connection, tick_id: int) -> dict[str, int]:
         )
         .order_by("id")
     )
-    rows = sql.execute(conn, unanswered).fetchall()
     read: defaultdict[str, list[int]] = defaultdict(list)
-    for row in rows:
-        read[str(row["subject_id"])].append(int(row["id"]))
+    for message in unanswered.all(conn):
+        read[message.subject_id].append(message.id)
     # A cursor the harness moved decided nothing about the ticket, so the note leaves it out.
     decisions = [d for d in db.decisions_for_tick(conn, tick_id) if d.action != harness.CURSOR_ACTION]
     return {
@@ -67,6 +67,14 @@ def note(conn: sqlite3.Connection, tick_id: int) -> dict[str, int]:
         )
         for key, ids in sorted(read.items())
     }
+
+
+@dataclass(frozen=True)
+class _Read(records.View):
+    """A message the operator sent a ticket, and the ticket."""
+
+    id: int
+    subject_id: str
 
 
 def _noted_up_to(conn: sqlite3.Connection, tick_id: int) -> int:
