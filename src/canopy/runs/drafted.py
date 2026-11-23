@@ -65,6 +65,10 @@ def _check(ctx: Context, whole: Collection[str], log: logs.TickAdapter) -> None:
         log.info("drafts checked", extra={"prs": sorted(whole), **counts})
 
 
+#: The statuses of a draft that waits on the operator: to send it, once a read has checked it, or to submit on GitHub
+#: the review they staged it in.
+_UNSENT: Final = (DraftStatus.UNCHECKED, DraftStatus.WAITING, DraftStatus.STAGED)
+
 #: The attention reason drafts waiting on the operator raise (DESIGN §14, §29): the harness's, and the operator's alone.
 WAITING_REASON: Final = "drafts_waiting"
 
@@ -136,8 +140,3 @@ def unsent(conn: sqlite3.Connection) -> list[records.Draft]:
         .order_by("d.ticket_key, d.repo IS NULL, d.repo, d.pr_url, d.run_id, d.number")
         .all(conn)
     )
-
-
-#: The statuses of a draft that waits on the operator: to send it, once a read has checked it, or to submit on GitHub
-#: the review they staged it in.
-_UNSENT: Final = (DraftStatus.UNCHECKED, DraftStatus.WAITING, DraftStatus.STAGED)

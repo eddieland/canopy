@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, useLocation } from '@tanstack/react-router'
 import { MessageSquareReply } from 'lucide-react'
+import { useEffect } from 'react'
 
 import { unsentDraftsQuery } from '@/api/queries'
 import type { UnsentDrafts } from '@/api/types'
@@ -42,6 +43,15 @@ export const Route = createFileRoute('/pull-requests/drafts')({
 function DraftsPage() {
     const query = useQuery(unsentDraftsQuery)
     const { data } = query
+    // A ticket's chip links to its group (`#drafts-ABC-099`), which is not drawn until the drafts are read: brought
+    // into view once it is.
+    const hash = useLocation({ select: (location) => location.hash })
+    const read = data !== undefined
+    useEffect(() => {
+        if (read && hash !== '') {
+            document.querySelector(`#${CSS.escape(hash)}`)?.scrollIntoView({ block: 'start' })
+        }
+    }, [hash, read])
     return (
         <>
             <PageHeader title="Drafts">
