@@ -405,14 +405,13 @@ def spend(conn: sqlite3.Connection, plan_id: int, run_id: int) -> bool:
     Returns:
         False when the plan is no longer approved and unspent, and nothing was recorded: the run must not start.
     """
-    row = (
+    spent = (
         records.update(records.FeedbackPlan)
         .set(spent_run_id=run_id)
         .where("id = ? AND status = ? AND spent_run_id IS NULL", plan_id, PlanStatus.APPROVED)
         .returning("id")
-        .run(conn)
-    ).fetchone()
-    return row is not None
+    )
+    return records.exists(conn, spent)
 
 
 def dispatch_refusal(
@@ -786,28 +785,29 @@ def changes_asked(conn: sqlite3.Connection, ticket: records.Ticket) -> str | Non
     plan = current(conn, key)
     if plan is not None and plan.status is PlanStatus.APPROVED:
         return None
-    started = sql.execute(
+    started = records.fetch_value(
         conn,
+        str,
         sql.select("max(started_at)")
         .from_("runs")
         .where("ticket_key = ? AND kind = ? AND id > ?", key, RunKind.FEEDBACK_PLAN, ticket.forgotten_run_id or 0),
-    ).fetchone()[0]
+    )
     replied = _replied(conn, ticket)
-    since = max(plan.created_at if plan is not None else "", str(started) if started is not None else "")
+    since = max(plan.created_at if plan is not None else "", started if started is not None else "")
     return replied if replied is not None and since and replied > since else None
 
 
 def _replied(conn: sqlite3.Connection, ticket: records.Ticket) -> str | None:
     # An approval's own message is an instruction: it answers no question and asks for no change.
-    found = sql.execute(
+    return records.fetch_value(
         conn,
+        str,
         sql.select("max(at)")
         .from_("messages")
         .where("subject_kind = ? AND subject_id = ?", conversation.TICKET, ticket.key)
         .where("source = 'operator' AND id > ?", ticket.forgotten_message_id or 0)
         .where("coalesce(submission, '') NOT GLOB ?", f"{conversation.INSTRUCTION}*"),
-    ).fetchone()[0]
-    return None if found is None else str(found)
+    )
 
 
 class NewestFeedbackPlan(TypedDict):

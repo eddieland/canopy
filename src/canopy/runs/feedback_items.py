@@ -455,11 +455,11 @@ def prs_of(conn: sqlite3.Connection, plan_id: int) -> list[str]:
     Returns:
         Their URLs, in order; none for a plan recorded before snapshots were.
     """
-    rows = sql.execute(
+    return records.fetch_values(
         conn,
+        str,
         sql.select("pr_url").from_("feedback_plan_prs").where("plan_id = ?", plan_id).order_by("pr_url"),
     )
-    return [str(r[0]) for r in rows]
 
 
 def said(found: Sequence[Change]) -> str:
@@ -662,14 +662,13 @@ def _covered_comments(conn: sqlite3.Connection, key: str, pr: str) -> frozenset[
     Returns:
         Their observed ids.
     """
-    rows = sql.execute(
-        conn,
+    covered = (
         sql.select("i.item_id")
         .from_("feedback_plan_items i")
         .join("feedback_plans p ON p.id = i.plan_id")
-        .where("p.ticket_key = ? AND i.pr_url = ? AND i.item = ?", key, pr, ReviewItem.COMMENT),
+        .where("p.ticket_key = ? AND i.pr_url = ? AND i.item = ?", key, pr, ReviewItem.COMMENT)
     )
-    return frozenset(int(r[0]) for r in rows)
+    return frozenset(records.fetch_values(conn, int, covered))
 
 
 class _Handled:
@@ -784,8 +783,7 @@ def _raised_id(item: PlanItem, pr: str, head: str, what: str) -> int:
 
 
 def _pr_author(conn: sqlite3.Connection, pr: str) -> str | None:
-    found = sql.execute(conn, sql.select("author").from_("observed_prs").where("url = ?", pr)).fetchone()
-    return None if found is None or found[0] is None else str(found[0])
+    return records.fetch_value(conn, str, sql.select("author").from_("observed_prs").where("url = ?", pr))
 
 
 def _offer(

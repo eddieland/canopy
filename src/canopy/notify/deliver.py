@@ -199,15 +199,16 @@ def _record_loop_events(ctx: Context) -> None:
         return
     tick_id, status = int(latest[0]), str(latest[1])
     # Pruning always keeps the newest of these (journal.prune_events), so a long streak is never taken for a new one.
-    last = sql.execute(
+    last = records.fetch_value(
         ctx.conn,
+        str,
         sql.select("kind")
         .from_("notify_events")
         .where("kind IN ('loop.failing', 'loop.recovered')")
         .order_by("id DESC")
         .limit(1),
-    ).fetchone()
-    failing = last is not None and last[0] == "loop.failing"
+    )
+    failing = last == "loop.failing"
     if status == "ok":
         if failing:
             db.record_event(ctx.conn, outbox.loop_recovered(_failed_before(ctx.conn, tick_id)))
@@ -229,15 +230,16 @@ def _record_budget_event(ctx: Context, now: datetime) -> None:
     if found is None or found.reached is None:
         return
     # Pruning always keeps the newest of these (journal.prune_events), so a month already told is never taken for new.
-    last = sql.execute(
+    last = records.fetch_value(
         ctx.conn,
+        str,
         sql.select("fields")
         .from_("notify_events")
         .where("kind = ?", outbox.BUDGET_REACHED)
         .order_by("id DESC")
         .limit(1),
-    ).fetchone()
-    told = contract.stored_object(str(last[0])) if last is not None else {}
+    )
+    told = contract.stored_object(last) if last is not None else {}
     budget, percent = told.get("budget"), told.get("percent")
     heard = budget * percent if isinstance(budget, int) and isinstance(percent, int) else 0
     if told.get("month") == found.month and heard >= found.budget_usd * found.reached:
@@ -252,14 +254,13 @@ def _failed_before(conn: sqlite3.Connection, tick_id: int) -> int:
         The count, 0 when the last ended tick before `tick_id` was `ok`.
     """
     last_ok = sql.select("max(id)").from_("ticks").where("id < ?", tick_id).where("status = 'ok'")
-    q = (
-        sql.select("count(*)")
-        .from_("ticks")
-        .where("id < ?", tick_id)
-        .where("status NOT IN ('running', 'ok')")
-        .where("id > coalesce(({}), 0)", last_ok)
+    failed = (
+        records.select(records.Tick)
+        .where("ticks.id < ?", tick_id)
+        .where("ticks.status NOT IN ('running', 'ok')")
+        .where("ticks.id > coalesce(({}), 0)", last_ok)
     )
-    return int(sql.execute(conn, q).fetchone()[0])
+    return failed.count(conn)
 
 
 def _deliver(

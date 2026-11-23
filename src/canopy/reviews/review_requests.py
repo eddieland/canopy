@@ -20,7 +20,7 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
-from canopy.core import agent_models, contract, conversation, db, personas, records, sql, ticket_models
+from canopy.core import agent_models, contract, conversation, db, personas, records, ticket_models
 from canopy.runtime import agents, invocation
 
 if TYPE_CHECKING:
@@ -227,7 +227,7 @@ def request(
     for name in names:
         personas.check(config, name)
     url = _pr_url(ref)
-    if sql.execute(conn, sql.select("1").from_("ticket_units").where("pr_url = ?", url)).fetchone() is not None:
+    if records.select(records.TicketUnit).where("pr_url = ?", url).exists(conn):
         raise conversation.Refused(
             "loop_pr",
             f"{url} is one of the loop's own PRs, a ticket's unit's; `review.agent_prs` reviews those",

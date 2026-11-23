@@ -257,15 +257,15 @@ def _thread_of(conn: sqlite3.Connection, plan_id: int, pr: str, comment: int) ->
     ).fetchone()
     if seen is not None:
         return str(seen["thread_id"])
-    observed = sql.execute(
+    return records.fetch_value(
         conn,
+        str,
         sql.select("thread_id")
         .from_("observed_reviews")
         .where("pr_url = ?", pr)
         .where("item = ?", ReviewItem.COMMENT)
         .where("id = ?", comment),
-    ).fetchone()
-    return None if observed is None or observed["thread_id"] is None else str(observed["thread_id"])
+    )
 
 
 def _words(kind: DraftKind, entry: Mapping[str, JsonValue]) -> tuple[str, Reaction | None]:
@@ -473,16 +473,17 @@ def _check_one(conn: sqlite3.Connection, draft: records.Draft, now: str) -> None
             _refuse(conn, draft, f"unknown_thread: {draft.pr_url} has no review comment {draft.comment_id}")
             return
         thread = str(row["thread_id"])
-        twin = sql.execute(
+        twin = records.fetch_value(
             conn,
+            int,
             sql.select("number")
             .from_("drafts")
             .where("run_id = ?", draft.run_id)
             .where("thread_id = ?", thread)
             .where("id != ?", draft.id),
-        ).fetchone()
+        )
         if twin is not None:
-            _refuse(conn, draft, f"a second draft for the thread draft {twin['number']} answers; a thread takes one")
+            _refuse(conn, draft, f"a second draft for the thread draft {twin} answers; a thread takes one")
             return
     (
         records.update(records.Draft)
@@ -513,10 +514,14 @@ def _checked_plan_item(conn: sqlite3.Connection, draft: records.Draft, thread: s
     """
     if draft.plan_item is not None or thread is None or draft.pr_url is None or draft.comment_id is None:
         return draft.plan_item
-    run = sql.execute(conn, sql.select("feedback_plan_id").from_("runs").where("id = ?", draft.run_id)).fetchone()
-    if run is None or run["feedback_plan_id"] is None:
+    plan_id = records.fetch_value(
+        conn,
+        int,
+        sql.select("feedback_plan_id").from_("runs").where("id = ?", draft.run_id),
+    )
+    if plan_id is None:
         return None
-    return _plan_item(conn, int(run["feedback_plan_id"]), draft.pr_url, draft.comment_id, thread)
+    return _plan_item(conn, plan_id, draft.pr_url, draft.comment_id, thread)
 
 
 def _supersede(conn: sqlite3.Connection, draft: records.Draft, same: sql.Composable) -> None:
@@ -614,12 +619,16 @@ def from_plan(conn: sqlite3.Connection, draft: records.Draft) -> FromPlan | None
     """
     if draft.plan_item is None:
         return None
-    run = sql.execute(conn, sql.select("feedback_plan_id").from_("runs").where("id = ?", draft.run_id)).fetchone()
-    if run is None or run["feedback_plan_id"] is None:
+    plan_id = records.fetch_value(
+        conn,
+        int,
+        sql.select("feedback_plan_id").from_("runs").where("id = ?", draft.run_id),
+    )
+    if plan_id is None:
         return None
     item = (
         records.select(records.FeedbackPlanItem)
-        .where("plan_id = ?", int(run["feedback_plan_id"]))
+        .where("plan_id = ?", plan_id)
         .where("number = ?", draft.plan_item)
         .one(conn)
     )

@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
-from canopy.core import hostgit, sql
+from canopy.core import hostgit, records, sql
 from canopy.core.vocab import RunStatus
 from canopy.infra import procs
 from canopy.runs import dispatch, tasks
@@ -92,8 +92,8 @@ def _named(conn: sqlite3.Connection, prefix: str) -> set[str]:
         sql.select("branch").from_("task_runs").where("status = ? OR task_id IN ({})", RunStatus.RUNNING, open_tasks),
         sql.select("base_branch").from_("task_runs").where("status = ?", RunStatus.RUNNING),
     )
-    found = {str(r[0]) for r in sql.execute(conn, names)}
-    found.update(tasks.branch(prefix, int(r[0])) for r in sql.execute(conn, open_tasks))
+    found = set(records.fetch_values(conn, str, names))
+    found.update(tasks.branch(prefix, task_id) for task_id in records.fetch_values(conn, int, open_tasks))
     return found
 
 

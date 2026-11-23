@@ -491,7 +491,7 @@ def _run_files(conn: sqlite3.Connection, cutoff: str) -> list[_Owned]:
         repos.setdefault(int(r["run_id"]), []).append(str(r["repo"]))
     stretches = _stretches(conn, "run_id")
     planned = sql.union(sql.select("run_id").from_("plans"), sql.select("run_id").from_("feedback_plans"))
-    planned_ids = {int(r[0]) for r in sql.execute(conn, planned)}
+    planned_ids = set(records.fetch_values(conn, int, planned))
     owned: list[_Owned] = []
     for r in sql.execute(conn, sql.select("id, ended_at, log_path").from_("runs").order_by("id")):
         log = Path(r["log_path"])
@@ -652,7 +652,7 @@ def _newest_runs(conn: sqlite3.Connection) -> list[int]:
         sql.select("max(id)").from_("connector_runs").group_by("source"),
         sql.select("max(id)").from_("connector_runs").where("query_result IS NOT NULL").group_by("source"),
     )
-    return [int(r[0]) for r in sql.execute(conn, newest)]
+    return records.fetch_values(conn, int, newest)
 
 
 def _journal_space(conn: sqlite3.Connection, journal: Path) -> list[Kind]:
@@ -661,8 +661,8 @@ def _journal_space(conn: sqlite3.Connection, journal: Path) -> list[Kind]:
     Returns:
         The free pages' kind, then the WAL's.
     """
-    page_size = int(sql.execute(conn, sql.frag("PRAGMA page_size")).fetchone()[0])
-    free = int(sql.execute(conn, sql.frag("PRAGMA freelist_count")).fetchone()[0])
+    [page_size] = records.fetch_values(conn, int, sql.frag("PRAGMA page_size"))
+    [free] = records.fetch_values(conn, int, sql.frag("PRAGMA freelist_count"))
     wal = _regular_size(journal.with_name(f"{journal.name}-wal"))
     wal_count, wal_bytes = (1, wal) if wal is not None else (0, 0)
     return [

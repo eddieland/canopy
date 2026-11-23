@@ -29,8 +29,8 @@ def newest_event_id(conn: sqlite3.Connection) -> int:
     Returns:
         The id, or 0 before the first event.
     """
-    row = sql.execute(conn, sql.select("seq").from_("sqlite_sequence").where("name = 'notify_events'")).fetchone()
-    return int(row[0]) if row is not None else 0
+    newest = sql.select("seq").from_("sqlite_sequence").where("name = 'notify_events'")
+    return records.fetch_value(conn, int, newest) or 0
 
 
 def sink(conn: sqlite3.Connection, name: str) -> records.NotifySink | None:
@@ -60,8 +60,8 @@ def forget_sinks(conn: sqlite3.Connection, keep: Iterable[str]) -> list[str]:
         The names forgotten, sorted.
     """
     kept = set(keep)
-    names = {str(r[0]) for r in sql.execute(conn, sql.select("name").from_("notify_sinks"))}
-    names |= {str(r[0]) for r in sql.execute(conn, sql.select("sink").unique().from_("notifications"))}
+    names = set(records.fetch_values(conn, str, sql.select("name").from_("notify_sinks")))
+    names |= set(records.fetch_values(conn, str, sql.select("sink").unique().from_("notifications")))
     gone = sorted(names - kept)
     with db.transaction(conn):
         for name in gone:
@@ -111,18 +111,13 @@ def prune_events(conn: sqlite3.Connection, now: datetime) -> int:
         How many were deleted. The newest `loop.failing` or `loop.recovered` event is kept, and the newest
         `loop.budget_reached`.
     """
-    cursors = [int(r[0]) for r in sql.execute(conn, sql.select("cursor").from_("notify_sinks"))]
+    cursors = records.fetch_values(conn, int, sql.select("cursor").from_("notify_sinks"))
     passed = min(cursors) if cursors else newest_event_id(conn)
     # The newest `loop.failing` or `loop.recovered` stays: it is how a long streak is told from a new one. So does the
     # newest `loop.budget_reached`: it is how an alert already told is told from a new one.
-    streak = sql.execute(
-        conn,
-        sql.select("coalesce(max(id), 0)").from_("notify_events").where("kind IN ('loop.failing', 'loop.recovered')"),
-    ).fetchone()[0]
-    budget = sql.execute(
-        conn,
-        sql.select("coalesce(max(id), 0)").from_("notify_events").where("kind = 'loop.budget_reached'"),
-    ).fetchone()[0]
+    newest = sql.select("max(id)").from_("notify_events")
+    streak = records.fetch_value(conn, int, newest.where("kind IN ('loop.failing', 'loop.recovered')")) or 0
+    budget = records.fetch_value(conn, int, newest.where("kind = 'loop.budget_reached'")) or 0
     cur = (
         records.delete(records.NotifyEvent)
         .where("id <= ?", passed)

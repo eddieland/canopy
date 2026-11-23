@@ -291,12 +291,13 @@ def attempt_of(conn: sqlite3.Connection, run_id: int) -> int | None:
     if run is None:
         return None
     if run.kind in TICKET_KINDS:
-        earlier = (
-            sql.select("count(*)")
-            .from_("runs")
-            .where("ticket_key = ? AND kind = ? AND id <= ?", run.ticket_key, run.kind, run_id)
+        earlier = records.select(records.Run).where(
+            "ticket_key = ? AND kind = ? AND id <= ?",
+            run.ticket_key,
+            run.kind,
+            run_id,
         )
-        return int(sql.execute(conn, earlier).fetchone()[0])
+        return earlier.count(conn)
     per_unit = (
         sql.select("count(DISTINCT r.id)")
         .from_("runs r")
@@ -306,7 +307,7 @@ def attempt_of(conn: sqlite3.Connection, run_id: int) -> int | None:
         .where_in("r.kind", [kind for kind in RunKind if counted_as(kind) == counted_as(run.kind)])
         .group_by("s.repo")
     )
-    return max((int(row[0]) for row in sql.execute(conn, per_unit)), default=1)
+    return max(records.fetch_values(conn, int, per_unit), default=1)
 
 
 def ci_cooldowns(conn: sqlite3.Connection, config: Config, now: datetime) -> dict[Unit, datetime]:

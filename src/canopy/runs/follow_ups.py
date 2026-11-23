@@ -262,8 +262,7 @@ def known_ticket(conn: sqlite3.Connection, key: str) -> bool:
         sql.select("1").from_("split_children").where("child_key = ?", key),
         every=True,
     )
-    # The LIMIT is the compound's, so it is written whole.
-    return sql.execute(conn, sql.frag("{} LIMIT 1", names)).fetchone() is not None
+    return records.exists(conn, names)
 
 
 def record_follow_up(conn: sqlite3.Connection, key: str, parent: str, run_id: int, repo: str | None) -> bool:
@@ -321,8 +320,8 @@ def _check_entry(conn: sqlite3.Connection, key: str, repo: object, *, parent: st
 
 def _note_late(conn: sqlite3.Connection, run_id: int, late: Iterable[str]) -> None:
     # Name the keys another run recorded first in run `run_id`'s note and stored refusals, as `check` names its own.
-    row = sql.execute(conn, sql.select("result_json").from_("runs").where("id = ?", run_id)).fetchone()
-    result = contract.stored_object(row[0] if row is not None else None)
+    stored = records.fetch_value(conn, str, sql.select("result_json").from_("runs").where("id = ?", run_id))
+    result = contract.stored_object(stored)
     keys = list(late)
     added = "; ".join(f"{key}: another run recorded it first" for key in keys)
     note = str(result.get("harness") or "")

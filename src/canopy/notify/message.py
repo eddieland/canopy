@@ -527,10 +527,10 @@ def digest(
         The digest, read from the journal and `items` only.
     """
     ticks = Counter(
-        str(r[0]) for r in sql.execute(conn, sql.select("status").from_("ticks").where("started_at >= ?", since))
+        records.fetch_values(conn, str, sql.select("status").from_("ticks").where("started_at >= ?", since)),
     )
     started = Counter(
-        str(r[0]) for r in sql.execute(conn, sql.select("kind").from_("runs").where("started_at >= ?", since))
+        records.fetch_values(conn, str, sql.select("kind").from_("runs").where("started_at >= ?", since)),
     )
     ended_rows = records.select(records.Run).where("ended_at >= ?", since).order_by("id").all(conn)
     ended = Counter(str(r.status) for r in ended_rows)

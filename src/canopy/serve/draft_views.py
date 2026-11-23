@@ -35,14 +35,14 @@ def draft(conn: sqlite3.Connection, found: records.Draft) -> Draft:
         The draft.
     """
     text = drafts.text_of(conn, found.id)
-    supersedes_edited = sql.execute(
+    supersedes_edited = records.exists(
         conn,
         sql.select("1")
         .from_("drafts d")
         .join("draft_versions v ON v.draft_id = d.id")
         .where("d.superseded_by = ?", found.id)
         .where("v.version > 1"),
-    ).fetchone()
+    )
     planned = drafts.from_plan(conn, found)
     return Draft(
         run=found.run_id,
@@ -59,7 +59,7 @@ def draft(conn: sqlite3.Connection, found: records.Draft) -> Draft:
         reaction=cast("ReactionName", text.reaction.value) if text.reaction is not None else None,
         hash=drafts_manage.hash_of_version(text),
         edited=text.version > 1,
-        supersedes_edited=supersedes_edited is not None,
+        supersedes_edited=supersedes_edited,
         sent_url=found.sent_url,
         reacted=cast("ReactionName", found.reacted.value) if found.reacted is not None else None,
         created_at=db.parse_time(found.created_at),

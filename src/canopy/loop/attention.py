@@ -48,6 +48,7 @@ from canopy.core import (
     db,
     kept_items,
     memory,
+    records,
     sql,
 )
 from canopy.core.items import ACTION_PREFIX, Item, age, fingerprint, one_line, subject
@@ -61,7 +62,6 @@ from canopy.reviews import waiting as review_waiting
 from canopy.runs import artifact_authority, drafted, epic_runs, follow_ups, task_tickets, tasks
 
 if TYPE_CHECKING:
-    from canopy.core import records
     from canopy.core.context import Context
 
 #: Where a ticket key would be, an item about a chore names it so, and one about a PR with no ticket. A ticket key has
@@ -375,13 +375,13 @@ def _halted(conn: sqlite3.Connection, last_ok: int | None) -> list[Item]:
     Returns:
         The item, open since the first tick after `last_ok` that raised it, or nothing.
     """
-    latest = sql.execute(
+    reason = records.fetch_value(
         conn,
+        str,
         sql.select("status").from_("ticks").where("status != 'running'").order_by("id DESC").limit(1),
-    ).fetchone()
-    if latest is None or latest[0] not in HALTS | MODEL_HALTS:
+    )
+    if reason is None or reason not in HALTS | MODEL_HALTS:
         return []
-    reason = str(latest[0])
     # Only the halted ticks' own items: a refusal in another tick may raise an item of the same name.
     rows = sql.execute(
         conn,
@@ -602,7 +602,7 @@ def from_runs(conn: sqlite3.Connection, *, labels: AbstractSet[str] = frozenset(
     is planned next (M55). Nor does a run that found its ticket not authorized once a queue label in `labels`, the
     tracker's, was observed added to it since (`relabel`); with none given, none lifts it.
     """
-    done = {str(r[0]) for r in sql.execute(conn, sql.select("key").from_("tickets").where("done = 1"))}
+    done = set(records.fetch_values(conn, str, sql.select("key").from_("tickets").where("done = 1")))
     stopped = set(conversation.stopped(conn))
     latest = db.latest_runs(conn)
     relabeled = relabel.lifted(conn, labels, latest)

@@ -990,7 +990,7 @@ class _World:
 
 
 def _done(conn: sqlite3.Connection) -> set[str]:
-    return {str(r[0]) for r in sql.execute(conn, sql.select("key").from_("tickets").where("done = 1"))}
+    return set(records.fetch_values(conn, str, sql.select("key").from_("tickets").where("done = 1")))
 
 
 def _approved(reviews: Collection[records.ObservedReview]) -> bool:

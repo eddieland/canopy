@@ -12,15 +12,13 @@ import re
 from collections import defaultdict
 from typing import TYPE_CHECKING, Final
 
-from canopy.core import conversation, db, sql
+from canopy.core import conversation, db, records, sql
 from canopy.core.items import one_line
 from canopy.loop import harness
 
 if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Mapping, Sequence
-
-    from canopy.core import records
 
 #: The most characters of one decision's reason a note carries; the tick's page has it whole.
 MAX_REASON: Final = 300
@@ -81,8 +79,7 @@ def _noted_up_to(conn: sqlite3.Connection, tick_id: int) -> int:
         .order_by("id DESC")
         .limit(1)
     )
-    row = sql.execute(conn, noted).fetchone()
-    return 0 if row is None else int(row[0])
+    return records.fetch_value(conn, int, noted) or 0
 
 
 def body(tick_id: int, key: str, read: Sequence[int], decisions: Sequence[records.Decision]) -> str:
