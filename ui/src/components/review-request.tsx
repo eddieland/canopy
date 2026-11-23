@@ -34,8 +34,9 @@ const FIELD_LABEL = 'text-xs font-medium'
 
 /**
  * `canopy start URL --review --notes TEXT --persona NAME --model M` from the reviews page (DESIGN §13, §21, §22, §31):
- * one column, every part on its left edge and to its width (ui/DESIGN.md, "A review request"). A PR the loop does not
- * own, by its URL, with the PR's reference under it once canopy would take it, or a line saying it would not; then what
+ * one column in a narrow box, as the dialog's is, and across a wide panel, as the reviews page's is, the notes beside
+ * the URL, by the form's own width (ui/DESIGN.md, "A review request"). A PR the loop does not own, by its URL, with
+ * the PR's reference under it once canopy would take it, or a line saying it would not; then what
  * its reviewer should know; then who reviews it, on one row: the personas to review it in, one review each, or none
  * for `[personas] reviewer`'s, and the model its reviews run on, config's by default; and at the row's end `Review`,
  * the form's primary. The personas start as those the operator prefers in Settings, which the row says. canopy reviews
@@ -98,7 +99,7 @@ export function ReviewRequestForm({
     const ready = url.trim() !== '' && !request.isPending
     return (
         <form
-            className={cn('flex max-w-3xl flex-col gap-3 p-3', className)}
+            className={cn('@container flex flex-col gap-3 p-3', className)}
             aria-label="Review a PR"
             aria-keyshortcuts="R"
             data-testid="review-request-form"
@@ -109,43 +110,50 @@ export function ReviewRequestForm({
                 }
             }}
         >
-            <div className="flex flex-col gap-1.5">
-                <Input
-                    // oxlint-disable-next-line jsx-a11y/no-autofocus -- the dialog opens on a key, to type in.
-                    autoFocus={focused === 'url'}
-                    aria-label="PR URL"
-                    aria-describedby={`${id}-ref`}
-                    placeholder="https://github.com/org/repo/pull/123"
-                    title="R opens this form from any page, and so does pasting a PR's URL"
-                    className="font-mono text-xs"
-                    value={url}
-                    onChange={(event) => {
-                        setUrl(event.target.value)
-                        change({ url: event.target.value })
-                    }}
-                    data-testid="review-request-url"
-                />
-                <PullRequestReference id={`${id}-ref`} url={url.trim()} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-                <label className={FIELD_LABEL} htmlFor={`${id}-notes`}>
-                    Notes for the reviewer <span className="font-normal text-muted-foreground">(optional)</span>
-                </label>
-                <Textarea
-                    // oxlint-disable-next-line jsx-a11y/no-autofocus -- the dialog opens on a key, to type in.
-                    autoFocus={focused === 'notes'}
-                    id={`${id}-notes`}
-                    className="min-h-16 text-xs"
-                    value={notes}
-                    maxLength={MAX_NOTES}
-                    onChange={(event) => {
-                        setNotes(event.target.value)
-                        change({ notes: event.target.value })
-                    }}
-                    onKeyDown={sendKeys.onKeyDown}
-                    placeholder="What the author asked for, or the part of the change that worries you"
-                    data-testid="review-request-notes"
-                />
+            {/* One column in a narrow box, as the dialog's is; across a wide panel, the notes beside the URL. */}
+            <div className="grid gap-3 @3xl:grid-cols-5">
+                <div className="flex flex-col gap-1.5 @3xl:col-span-2">
+                    {/* Beside the notes, the URL wears a label as they do, so the two fields start on one line. */}
+                    <span className={cn(FIELD_LABEL, 'hidden @3xl:block')} aria-hidden>
+                        PR URL
+                    </span>
+                    <Input
+                        // oxlint-disable-next-line jsx-a11y/no-autofocus -- the dialog opens on a key, to type in.
+                        autoFocus={focused === 'url'}
+                        aria-label="PR URL"
+                        aria-describedby={`${id}-ref`}
+                        placeholder="https://github.com/org/repo/pull/123"
+                        title="R opens this form from any page, and so does pasting a PR's URL"
+                        className="font-mono text-xs"
+                        value={url}
+                        onChange={(event) => {
+                            setUrl(event.target.value)
+                            change({ url: event.target.value })
+                        }}
+                        data-testid="review-request-url"
+                    />
+                    <PullRequestReference id={`${id}-ref`} url={url.trim()} />
+                </div>
+                <div className="flex flex-col gap-1.5 @3xl:col-span-3">
+                    <label className={FIELD_LABEL} htmlFor={`${id}-notes`}>
+                        Notes for the reviewer <span className="font-normal text-muted-foreground">(optional)</span>
+                    </label>
+                    <Textarea
+                        // oxlint-disable-next-line jsx-a11y/no-autofocus -- the dialog opens on a key, to type in.
+                        autoFocus={focused === 'notes'}
+                        id={`${id}-notes`}
+                        className="min-h-16 grow text-xs"
+                        value={notes}
+                        maxLength={MAX_NOTES}
+                        onChange={(event) => {
+                            setNotes(event.target.value)
+                            change({ notes: event.target.value })
+                        }}
+                        onKeyDown={sendKeys.onKeyDown}
+                        placeholder="What the author asked for, or the part of the change that worries you"
+                        data-testid="review-request-notes"
+                    />
+                </div>
             </div>
             {/* Who reviews it, then the primary at the row's end, on the fields' right edge. */}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2" data-testid="review-request-reviewer">

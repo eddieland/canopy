@@ -233,6 +233,28 @@ test('settings prefers the personas a review request starts from, apart from the
     await expect(reviewer).not.toContainText('as Settings prefers')
 })
 
+test("Review a PR lays its notes beside the URL across the page's panel, and under it in the dialog", async ({
+    page,
+}) => {
+    await page.goto('pull-requests/reviews')
+    await settled(page)
+    // The form takes the layout its own width gives it. The page's panel is wide: two fields on one line.
+    const form = page.getByRole('main').getByTestId('review-request-form')
+    const top = async (testId: string) => (await form.getByTestId(testId).boundingBox())?.y ?? 0
+    await expect
+        .poll(async () => Math.abs((await top('review-request-notes')) - (await top('review-request-url'))))
+        .toBeLessThanOrEqual(1)
+
+    // The dialog's box is narrow: the same form, in one column.
+    await page.getByRole('heading', { level: 1 }).click()
+    await page.keyboard.press('r')
+    const dialog = page.getByRole('dialog', { name: 'Review a PR' })
+    await expect(dialog).toBeVisible()
+    const url = await dialog.getByTestId('review-request-url').boundingBox()
+    const notes = await dialog.getByTestId('review-request-notes').boundingBox()
+    expect(notes?.y ?? 0).toBeGreaterThan((url?.y ?? 0) + (url?.height ?? 0))
+})
+
 test("a request's reviews in two personas sit together in the lists, the second named by its persona", async ({
     page,
 }) => {

@@ -1401,8 +1401,11 @@ reader, so no table repeats them.
   is something to type. What the grant did goes under the rows (`Notice`), untinted once nothing is stuck; the row
   leaves once the limit is above its runs. A limit with room left shows nothing.
 - **A review request** (`ReviewRequestForm`, `ReviewRequestStatus`) is how the operator has canopy review a PR the loop
-  does not own (DESIGN §21). The reviews page leads with a `Review a PR` panel above the list, whose form is one column
-  capped at `max-w-3xl`: the PR's URL in a monospace field, and under it a line it always holds, so nothing below moves
+  does not own (DESIGN §21). The reviews page leads with a `Review a PR` panel above the list. Its form is laid out by
+  its own width (a container query), never by who renders it: one column in a narrow box, as the review dialog's and a
+  narrow window's are, and across a wide panel two, the URL under a label of its own beside the notes, so the panel is
+  filled and half as tall. In either: the PR's URL in a monospace field, and under it a line it always holds, so
+  nothing below moves
   as it changes: the PR's reference once canopy would take the URL, that it is not a PR's URL, before it is sent, or,
   empty, that a link into the PR will do. Then the notes, always open since the operator often has some, under a
   sentence-case field label, never a `panel-label`. Then who reviews it, one row with nothing folded: `Persona` and its
