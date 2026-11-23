@@ -368,5 +368,8 @@ describe('ReviewDiffPanels layout', () => {
         setDiffLayout('split')
         render(diff([], { files: { truncated: false, files: [small('src/a.ts')] } }))
         expect(texts()).toContain('1+src/a.ts 1')
+        // Its number, its mark, and its text, once: not a side of three cells beside a blank one.
+        const row = screen.getAllByRole('row').find((line) => line.textContent === '1+src/a.ts 1')
+        expect(within(row as HTMLElement).getAllByRole('cell', { hidden: true })).toHaveLength(3)
     })
 })

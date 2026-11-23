@@ -28,7 +28,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useHighlight } from '@/hooks/use-highlight'
 import { LAYOUTS, setDiffLayout, splitRows, useDiffLayout } from '@/lib/diff-layout'
 import type { DiffLayout } from '@/lib/diff-layout'
-import { changedWords, fileLines, hunkRange, lineParts, pairedLines } from '@/lib/diff-words'
+import { comparedLines, fileLines, hunkRange, lineParts } from '@/lib/diff-words'
 import type { Changed } from '@/lib/diff-words'
 import { fileType, fileTypes, fileTypesLabel, hiddenFilesText } from '@/lib/file-types'
 import type { FileType } from '@/lib/file-types'
@@ -432,7 +432,8 @@ function FilePanel<T>({
     // read again does.
     const shown = opened.reduce((spans, span) => reveal(spans, span), first)
     const highlighted = useHighlight(file)
-    const changed = changedWords(file)
+    // Compared once: the words that changed, and which line each removed line became, which a split lays out by.
+    const { changed, pairs: paired } = comparedLines(file)
     const lines = file.hunks.flatMap((hunk) => hunk.lines)
     const sides: Sides = {
         old: lines.some((line) => typeof line.old === 'number'),
@@ -440,7 +441,7 @@ function FilePanel<T>({
     }
     // A file with lines on one side only has nothing to set beside them: it stays one column.
     const split = layout === 'split' && sides.old && sides.new
-    const pairs = split ? pairedLines(file) : undefined
+    const pairs = split ? paired : undefined
     const rows = pieces(file, shown).flatMap((piece) =>
         pieceRows(piece, { file, highlighted, changed, sides, pairs, onLine, show: onShow, renderCard, add: onAdd }),
     )

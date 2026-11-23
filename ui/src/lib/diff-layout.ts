@@ -41,7 +41,7 @@ export interface SplitRow {
 
 /**
  * The rows of a split diff for a hunk's `lines` from `from` up to `to`: an unchanged line on both sides, and where
- * added lines follow removed ones, each removed line beside the added line `pairs` gives it (`pairedLines`), so an
+ * added lines follow removed ones, each removed line beside the added line `pairs` gives it (`comparedLines`), so an
  * edit sits across from what it edited; the lines between two pairs sit side by side in order, the longer side's
  * rest alone. A pair with a line outside the range is no pair here.
  */
