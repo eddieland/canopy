@@ -1090,16 +1090,16 @@ class ConfigKey(Model):
     file, where it shadows the user file's for this workspace), the workspace file (a shared `policy.*` key), or
     none."""
     kind: Literal["limit", "stricter", "free"]
-    """`limit`: raised or lowered, within `bound`. `stricter`: only made stricter (a list only loses entries, a count
-    only goes down, a choice only moves later in `choices`). `free`: set whole to anything the config loader takes
-    (`spend.budget_alerts`, beside the 100% alert always sent)."""
+    """`limit`: raised or lowered to anything the config loader takes, a retention no shorter than `bound`.
+    `stricter`: only made stricter (a list only loses entries, a count only goes down, a choice only moves later in
+    `choices`). `free`: set whole to anything the config loader takes (`spend.budget_alerts`, beside the 100% alert
+    always sent)."""
     bound: int | None
-    """A limit's loosest value from the page: a count's ceiling, or a pace's floor. The file can set any."""
-    looser: Literal["higher", "lower"] | None
-    """Which way loosens a limit: a count's higher, a pace's lower. None for a `stricter` key."""
+    """A retention's floor from the page, in days: the shortest it may be made. The file can set any. None for
+    every other key."""
     forever_at_zero: bool
     """Whether 0 keeps that kind forever, as a `retention.*` key's does: the page may always set 0, and from 0 any
-    count of days is looser."""
+    count of days is shorter."""
     choices: list[str]
     """A `stricter` choice's values, loosest first: the page may move it only later in the list. Empty for any other
     key."""

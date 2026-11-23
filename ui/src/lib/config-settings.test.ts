@@ -34,8 +34,7 @@ const WORKERS: ConfigKey = {
     value: 2,
     source: 'user',
     kind: 'limit',
-    bound: 8,
-    looser: 'higher',
+    bound: null,
     forever_at_zero: false,
     choices: [],
     default: 2,
@@ -45,15 +44,13 @@ const SLOTS: ConfigKey = {
     value: { web: 4 },
     source: 'user',
     kind: 'limit',
-    bound: 8,
-    looser: 'higher',
+    bound: null,
     forever_at_zero: false,
     choices: [],
     default: {},
 }
 const PER_REPO: ConfigKey = { ...WORKERS, name: 'capacity.slots_per_repo', value: null }
-const PACE: ConfigKey = { ...WORKERS, name: 'loop.interval_minutes', value: 15, bound: 5, looser: 'lower' }
-const QUERY: ConfigKey = { ...PACE, name: 'tracker.query_every_minutes', value: 0, bound: 0 }
+const PACE: ConfigKey = { ...WORKERS, name: 'loop.interval_minutes', value: 15 }
 const RUN_FILES: ConfigKey = { ...PACE, name: 'retention.run_files_days', value: 30, bound: 7, forever_at_zero: true }
 const REVIEWERS: ConfigKey = {
     name: 'trust.trusted_reviewers',
@@ -61,7 +58,6 @@ const REVIEWERS: ConfigKey = {
     source: 'user',
     kind: 'stricter',
     bound: null,
-    looser: null,
     forever_at_zero: false,
     choices: [],
     default: [],
@@ -127,10 +123,10 @@ describe('config settings', () => {
         })
     })
 
-    it("check a limit's bound as the server does: refused only past it and looser than the value read", () => {
-        expect(configForm(KEYS, { 'capacity.max_workers': '9' })).toEqual({
-            changes: {},
-            errors: { 'capacity.max_workers': 'at most 8 from here; set more in the file' },
+    it("hold a limit to no bound of the page's own, and a retention to its floor as the server does", () => {
+        expect(configForm(KEYS, { 'capacity.max_workers': '9999' })).toEqual({
+            changes: { 'capacity.max_workers': 9999 },
+            errors: {},
         })
         expect(configForm(KEYS, { 'capacity.max_workers': '-3' }).errors).toEqual({
             'capacity.max_workers': 'not a whole number',
@@ -139,10 +135,11 @@ describe('config settings', () => {
             changes: { 'capacity.max_workers': 8 },
             errors: {},
         })
-        // A count the file set past the bound may come down, though still past it.
-        expect(configForm([{ ...WORKERS, value: 12 }], { 'capacity.max_workers': '10' }).errors).toEqual({})
-        expect(configForm([PACE], { 'loop.interval_minutes': '4' }).errors).toEqual({
-            'loop.interval_minutes': 'at least 5 from here; set less in the file',
+        expect(configForm([PACE], { 'loop.interval_minutes': '1' }).errors).toEqual({})
+        // A retention the file set under its floor may be lengthened, though still under it, never shortened.
+        expect(configForm([{ ...RUN_FILES, value: 3 }], { 'retention.run_files_days': '5' }).errors).toEqual({})
+        expect(configForm([{ ...RUN_FILES, value: 3 }], { 'retention.run_files_days': '2' }).errors).toEqual({
+            'retention.run_files_days': 'at least 7, or 0 for forever, from here; set less in the file',
         })
         expect(configForm([RUN_FILES], { 'retention.run_files_days': '3' }).errors).toEqual({
             'retention.run_files_days': 'at least 7, or 0 for forever, from here; set less in the file',
@@ -152,11 +149,11 @@ describe('config settings', () => {
         })
     })
 
-    it("check a repository's own count against the bound, from the slots per repository it has now", () => {
+    it("send each repository's own count that changed, however high", () => {
         const perRepo = { ...PER_REPO, value: 2 }
-        expect(configForm([SLOTS, perRepo], { 'capacity.repo_slots': { web: '9', api: '8' } })).toEqual({
-            changes: { 'capacity.repo_slots': { api: 8 } },
-            errors: { 'capacity.repo_slots.web': 'at most 8 from here; set more in the file' },
+        expect(configForm([SLOTS, perRepo], { 'capacity.repo_slots': { web: '4', api: '80' } })).toEqual({
+            changes: { 'capacity.repo_slots': { api: 80 } },
+            errors: {},
         })
     })
 
@@ -207,9 +204,8 @@ describe('config settings', () => {
         // A chip's word is short, every row has one; what it means is its tip, and the page's help.
         expect(Object.values(SOURCE_WORD)).toEqual(['this workspace', 'user', 'workspace', 'default'])
         expect(SOURCE_MEANING.user).toContain('a change here is saved for this workspace only')
-        expect(boundText(WORKERS)).toBe('at most 8 from here')
-        expect(boundText(PACE)).toBe('at least 5 from here')
-        expect(boundText(QUERY)).toBe('')
+        expect(boundText(WORKERS)).toBe('')
+        expect(boundText(PACE)).toBe('')
         expect(boundText(RUN_FILES)).toBe('at least 7, or 0 for forever, from here')
         expect(boundText(REVIEWERS)).toBe('stricter only')
         expect(boundText(KICKS)).toBe('only fewer from here')
@@ -443,11 +439,12 @@ describe('defaults', () => {
         expect(defaultText({ ...PER_REPO, value: 3, default: null })).toBe('default unmanaged')
     })
 
-    it('reset a limit to its default within its bound, and offer none past it or to unset it', () => {
+    it('reset a limit to its default, and offer none under a retention floor or to unset it', () => {
         expect(resetDraft({ ...WORKERS, value: 5 })).toBe('2')
         expect(resetDraft(WORKERS)).toBeNull()
-        // A pace's default under the page's floor would loosen it past the bound.
-        expect(resetDraft({ ...PACE, value: 15, default: 3 })).toBeNull()
+        expect(resetDraft({ ...PACE, value: 15, default: 3 })).toBe('3')
+        // A retention's default under the page's floor would shorten it past the floor.
+        expect(resetDraft({ ...RUN_FILES, value: 30, default: 3 })).toBeNull()
         expect(resetDraft({ ...PER_REPO, value: 3, default: null })).toBeNull()
         expect(resetDraft({ ...SLOTS, default: {} })).toBeNull()
         expect(resetDraft({ ...ALERTS, default: [] })).toBe('')
@@ -472,14 +469,14 @@ describe('defaults', () => {
     })
 
     it('offer no reset the loader would refuse beside its pair', () => {
-        const idle: ConfigKey = { ...PACE, name: 'loop.idle_max_minutes', value: 200, default: 120, bound: 2 }
+        const idle: ConfigKey = { ...PACE, name: 'loop.idle_max_minutes', value: 200, default: 120 }
         const pace: ConfigKey = { ...PACE, value: 150, default: 15 }
         // Back to 120 would be under a pace of 150; the pace back to 15 stays under any idle wait.
         expect(resetDraft(idle, [idle, pace])).toBeNull()
         expect(resetDraft(pace, [idle, pace])).toBe('15')
         expect(resetDraft(idle, [idle, { ...pace, value: 60 }])).toBe('120')
         const every: ConfigKey = { ...PACE, name: 'connect.every_minutes', value: 2, default: 2 }
-        const age: ConfigKey = { ...PACE, name: 'connect.max_age_minutes', value: 60, default: 30, bound: 2 }
+        const age: ConfigKey = { ...PACE, name: 'connect.max_age_minutes', value: 60, default: 30 }
         expect(resetDraft(age, [age, { ...every, value: 45 }])).toBeNull()
         expect(resetDraft(age, [age, every])).toBe('30')
     })

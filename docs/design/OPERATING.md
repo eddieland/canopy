@@ -143,31 +143,20 @@ symlink, that no one else can write (§18, D053). A sandboxed run can neither re
 Secrets (the listener secret, Slack credentials) and the sandbox templates are files in the user config directory, not
 keys, shared by every workspace's runs.
 
-**From the web UI.** The Loop settings page under Settings (§22) edits a few keys of the workspace's private file
-in place, and no others (D128, TRUST_MODEL T8). They are named one by one in `canopy/serve/config_edit.py`, never by
-section, so a key added to a section later is not editable until it is named there. A limit may be raised or
-lowered, but the page cannot loosen it past its bound; the file can set any value, and the page may still tighten a
-value the file set past the bound. A trust key moves only toward stricter: a config write outlives the listener
+**From the web UI.** The Loop settings page under Settings (§22) edits a few keys of the workspace's private file in
+place, and no others (D128, TRUST_MODEL T8). They are named one by one in `canopy/serve/config_edit.py`, never by
+section, so a key added to a section later is not editable until it is named there. A limit may be set to anything the
+loader takes: the page's own ceilings and floors got in the operator's way more than they capped a stolen session's
+spend. A retention keeps a floor, since what a shorter one removes is gone; the file can set any value, and the page may
+still lengthen one the file set under it. A trust key moves only toward stricter: a config write outlives the listener
 secret, and a replier added through a stolen session would go on steering workers after a new secret ended it.
 
 | Key | From the page |
 |---|---|
-| `capacity.max_workers`, `capacity.slots_per_repo`, each `capacity.repo_slots` entry | at most 32; an unmanaged pool's first count is bounded too |
-| `capacity.max_chores`, `capacity.max_reviews`, `capacity.max_tasks` | at most 16 |
-| `capacity.max_reviews_per_day` | at most 500 |
-| `loop.min_free_disk_mib` | at least 512 |
-| `policy.max_implement_attempts`, `policy.max_resume_attempts`, `policy.max_plan_attempts`, `policy.max_revisions_per_draft` | at most 10 |
-| `policy.max_feedback_plan_attempts`, `policy.max_follow_ups` | at most 20 |
-| `policy.max_reviews_per_pr` | at most 25 |
-| `policy.max_epic_tickets` | at most 50 |
-| `policy.ci_cooldown_minutes`, `policy.feedback_ci_wait_minutes` | at least 5 |
-| `policy.feedback_quiet_minutes`, `loop.interval_minutes`, `loop.idle_max_minutes` | at least 2 |
-| `loop.min_gap_minutes`, `connect.every_minutes` | at least 1 |
-| `tracker.query_every_minutes`, `review.settle_minutes` | anything the loader takes |
-| `connect.max_age_minutes` | at most 240 |
-| `runtime.worker_timeout_minutes`, `runtime.review_timeout_minutes`, `runtime.overseer_timeout_minutes`, `runtime.setup_timeout_minutes` | at most 240, 120, 60, 120 |
+| the counts in `capacity`, `loop.min_free_disk_mib`, and `policy`'s attempt, follow-up, epic, and attachment limits | anything the loader takes |
+| the paces and waits in `loop`, `policy`, `tracker`, `connect`, and `review`, and `runtime`'s timeouts | anything the loader takes |
 | `retention.run_files_days`, `retention.tick_files_days`, `retention.journal_days`, `retention.memory_days` | at least 7, 1, 30, 7, or 0 (forever) |
-| `spend.monthly_budget_usd` | at most 10000; raising it keeps a sink from hearing the month reached it |
+| `spend.monthly_budget_usd` | anything the loader takes |
 | `spend.budget_alerts` | any list the loader takes; the 100% alert is sent whatever it holds |
 | `policy.stacking` | to `"never"` only |
 | `policy.plan`, `policy.feedback_plan` | to `"approve"` only |
