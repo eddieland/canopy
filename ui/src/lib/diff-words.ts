@@ -37,15 +37,34 @@ const WORDS = /[\p{L}\p{N}\p{M}_]+|\s+|[^\p{L}\p{N}\p{M}_\s]/gu
 const WORD = /^[\p{L}\p{N}_]/u
 const SPACE = /^\s/u
 
+/** What comparing a file's removed lines with its added ones finds, each by hunk and then line. */
+export interface ComparedLines {
+    /**
+     * What changed within each line: undefined for a line with no pair, or one whose pair shares too little with it to
+     * be the same line edited; empty for a line whose pair only added to it.
+     */
+    changed: (Changed[] | undefined)[][]
+    /**
+     * The added line each removed line is paired with, as its index in its hunk: undefined for an added or unchanged
+     * line, and for a removed line with no pair. A hunk's pairs are in order, so no two cross.
+     */
+    pairs: (number | undefined)[][]
+}
+
 /**
- * What changed within each line of each of `file`'s hunks, by hunk and then line: where added lines follow removed
- * ones, each removed line is paired with the next added one like it, and the words the pair does not share, in order,
- * are what changed, so two edits to a long line each show where. Undefined for a line with no pair, or one whose pair
- * shares too little with it to be the same line edited; empty for a line whose pair only added to it.
+ * A file's lines compared, once for both of what the comparison finds: where added lines follow removed ones, each
+ * removed line is paired with the next added one like it, and the words the pair does not share, in order, are what
+ * changed, so two edits to a long line each show where.
  */
-export function changedWords(file: DiffFile): (Changed[] | undefined)[][] {
+export function comparedLines(file: DiffFile): ComparedLines {
     const budget = { left: MAX_COMPARED }
-    return file.hunks.map((hunk) => hunkChanges(hunk, budget))
+    const hunks = file.hunks.map((hunk) => hunkChanges(hunk, budget))
+    return { changed: hunks.map((hunk) => hunk.changes), pairs: hunks.map((hunk) => hunk.pairs) }
+}
+
+/** What changed within each line of each of `file`'s hunks (`comparedLines`). */
+export function changedWords(file: DiffFile): (Changed[] | undefined)[][] {
+    return comparedLines(file).changed
 }
 
 /** A hunk's ranges as git writes them, `-4,6 +4,8`, from its lines' numbers: where it starts and how far it runs. */
@@ -106,9 +125,13 @@ interface Budget {
     left: number
 }
 
-function hunkChanges(hunk: DiffHunk, budget: Budget): (Changed[] | undefined)[] {
+function hunkChanges(
+    hunk: DiffHunk,
+    budget: Budget,
+): { changes: (Changed[] | undefined)[]; pairs: (number | undefined)[] } {
     const { lines } = hunk
     const changes = Array.from<Changed[] | undefined>({ length: lines.length })
+    const pairs = Array.from<number | undefined>({ length: lines.length })
     let at = 0
     while (at < lines.length) {
         const dels = runOf(lines, at, 'del')
@@ -122,6 +145,7 @@ function hunkChanges(hunk: DiffHunk, budget: Budget): (Changed[] | undefined)[] 
                 if (pair !== undefined) {
                     changes[k] = pair[0]
                     changes[j] = pair[1]
+                    pairs[k] = j
                     next = j + 1
                     break
                 }
@@ -129,7 +153,7 @@ function hunkChanges(hunk: DiffHunk, budget: Budget): (Changed[] | undefined)[] 
         }
         at += Math.max(1, dels + adds)
     }
-    return changes
+    return { changes, pairs }
 }
 
 // How many lines of `kind` run from `from`.

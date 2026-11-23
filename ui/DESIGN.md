@@ -1449,7 +1449,11 @@ reader, so no table repeats them.
   A diff of more than one file lists them (`FileList`, `src/components/diff-files.tsx`): a picker, narrowed by what a
   path holds, of each file with a check once viewed, its cards counted, and its lines, which brings the one picked to
   the top of the page. It opens from an outline `xs` button above the first file, `5 files, 2 viewed`, and from a
-  ghost icon button in every file's header, which is sticky, so another file is one click from anywhere. Above the
+  ghost icon button in every file's header, which is sticky, so another file is one click from anywhere. At the row's
+  end a segmented control, `unified` or `split`, as tall as the buttons beside it, lays every diff out
+  (`src/lib/diff-layout.ts`), kept in this browser. Split sets the old side beside the new, each removed line across
+  from the added line the changed words pair it with, so an edit is read left to right, and wraps its lines where
+  unified scrolls them. A file with lines on one side only, a new file, stays one column. Above the
   first file, an outline `xs` button names the file types shown and opens a menu of them, each a checkbox item, so
   several flip in one go; a link from the findings list to a card ticks its file's type and opens its panel, viewed or
   not, so a link never lands on nothing. A finding's card (`FindingCard`) sits right under the line it names, or under
