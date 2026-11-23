@@ -10,17 +10,16 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
-from canopy.core import conversation, db, sql
+from canopy.core import conversation, db, records, sql
 from canopy.core.items import one_line
 from canopy.loop import harness
 
 if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Mapping, Sequence
-
-    from canopy.core import records
 
 #: The most characters of one decision's reason a note carries; the tick's page has it whole.
 MAX_REASON: Final = 300
@@ -44,7 +43,7 @@ def note(conn: sqlite3.Connection, tick_id: int) -> dict[str, int]:
     if tick is None or tick.message_id is None:
         return {}
     unanswered = (
-        sql.select("id, subject_id")
+        records.view(_Read)
         .from_("messages")
         .where(
             "subject_kind = ? AND source = 'operator' AND id > ? AND id <= ?",
@@ -54,10 +53,9 @@ def note(conn: sqlite3.Connection, tick_id: int) -> dict[str, int]:
         )
         .order_by("id")
     )
-    rows = sql.execute(conn, unanswered).fetchall()
     read: defaultdict[str, list[int]] = defaultdict(list)
-    for row in rows:
-        read[str(row["subject_id"])].append(int(row["id"]))
+    for message in unanswered.all(conn):
+        read[message.subject_id].append(message.id)
     # A cursor the harness moved decided nothing about the ticket, so the note leaves it out.
     decisions = [d for d in db.decisions_for_tick(conn, tick_id) if d.action != harness.CURSOR_ACTION]
     return {
@@ -71,6 +69,14 @@ def note(conn: sqlite3.Connection, tick_id: int) -> dict[str, int]:
     }
 
 
+@dataclass(frozen=True)
+class _Read(records.View):
+    """A message the operator sent a ticket, and the ticket."""
+
+    id: int
+    subject_id: str
+
+
 def _noted_up_to(conn: sqlite3.Connection, tick_id: int) -> int:
     # The newest message the live `ok` tick before this one read, which its notes answered for. A dry run's does not
     # count: it notes nothing, so what it read is still unanswered.
@@ -81,8 +87,7 @@ def _noted_up_to(conn: sqlite3.Connection, tick_id: int) -> int:
         .order_by("id DESC")
         .limit(1)
     )
-    row = sql.execute(conn, noted).fetchone()
-    return 0 if row is None else int(row[0])
+    return records.fetch_value(conn, int, noted) or 0
 
 
 def body(tick_id: int, key: str, read: Sequence[int], decisions: Sequence[records.Decision]) -> str:

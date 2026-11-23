@@ -181,6 +181,38 @@ def test_a_view_reads_a_joins_columns_converted_as_a_rows_are(conn: sqlite3.Conn
     assert isinstance(read.status, TickStatus)
 
 
+def test_a_view_starts_its_own_query_of_its_fields_or_of_columns_written_out(conn: sqlite3.Connection) -> None:
+    dry = db.start_tick(conn, dry_run=True)
+    for key in ("PROJ-1", "PROJ-2"):
+        db.record_decision(conn, dry, key, "wait", "checks running")
+    named = records.view(Keyed).from_("decisions").where("ticket_key != ?", "PROJ-1")
+    assert named.all(conn) == [Keyed(ticket_key="PROJ-2", action="wait")]
+    counted = records.view(Counted, "tick_id, count(*) AS decisions").from_("decisions").group_by("tick_id")
+    assert counted.one(conn) == Counted(tick_id=dry, decisions=2)
+    # A view's columns may make its rows what they are, so its count and existence read the query as written.
+    total = records.view(Total, "count(*) AS decisions").from_("decisions").where("ticket_key = ?", "PROJ-9")
+    assert (total.count(conn), total.exists(conn)) == (1, True)
+    with pytest.raises(records.RowError, match=r"^query does not fit Keyed: missing action$"):
+        records.view(Keyed, "ticket_key").from_("decisions").all(conn)
+
+
+@dataclass(frozen=True)
+class Keyed(records.View):
+    ticket_key: str
+    action: str
+
+
+@dataclass(frozen=True)
+class Counted(records.View):
+    tick_id: int
+    decisions: int
+
+
+@dataclass(frozen=True)
+class Total(records.View):
+    decisions: int
+
+
 def test_a_views_refusal_names_the_view(conn: sqlite3.Connection) -> None:
     tick = db.start_tick(conn, dry_run=True)
     db.record_decision(conn, tick, "PROJ-1", "wait", "checks running")

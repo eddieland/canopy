@@ -869,8 +869,9 @@ def _work(conn: sqlite3.Connection, planned: AbstractSet[str]) -> dict[str, _Wor
         Each ticket's work, by its key; a ticket with none is not there.
     """
     plan_runs = sql.union(sql.select("run_id").from_("plans"), sql.select("run_id").from_("feedback_plans"))
+    columns = "r.id, r.ticket_key, r.kind, r.status, r.started_at, r.ended_at, p.run_id AS plan, f.run_id AS fb"
     runs = (
-        sql.select("r.id, r.ticket_key, r.kind, r.status, r.started_at, r.ended_at, p.run_id AS plan, f.run_id AS fb")
+        records.view(_RanAfter, columns)
         .from_("runs r")
         .left_join("plans p ON p.id = r.plan_id")
         .left_join("feedback_plans f ON f.id = r.feedback_plan_id")
@@ -878,32 +879,51 @@ def _work(conn: sqlite3.Connection, planned: AbstractSet[str]) -> dict[str, _Wor
         .order_by("r.id")
     )
     found_runs: dict[str, list[_WorkRun]] = {}
-    for r in sql.execute(conn, runs):
-        if r["ticket_key"] in planned:
-            followed = r["fb"] if r["fb"] is not None else r["plan"]
-            found_runs.setdefault(str(r["ticket_key"]), []).append(
-                _WorkRun(
-                    int(r["id"]),
-                    str(r["kind"]),
-                    str(r["status"]),
-                    str(r["started_at"]),
-                    r["ended_at"],
-                    None if followed is None else int(followed),
-                ),
+    for ran in runs.all(conn):
+        if ran.ticket_key in planned:
+            followed = ran.fb if ran.fb is not None else ran.plan
+            found_runs.setdefault(ran.ticket_key, []).append(
+                _WorkRun(ran.id, ran.kind, ran.status, ran.started_at, ran.ended_at, followed),
             )
     prs = (
-        sql.select("u.ticket_key, u.repo, u.pr_url, u.phase, o.state, o.draft")
+        records.view(_UnitPr, "u.ticket_key, u.repo, u.pr_url, u.phase, o.state, o.draft")
         .from_("ticket_units u")
         .left_join("observed_prs o ON o.url = u.pr_url")
         .where("u.pr_url IS NOT NULL")
         .order_by("u.ticket_key, u.repo")
     )
     found_prs: dict[str, list[_Pr]] = {}
-    for r in sql.execute(conn, prs):
-        if r["ticket_key"] in planned:
-            pr = _Pr(r["repo"], str(r["pr_url"]), r["state"], bool(r["draft"]), r["phase"])
-            found_prs.setdefault(str(r["ticket_key"]), []).append(pr)
+    for unit in prs.all(conn):
+        if unit.ticket_key in planned:
+            pr = _Pr(unit.repo, unit.pr_url, unit.state, bool(unit.draft), unit.phase)
+            found_prs.setdefault(unit.ticket_key, []).append(pr)
     return {key: _Work(found_runs.get(key, ()), found_prs.get(key, ())) for key in {*found_runs, *found_prs}}
+
+
+@dataclass(frozen=True)
+class _RanAfter(records.View):
+    """A run that worked on a ticket's branch, with the run of the plan and of the feedback plan it followed."""
+
+    id: int
+    ticket_key: str
+    kind: str
+    status: str
+    started_at: str
+    ended_at: str | None
+    plan: int | None
+    fb: int | None
+
+
+@dataclass(frozen=True)
+class _UnitPr(records.View):
+    """A unit's PR, with what canopy's GitHub reader last read of it: no state and no draft for one never read."""
+
+    ticket_key: str
+    repo: str | None
+    pr_url: str
+    phase: str | None
+    state: str | None
+    draft: bool | None
 
 
 def _last_messages(conn: sqlite3.Connection) -> dict[str, int]:
@@ -912,13 +932,22 @@ def _last_messages(conn: sqlite3.Connection) -> dict[str, int]:
     Returns:
         The id of each ticket's newest message, by its key.
     """
-    query = (
-        sql.select("subject_id, MAX(id) AS last")
+    newest = (
+        records.view(_NewestMessage, "subject_id, MAX(id) AS last")
         .from_("messages")
         .where("subject_kind = ?", db.SUBJECT_TICKET)
         .group_by("subject_id")
+        .all(conn)
     )
-    return {str(r["subject_id"]): int(r["last"]) for r in sql.execute(conn, query)}
+    return {n.subject_id: n.last for n in newest}
+
+
+@dataclass(frozen=True)
+class _NewestMessage(records.View):
+    """A ticket's newest message: the ticket's key, as a message names its subject, and the message's id."""
+
+    subject_id: str
+    last: int
 
 
 def _messages(conn: sqlite3.Connection, key: str, last: int) -> list[records.Message]:
@@ -1228,18 +1257,26 @@ def _prompt_paths(conn: sqlite3.Connection, state_dir: Path) -> dict[int, Path]:
         The path of each plan run's prompt, by its run's id; a run whose log is outside the state directory has none.
     """
     planned = sql.union(sql.select("run_id").from_("plans"), sql.select("run_id").from_("feedback_plans"))
-    runs = sql.select("id, log_path").from_("runs").where("id IN ({})", planned)
+    runs = records.view(_RunLog).from_("runs").where("id IN ({})", planned).all(conn)
     root = os.path.realpath(state_dir)
     # Resolved once for each directory: every plan run logs to the same one.
     inside: dict[Path, bool] = {}
     paths: dict[int, Path] = {}
-    for r in sql.execute(conn, runs):
-        prompt = Path(r["log_path"]).with_suffix(".prompt")
+    for run in runs:
+        prompt = Path(run.log_path).with_suffix(".prompt")
         if prompt.parent not in inside:
             inside[prompt.parent] = Path(os.path.realpath(prompt.parent)).is_relative_to(root)
         if inside[prompt.parent]:
-            paths[int(r["id"])] = prompt
+            paths[run.id] = prompt
     return paths
+
+
+@dataclass(frozen=True)
+class _RunLog(records.View):
+    """Where a run logs."""
+
+    id: int
+    log_path: str
 
 
 def _prompt_stats(prompt: _Prompt, run_id: int, dest_fd: int) -> _Stats:

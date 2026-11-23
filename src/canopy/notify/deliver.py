@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Final
 
 from canopy.core import contract, db, outbox, records, run_metrics, spend, sql
 from canopy.core.config import Sink, notify_words
+from canopy.core.vocab import TickStatus
 from canopy.infra import procs
 from canopy.notify import journal, message
 
@@ -191,31 +192,38 @@ def status(ctx: Context) -> list[SinkStatus]:
 
 def _record_loop_events(ctx: Context) -> None:
     """Record `loop.failing` once when the latest ticks all failed, and `loop.recovered` at the first `ok` after it."""
-    latest = sql.execute(
-        ctx.conn,
-        sql.select("id, status").from_("ticks").where("status != 'running'").order_by("id DESC").limit(1),
-    ).fetchone()
+    ended = records.view(_Ended).from_("ticks").where("status != 'running'").order_by("id DESC").limit(1)
+    latest = ended.one(ctx.conn)
     if latest is None:
         return
-    tick_id, status = int(latest[0]), str(latest[1])
+    tick_id, status = latest.id, latest.status
     # Pruning always keeps the newest of these (journal.prune_events), so a long streak is never taken for a new one.
-    last = sql.execute(
+    last = records.fetch_value(
         ctx.conn,
+        str,
         sql.select("kind")
         .from_("notify_events")
         .where("kind IN ('loop.failing', 'loop.recovered')")
         .order_by("id DESC")
         .limit(1),
-    ).fetchone()
-    failing = last is not None and last[0] == "loop.failing"
-    if status == "ok":
+    )
+    failing = last == "loop.failing"
+    if status is TickStatus.OK:
         if failing:
             db.record_event(ctx.conn, outbox.loop_recovered(_failed_before(ctx.conn, tick_id)))
         return
     streak = _failed_before(ctx.conn, tick_id + 1)
     if streak >= FAILING_AFTER and not failing:
         log_path = ctx.state_dir / "ticks" / f"{tick_id}.log"
-        db.record_event(ctx.conn, outbox.loop_failing(streak, status, tick_id, str(log_path)))
+        db.record_event(ctx.conn, outbox.loop_failing(streak, status.value, tick_id, str(log_path)))
+
+
+@dataclass(frozen=True)
+class _Ended(records.View):
+    """A tick that ended, and how."""
+
+    id: int
+    status: TickStatus
 
 
 def _record_budget_event(ctx: Context, now: datetime) -> None:
@@ -229,15 +237,16 @@ def _record_budget_event(ctx: Context, now: datetime) -> None:
     if found is None or found.reached is None:
         return
     # Pruning always keeps the newest of these (journal.prune_events), so a month already told is never taken for new.
-    last = sql.execute(
+    last = records.fetch_value(
         ctx.conn,
+        str,
         sql.select("fields")
         .from_("notify_events")
         .where("kind = ?", outbox.BUDGET_REACHED)
         .order_by("id DESC")
         .limit(1),
-    ).fetchone()
-    told = contract.stored_object(str(last[0])) if last is not None else {}
+    )
+    told = contract.stored_object(last) if last is not None else {}
     budget, percent = told.get("budget"), told.get("percent")
     heard = budget * percent if isinstance(budget, int) and isinstance(percent, int) else 0
     if told.get("month") == found.month and heard >= found.budget_usd * found.reached:
@@ -252,14 +261,13 @@ def _failed_before(conn: sqlite3.Connection, tick_id: int) -> int:
         The count, 0 when the last ended tick before `tick_id` was `ok`.
     """
     last_ok = sql.select("max(id)").from_("ticks").where("id < ?", tick_id).where("status = 'ok'")
-    q = (
-        sql.select("count(*)")
-        .from_("ticks")
-        .where("id < ?", tick_id)
-        .where("status NOT IN ('running', 'ok')")
-        .where("id > coalesce(({}), 0)", last_ok)
+    failed = (
+        records.select(records.Tick)
+        .where("ticks.id < ?", tick_id)
+        .where("ticks.status NOT IN ('running', 'ok')")
+        .where("ticks.id > coalesce(({}), 0)", last_ok)
     )
-    return int(sql.execute(conn, q).fetchone()[0])
+    return failed.count(conn)
 
 
 def _deliver(

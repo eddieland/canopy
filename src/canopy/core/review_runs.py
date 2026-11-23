@@ -86,8 +86,8 @@ def review_dismissals(conn: sqlite3.Connection, run_id: int) -> dict[int, Dismis
     Returns:
         Each dismissed finding's number, with why it was dismissed: None for a dismissal from before canopy asked.
     """
-    query = sql.select("finding, reason").from_("review_dismissals").where("review_run_id = ?", run_id)
-    return {int(r[0]): DismissalReason(r[1]) if r[1] is not None else None for r in sql.execute(conn, query)}
+    dismissed = records.select(records.ReviewDismissal).where("review_run_id = ?", run_id).all(conn)
+    return {d.finding: d.reason for d in dismissed}
 
 
 def set_review_dismissal(

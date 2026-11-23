@@ -185,14 +185,13 @@ def moved_after(conn: sqlite3.Connection, since: str) -> bool:
         True if one did: it ends the loop's wait, so the run it asks for starts at the next tick, not the one after
         the wait.
     """
-    query = sql.select("1").from_("tasks").where("submitted_at > ? OR stopped_at > ?", since, since).limit(1)
-    replied = (
-        sql.select("1")
-        .from_("messages")
-        .where("subject_kind = ? AND source = 'operator' AND at > ?", conversation.TASK, since)
-        .limit(1)
+    changed = records.select(records.Task).where("submitted_at > ? OR stopped_at > ?", since, since)
+    replied = records.select(records.Message).where(
+        "subject_kind = ? AND source = 'operator' AND at > ?",
+        conversation.TASK,
+        since,
     )
-    return sql.execute(conn, query).fetchone() is not None or sql.execute(conn, replied).fetchone() is not None
+    return changed.exists(conn) or replied.exists(conn)
 
 
 @dataclass(frozen=True)
@@ -255,12 +254,20 @@ def newest_messages(conn: sqlite3.Connection) -> dict[int, int]:
         The ids.
     """
     query = (
-        sql.select("subject_id, max(id)")
+        records.view(_Newest, "subject_id, max(id) AS message_id")
         .from_("messages")
         .where("subject_kind = ?", conversation.TASK)
         .group_by("subject_id")
     )
-    return {int(r[0]): int(r[1]) for r in sql.execute(conn, query)}
+    return {int(r.subject_id): r.message_id for r in query.all(conn)}
+
+
+@dataclass(frozen=True)
+class _Newest(records.View):
+    """A task's newest message, the task named as its messages name it."""
+
+    subject_id: str
+    message_id: int
 
 
 def runs_of(conn: sqlite3.Connection, task_id: int) -> list[records.TaskRun]:
@@ -388,7 +395,7 @@ def insert_run(
             pool=str(pool),
             started_at=db.now(),
             log_path="",
-            message_id=sql.execute(conn, newest).fetchone()[0],
+            message_id=records.fetch_value(conn, int, newest),
             model=model,
         )
         run_id = int(run.run(conn).lastrowid or 0)

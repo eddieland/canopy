@@ -35,7 +35,7 @@ from typing import TYPE_CHECKING, Annotated, Final, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from canopy.core import conversation, db, observe, outbox, sql
+from canopy.core import conversation, db, observe, outbox, records
 from canopy.core.config import SLACK_USER_RE
 from canopy.core.vocab import ConnectorRunStatus
 
@@ -247,14 +247,14 @@ def _refused(
     event = outbox.reply_refused(config, key=line.ticket, ts=line.ts, guard=refusal.guard, reason=refusal.reason)
     if event is None:
         return
-    told = (
-        sql.select("1")
-        .from_("notify_events")
-        .where("kind = ? AND json_extract(fields, '$.ts') = ?", event.kind, line.ts)
+    told = records.select(records.NotifyEvent).where(
+        "kind = ? AND json_extract(fields, '$.ts') = ?",
+        event.kind,
+        line.ts,
     )
     with db.transaction(conn):
         # The reader reads the message again on every run until it ages out: the sinks hear of it once.
-        if sql.execute(conn, told).fetchone() is None:
+        if not told.exists(conn):
             db.record_event(conn, event)
 
 

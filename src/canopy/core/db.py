@@ -276,12 +276,18 @@ def live_runs(conn: sqlite3.Connection) -> list[str]:
     for table in RUN_TABLES:
         if not records.exists(conn, _table_named(table)):
             continue
-        rows = sql.execute(
-            conn,
-            sql.select("id, pid, log_path").from_(table).where("status = 'running'").order_by("id"),
-        )
-        live += [f"{RUN_NOUNS[table]} {r['id']}" for r in rows if procs.running(Path(r["log_path"]), r["pid"])]
+        rows = records.view(_Started).from_(table).where("status = 'running'").order_by("id").all(conn)
+        live += [f"{RUN_NOUNS[table]} {r.id}" for r in rows if procs.running(Path(r.log_path), r.pid)]
     return live
+
+
+@dataclass(frozen=True)
+class _Started(records.View):
+    """A run of any run table, as `live_runs` asks whether its process still runs."""
+
+    id: int
+    pid: int | None
+    log_path: str
 
 
 def _table_named(table: str) -> sql.Select:
@@ -459,11 +465,29 @@ def phases(conn: sqlite3.Connection) -> dict[tuple[str, str | None], str | None]
         The phase by ticket key and repository: None for the ticket's own, the unit's repository for a unit's.
     """
     found: dict[tuple[str, str | None], str | None] = {}
-    for key, phase in sql.execute(conn, sql.select("key, phase").from_("tickets")):
-        found[str(key), None] = None if phase is None else str(phase)
-    for key, repo, phase in sql.execute(conn, sql.select("ticket_key, repo, phase").from_("ticket_units")):
-        found[str(key), str(repo)] = None if phase is None else str(phase)
+    for ticket in records.view(_TicketPhase).from_("tickets").all(conn):
+        found[ticket.key, None] = ticket.phase
+    for unit in records.view(_UnitPhase).from_("ticket_units").all(conn):
+        # A unit of no repository is named as it was when the row was read bare.
+        found[unit.ticket_key, str(unit.repo)] = unit.phase
     return found
+
+
+@dataclass(frozen=True)
+class _TicketPhase(records.View):
+    """A ticket's recorded phase, as the word the journal holds."""
+
+    key: str
+    phase: str | None
+
+
+@dataclass(frozen=True)
+class _UnitPhase(records.View):
+    """A unit's recorded phase, as the word the journal holds."""
+
+    ticket_key: str
+    repo: str | None
+    phase: str | None
 
 
 def acknowledged_message_id(conn: sqlite3.Connection) -> int | None:
@@ -613,14 +637,23 @@ def set_pr_title(conn: sqlite3.Connection, pr_url: str, title: str) -> None:
 
 def pr_titles(conn: sqlite3.Connection, pr_urls: Collection[str]) -> dict[str, str]:
     """Return the own title recorded for each of `pr_urls` that has one, by URL."""
-    query = sql.select("pr_url, title").from_("pr_titles").where_in("pr_url", pr_urls)
-    return {str(r[0]): str(r[1]) for r in sql.execute(conn, query)}
+    titled = records.view(_Titled, "pr_url AS name, title").from_("pr_titles").where_in("pr_url", pr_urls)
+    return {t.name: t.title for t in titled.all(conn)}
 
 
 def ticket_titles(conn: sqlite3.Connection, keys: Collection[str]) -> dict[str, str]:
     """Return the title of each of tickets `keys` the overseer has named, by key."""
-    query = sql.select("key, title").from_("tickets").where_in("key", keys).where("title IS NOT NULL")
-    return {str(r[0]): str(r[1]) for r in sql.execute(conn, query)}
+    titled = records.view(_Titled, "key AS name, title").from_("tickets").where_in("key", keys)
+    return {t.name: t.title for t in titled.where("title IS NOT NULL").all(conn)}
+
+
+@dataclass(frozen=True)
+class _Titled(records.View):
+    """A PR or a ticket and the title recorded for it."""
+
+    #: The PR's URL, or the ticket's key.
+    name: str
+    title: str
 
 
 def units(conn: sqlite3.Connection, key: str) -> list[records.TicketUnit]:
@@ -819,9 +852,17 @@ def finish_run(
 
 def _number_review_run(conn: sqlite3.Connection, run_id: int) -> None:
     """Give a review run that just ended its journal number, what a `review` cursor names of it (DESIGN §35)."""
-    run = sql.execute(conn, sql.select("pr_url, ended_at").from_("review_runs").where("id = ?", run_id)).fetchone()
-    number = item_numbers.take(conn, NumberedItem.REVIEW_RUN, str(run[0]), run_id, at=str(run[1]))
+    [run] = records.view(_EndedReview).from_("review_runs").where("id = ?", run_id).all(conn)
+    number = item_numbers.take(conn, NumberedItem.REVIEW_RUN, run.pr_url, run_id, at=str(run.ended_at))
     records.update(records.ReviewRun).set(number=number).where("id = ?", run_id).run(conn)
+
+
+@dataclass(frozen=True)
+class _EndedReview(records.View):
+    """A review run's PR and when it ended, as its journal number is taken."""
+
+    pr_url: str
+    ended_at: str | None
 
 
 def _close_run(
@@ -1207,10 +1248,18 @@ def spent_since(conn: sqlite3.Connection, since: str) -> float | None:
         The total cost in US dollars, or None when no such run reported one.
     """
     tables: tuple[RunTable | Literal["ticks"], ...] = (*RUN_TABLES, "ticks")
-    costs = [sql.select("SUM(cost_usd)").from_(table).where("started_at >= ?", since) for table in tables]
-    row = sql.execute(conn, sql.select("({}), ({}), ({}), ({}), ({}), ({})", *costs)).fetchone()
-    parts = [float(v) for v in row if v is not None]
+    costs = [sql.select("SUM(cost_usd) AS cost").from_(table).where("started_at >= ?", since) for table in tables]
+    # One statement, so one snapshot of the journal: a run that starts meanwhile is in every table's sum or in none.
+    spent = records.fetch_all(conn, _Spent, sql.union(*costs, every=True))
+    parts = [s.cost for s in spent if s.cost is not None]
     return sum(parts) if parts else None
+
+
+@dataclass(frozen=True)
+class _Spent(records.View):
+    """What one table's runs cost together, None when none of them reported a cost."""
+
+    cost: float | None
 
 
 def spent_ever(conn: sqlite3.Connection) -> float | None:
@@ -1416,13 +1465,21 @@ def with_decision_counts(conn: sqlite3.Connection, ticks: Iterable[records.Tick]
     """
     found = list(ticks)
     query = (
-        sql.select("tick_id, count(*)")
+        records.view(_Decided, "tick_id, count(*) AS decisions")
         .from_("decisions")
         .where("tick_id IN (SELECT value FROM json_each(?))", json.dumps([t.id for t in found]))
         .group_by("tick_id")
     )
-    counts = dict(sql.execute(conn, query).fetchall())
-    return [(t, int(counts.get(t.id, 0))) for t in found]
+    counts = {d.tick_id: d.decisions for d in query.all(conn)}
+    return [(t, counts.get(t.id, 0)) for t in found]
+
+
+@dataclass(frozen=True)
+class _Decided(records.View):
+    """How many decisions a tick recorded."""
+
+    tick_id: int
+    decisions: int
 
 
 def decision_count(conn: sqlite3.Connection, tick_id: int) -> int:

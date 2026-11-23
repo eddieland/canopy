@@ -401,7 +401,7 @@ def awaiting(conn: sqlite3.Connection) -> list[conversation.Awaiting]:
     """
     found: list[conversation.Awaiting] = []
     blocked = (
-        sql.select("r.ticket_key, r.id")
+        records.view(_BlockedPlan, "r.ticket_key, r.id")
         .from_("runs r")
         .join("tickets t ON t.key = r.ticket_key")
         .where("t.done = 0 AND r.id > coalesce(t.forgotten_run_id, 0) AND r.status = 'blocked'")
@@ -412,13 +412,19 @@ def awaiting(conn: sqlite3.Connection) -> list[conversation.Awaiting]:
         )
         .order_by("r.ticket_key")
     )
-    rows = sql.execute(conn, blocked).fetchall()
-    for row in rows:
-        key = str(row[0])
-        asked = question(conn, key)
-        if asked is not None and asked.run_id == row[1]:
-            found.append(conversation.Awaiting(key, asked.id, asked.body))
+    for run in blocked.all(conn):
+        asked = question(conn, run.ticket_key)
+        if asked is not None and asked.run_id == run.id:
+            found.append(conversation.Awaiting(run.ticket_key, asked.id, asked.body))
     return found
+
+
+@dataclass(frozen=True)
+class _BlockedPlan(records.View):
+    """A ticket's latest plan run, blocked: the ticket and the run."""
+
+    ticket_key: str
+    id: int
 
 
 def question(conn: sqlite3.Connection, key: str) -> records.Message | None:

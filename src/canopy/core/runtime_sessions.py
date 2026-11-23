@@ -206,23 +206,20 @@ def spend(conn: sqlite3.Connection, since: str, until: str, *, state_dir: Path) 
         Canopy's sessions, the rest, and where the rest ran.
     """
     shares = {
-        bool(ours): Share(sessions=int(count), cost_usd=float(cost))
-        for ours, count, cost in sql.execute(
-            conn,
-            _classified(since, until, state_dir).group_by("ours"),
-        )
+        s.ours: Share(sessions=s.sessions, cost_usd=s.cost_usd)
+        for s in _classified(since, until, state_dir).group_by("ours").all(conn)
     }
+    by_directory = (
+        records.view(_Directory, "directory, count(*) AS sessions, total(cost_usd) AS cost_usd")
+        .from_("({}) AS c", sessions_in(since, until, state_dir))
+        .where("NOT ours")
+        .group_by("directory")
+        .order_by("total(cost_usd) DESC, directory")
+        .limit(DIRECTORIES)
+        .all(conn)
+    )
     directories = [
-        DirectorySpend(directory=str(directory), sessions=int(count), cost_usd=float(cost))
-        for directory, count, cost in sql.execute(
-            conn,
-            sql.select("directory, count(*), total(cost_usd)")
-            .from_("({}) AS c", sessions_in(since, until, state_dir))
-            .where("NOT ours")
-            .group_by("directory")
-            .order_by("total(cost_usd) DESC, directory")
-            .limit(DIRECTORIES),
-        )
+        DirectorySpend(directory=d.directory, sessions=d.sessions, cost_usd=d.cost_usd) for d in by_directory
     ]
     read = last_read(conn)
     return SessionsSpend(
@@ -243,15 +240,13 @@ def outside(conn: sqlite3.Connection, since: str, until: str | None = None, *, s
     Returns:
         How many there were and what they cost: none and 0 before any read.
     """
-    count, cost = sql.execute(
-        conn,
-        sql.select("count(*), total(cost_usd)")
+    [total] = (
+        records.view(_Sessions, "count(*) AS sessions, total(cost_usd) AS cost_usd")
         .from_("({}) AS c", sessions_in(since, until, state_dir))
-        .where(
-            "NOT ours",
-        ),
-    ).fetchone()
-    return Share(sessions=int(count), cost_usd=float(cost))
+        .where("NOT ours")
+        .all(conn)
+    )
+    return Share(sessions=total.sessions, cost_usd=total.cost_usd)
 
 
 def of_session(conn: sqlite3.Connection, session_id: str) -> records.RuntimeSession | None:
@@ -422,5 +417,33 @@ def _journal_time(ms: int) -> str:
 
 
 # The window's sessions, as `sessions_in` reads them, to be grouped by whether each is canopy's.
-def _classified(since: str, until: str, state_dir: Path) -> sql.Select:
-    return sql.select("ours, count(*), total(cost_usd)").from_("({}) AS c", sessions_in(since, until, state_dir))
+def _classified(since: str, until: str, state_dir: Path) -> records.Query[_Shared]:
+    counted = records.view(_Shared, "ours, count(*) AS sessions, total(cost_usd) AS cost_usd")
+    return counted.from_("({}) AS c", sessions_in(since, until, state_dir))
+
+
+@dataclass(frozen=True)
+class _Sessions(records.View):
+    """Some sessions, counted, and what they cost."""
+
+    sessions: int
+    cost_usd: float
+
+
+@dataclass(frozen=True)
+class _Shared(records.View):
+    """Canopy's sessions of a window, or the rest, counted, and what they cost."""
+
+    #: Whether they are canopy's.
+    ours: bool
+    sessions: int
+    cost_usd: float
+
+
+@dataclass(frozen=True)
+class _Directory(records.View):
+    """The sessions that ran in one directory, counted, and what they cost."""
+
+    directory: str
+    sessions: int
+    cost_usd: float

@@ -316,8 +316,8 @@ def _finished_at(conn: sqlite3.Connection, url: str, run_ids: Iterable[int]) -> 
         The time, or None for no run the journal kept.
     """
     query = sql.select("MAX(observed_at)").from_("observed_check_runs").where("pr_url = ?", url)
-    found = sql.execute(conn, query.where_in("run_id", list(run_ids))).fetchone()
-    return None if found is None or found[0] is None else db.parse_time(str(found[0]))
+    found = records.fetch_value(conn, str, query.where_in("run_id", list(run_ids)))
+    return None if found is None else db.parse_time(found)
 
 
 def _review_limit(ctx: Context, key: str, url: str, head: str | None) -> str | None:
@@ -609,7 +609,7 @@ def _closed_prs(conn: sqlite3.Connection, cutoff: str, urls: Iterable[str]) -> s
         .where_in("url", list(urls))
         .where("state != ? AND observed_at >= ?", PrState.OPEN, cutoff)
     )
-    return {str(r[0]) for r in sql.execute(conn, query)}
+    return set(records.fetch_values(conn, str, query))
 
 
 def _kept(ctx: Context, subjects: _Subjects, limits: _Limits) -> Iterator[Raised]:

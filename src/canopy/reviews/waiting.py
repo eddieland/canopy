@@ -78,8 +78,7 @@ def unread_prs(conn: sqlite3.Connection) -> list[str]:
     Returns:
         The PRs' URLs, in order.
     """
-    rows = sql.execute(
-        conn,
+    unread = (
         sql.select("d.pr_url")
         .unique()
         .from_("review_drafts d")
@@ -87,9 +86,9 @@ def unread_prs(conn: sqlite3.Connection) -> list[str]:
         .where("d.status = ?", ReviewDraftStatus.WAITING)
         .where("r.purpose = ?", review_requests.PURPOSE)
         .where("NOT EXISTS (SELECT 1 FROM observed_prs p WHERE p.url = d.pr_url AND p.state != ?)", PrState.OPEN)
-        .order_by("d.pr_url"),
+        .order_by("d.pr_url")
     )
-    return [str(r["pr_url"]) for r in rows]
+    return records.fetch_values(conn, str, unread)
 
 
 def _waiting(conn: sqlite3.Connection) -> list[Item]:
@@ -139,11 +138,8 @@ def _requested(conn: sqlite3.Connection, run_ids: Sequence[int]) -> set[int]:
     """
     if not run_ids:
         return set()
-    rows = sql.execute(
-        conn,
-        sql.select("id").from_("review_runs").where("purpose = ?", review_requests.PURPOSE).where_in("id", run_ids),
-    )
-    return {int(r["id"]) for r in rows}
+    asked = sql.select("id").from_("review_runs").where("purpose = ?", review_requests.PURPOSE).where_in("id", run_ids)
+    return set(records.fetch_values(conn, int, asked))
 
 
 def _posts(conn: sqlite3.Connection, draft: records.ReviewDraft) -> bool:
@@ -207,9 +203,11 @@ def _held(conn: sqlite3.Connection) -> list[Item]:
         The items, rebuttals first, each by ticket, each naming every finding held of its kind.
     """
     # CROSS JOIN keeps SQLite reading the few holds and each one's run, rather than every review run for the order.
-    rows = sql.execute(
-        conn,
-        sql.select("h.review_run_id, h.finding, h.kind, h.rebuts_run_id, h.rebuts_finding, r.pr_url, r.ticket_key")
+    holds = (
+        records.view(
+            _Hold,
+            "h.review_run_id, h.finding, h.kind, h.rebuts_run_id, h.rebuts_finding, r.pr_url, r.ticket_key",
+        )
         .from_("review_holds h CROSS JOIN review_runs r ON r.id = h.review_run_id")
         .where("h.released_at IS NULL")
         .where("r.status = ? AND r.ticket_key IS NOT NULL", ReviewRunStatus.DONE)
@@ -219,21 +217,36 @@ def _held(conn: sqlite3.Connection) -> list[Item]:
         )
         .where("EXISTS (SELECT 1 FROM ticket_units u WHERE u.ticket_key = r.ticket_key AND u.pr_url = r.pr_url)")
         .where("NOT EXISTS (SELECT 1 FROM observed_prs p WHERE p.url = r.pr_url AND p.state != ?)", PrState.OPEN)
-        .order_by("r.pr_url, h.review_run_id, h.finding"),
-    ).fetchall()
+        .order_by("r.pr_url, h.review_run_id, h.finding")
+        .all(conn)
+    )
     # One item a ticket and reason, as the attention list keys it, naming the PR of its first held finding: a joint
     # run's PRs share their ticket's.
     by_item: dict[tuple[str, HoldKind], list[str]] = defaultdict(list)
     prs: dict[tuple[str, HoldKind], str] = {}
-    for r in rows:
-        kind, held = HoldKind(r["kind"]), f"review:{r['review_run_id']} finding {r['finding']}"
-        prs.setdefault((str(r["ticket_key"]), kind), str(r["pr_url"]))
-        by_item[str(r["ticket_key"]), kind].append(_held_detail(held, kind, r["rebuts_run_id"], r["rebuts_finding"]))
+    for h in holds:
+        held = f"review:{h.review_run_id} finding {h.finding}"
+        prs.setdefault((h.ticket_key, h.kind), h.pr_url)
+        by_item[h.ticket_key, h.kind].append(_held_detail(held, h.kind, h.rebuts_run_id, h.rebuts_finding))
     order = list(HoldKind)
     return [
         Item(prs[ticket, kind], _HELD_REASONS[kind], f"{'; '.join(held)}. {_HELD_ASK[kind]}", ticket=ticket)
         for (ticket, kind), held in sorted(by_item.items(), key=lambda i: (order.index(i[0][1]), i[0][0]))
     ]
+
+
+@dataclass(frozen=True)
+class _Hold(records.View):
+    """A finding canopy holds, with the PR and the ticket of the review run that found it."""
+
+    review_run_id: int
+    finding: int
+    kind: HoldKind
+    #: The earlier review run, and its finding, that a rebuttal answers; None for a `late` hold.
+    rebuts_run_id: int | None
+    rebuts_finding: int | None
+    pr_url: str
+    ticket_key: str
 
 
 def _held_detail(held: str, kind: HoldKind, rebuts_run_id: object, rebuts_finding: object) -> str:

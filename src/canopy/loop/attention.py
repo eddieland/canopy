@@ -48,6 +48,7 @@ from canopy.core import (
     db,
     kept_items,
     memory,
+    records,
     sql,
 )
 from canopy.core.items import ACTION_PREFIX, Item, age, fingerprint, one_line, subject
@@ -61,7 +62,6 @@ from canopy.reviews import waiting as review_waiting
 from canopy.runs import artifact_authority, drafted, epic_runs, follow_ups, task_tickets, tasks
 
 if TYPE_CHECKING:
-    from canopy.core import records
     from canopy.core.context import Context
 
 #: Where a ticket key would be, an item about a chore names it so, and one about a PR with no ticket. A ticket key has
@@ -235,18 +235,17 @@ def current(conn: sqlite3.Connection) -> list[Item]:
     its ticket is done or stopped. One the overseer keeps is open while any record of it is held, whatever the ticks
     since recorded (`kept_items.held`), open since the oldest of them.
     """
-    rows = sql.execute(
-        conn,
-        sql.select("id, overseer_ran").from_("ticks").where("status = 'ok'").order_by("id DESC").limit(HISTORY_TICKS),
-    ).fetchall()
-    ticks = [int(r[0]) for r in rows]
+    closed = (
+        records.view(_Closed).from_("ticks").where("status = 'ok'").order_by("id DESC").limit(HISTORY_TICKS).all(conn)
+    )
+    ticks = [tick.id for tick in closed]
     if not ticks:
         return _halted(conn, None)
     by_tick = _recorded(conn, ticks)
     subjects = {i[0] for found in by_tick.values() for i, r in found.items() if r.held and i[0] is not None}
     given = _given(conn, ticks, subjects)
     # A tick from before it was recorded that closed `ok` ran its overseer (DESIGN §39).
-    ran = frozenset(int(r[0]) for r in rows if r[1] != 0)
+    ran = frozenset(tick.id for tick in closed if tick.overseer_ran is not False)
     open_items: dict[_ItemId, _Open] = {}
     for tick_id in reversed(ticks):
         now: dict[_ItemId, _Open] = {}
@@ -287,6 +286,14 @@ class _Open:
     held: bool
 
 
+@dataclass(frozen=True)
+class _Closed(records.View):
+    """A tick that closed `ok`, and whether it ran its overseer: None on one from before canopy recorded it."""
+
+    id: int
+    overseer_ran: bool | None
+
+
 def _recorded(conn: sqlite3.Connection, ticks: Collection[int]) -> dict[int, dict[_ItemId, _Open]]:
     """The attention items each of `ticks` recorded, each as its first row there words it, but those the overseer keeps.
 
@@ -294,29 +301,27 @@ def _recorded(conn: sqlite3.Connection, ticks: Collection[int]) -> dict[int, dic
         By tick, each item, held when the overseer recorded it there: a reason not only the harness records, recorded
         other than by the harness, as by a guard that refused the overseer.
     """
-    rows = sql.execute(
-        conn,
-        sql.select("tick_id, ticket_key, action, rationale, created_at, repo, chore, pr, decider")
-        .from_("decisions")
+    recorded = (
+        records.select(records.Decision)
         .where("action LIKE 'attention:%' AND kept = 0")
         .where_in("tick_id", ticks)
-        .order_by("id"),
-    ).fetchall()
+        .order_by("id")
+        .all(conn)
+    )
     by_tick: dict[int, dict[_ItemId, _Open]] = {t: {} for t in ticks}
-    for r in rows:
-        key = None if r["ticket_key"] is None else str(r["ticket_key"])
-        if r["chore"] is not None:
-            key = f"{CHORE_PREFIX}{r['chore']}"
-        elif key is None and r["pr"] is not None:
-            key = f"{PR_PREFIX}{r['pr']}"
-        repo = None if r["repo"] is None else str(r["repo"])
-        reason = str(r["action"]).removeprefix(ACTION_PREFIX)
-        item_id: _ItemId = (key, reason, repo)
-        held = r["decider"] != Decider.HARNESS and reason not in ALWAYS_HARNESS
-        found = by_tick[int(r["tick_id"])]
+    for r in recorded:
+        key = r.ticket_key
+        if r.chore is not None:
+            key = f"{CHORE_PREFIX}{r.chore}"
+        elif key is None and r.pr is not None:
+            key = f"{PR_PREFIX}{r.pr}"
+        reason = r.action.removeprefix(ACTION_PREFIX)
+        item_id: _ItemId = (key, reason, r.repo)
+        held = r.decider != Decider.HARNESS and reason not in ALWAYS_HARNESS
+        found = by_tick[r.tick_id]
         first = found.get(item_id)
         if first is None:
-            found[item_id] = _Open(str(r["rationale"]), str(r["created_at"]), held=held)
+            found[item_id] = _Open(r.rationale, r.created_at, held=held)
         elif held and not first.held:
             found[item_id] = replace(first, held=True)
     return by_tick
@@ -335,19 +340,18 @@ def _given(conn: sqlite3.Connection, ticks: Collection[int], keys: Collection[st
     found: dict[int, set[str]] = {t: set() for t in ticks}
     if not keys:
         return found
-    rows = sql.execute(
-        conn,
-        sql.select("tick_id, ticket_key, action, decider")
-        .from_("decisions")
+    decided = (
+        records.select(records.Decision)
         .where_in("tick_id", ticks)
         .where_in("ticket_key", keys)
-        .where("action NOT IN (?, ?)", conversation.MIRROR_ACTION, REFUSED_DECIDED),
-    ).fetchall()
-    for r in rows:
-        action = str(r["action"])
-        raised = action.startswith(ACTION_PREFIX) and action.removeprefix(ACTION_PREFIX) in ALWAYS_HARNESS
-        if r["decider"] != Decider.HARNESS and not raised:
-            found[int(r["tick_id"])].add(str(r["ticket_key"]))
+        .where("action NOT IN (?, ?)", conversation.MIRROR_ACTION, REFUSED_DECIDED)
+        .all(conn)
+    )
+    for d in decided:
+        raised = d.action.startswith(ACTION_PREFIX) and d.action.removeprefix(ACTION_PREFIX) in ALWAYS_HARNESS
+        # Its key is one of `keys`, so it is not None.
+        if d.decider != Decider.HARNESS and not raised and d.ticket_key is not None:
+            found[d.tick_id].add(d.ticket_key)
     return found
 
 
@@ -375,25 +379,24 @@ def _halted(conn: sqlite3.Connection, last_ok: int | None) -> list[Item]:
     Returns:
         The item, open since the first tick after `last_ok` that raised it, or nothing.
     """
-    latest = sql.execute(
+    reason = records.fetch_value(
         conn,
+        str,
         sql.select("status").from_("ticks").where("status != 'running'").order_by("id DESC").limit(1),
-    ).fetchone()
-    if latest is None or latest[0] not in HALTS | MODEL_HALTS:
+    )
+    if reason is None or reason not in HALTS | MODEL_HALTS:
         return []
-    reason = str(latest[0])
     # Only the halted ticks' own items: a refusal in another tick may raise an item of the same name.
-    rows = sql.execute(
-        conn,
-        sql.select("rationale, created_at")
-        .from_("decisions")
+    raised = (
+        records.select(records.Decision)
         .where("action = ? AND tick_id > ?", f"{ACTION_PREFIX}{reason}", last_ok or 0)
         .where("tick_id IN (SELECT id FROM ticks WHERE status = ?)", reason)
-        .order_by("id"),
-    ).fetchall()
-    if not rows:
+        .order_by("id")
+        .all(conn)
+    )
+    if not raised:
         return []
-    return [Item(None, reason, str(rows[-1]["rationale"]), str(rows[0]["created_at"]))]
+    return [Item(None, reason, raised[-1].rationale, raised[0].created_at)]
 
 
 class OpenItem(TypedDict):
@@ -602,7 +605,7 @@ def from_runs(conn: sqlite3.Connection, *, labels: AbstractSet[str] = frozenset(
     is planned next (M55). Nor does a run that found its ticket not authorized once a queue label in `labels`, the
     tracker's, was observed added to it since (`relabel`); with none given, none lifts it.
     """
-    done = {str(r[0]) for r in sql.execute(conn, sql.select("key").from_("tickets").where("done = 1"))}
+    done = set(records.fetch_values(conn, str, sql.select("key").from_("tickets").where("done = 1")))
     stopped = set(conversation.stopped(conn))
     latest = db.latest_runs(conn)
     relabeled = relabel.lifted(conn, labels, latest)

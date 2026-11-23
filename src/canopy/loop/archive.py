@@ -32,7 +32,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Final
 
-from canopy.core import hostgit, plan_export, sql
+from canopy.core import hostgit, plan_export, records, sql
 from canopy.core.items import ACTION_PREFIX
 from canopy.infra import procs
 
@@ -99,8 +99,8 @@ def _raised(conn: Connection) -> bool:
         True when it did, so a failed push or a history left for the next tick is not held back.
     """
     newest = sql.select("max(id)").from_("ticks").where("status = 'ok'")
-    query = sql.select("1").from_("decisions").where("tick_id = ({}) AND action = ?", newest, ACTION_PREFIX + REASON)
-    return sql.execute(conn, query).fetchone() is not None
+    raised = records.select(records.Decision).where("tick_id = ({}) AND action = ?", newest, ACTION_PREFIX + REASON)
+    return raised.exists(conn)
 
 
 def _archive(ctx: Context, git: _Git, place: _Place, log: logs.TickAdapter) -> str | None:

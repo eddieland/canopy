@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
-from canopy.core import observe, records, review_drafts_manage, sql
+from canopy.core import observe, records, review_drafts_manage
 from canopy.core.vocab import DraftStatus, PrState
 from canopy.runs import drafts, drafts_manage
 
@@ -25,15 +25,22 @@ if TYPE_CHECKING:
 
 def after_run(ctx: Context, run_id: int, log: logs.TickAdapter) -> None:
     """Read the PRs run `run_id`'s drafts wait on, and check them against what was read."""
-    rows = sql.execute(
-        ctx.conn,
-        sql.select("pr_url")
+    rows = (
+        records.view(_Pr)
         .unique()
         .from_("drafts")
         .where("run_id = ?", run_id)
-        .where("status = ?", DraftStatus.UNCHECKED),
+        .where("status = ?", DraftStatus.UNCHECKED)
+        .all(ctx.conn)
     )
-    _read_and_check(ctx, [str(r["pr_url"]) for r in rows], log)
+    _read_and_check(ctx, [str(r.pr_url) for r in rows], log)
+
+
+@dataclass(frozen=True)
+class _Pr(records.View):
+    """A PR some draft names, by its URL."""
+
+    pr_url: str | None
 
 
 def reconcile(ctx: Context, whole: Collection[str], log: logs.TickAdapter) -> None:
@@ -97,9 +104,9 @@ def waiting(conn: sqlite3.Connection) -> list[Item]:
     Returns:
         The items, by ticket, then repository, the ticket's own after its units'.
     """
-    rows = sql.execute(
-        conn,
-        sql.select(
+    rows = (
+        records.view(
+            _Unsent,
             "d.ticket_key, d.repo, d.pr_url, count(*) AS n, sum(d.status = ?) AS unchecked, "
             "sum(d.status = ?) AS staged, min(d.created_at) AS since",
             DraftStatus.UNCHECKED,
@@ -110,22 +117,37 @@ def waiting(conn: sqlite3.Connection) -> list[Item]:
         .where_in("d.status", _UNSENT)
         .where("p.state IS NULL OR p.state = ?", PrState.OPEN)
         .group_by("d.ticket_key, d.repo, d.pr_url")
-        .order_by("d.ticket_key, d.repo IS NULL, d.repo, d.pr_url"),
-    ).fetchall()
+        .order_by("d.ticket_key, d.repo IS NULL, d.repo, d.pr_url")
+        .all(conn)
+    )
     found: list[Item] = []
     for r in rows:
-        n, unchecked, staged = int(r["n"]), int(r["unchecked"]), int(r["staged"])
-        what = f"{n} drafts wait on you" if n > 1 else "1 draft waits on you"
-        if r["pr_url"] is None:
-            found.append(Item(str(r["ticket_key"]), None, n, f"{what}, for the ticket", str(r["since"])))
+        what = f"{r.n} drafts wait on you" if r.n > 1 else "1 draft waits on you"
+        if r.pr_url is None:
+            found.append(Item(r.ticket_key, None, r.n, f"{what}, for the ticket", r.since))
             continue
-        detail = f"{what}, for {r['pr_url']}"
-        if staged:
-            detail += f"; {staged} in the review you staged there, for you to submit on GitHub"
-        if unchecked:
-            detail += f"; its threads could not be read yet, so {unchecked} cannot be sent until they are"
-        found.append(Item(str(r["ticket_key"]), str(r["repo"]), n, detail, str(r["since"])))
+        detail = f"{what}, for {r.pr_url}"
+        if r.staged:
+            detail += f"; {r.staged} in the review you staged there, for you to submit on GitHub"
+        if r.unchecked:
+            detail += f"; its threads could not be read yet, so {r.unchecked} cannot be sent until they are"
+        found.append(Item(r.ticket_key, str(r.repo), r.n, detail, r.since))
     return found
+
+
+@dataclass(frozen=True)
+class _Unsent(records.View):
+    """The unsent drafts of one ticket, repository, and PR, counted."""
+
+    ticket_key: str
+    repo: str | None
+    pr_url: str | None
+    n: int
+    #: How many of them wait on a whole read of the PR, and how many are in a review the operator staged.
+    unchecked: int
+    staged: int
+    #: When the oldest was written.
+    since: str
 
 
 def unsent(conn: sqlite3.Connection) -> list[records.Draft]:

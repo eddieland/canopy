@@ -33,7 +33,7 @@ from canopy.core.vocab import NumberedItem
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Collection, Iterable, Mapping, Sequence
+    from collections.abc import Collection, Iterable, Mapping
 
 NEEDS_AUTHOR: Final = "needs_author"
 MULTI_REPO: Final = "multi_repo"
@@ -225,15 +225,22 @@ def _passed(conn: sqlite3.Connection, key: str, item: records.ItemNumber) -> boo
     """
     match item.kind:
         case NumberedItem.COMMENT:
-            query = sql.select("comment_cursor").from_("tickets").where("key = ?", key)
+            query = records.view(_Cursor, "comment_cursor AS cursor").from_("tickets").where("key = ?", key)
         case NumberedItem.REVIEW | NumberedItem.REVIEW_COMMENT | NumberedItem.PR_COMMENT | NumberedItem.REVIEW_RUN:
-            units = sql.select("review_cursor").from_("ticket_units")
+            units = records.view(_Cursor, "review_cursor AS cursor").from_("ticket_units")
             query = units.where("ticket_key = ? AND pr_url = ?", key, item.subject)
         case NumberedItem.CHECK_RUN:
             return False
         case _:
             assert_never(item.kind)
-    return any(r[0] is not None and int(r[0]) >= item.number for r in sql.execute(conn, query))
+    return any(read.cursor is not None and read.cursor >= item.number for read in query.all(conn))
+
+
+@dataclass(frozen=True)
+class _Cursor(records.View):
+    """How far a ticket's comments, or one of its PRs' reviews, were read: None before any was."""
+
+    cursor: int | None
 
 
 def _rerun(conn: sqlite3.Connection, item: records.ItemNumber) -> bool:
@@ -244,13 +251,22 @@ def _rerun(conn: sqlite3.Connection, item: records.ItemNumber) -> bool:
     """
     if item.kind is not NumberedItem.CHECK_RUN:
         return False
-    runs: Sequence[tuple[str, int | None, int | None]] = [
-        (str(r[0]), r[1], r[2])
+    runs = [
+        run
         for table in (
-            sql.select("name, run_id, number").from_("observed_check_runs").where("pr_url = ?", item.subject),
-            sql.select("name, run_id, number").from_("observed_checks").where("pr_url = ?", item.subject),
+            records.view(_CheckRun).from_("observed_check_runs").where("pr_url = ?", item.subject),
+            records.view(_CheckRun).from_("observed_checks").where("pr_url = ?", item.subject),
         )
-        for r in sql.execute(conn, table)
+        for run in table.all(conn)
     ]
-    names = {name for name, run_id, _ in runs if str(run_id) == item.id}
-    return any(name in names and number is not None and number > item.number for name, _, number in runs)
+    names = {run.name for run in runs if str(run.run_id) == item.id}
+    return any(run.name in names and run.number is not None and run.number > item.number for run in runs)
+
+
+@dataclass(frozen=True)
+class _CheckRun(records.View):
+    """A check run observed on a PR, from either table that holds one: its check's name, its id, and its number."""
+
+    name: str
+    run_id: int | None
+    number: int | None

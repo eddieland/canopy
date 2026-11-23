@@ -712,18 +712,25 @@ def check_subject(conn: sqlite3.Connection, ref: Ref) -> None:
                 f"canopy has no record of {ref}: start it, or label it and let a tick see it, before replying",
             )
     elif ref.kind == TASK:
-        row = sql.execute(conn, sql.select("stopped_at").from_("tasks").where("id = ?", int(ref.id))).fetchone()
-        if row is None:
+        task = records.view(_Stopped).from_("tasks").where("id = ?", int(ref.id)).one(conn)
+        if task is None:
             raise Refused("unknown", f"canopy has no {ref}")
-        if row[0] is not None:
+        if task.stopped_at is not None:
             raise Refused("stopped", f"{ref} is stopped, and nothing starts it again; submit a new task instead")
     elif ref.kind == EPIC:
-        row = sql.execute(conn, sql.select("stopped_at").from_("epics").where("id = ?", int(ref.id))).fetchone()
-        if row is None:
+        epic = records.view(_Stopped).from_("epics").where("id = ?", int(ref.id)).one(conn)
+        if epic is None:
             raise Refused("unknown", f"canopy has no {ref}")
-        if row[0] is not None:
+        if epic.stopped_at is not None:
             # A reply asks for its next plan, which no tick starts once it is stopped.
             raise Refused("stopped", f"{ref} is stopped, and nothing plans it again; submit a new epic instead")
+
+
+@dataclass(frozen=True)
+class _Stopped(records.View):
+    """When the operator stopped a task or an epic, None while it is not stopped: no row is one canopy has not."""
+
+    stopped_at: str | None
 
 
 def _waiting_question(conn: sqlite3.Connection, ref: Ref) -> int | None:
@@ -1161,9 +1168,7 @@ def awaiting(conn: sqlite3.Connection) -> list[Awaiting]:
         .where("s.subject_kind = ? AND s.status = 'started' AND coalesce(t.done, 0) = 0", TICKET)
         .order_by("s.subject_id")
     )
-    rows = sql.execute(conn, started).fetchall()
-    for row in rows:
-        key = str(row[0])
+    for key in records.fetch_values(conn, str, started):
         question = latest_question(conn, key)
         if question is not None:
             found.append(Awaiting(key, question.id, question.body))

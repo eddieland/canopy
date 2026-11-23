@@ -24,7 +24,7 @@ from __future__ import annotations
 import contextlib
 from typing import TYPE_CHECKING, assert_never
 
-from canopy.core import db, records, sql
+from canopy.core import db, records
 from canopy.core.items import ACTION_PREFIX
 from canopy.core.vocab import Decider, RequestAction
 from canopy.loop import attention
@@ -45,8 +45,7 @@ def takes(conn: sqlite3.Connection, pr_url: str) -> bool:
     Returns:
         False for one of the loop's own PRs, whose request stays the overseer's.
     """
-    query = sql.select("1").from_("ticket_units").where("pr_url = ?", pr_url)
-    return sql.execute(conn, query).fetchone() is None
+    return not records.select(records.TicketUnit).where("pr_url = ?", pr_url).exists(conn)
 
 
 def taken(conn: sqlite3.Connection, tick_id: int) -> frozenset[str]:

@@ -28,7 +28,7 @@ from contextlib import ExitStack, contextmanager
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Final
 
-from canopy.core import epics, run_inbox, sql
+from canopy.core import epics, records, run_inbox, sql
 from canopy.infra import logs
 from canopy.runs import tasks
 from canopy.serve import chore_views, epic_views, reviews, spend_views, task_views, tick_views, views
@@ -163,8 +163,8 @@ class _Reader:
 
 
 def _data_version(ctx: Context) -> int:
-    row = sql.execute(ctx.conn, sql.frag("PRAGMA data_version")).fetchone()
-    return int(row[0])
+    [version] = records.fetch_values(ctx.conn, int, sql.frag("PRAGMA data_version"))
+    return version
 
 
 class _Sent:
