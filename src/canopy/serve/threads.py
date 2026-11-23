@@ -99,9 +99,10 @@ def known(conn: sqlite3.Connection, url: str) -> bool:
     Returns:
         True when the journal holds a read of the PR or a draft for it.
     """
-    read = records.select(records.ObservedPr).where("url = ?", url)
-    drafted = records.select(records.Draft).where("pr_url = ?", url)
-    return read.exists(conn) or drafted.exists(conn)
+    read = sql.select("1").from_("observed_prs").where("url = ?", url)
+    drafted = sql.select("1").from_("drafts").where("pr_url = ?", url)
+    # One statement, so one snapshot of the journal: a PR whose read lands as its draft goes is in one or the other.
+    return records.exists(conn, sql.union(read, drafted, every=True))
 
 
 def sent(conn: sqlite3.Connection, outcome: drafts_manage.Sent) -> DraftsSent:
