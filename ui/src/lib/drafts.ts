@@ -160,7 +160,7 @@ export function draftGoes(draft: Pick<Draft, 'kind' | 'stance'>): string {
 
 /** The unsent drafts by how long each PR's or ticket's have waited, the longest first. */
 export function longestWaiting(groups: UnsentDrafts[]): UnsentDrafts[] {
-    return groups.toSorted((a, b) => a.since.localeCompare(b.since))
+    return groups.toSorted((a, b) => Date.parse(a.since) - Date.parse(b.since))
 }
 
 /** How many drafts wait in the groups: all of them, or those for one PR, or for one ticket and its PRs. */

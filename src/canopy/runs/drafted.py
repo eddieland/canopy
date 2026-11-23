@@ -124,14 +124,16 @@ def waiting(conn: sqlite3.Connection) -> list[Item]:
     return found
 
 
-def unsent(conn: sqlite3.Connection, limit: int) -> list[records.Draft]:
-    """Return the drafts `waiting` counts, each whole: at most `limit`, in its items' order, then by run and number."""
+def unsent(conn: sqlite3.Connection) -> list[records.Draft]:
+    """Return the drafts `waiting` counts, each whole, in its items' order, then by run and number.
+
+    Every one, as `waiting` counts every one: a cut list would count fewer than the attention list says wait.
+    """
     return (
         records.select(records.Draft, "d")
         .where_in("d.status", _UNSENT)
         .where("NOT EXISTS (SELECT 1 FROM observed_prs p WHERE p.url = d.pr_url AND p.state != ?)", PrState.OPEN)
         .order_by("d.ticket_key, d.repo IS NULL, d.repo, d.pr_url, d.run_id, d.number")
-        .limit(limit)
         .all(conn)
     )
 

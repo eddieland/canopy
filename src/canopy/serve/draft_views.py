@@ -25,9 +25,6 @@ from canopy.serve.schema.draft import (
 if TYPE_CHECKING:
     import sqlite3
 
-#: How many unsent drafts the drafts page carries, across every PR and ticket.
-UNSENT_DRAFTS: Final = 200
-
 #: How many of a ticket's own drafts its page carries, the newest runs' first.
 TICKET_DRAFTS: Final = 10
 
@@ -102,10 +99,10 @@ def unsent(conn: sqlite3.Connection) -> list[UnsentDrafts]:
 
     Returns:
         A group for each PR with a draft unsent and each ticket with one of its own, by ticket, a ticket's own after
-        its PRs'; at most `UNSENT_DRAFTS` drafts in all.
+        its PRs': every one, so the counts made from them match the attention list's.
     """
     groups: dict[tuple[str, str | None], list[records.Draft]] = {}
-    for found in drafted.unsent(conn, UNSENT_DRAFTS):
+    for found in drafted.unsent(conn):
         groups.setdefault((found.ticket_key, found.pr_url), []).append(found)
     titles = {
         t.key: t.title for t in records.select(records.Ticket).where_in("key", sorted({k for k, _ in groups})).all(conn)

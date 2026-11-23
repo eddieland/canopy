@@ -1473,10 +1473,10 @@ reader, so no table repeats them.
 - **A PR** (`/pull-requests`, `/pull-requests/pr?url=`) has a section of its own. A PR's row: where it stands, which is
   the run working it now while one does, then its latest review and its verdict, in its worst finding's color (`not
   reviewed` muted), its draft's chip, and `requested` while the operator's request is open; the PR; its unit's phase as
-  a chip; then its ticket and title in the free column, with its unsent drafts' chip, and its age.
-  The ticket shares the free column with its title: a column of its own would not fit a 1280px window. Its page: the
-  PR's name as the title, then its own title as its
-  worker reported it, else its ticket's, with its phase as a chip; its description is where it stands, as its row leads
+  a chip; then its ticket and title in the free column, with its unsent drafts' chip, and its age. The ticket shares
+  the free column with its title: a column of its own would not fit a 1280px window. Its page: the PR's name as the
+  title, then its own title as its worker reported it, else its ticket's, with its phase as a chip; its description is
+  where it stands, as its row leads
   with it, and for a PR canopy only reviews, `canopy only reviews it`, said there alone. A link out follows, saying
   where it goes rather than repeating the title. Then panels: its fields, with a grant of another review in its foot
   when it is at its review limit; its review threads when canopy has read them or holds a draft for it, led by its
