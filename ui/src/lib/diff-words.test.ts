@@ -43,6 +43,20 @@ describe('changedWords', () => {
         ])
     })
 
+    it('pairs a line edited at both its ends', () => {
+        expect(marked(file('-first.send(query).then(read)', '+second.send(query).then(write)'))).toEqual([
+            ['first', 'read'],
+            ['second', 'write'],
+        ])
+    })
+
+    it('marks a whole word in any script, not the letter that differs', () => {
+        expect(marked(file('-const größe = länge(wert)', '+const größer = länge(wert)'))).toEqual([
+            ['größe'],
+            ['größer'],
+        ])
+    })
+
     it('marks a phrase rewritten as one stretch, its spaces with it', () => {
         expect(marked(file('-return the first value here', '+return a second value here'))).toEqual([
             ['the first'],
@@ -83,6 +97,11 @@ describe('hunkRange', () => {
     it("writes each side's first line and how many it has, as git does", () => {
         const [hunk] = file(' a', '-b', '+c', '+d').hunks
         expect(hunk && hunkRange(hunk)).toBe('-1,2 +1,3')
+    })
+
+    it('writes a side of one line as its number alone', () => {
+        const [hunk] = file(' a', '+b').hunks
+        expect(hunk && hunkRange(hunk)).toBe('-1 +1,2')
     })
 
     it('writes a side with no lines as git does', () => {

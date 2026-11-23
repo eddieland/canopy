@@ -28,9 +28,10 @@ const MAX_WORDS = 160
 const ALIKE = 0.5
 // A run of removed lines by one of added lines with more pairs to try than this is left unmarked.
 const MAX_PAIRS = 400
-// A line's words: each run of word characters, each run of spaces, and each other character alone.
-const WORDS = /\w+|\s+|[^\w\s]/gu
-const WORD = /^\w/u
+// A line's words: each run of letters, digits, and underscores, in any script, each run of spaces, and each other
+// character alone.
+const WORDS = /[\p{L}\p{N}\p{M}_]+|\s+|[^\p{L}\p{N}\p{M}_\s]/gu
+const WORD = /^[\p{L}\p{N}_]/u
 const SPACE = /^\s/u
 
 /**
@@ -226,10 +227,12 @@ function stretches(words: readonly Word[], kept: readonly boolean[]): Changed[] 
     return changed
 }
 
-// One side's range: its first number and how many lines it has, `-4,6`; `-0,0` for a side with none, as git writes.
+// One side's range as git writes it: its first number and how many lines it has, `-4,6`, `-4` for one line, and
+// `-0,0` for a side with none.
 function side(sign: '-' | '+', numbers: readonly (number | null | undefined)[]): string {
     const on = numbers.filter((n) => n !== null && n !== undefined)
-    return `${sign}${on[0] ?? 0},${on.length}`
+    // One line is its number alone.
+    return on.length === 1 ? `${sign}${on[0] ?? 0}` : `${sign}${on[0] ?? 0},${on.length}`
 }
 
 function sliceTokens(tokens: readonly CodeToken[], from: number, to: number): CodeToken[] {
