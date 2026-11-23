@@ -1,9 +1,11 @@
-import { ChevronDown, ListFilter, Plus } from 'lucide-react'
-import { Fragment, useState } from 'react'
+import { ChevronDown, Files, List, ListFilter, Plus } from 'lucide-react'
+import { Fragment, useEffect, useId, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import type { DiffFile, DiffLine, ReviewDiff, ReviewDraft } from '@/api/types'
 import { CodeTokens } from '@/components/code-tokens'
+import { FileList } from '@/components/diff-files'
+import type { ListedFile } from '@/components/diff-files'
 import { Disclosure } from '@/components/disclosure'
 import { dismissedLabel, useDismissReviewFinding } from '@/components/dismiss-finding'
 import { FoldButton } from '@/components/fold-button'
@@ -12,6 +14,7 @@ import { DraftCommentCard, NewCommentCard, ReviewPointCard } from '@/components/
 import { RichText } from '@/components/rich-text'
 import { Chip } from '@/components/status'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import {
     DropdownMenu,
@@ -44,6 +47,7 @@ import { findingAnchor, SEVERITY_TONE } from '@/lib/reviews'
 import type { Numbered, Placed } from '@/lib/reviews'
 import { linesText } from '@/lib/run-changes'
 import { cn } from '@/lib/utils'
+import { filesSummary, setViewed, useViewedFiles, viewedMark, viewedOf } from '@/lib/viewed-files'
 
 // Full class names, written out, so Tailwind finds them: a line's tint and its +/- mark.
 const LINE_TINT: Record<DiffLine['kind'], string> = { add: 'bg-diff-add/12', del: 'bg-diff-del/12', ctx: '' }
@@ -176,7 +180,9 @@ export function DiffPanels<T>({
     // Held here rather than in each file's panel, which the filter unmounts, so a file it hides keeps its fold, and the
     // lines opened in it, for when it comes back. Both are by the file's index.
     const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set())
-    const [folded, setFolded] = useState<ReadonlySet<number>>(new Set())
+    // A file marked viewed, here or on a page that showed the same change, starts folded: it has been read.
+    const viewed = viewedOf(diff.files, useViewedFiles())
+    const [folded, setFolded] = useState<ReadonlySet<number>>(() => new Set(viewed.flatMap((on, i) => (on ? [i] : []))))
     const [opened, setOpened] = useState<ReadonlyMap<number, Span[]>>(new Map())
     // A file just wanted is shown as the page draws it, before the router scrolls to the card on it.
     const [seen, setSeen] = useState(wanted)
@@ -189,10 +195,53 @@ export function DiffPanels<T>({
         }
     }
     const hiddenFiles = diff.files.filter((file) => hidden.has(fileType(file.path))).length
+    const listed = diff.files.map((file, i): ListedFile => {
+        const onLines = [...(placed.lines.get(i)?.values() ?? [])].reduce((sum, items) => sum + items.length, 0)
+        return {
+            index: i,
+            path: file.path,
+            ...fileLines(file),
+            cards: (placed.files.get(i)?.length ?? 0) + onLines,
+            viewed: viewed[i] ?? false,
+        }
+    })
+    // The file last picked from the list, a new object each time, brought to the top of the page once it is drawn.
+    const id = useId()
+    const [picked, setPicked] = useState<Wanted | null>(null)
+    useEffect(() => {
+        if (picked !== null) {
+            document.querySelector(`#${CSS.escape(`${id}-${picked.file}`)}`)?.scrollIntoView({ block: 'start' })
+        }
+    }, [picked, id])
+    const pick = (file: number) => {
+        const path = diff.files[file]?.path
+        if (path !== undefined) {
+            setHidden((was) => without(was, fileType(path)))
+            setPicked({ file })
+        }
+    }
+    const mark = (i: number, on: boolean) => {
+        const file = diff.files[i]
+        if (file !== undefined) {
+            setViewed(viewedMark(file), on)
+            setFolded((was) => (on ? new Set([...was, i]) : without(was, i)))
+        }
+    }
+    // One file has nowhere else to go.
+    const list = listed.length > 1 ? listed : undefined
     return (
         <>
             {diff.files.length > 0 && (
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    {list !== undefined && (
+                        <FileList files={list} cards={cards} onPick={pick}>
+                            <Button variant="outline" size="xs" data-testid="diff-files">
+                                <Files aria-hidden />
+                                {filesSummary(viewed)}
+                                <ChevronDown aria-hidden />
+                            </Button>
+                        </FileList>
+                    )}
                     <FileTypeFilter types={types} hidden={hidden} onHiddenChange={setHidden} />
                     {hiddenFiles > 0 && (
                         <span className="font-mono text-xs text-muted-foreground" data-testid="diff-hidden-files">
@@ -211,7 +260,12 @@ export function DiffPanels<T>({
                     !hidden.has(fileType(file.path)) && (
                         <FilePanel
                             key={`${i}:${file.path}`}
+                            id={`${id}-${i}`}
                             file={file}
+                            files={list}
+                            onPick={pick}
+                            viewed={viewed[i] ?? false}
+                            onViewedChange={(on) => mark(i, on)}
                             first={first[i] ?? []}
                             onLine={placed.lines.get(i)}
                             onFile={placed.files.get(i) ?? []}
@@ -296,7 +350,12 @@ function FileTypeFilter({
 }
 
 function FilePanel<T>({
+    id,
     file,
+    files,
+    onPick,
+    viewed,
+    onViewedChange,
     first,
     onLine,
     onFile,
@@ -309,7 +368,12 @@ function FilePanel<T>({
     onAdd,
     level,
 }: {
+    id: string
     file: DiffFile
+    files: readonly ListedFile[] | undefined
+    onPick: (file: number) => void
+    viewed: boolean
+    onViewedChange: (viewed: boolean) => void
     first: Span[]
     onLine: Map<number, T[]> | undefined
     onFile: T[]
@@ -345,9 +409,23 @@ function FilePanel<T>({
     const [plus, minus] = linesText(added, removed)
     return (
         <Collapsible asChild open={open || !body} onOpenChange={onOpenChange}>
-            <Panel data-testid="diff-file">
+            <Panel id={id} className="scroll-mt-4" data-testid="diff-file">
                 {/* It stays in view while its lines scroll under it, so a long file never loses its name. */}
                 <PanelHeader label="File" level={level} spoken={named} sticky>
+                    {/* The way to another file from anywhere in this one, since the header stays in view. */}
+                    {files !== undefined && (
+                        <FileList files={files} cards={cards} onPick={onPick}>
+                            <Button
+                                variant="ghost"
+                                size="icon-xs"
+                                aria-label="Go to a file"
+                                title="Go to a file"
+                                className="-mx-1 text-muted-foreground"
+                            >
+                                <List />
+                            </Button>
+                        </FileList>
+                    )}
                     {/* Its heading names it to a screen reader, which this line would say again. */}
                     <span aria-hidden className="flex min-w-0 flex-1 font-mono text-xs" title={named}>
                         <span className="truncate text-muted-foreground">
@@ -362,6 +440,20 @@ function FilePanel<T>({
                         </span>
                     )}
                     {file.binary && <Chip>binary</Chip>}
+                    {body && (
+                        <label
+                            htmlFor={`${id}-viewed`}
+                            className="inline-flex items-center gap-1.5 font-mono text-xs text-muted-foreground"
+                        >
+                            <Checkbox
+                                id={`${id}-viewed`}
+                                checked={viewed}
+                                aria-label={`Viewed ${file.path}`}
+                                onCheckedChange={(on) => onViewedChange(on === true)}
+                            />
+                            viewed
+                        </label>
+                    )}
                     {body && <Disclosure open={open} what="diff" of={file.path} />}
                 </PanelHeader>
                 <CollapsibleContent>

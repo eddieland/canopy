@@ -78,9 +78,11 @@ const SMALL: ReviewDiff = {
 
 /** The paths of the files the page shows, in order. */
 function shownPaths(): string[] {
-    return screen
-        .getAllByTestId('diff-file')
-        .map((panel) => panel.querySelector('[title]')?.getAttribute('title') ?? '')
+    return screen.getAllByTestId('diff-file').map((panel) =>
+        within(panel)
+            .getByRole('heading', { hidden: true })
+            .textContent.replace(/^File /u, ''),
+    )
 }
 
 /** Folds the diff of the file at `i` on its header. */
@@ -267,5 +269,42 @@ describe('ReviewDiffPanels lines', () => {
         expect(screen.getByText('250')).toBeDefined()
         expect(screen.getByText('WAIT')).toBeDefined()
         expect(screen.getAllByRole('row').map((row) => row.textContent)).toContain('5+    return post(query, WAIT)')
+    })
+})
+
+describe('ReviewDiffPanels files', () => {
+    it('folds a file marked viewed, counts it, and keeps it folded when the diff is opened again', () => {
+        localStorage.clear()
+        const { unmount } = render(diff([], { files: SMALL }))
+        expect(screen.getByTestId('diff-files').textContent).toBe('4 files')
+
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Viewed src/b.py' }))
+        expect(screen.getByTestId('diff-files').textContent).toBe('4 files, 1 viewed')
+        expect(screen.queryByText('src/b.py 2')).toBeNull()
+        expect(screen.getByRole('button', { name: 'Show diff of src/b.py' })).toBeDefined()
+
+        // Another visit to the page: the mark is the browser's, and the file starts folded.
+        unmount()
+        render(diff([], { files: SMALL }))
+        expect(screen.queryByText('src/b.py 2')).toBeNull()
+        expect(screen.getByText('src/a.ts 2')).toBeDefined()
+
+        // Unmarked, it opens again.
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Viewed src/b.py' }))
+        expect(screen.getByText('src/b.py 2')).toBeDefined()
+        expect(screen.getByTestId('diff-files').textContent).toBe('4 files')
+    })
+
+    it("lists the diff's files from any file's header, and shows the one picked though its type was hidden", () => {
+        localStorage.clear()
+        render(diff([], { files: SMALL }))
+        fireEvent.click(within(openFilter()).getByRole('menuitemcheckbox', { name: '.py, 1 file' }))
+        fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+        expect(shownPaths()).not.toContain('src/b.py')
+
+        fireEvent.click(screen.getAllByRole('button', { name: 'Go to a file' })[0] as HTMLElement)
+        fireEvent.click(screen.getByRole('option', { name: /b\.py/u }))
+        expect(shownPaths()).toContain('src/b.py')
+        expect(screen.queryByRole('option')).toBeNull()
     })
 })

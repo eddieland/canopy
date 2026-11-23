@@ -378,7 +378,13 @@ with its location, its detail, and **dismiss**, so each finding is on the page o
 to read a blocking one.
 
 **Hide diff**, on a file's header, folds that file away to one line saying how much it hid; **Show diff** brings it
-back. To read only some kinds of file, open **All file types** above the first file and untick the rest: a lockfile's
+back. Tick **viewed** when you have read a file: it folds, and it starts folded the next time you open the page, in
+this browser. The mark is on the change, not the path, so a file that changes after you viewed it comes back unmarked
+and open. The files button above the first file counts them (`5 files, 2 viewed`) and lists them with their findings
+and line counts; type to narrow the list, and pick one to go to it. The same list opens from the small list icon in
+any file's header, which stays on screen, so you never scroll back to the top to change files.
+
+To read only some kinds of file, open **All file types** above the first file and untick the rest: a lockfile's
 thousand lines are rarely where the bug is. **Show every type** ticks them all again. Following a finding from the list
 opens its file again, and ticks its type, so nothing you folded hides a finding from you.
 
