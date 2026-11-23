@@ -373,3 +373,22 @@ describe('ReviewDiffPanels layout', () => {
         expect(within(row as HTMLElement).getAllByRole('cell', { hidden: true })).toHaveLength(3)
     })
 })
+
+describe('ReviewDiffPanels cards', () => {
+    it("leaves a card's location to the line it sits under, and says it where the card stands alone", () => {
+        localStorage.clear()
+        const on = { ...finding('On its line', 2), location: 'src/b.py:2', file: 1 }
+        const { unmount } = render(diff([on], { files: SMALL }))
+        expect(screen.getByRole('article').textContent).toContain('On its line')
+        expect(screen.getByRole('article').textContent).not.toContain('src/b.py:2')
+
+        // In a list, with no line above it to say where it is.
+        unmount()
+        render(
+            <QueryClientProvider client={new QueryClient()}>
+                <FindingCard run={4} numbered={{ n: 1, finding: on }} />
+            </QueryClientProvider>,
+        )
+        expect(screen.getByRole('article').textContent).toContain('src/b.py:2')
+    })
+})

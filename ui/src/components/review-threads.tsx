@@ -24,6 +24,7 @@ import { Chip, Word } from '@/components/status'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { cardFrame, OnDiffLineContext, useOnDiffLine } from '@/hooks/use-on-diff-line'
 import { useToast } from '@/hooks/use-toast'
 import {
     DRAFT_TONE,
@@ -429,40 +430,49 @@ export function ThreadCard({
     const where = threadWhere(thread)
     const ahead =
         resumes && item?.proposal === 'change' && !item.left_out && thread.drafts.some((d) => d.status === 'waiting')
+    // Under its line, the file's header and the line say where it is; with nothing else to say, it has no head.
+    const onLine = useOnDiffLine()
+    const placed = where !== null && !onLine
+    const headed = placed || thread.outdated || thread.resolved
     return (
         <article
             id={threadAnchor(thread.id)}
-            className="rounded-md border bg-surface-raised p-3 text-sm"
+            className={cn('bg-surface-raised text-sm', cardFrame(onLine))}
             data-testid="review-thread"
         >
-            <header className="flex flex-wrap items-center gap-2">
-                {where !== null && <span className="font-mono text-xs break-all text-muted-foreground">{where}</span>}
-                {thread.outdated && <Chip>outdated</Chip>}
-                {thread.resolved && <Chip>resolved</Chip>}
-            </header>
-            <ol className="mt-1.5 flex flex-col gap-2">
-                {thread.comments.map((c) => (
-                    <li key={c.id} className="flex flex-col gap-0.5" data-testid="thread-comment">
-                        <span className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                            <span className="font-medium text-foreground">{c.author ?? 'a deleted account'}</span>
-                            {c.bot && <Chip>bot</Chip>}
-                            {c.operator_sent && <Chip>sent by you</Chip>}
-                            {c.ignored && <Chip>ignored</Chip>}
-                            {c.created_at !== null && <Age at={c.created_at} variant="ago" />}
-                            {c.url !== null && <LinkOut href={c.url} label="The comment on its host" />}
-                        </span>
-                        <CommentText text={c.body} />
-                    </li>
-                ))}
-            </ol>
-            {item !== undefined && <PlanProposal item={item} ahead={ahead} />}
-            {thread.drafts.length > 0 && (
-                <div className="mt-2 flex flex-col gap-2">
-                    {thread.drafts.map((d) => (
-                        <DraftCard key={`${d.run}-${d.number}`} draft={d} onChange={onChange} />
+            {/* What it holds, a draft and its verbs, is in the card, not on the line: framed as anywhere. */}
+            <OnDiffLineContext value={false}>
+                {headed && (
+                    <header className="flex flex-wrap items-center gap-2">
+                        {placed && <span className="font-mono text-xs break-all text-muted-foreground">{where}</span>}
+                        {thread.outdated && <Chip>outdated</Chip>}
+                        {thread.resolved && <Chip>resolved</Chip>}
+                    </header>
+                )}
+                <ol className={cn('flex flex-col gap-2', headed && 'mt-1.5')}>
+                    {thread.comments.map((c) => (
+                        <li key={c.id} className="flex flex-col gap-0.5" data-testid="thread-comment">
+                            <span className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                <span className="font-medium text-foreground">{c.author ?? 'a deleted account'}</span>
+                                {c.bot && <Chip>bot</Chip>}
+                                {c.operator_sent && <Chip>sent by you</Chip>}
+                                {c.ignored && <Chip>ignored</Chip>}
+                                {c.created_at !== null && <Age at={c.created_at} variant="ago" />}
+                                {c.url !== null && <LinkOut href={c.url} label="The comment on its host" />}
+                            </span>
+                            <CommentText text={c.body} />
+                        </li>
                     ))}
-                </div>
-            )}
+                </ol>
+                {item !== undefined && <PlanProposal item={item} ahead={ahead} />}
+                {thread.drafts.length > 0 && (
+                    <div className="mt-2 flex flex-col gap-2">
+                        {thread.drafts.map((d) => (
+                            <DraftCard key={`${d.run}-${d.number}`} draft={d} onChange={onChange} />
+                        ))}
+                    </div>
+                )}
+            </OnDiffLineContext>
         </article>
     )
 }

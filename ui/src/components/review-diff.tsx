@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useHighlight } from '@/hooks/use-highlight'
+import { cardFrame, OnDiffLineContext, useOnDiffLine } from '@/hooks/use-on-diff-line'
 import { LAYOUTS, setDiffLayout, splitRows, useDiffLayout } from '@/lib/diff-layout'
 import type { DiffLayout } from '@/lib/diff-layout'
 import { comparedLines, fileLines, hunkRange, lineParts } from '@/lib/diff-words'
@@ -581,8 +582,9 @@ function pieceRows<T>(
             cards !== undefined && (
                 <tr>
                     <td colSpan={columns} className="border-y bg-surface p-0">
-                        <InView className="flex flex-col gap-2 px-3 py-2 font-sans">
-                            {cards.map((item) => renderCard(item))}
+                        {/* Each card is a band of the row, edge to edge: the row is its frame. */}
+                        <InView className="flex flex-col font-sans">
+                            <OnDiffLineContext value>{cards.map((item) => renderCard(item))}</OnDiffLineContext>
                         </InView>
                     </td>
                 </tr>
@@ -836,10 +838,11 @@ export function FindingCard({
 }) {
     const { n, finding } = numbered
     const { button, notice } = useDismissReviewFinding(run, n, finding.dismissed)
+    const onLine = useOnDiffLine()
     return (
         <article
             id={findingAnchor(n)}
-            className={cn('scroll-mt-16 rounded-md border bg-surface-raised p-3 text-sm', className)}
+            className={cn('scroll-mt-16 bg-surface-raised text-sm', cardFrame(onLine), className)}
             data-testid="finding"
             data-dismissed={finding.dismissed || undefined}
         >
@@ -848,14 +851,15 @@ export function FindingCard({
                 <span className="readout text-xs text-muted-foreground">{n}</span>
                 <Chip tone={SEVERITY_TONE[finding.severity]}>{finding.severity}</Chip>
                 <span className={cn('font-medium', finding.dismissed && 'text-muted-foreground')}>{finding.title}</span>
-                {finding.location && (
+                {finding.location && !onLine && (
                     <span className="font-mono text-xs break-all text-muted-foreground">{finding.location}</span>
                 )}
                 {finding.dismissed && <Chip>{dismissedLabel(finding)}</Chip>}
                 {finding.held && <Chip tone="blocked">{HELD}</Chip>}
                 <span className="ml-auto">{button}</span>
             </header>
-            {finding.detail && <RichText text={finding.detail} className="mt-1.5 text-muted-foreground" />}
+            {/* What the finding says is what the card is for: in the page's own ink, at a width a line is read at. */}
+            {finding.detail && <RichText text={finding.detail} className="mt-1.5 max-w-[96ch]" />}
             <FindingAnswer finding={finding} />
             {notice}
         </article>

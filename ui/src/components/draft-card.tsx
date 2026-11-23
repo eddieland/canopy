@@ -7,6 +7,7 @@ import { Textarea } from '@/components/input'
 import { Notice } from '@/components/notice'
 import { SendKeycap } from '@/components/send-keycap'
 import { Button } from '@/components/ui/button'
+import { useOnDiffLine } from '@/hooks/use-on-diff-line'
 import { MAX_DRAFT_CHARS, draftChars } from '@/lib/drafts'
 import { useSendKeys } from '@/lib/send-key'
 import { cn } from '@/lib/utils'
@@ -37,12 +38,15 @@ export function DraftCardFrame({
     /** Its text, verbs, and notices. */
     children: ReactNode
 }) {
+    const onLine = useOnDiffLine()
     return (
         <article
             id={id}
             className={cn(
                 'scroll-mt-16 rounded-md border bg-surface p-3 text-sm',
                 waiting && 'border-status-blocked/40',
+                // Under a diff line it keeps its frame, which says whether it waits, and the row's margin around it.
+                onLine && 'mx-3 mt-2 last:mb-2',
             )}
             data-testid={testId}
             data-status={status}
