@@ -36,7 +36,7 @@ const FIELD_LABEL = 'text-xs font-medium'
  * `canopy start URL --review --notes TEXT --persona NAME --model M` from the reviews page (DESIGN §13, §21, §22, §31):
  * the same two rows at every width (ui/DESIGN.md, "A review request"): the fields, then who reviews it. A PR the loop
  * does not own, by its URL, with the PR's reference under it once canopy would take it, or a line saying it would not;
- * then what
+ * beside the URL, what
  * its reviewer should know; then who reviews it, on one row: the personas to review it in, one review each, or none
  * for `[personas] reviewer`'s, and the model its reviews run on, config's by default; and at the row's end `Review`,
  * the form's primary. The personas start as those the operator prefers in Settings, which the row says. canopy reviews
@@ -113,24 +113,21 @@ export function ReviewRequestForm({
             {/* The same two rows at every width, with no breakpoint, the dialog's too: the fields share the first,
                 the notes going under the URL only where the two do not fit side by side. */}
             <div className="flex flex-wrap items-start gap-3">
-                <div className="flex min-w-80 flex-2 flex-col gap-1.5">
-                    <Input
-                        // oxlint-disable-next-line jsx-a11y/no-autofocus -- the dialog opens on a key, to type in.
-                        autoFocus={focused === 'url'}
-                        aria-label="PR URL"
-                        aria-describedby={`${id}-ref`}
-                        placeholder="https://github.com/org/repo/pull/123"
-                        title="R opens this form from any page, and so does pasting a PR's URL"
-                        className="font-mono text-xs"
-                        value={url}
-                        onChange={(event) => {
-                            setUrl(event.target.value)
-                            change({ url: event.target.value })
-                        }}
-                        data-testid="review-request-url"
-                    />
-                    <PullRequestReference id={`${id}-ref`} url={url.trim()} />
-                </div>
+                <Input
+                    // oxlint-disable-next-line jsx-a11y/no-autofocus -- the dialog opens on a key, to type in.
+                    autoFocus={focused === 'url'}
+                    aria-label="PR URL"
+                    aria-describedby={`${id}-ref`}
+                    placeholder="https://github.com/org/repo/pull/123"
+                    title="R opens this form from any page, and so does pasting a PR's URL"
+                    className="min-w-80 flex-2 font-mono text-xs"
+                    value={url}
+                    onChange={(event) => {
+                        setUrl(event.target.value)
+                        change({ url: event.target.value })
+                    }}
+                    data-testid="review-request-url"
+                />
                 <Textarea
                     // oxlint-disable-next-line jsx-a11y/no-autofocus -- the dialog opens on a key, to type in.
                     autoFocus={focused === 'notes'}
@@ -153,54 +150,57 @@ export function ReviewRequestForm({
                     data-testid="review-request-notes"
                 />
             </div>
-            {/* Who reviews it, then the primary, at the fields' right edge. */}
-            <div
-                className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2"
-                data-testid="review-request-reviewer"
-            >
-                <span className="flex flex-wrap items-center gap-2">
-                    <span className={FIELD_LABEL} aria-hidden>
-                        Persona
+            {/* What the URL names, then who reviews it and the primary at the fields' right edge. */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                <PullRequestReference id={`${id}-ref`} url={url.trim()} />
+                <div
+                    className="ml-auto flex flex-wrap items-center justify-end gap-x-4 gap-y-2"
+                    data-testid="review-request-reviewer"
+                >
+                    <span className="flex flex-wrap items-center gap-2">
+                        <span className={FIELD_LABEL} aria-hidden>
+                            Persona
+                        </span>
+                        <PersonasMenu
+                            personas={personas}
+                            chosen={chosen}
+                            disabled={request.isPending}
+                            onChange={(next) => {
+                                setPicked(next)
+                                change({ picked: next })
+                            }}
+                            title="canopy start URL --review --persona NAME"
+                            testId="review-request-personas"
+                        />
+                        {picked === null && chosen.length > 0 && (
+                            <span className="text-xs text-muted-foreground">as Settings prefers</span>
+                        )}
+                        {chosen.length > 1 && (
+                            <span className="text-xs text-muted-foreground">one review in each, side by side</span>
+                        )}
                     </span>
-                    <PersonasMenu
-                        personas={personas}
-                        chosen={chosen}
+                    <ReviewModelMenu
+                        model={model}
                         disabled={request.isPending}
                         onChange={(next) => {
-                            setPicked(next)
-                            change({ picked: next })
+                            setModel(next)
+                            change({ model: next })
                         }}
-                        title="canopy start URL --review --persona NAME"
-                        testId="review-request-personas"
+                        testId="review-request-model"
+                        labelClassName={FIELD_LABEL}
                     />
-                    {picked === null && chosen.length > 0 && (
-                        <span className="text-xs text-muted-foreground">as Settings prefers</span>
-                    )}
-                    {chosen.length > 1 && (
-                        <span className="text-xs text-muted-foreground">one review in each, side by side</span>
-                    )}
-                </span>
-                <ReviewModelMenu
-                    model={model}
-                    disabled={request.isPending}
-                    onChange={(next) => {
-                        setModel(next)
-                        change({ model: next })
-                    }}
-                    testId="review-request-model"
-                    labelClassName={FIELD_LABEL}
-                />
-                <Button
-                    type="submit"
-                    disabled={!ready}
-                    title="canopy start URL --review"
-                    aria-keyshortcuts={sendKeys.shortcut}
-                    data-testid="review-request-submit"
-                >
-                    <ScanSearch />
-                    Review
-                    <SendKeycap keys={sendKeys.shortcut} />
-                </Button>
+                    <Button
+                        type="submit"
+                        disabled={!ready}
+                        title="canopy start URL --review"
+                        aria-keyshortcuts={sendKeys.shortcut}
+                        data-testid="review-request-submit"
+                    >
+                        <ScanSearch />
+                        Review
+                        <SendKeycap keys={sendKeys.shortcut} />
+                    </Button>
+                </div>
             </div>
             <Notice error={request.error}>
                 {notice && 'For a PR the loop does not own. Nothing posts until you publish its draft.'}
@@ -210,14 +210,14 @@ export function ReviewRequestForm({
 }
 
 /**
- * What the URL field names, on the line under it, which it always holds so the notes never move as it changes: the
+ * What the URL field names, at the start of the row under it, which it always holds so nothing moves as it changes: the
  * PR's reference once canopy would take it, `acme/web#88` as the reviews list writes it, or that it is not a PR's URL,
  * which canopy would refuse, before it is sent; with nothing written, that a link into a PR names it too.
  */
 function PullRequestReference({ id, url }: { id: string; url: string }) {
     const reference = url === '' ? null : pullRequestReference(url)
     return (
-        <p id={id} className="min-h-4 text-xs text-muted-foreground" data-testid="review-request-ref">
+        <p id={id} className="min-h-4 min-w-48 flex-1 text-xs text-muted-foreground" data-testid="review-request-ref">
             {url === '' && 'A link into the PR, such as one of its threads, names it too.'}
             {reference !== null && <span className="font-mono text-foreground">{reference}</span>}
             {url !== '' && reference === null && "Not a PR's URL, so canopy would refuse it."}

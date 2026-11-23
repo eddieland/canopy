@@ -1405,13 +1405,13 @@ reader, so no table repeats them.
   two rows at every width, with no breakpoint, so the page and the review dialog differ only in how wide they are. The
   first row is its fields: the PR's URL in a monospace field, then the notes, always open since the operator often has
   some, one line high and as tall as what is written in them, named by their placeholder as the tasks form's fields
-  are; the notes go under the URL only where the two do not fit side by side, in a very narrow window. Under the URL
-  is a line it always holds, so nothing below moves as it changes: the PR's reference once canopy would take the URL,
-  that it is not a PR's URL, before it is sent, or, empty, that a link into the PR will do. The second row is who
-  reviews it, at
-  the fields' right edge, with nothing folded: `Persona` and its menu, `Model` and its menu (A choice of model), and
-  at the row's end `Review`, the form's primary, with its keycap and the CLI's command on hover. The form ends on one
-  quiet line saying its review is a draft that posts nothing until
+  are; the notes go under the URL only where the two do not fit side by side, in a very narrow window. The second row
+  starts, under the URL, with a line it always holds, so nothing moves as it changes: the PR's reference once canopy
+  would take the URL, that it is not a PR's URL, before it is sent, or, empty, that a link into the PR will do. At the
+  row's other end, the fields' right edge, is who reviews it, with nothing folded: `Persona` and its menu, `Model` and
+  its menu (A choice of model), then `Review`, the form's primary, with its keycap and the CLI's command on hover; in
+  a box too narrow for both, as the dialog's is, they go under the line. The form ends on one quiet line saying its
+  review is a draft that posts nothing until
   published, which a refusal replaces. On success the form opens the PR's page. It takes no repository: the overseer
   finds the PR's. A PR with an open request wears a `requested` chip after its review in the list. On a PR's page the
   request is a line in the foot of its Pull request panel, with an outline `Stop` while it is open, or how it ended;
