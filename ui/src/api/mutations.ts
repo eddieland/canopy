@@ -749,8 +749,8 @@ export function refreshMemory(client: QueryClient): Promise<void> {
 
 /**
  * Writes the changed loop settings to the user config, then asks the loop to read it again. Refused,
- * writing nothing, past a limit's bound (`past_bound`), for a trust setting loosened (`not_stricter`), or when the
- * file changed since `hash` was read (`stale`).
+ * writing nothing, for a retention under its floor (`past_bound`), for a trust setting loosened (`not_stricter`), or
+ * when the file changed since `hash` was read (`stale`).
  */
 export async function saveConfig(hash: string, changes: Record<string, ConfigValue>): Promise<ConfigSaved> {
     return unwrap(await api.PATCH('/api/config', { body: { hash, changes } }))

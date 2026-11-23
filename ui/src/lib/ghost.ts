@@ -284,7 +284,7 @@ export const GHOST_TIPS = {
     ],
     '/settings_/limits': [
         "Eyes up, Guardian. Limits. I have one: I can't open doors any faster. Hold them off.",
-        'Field report: the ceiling is 32 workers. A fireteam is three. Show-offs.',
+        'Field report: no ceiling on workers here. A fireteam is three. Show-offs.',
         'Grimoire: trust here only gets stricter. Like Zavala, every season.',
         'Scanning... the comments in your config are love letters. This page keeps every one.',
         "Dear Traveler, they dropped a trusted reviewer. I checked. I'm still trusted. Phew.",

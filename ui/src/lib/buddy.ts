@@ -356,7 +356,7 @@ export const TIPS = {
     ],
     '/settings_/limits': [
         "It looks like you're setting limits. I have none. Ask anyone.",
-        'Unhelpful tip: the ceiling is 32 workers. I asked for 33 hats. Denied.',
+        'Unhelpful tip: workers have no ceiling here. I asked for 33 hats. Denied.',
         'Dear diary, they dropped a trusted reviewer today. I checked. I am still trusted.',
         'Fun fact: trust only gets stricter here. So does my bedtime.',
         'Hot take: comments in a config file are love letters. This page keeps every one.',

@@ -135,7 +135,7 @@ max_workers = 3
 web = 4
 
 [spend]
-# What the spend page tracks October's runs against; the settings page may raise it to its ceiling.
+# What the spend page tracks October's runs against.
 monthly_budget_usd = 40
 # A sink taking loop events would hear at half and at four fifths of it too, beside the budget itself.
 budget_alerts = [50, 80]

@@ -84,8 +84,7 @@ def test_the_page_lists_each_editable_key_with_its_value_source_and_bound(ctx: C
         "value": 2,
         "source": "private",
         "kind": "limit",
-        "bound": 32,
-        "looser": "higher",
+        "bound": None,
         "forever_at_zero": False,
         "choices": [],
         "default": 2,
@@ -97,8 +96,7 @@ def test_the_page_lists_each_editable_key_with_its_value_source_and_bound(ctx: C
         "value": None,
         "source": "user",
         "kind": "limit",
-        "bound": 2,
-        "looser": "lower",
+        "bound": None,
         "forever_at_zero": False,
         "choices": [],
         "default": 15,
@@ -110,7 +108,6 @@ def test_the_page_lists_each_editable_key_with_its_value_source_and_bound(ctx: C
         "source": "private",
         "kind": "stricter",
         "bound": None,
-        "looser": None,
         "forever_at_zero": False,
         "choices": [],
         "default": [],
@@ -121,7 +118,6 @@ def test_the_page_lists_each_editable_key_with_its_value_source_and_bound(ctx: C
         "source": "default",
         "kind": "stricter",
         "bound": None,
-        "looser": None,
         "forever_at_zero": False,
         "choices": ["lenient", "normal", "strict", "off"],
         "default": "off",
@@ -280,18 +276,8 @@ def test_each_refusal_leaves_the_files_as_they_were(ctx: Context, canopy_env: Ca
         ({"runtime.worker_cmd": "sh -c {prompt}"}, "not_editable"),
         ({"serve.port": 9000}, "not_editable"),
         ({"capacity": {"max_workers": 3}}, "not_editable"),
-        ({"capacity.max_workers": 33}, "past_bound"),
-        ({"capacity.repo_slots": {"repo": 33}}, "past_bound"),
-        ({"capacity.slots_per_repo": 40}, "past_bound"),
-        ({"loop.interval_minutes": 1}, "past_bound"),
-        ({"policy.ci_cooldown_minutes": 0}, "past_bound"),
-        ({"spend.monthly_budget_usd": 10001}, "past_bound"),
-        ({"capacity.max_tasks": 17}, "past_bound"),
-        ({"policy.max_follow_ups": 21}, "past_bound"),
-        ({"policy.feedback_quiet_minutes": 1}, "past_bound"),
-        ({"loop.min_free_disk_mib": 0}, "past_bound"),
-        ({"runtime.worker_timeout_minutes": 241}, "past_bound"),
-        ({"runtime.overseer_timeout_minutes": 61}, "past_bound"),
+        ({"retention.run_files_days": 6}, "past_bound"),
+        ({"retention.journal_days": 29}, "past_bound"),
         ({"trust.rebase": True}, "not_stricter"),
         ({"trust.commit_trailer": False}, "not_stricter"),
         ({"trust.max_flaky_kicks": 1}, "not_stricter"),
@@ -311,7 +297,7 @@ def test_each_refusal_leaves_the_files_as_they_were(ctx: Context, canopy_env: Ca
         assert refused(save(c, headers, changes)).startswith(f"{guard}: "), changes
         assert canopy_env.private_file.read_text() == COMMENTED
         assert canopy_env.user_file.read_text() == user_toml(canopy_env.runtime)
-    assert f"set more in {canopy_env.private_file}" in refused(save(c, headers, {"capacity.max_workers": 33}))
+    assert f"set less in {canopy_env.private_file}" in refused(save(c, headers, {"retention.run_files_days": 6}))
     assert not reload.requested
     assert [p.name for p in canopy_env.state_dir.iterdir() if p.name.endswith(".tmp")] == []
 
@@ -404,16 +390,36 @@ def test_a_choice_moves_only_later_and_a_count_only_down(ctx: Context, canopy_en
     assert save(c, headers, {"policy.planner_may_approve": "off", "trust.max_flaky_kicks": 0}).status_code == 200
 
 
-def test_a_limit_the_file_set_past_its_bound_may_still_be_lowered(ctx: Context, canopy_env: CanopyEnv) -> None:
-    canopy_env.write_user(user_toml(canopy_env.runtime).replace("[paths]", "[capacity]\nmax_workers = 40\n\n[paths]"))
+def test_a_limit_has_no_bound_of_the_page_s_own(ctx: Context, canopy_env: CanopyEnv) -> None:
+    """A count raised and a pace lowered past where the page once stopped them are saved, as the file takes them."""
+    canopy_env.write_private(COMMENTED)
     c, headers = signed_in_client(ctx)
 
-    assert save(c, headers, {"capacity.max_workers": 35}).status_code == 200
-    assert "max_workers = 35" in canopy_env.private_file.read_text()
-    assert refused(save(c, headers, {"capacity.max_workers": 36})).startswith("past_bound: ")
+    saved = save(
+        c,
+        headers,
+        {
+            "capacity.max_workers": 64,
+            "capacity.repo_slots": {"repo": 40},
+            "policy.max_resume_attempts": 25,
+            "loop.interval_minutes": 1,
+            "policy.ci_cooldown_minutes": 0,
+            "runtime.worker_timeout_minutes": 600,
+            "spend.monthly_budget_usd": 50000,
+        },
+    )
+
+    assert saved.status_code == 200, saved.text
+    found = settings(c)
+    assert key(found, "capacity.max_workers")["value"] == 64
+    assert key(found, "capacity.repo_slots")["value"] == {"repo": 40}
+    assert key(found, "loop.interval_minutes")["value"] == 1
+    assert "max_workers = 64  # raise when the fans allow" in canopy_env.private_file.read_text()
+    # The loader's own rules still hold.
+    assert refused(save(c, headers, {"capacity.max_workers": -1})).startswith("config_invalid: ")
 
 
-def test_a_monthly_budget_may_be_set_raised_to_its_ceiling_and_lowered(ctx: Context, canopy_env: CanopyEnv) -> None:
+def test_a_monthly_budget_may_be_set_raised_and_lowered(ctx: Context, canopy_env: CanopyEnv) -> None:
     canopy_env.write_private(COMMENTED)
     c, headers = signed_in_client(ctx)
     assert key(settings(c), "spend.monthly_budget_usd") == {
@@ -421,8 +427,7 @@ def test_a_monthly_budget_may_be_set_raised_to_its_ceiling_and_lowered(ctx: Cont
         "value": None,
         "source": "default",
         "kind": "limit",
-        "bound": 10000,
-        "looser": "higher",
+        "bound": None,
         "forever_at_zero": False,
         "choices": [],
         "default": None,
@@ -449,7 +454,6 @@ def test_a_retention_may_be_lengthened_shortened_to_its_floor_or_kept_forever(
         "source": "default",
         "kind": "limit",
         "bound": 7,
-        "looser": "lower",
         "forever_at_zero": True,
         "choices": [],
         "default": 30,
@@ -475,7 +479,7 @@ def test_the_paces_of_the_tracker_the_connectors_and_reviews_are_saved_in_their_
     ctx: Context,
     canopy_env: CanopyEnv,
 ) -> None:
-    """A key outside `capacity`, `policy`, `loop`, and `trust` is written to its own table, and bounded as the rest."""
+    """A key outside `capacity`, `policy`, `loop`, and `trust` is written to its own table, under the loader's rules."""
     canopy_env.write_private(COMMENTED)
     c, headers = signed_in_client(ctx)
 
@@ -500,14 +504,6 @@ def test_the_paces_of_the_tracker_the_connectors_and_reviews_are_saved_in_their_
     assert key(found, "review.settle_minutes")["source"] == "private"
     assert canopy_env.private_file.read_text().startswith(COMMENTED)
     assert save(c, headers, {"tracker.query_every_minutes": 0, "review.settle_minutes": 0}).status_code == 200
-    for changes in (
-        {"connect.every_minutes": 0},
-        {"connect.max_age_minutes": 241},
-        {"policy.feedback_ci_wait_minutes": 4},
-        {"policy.max_epic_tickets": 51},
-        {"runtime.setup_timeout_minutes": 121},
-    ):
-        assert refused(save(c, headers, changes)).split(":")[0] in {"past_bound", "config_invalid"}, changes
     # The loader's own rule between two keys holds: an observation is stale no sooner than the connectors poll.
     assert refused(save(c, headers, {"connect.every_minutes": 90})).startswith("config_invalid: ")
 
@@ -521,7 +517,6 @@ def test_the_budget_s_alerts_are_set_whole_to_anything_the_loader_takes(ctx: Con
         "source": "default",
         "kind": "free",
         "bound": None,
-        "looser": None,
         "forever_at_zero": False,
         "choices": [],
         "default": [],

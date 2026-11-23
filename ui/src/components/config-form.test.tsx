@@ -14,8 +14,7 @@ const WORKERS: ConfigKey = {
     value: 3,
     source: 'user',
     kind: 'limit',
-    bound: 32,
-    looser: 'higher',
+    bound: null,
     forever_at_zero: false,
     choices: [],
     default: 3,
@@ -26,7 +25,6 @@ const KICKS: ConfigKey = {
     source: 'default',
     kind: 'stricter',
     bound: null,
-    looser: null,
     forever_at_zero: false,
     choices: [],
     default: 0,
@@ -71,7 +69,6 @@ function type(name: string, text: string) {
 
 describe('ConfigForm', () => {
     it.each([
-        ['capacity.max_workers', '9999', 'at most 32 from here; set more in the file'],
         ['capacity.max_workers', 'abc', 'not a whole number'],
         ['trust.max_flaky_kicks', '3', 'only fewer from here: at most 2; set more in the file'],
         ['trust.max_flaky_kicks', '1.5', 'not a whole number'],
@@ -112,7 +109,7 @@ describe('ConfigForm', () => {
         await renderForm()
         expect(screen.queryByText(/was 3/u)).toBeNull()
         type('capacity.max_workers', '5')
-        expect(screen.getByText('at most 32 from here · was 3')).toBeTruthy()
+        expect(screen.getByText('was 3')).toBeTruthy()
         expect(changes()).toEqual(['capacity.max_workers: 3 → 5'])
         expect(screen.queryByTestId('config-one-way')).toBeNull()
     })
@@ -120,7 +117,7 @@ describe('ConfigForm', () => {
     it("names each row's source in a chip, and puts a minute's unit after its field", async () => {
         await renderForm({
             ...SETTINGS,
-            keys: [WORKERS, KICKS, { ...WORKERS, name: 'loop.interval_minutes', bound: 2 }],
+            keys: [WORKERS, KICKS, { ...WORKERS, name: 'loop.interval_minutes' }],
         })
         expect(screen.getAllByText('user')).toHaveLength(2)
         expect(screen.getByText('default')).toBeTruthy()

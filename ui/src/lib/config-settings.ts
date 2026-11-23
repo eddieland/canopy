@@ -44,7 +44,7 @@ export const SOURCES_HELP = `Each row's chip says where its value comes from: ${
 export const LIMITS_HELP =
     "What the loop runs, spends, polls, and keeps, and whose words it acts on. A save writes this workspace's own " +
     'config, keeping its comments, with the old file beside it as config.toml.bak, then reloads the loop; your user ' +
-    'config is never changed. Limits and retentions move within their bounds; trust settings only get stricter; ' +
+    'config is never changed. Limits move freely and retentions down to a floor; trust settings only get stricter; ' +
     `anything else is an edit to the file. ${SOURCES_HELP}`
 
 /**
@@ -116,8 +116,8 @@ export function defaultText(key: ConfigKey): string | null {
 /**
  * What a reset types into key's field, its default as the form holds it, for a key whose value is not its default;
  * null when the page cannot take it there: a default that unsets the key (an unmanaged pool, no budget) or removes a
- * repository's own count, a limit's default past its bound from the value now, a stricter key's default looser than
- * its value now, which only the file may set, a list's default that drops an entry the page asks about first, or a
+ * repository's own count, a retention's default under its floor from the value now, a stricter key's default looser
+ * than its value now, which only the file may set, a list's default that drops an entry the page asks about first, or a
  * default the loader would refuse beside its pair's value in `keys` (`PAIRS`). A reset is an ordinary change, saved as
  * any other.
  */
@@ -189,7 +189,7 @@ function sameValue(a: ConfigValue, b: ConfigValue): boolean {
     return JSON.stringify(a) === JSON.stringify(b)
 }
 
-/** How far the page may take a limit, or that a trust setting only gets stricter. */
+/** How far the page may take a retention, or that a trust setting only gets stricter; nothing for a limit. */
 export function boundText(key: ConfigKey): string {
     if (key.kind === 'stricter') {
         return typeof key.value === 'number' ? 'only fewer from here' : 'stricter only'
@@ -197,17 +197,7 @@ export function boundText(key: ConfigKey): string {
     if (key.kind === 'free') {
         return 'percentages, comma separated; 100% is always sent'
     }
-    if (key.bound === null) {
-        return ''
-    }
-    if (key.forever_at_zero) {
-        return `at least ${key.bound}, or 0 for forever, from here`
-    }
-    if (key.looser === 'lower') {
-        // A floor of 0 bounds nothing the loader does not.
-        return key.bound === 0 ? '' : `at least ${key.bound} from here`
-    }
-    return `at most ${key.bound} from here`
+    return key.bound === null ? '' : `at least ${key.bound}, or 0 for forever, from here`
 }
 
 /** What a save would send, and the fields whose text the page would not send, which keep it from being sent. */
@@ -226,8 +216,8 @@ export interface ConfigForm {
  * the repositories whose count changed, and a list the entries kept. A count left empty changes nothing when the file
  * sets none, and is named in `errors` when it does, as is a repository picked and left empty. A count that is not a
  * whole number, or that the server would refuse as past its bound, is named in `errors` with why, as the server checks
- * it: a limit past its bound and looser than the value read, or a stricter count raised. The server checks again on
- * save, and checks what the loader refuses.
+ * it: a retention under its floor and shorter than the value read, or a stricter count raised. The server checks again
+ * on save, and checks what the loader refuses.
  */
 export function configForm(keys: ConfigKey[], drafts: ConfigDrafts): ConfigForm {
     const changes: Record<string, ConfigValue> = {}
@@ -323,8 +313,8 @@ function countError(
 
 /**
  * Why the page would not send `now` for `key`, whose value read was `was`, as the server's own check (`_past` and
- * `_stricter` in `canopy/serve/config_edit.py`) refuses it; null when the server would take it. A limit is refused
- * only past its bound and looser than `was`, so a value the file set past the bound stays as it is.
+ * `_stricter` in `canopy/serve/config_edit.py`) refuses it; null when the server would take it. A retention is refused
+ * only under its floor and shorter than `was`, so a value the file set under the floor stays as it is.
  */
 function pastText(key: ConfigKey, was: number | null, now: number): string | null {
     if (key.kind === 'stricter') {
@@ -334,16 +324,10 @@ function pastText(key: ConfigKey, was: number | null, now: number): string | nul
         return null
     }
     const { bound } = key
-    if (key.looser === 'higher') {
-        return now > bound && (was === null || now > was) ? `at most ${bound} from here; set more in the file` : null
-    }
-    if (key.forever_at_zero) {
-        // Forever is the strictest: always allowed, and any count of days looser than it.
-        return now !== 0 && now < bound && (was === null || was === 0 || now < was)
-            ? `at least ${bound}, or 0 for forever, from here; set less in the file`
-            : null
-    }
-    return now < bound && (was === null || now < was) ? `at least ${bound} from here; set less in the file` : null
+    // Forever is the strictest: always allowed, and any count of days shorter than it.
+    return now !== 0 && now < bound && (was === null || was === 0 || now < was)
+        ? `at least ${bound}, or 0 for forever, from here; set less in the file`
+        : null
 }
 
 /** The whole numbers `text` lists, split on commas and spaces; none when empty; `invalid` when one is not a number. */
@@ -357,7 +341,10 @@ function sameNumbers(numbers: number[], was: ConfigValue): boolean {
     return Array.isArray(was) && was.length === numbers.length && numbers.every((n, i) => was[i] === n)
 }
 
-/** The count `text` holds when it differs from `was`; null when empty or the same; `invalid` when not a number. */
+/**
+ * The count `text` holds when it differs from `was`; null when empty or the same; `invalid` when not a number, or one
+ * too large to send as typed.
+ */
 function wholeNumber(text: string, was: number | null): number | 'invalid' | null {
     const typed = text.trim()
     if (typed === '') {
@@ -367,6 +354,9 @@ function wholeNumber(text: string, was: number | null): number | 'invalid' | nul
         return 'invalid'
     }
     const count = Number(typed)
+    if (!Number.isSafeInteger(count)) {
+        return 'invalid'
+    }
     return count === was ? null : count
 }
 
