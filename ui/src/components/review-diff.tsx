@@ -276,7 +276,12 @@ export function DiffPanels<T>({
                         data-testid="diff-layout"
                     >
                         {LAYOUTS.map((known) => (
-                            <ToggleGroupItem key={known} value={known} className="h-5 font-mono" title={LAYOUT[known]}>
+                            <ToggleGroupItem
+                                key={known}
+                                value={known}
+                                className="h-4.5 font-mono"
+                                title={LAYOUT[known]}
+                            >
                                 {known}
                             </ToggleGroupItem>
                         ))}
