@@ -317,6 +317,10 @@ describe('ReviewDiffPanels files', () => {
         expect(shownPaths()).not.toContain('src/b.py')
 
         fireEvent.click(screen.getAllByRole('button', { name: 'Go to a file' })[0] as HTMLElement)
+        // What is typed is looked for in a path, never in a file's place in the list.
+        fireEvent.change(screen.getByRole('combobox'), { target: { value: '1' } })
+        expect(screen.queryByRole('option')).toBeNull()
+        fireEvent.change(screen.getByRole('combobox'), { target: { value: 'b.p' } })
         fireEvent.click(screen.getByRole('option', { name: /b\.py/u }))
         expect(shownPaths()).toContain('src/b.py')
         expect(screen.queryByRole('option')).toBeNull()

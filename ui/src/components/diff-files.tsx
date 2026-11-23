@@ -102,5 +102,7 @@ function FileItem({
 
 /** How an item ranks for what is typed in the field: 1 when its path holds it, else 0, which hides it. */
 function holds(value: string, search: string): number {
-    return value.toLowerCase().includes(search.trim().toLowerCase()) ? 1 : 0
+    // An item's value is its path, then its index on a line of its own, which is not what is searched.
+    const path = value.split('\n')[0] ?? ''
+    return path.toLowerCase().includes(search.trim().toLowerCase()) ? 1 : 0
 }
