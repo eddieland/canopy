@@ -288,53 +288,72 @@ def _kinds(conn: sqlite3.Connection, since: str, until: str) -> dict[tuple[str, 
     found: dict[tuple[str, Kind], KindMonth] = {}
     for kind, (table, which) in KIND_TABLES.items():
         by_month = (
-            sql.select(
-                "{} AS month, count(*), SUM(cost_usd), TOTAL(tokens_input), TOTAL(tokens_output), "
-                "TOTAL(tokens_reasoning), TOTAL(tokens_cache_read), TOTAL(tokens_cache_write)",
-                _bucket(sql.frag("started_at")),
-            )
+            records.view(_Spent, _SPENT, _bucket(sql.frag("started_at")))
             .from_("{}", sql.name(table))
             .where("{}", which)
             .where("started_at >= ? AND started_at < ?", since, until)
             .group_by("month")
         )
-        for month, runs, cost, sent, out, thought, read, written in sql.execute(conn, by_month):
-            tokens = Tokens(
-                input=int(sent),
-                output=int(out),
-                reasoning=int(thought),
-                cache_read=int(read),
-                cache_write=int(written),
+        for spent in by_month.all(conn):
+            found[str(spent.month), kind] = KindMonth(
+                kind=kind,
+                runs=spent.runs,
+                cost_usd=spent.cost_usd,
+                tokens=spent.tokens(),
             )
-            found[str(month), kind] = KindMonth(kind=kind, runs=int(runs), cost_usd=cost, tokens=tokens)
     return found
+
+
+#: What `_Spent` reads of the rows a month's bucket groups, the bucket in its slot.
+_SPENT: Final = (
+    "{} AS month, count(*) AS runs, SUM(cost_usd) AS cost_usd, TOTAL(tokens_input) AS sent, "
+    "TOTAL(tokens_output) AS out, TOTAL(tokens_reasoning) AS thought, TOTAL(tokens_cache_read) AS read, "
+    "TOTAL(tokens_cache_write) AS written"
+)
+
+
+@dataclass(frozen=True)
+class _Spent(records.View):
+    """What a month's runs of one kind, or its sessions outside canopy, cost."""
+
+    #: The local month, as `YYYY-MM`; None where SQLite could not read a row's time.
+    month: str | None
+    runs: int
+    #: None when none reported a cost.
+    cost_usd: float | None
+    #: The tokens, each a `TOTAL`, which is a REAL and 0.0 where none reported any.
+    sent: float
+    out: float
+    thought: float
+    read: float
+    written: float
+
+    def tokens(self) -> Tokens:
+        """Its tokens, by kind.
+
+        Returns:
+            The tokens, each a whole number.
+        """
+        return Tokens(
+            input=int(self.sent),
+            output=int(self.out),
+            reasoning=int(self.thought),
+            cache_read=int(self.read),
+            cache_write=int(self.written),
+        )
 
 
 # The runtime's sessions outside canopy by the month they started in.
 def _outside(conn: sqlite3.Connection, since: str, until: str, state_dir: Path) -> dict[str, Outside]:
     by_month = (
-        sql.select(
-            "{} AS month, count(*), SUM(cost_usd), TOTAL(tokens_input), TOTAL(tokens_output), "
-            "TOTAL(tokens_reasoning), TOTAL(tokens_cache_read), TOTAL(tokens_cache_write)",
-            _bucket(sql.frag("started_at")),
-        )
+        records.view(_Spent, _SPENT, _bucket(sql.frag("started_at")))
         .from_("({}) AS s", runtime_sessions.sessions_in(since, until, state_dir))
         .where("NOT ours")
         .group_by("month")
     )
     return {
-        str(month): Outside(
-            sessions=int(count),
-            cost_usd=cost,
-            tokens=Tokens(
-                input=int(sent),
-                output=int(out),
-                reasoning=int(thought),
-                cache_read=int(read),
-                cache_write=int(written),
-            ),
-        )
-        for month, count, cost, sent, out, thought, read, written in sql.execute(conn, by_month)
+        str(spent.month): Outside(sessions=spent.runs, cost_usd=spent.cost_usd, tokens=spent.tokens())
+        for spent in by_month.all(conn)
     }
 
 
@@ -352,8 +371,9 @@ def _models(conn: sqlite3.Connection, since: str, until: str) -> dict[str, dict[
 
     for table, which in KIND_TABLES.values():
         named = (
-            sql.select(
-                "{} AS month, m.model, count(*), SUM(m.replies), SUM(m.cost_usd)",
+            records.view(
+                _Named,
+                "{} AS month, m.model, count(*) AS runs, SUM(m.replies) AS replies, SUM(m.cost_usd) AS cost_usd",
                 _bucket(sql.frag("r.started_at")),
             )
             .from_("{} r CROSS JOIN run_models m ON m.run_table = ? AND m.run_id = r.id", sql.name(table), table)
@@ -361,11 +381,12 @@ def _models(conn: sqlite3.Connection, since: str, until: str) -> dict[str, dict[
             .where("{}", which)
             .group_by("month, m.model")
         )
-        for month, model, runs, replies, cost in sql.execute(conn, named):
-            add(str(month), str(model), int(runs), int(replies), cost, unread=False)
+        for of in named.all(conn):
+            add(str(of.month), of.model, of.runs, of.replies, of.cost_usd, unread=False)
         unnamed = (
-            sql.select(
-                "{} AS month, {} AS unread, count(*), SUM(r.cost_usd)",
+            records.view(
+                _Unnamed,
+                "{} AS month, {} AS unread, count(*) AS runs, SUM(r.cost_usd) AS cost_usd",
                 _bucket(sql.frag("r.started_at")),
                 run_models.unread(table),
             )
@@ -375,9 +396,31 @@ def _models(conn: sqlite3.Connection, since: str, until: str) -> dict[str, dict[
             .where("NOT EXISTS (SELECT 1 FROM run_models m WHERE m.run_table = ? AND m.run_id = r.id)", table)
             .group_by("month, unread")
         )
-        for month, unread, runs, cost in sql.execute(conn, unnamed):
-            add(str(month), None, int(runs), 0, cost, unread=bool(unread))
+        for no_model in unnamed.all(conn):
+            add(str(no_model.month), None, no_model.runs, 0, no_model.cost_usd, unread=bool(no_model.unread))
     return found
+
+
+@dataclass(frozen=True)
+class _Named(records.View):
+    """What one model's replies cost in a month, in one kind's runs."""
+
+    month: str | None
+    model: str
+    runs: int
+    replies: int
+    cost_usd: float | None
+
+
+@dataclass(frozen=True)
+class _Unnamed(records.View):
+    """What a month's runs of one kind that no session named a model for cost, those unread apart from the rest."""
+
+    month: str | None
+    #: `run_models.unread`: 1 or 0.
+    unread: int | None
+    runs: int
+    cost_usd: float | None
 
 
 def _costliest(models: Mapping[_ModelKey, ModelMonth]) -> list[ModelMonth]:
@@ -403,28 +446,32 @@ class _Run:
 def _landed(conn: sqlite3.Connection, landed: Mapping[str, str]) -> list[Landed]:
     keys = json.dumps(sorted(landed))
     in_keys = sql.frag("ticket_key IN (SELECT value FROM json_each(?))", keys)
-    titled = sql.select("key, title").from_("tickets").where("key IN (SELECT value FROM json_each(?))", keys)
-    titles = {str(key): None if title is None else str(title) for key, title in sql.execute(conn, titled)}
+    titled = records.view(_Titled).from_("tickets").where("key IN (SELECT value FROM json_each(?))", keys)
+    titles = {ticket.key: ticket.title for ticket in titled.all(conn)}
     runs: dict[str, list[_Run]] = {}
-    of_runs = sql.select("ticket_key, kind, started_at, ended_at, status, cost_usd, result_json").from_("runs")
-    of_reviews = sql.select("ticket_key, NULL, started_at, ended_at, status, cost_usd, NULL").from_("review_runs")
+    of_runs = records.view(_Ran).from_("runs")
+    of_reviews = records.view(
+        _Ran,
+        "ticket_key, NULL AS kind, started_at, ended_at, status, cost_usd, NULL AS result_json",
+    ).from_("review_runs")
     for select in (of_runs.where("{}", in_keys), of_reviews.where("{}", in_keys)):
-        for key, kind, started, ended, status, cost, result in sql.execute(conn, select):
+        for ran in select.all(conn):
+            result = ran.result_json
             named = () if result is None else tuple(contract.stored_prs(contract.stored_object(result)))
-            runs.setdefault(str(key), []).append(
+            runs.setdefault(ran.ticket_key, []).append(
                 _Run(
-                    kind=None if kind is None else str(kind),
-                    started_at=db.parse_time(str(started)),
-                    ended_at=None if ended is None else db.parse_time(str(ended)),
-                    status=str(status),
-                    cost_usd=cost,
+                    kind=ran.kind,
+                    started_at=db.parse_time(ran.started_at),
+                    ended_at=None if ran.ended_at is None else db.parse_time(ran.ended_at),
+                    status=ran.status,
+                    cost_usd=ran.cost_usd,
                     prs=named,
                 ),
             )
-    units = sql.select("ticket_key, pr_url").from_("ticket_units").where("{} AND pr_url IS NOT NULL", in_keys)
+    units = records.view(_UnitPr).from_("ticket_units").where("{} AND pr_url IS NOT NULL", in_keys)
     prs: dict[str, set[str]] = {}
-    for key, url in sql.execute(conn, units):
-        prs.setdefault(str(key), set()).add(str(url))
+    for unit in units.all(conn):
+        prs.setdefault(unit.ticket_key, set()).add(unit.pr_url)
     for key, found in runs.items():
         prs.setdefault(key, set()).update(url for run in found for url in run.prs)
     urls = sorted({url for found in prs.values() for url in found})
@@ -442,6 +489,37 @@ def _landed(conn: sqlite3.Connection, landed: Mapping[str, str]) -> list[Landed]
         )
         for key, at in landed.items()
     ]
+
+
+@dataclass(frozen=True)
+class _Titled(records.View):
+    """A ticket's title, by its key."""
+
+    key: str
+    title: str | None
+
+
+@dataclass(frozen=True)
+class _Ran(records.View):
+    """A run on a ticket, or a review run naming it, as the journal holds it."""
+
+    ticket_key: str
+    #: None for a review run.
+    kind: str | None
+    started_at: str
+    ended_at: str | None
+    status: str
+    cost_usd: float | None
+    #: None for a review run, and for a run that left no result.
+    result_json: str | None
+
+
+@dataclass(frozen=True)
+class _UnitPr(records.View):
+    """A PR one of a ticket's units opened."""
+
+    ticket_key: str
+    pr_url: str
 
 
 def _ticket(

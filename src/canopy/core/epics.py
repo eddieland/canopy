@@ -16,7 +16,7 @@ import sqlite3
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
-from canopy.core import conversation, db, epic_changes, epic_outline, plans, records, sql
+from canopy.core import conversation, db, epic_changes, epic_outline, plans, records
 from canopy.core.conversation import Refused
 from canopy.core.vocab import PlannerApproval, PlanSetting, PlanStatus, RunStatus
 from canopy.infra import lock
@@ -643,13 +643,22 @@ def newest_messages(conn: sqlite3.Connection) -> dict[int, int]:
     Returns:
         The ids.
     """
-    query = (
-        sql.select("subject_id, max(id)")
+    newest = (
+        records.view(_NewestMessage, "subject_id, max(id) AS message_id")
         .from_("messages")
         .where("subject_kind = ?", conversation.EPIC)
         .group_by("subject_id")
+        .all(conn)
     )
-    return {int(r[0]): int(r[1]) for r in sql.execute(conn, query)}
+    return {int(n.subject_id): n.message_id for n in newest}
+
+
+@dataclass(frozen=True)
+class _NewestMessage(records.View):
+    """An epic's newest message: the epic's id, as a message names its subject, and the message's."""
+
+    subject_id: str
+    message_id: int
 
 
 def _keep_approved(state_dir: Path, epic_id: int, run_id: int, text: str, sha256: str) -> None:

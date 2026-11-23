@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Final
 
-from canopy.core import db, memory, sql
+from canopy.core import db, memory, records, sql
 from canopy.core.vocab import MemoryMode
 
 if TYPE_CHECKING:
@@ -47,13 +47,13 @@ def items(conn: sqlite3.Connection, config: Config, now: datetime | None = None)
         return []
     found: list[Item] = []
     remembered = sql.select("ticket_key").from_("memories")
-    done = {
-        str(r["key"])
-        for r in sql.execute(
+    done = set(
+        records.fetch_values(
             conn,
+            str,
             sql.select("key").from_("tickets").where("done = 1").where("key IN ({})", remembered),
-        )
-    }
+        ),
+    )
     by_ticket: dict[str, list[int]] = {}
     for p in memory.pending_proposals(conn):
         if p.ticket_key in done:

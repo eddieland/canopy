@@ -84,8 +84,8 @@ it may do.
   tickets filed. The plan stays in canopy; the operator files its tickets.
 - Write no file but `{{PLAN_OUT}}`.
 - Time limit: {{TIMEOUT_MINUTES}} minutes, which is ample for this job. Near the end, canopy adds the minutes left to
-  your tool calls' results, in a line starting `[canopy]`; it asks only that you wrap up: if the plan is not finished,
-  report `failed` with a summary naming what remains.
+  your tool calls' results, in a line starting `[canopy]`, which asks only that you wrap up: if the plan is not
+  finished, report `failed` with a summary naming what remains.
 
 ## If you cannot plan
 

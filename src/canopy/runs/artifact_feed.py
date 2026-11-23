@@ -120,8 +120,8 @@ def cursor(conn: sqlite3.Connection, name: str) -> int:
     Returns:
         The cursor.
     """
-    row = sql.execute(conn, sql.select("through").from_("observed_feeds").where("source = ?", name)).fetchone()
-    return 0 if row is None else int(row[0])
+    through = sql.select("through").from_("observed_feeds").where("source = ?", name)
+    return records.fetch_value(conn, int, through) or 0
 
 
 def origin_env(workspace: str, ticket: str, run_id: int) -> dict[str, str]:

@@ -934,16 +934,24 @@ def done_in(conn: sqlite3.Connection, since: str, until: str) -> dict[str, tuple
         Each ticket's key, with `merged` or `closed` and when the decision was made.
     """
     marked = (
-        sql.select("t.key, d.rationale, d.created_at")
+        records.view(_MarkedDone, "t.key, d.rationale, d.created_at")
         .from_("tickets t")
         .join("decisions d ON d.id = (SELECT max(id) FROM decisions WHERE ticket_key = t.key AND action = 'done')")
         .where("t.done = 1 AND d.created_at >= ? AND d.created_at < ?", since, until)
         .where("t.forgotten_at IS NULL OR d.created_at > t.forgotten_at")
     )
-    rows = sql.execute(conn, marked).fetchall()
     return {
-        str(key): ("closed" if rationale == db.CLOSED_RATIONALE else "merged", str(at)) for key, rationale, at in rows
+        m.key: ("closed" if m.rationale == db.CLOSED_RATIONALE else "merged", m.created_at) for m in marked.all(conn)
     }
+
+
+@dataclass(frozen=True)
+class _MarkedDone(records.View):
+    """A ticket marked done, with the decision that marked it: why, and when."""
+
+    key: str
+    rationale: str
+    created_at: str
 
 
 # Each ticket with a run or a review run that started in the window, or marked done in it, the costliest first.
@@ -956,8 +964,8 @@ def _tickets(
     runs = _by_ticket(conn, "runs", since, until)
     reviews = _by_ticket(conn, "review_runs", since, until)
     keys = sorted({*runs, *reviews, *done})
-    named = sql.select("key, title").from_("tickets").where("key IN (SELECT value FROM json_each(?))", json.dumps(keys))
-    titles = {str(key): None if title is None else str(title) for key, title in sql.execute(conn, named)}
+    named = records.view(_Titled).from_("tickets").where("key IN (SELECT value FROM json_each(?))", json.dumps(keys))
+    titles = {ticket.key: ticket.title for ticket in named.all(conn)}
     found = [
         TicketSpend(
             key=key,
@@ -980,43 +988,50 @@ def _by_ticket(
     until: str,
 ) -> dict[str, tuple[int, float | None]]:
     by_key = (
-        sql.select("ticket_key, count(*), SUM(cost_usd)")
+        records.view(_TicketRuns, "ticket_key, count(*) AS runs, SUM(cost_usd) AS cost_usd")
         .from_(table)
         .where("started_at >= ? AND started_at < ? AND ticket_key IS NOT NULL", since, until)
         .group_by("ticket_key")
     )
-    return {str(key): (int(count), cost) for key, count, cost in sql.execute(conn, by_key)}
+    return {t.ticket_key: (t.runs, t.cost_usd) for t in by_key.all(conn)}
+
+
+@dataclass(frozen=True)
+class _Titled(records.View):
+    """A ticket's title, None while the overseer has named none."""
+
+    key: str
+    title: str | None
+
+
+@dataclass(frozen=True)
+class _TicketRuns(records.View):
+    """One ticket's runs of a window, counted, and what those that reported a cost cost: None when none did."""
+
+    ticket_key: str
+    runs: int
+    cost_usd: float | None
 
 
 # Each PR a run that started in the window pushed to, as its result names it, or a review run of it started in the
 # window, the costliest first. A run still running names no PR yet, so it counts on its ticket and on none of these.
 def _pull_requests(conn: sqlite3.Connection, since: str, until: str) -> list[PullRequestSpend]:
     runs: dict[str, list[tuple[str, float | None]]] = {}
-    pushed = (
-        sql.select("ticket_key, result_json, cost_usd")
-        .from_("runs")
-        .where("started_at >= ? AND started_at < ?", since, until)
-    )
-    for key, result, cost in sql.execute(conn, pushed):
-        for url in dict.fromkeys(contract.stored_prs(contract.stored_object(result))):
-            runs.setdefault(url, []).append((str(key), cost))
+    pushed = records.view(_RunCost).from_("runs").where("started_at >= ? AND started_at < ?", since, until)
+    for run in pushed.all(conn):
+        for url in dict.fromkeys(contract.stored_prs(contract.stored_object(run.result_json))):
+            runs.setdefault(url, []).append((run.ticket_key, run.cost_usd))
     reviews: dict[str, list[tuple[str | None, float | None]]] = {}
-    reviewed = (
-        sql.select("pr_url, ticket_key, cost_usd")
-        .from_("review_runs")
-        .where("started_at >= ? AND started_at < ?", since, until)
-    )
-    for url, key, cost in sql.execute(conn, reviewed):
-        reviews.setdefault(str(url), []).append((None if key is None else str(key), cost))
+    reviewed = records.view(_ReviewCost).from_("review_runs").where("started_at >= ? AND started_at < ?", since, until)
+    for review in reviewed.all(conn):
+        reviews.setdefault(review.pr_url, []).append((review.ticket_key, review.cost_usd))
     urls = sorted({*runs, *reviews})
     of_units = (
-        sql.select("pr_url, ticket_key, phase")
+        records.view(_UnitPhase)
         .from_("ticket_units")
         .where("pr_url IN (SELECT value FROM json_each(?))", json.dumps(urls))
     )
-    units = {
-        str(url): (str(key), None if phase is None else str(phase)) for url, key, phase in sql.execute(conn, of_units)
-    }
+    units = {unit.pr_url: (unit.ticket_key, unit.phase) for unit in of_units.all(conn)}
     found = [
         PullRequestSpend(
             url=url,
@@ -1029,6 +1044,33 @@ def _pull_requests(conn: sqlite3.Connection, since: str, until: str) -> list[Pul
         for url in urls
     ]
     return sorted(found, key=lambda p: -(p.cost_usd or 0.0))
+
+
+@dataclass(frozen=True)
+class _RunCost(records.View):
+    """A run's result as stored, which names the PRs it pushed to, and what it cost."""
+
+    ticket_key: str
+    result_json: str | None
+    cost_usd: float | None
+
+
+@dataclass(frozen=True)
+class _ReviewCost(records.View):
+    """A review run's PR, the ticket it names if any, and what it cost."""
+
+    pr_url: str
+    ticket_key: str | None
+    cost_usd: float | None
+
+
+@dataclass(frozen=True)
+class _UnitPhase(records.View):
+    """The unit holding a PR: its ticket, and its phase as canopy last derived it."""
+
+    pr_url: str
+    ticket_key: str
+    phase: str | None
 
 
 def _first_key(named: Iterable[tuple[str | None, float | None]]) -> str | None:

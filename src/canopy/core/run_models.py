@@ -281,16 +281,23 @@ def of_ticket(conn: sqlite3.Connection, key: str) -> list[ModelTotal]:
         session named a model for.
     """
     named = sql.union(*(_ticket_models(table, key) for table in _TICKET_TABLES), every=True)
-    query = (
-        sql.select("model, count(*), SUM(cost_usd)")
+    totals = (
+        records.view(_Total, "model, count(*) AS runs, SUM(cost_usd) AS cost_usd")
         .from_("({}) AS m", named)
         .group_by("model")
         .order_by("SUM(cost_usd) DESC, model")
+        .all(conn)
     )
-    return [
-        ModelTotal(model=str(model), runs=int(runs), cost_usd=float(cost))
-        for model, runs, cost in sql.execute(conn, query)
-    ]
+    return [ModelTotal(model=t.model, runs=t.runs, cost_usd=t.cost_usd) for t in totals]
+
+
+@dataclass(frozen=True)
+class _Total(records.View):
+    """What one model cost over a ticket's runs, as `of_ticket` sums it."""
+
+    model: str
+    runs: int
+    cost_usd: float
 
 
 def unread_of_ticket(conn: sqlite3.Connection, key: str) -> float | None:
@@ -302,8 +309,7 @@ def unread_of_ticket(conn: sqlite3.Connection, key: str) -> float | None:
         Their cost, in US dollars; None when none reported one.
     """
     parts = sql.union(*(_ticket_unread(table, key) for table in _TICKET_TABLES), every=True)
-    [(cost,)] = sql.execute(conn, sql.select("SUM(cost_usd)").from_("({}) AS u", parts)).fetchall()
-    return None if cost is None else float(cost)
+    return records.fetch_value(conn, float, sql.select("SUM(cost_usd)").from_("({}) AS u", parts))
 
 
 def unread(table: RunTable) -> sql.Fragment:
@@ -330,16 +336,26 @@ def _retry_before(now: datetime | None = None) -> str:
 
 # The runs `candidates` selects, as `_due_in` selects them, in the order to read them.
 def _dues(conn: sqlite3.Connection, candidates: sql.Composable, *, limit: int) -> list[Due]:
-    query = (
-        sql.select("run_table, run_id, session_id, attempts")
+    dues = (
+        records.view(_DueRun)
         .from_("({}) AS due", candidates)
         .order_by("attempts, started_at DESC, run_table, run_id")
         .limit(limit)
+        .all(conn)
     )
     return [
-        Due(run_table=_table(str(r[0])), run_id=int(r[1]), session_id=str(r[2]), attempts=int(r[3]))
-        for r in sql.execute(conn, query)
+        Due(run_table=_table(d.run_table), run_id=d.run_id, session_id=d.session_id, attempts=d.attempts) for d in dues
     ]
+
+
+@dataclass(frozen=True)
+class _DueRun(records.View):
+    """A run whose session is due a read, as `_due_in` selects it."""
+
+    run_table: str
+    run_id: int
+    session_id: str
+    attempts: int
 
 
 # One table's runs that are due: ended with a session, and never read or failed long enough ago to read again.

@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, Literal
 
-from canopy.core import memory_search, spend, sql
+from canopy.core import memory_search, records, spend, sql
 from canopy.runtime import session_text
 from canopy.runtime.report import TEXT_PARTS
 
@@ -277,7 +277,8 @@ def _named(conn: sqlite3.Connection) -> dict[str, Owner]:
     ]
     selects.append(("epics", sql.select("session_id").from_("epic_runs")))
     for kind, select in selects:
-        found.update((str(row[0]), kind) for row in sql.execute(conn, select.where("session_id IS NOT NULL")))
+        sessions = records.fetch_values(conn, str, select.where("session_id IS NOT NULL"))
+        found.update((session, kind) for session in sessions)
     return found
 
 

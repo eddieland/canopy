@@ -41,6 +41,7 @@ from canopy.core.orm import (
     insert_rows,
     select,
     update,
+    view,
 )
 from canopy.core.records.agents import (
     NextRunPersona,
@@ -310,6 +311,7 @@ __all__ = [
     "insert_rows",
     "select",
     "update",
+    "view",
 ]
 
 

@@ -99,7 +99,7 @@ def insert_run(
             desk_path=str(desk),
             started_at=db.now(),
             log_path="",
-            message_id=sql.execute(conn, newest).fetchone()[0],
+            message_id=records.fetch_value(conn, int, newest),
             model=model,
         )
         run_id = int(insert.run(conn).lastrowid or 0)

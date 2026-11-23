@@ -34,8 +34,8 @@ def paused(conn: sqlite3.Connection) -> Paused | None:
     Returns:
         When the loop was paused and through which channel, or None if it is not paused.
     """
-    row = sql.execute(conn, sql.select("paused_at, channel").from_("pause").where("id = 1")).fetchone()
-    return Paused(str(row["paused_at"]), str(row["channel"])) if row is not None else None
+    row = records.select(records.Pause).where("id = 1").one(conn)
+    return Paused(row.paused_at, row.channel) if row is not None else None
 
 
 def pause(conn: sqlite3.Connection, *, channel: str) -> bool:

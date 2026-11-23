@@ -14,8 +14,13 @@ A column holding one of `vocab`'s closed vocabularies is a field of that `StrEnu
 value the vocabulary does not hold is refused where the row is read, not where something later branches on it.
 
 A query that reads some of a table's columns, computes some, or joins in another's reads them as a `View`: a frozen
-dataclass defined beside it, a field per column it returns, read through `fetch_all` or `fetch_one` and converted and
-checked as a row type's are.
+dataclass defined beside it, a field per column it returns, converted and checked as a row type's are. `view` starts
+its query, selecting the view's fields by name, or the columns written out where one is computed or renamed:
+
+    units = records.view(Unit).from_("ticket_units").where("ticket_key = ?", key).all(conn)
+    phases = records.view(InPhase, "phase, count(*) AS tickets").from_("tickets").group_by("phase").all(conn)
+
+A query built elsewhere reads a view through `fetch_all` or `fetch_one`, as it does a row type.
 
 A query read for less than a record ends in a typed read too, so no caller indexes a bare row:
 
@@ -93,6 +98,19 @@ def select[R: Row](row_type: type[R], alias: LiteralString | None = None) -> Que
         columns=_selected(row_type, alias or row_type.TABLE),
         source=table if alias is None else sql.frag("{} {}", table, sql.name(alias)),
     )
+
+
+def view[V: View](view_type: type[V], columns: LiteralString | None = None, *args: sql.Arg) -> Query[V]:
+    """Start a query read as `view_type`: a SELECT of `columns`, or of its fields by name, to give a FROM and end.
+
+    `columns` is an expression list that may hold slots for `args`, as `sql.select`'s is, naming each of the view's
+    fields once, by a column's own name or an `AS`. Whether it does is checked where the query runs, before any row.
+
+    Returns:
+        The query, to add clauses to and end with `all` or `one`.
+    """
+    selected = _named(view_type) if columns is None else sql.frag(columns, *args)
+    return Query(row_type=view_type, columns=selected)
 
 
 def insert[R: Row](row_type: type[R], **values: sql.Arg) -> Insert[R]:
@@ -227,13 +245,13 @@ def columns(row: sqlite3.Row | Record) -> sqlite3.Row | dict[str, Any]:
 
 
 @dataclass(frozen=True, kw_only=True)
-class Query[R: Row](sql.Select):
-    """A SELECT of one table's whole rows, read as its row type: `select` starts one, and `all` or `one` runs it.
+class Query[R: Record](sql.Select):
+    """A SELECT read as a record type: `select` starts one of a table's whole rows, `view` one read as a view.
 
-    It is a `sql.Select`, built clause by clause as any is, and goes in a `{}` as itself.
+    It is a `sql.Select`, built clause by clause as any is, and goes in a `{}` as itself; `all` or `one` runs it.
     """
 
-    #: The row type it reads, which names its table and columns.
+    #: The record type it reads: a row type, which names its table and columns, or a view.
     row_type: type[R]
 
     def all(self, conn: sqlite3.Connection) -> list[R]:
@@ -271,13 +289,15 @@ class Query[R: Row](sql.Select):
     def _rows_only(self) -> sql.Select:
         """This query, selecting `1` for each row it matches where that leaves its rows the same.
 
-        A DISTINCT, a GROUP BY, or a HAVING may depend on the columns selected, so such a query keeps them. The ORDER
-        BY goes with the columns: it may name one by position, and no order changes how many rows there are.
+        A DISTINCT, a GROUP BY, or a HAVING may depend on the columns selected, so such a query keeps them, as a
+        view's does: a column it computes, such as a `count(*)`, may make its rows what they are. The ORDER BY goes
+        with the columns: it may name one by position, and no order changes how many rows there are.
 
         Returns:
             The query to run for its rows alone.
         """
-        if self.distinct or self.groups is not None or self.having_conditions:
+        plain = issubclass(self.row_type, Row)
+        if not plain or self.distinct or self.groups is not None or self.having_conditions:
             return self
         return self._but(columns=_ONE, order=None)
 
@@ -495,6 +515,19 @@ def _selected(row_type: type[Row], qualifier: LiteralString) -> sql.Fragment:
     named = [
         sql.frag("{}.{}", sql.name(qualifier), sql.name(typing.cast("LiteralString", f.name))) for f in fields(row_type)
     ]
+    return functools.reduce(lambda listed, column: sql.frag("{}, {}", listed, column), named)
+
+
+# Cached: a view's fields never change, and a query of them is started on every read.
+@functools.cache
+def _named(view_type: type[View]) -> sql.Fragment:
+    """Each of `view_type`'s fields, by its bare name, in field order.
+
+    Returns:
+        The column list, for a SELECT.
+    """
+    # A field's name is spelled in canopy's code; `sql.name` still checks it is an identifier.
+    named = [sql.name(typing.cast("LiteralString", f.name)) for f in fields(view_type)]
     return functools.reduce(lambda listed, column: sql.frag("{}, {}", listed, column), named)
 
 

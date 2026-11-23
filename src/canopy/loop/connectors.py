@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, assert_never
 from urllib.parse import urlsplit, urlunsplit
 
-from canopy.core import connector_runs, conversation, db, observe, review_drafts_manage, sql
+from canopy.core import connector_runs, conversation, db, observe, records, review_drafts_manage, sql
 from canopy.core.vocab import ConnectorRunStatus, PrState, SourceKind
 from canopy.loop import slack_replies
 from canopy.reviews import review_requests, waiting
@@ -105,17 +105,22 @@ def tracker_request(ctx: Context) -> observe.Request:
     """
     stopped = conversation.stopped(ctx.conn)
     keys = [t.key for t in db.open_tickets(ctx.conn) if t.key not in stopped]
-    newest = {
-        str(r[0]): str(r[1])
-        for r in sql.execute(
-            ctx.conn,
-            sql.select("ticket, max(commented_at)").from_("observed_comments").group_by("ticket"),
-        )
-    }
+    commented = (
+        records.view(_Commented, "ticket, max(commented_at) AS newest").from_("observed_comments").group_by("ticket")
+    )
+    newest = {c.ticket: c.newest for c in commented.all(ctx.conn)}
     return observe.Request(
         query=ctx.config.tracker.query,
         tickets=[observe.AskedTicket(key, newest.get(key)) for key in keys],
     )
+
+
+@dataclass(frozen=True)
+class _Commented(records.View):
+    """A ticket and when its newest comment the connector recorded was made."""
+
+    ticket: str
+    newest: str
 
 
 def vcs_request(ctx: Context) -> observe.Request:
@@ -132,7 +137,7 @@ def vcs_request(ctx: Context) -> observe.Request:
     Returns:
         The request.
     """
-    done = {str(r[0]) for r in sql.execute(ctx.conn, sql.select("key").from_("tickets").where("done = 1"))}
+    done = set(records.fetch_values(ctx.conn, str, sql.select("key").from_("tickets").where("done = 1")))
     prs = {
         unit.pr_url
         for key, units in db.all_units(ctx.conn).items()
@@ -148,7 +153,7 @@ def vcs_request(ctx: Context) -> observe.Request:
         drafts_manage.unsettled_prs(ctx.conn),
         review_drafts_manage.unsettled_prs(ctx.conn),
         (pr for pr in waiting.unread_prs(ctx.conn) if observe.is_pr_url(pr)),
-        (str(r[0]) for r in sql.execute(ctx.conn, seen_open)),
+        records.fetch_values(ctx.conn, str, seen_open),
         (r.pr_url for r in review_requests.open_requests(ctx.conn) if observe.is_pr_url(r.pr_url)),
     )
     query = ctx.config.review.query.strip()
@@ -171,15 +176,16 @@ def _review_query_found(conn: sqlite3.Connection) -> list[str]:
     Returns:
         Their URLs; none when no run has.
     """
-    row = sql.execute(
+    found = records.fetch_value(
         conn,
+        str,
         sql.select("review_query_result")
         .from_("connector_runs")
         .where("kind = ? AND review_query_result IS NOT NULL", SourceKind.VCS)
         .order_by("id DESC")
         .limit(1),
-    ).fetchone()
-    return [str(url) for url in json.loads(str(row[0]))] if row is not None else []
+    )
+    return [str(url) for url in json.loads(found)] if found is not None else []
 
 
 def without_credentials(url: str) -> str:

@@ -448,11 +448,11 @@ def record_run(conn: sqlite3.Connection, run_id: int, fields: Fields | None, *, 
     rendered = run_memory(conn, run_id)
     if rendered is None or fields is None:
         return []
-    row = sql.execute(conn, sql.select("ticket_key, tick_id, kind").from_("runs").where("id = ?", run_id)).fetchone()
+    [run] = records.view(_WritingRun).from_("runs").where("id = ?", run_id).all(conn)
     writing = _Writing(
         run_id=run_id,
-        ticket_key=str(row["ticket_key"]),
-        tick_id=int(row["tick_id"]),
+        ticket_key=run.ticket_key,
+        tick_id=run.tick_id,
         head=head,
         modes=Modes(rendered.ticket_notes, rendered.proposals),
     )
@@ -472,9 +472,9 @@ def record_run(conn: sqlite3.Connection, run_id: int, fields: Fields | None, *, 
             _drop_notes(conn, writing, fields.drop_notes, shown.values())
     if writing.modes.ticket_notes is not MemoryMode.OFF:
         _write_notes(conn, writing, fields.notes)
-    if writing.modes.proposals is not MemoryMode.OFF and RunKind(row["kind"]) in NOTE_KINDS:
-        slots = sql.execute(conn, sql.select("repo").from_("run_slots").where("run_id = ?", run_id))
-        repos = {str(r["repo"]) for r in slots}
+    if writing.modes.proposals is not MemoryMode.OFF and run.kind in NOTE_KINDS:
+        slots = records.view(_SlotRepo).from_("run_slots").where("run_id = ?", run_id).all(conn)
+        repos = {str(slot.repo) for slot in slots}
         _write_proposals(conn, writing, fields.proposals, repos)
     (
         records.update(records.RunMemory)
@@ -486,6 +486,22 @@ def record_run(conn: sqlite3.Connection, run_id: int, fields: Fields | None, *, 
     for r in writing.refused:
         log.info("memory entry refused", extra={"run_id": run_id, **r.as_json()})
     return writing.refused
+
+
+@dataclass(frozen=True)
+class _WritingRun(records.View):
+    """The run whose memory is written: its ticket, the tick that started it, and its kind."""
+
+    ticket_key: str
+    tick_id: int
+    kind: RunKind
+
+
+@dataclass(frozen=True)
+class _SlotRepo(records.View):
+    """The repository one of a run's slots came from, None for a slot of none."""
+
+    repo: str | None
 
 
 @dataclass(frozen=True)
@@ -817,17 +833,31 @@ def ticket_notes(conn: sqlite3.Connection) -> list[TicketNotes]:
     Returns:
         The tickets, the one whose newest note in force was written last first.
     """
-    rows = sql.execute(
-        conn,
-        sql.select("m.ticket_key, count(*) AS n, sum(m.use_count > 0) AS used, max(m.created_at) AS latest, t.title")
+    columns = "m.ticket_key, count(*) AS n, sum(m.use_count > 0) AS used, max(m.created_at) AS latest, t.title"
+    rows = (
+        records.view(_Noted, columns)
         .from_("memories m")
         .left_join("tickets t ON t.key = m.ticket_key")
         .where("m.scope = ?", MemoryScope.TICKET)
         .where("m.status = ?", MemoryStatus.ACTIVE)
         .group_by("m.ticket_key")
-        .order_by("latest DESC, m.ticket_key"),
+        .order_by("latest DESC, m.ticket_key")
+        .all(conn)
     )
-    return [TicketNotes(str(r["ticket_key"]), int(r["n"]), int(r["used"]), str(r["latest"]), r["title"]) for r in rows]
+    return [TicketNotes(str(r.ticket_key), r.n, r.used, r.latest, r.title) for r in rows]
+
+
+@dataclass(frozen=True)
+class _Noted(records.View):
+    """One ticket's notes in force, counted, as `ticket_notes` reads them."""
+
+    ticket_key: str | None
+    n: int
+    #: How many of them some run relied on.
+    used: int
+    #: When the newest was written.
+    latest: str
+    title: str | None
 
 
 def pending_proposals(conn: sqlite3.Connection) -> list[records.Memory]:
@@ -1028,16 +1058,15 @@ def used_by(conn: sqlite3.Connection, memory_id: int, *, limit: int = USED_BY_SH
 
     A run from before canopy named them is counted in the memory's `use_count` but is not among them.
     """
-    rows = sql.execute(
-        conn,
+    runs = (
         sql.select("run_id")
         .from_("memory_reads")
         .where("memory_id = ?", memory_id)
         .where("cited = ?", MemoryCited.USED)
         .order_by("run_id DESC")
-        .limit(limit),
+        .limit(limit)
     )
-    return [int(r["run_id"]) for r in rows]
+    return records.fetch_values(conn, int, runs)
 
 
 @dataclass(frozen=True)
@@ -1062,17 +1091,27 @@ def reads(conn: sqlite3.Connection, memory_ids: Sequence[int]) -> dict[int, Read
     found: dict[int, Reads] = {}
     for start in range(0, len(memory_ids), _READS_BATCH):
         batch = sql.select("id, id").from_("memories").where_in("id", memory_ids[start : start + _READS_BATCH])
-        rows = sql.execute(
-            conn,
-            sql.select("s.root, count(*) AS n, max(r.started_at) AS last_at")
+        rows = (
+            records.view(_ReadsOf, "s.root, count(*) AS n, max(r.started_at) AS last_at")
             .with_("same(id, root) AS ({})", sql.union(batch, _SAME_WORDS), recursive=True)
             .from_("same s")
             .join("memory_reads m ON m.memory_id = s.id")
             .join("runs r ON r.id = m.run_id")
-            .group_by("s.root"),
+            .group_by("s.root")
+            .all(conn)
         )
-        found.update({int(r["root"]): Reads(int(r["n"]), str(r["last_at"])) for r in rows})
+        found.update({r.root: Reads(r.n, r.last_at) for r in rows})
     return found
+
+
+@dataclass(frozen=True)
+class _ReadsOf(records.View):
+    """The runs that read one memory, or a version it was renamed from, as `reads` counts them."""
+
+    #: The memory asked about.
+    root: int
+    n: int
+    last_at: str
 
 
 def refused_of(rendered: records.RunMemory) -> list[Refused]:
@@ -1110,13 +1149,8 @@ def ticket_digest(conn: sqlite3.Connection, key: str) -> Digest:
         The section, starting with its heading and ending with a blank line, the ids it holds, and the count left out.
     """
     active = active_notes(conn, key)
-    runs = {
-        int(r["id"]): r
-        for r in sql.execute(
-            conn,
-            sql.select("id, kind, status").from_("runs").where("ticket_key = ?", key).order_by("id"),
-        )
-    }
+    ran = records.view(_NoteRun).from_("runs").where("ticket_key = ?", key).order_by("id").all(conn)
+    runs = {run.id: run for run in ran}
     later = sorted(runs)
     entries = {note.id: _note_entry(note, runs, later) for note in active}
     # The most recently used, or written, first: those are kept when the cap leaves some out.
@@ -1207,9 +1241,18 @@ def _lesson_entry(lesson: records.Memory) -> str:
     return f"Lesson {lesson.id}, `{lesson.key}`{where}:\n{quoted(lesson.body or '', '> ')}"
 
 
-def _note_entry(note: records.Memory, runs: Mapping[int, sqlite3.Row], order: Sequence[int]) -> str:
+@dataclass(frozen=True)
+class _NoteRun(records.View):
+    """A run of a ticket, as its notes' digest names the one that wrote a note."""
+
+    id: int
+    kind: str
+    status: str
+
+
+def _note_entry(note: records.Memory, runs: Mapping[int, _NoteRun], order: Sequence[int]) -> str:
     run = runs.get(note.run_id) if note.run_id is not None else None
-    wrote = f"from run {note.run_id} (`{run['kind']}`, ended `{run['status']}`)" if run is not None else "from a run"
+    wrote = f"from run {note.run_id} (`{run.kind}`, ended `{run.status}`)" if run is not None else "from a run"
     since = sum(1 for i in order if note.run_id is not None and i > note.run_id)
     ago = f"{since + 1} run{'s' if since else ''} before this one"
     head = f", against `{note.head}`" if note.head else ""

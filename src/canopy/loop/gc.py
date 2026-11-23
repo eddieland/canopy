@@ -149,20 +149,21 @@ class RowKind:
         Returns:
             The kind, its count the rows of it.
         """
-        found = sql.execute(
-            conn,
-            sql.select(
-                "count(*), sum({}), sum(coalesce({}, 0)), sum(CASE WHEN {} THEN {} END)",
+        tallied = (
+            records.view(
+                _RowTally,
+                "count(*) AS rows, sum({}) AS size, sum(coalesce({}, 0)) AS removable,"
+                " sum(CASE WHEN {} THEN {} END) AS removable_size",
                 self.size,
                 self.removable,
                 self.removable,
                 self.size,
             )
             .from_(self.table)
-            .where("{}", self.rows),
-        ).fetchone()
-        count, size, removable, removable_size = (int(v or 0) for v in found)
-        return Kind(self.name, "rows", count, size, removable, removable_size, self.rule)
+            .where("{}", self.rows)
+        )
+        [found] = tallied.all(conn)
+        return found.kind(self.name, self.rule)
 
     def delete(self) -> records.Delete[records.Row]:
         """The statement that deletes the rows the dry run counts as removable.
@@ -346,27 +347,66 @@ def memory_text(conn: sqlite3.Connection, now: datetime, retention: Retention) -
         The kind, counting rows that still hold text.
     """
     expired = memory_manage.retired_before(retention_cutoff(now, retention.memory_days))
-    found = sql.execute(
-        conn,
-        sql.select(
-            "count(*), sum(length(CAST(body AS BLOB))), sum({}), sum(CASE WHEN {} THEN length(CAST(body AS BLOB)) END)",
+    tallied = (
+        records.view(
+            _RowTally,
+            "count(*) AS rows, sum(length(CAST(body AS BLOB))) AS size, sum({}) AS removable,"
+            " sum(CASE WHEN {} THEN length(CAST(body AS BLOB)) END) AS removable_size",
             expired,
             expired,
         )
         .from_("memories")
         .where("{}", memory_manage.RETIRED)
-        .where("body IS NOT NULL"),
-    ).fetchone()
-    count, size, removable, removable_bytes = (int(v or 0) for v in found)
-    return Kind(
-        "memory text",
-        "rows",
-        count,
-        size,
-        removable,
-        removable_bytes,
-        f"memory_days = {retention.memory_days}",
+        .where("body IS NOT NULL")
     )
+    [found] = tallied.all(conn)
+    return found.kind("memory text", f"memory_days = {retention.memory_days}")
+
+
+@dataclass(frozen=True)
+class _RowTally(records.View):
+    """One kind's rows as a query tallies them: a sum is None where it adds no row up."""
+
+    rows: int
+    #: The bytes the rows hold.
+    size: int | None
+    #: How many of the rows a pass removes, and their bytes.
+    removable: int | None
+    removable_size: int | None
+
+    def kind(self, name: str, rule: str) -> Kind:
+        """The kind `name`, kept by `rule`, with this tally: a sum of no row counts as 0.
+
+        Returns:
+            The kind, its count the rows of it.
+        """
+        return Kind(name, "rows", self.rows, self.size or 0, self.removable or 0, self.removable_size or 0, rule)
+
+
+@dataclass(frozen=True)
+class _Log(records.View):
+    """A run as its files are found: its id, when it ended, None while it has not, and its log's path."""
+
+    id: int
+    ended_at: str | None
+    log_path: str
+
+
+@dataclass(frozen=True)
+class _Leased(records.View):
+    """A repository a worker run leased a worktree of."""
+
+    run_id: int
+    repo: str
+
+
+@dataclass(frozen=True)
+class _Ended(records.View):
+    """A tick as its files are found: how it closed, and when, None while it has not."""
+
+    id: int
+    status: TickStatus
+    ended_at: str | None
 
 
 @dataclass(frozen=True)
@@ -466,12 +506,11 @@ def _logged(conn: sqlite3.Connection, table: db.RunTable, cutoff: str, *suffixes
     Returns:
         What each row owns, oldest first.
     """
-    rows = sql.execute(conn, sql.select("ended_at, log_path").from_(table).order_by("id")).fetchall()
     owned: list[_Owned] = []
-    for r in rows:
-        log = Path(r["log_path"])
+    for r in records.view(_Log).from_(table).order_by("id").all(conn):
+        log = Path(r.log_path)
         paths = (log, *(log.with_suffix(s) for s in suffixes))
-        owned.append(_Owned(paths, r["ended_at"], cutoff, lifelock=procs.lifelock(log)))
+        owned.append(_Owned(paths, r.ended_at, cutoff, lifelock=procs.lifelock(log)))
     return owned
 
 
@@ -487,15 +526,15 @@ def _run_files(conn: sqlite3.Connection, cutoff: str) -> list[_Owned]:
     """
     repos: dict[int, list[str]] = {}
     slots = sql.select("run_id, repo").from_("run_slots").where("repo IS NOT NULL").order_by("run_id, repo")
-    for r in sql.execute(conn, slots):
-        repos.setdefault(int(r["run_id"]), []).append(str(r["repo"]))
+    for slot in records.fetch_all(conn, _Leased, slots):
+        repos.setdefault(slot.run_id, []).append(slot.repo)
     stretches = _stretches(conn, "run_id")
     planned = sql.union(sql.select("run_id").from_("plans"), sql.select("run_id").from_("feedback_plans"))
-    planned_ids = {int(r[0]) for r in sql.execute(conn, planned)}
+    planned_ids = set(records.fetch_values(conn, int, planned))
     owned: list[_Owned] = []
-    for r in sql.execute(conn, sql.select("id, ended_at, log_path").from_("runs").order_by("id")):
-        log = Path(r["log_path"])
-        run_id = int(r["id"])
+    for r in records.view(_Log).from_("runs").order_by("id").all(conn):
+        log = Path(r.log_path)
+        run_id = r.id
         kept = (
             *run_changes.files(log, repos.get(run_id, [])),
             *(checklist_answers.diff_path(log, repo, shown) for repo, shown in stretches.get(run_id, [])),
@@ -504,11 +543,11 @@ def _run_files(conn: sqlite3.Connection, cutoff: str) -> list[_Owned]:
         lifelock = procs.lifelock(log)
         if run_id in planned_ids:
             # A cutoff of "" is one no time is before: kept forever.
-            owned.append(_Owned((prompt,), r["ended_at"], "", lifelock=lifelock))
+            owned.append(_Owned((prompt,), r.ended_at, "", lifelock=lifelock))
             paths = (log, *kept)
         else:
             paths = (log, prompt, *kept)
-        owned.append(_Owned(paths, r["ended_at"], cutoff, lifelock=lifelock))
+        owned.append(_Owned(paths, r.ended_at, cutoff, lifelock=lifelock))
     return owned
 
 
@@ -548,14 +587,13 @@ def _stretches(conn: sqlite3.Connection, column: Literal["run_id", "task_run_id"
 
 def _tick_files(conn: sqlite3.Connection, state_dir: Path, ok_cutoff: str, other_cutoff: str) -> list[_Owned]:
     # A tick that did not close `ok` is one the operator debugs, so it keeps its files as long as a run's.
-    rows = sql.execute(conn, sql.select("id, status, ended_at").from_("ticks").order_by("id")).fetchall()
     return [
         _Owned(
-            tuple(state_dir / TICKS_DIR / f"{r['id']}{suffix}" for suffix in (".log", ".prompt")),
-            r["ended_at"],
-            cutoff=ok_cutoff if TickStatus(r["status"]) is TickStatus.OK else other_cutoff,
+            tuple(state_dir / TICKS_DIR / f"{tick.id}{suffix}" for suffix in (".log", ".prompt")),
+            tick.ended_at,
+            cutoff=ok_cutoff if tick.status is TickStatus.OK else other_cutoff,
         )
-        for r in rows
+        for tick in records.view(_Ended).from_("ticks").order_by("id").all(conn)
     ]
 
 
@@ -616,7 +654,7 @@ def _harness() -> sql.Fragment:
 
 
 @dataclass(frozen=True)
-class _Window:
+class _Window(records.View):
     """The oldest tick inside the attention list's window, and when it started; 0 and None while there is none."""
 
     tick_id: int
@@ -629,15 +667,15 @@ def _window(conn: sqlite3.Connection) -> _Window:
     Returns:
         It, or tick 0, which no tick is before, when the journal has fewer `ok` ticks than the window.
     """
-    oldest = sql.execute(
-        conn,
-        sql.select("id, started_at")
+    oldest = (
+        records.view(_Window, "id AS tick_id, started_at")
         .from_("ticks")
         .where("status = ?", TickStatus.OK)
         .order_by("id DESC")
-        .limit(1, offset=attention.HISTORY_TICKS - 1),
-    ).fetchone()
-    return _Window(0, None) if oldest is None else _Window(int(oldest["id"]), str(oldest["started_at"]))
+        .limit(1, offset=attention.HISTORY_TICKS - 1)
+        .one(conn)
+    )
+    return _Window(0, None) if oldest is None else oldest
 
 
 def _newest_runs(conn: sqlite3.Connection) -> list[int]:
@@ -652,7 +690,7 @@ def _newest_runs(conn: sqlite3.Connection) -> list[int]:
         sql.select("max(id)").from_("connector_runs").group_by("source"),
         sql.select("max(id)").from_("connector_runs").where("query_result IS NOT NULL").group_by("source"),
     )
-    return [int(r[0]) for r in sql.execute(conn, newest)]
+    return records.fetch_values(conn, int, newest)
 
 
 def _journal_space(conn: sqlite3.Connection, journal: Path) -> list[Kind]:
@@ -661,8 +699,8 @@ def _journal_space(conn: sqlite3.Connection, journal: Path) -> list[Kind]:
     Returns:
         The free pages' kind, then the WAL's.
     """
-    page_size = int(sql.execute(conn, sql.frag("PRAGMA page_size")).fetchone()[0])
-    free = int(sql.execute(conn, sql.frag("PRAGMA freelist_count")).fetchone()[0])
+    [page_size] = records.fetch_values(conn, int, sql.frag("PRAGMA page_size"))
+    [free] = records.fetch_values(conn, int, sql.frag("PRAGMA freelist_count"))
     wal = _regular_size(journal.with_name(f"{journal.name}-wal"))
     wal_count, wal_bytes = (1, wal) if wal is not None else (0, 0)
     return [

@@ -11,7 +11,7 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, Literal
 
-from canopy.core import conversation, sql
+from canopy.core import conversation, records, sql
 
 if TYPE_CHECKING:
     import sqlite3
@@ -93,11 +93,11 @@ def search(conn: sqlite3.Connection, query: str) -> Found:
     terms = words(query)
     hits: list[Hit] = []
     more: list[Source] = []
-    for source, rows_of, hit in _SOURCES:
-        rows = _matching(conn, rows_of, terms)
-        if len(rows) > PER_SOURCE:
-            more.append(source)
-        hits.extend(hit(row, snippet(str(row["text"]), terms)) for row in rows[:PER_SOURCE])
+    for source in _SOURCES:
+        found, has_more = source.newest(conn, terms)
+        if has_more:
+            more.append(source.name)
+        hits.extend(found)
     return Found(words=terms, hits=hits, more=more)
 
 
@@ -140,13 +140,37 @@ def like(term: str) -> str:
     return f"%{escaped}%"
 
 
-def _matching(conn: sqlite3.Connection, rows_of: sql.Select, terms: Collection[str]) -> list[sqlite3.Row]:
-    # Each source's query is a subquery with a `text` column and an `id` that orders it newest first. SQLite flattens
-    # it, so the scan walks the table by id and stops once the limit is met. The SQL is fixed; the terms are bound.
-    query = sql.select("*").from_("({})", rows_of)
-    for term in terms:
-        query = query.where("text LIKE ? ESCAPE '\\'", like(term))
-    return sql.execute(conn, query.order_by("id DESC").limit(PER_SOURCE + 1)).fetchall()
+@dataclass(frozen=True)
+class _Matched(records.View):
+    """A row of a source: each source's view adds what its hit shows."""
+
+    #: The field the words are looked for in.
+    text: str
+
+
+@dataclass(frozen=True)
+class _Source[V: _Matched]:
+    """One thing search looks through: its rows, what they are read as, and the hit each makes."""
+
+    name: Source
+    #: Its rows, with a `text` column and an `id` that orders them newest first.
+    rows_of: sql.Select
+    read_as: type[V]
+    hit: Callable[[V, str], Hit]
+
+    def newest(self, conn: sqlite3.Connection, terms: Collection[str]) -> tuple[list[Hit], bool]:
+        """Its newest rows holding each of `terms`, as hits.
+
+        Returns:
+            At most `PER_SOURCE` hits, newest first, and whether it had more.
+        """
+        # The source's query is a subquery. SQLite flattens it, so the scan walks the table by id and stops once the
+        # limit is met. The SQL is fixed; the terms are bound.
+        query = sql.select("*").from_("({})", self.rows_of)
+        for term in terms:
+            query = query.where("text LIKE ? ESCAPE '\\'", like(term))
+        rows = records.fetch_all(conn, self.read_as, query.order_by("id DESC").limit(PER_SOURCE + 1))
+        return [self.hit(row, snippet(row.text, terms)) for row in rows[:PER_SOURCE]], len(rows) > PER_SOURCE
 
 
 #: A ticket's text: its key and title, then its branch and each unit's branch and PR, each once. Ordered by when a tick
@@ -201,83 +225,127 @@ _TICKS: Final = (
 )
 
 
-def _ticket(row: sqlite3.Row, text: str) -> Hit:
-    phase = row["phase"]
-    return Hit("ticket", str(row["at"]), text, ticket_key=str(row["key"]), label=str(phase) if phase else None)
+@dataclass(frozen=True)
+class _TicketRow(_Matched):
+    key: str
+    phase: str | None
+    at: str
+    #: When a tick last saw it, which orders it.
+    id: str
 
 
-def _task(row: sqlite3.Row, text: str) -> Hit:
+def _ticket(row: _TicketRow, text: str) -> Hit:
+    return Hit("ticket", row.at, text, ticket_key=row.key, label=row.phase or None)
+
+
+@dataclass(frozen=True)
+class _TaskRow(_Matched):
+    id: int
+    stopped_at: str | None
+    at: str
+    #: The operator's words alone, for its title.
+    task_text: str
+
+
+def _task(row: _TaskRow, text: str) -> Hit:
     return Hit(
         "task",
-        str(row["at"]),
+        row.at,
         text,
-        task_id=int(row["id"]),
-        task_title=title(str(row["task_text"])),
-        label="stopped" if row["stopped_at"] is not None else None,
+        task_id=row.id,
+        task_title=title(row.task_text),
+        label="stopped" if row.stopped_at is not None else None,
     )
 
 
-def _message(row: sqlite3.Row, text: str) -> Hit:
-    subject = str(row["subject_id"])
-    if row["subject_kind"] == conversation.TASK:
-        task_run = row["task_run_id"]
-        task_text = row["task_text"]
+@dataclass(frozen=True)
+class _MessageRow(_Matched):
+    id: int
+    subject_kind: str
+    subject_id: str
+    at: str
+    kind: str
+    run_id: int | None
+    task_run_id: int | None
+    #: The text of the task it is a message of; None for any other subject's, or a task no longer there.
+    task_text: str | None
+
+
+def _message(row: _MessageRow, text: str) -> Hit:
+    subject = row.subject_id
+    if row.subject_kind == conversation.TASK:
         return Hit(
             "message",
-            str(row["at"]),
+            row.at,
             text,
             task_id=int(subject),
-            task_title=title(str(task_text)) if task_text is not None else None,
-            run_id=int(task_run) if task_run is not None else None,
-            label=str(row["kind"]),
+            task_title=title(row.task_text) if row.task_text is not None else None,
+            run_id=row.task_run_id,
+            label=row.kind,
         )
-    chore = row["subject_kind"] == conversation.CHORE
-    run = row["run_id"]
+    chore = row.subject_kind == conversation.CHORE
     return Hit(
         "message",
-        str(row["at"]),
+        row.at,
         text,
         ticket_key=None if chore else subject,
         chore=subject if chore else None,
-        run_id=int(run) if run is not None else None,
+        run_id=row.run_id,
         # A note to a chore is the operator's reply on its subject (§19).
-        label="note" if chore else str(row["kind"]),
+        label="note" if chore else row.kind,
     )
 
 
-def _chore_run(row: sqlite3.Row, text: str) -> Hit:
-    return Hit(
-        "chore_run",
-        str(row["at"]),
-        text,
-        chore=str(row["chore"]),
-        run_id=int(row["id"]),
-        label=str(row["status"]),
-    )
+@dataclass(frozen=True)
+class _ChoreRunRow(_Matched):
+    id: int
+    chore: str
+    status: str
+    at: str
 
 
-def _decision(row: sqlite3.Row, text: str) -> Hit:
-    key, chore = row["ticket_key"], row["chore"]
+def _chore_run(row: _ChoreRunRow, text: str) -> Hit:
+    return Hit("chore_run", row.at, text, chore=row.chore, run_id=row.id, label=row.status)
+
+
+@dataclass(frozen=True)
+class _DecisionRow(_Matched):
+    id: int
+    tick_id: int
+    ticket_key: str | None
+    chore: str | None
+    action: str
+    at: str
+
+
+def _decision(row: _DecisionRow, text: str) -> Hit:
     return Hit(
         "decision",
-        str(row["at"]),
+        row.at,
         text,
-        ticket_key=str(key) if key is not None else None,
-        chore=str(chore) if chore is not None else None,
-        tick_id=int(row["tick_id"]),
-        label=str(row["action"]),
+        ticket_key=row.ticket_key,
+        chore=row.chore,
+        tick_id=row.tick_id,
+        label=row.action,
     )
 
 
-def _tick(row: sqlite3.Row, text: str) -> Hit:
-    return Hit("tick", str(row["at"]), text, tick_id=int(row["id"]), label=str(row["status"]))
+@dataclass(frozen=True)
+class _TickRow(_Matched):
+    id: int
+    status: str
+    at: str
 
 
-_SOURCES: Final[tuple[tuple[Source, sql.Select, Callable[[sqlite3.Row, str], Hit]], ...]] = (
-    ("ticket", _TICKETS, _ticket),
-    ("task", _TASKS, _task),
-    ("message", _MESSAGES, _message),
-    ("chore_run", _CHORE_RUNS, _chore_run),
-    ("decision", _DECISIONS, _decision),
-    ("tick", _TICKS, _tick),
+def _tick(row: _TickRow, text: str) -> Hit:
+    return Hit("tick", row.at, text, tick_id=row.id, label=row.status)
+
+
+_SOURCES: Final = (
+    _Source("ticket", _TICKETS, _TicketRow, _ticket),
+    _Source("task", _TASKS, _TaskRow, _task),
+    _Source("message", _MESSAGES, _MessageRow, _message),
+    _Source("chore_run", _CHORE_RUNS, _ChoreRunRow, _chore_run),
+    _Source("decision", _DECISIONS, _DecisionRow, _decision),
+    _Source("tick", _TICKS, _TickRow, _tick),
 )
