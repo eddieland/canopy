@@ -296,6 +296,20 @@ describe('ReviewDiffPanels files', () => {
         expect(screen.getByTestId('diff-files').textContent).toBe('4 files')
     })
 
+    it('opens a file marked viewed when the page is opened at a finding on it', () => {
+        localStorage.clear()
+        const late = { ...finding('On b', 2), location: 'src/b.py:2', file: 1 }
+        const { unmount } = render(diff([late], { files: SMALL }))
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Viewed src/b.py' }))
+        expect(screen.queryByRole('article')).toBeNull()
+
+        // The page opened again, by the finding's link: its file is open, and still marked.
+        unmount()
+        render(diff([late], { files: SMALL, wanted: { file: 1 } }))
+        expect(screen.getByRole('article').textContent).toContain('On b')
+        expect(screen.getByRole('checkbox', { name: 'Viewed src/b.py' }).getAttribute('aria-checked')).toBe('true')
+    })
+
     it("lists the diff's files from any file's header, and shows the one picked though its type was hidden", () => {
         localStorage.clear()
         render(diff([], { files: SMALL }))

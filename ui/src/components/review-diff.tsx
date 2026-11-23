@@ -189,9 +189,12 @@ export function DiffPanels<T>({
     // Held here rather than in each file's panel, which the filter unmounts, so a file it hides keeps its fold, and the
     // lines opened in it, for when it comes back. Both are by the file's index.
     const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set())
-    // A file marked viewed, here or on a page that showed the same change, starts folded: it has been read.
+    // A file marked viewed, here or on a page that showed the same change, starts folded: it has been read. Not the
+    // file the page was opened at a card on, which a link must never land on folded.
     const viewed = viewedOf(diff.files, useViewedFiles())
-    const [folded, setFolded] = useState<ReadonlySet<number>>(() => new Set(viewed.flatMap((on, i) => (on ? [i] : []))))
+    const [folded, setFolded] = useState<ReadonlySet<number>>(
+        () => new Set(viewed.flatMap((on, i) => (on && i !== wanted?.file ? [i] : []))),
+    )
     const [opened, setOpened] = useState<ReadonlyMap<number, Span[]>>(new Map())
     // A file just wanted is shown as the page draws it, before the router scrolls to the card on it.
     const [seen, setSeen] = useState(wanted)
@@ -464,11 +467,12 @@ function FilePanel<T>({
                     )}
                     {/* Its heading names it to a screen reader, which this line would say again. */}
                     <span aria-hidden className="flex min-w-0 flex-1 font-mono text-xs" title={named}>
-                        <span className="truncate text-muted-foreground">
+                        {/* The directory gives way first; a name too long for the header alone is cut too. */}
+                        <span className="shrink-999 truncate text-muted-foreground">
                             {file.old_path !== null && `${file.old_path} → `}
                             {file.path.slice(0, slash)}
                         </span>
-                        <span className="shrink-0">{file.path.slice(slash)}</span>
+                        <span className="truncate">{file.path.slice(slash)}</span>
                     </span>
                     {added + removed > 0 && (
                         <span className="readout text-xs whitespace-nowrap" data-testid="diff-file-lines">

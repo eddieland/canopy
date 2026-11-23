@@ -1456,10 +1456,10 @@ reader, so no table repeats them.
   pair them, so an edit is read left to right; a side with no line there is a blank on `surface-raised`. Split lines
   wrap, since a side has half the panel, where unified lines scroll. A file with lines on one side only, a new file,
   stays one column: there is nothing to set beside it. Above the
-  first file, an
-  outline `xs` button names the file types shown and opens a menu of them, each a checkbox item, so several flip in one
-  go; a link from the findings list to a card ticks its file's type and opens its panel, so a link never lands on
-  nothing. A finding's card (`FindingCard`) sits right under the line it names, or under its file's header when the
+  first file, an outline `xs` button names the file types shown and opens a menu of them, each a checkbox item, so
+  several flip in one go; a link from the findings list to a card ticks its file's type and opens its panel, viewed or
+  not, so a link never lands on nothing. A finding's card (`FindingCard`) sits right under the line it names, or under
+  its file's header when the
   diff does not show the line, or in a Not in the diff panel after the files. A card holds its number, its severity as
   a chip (`blocking` in `status-failed`, `major` in `status-blocked`, as the attention list's reasons; `minor` plain),
   its title, its location, and its detail as rich text, with `dismiss` at the end of its head line; a dismissed one has
