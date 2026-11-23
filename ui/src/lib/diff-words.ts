@@ -40,7 +40,16 @@ const SPACE = /^\s/u
  * shares too little with it to be the same line edited; empty for a line whose pair only added to it.
  */
 export function changedWords(file: DiffFile): (Changed[] | undefined)[][] {
-    return file.hunks.map((hunk) => hunkChanges(hunk))
+    return file.hunks.map((hunk) => hunkChanges(hunk).changes)
+}
+
+/**
+ * The added line each removed line of each of `file`'s hunks is paired with, as `changedWords` pairs them, by hunk
+ * and then line, as the added line's index in its hunk: undefined for an added or unchanged line, and for a removed
+ * line with no pair. A hunk's pairs are in order, so no two cross.
+ */
+export function pairedLines(file: DiffFile): (number | undefined)[][] {
+    return file.hunks.map((hunk) => hunkChanges(hunk).pairs)
 }
 
 /** A hunk's ranges as git writes them, `-4,6 +4,8`, from its lines' numbers: where it starts and how far it runs. */
@@ -95,9 +104,10 @@ export function lineParts(
         }))
 }
 
-function hunkChanges(hunk: DiffHunk): (Changed[] | undefined)[] {
+function hunkChanges(hunk: DiffHunk): { changes: (Changed[] | undefined)[]; pairs: (number | undefined)[] } {
     const { lines } = hunk
     const changes = Array.from<Changed[] | undefined>({ length: lines.length })
+    const pairs = Array.from<number | undefined>({ length: lines.length })
     let at = 0
     while (at < lines.length) {
         const dels = runOf(lines, at, 'del')
@@ -111,6 +121,7 @@ function hunkChanges(hunk: DiffHunk): (Changed[] | undefined)[] {
                 if (pair !== undefined) {
                     changes[k] = pair[0]
                     changes[j] = pair[1]
+                    pairs[k] = j
                     next = j + 1
                     break
                 }
@@ -118,7 +129,7 @@ function hunkChanges(hunk: DiffHunk): (Changed[] | undefined)[] {
         }
         at += Math.max(1, dels + adds)
     }
-    return changes
+    return { changes, pairs }
 }
 
 // How many lines of `kind` run from `from`.

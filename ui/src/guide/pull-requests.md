@@ -384,6 +384,11 @@ and open. The files button above the first file counts them (`5 files, 2 viewed`
 and line counts; type to narrow the list, and pick one to go to it. The same list opens from the small list icon in
 any file's header, which stays on screen, so you never scroll back to the top to change files.
 
+**unified** and **split**, at the right above the first file, choose how every diff is laid out, and your browser
+remembers which. Unified is one column, a removed line above the line that replaced it. Split puts the old file on the
+left and the new on the right, with each edited line across from what it was, which is the easier read when a change
+rewrites lines rather than adding them. A new file has no old side, so it stays one column either way.
+
 To read only some kinds of file, open **All file types** above the first file and untick the rest: a lockfile's
 thousand lines are rarely where the bug is. **Show every type** ticks them all again. Following a finding from the list
 opens its file again, and ticks its type, so nothing you folded hides a finding from you.

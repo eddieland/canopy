@@ -24,8 +24,11 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useHighlight } from '@/hooks/use-highlight'
-import { changedWords, fileLines, hunkRange, lineParts } from '@/lib/diff-words'
+import { LAYOUTS, setDiffLayout, splitRows, useDiffLayout } from '@/lib/diff-layout'
+import type { DiffLayout } from '@/lib/diff-layout'
+import { changedWords, fileLines, hunkRange, lineParts, pairedLines } from '@/lib/diff-words'
 import type { Changed } from '@/lib/diff-words'
 import { fileType, fileTypes, fileTypesLabel, hiddenFilesText } from '@/lib/file-types'
 import type { FileType } from '@/lib/file-types'
@@ -53,6 +56,12 @@ import { filesSummary, setViewed, useViewedFiles, viewedMark, viewedOf } from '@
 const LINE_TINT: Record<DiffLine['kind'], string> = { add: 'bg-diff-add/12', del: 'bg-diff-del/12', ctx: '' }
 const LINE_MARK: Record<DiffLine['kind'], string> = { add: 'text-diff-add', del: 'text-diff-del', ctx: '' }
 const MARK: Record<DiffLine['kind'], string> = { add: '+', del: '-', ctx: ' ' }
+// What each layout is, on its control's hover.
+const LAYOUT: Record<DiffLayout, string> = {
+    unified: 'One column: a removed line above the line added in its place',
+    split: 'Two columns: the old side beside the new',
+}
+
 // The words that changed within a line: a second layer of its tint, and plain `foreground`, since no code color reads
 // at 4.5:1 on the two together (src/styles/tokens.test.ts).
 const WORD: Record<DiffLine['kind'], string> = {
@@ -229,6 +238,7 @@ export function DiffPanels<T>({
     }
     // One file has nowhere else to go.
     const list = listed.length > 1 ? listed : undefined
+    const layout = useDiffLayout()
     return (
         <>
             {diff.files.length > 0 && (
@@ -248,6 +258,26 @@ export function DiffPanels<T>({
                             {hiddenFilesText(hiddenFiles)}
                         </span>
                     )}
+                    <ToggleGroup
+                        type="single"
+                        value={layout}
+                        aria-label="How the diff's lines are laid out"
+                        className="ml-auto"
+                        onValueChange={(value) => {
+                            // Pressing the layout shown turns it off, which reads as no value: keep it.
+                            const next = LAYOUTS.find((known) => known === value)
+                            if (next !== undefined) {
+                                setDiffLayout(next)
+                            }
+                        }}
+                        data-testid="diff-layout"
+                    >
+                        {LAYOUTS.map((known) => (
+                            <ToggleGroupItem key={known} value={known} className="h-5 font-mono" title={LAYOUT[known]}>
+                                {known}
+                            </ToggleGroupItem>
+                        ))}
+                    </ToggleGroup>
                 </div>
             )}
             {drawn < total && (
@@ -262,6 +292,7 @@ export function DiffPanels<T>({
                             key={`${i}:${file.path}`}
                             id={`${id}-${i}`}
                             file={file}
+                            layout={layout}
                             files={list}
                             onPick={pick}
                             viewed={viewed[i] ?? false}
@@ -352,6 +383,7 @@ function FileTypeFilter({
 function FilePanel<T>({
     id,
     file,
+    layout,
     files,
     onPick,
     viewed,
@@ -370,6 +402,7 @@ function FilePanel<T>({
 }: {
     id: string
     file: DiffFile
+    layout: DiffLayout
     files: readonly ListedFile[] | undefined
     onPick: (file: number) => void
     viewed: boolean
@@ -397,8 +430,11 @@ function FilePanel<T>({
         old: lines.some((line) => typeof line.old === 'number'),
         new: lines.some((line) => typeof line.new === 'number'),
     }
+    // A file with lines on one side only has nothing to set beside them: it stays one column.
+    const split = layout === 'split' && sides.old && sides.new
+    const pairs = split ? pairedLines(file) : undefined
     const rows = pieces(file, shown).flatMap((piece) =>
-        pieceRows(piece, { file, highlighted, changed, sides, onLine, show: onShow, renderCard, add: onAdd }),
+        pieceRows(piece, { file, highlighted, changed, sides, pairs, onLine, show: onShow, renderCard, add: onAdd }),
     )
     const count = onFile.length + [...(onLine?.values() ?? [])].reduce((sum, items) => sum + items.length, 0)
     const body = onFile.length > 0 || rows.length > 0
@@ -462,7 +498,23 @@ function FilePanel<T>({
                     )}
                     {rows.length > 0 && (
                         <div className="overflow-x-auto">
-                            <table className="w-full border-collapse font-mono text-xs/4.5 tab-4">
+                            <table
+                                className={cn(
+                                    'w-full border-collapse font-mono text-xs/4.5 tab-4',
+                                    split && 'table-fixed',
+                                )}
+                                data-layout={split ? 'split' : 'unified'}
+                            >
+                                {split && (
+                                    <colgroup>
+                                        <col className="w-14" />
+                                        <col className="w-6" />
+                                        <col />
+                                        <col className="w-14" />
+                                        <col className="w-6" />
+                                        <col />
+                                    </colgroup>
+                                )}
                                 <tbody>{rows}</tbody>
                             </table>
                         </div>
@@ -489,6 +541,7 @@ function pieceRows<T>(
         highlighted,
         changed,
         sides,
+        pairs,
         onLine,
         show,
         renderCard,
@@ -498,14 +551,34 @@ function pieceRows<T>(
         highlighted: (CodeToken[] | undefined)[][] | undefined
         changed: (Changed[] | undefined)[][]
         sides: Sides
+        /** Each removed line's added line, by hunk and line, where the file is laid out split. */
+        pairs: (number | undefined)[][] | undefined
         onLine: Map<number, T[]> | undefined
         show: (span: Span) => void
         renderCard: (item: T) => ReactNode
         add: ((line: number) => void) | undefined
     },
 ): ReactNode[] {
-    // The mark and the code, and a column for each side numbered.
-    const columns = 2 + Number(sides.old) + Number(sides.new)
+    // The mark and the code, and a column for each side numbered; split, a number, a mark, and the code a side.
+    const columns = pairs === undefined ? 2 + Number(sides.old) + Number(sides.new) : 6
+    const comment = (at: number | null | undefined) =>
+        add === undefined || typeof at !== 'number'
+            ? undefined
+            : { label: `Comment on ${file.path}:${at}`, pick: () => add(at) }
+    const cardsRow = (at: number | null | undefined) => {
+        const cards = typeof at === 'number' ? onLine?.get(at) : undefined
+        return (
+            cards !== undefined && (
+                <tr>
+                    <td colSpan={columns} className="border-y bg-surface p-0">
+                        <InView className="flex flex-col gap-2 px-3 py-2 font-sans">
+                            {cards.map((item) => renderCard(item))}
+                        </InView>
+                    </td>
+                </tr>
+            )
+        )
+    }
     switch (piece.kind) {
         case 'hunk': {
             const hunk = file.hunks[piece.hunk]
@@ -524,10 +597,35 @@ function pieceRows<T>(
             ]
         }
         case 'lines': {
-            const lines = file.hunks[piece.hunk]?.lines.slice(piece.from, piece.to) ?? []
-            return lines.map((line, k) => {
+            const all = file.hunks[piece.hunk]?.lines ?? []
+            if (pairs !== undefined) {
+                return splitRows(all, pairs[piece.hunk] ?? [], piece.from, piece.to).map((row) => {
+                    const was = row.old === undefined ? undefined : all[row.old]
+                    const now = row.new === undefined ? undefined : all[row.new]
+                    return (
+                        <Fragment key={`line-${piece.hunk}-${row.old ?? ''}-${row.new ?? ''}`}>
+                            <tr className="group" data-split>
+                                <Half
+                                    side="old"
+                                    line={was}
+                                    tokens={row.old === undefined ? undefined : highlighted?.[piece.hunk]?.[row.old]}
+                                    changed={row.old === undefined ? undefined : changed[piece.hunk]?.[row.old]}
+                                />
+                                <Half
+                                    side="new"
+                                    line={now}
+                                    tokens={row.new === undefined ? undefined : highlighted?.[piece.hunk]?.[row.new]}
+                                    changed={row.new === undefined ? undefined : changed[piece.hunk]?.[row.new]}
+                                    add={comment(now?.new)}
+                                />
+                            </tr>
+                            {cardsRow(now?.new)}
+                        </Fragment>
+                    )
+                })
+            }
+            return all.slice(piece.from, piece.to).map((line, k) => {
                 const at = line.kind === 'del' ? null : line.new
-                const cards = at === null ? undefined : onLine?.get(at)
                 return (
                     <Fragment key={`line-${piece.hunk}-${piece.from + k}`}>
                         <Line
@@ -535,21 +633,9 @@ function pieceRows<T>(
                             tokens={highlighted?.[piece.hunk]?.[piece.from + k]}
                             changed={changed[piece.hunk]?.[piece.from + k]}
                             sides={sides}
-                            add={
-                                add === undefined || at === null
-                                    ? undefined
-                                    : { label: `Comment on ${file.path}:${at}`, pick: () => add(at) }
-                            }
+                            add={comment(at)}
                         />
-                        {cards !== undefined && (
-                            <tr>
-                                <td colSpan={columns} className="border-y bg-surface p-0">
-                                    <InView className="flex flex-col gap-2 px-3 py-2 font-sans">
-                                        {cards.map((item) => renderCard(item))}
-                                    </InView>
-                                </td>
-                            </tr>
-                        )}
+                        {cardsRow(at)}
                     </Fragment>
                 )
             })
@@ -610,48 +696,107 @@ function Line({
             {sides.old && <td className={NUMBER}>{line.old ?? ''}</td>}
             {sides.new && (
                 <td className={NUMBER}>
-                    {add === undefined ? (
-                        (line.new ?? '')
-                    ) : (
-                        <span className="flex items-center justify-between gap-1">
-                            <Button
-                                variant="ghost"
-                                size="icon-xs"
-                                aria-label={add.label}
-                                title={add.label}
-                                onClick={add.pick}
-                                className={cn(
-                                    '-ml-1.5 size-4 text-accent opacity-0',
-                                    'group-hover:opacity-100 focus-visible:opacity-100',
-                                )}
-                            >
-                                <Plus />
-                            </Button>
-                            {line.new}
-                        </span>
-                    )}
+                    <NewNumber line={line} add={add} />
                 </td>
             )}
             <td aria-hidden className={cn('w-px border-l pr-1.5 pl-2 select-none', LINE_MARK[line.kind])}>
                 {MARK[line.kind]}
             </td>
             <td className="pr-3 whitespace-pre" data-highlighted={tokens !== undefined || undefined}>
-                {changed === undefined || changed.length === 0 ? (
-                    <Code text={line.text} tokens={tokens} />
-                ) : (
-                    // A line's parts never reorder.
-                    lineParts(line.text, tokens, changed).map((part, i) =>
-                        part.changed ? (
-                            <span key={i} className={WORD[line.kind]}>
-                                {part.text}
-                            </span>
-                        ) : (
-                            <Code key={i} text={part.text} tokens={part.tokens} />
-                        ),
-                    )
-                )}
+                <LineText line={line} tokens={tokens} changed={changed} />
             </td>
         </tr>
+    )
+}
+
+/**
+ * One side of a split diff's row, three cells: the line's number on that `side`, its mark, and its text, wrapped
+ * rather than scrolled, since each side has half the panel. A side with no line here is a quiet blank.
+ */
+function Half({
+    side,
+    line,
+    tokens,
+    changed,
+    add,
+}: {
+    side: 'old' | 'new'
+    line: DiffLine | undefined
+    tokens: CodeToken[] | undefined
+    changed: readonly Changed[] | undefined
+    add?: { label: string; pick: () => void }
+}) {
+    // The new side starts at a hairline, which parts the two.
+    const edge = side === 'new' && 'border-l'
+    if (line === undefined) {
+        return <td aria-hidden colSpan={3} className={cn('bg-surface-raised/40', edge)} />
+    }
+    const tint = LINE_TINT[line.kind]
+    return (
+        <>
+            <td className={cn(NUMBER, 'align-top', tint, edge)}>
+                {side === 'old' ? line.old : <NewNumber line={line} add={add} />}
+            </td>
+            <td aria-hidden className={cn('pl-2 align-top select-none', tint, LINE_MARK[line.kind])}>
+                {MARK[line.kind]}
+            </td>
+            <td
+                className={cn('pr-3 align-top wrap-anywhere whitespace-pre-wrap', tint)}
+                data-highlighted={tokens !== undefined || undefined}
+            >
+                <LineText line={line} tokens={tokens} changed={changed} />
+            </td>
+        </>
+    )
+}
+
+/** A line's number on the new side, and with `add`, the + beside it that starts a comment on the line. */
+function NewNumber({ line, add }: { line: DiffLine; add?: { label: string; pick: () => void } }) {
+    return add === undefined ? (
+        (line.new ?? '')
+    ) : (
+        <span className="flex items-center justify-between gap-1">
+            <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={add.label}
+                title={add.label}
+                onClick={add.pick}
+                className={cn(
+                    '-ml-1.5 size-4 text-accent opacity-0',
+                    'group-hover:opacity-100 focus-visible:opacity-100',
+                )}
+            >
+                <Plus />
+            </Button>
+            {line.new}
+        </span>
+    )
+}
+
+/** A line's text: its code colored once read, and the words that `changed` within it on their own tint. */
+function LineText({
+    line,
+    tokens,
+    changed,
+}: {
+    line: DiffLine
+    tokens: CodeToken[] | undefined
+    changed: readonly Changed[] | undefined
+}) {
+    return changed === undefined || changed.length === 0 ? (
+        <Code text={line.text} tokens={tokens} />
+    ) : (
+        // A line's parts never reorder.
+        lineParts(line.text, tokens, changed).map((part, i) =>
+            part.changed ? (
+                <span key={i} className={WORD[line.kind]}>
+                    {part.text}
+                </span>
+            ) : (
+                <Code key={i} text={part.text} tokens={part.tokens} />
+            ),
+        )
     )
 }
 

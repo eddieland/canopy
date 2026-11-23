@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, describe, expect, it } from 'vitest'
 
 import type { DiffFile, DiffLine, ReviewDiff, ReviewFinding } from '@/api/types'
+import { setDiffLayout } from '@/lib/diff-layout'
 import { DIFF_BUDGET } from '@/lib/review-folds'
 import { placeFindings } from '@/lib/reviews'
 
@@ -306,5 +307,48 @@ describe('ReviewDiffPanels files', () => {
         fireEvent.click(screen.getByRole('option', { name: /b\.py/u }))
         expect(shownPaths()).toContain('src/b.py')
         expect(screen.queryByRole('option')).toBeNull()
+    })
+})
+
+/** What each row of the diff's tables says, in order. */
+function texts(): string[] {
+    return screen.getAllByRole('row').map((row) => row.textContent)
+}
+
+describe('ReviewDiffPanels layout', () => {
+    afterEach(() => {
+        setDiffLayout('unified')
+    })
+
+    it('sets the old side beside the new when split, an edit across from what it edited, and keeps the choice', () => {
+        const lines: DiffLine[] = [
+            { kind: 'ctx', old: 4, new: 4, text: 'function send() {' },
+            { kind: 'del', old: 5, new: null, text: '    return post(query, 250)' },
+            { kind: 'add', old: null, new: 5, text: '    const wait = useWait()' },
+            { kind: 'add', old: null, new: 6, text: '    return post(query, wait)' },
+        ]
+        const files = { truncated: false, files: [{ ...small('src/a.txt'), hunks: [{ header: '', lines }] }] }
+        const { unmount } = render(diff([], { files }))
+        expect(texts()).toContain('5-    return post(query, 250)')
+
+        fireEvent.click(screen.getByRole('radio', { name: 'split' }))
+        expect(texts()).toStrictEqual([
+            '@@ -4,2 +4,3 @@',
+            '4 function send() {4 function send() {',
+            '5+    const wait = useWait()',
+            '5-    return post(query, 250)6+    return post(query, wait)',
+        ])
+
+        // The choice is the browser's: the next diff opens split.
+        unmount()
+        render(diff([], { files }))
+        expect(screen.getByRole('radio', { name: 'split' }).getAttribute('aria-checked')).toBe('true')
+        expect(texts()).toContain('4 function send() {4 function send() {')
+    })
+
+    it('keeps a file with lines on one side only in one column', () => {
+        setDiffLayout('split')
+        render(diff([], { files: { truncated: false, files: [small('src/a.ts')] } }))
+        expect(texts()).toContain('1+src/a.ts 1')
     })
 })
