@@ -215,6 +215,18 @@ describe.each(Object.entries(THEMES))('%s theme', (themeName, colors) => {
         expect(low).toEqual([])
     })
 
+    it("reads the words that changed within a diff's line on their own tint", () => {
+        // A second layer of the line's color, 25%, over its 12% (`WORD` in src/components/review-diff.tsx). No code
+        // color reads on it, so those words are in `foreground` alone.
+        const low = ['diff-add', 'diff-del']
+            .map((line) => {
+                const row = over(token(line), 0.12, token('surface'))
+                return below(`foreground on ${line}'s changed words`, token('foreground'), over(token(line), 0.25, row))
+            })
+            .filter((line) => line !== null)
+        expect(low).toEqual([])
+    })
+
     it("sets the spend chart's series apart from the surface they sit on", () => {
         const low = SERIES.map((name) => {
             const ratio = contrast(token(name), token('surface'))
