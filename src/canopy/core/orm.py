@@ -17,6 +17,15 @@ A query that reads some of a table's columns, computes some, or joins in another
 dataclass defined beside it, a field per column it returns, read through `fetch_all` or `fetch_one` and converted and
 checked as a row type's are.
 
+A query read for less than a record ends in a typed read too, so no caller indexes a bare row:
+
+    waiting = records.select(records.Run).where("status = ?", RunStatus.RUNNING).exists(conn)
+    newest = records.fetch_value(conn, int, sql.select("max(id)").from_("ticks"))
+    done = records.fetch_values(conn, str, sql.select("key").from_("tickets").where("done = 1"))
+
+`exists` and `count` say whether a query returns a row and how many; `fetch_value` and `fetch_values` read a query of
+one column as the type named, converted and checked as a field of that type is.
+
 A write starts from the row type too, and is held to it where the statement is built, before anything runs:
 
     records.insert(records.Tick, started_at=now, status=TickStatus.RUNNING, dry_run=True).run(conn)
@@ -158,6 +167,53 @@ def fetch_one[R: Record](conn: sqlite3.Connection, record_type: type[R], query: 
     return None if first is None else _made(record_type, reading.names, reading.values(first))
 
 
+def fetch_value[T](conn: sqlite3.Connection, value_type: type[T], query: sql.Composable) -> T | None:
+    """Run `query`, a statement of one column, and read its first row's value as `value_type`.
+
+    `value_type` is a type a record's field may have: int, float, str, bytes, bool for a flag, or a vocabulary.
+
+    Returns:
+        The value, or None when the query returned no row or its value is NULL.
+    """
+    cur = _cursor(conn, query)
+    field = _value_field(value_type, _names(cur))
+    first = cur.fetchone()
+    return None if first is None or first[0] is None else typing.cast("T", field.read(first[0]))
+
+
+def fetch_values[T](conn: sqlite3.Connection, value_type: type[T], query: sql.Composable) -> list[T]:
+    """Run `query`, a statement of one column, and read each row's value as `value_type`, as `fetch_value` does.
+
+    Returns:
+        The values, in the order the query returned them.
+
+    Raises:
+        RowError: A value is NULL: a column that may be is read as a `View`, or its NULLs left out by the query.
+    """
+    cur = _cursor(conn, query)
+    field = _value_field(value_type, _names(cur))
+    return [typing.cast("T", field.read(value)) for (value,) in cur.fetchall()]
+
+
+def exists(conn: sqlite3.Connection, query: sql.Composable) -> bool:
+    """Whether `query`, a statement built with `sql`, returns any row. Only its first is read.
+
+    Returns:
+        True when it returns one.
+    """
+    return _cursor(conn, query).fetchone() is not None
+
+
+def count(conn: sqlite3.Connection, query: sql.Composable) -> int:
+    """How many rows `query`, a SELECT built with `sql`, returns, counted by SQLite: none is read.
+
+    Returns:
+        The number of rows.
+    """
+    [(rows,)] = _cursor(conn, sql.select("count(*)").from_("({})", query)).fetchall()
+    return int(rows)
+
+
 def columns(row: sqlite3.Row | Record) -> sqlite3.Row | dict[str, Any]:
     """A row of a table with a row type or one still read as `sqlite3.Row`, either way read by column name.
 
@@ -195,6 +251,23 @@ class Query[R: Row](sql.Select):
             The first row it matched, or None when it matched none.
         """
         return fetch_one(conn, self.row_type, self)
+
+    def exists(self, conn: sqlite3.Connection) -> bool:
+        """Run it on `conn` to learn whether it matches any row, reading none of its columns.
+
+        Returns:
+            True when it matches one.
+        """
+        return exists(conn, self._but(columns=_ONE))
+
+    def count(self, conn: sqlite3.Connection) -> int:
+        """Run it on `conn` to count the rows it matches, within its LIMIT if it has one, reading none.
+
+        Returns:
+            The number of rows.
+        """
+        # A DISTINCT counts its rows' own columns: of `1` it would count one.
+        return count(conn, self if self.distinct else self._but(columns=_ONE))
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -295,6 +368,8 @@ class Delete[R: Row](_Write[R], sql.Delete):
 
 #: What makes a value of a type its field accepts the field's own, refusing one it cannot be.
 type _Convert = Callable[[object], object]
+#: What a query selects when only its rows matter, not their columns.
+_ONE: Final = sql.frag("1")
 #: A column's value as `insert_rows` binds it, from each row `Insert.many` runs for.
 _PER_ROW: Final = sql.frag("?", sql.ROW)
 
@@ -421,6 +496,31 @@ def _cursor(conn: sqlite3.Connection, query: sql.Composable) -> sqlite3.Cursor:
     # A record reads its values by position: a `sqlite3.Row` per row would be made only to be taken apart again.
     cur.row_factory = None
     return cur
+
+
+def _value_field(value_type: type, names: Sequence[str]) -> _Field:
+    """How a query of one column, named by `names`, reads its value as `value_type`.
+
+    Returns:
+        The field.
+
+    Raises:
+        RowError: The query returns more or fewer columns than one.
+    """
+    if len(names) != 1:
+        raise RowError(f"a query read for one {value_type.__name__} returns {len(names)} columns: {', '.join(names)}")
+    return _as_value(value_type)
+
+
+# Cached: few types are read so, and each read of one value would build its field again.
+@functools.cache
+def _as_value(value_type: type) -> _Field:
+    """How a lone value is read as `value_type`, as a field so typed reads its column's.
+
+    Returns:
+        The field.
+    """
+    return _field(f"a value read as {value_type.__name__}", value_type)
 
 
 def _names(cur: sqlite3.Cursor) -> tuple[str, ...]:
