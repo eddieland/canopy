@@ -389,9 +389,12 @@ page, and a review that ended keeps its last. The status is the line under the t
 to where it sits, and the diff, a panel per file, with each finding pinned under the line it names. A finding on a line
 the diff doesn't show sits under its file's header, and one about a file the diff doesn't touch waits in a panel of its
 own after the files. A long diff shows the lines around each finding at first, with folds that open the rest. A renamed
-file is headed `old → new`, and a binary one is marked `binary`. A diff too long to keep whole says so at its end. A
-review that holds a draft of yours leads with the draft instead, and folds all this but the diff under it ([Publishing
-your review](#publishing-your-review)).
+file is headed `old → new`, and a binary one is marked `binary`. Each file's header counts the lines it adds and
+removes, and stays at the top of the page while you scroll through the file, so you always know whose line 412 you are
+reading. Where a line was edited rather than replaced, the words that changed are marked more strongly than the rest of
+it, each edit on its own and a rewritten phrase as one, which saves you playing spot the difference with two
+110-character lines. A diff too long to keep whole says so at its end. A review that holds a draft of yours leads with
+the draft instead, and folds all this but the diff under it ([Publishing your review](#publishing-your-review)).
 
 An old review may have no diff kept, either from before canopy kept them or because your `[retention]` removed it with
 the review's log, which the page says as `removed after 30 days`. Its findings list is then the cards themselves, each
@@ -399,7 +402,18 @@ with its location, its detail, and **dismiss**, so each finding is on the page o
 to read a blocking one.
 
 **Hide diff**, on a file's header, folds that file away to one line saying how much it hid; **Show diff** brings it
-back. To read only some kinds of file, open **All file types** above the first file and untick the rest: a lockfile's
+back. Tick **viewed** when you have read a file: it folds, and it starts folded the next time you open the page, in
+this browser. The mark is on the change, not the path, so a file that changes after you viewed it comes back unmarked
+and open. The files button above the first file counts them (`5 files, 2 viewed`) and lists them with their findings
+and line counts; type to narrow the list, and pick one to go to it. The same list opens from the small list icon in
+any file's header, which stays on screen, so you never scroll back to the top to change files.
+
+**unified** and **split**, at the right above the first file, choose how every diff is laid out, and your browser
+remembers which. Unified is one column, a removed line above the line that replaced it. Split puts the old file on the
+left and the new on the right, with each edited line across from what it was, which is the easier read when a change
+rewrites lines rather than adding them. A new file has no old side, so it stays one column either way.
+
+To read only some kinds of file, open **All file types** above the first file and untick the rest: a lockfile's
 thousand lines are rarely where the bug is. **Show every type** ticks them all again. Following a finding from the list
 opens its file again, and ticks its type, so nothing you folded hides a finding from you.
 

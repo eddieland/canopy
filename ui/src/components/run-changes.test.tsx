@@ -316,7 +316,7 @@ describe('RunChangesPanel', () => {
         expect(rowsOf(api)).toEqual(['changed after the list: api.txt+1 −1'])
         expect(api.textContent).toContain('canopy recorded nothing of what this run changed')
         // With no run diff to read, its stretch is its only scope, so no choice is offered.
-        expect(within(api).queryByRole('radiogroup')).toBeNull()
+        expect(within(api).queryByTestId('run-change-scopes')).toBeNull()
         expect(shownFiles()).toEqual(['own.txt', 'api.txt'])
     })
 

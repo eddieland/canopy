@@ -78,7 +78,7 @@ export function ReviewDialog() {
                 }
             }}
         >
-            <DialogContent className="max-w-xl" data-testid="review-dialog">
+            <DialogContent className="max-w-2xl" data-testid="review-dialog">
                 {/* A panel's header, as on the reviews page, inside the box's border. */}
                 <div
                     className={cn(

@@ -49,7 +49,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `status-failed` | A run that failed, crashed, or left no result. Also shadcn's `destructive` and refusals. |
 | `section-attention`, `-runs`, `-worktrees`, ... | Each nav section's color (rules below). Identity, never state. |
 | `nav-label-attention`, `-runs`, ... | The nav's active label: its section's color, shaded by `nav-label-shade`. |
-| `diff-add`, `diff-del` | A diff's added and removed lines: a 12% tint behind a line, and its `+` or `-`. |
+| `diff-add`, `diff-del` | A diff's added and removed lines: a 12% tint behind a line, 25% more behind the words that changed in it, and its `+` or `-`. |
 | `spend-overseer`, `-idle`, `-workers`, `-plans`, `-chores`, `-reviews`, `-tasks`, `-dry-run` | Spend series fills. |
 | `spend-outside` | The spend series of the sessions outside canopy: no run of canopy's. |
 | `context-carried`, `context-added` | The context chart's fills: what a model call carried, and what it added. |
@@ -1401,17 +1401,21 @@ reader, so no table repeats them.
   is something to type. What the grant did goes under the rows (`Notice`), untinted once nothing is stuck; the row
   leaves once the limit is above its runs. A limit with room left shows nothing.
 - **A review request** (`ReviewRequestForm`, `ReviewRequestStatus`) is how the operator has canopy review a PR the loop
-  does not own (DESIGN §21). The reviews page leads with a `Review a PR` panel above the list, whose form is one column
-  capped at `max-w-3xl`: the PR's URL in a monospace field, and under it a line it always holds, so nothing below moves
-  as it changes: the PR's reference once canopy would take the URL, that it is not a PR's URL, before it is sent, or,
-  empty, that a link into the PR will do. Then the notes, always open since the operator often has some, under a
-  sentence-case field label, never a `panel-label`. Then who reviews it, one row with nothing folded: `Persona` and its
-  menu, `Model` and its menu (A choice of model), and at the row's end `Review`, the form's primary, with its keycap
-  and the CLI's command on hover. The form ends on one quiet line saying its review is a draft that posts nothing until
-  published, which a refusal replaces. On success the form opens the PR's page. It takes no repository: the overseer
-  finds the PR's. A PR with an open request wears a `requested` chip after its review in the list. On a PR's page the
-  request is a line in the foot of its Pull request panel, with an outline `Stop` while it is open, or how it ended;
-  while none is open on a PR the loop does not own, the line's end holds the menus and an outline `Review this PR`.
+  does not own (DESIGN §21). The reviews page leads with a `Review a PR` panel above the list. Its form is the same two
+  rows at every width, with no breakpoint, so the page and the review dialog differ only in how wide they are. The first
+  row is its fields: the PR's URL in a monospace field, then the notes, always open since the operator often has some,
+  one line high and as tall as what is written in them, named by their placeholder as the tasks form's fields are; the
+  notes go under the URL only where the two do not fit side by side, in a very narrow window. The second row starts,
+  under the URL, with a line it always holds, so nothing moves as it changes: the PR's reference once canopy would take
+  the URL, that it is not a PR's URL, before it is sent, or, empty, that a link into the PR will do. At the row's other
+  end, the fields' right edge, is who reviews it, with nothing folded: `Persona` and its menu, `Model` and its menu (A
+  choice of model), then `Review`, the form's primary, with its keycap and the CLI's command on hover; in a box too
+  narrow for both, as the dialog's is, they go under the line. The form ends on one quiet line saying its review is a
+  draft that posts nothing until published, which a refusal replaces. On success the form opens the PR's page. It takes
+  no repository: the overseer finds the PR's. A PR with an open request wears a `requested` chip after its review in the
+  list. On a PR's page the request is a line in the foot of its Pull request panel, with an outline `Stop` while it is
+  open, or how it ended; while none is open on a PR the loop does not own, the line's end holds the menus and an outline
+  `Review this PR`.
 - **A review** (`/pull-requests/reviews/$id`) is canopy's shadow PR review, kept in the journal (D114); on a PR the loop
   does not own it is also a draft the operator may publish, word for word, as their own (A review's draft). The page
   holds the review's fields, its findings as a list linking to each one's card, and the diff, a panel per file. Its
@@ -1420,7 +1424,17 @@ reader, so no table repeats them.
   came for, then the `harness` line when the harness decided the status, then the verdict, in its worst finding's color
   with its impact chip (its one home), the PR, with the PR's other reviews on a muted line under it, the ticket, the
   commit, when it ended, and what it spent. A diff is a monospace table: the old and new line numbers, the `+` or `-`
-  in `diff-add` or `diff-del`, and the line, its row on that token's tint; a hunk's header on `surface-raised`; long
+  in `diff-add` or `diff-del`, and the line, its row on that token's tint. The numbers are a gutter, as narrow as the
+  file's longest number, a hairline between it and the code; a side no line is on has no column, so a new file's code
+  starts a column sooner. A hunk's header, on `surface-raised`, is git's own line, `@@ -4,6 +4,8 @@` with what follows
+  it, its ranges from the lines' numbers, so the row says where the hunk is even when git names no function. Where
+  added lines follow removed ones, each removed line is paired with the next added one like it
+  (`src/lib/diff-words.ts`), and the words the two do not share, in order, wear a second layer of the tint, 25%, each
+  edit its own mark, a phrase rewritten one mark, in `foreground`: no
+  `syntax-*` color reads at 4.5:1 on both layers, and the plain ink is part of the mark. Lines too unlike to be one
+  line edited keep their row's tint alone. A file's header leads with its name, its directory muted and cut first
+  when the path is too long, then the lines it adds and removes in `diff-add` and `diff-del`, as a run's file list
+  counts them; it is a sticky `PanelHeader`, so a long file keeps its name in view. Long
   lines scroll sideways inside the panel, while a finding's card and a fold keep to the panel's width at its left edge,
   so one long line never carries a card's text out of reach. The code is colored by the file's language
   (`src/lib/languages.ts`) in the `syntax-*` tokens, each read at 4.5:1 on an added or removed line's tint too; Shiki
@@ -1433,13 +1447,28 @@ reader, so no table repeats them.
   button, `Show 60 hidden lines`, which draws the next step; a fold only adds, as rich text's `show N more lines` does,
   so it is a plain button, not a `Disclosure`. The panels take any card anchored at a line (`DiffPanels`), so a PR's
   threads sit on a run's diff as findings do on a review's. A file's panel folds away whole on `Hide diff`, a
-  `Disclosure` at its header's end, to its header and a muted line counting what it hides. Above the first file, an
-  outline `xs` button names the file types shown and opens a menu of them, each a checkbox item, so several flip in one
-  go; a link from the findings list to a card ticks its file's type and opens its panel, so a link never lands on
-  nothing. A finding's card (`FindingCard`) sits right under the line it names, or under its file's header when the
-  diff does not show the line, or in a Not in the diff panel after the files. A card holds its number, its severity as
+  `Disclosure` at its header's end, to its header and a muted line counting what it hides. Before it, a `viewed`
+  checkbox marks the file read and folds it; the mark is on the file's change (`src/lib/viewed-files.ts`), kept in
+  this browser, so a file viewed starts folded on the next visit and a file whose diff has changed since is unmarked.
+  A diff of more than one file lists them (`FileList`, `src/components/diff-files.tsx`): a picker, narrowed by what a
+  path holds, of each file with a check once viewed, its cards counted, and its lines, which brings the one picked to
+  the top of the page. It opens from an outline `xs` button above the first file, `5 files, 2 viewed`, and from a
+  ghost icon button in every file's header, which is sticky, so another file is one click from anywhere. At the row's
+  end a segmented control, `unified` or `split`, as tall as the buttons beside it, lays every diff out
+  (`src/lib/diff-layout.ts`), kept in this browser. Split sets the old side beside the new, each removed line across
+  from the added line the changed words pair it with, so an edit is read left to right, and wraps its lines where
+  unified scrolls them. A file with lines on one side only, a new file, stays one column. Above the
+  first file, an outline `xs` button names the file types shown and opens a menu of them, each a checkbox item, so
+  several flip in one go; a link from the findings list to a card ticks its file's type and opens its panel, viewed or
+  not, so a link never lands on nothing. A finding's card (`FindingCard`) sits right under the line it names, or under
+  its file's header when the diff does not show the line, or in a Not in the diff panel after the files. Under its
+  line a card is a band of the row on `surface-raised`, edge to edge between the row's hairlines, with no frame of its
+  own and no location: the file's header and the line above it say where it is, and a box inside the row inside the
+  panel is one frame too many. Anywhere else it is a box, and says its location. A draft's card keeps its frame under
+  a line too, since its edge says whether it waits. A card holds its number, its severity as
   a chip (`blocking` in `status-failed`, `major` in `status-blocked`, as the attention list's reasons; `minor` plain),
-  its title, its location, and its detail as rich text, with `dismiss` at the end of its head line; a dismissed one has
+  its title, and its detail as rich text in `foreground`, held to a width a line is read at, since what a finding
+  says is what the card is for; `dismiss` is at the end of its head line; a dismissed one has
   a `dismissed` chip, its title muted, `undo` in place of `dismiss`, as on a chore's finding. On a review of one of the
   loop's own PRs, each finding in the list the operator has not dismissed has a checkbox before its number, and under
   the list `send to a worker` sends the ticked ones together, as `canopy send` does. The list of reviews is a
@@ -1510,7 +1539,8 @@ reader, so no table repeats them.
   its own (`proposal-*`), so `change`, the one that edits code, stands out, `decline` and `ask` sit apart from it and
   from each other, and `leave`, which does nothing, stays plain. Then the diff (`DiffPanels`), each thread's card
   (`ThreadCard`, `surface-raised`) under its line, under its file's header when outdated or off the diff, and a `Not in
-  the diff` panel for the rest. A thread's card: where it is in muted monospace, `outdated` and `resolved` chips, each
+  the diff` panel for the rest. A thread's card: where it is in muted monospace, unless it is under its line, as a
+  finding's is, `outdated` and `resolved` chips, each
   comment's author, a `bot` chip, `sent by you` on one the operator sent, its age, a `LinkOut` to it, and its body as
   `MemoryText`, plain, never Markdown or a link; a draft's text the same. A thread the feedback plan covers carries its
   proposal above its drafts (`PlanProposal`, an inset rule on the thread's card, not a card of its own); a `change` its

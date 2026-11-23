@@ -414,6 +414,8 @@ describe('DraftCommentCard', () => {
         await renderRouted(<DraftCommentCard run={5} comment={comment} draft={draft} />)
         const card = screen.getByTestId('draft-comment')
         expect(within(card).getByText('from finding 1')).toBeTruthy()
+        // Standing alone, it says where it is; under its line in the diff, the line does.
+        expect(card.textContent).toContain(`${comment.path}:${comment.line}`)
         fireEvent.click(within(card).getByRole('button', { name: 'Edit' }))
         fireEvent.change(within(card).getByRole('textbox'), { target: { value: 'Raise once it gives up.' } })
         fireEvent.click(within(card).getByRole('button', { name: /Save/u }))
@@ -487,6 +489,7 @@ describe('ReviewDiffPanels with a draft', () => {
         expect(within(first).getByText('in your review')).toBeTruthy()
         expect(first.textContent).toContain('The last 503 is returned as if it were an answer')
         expect(first.textContent).not.toContain("finding 1's detail")
+        expect(first.textContent).not.toContain('api/upstream.py:')
         fireEvent.click(within(first).getByRole('button', { name: 'Edit' }))
         fireEvent.change(within(first).getByRole('textbox'), { target: { value: 'Raise once it gives up.' } })
         fireEvent.click(within(first).getByRole('button', { name: /Save/u }))

@@ -1,9 +1,11 @@
-import { ChevronDown, ListFilter, Plus } from 'lucide-react'
-import { Fragment, useState } from 'react'
+import { ChevronDown, Files, List, ListFilter, Plus } from 'lucide-react'
+import { Fragment, useEffect, useId, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import type { DiffFile, DiffLine, ReviewDiff, ReviewDraft } from '@/api/types'
 import { CodeTokens } from '@/components/code-tokens'
+import { FileList } from '@/components/diff-files'
+import type { ListedFile } from '@/components/diff-files'
 import { Disclosure } from '@/components/disclosure'
 import { dismissedLabel, useDismissReviewFinding } from '@/components/dismiss-finding'
 import { FoldButton } from '@/components/fold-button'
@@ -12,6 +14,7 @@ import { DraftCommentCard, NewCommentCard, ReviewPointCard } from '@/components/
 import { RichText } from '@/components/rich-text'
 import { Chip } from '@/components/status'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import {
     DropdownMenu,
@@ -21,7 +24,13 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useHighlight } from '@/hooks/use-highlight'
+import { cardFrame, OnDiffLineContext, useOnDiffLine } from '@/hooks/use-on-diff-line'
+import { LAYOUTS, setDiffLayout, splitRows, useDiffLayout } from '@/lib/diff-layout'
+import type { DiffLayout } from '@/lib/diff-layout'
+import { comparedLines, fileLines, hunkRange, lineParts } from '@/lib/diff-words'
+import type { Changed } from '@/lib/diff-words'
 import { fileType, fileTypes, fileTypesLabel, hiddenFilesText } from '@/lib/file-types'
 import type { FileType } from '@/lib/file-types'
 import type { CodeToken } from '@/lib/highlight'
@@ -40,12 +49,35 @@ import {
 import type { Piece, Span } from '@/lib/review-folds'
 import { findingAnchor, SEVERITY_TONE } from '@/lib/reviews'
 import type { Numbered, Placed } from '@/lib/reviews'
+import { linesText } from '@/lib/run-changes'
 import { cn } from '@/lib/utils'
+import { filesSummary, setViewed, useViewedFiles, viewedMark, viewedOf } from '@/lib/viewed-files'
 
 // Full class names, written out, so Tailwind finds them: a line's tint and its +/- mark.
 const LINE_TINT: Record<DiffLine['kind'], string> = { add: 'bg-diff-add/12', del: 'bg-diff-del/12', ctx: '' }
 const LINE_MARK: Record<DiffLine['kind'], string> = { add: 'text-diff-add', del: 'text-diff-del', ctx: '' }
 const MARK: Record<DiffLine['kind'], string> = { add: '+', del: '-', ctx: ' ' }
+// What each layout is, on its control's hover.
+const LAYOUT: Record<DiffLayout, string> = {
+    unified: 'One column: a removed line above the line added in its place',
+    split: 'Two columns: the old side beside the new',
+}
+
+// The words that changed within a line: a second layer of its tint, and plain `foreground`, since no code color reads
+// at 4.5:1 on the two together (src/styles/tokens.test.ts).
+const WORD: Record<DiffLine['kind'], string> = {
+    add: 'rounded-xs bg-diff-add/25 text-foreground',
+    del: 'rounded-xs bg-diff-del/25 text-foreground',
+    ctx: '',
+}
+
+/** Which sides' line numbers a file's table has a column for: a file only added to has no old side to number. */
+interface Sides {
+    /** Whether any line has a number on the old side. */
+    old: boolean
+    /** Whether any line has a number on the new side. */
+    new: boolean
+}
 
 /** A file of a diff the operator just asked to see, by following a link to a card on it, a new object each time. */
 export interface Wanted {
@@ -158,7 +190,12 @@ export function DiffPanels<T>({
     // Held here rather than in each file's panel, which the filter unmounts, so a file it hides keeps its fold, and the
     // lines opened in it, for when it comes back. Both are by the file's index.
     const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set())
-    const [folded, setFolded] = useState<ReadonlySet<number>>(new Set())
+    // A file marked viewed, here or on a page that showed the same change, starts folded: it has been read. Not the
+    // file the page was opened at a card on, which a link must never land on folded.
+    const viewed = viewedOf(diff.files, useViewedFiles())
+    const [folded, setFolded] = useState<ReadonlySet<number>>(
+        () => new Set(viewed.flatMap((on, i) => (on && i !== wanted?.file ? [i] : []))),
+    )
     const [opened, setOpened] = useState<ReadonlyMap<number, Span[]>>(new Map())
     // A file just wanted is shown as the page draws it, before the router scrolls to the card on it.
     const [seen, setSeen] = useState(wanted)
@@ -171,16 +208,85 @@ export function DiffPanels<T>({
         }
     }
     const hiddenFiles = diff.files.filter((file) => hidden.has(fileType(file.path))).length
+    const listed = diff.files.map((file, i): ListedFile => {
+        const onLines = [...(placed.lines.get(i)?.values() ?? [])].reduce((sum, items) => sum + items.length, 0)
+        return {
+            index: i,
+            path: file.path,
+            ...fileLines(file),
+            cards: (placed.files.get(i)?.length ?? 0) + onLines,
+            viewed: viewed[i] ?? false,
+        }
+    })
+    // The file last picked from the list, a new object each time, brought to the top of the page once it is drawn.
+    const id = useId()
+    const [picked, setPicked] = useState<Wanted | null>(null)
+    useEffect(() => {
+        if (picked !== null) {
+            document.querySelector(`#${CSS.escape(`${id}-${picked.file}`)}`)?.scrollIntoView({ block: 'start' })
+        }
+    }, [picked, id])
+    const pick = (file: number) => {
+        const path = diff.files[file]?.path
+        if (path !== undefined) {
+            setHidden((was) => without(was, fileType(path)))
+            setPicked({ file })
+        }
+    }
+    const mark = (i: number, on: boolean) => {
+        const file = diff.files[i]
+        if (file !== undefined) {
+            setViewed(viewedMark(file), on)
+            setFolded((was) => (on ? new Set([...was, i]) : without(was, i)))
+        }
+    }
+    // One file has nowhere else to go.
+    const list = listed.length > 1 ? listed : undefined
+    const layout = useDiffLayout()
     return (
         <>
             {diff.files.length > 0 && (
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    {list !== undefined && (
+                        <FileList files={list} cards={cards} onPick={pick}>
+                            <Button variant="outline" size="xs" data-testid="diff-files">
+                                <Files aria-hidden />
+                                {filesSummary(viewed)}
+                                <ChevronDown aria-hidden />
+                            </Button>
+                        </FileList>
+                    )}
                     <FileTypeFilter types={types} hidden={hidden} onHiddenChange={setHidden} />
                     {hiddenFiles > 0 && (
                         <span className="font-mono text-xs text-muted-foreground" data-testid="diff-hidden-files">
                             {hiddenFilesText(hiddenFiles)}
                         </span>
                     )}
+                    <ToggleGroup
+                        type="single"
+                        value={layout}
+                        aria-label="How the diff's lines are laid out"
+                        className="ml-auto"
+                        onValueChange={(value) => {
+                            // Pressing the layout shown turns it off, which reads as no value: keep it.
+                            const next = LAYOUTS.find((known) => known === value)
+                            if (next !== undefined) {
+                                setDiffLayout(next)
+                            }
+                        }}
+                        data-testid="diff-layout"
+                    >
+                        {LAYOUTS.map((known) => (
+                            <ToggleGroupItem
+                                key={known}
+                                value={known}
+                                className="h-4.5 font-mono"
+                                title={LAYOUT[known]}
+                            >
+                                {known}
+                            </ToggleGroupItem>
+                        ))}
+                    </ToggleGroup>
                 </div>
             )}
             {drawn < total && (
@@ -193,7 +299,13 @@ export function DiffPanels<T>({
                     !hidden.has(fileType(file.path)) && (
                         <FilePanel
                             key={`${i}:${file.path}`}
+                            id={`${id}-${i}`}
                             file={file}
+                            layout={layout}
+                            files={list}
+                            onPick={pick}
+                            viewed={viewed[i] ?? false}
+                            onViewedChange={(on) => mark(i, on)}
                             first={first[i] ?? []}
                             onLine={placed.lines.get(i)}
                             onFile={placed.files.get(i) ?? []}
@@ -278,7 +390,13 @@ function FileTypeFilter({
 }
 
 function FilePanel<T>({
+    id,
     file,
+    layout,
+    files,
+    onPick,
+    viewed,
+    onViewedChange,
     first,
     onLine,
     onFile,
@@ -291,7 +409,13 @@ function FilePanel<T>({
     onAdd,
     level,
 }: {
+    id: string
     file: DiffFile
+    layout: DiffLayout
+    files: readonly ListedFile[] | undefined
+    onPick: (file: number) => void
+    viewed: boolean
+    onViewedChange: (viewed: boolean) => void
     first: Span[]
     onLine: Map<number, T[]> | undefined
     onFile: T[]
@@ -309,22 +433,74 @@ function FilePanel<T>({
     // read again does.
     const shown = opened.reduce((spans, span) => reveal(spans, span), first)
     const highlighted = useHighlight(file)
+    // Compared once: the words that changed, and which line each removed line became, which a split lays out by.
+    const { changed, pairs: paired } = comparedLines(file)
+    const lines = file.hunks.flatMap((hunk) => hunk.lines)
+    const sides: Sides = {
+        old: lines.some((line) => typeof line.old === 'number'),
+        new: lines.some((line) => typeof line.new === 'number'),
+    }
+    // A file with lines on one side only has nothing to set beside them: it stays one column.
+    const split = layout === 'split' && sides.old && sides.new
+    const pairs = split ? paired : undefined
     const rows = pieces(file, shown).flatMap((piece) =>
-        pieceRows(piece, { file, highlighted, onLine, show: onShow, renderCard, add: onAdd }),
+        pieceRows(piece, { file, highlighted, changed, sides, pairs, onLine, show: onShow, renderCard, add: onAdd }),
     )
     const count = onFile.length + [...(onLine?.values() ?? [])].reduce((sum, items) => sum + items.length, 0)
     const body = onFile.length > 0 || rows.length > 0
     const named = file.old_path === null ? file.path : `${file.old_path} → ${file.path}`
+    // The file's name leads the eye, and is what a path too long for the header keeps.
+    const slash = file.path.lastIndexOf('/') + 1
+    const { added, removed } = fileLines(file)
+    const [plus, minus] = linesText(added, removed)
     return (
         <Collapsible asChild open={open || !body} onOpenChange={onOpenChange}>
-            <Panel data-testid="diff-file">
-                <PanelHeader label="File" level={level} spoken={named}>
+            <Panel id={id} className="scroll-mt-4" data-testid="diff-file">
+                {/* It stays in view while its lines scroll under it, so a long file never loses its name. */}
+                <PanelHeader label="File" level={level} spoken={named} sticky>
+                    {/* The way to another file from anywhere in this one, since the header stays in view. */}
+                    {files !== undefined && (
+                        <FileList files={files} cards={cards} onPick={onPick}>
+                            <Button
+                                variant="ghost"
+                                size="icon-xs"
+                                aria-label="Go to a file"
+                                title="Go to a file"
+                                className="-mx-1 text-muted-foreground"
+                            >
+                                <List />
+                            </Button>
+                        </FileList>
+                    )}
                     {/* Its heading names it to a screen reader, which this line would say again. */}
-                    <span aria-hidden className="min-w-0 flex-1 truncate font-mono text-xs" title={file.path}>
-                        {file.old_path !== null && <span className="text-muted-foreground">{file.old_path} → </span>}
-                        {file.path}
+                    <span aria-hidden className="flex min-w-0 flex-1 font-mono text-xs" title={named}>
+                        {/* The directory gives way first; a name too long for the header alone is cut too. */}
+                        <span className="shrink-999 truncate text-muted-foreground">
+                            {file.old_path !== null && `${file.old_path} → `}
+                            {file.path.slice(0, slash)}
+                        </span>
+                        <span className="truncate">{file.path.slice(slash)}</span>
                     </span>
+                    {added + removed > 0 && (
+                        <span className="readout text-xs whitespace-nowrap" data-testid="diff-file-lines">
+                            <span className="text-diff-add">{plus}</span> <span className="text-diff-del">{minus}</span>
+                        </span>
+                    )}
                     {file.binary && <Chip>binary</Chip>}
+                    {body && (
+                        <label
+                            htmlFor={`${id}-viewed`}
+                            className="inline-flex items-center gap-1.5 font-mono text-xs text-muted-foreground"
+                        >
+                            <Checkbox
+                                id={`${id}-viewed`}
+                                checked={viewed}
+                                aria-label={`Viewed ${file.path}`}
+                                onCheckedChange={(on) => onViewedChange(on === true)}
+                            />
+                            viewed
+                        </label>
+                    )}
                     {body && <Disclosure open={open} what="diff" of={file.path} />}
                 </PanelHeader>
                 <CollapsibleContent>
@@ -333,7 +509,23 @@ function FilePanel<T>({
                     )}
                     {rows.length > 0 && (
                         <div className="overflow-x-auto">
-                            <table className="w-full border-collapse font-mono text-xs">
+                            <table
+                                className={cn(
+                                    'w-full border-collapse font-mono text-xs/4.5 tab-4',
+                                    split && 'table-fixed',
+                                )}
+                                data-layout={split ? 'split' : 'unified'}
+                            >
+                                {split && (
+                                    <colgroup>
+                                        <col className="w-14" />
+                                        <col className="w-6" />
+                                        <col />
+                                        <col className="w-14" />
+                                        <col className="w-6" />
+                                        <col />
+                                    </colgroup>
+                                )}
                                 <tbody>{rows}</tbody>
                             </table>
                         </div>
@@ -358,6 +550,9 @@ function pieceRows<T>(
     {
         file,
         highlighted,
+        changed,
+        sides,
+        pairs,
         onLine,
         show,
         renderCard,
@@ -365,54 +560,107 @@ function pieceRows<T>(
     }: {
         file: DiffFile
         highlighted: (CodeToken[] | undefined)[][] | undefined
+        changed: (Changed[] | undefined)[][]
+        sides: Sides
+        /** Each removed line's added line, by hunk and line, where the file is laid out split. */
+        pairs: (number | undefined)[][] | undefined
         onLine: Map<number, T[]> | undefined
         show: (span: Span) => void
         renderCard: (item: T) => ReactNode
         add: ((line: number) => void) | undefined
     },
 ): ReactNode[] {
+    // The mark and the code, and a column for each side numbered; split, a number, a mark, and the code a side.
+    const columns = pairs === undefined ? 2 + Number(sides.old) + Number(sides.new) : 6
+    const comment = (at: number | null | undefined) =>
+        add === undefined || typeof at !== 'number'
+            ? undefined
+            : { label: `Comment on ${file.path}:${at}`, pick: () => add(at) }
+    const cardsRow = (at: number | null | undefined) => {
+        const cards = typeof at === 'number' ? onLine?.get(at) : undefined
+        return (
+            cards !== undefined && (
+                <tr>
+                    <td colSpan={columns} className="border-y bg-surface p-0">
+                        {/* Each card is a band of the row, edge to edge: the row is its frame. */}
+                        <InView className="flex flex-col font-sans">
+                            <OnDiffLineContext value>{cards.map((item) => renderCard(item))}</OnDiffLineContext>
+                        </InView>
+                    </td>
+                </tr>
+            )
+        )
+    }
     switch (piece.kind) {
         case 'hunk': {
-            const header = file.hunks[piece.hunk]?.header
+            const hunk = file.hunks[piece.hunk]
+            if (hunk === undefined) {
+                return []
+            }
             return [
                 <tr key={`hunk-${piece.hunk}`} className="bg-surface-raised text-muted-foreground">
-                    <td colSpan={4} className="px-3 py-1 whitespace-pre">
-                        {header ? `@@ ${header}` : '@@'}
+                    <td colSpan={columns} className="px-3 py-1 whitespace-pre">
+                        {/* Git's own line, its ranges from the lines' numbers, kept at the panel's left edge. */}
+                        <span className="sticky left-3">
+                            @@ {hunkRange(hunk)} @@{hunk.header !== '' && ` ${hunk.header}`}
+                        </span>
                     </td>
                 </tr>,
             ]
         }
         case 'lines': {
-            const lines = file.hunks[piece.hunk]?.lines.slice(piece.from, piece.to) ?? []
-            return lines.map((line, k) => {
+            const all = file.hunks[piece.hunk]?.lines ?? []
+            if (pairs !== undefined) {
+                return splitRows(all, pairs[piece.hunk] ?? [], piece.from, piece.to).map((row) => {
+                    const was = row.old === undefined ? undefined : all[row.old]
+                    const now = row.new === undefined ? undefined : all[row.new]
+                    return (
+                        <Fragment key={`line-${piece.hunk}-${row.old ?? ''}-${row.new ?? ''}`}>
+                            <tr className="group" data-split>
+                                <Half
+                                    side="old"
+                                    line={was}
+                                    tokens={row.old === undefined ? undefined : highlighted?.[piece.hunk]?.[row.old]}
+                                    changed={row.old === undefined ? undefined : changed[piece.hunk]?.[row.old]}
+                                />
+                                <Half
+                                    side="new"
+                                    line={now}
+                                    tokens={row.new === undefined ? undefined : highlighted?.[piece.hunk]?.[row.new]}
+                                    changed={row.new === undefined ? undefined : changed[piece.hunk]?.[row.new]}
+                                    add={comment(now?.new)}
+                                />
+                            </tr>
+                            {cardsRow(now?.new)}
+                        </Fragment>
+                    )
+                })
+            }
+            return all.slice(piece.from, piece.to).map((line, k) => {
                 const at = line.kind === 'del' ? null : line.new
-                const cards = at === null ? undefined : onLine?.get(at)
                 return (
                     <Fragment key={`line-${piece.hunk}-${piece.from + k}`}>
                         <Line
                             line={line}
                             tokens={highlighted?.[piece.hunk]?.[piece.from + k]}
-                            add={
-                                add === undefined || at === null
-                                    ? undefined
-                                    : { label: `Comment on ${file.path}:${at}`, pick: () => add(at) }
-                            }
+                            changed={changed[piece.hunk]?.[piece.from + k]}
+                            sides={sides}
+                            add={comment(at)}
                         />
-                        {cards !== undefined && (
-                            <tr>
-                                <td colSpan={4} className="border-y bg-surface p-0">
-                                    <InView className="flex flex-col gap-2 px-3 py-2 font-sans">
-                                        {cards.map((item) => renderCard(item))}
-                                    </InView>
-                                </td>
-                            </tr>
-                        )}
+                        {cardsRow(at)}
                     </Fragment>
                 )
             })
         }
         case 'fold': {
-            return [<Fold key={`fold-${piece.span.from}`} span={piece.span} onShow={() => show(piece.span)} />]
+            return [
+                <Fold
+                    key={`fold-${piece.span.from}`}
+                    span={piece.span}
+                    columns={columns}
+                    onShow={() => show(piece.span)}
+                />,
+            ]
         }
     }
 }
@@ -426,10 +674,10 @@ function InView({ className, children }: { className?: string; children: ReactNo
 }
 
 /** A run of lines the page does not draw yet, and a button to draw the next of them. */
-function Fold({ span, onShow }: { span: Span; onShow: () => void }) {
+function Fold({ span, columns, onShow }: { span: Span; columns: number; onShow: () => void }) {
     return (
         <tr className="border-y bg-surface-raised/50" data-testid="diff-fold">
-            <td colSpan={4} className="px-1 py-0.5">
+            <td colSpan={columns} className="px-1 py-0.5">
                 {/* At the panel's left edge, as a card is, while the lines scroll sideways. */}
                 <FoldButton label={foldLabel(span)} onShow={onShow} className="sticky left-1" />
             </td>
@@ -438,51 +686,138 @@ function Fold({ span, onShow }: { span: Span; onShow: () => void }) {
 }
 
 /**
- * One line of a hunk. `add`, on a line of the new side, puts a + beside its number, shown while the row is hovered or
- * the button focused, which starts a comment on it.
+ * One line of a hunk: its number on each of the file's `sides`, its mark, and its text, the words that `changed`
+ * within it on a second layer of its tint. `add`, on a line of the new side, puts a + beside its number, shown while
+ * the row is hovered or the button focused, which starts a comment on it.
  */
 function Line({
     line,
     tokens,
+    changed,
+    sides,
     add,
 }: {
     line: DiffLine
     tokens: CodeToken[] | undefined
+    changed: readonly Changed[] | undefined
+    sides: Sides
     add?: { label: string; pick: () => void }
 }) {
     return (
         <tr className={cn('group', LINE_TINT[line.kind])} data-kind={line.kind}>
-            <td className="w-12 px-2 text-right text-muted-foreground tabular-nums select-none">{line.old ?? ''}</td>
-            <td className="w-12 px-2 text-right text-muted-foreground tabular-nums select-none">
-                {add === undefined ? (
-                    (line.new ?? '')
-                ) : (
-                    <span className="flex items-center justify-between gap-1">
-                        <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            aria-label={add.label}
-                            title={add.label}
-                            onClick={add.pick}
-                            className={cn(
-                                '-ml-1.5 size-4 text-accent opacity-0',
-                                'group-hover:opacity-100 focus-visible:opacity-100',
-                            )}
-                        >
-                            <Plus />
-                        </Button>
-                        {line.new}
-                    </span>
-                )}
-            </td>
-            <td aria-hidden className={cn('w-4 select-none', LINE_MARK[line.kind])}>
+            {sides.old && <td className={NUMBER}>{line.old ?? ''}</td>}
+            {sides.new && (
+                <td className={NUMBER}>
+                    <NewNumber line={line} add={add} />
+                </td>
+            )}
+            <td aria-hidden className={cn('w-px border-l pr-1.5 pl-2 select-none', LINE_MARK[line.kind])}>
                 {MARK[line.kind]}
             </td>
             <td className="pr-3 whitespace-pre" data-highlighted={tokens !== undefined || undefined}>
-                {tokens === undefined ? line.text : <CodeTokens tokens={tokens} />}
+                <LineText line={line} tokens={tokens} changed={changed} />
             </td>
         </tr>
     )
+}
+
+/**
+ * One side of a split diff's row, three cells: the line's number on that `side`, its mark, and its text, wrapped
+ * rather than scrolled, since each side has half the panel. A side with no line here is a quiet blank.
+ */
+function Half({
+    side,
+    line,
+    tokens,
+    changed,
+    add,
+}: {
+    side: 'old' | 'new'
+    line: DiffLine | undefined
+    tokens: CodeToken[] | undefined
+    changed: readonly Changed[] | undefined
+    add?: { label: string; pick: () => void }
+}) {
+    // The new side starts at a hairline, which parts the two.
+    const edge = side === 'new' && 'border-l'
+    if (line === undefined) {
+        return <td aria-hidden colSpan={3} className={cn('bg-surface-raised/40', edge)} />
+    }
+    const tint = LINE_TINT[line.kind]
+    return (
+        <>
+            <td className={cn(NUMBER, 'align-top', tint, edge)}>
+                {side === 'old' ? line.old : <NewNumber line={line} add={add} />}
+            </td>
+            <td aria-hidden className={cn('pl-2 align-top select-none', tint, LINE_MARK[line.kind])}>
+                {MARK[line.kind]}
+            </td>
+            <td
+                className={cn('pr-3 align-top wrap-anywhere whitespace-pre-wrap', tint)}
+                data-highlighted={tokens !== undefined || undefined}
+            >
+                <LineText line={line} tokens={tokens} changed={changed} />
+            </td>
+        </>
+    )
+}
+
+/** A line's number on the new side, and with `add`, the + beside it that starts a comment on the line. */
+function NewNumber({ line, add }: { line: DiffLine; add?: { label: string; pick: () => void } }) {
+    return add === undefined ? (
+        (line.new ?? '')
+    ) : (
+        <span className="flex items-center justify-between gap-1">
+            <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={add.label}
+                title={add.label}
+                onClick={add.pick}
+                className={cn(
+                    '-ml-1.5 size-4 text-accent opacity-0',
+                    'group-hover:opacity-100 focus-visible:opacity-100',
+                )}
+            >
+                <Plus />
+            </Button>
+            {line.new}
+        </span>
+    )
+}
+
+/** A line's text: its code colored once read, and the words that `changed` within it on their own tint. */
+function LineText({
+    line,
+    tokens,
+    changed,
+}: {
+    line: DiffLine
+    tokens: CodeToken[] | undefined
+    changed: readonly Changed[] | undefined
+}) {
+    return changed === undefined || changed.length === 0 ? (
+        <Code text={line.text} tokens={tokens} />
+    ) : (
+        // A line's parts never reorder.
+        lineParts(line.text, tokens, changed).map((part, i) =>
+            part.changed ? (
+                <span key={i} className={WORD[line.kind]}>
+                    {part.text}
+                </span>
+            ) : (
+                <Code key={i} text={part.text} tokens={part.tokens} />
+            ),
+        )
+    )
+}
+
+// A line number's cell, as narrow as the file's longest number and no narrower than three digits.
+const NUMBER = 'w-px min-w-10 pr-2 pl-3 text-right whitespace-nowrap text-muted-foreground tabular-nums select-none'
+
+/** A stretch of a line: its tokens colored once its file's grammar has read it, its plain text until then. */
+function Code({ text, tokens }: { text: string; tokens: readonly CodeToken[] | undefined }) {
+    return tokens === undefined ? text : <CodeTokens tokens={tokens} />
 }
 
 /**
@@ -503,10 +838,11 @@ export function FindingCard({
 }) {
     const { n, finding } = numbered
     const { button, notice } = useDismissReviewFinding(run, n, finding.dismissed)
+    const onLine = useOnDiffLine()
     return (
         <article
             id={findingAnchor(n)}
-            className={cn('scroll-mt-16 rounded-md border bg-surface-raised p-3 text-sm', className)}
+            className={cn('scroll-mt-16 bg-surface-raised text-sm', cardFrame(onLine), className)}
             data-testid="finding"
             data-dismissed={finding.dismissed || undefined}
         >
@@ -515,14 +851,15 @@ export function FindingCard({
                 <span className="readout text-xs text-muted-foreground">{n}</span>
                 <Chip tone={SEVERITY_TONE[finding.severity]}>{finding.severity}</Chip>
                 <span className={cn('font-medium', finding.dismissed && 'text-muted-foreground')}>{finding.title}</span>
-                {finding.location && (
+                {finding.location && !onLine && (
                     <span className="font-mono text-xs break-all text-muted-foreground">{finding.location}</span>
                 )}
                 {finding.dismissed && <Chip>{dismissedLabel(finding)}</Chip>}
                 {finding.held && <Chip tone="blocked">{HELD}</Chip>}
                 <span className="ml-auto">{button}</span>
             </header>
-            {finding.detail && <RichText text={finding.detail} className="mt-1.5 text-muted-foreground" />}
+            {/* What the finding says is what the card is for: in the page's own ink, at a width a line is read at. */}
+            {finding.detail && <RichText text={finding.detail} className="mt-1.5 max-w-[96ch]" />}
             <FindingAnswer finding={finding} />
             {notice}
         </article>

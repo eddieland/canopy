@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, describe, expect, it } from 'vitest'
 
 import type { DiffFile, DiffLine, ReviewDiff, ReviewFinding } from '@/api/types'
+import { setDiffLayout } from '@/lib/diff-layout'
 import { DIFF_BUDGET } from '@/lib/review-folds'
 import { placeFindings } from '@/lib/reviews'
 
@@ -78,9 +79,11 @@ const SMALL: ReviewDiff = {
 
 /** The paths of the files the page shows, in order. */
 function shownPaths(): string[] {
-    return screen
-        .getAllByTestId('diff-file')
-        .map((panel) => panel.querySelector('[title]')?.getAttribute('title') ?? '')
+    return screen.getAllByTestId('diff-file').map((panel) =>
+        within(panel)
+            .getByRole('heading', { hidden: true })
+            .textContent.replace(/^File /u, ''),
+    )
 }
 
 /** Folds the diff of the file at `i` on its header. */
@@ -248,5 +251,144 @@ describe('FindingCard', () => {
         expect(within(second as HTMLElement).getByTestId('finding-answer').textContent).toBe(
             'The worker answered: declinedBy design.',
         )
+    })
+})
+
+describe('ReviewDiffPanels lines', () => {
+    it("says how many lines a file adds and removes, and each hunk's ranges as git writes them", () => {
+        const lines: DiffLine[] = [
+            { kind: 'ctx', old: 4, new: 4, text: 'function send() {' },
+            { kind: 'del', old: 5, new: null, text: '    return post(query, 250)' },
+            { kind: 'add', old: null, new: 5, text: '    return post(query, WAIT)' },
+        ]
+        const files = { truncated: false, files: [{ ...small('src/a.txt'), hunks: [{ header: 'send', lines }] }] }
+        render(diff([], { files }))
+
+        expect(screen.getByTestId('diff-file-lines').textContent).toBe('+1 −1')
+        expect(screen.getByText('@@ -4,2 +4,2 @@ send')).toBeDefined()
+        // The words that changed are still the line's own text, whole.
+        expect(screen.getByText('250')).toBeDefined()
+        expect(screen.getByText('WAIT')).toBeDefined()
+        expect(screen.getAllByRole('row').map((row) => row.textContent)).toContain('5+    return post(query, WAIT)')
+    })
+})
+
+describe('ReviewDiffPanels files', () => {
+    it('folds a file marked viewed, counts it, and keeps it folded when the diff is opened again', () => {
+        localStorage.clear()
+        const { unmount } = render(diff([], { files: SMALL }))
+        expect(screen.getByTestId('diff-files').textContent).toBe('4 files')
+
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Viewed src/b.py' }))
+        expect(screen.getByTestId('diff-files').textContent).toBe('4 files, 1 viewed')
+        expect(screen.queryByText('src/b.py 2')).toBeNull()
+        expect(screen.getByRole('button', { name: 'Show diff of src/b.py' })).toBeDefined()
+
+        // Another visit to the page: the mark is the browser's, and the file starts folded.
+        unmount()
+        render(diff([], { files: SMALL }))
+        expect(screen.queryByText('src/b.py 2')).toBeNull()
+        expect(screen.getByText('src/a.ts 2')).toBeDefined()
+
+        // Unmarked, it opens again.
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Viewed src/b.py' }))
+        expect(screen.getByText('src/b.py 2')).toBeDefined()
+        expect(screen.getByTestId('diff-files').textContent).toBe('4 files')
+    })
+
+    it('opens a file marked viewed when the page is opened at a finding on it', () => {
+        localStorage.clear()
+        const late = { ...finding('On b', 2), location: 'src/b.py:2', file: 1 }
+        const { unmount } = render(diff([late], { files: SMALL }))
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Viewed src/b.py' }))
+        expect(screen.queryByRole('article')).toBeNull()
+
+        // The page opened again, by the finding's link: its file is open, and still marked.
+        unmount()
+        render(diff([late], { files: SMALL, wanted: { file: 1 } }))
+        expect(screen.getByRole('article').textContent).toContain('On b')
+        expect(screen.getByRole('checkbox', { name: 'Viewed src/b.py' }).getAttribute('aria-checked')).toBe('true')
+    })
+
+    it("lists the diff's files from any file's header, and shows the one picked though its type was hidden", () => {
+        localStorage.clear()
+        render(diff([], { files: SMALL }))
+        fireEvent.click(within(openFilter()).getByRole('menuitemcheckbox', { name: '.py, 1 file' }))
+        fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+        expect(shownPaths()).not.toContain('src/b.py')
+
+        fireEvent.click(screen.getAllByRole('button', { name: 'Go to a file' })[0] as HTMLElement)
+        // What is typed is looked for in a path, never in a file's place in the list.
+        fireEvent.change(screen.getByRole('combobox'), { target: { value: '1' } })
+        expect(screen.queryByRole('option')).toBeNull()
+        fireEvent.change(screen.getByRole('combobox'), { target: { value: 'b.p' } })
+        fireEvent.click(screen.getByRole('option', { name: /b\.py/u }))
+        expect(shownPaths()).toContain('src/b.py')
+        expect(screen.queryByRole('option')).toBeNull()
+    })
+})
+
+/** What each row of the diff's tables says, in order. */
+function texts(): string[] {
+    return screen.getAllByRole('row').map((row) => row.textContent)
+}
+
+describe('ReviewDiffPanels layout', () => {
+    afterEach(() => {
+        setDiffLayout('unified')
+    })
+
+    it('sets the old side beside the new when split, an edit across from what it edited, and keeps the choice', () => {
+        const lines: DiffLine[] = [
+            { kind: 'ctx', old: 4, new: 4, text: 'function send() {' },
+            { kind: 'del', old: 5, new: null, text: '    return post(query, 250)' },
+            { kind: 'add', old: null, new: 5, text: '    const wait = useWait()' },
+            { kind: 'add', old: null, new: 6, text: '    return post(query, wait)' },
+        ]
+        const files = { truncated: false, files: [{ ...small('src/a.txt'), hunks: [{ header: '', lines }] }] }
+        const { unmount } = render(diff([], { files }))
+        expect(texts()).toContain('5-    return post(query, 250)')
+
+        fireEvent.click(screen.getByRole('radio', { name: 'split' }))
+        expect(texts()).toStrictEqual([
+            '@@ -4,2 +4,3 @@',
+            '4 function send() {4 function send() {',
+            '5+    const wait = useWait()',
+            '5-    return post(query, 250)6+    return post(query, wait)',
+        ])
+
+        // The choice is the browser's: the next diff opens split.
+        unmount()
+        render(diff([], { files }))
+        expect(screen.getByRole('radio', { name: 'split' }).getAttribute('aria-checked')).toBe('true')
+        expect(texts()).toContain('4 function send() {4 function send() {')
+    })
+
+    it('keeps a file with lines on one side only in one column', () => {
+        setDiffLayout('split')
+        render(diff([], { files: { truncated: false, files: [small('src/a.ts')] } }))
+        expect(texts()).toContain('1+src/a.ts 1')
+        // Its number, its mark, and its text, once: not a side of three cells beside a blank one.
+        const row = screen.getAllByRole('row').find((line) => line.textContent === '1+src/a.ts 1')
+        expect(within(row as HTMLElement).getAllByRole('cell', { hidden: true })).toHaveLength(3)
+    })
+})
+
+describe('ReviewDiffPanels cards', () => {
+    it("leaves a card's location to the line it sits under, and says it where the card stands alone", () => {
+        localStorage.clear()
+        const on = { ...finding('On its line', 2), location: 'src/b.py:2', file: 1 }
+        const { unmount } = render(diff([on], { files: SMALL }))
+        expect(screen.getByRole('article').textContent).toContain('On its line')
+        expect(screen.getByRole('article').textContent).not.toContain('src/b.py:2')
+
+        // In a list, with no line above it to say where it is.
+        unmount()
+        render(
+            <QueryClientProvider client={new QueryClient()}>
+                <FindingCard run={4} numbered={{ n: 1, finding: on }} />
+            </QueryClientProvider>,
+        )
+        expect(screen.getByRole('article').textContent).toContain('src/b.py:2')
     })
 })
