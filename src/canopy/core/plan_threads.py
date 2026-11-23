@@ -222,8 +222,7 @@ def _planned(conn: sqlite3.Connection, key: str) -> str | None:
         .join("runs r ON r.id = p.run_id")
         .where("p.ticket_key = ?", key)
     )
-    started = sql.execute(conn, newest).fetchone()[0]
-    return str(started) if started is not None else None
+    return records.fetch_value(conn, str, newest)
 
 
 def _unsent(conn: sqlite3.Connection, thread_id: int) -> None:

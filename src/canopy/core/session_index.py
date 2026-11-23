@@ -32,7 +32,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Final
 
-from canopy.core import db, runtime_sessions, session_sizes, sql
+from canopy.core import db, records, runtime_sessions, session_sizes, sql
 from canopy.runtime import indexed_text
 
 if TYPE_CHECKING:
@@ -257,7 +257,7 @@ def progress(state_dir: Path, exclude: Sequence[str]) -> Progress | None:
     try:
         with read_only(state_dir) as idx:
             state = _state(idx)
-            count = int(sql.execute(idx, sql.select("count(*)").from_("sessions")).fetchone()[0])
+            count = records.fetch_value(idx, int, sql.select("count(*)").from_("sessions")) or 0
     except sqlite3.Error:
         return None
     return Progress(
@@ -477,7 +477,7 @@ def _excluded(idx: sqlite3.Connection, heads: Iterable[SessionHead], exclude: Co
         )
         .where("{}", runtime_sessions.excluded(exclude))
     )
-    return {str(row[0]) for row in sql.execute(idx, query)}
+    return set(records.fetch_values(idx, str, query))
 
 
 # Index session `head` again whole, in place of its rows: its title, and each of its messages that holds text of the

@@ -20,7 +20,7 @@ import sqlite3
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
-from canopy.core import session_index, sql
+from canopy.core import records, session_index, sql
 from canopy.runtime import indexed_text
 
 if TYPE_CHECKING:
@@ -204,15 +204,13 @@ def _snippet(text: str, words: Sequence[str]) -> list[Mark]:
     with contextlib.closing(sqlite3.connect(":memory:")) as conn:
         sql.execute(conn, sql.frag("CREATE VIRTUAL TABLE t USING fts5(body, tokenize='porter unicode61')"))
         sql.execute(conn, sql.frag("INSERT INTO t (body) VALUES (?)", flat))
-        row = sql.execute(
-            conn,
+        snippet = (
             sql.select("snippet(t, 0, ?, ?, '…', ?)", _START, _END, SNIPPET_WORDS)
             .from_("t")
-            .where("t MATCH ?", " OR ".join(f'"{w}"' for w in words)),
-        ).fetchone()
-    if row is not None:
-        picked = str(row[0])
-    return _marks(picked)
+            .where("t MATCH ?", " OR ".join(f'"{w}"' for w in words))
+        )
+        found = records.fetch_value(conn, str, snippet)
+    return _marks(picked if found is None else found)
 
 
 # A snippet `snippet()` marked, as its pieces, at most `MAX_SNIPPET` characters of text.
