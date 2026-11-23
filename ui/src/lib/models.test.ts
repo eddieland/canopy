@@ -129,33 +129,46 @@ describe('sameModel', () => {
 
 describe('isRouter', () => {
     it('takes a model whose id ends in auto as a router, at a variant or not, and no other', () => {
-        expect(isRouter('github-copilot/auto')).toBe(true)
-        expect(isRouter('openrouter/openrouter/auto')).toBe(true)
-        expect(isRouter('github-copilot/auto@high')).toBe(true)
-        expect(isRouter('github-copilot/gpt-5')).toBe(false)
-        expect(isRouter('acme/auto-tuned')).toBe(false)
-        expect(isRouter('auto/gpt-5')).toBe(false)
+        expect(isRouter('github-copilot/auto', [])).toBe(true)
+        expect(isRouter('openrouter/openrouter/auto', [])).toBe(true)
+        expect(isRouter('github-copilot/auto@high', [])).toBe(true)
+        expect(isRouter('github-copilot/gpt-5', [])).toBe(false)
+        expect(isRouter('acme/auto-tuned', [])).toBe(false)
+        expect(isRouter('auto/gpt-5', [])).toBe(false)
+    })
+
+    it('takes a model runtime.routers names as one too, at a variant or not', () => {
+        const routers = ['github-copilot/fusion']
+        expect(isRouter('github-copilot/fusion', routers)).toBe(true)
+        expect(isRouter('github-copilot/fusion@high', routers)).toBe(true)
+        expect(isRouter('github-copilot/auto', routers)).toBe(true)
+        expect(isRouter('acme/fusion', routers)).toBe(false)
+        expect(isRouter('github-copilot/fusion-mini', routers)).toBe(false)
+        expect(insteadMark('github-copilot/fusion', routers)).toBe('→')
     })
 
     it('marks what served in place of a router as sent on, and in place of any other model as not it', () => {
-        expect(insteadMark('github-copilot/auto')).toBe('→')
-        expect(insteadMark('openai/gpt-5')).toBe('≠')
+        expect(insteadMark('github-copilot/auto', [])).toBe('→')
+        expect(insteadMark('openai/gpt-5', [])).toBe('≠')
     })
 })
 
 describe('sessionModels', () => {
     it('names the model asked for, and what served only when it differs', () => {
-        expect(sessionModels('github-copilot/auto', ['github-copilot/gpt-5', 'github-copilot/claude-x'])).toBe(
+        expect(sessionModels('github-copilot/auto', ['github-copilot/gpt-5', 'github-copilot/claude-x'], [])).toBe(
             'github-copilot/auto → github-copilot/gpt-5, github-copilot/claude-x',
         )
-        expect(sessionModels('openai/gpt-5@medium', ['openai/gpt-5'])).toBe('openai/gpt-5@medium')
-        expect(sessionModels('openai/gpt-5', ['openai/gpt-5-mini'])).toBe('openai/gpt-5 ≠ openai/gpt-5-mini')
-        expect(sessionModels('openai/gpt-5', [])).toBe('openai/gpt-5')
+        expect(sessionModels('openai/gpt-5@medium', ['openai/gpt-5'], [])).toBe('openai/gpt-5@medium')
+        expect(sessionModels('openai/gpt-5', ['openai/gpt-5-mini'], [])).toBe('openai/gpt-5 ≠ openai/gpt-5-mini')
+        expect(sessionModels('openai/gpt-5', ['openai/gpt-5-mini'], ['openai/gpt-5'])).toBe(
+            'openai/gpt-5 → openai/gpt-5-mini',
+        )
+        expect(sessionModels('openai/gpt-5', [], [])).toBe('openai/gpt-5')
     })
 
     it('names what served when nothing says what was asked, and nothing when neither is known', () => {
-        expect(sessionModels(null, ['openai/gpt-5', 'openai/gpt-5-mini'])).toBe('openai/gpt-5, openai/gpt-5-mini')
-        expect(sessionModels(null, [])).toBeNull()
+        expect(sessionModels(null, ['openai/gpt-5', 'openai/gpt-5-mini'], [])).toBe('openai/gpt-5, openai/gpt-5-mini')
+        expect(sessionModels(null, [], [])).toBeNull()
     })
 })
 

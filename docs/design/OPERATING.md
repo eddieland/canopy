@@ -500,7 +500,7 @@ promises:
   own, the model the runtime says it was set to, where it says. So where a router was used is told from what it
   routed to: the list of sessions names both, and narrows to a model asked for or served, a run on a router reads
   as sent on, not as served by the wrong model, and spend by model sets a model's runs that asked for another apart,
-  under what they asked for.
+  under what they asked for. A router is a model whose id ends in `/auto`, or one `runtime.routers` names.
 - **Hiding narrows only what is shown.** `runtime.hide_models` leaves models and variants matching its globs out of the
   lists canopy shows, `canopy models` and the web UI's menus, never out of the check above: config or a ticket may
   still name a hidden one, and its runs run.

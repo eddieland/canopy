@@ -2,6 +2,7 @@ import type { ModelsServed } from '@/api/types'
 import { Cost } from '@/components/cost'
 import { Field } from '@/components/fields'
 import { None } from '@/components/none'
+import { useRouters } from '@/hooks/use-routers'
 import { insteadMark, isUnread, sameModel, UNREAD, unservedReason } from '@/lib/models'
 import { cn } from '@/lib/utils'
 
@@ -25,6 +26,7 @@ export function ModelsField({ models, asked = null }: { models: ModelsServed; as
 }
 
 function Models({ models, asked }: { models: ModelsServed; asked: string | null }) {
+    const routers = useRouters()
     const reason = unservedReason(models)
     if (reason !== null) {
         if (asked === null && isUnread(models)) {
@@ -69,7 +71,7 @@ function Models({ models, asked }: { models: ModelsServed; asked: string | null 
     }
     return (
         <span>
-            asked {asked} {asked === null ? '≠' : insteadMark(asked)} served {served}
+            asked {asked} {asked === null ? '≠' : insteadMark(asked, routers)} served {served}
         </span>
     )
 }

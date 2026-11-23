@@ -670,12 +670,13 @@ export async function reloadConfig(): Promise<ConfigReload> {
 /**
  * After the loop reads its config again, by Reload or a save: read the config's queries again, the agents' models among
  * them, and the runtime's model list, whose `hidden` is `runtime.hide_models` as the loop reads it, so a menu leaves
- * out what the file hides now rather than what it hid a minute ago.
+ * out what the file hides now rather than what it hid a minute ago, and the server's meta, which names the routers.
  */
 export async function refreshReloaded(client: QueryClient): Promise<void> {
     await Promise.all([
         client.invalidateQueries({ queryKey: keys.config }),
         client.invalidateQueries({ queryKey: keys.models }),
+        client.invalidateQueries({ queryKey: keys.meta }),
     ])
 }
 
