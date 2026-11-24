@@ -80,7 +80,7 @@ def owed(
 
 
 def record_queried(conn: sqlite3.Connection, tick_id: int, repo: str, keys: Iterable[str]) -> int:
-    """Record that tick `tick_id` ran the tracker query, touching each open ticket it returned into the journal.
+    """Record, as the harness's own decision, that tick `tick_id` ran the tracker query, touching each ticket it found.
 
     Into the journal at once, so the next tick's block carries each one even if this tick ends without deciding it.
 
@@ -90,7 +90,7 @@ def record_queried(conn: sqlite3.Connection, tick_id: int, repo: str, keys: Iter
     found = list(dict.fromkeys(keys))
     for key in found:
         db.touch_ticket(conn, key, repo)
-    db.record_decision(conn, tick_id, None, QUERIED_ACTION, queried_rationale(found))
+    db.record_decision(conn, tick_id, None, QUERIED_ACTION, queried_rationale(found), decider=Decider.HARNESS)
     return len(found)
 
 

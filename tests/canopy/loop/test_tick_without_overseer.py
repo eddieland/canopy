@@ -9,6 +9,7 @@ one duty no ticket is needed for.
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING, Final
 
 import pytest
@@ -24,6 +25,7 @@ from tests.canopy.scenario_helpers import (
     due_chore,
     loops,
 )
+from tests.conftest import TRACKER_SOURCE
 
 if TYPE_CHECKING:
     import sqlite3
@@ -67,6 +69,22 @@ def test_a_tick_with_nothing_left_runs_no_overseer_makes_the_harnesss_dispatches
     assert f"- {KEY}, " in (quiet.env.state_dir / "attention.md").read_text()
     chores_ended(quiet.conn)
     working.finishes()
+
+
+def test_every_decision_of_a_tick_that_runs_no_overseer_names_the_harness(
+    scenario: Scenario,
+    connector_state: Path,
+) -> None:
+    """With no overseer to make one, each decision the tick records is the harness's, the query's included (§37)."""
+    scenario.seen("PROJ-1")
+    due_chore(scenario, MINE)
+    # The query finds PROJ-1, its label taken off, which the harness skips, and PROJ-9, which no source has read yet.
+    unlabeled: dict[str, object] = {"kind": "ticket", "key": "PROJ-1", "title": "PROJ-1", "state": "open", "labels": []}
+    connector_state.write_text(json.dumps({TRACKER_SOURCE: {"query": ["PROJ-1", "PROJ-9"], "lines": [unlabeled]}}))
+    ticked = scenario.tick(dry_run=True)
+    assert (ticked.tick.status, ticked.tick.overseer_ran) == (TickStatus.OK, False)
+    assert sorted(ticked.actions) == ["dispatch:chore", "queried", "skip", "wait"]
+    assert {d.decider for d in ticked.decisions} == {Decider.HARNESS}
 
 
 def test_a_tick_with_a_ticket_left_runs_the_overseer(quiet: Scenario) -> None:
