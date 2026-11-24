@@ -50,7 +50,7 @@ MAX_SNIPPET: Final = 400
 _START, _END = "\x01", "\x02"
 #: How many words may stand between the words of a query for them to count as close together.
 NEAR_WORDS: Final = 10
-#: How many of a message's names a snippet looks at for the ones to mark by their parts.
+#: How many of a message's names a snippet marks by their parts at most.
 MAX_NAMES: Final = 500
 #: A message's row, found when its title and text hold every word between them and its text holds one.
 _MESSAGE_MATCH: Final = "{cols} : ({every}) AND {text} : ({any})"
@@ -99,8 +99,8 @@ def found(state_dir: Path, words: Sequence[str], *, canopy: bool, limit: int = M
     `words` are a query's, as memory's search reads them; with none, nothing is found.
 
     Returns:
-        At most `limit` sessions, ranked by how well they match, a word in a title weighing more, then newest first;
-        none when there is no index.
+        At most `limit` sessions, ranked by how well they match, a word in a title weighing more and words close
+        together more than the same words apart, then newest first; none when there is no index.
     """
     if not words:
         return []
@@ -243,13 +243,10 @@ def _snippet(text: str, words: Sequence[str]) -> list[Mark]:
     return _marks(picked if found is None else found)
 
 
-# The names in `flat` that one of `terms` finds by their parts, of its first `MAX_NAMES`: the text is searched as it
-# is written, where such a name is one word, so each is looked for by name as well.
+# The names in `flat` that one of `terms` finds by their parts, the first `MAX_NAMES` of them: the text is searched as
+# it is written, where such a name is one word, so each is looked for by name as well.
 def _names_found(conn: sqlite3.Connection, flat: str, terms: Sequence[str]) -> list[str]:
-    names: dict[str, list[str]] = {}
-    for name, split in word_parts.compounds(flat):
-        if name not in names and len(names) < MAX_NAMES:
-            names[name] = split
+    names = dict(word_parts.compounds(flat))
     if not names:
         return []
     sql.execute(conn, sql.frag("CREATE VIRTUAL TABLE n USING fts5(parts, tokenize='porter unicode61')"))
@@ -258,7 +255,8 @@ def _names_found(conn: sqlite3.Connection, flat: str, terms: Sequence[str]) -> l
         sql.frag("INSERT INTO n (rowid, parts) VALUES (?, ?)", sql.ROW, sql.ROW),
         [(row, " ".join(split)) for row, split in enumerate(names.values())],
     )
-    rows = records.fetch_values(conn, int, sql.select("rowid").from_("n").where("n MATCH ?", " OR ".join(terms)))
+    found = sql.select("rowid").from_("n").where("n MATCH ?", " OR ".join(terms)).order_by("rowid").limit(MAX_NAMES)
+    rows = records.fetch_values(conn, int, found)
     listed = list(names)
     return [listed[row] for row in rows]
 

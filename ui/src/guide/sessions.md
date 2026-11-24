@@ -83,8 +83,8 @@ live in the address as `?q=`, so a search is a link.
 
 At `text` you don't need to remember how a name was spelled. `validation manager` finds `ValidationManager`,
 `validationManager`, `validation_manager`, and `validation-manager`, and so does any one of those typed whole, which
-asks for the two words side by side. Sessions where your words sit close together come before ones where they are
-scattered through a long message.
+asks for the two words side by side. Sessions where your words sit close together rank higher than ones where they
+are scattered through a long message.
 
 ## Filtering by cost
 

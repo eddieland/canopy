@@ -238,3 +238,13 @@ def test_canopy_sessions_finds_one_by_what_it_said_or_says_why_text_is_titles(
         assert "runtime.version 1 is deprecated" in printed
         assert (as_json["search"], as_json["index"]) == ("titles", None)
         assert as_json["why_titles"] is not None
+
+
+def test_a_name_is_marked_however_many_other_names_its_message_holds_before_it(ctx: Context) -> None:
+    others = " ".join(f"other{n}Name" for n in range(session_search.MAX_NAMES + 1))
+    kept(ctx, Kept("ses_a", "/home/me", messages=[sent(f"{others} then the DunlinCounter ran")], updated=NOON_MS))
+
+    [snippet] = snippets(hits(ctx, "dunlin counter"))
+
+    assert snippet is not None
+    assert "*DunlinCounter*" in snippet
