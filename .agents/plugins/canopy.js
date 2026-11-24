@@ -133,8 +133,12 @@ const SHELL_TOOLS = new Set(["shell", "bash"]);
  * with nothing the shell would expand, and the space after the `&&`, a newline included.
  */
 const LEADING_CD = /^\s*cd[ \t]+(?:([\w./@%+=:,][\w./@%+=:,-]*)|'([^'\n]*)'|"([^"$`\\\n]*)")[ \t]*&&\s*/;
-/** A `cd` where a command of the shell starts: the command's start, or after `;`, `&`, `|`, `(`, or a line's end. */
-const A_CD = /(?:^|[;&|(\n])\s*cd(?=$|[\s;&|)])/;
+/**
+ * A `cd` where a command of the shell starts: the command's start, after `;`, `&`, `|`, `(`, `{`, `!`, or a line's
+ * end, or after `then`, `do`, or `else`. Not a parse: a `cd` in quotes or a comment matches too, which only gives a
+ * call refused anyway the more specific line.
+ */
+const A_CD = /(?:^|[;&|({!\n]|(?:^|\s)(?:then|do|else))\s*cd(?=$|[\s;&|)])/;
 /** The longest a session's first prompt waits on MCP servers still connecting, in milliseconds. */
 const MCP_WAIT_MS = 30_000;
 /** The longest it waits, once none is connecting, for a connected server's tools to be registered. */
@@ -162,9 +166,10 @@ const REFUSED = new Map([
  * agent's directory that holds a `cd` past its leading ones: the runtime checks it from where it starts. */
 const CD_REFUSED =
     `${MARK} Every path in a shell command is checked from where the command starts, its \`workdir\`, not from` +
-    " where a `cd` earlier in it went, so one inside once that `cd` is followed can still be refused as outside. Pass" +
-    " that directory as `workdir`, or to a tool's `-C`, instead of the `cd`. A path outside the directories this run" +
-    " may reach is refused on purpose: do not try it another way.";
+    " where a `cd` earlier in it went, so one inside once that `cd` is followed can still be refused as outside. Run" +
+    " what follows the `cd` as a call of its own, with that directory as its `workdir` or given to a tool's `-C`;" +
+    " make a directory the command creates first, in a call of its own. A path outside the directories this run may" +
+    " reach is refused on purpose: do not try it another way.";
 
 /**
  * Each job the plugin does, in the order its hooks run: a function that returns its hooks.

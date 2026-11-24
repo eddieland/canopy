@@ -73,8 +73,9 @@ test("a command refused as leaving its directory, a `cd` past its start, is told
     const said =
         "[canopy] Every path in a shell command is checked from where the command starts, its `workdir`, not from" +
         " where a `cd` earlier in it went, so one inside once that `cd` is followed can still be refused as outside." +
-        " Pass that directory as `workdir`, or to a tool's `-C`, instead of the `cd`. A path outside the directories" +
-        " this run may reach is refused on purpose: do not try it another way.";
+        " Run what follows the `cd` as a call of its own, with that directory as its `workdir` or given to a tool's" +
+        " `-C`; make a directory the command creates first, in a call of its own. A path outside the directories this" +
+        " run may reach is refused on purpose: do not try it another way.";
     const refused = new BlockedError("external_directory", ["/pool/web/*"]);
     await (await after())(failed(refused, "shell", { command: "mkdir -p d && cd d && true; cd .." }));
     assert.equal(refused.message, `Permission denied: external_directory (\`/pool/web/*\`)\n${said}`);
@@ -85,6 +86,11 @@ test("a command refused as leaving its directory, a `cd` past its start, is told
         "ls && (cd sub && ls ..)",
         "true || cd ..",
         "cd \"$HOME\" && ls ..",
+        "if true; then cd sub; fi; ls ..",
+        "for d in a b; do cd $d; done",
+        "if false; then :; else cd sub; fi",
+        "{ cd sub; ls ..; }",
+        "! cd sub",
     ]) {
         assert.equal(await lineFor(command), said, command);
     }
@@ -92,7 +98,15 @@ test("a command refused as leaving its directory, a `cd` past its start, is told
 });
 
 test("a refusal with no `cd` past the leading ones is told it is outside, as any other", async () => {
-    for (const command of ["ls ../..", "cd app && cd ../lib && ls ..", "echo cd ..", "cdk deploy ..", "abcd .."]) {
+    for (const command of [
+        "ls ../..",
+        "cd app && cd ../lib && ls ..",
+        "echo cd ..",
+        "cdk deploy ..",
+        "abcd ..",
+        "undo cd ..",
+        "echo then-cd ..",
+    ]) {
         assert.match(await lineFor(command), /^\[canopy\] It is outside the directories this run may reach\./, command);
     }
     // Another tool's call, and another permission's refusal of a shell command, are told as before.

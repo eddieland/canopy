@@ -4,7 +4,7 @@ From the transcripts canopy keeps (§13), per role and per tool, over the runs t
 and ended (`spend.window`): the calls, the characters of what they returned, in total and at the median, each tool's
 share of its role's characters, how many results the runtime said it cut and how many it said nothing of, and the reads
 of a path the same run had read already; and per role, the characters each run's `status` calls sent (§41), and the
-calls the run's permission rules refused, by the permission the runtime named, which OpenCode 1 does not.
+calls the run's permission rules refused, by the permission the runtime named, where its error names one.
 
 A role is a worker's or a planner's run kind, `review`, `task`, `epic-plan`, `chore`, or `overseer`. A call of the
 runtime's shell counts as the program it runs, as `$ gh run view`: its first stage that does more than move or set up
