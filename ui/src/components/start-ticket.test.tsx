@@ -41,7 +41,6 @@ function settings(plan: 'off' | 'approve'): ConfigSettings {
                 name: 'policy.plan',
                 value: plan,
                 source: 'default',
-                kind: 'stricter',
                 bound: null,
                 forever_at_zero: false,
                 choices: ['off', 'approve'],

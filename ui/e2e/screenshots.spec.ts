@@ -362,8 +362,8 @@ test('the root size grows with the window', async ({ page }) => {
     expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe('20px')
 })
 
-// Loop settings with changes waiting: the rows marked, and the save bar listing them, with the one-way warning a
-// stricter change brings. Typed, never saved: the root server's journal and config never change.
+// Loop settings with changes waiting: the rows marked, and the save bar listing them. Typed, never saved: the root
+// server's journal and config never change.
 test('settings/limits with changes waiting', async ({ page }) => {
     await openInDark(page, 'settings/limits')
     const form = page.getByTestId('config-form')

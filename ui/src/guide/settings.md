@@ -213,17 +213,19 @@ size `canopy.log` rotates at and how many rotated files stay. The page will keep
 [spend page](reports#the-spend-page) tracks, with any alerts short of or past it. You can add and drop alerts freely:
 the 100% one isn't in the list, so dropping everything still leaves it.
 
-**Guardrails** holds the settings that only get stricter from here. You can make tickets wait on a plan you approve, or
-take a planner's say over its own plan away, but not the reverse. You can drop a trusted reviewer or an authorized
-replier, never add one, have workers draft their review replies for you instead of posting them, turn `trust.rebase` off
-but not on, and cut the reruns of flaky checks but not raise them. The same goes for what canopy remembers and sends:
-a memory tier steps from `use` to `record` to `off`, session search from `text` to `titles` to `off`, an artifact
-author or a publishing agent can be dropped, and the plan archive can stop taking prompts, conversations, or your
-comments, each never the other way. A stolen session that could add a replier would keep
-steering your workers after you changed the secret, so adding one stays an edit to the file. The band says that once,
-with a lock, and a setting already as strict as it goes shows its value beside a lock rather than a row of greyed-out
-buttons, which looked broken and wasn't. Unchecking an authorized replier, or a list's last name, asks first: if that
-name is yours, your replies on the ticket stop reaching workers, and the page can't put it back.
+**Guardrails** holds the settings that decide what waits on you and whose words count. You can make tickets wait on
+a plan you approve, or stop; give a planner more or less say over its own plan; have workers draft their review
+replies for you or post them; turn `trust.rebase` and the commit trailer on or off; and set how many times a flaky
+check is rerun. The same band holds what canopy remembers and sends: the memory tiers, session search, and whether the
+plan archive takes prompts, conversations, and your comments. All of it goes both ways. The page used to let these
+only tighten, on the theory that anything looser deserved a trip to the file; in practice it meant a trip to the file.
+
+Four rows are lists of names: who may answer a worker, whose review a worker acts on unasked, whose comments on an
+artifact count, and which agents may publish. Uncheck a name to drop it, or type one into **add a name** and press
+Enter to add it. The config loader still has opinions, so a publishing agent it has never heard of is refused on save.
+One caution survives from the old rule, as advice rather than a lock: a name on these lists steers your workers, and a
+save outlives the sign-in secret. If a name shows up that you didn't add, the log has who changed what, old value and
+new.
 
 Each row's chip says where its value comes from, `this workspace`, `user`, `workspace`, or `default` (hover it, or
 the page's title, for what each means), and the line beside it says how far the page will take it. Units sit after the
@@ -247,12 +249,9 @@ that row and lights it for a moment, which is handy for a note to your future se
 
 A setting you've moved off its default says what the default is, so you can tell how far from stock you've wandered,
 and **reset** puts the field back. It's an ordinary change: it shows in the bar and waits for **Save** like any other.
-On a setting that only gets stricter, reset shows up only when the default isn't looser than what you have, since the
-page won't loosen anything for you, reset or not, and it never drops a name the page would ask you about first.
 
 Change something and its row gets a line down its edge and says what it was, and a bar appears at the foot listing
-each change as `key: old → new`. When one of them only gets stricter from here, the bar says so before you save, since
-the page can't take it back: only an edit to the file can.
+each change as `key: old → new`.
 
 **Save** writes `.canopy/config.toml`, this workspace's own file, editing it in place so your comments and layout stay,
 then reloads the loop as **Reload** below does. It never touches `canopy-workspace.toml` or

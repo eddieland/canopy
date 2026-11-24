@@ -631,7 +631,7 @@ export type MemoryEdited = Schemas['MemoryEdited']
 export type MemoryHistory = Schemas['MemoryHistory']
 /** The keys the settings page edits in the operator's user config, each with its value, source, and bound (M41). */
 export type ConfigSettings = Schemas['ConfigSettings']
-/** One key the settings page edits: a limit within its bound, or a trust setting that may only get stricter. */
+/** One key the settings page edits, to anything the config file would take: a retention no shorter than its bound. */
 export type ConfigKey = Schemas['ConfigKey']
 /** A config key's value: a count or minutes, a switch, a choice, a list's entries, or counts by repository. */
 export type ConfigValue = Schemas['ConfigValue']

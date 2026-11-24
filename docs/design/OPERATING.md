@@ -145,34 +145,24 @@ keys, shared by every workspace's runs.
 
 **From the web UI.** The Loop settings page under Settings (§22) edits a few keys of the workspace's private file in
 place, and no others (D128, TRUST_MODEL T8). They are named one by one in `canopy/serve/config_edit.py`, never by
-section, so a key added to a section later is not editable until it is named there. A limit may be set to anything the
-loader takes: the page's own ceilings and floors got in the operator's way more than they capped a stolen session's
-spend. A retention keeps a floor, since what a shorter one removes is gone; the file can set any value, and the page may
-still lengthen one the file set under it. A trust key moves only toward stricter: a config write outlives the listener
-secret, and a replier added through a stolen session would go on steering workers after a new secret ended it.
+section, so a key added to a section later is not editable until it is named there. A named key may be set to anything
+the loader takes: the page's own ceilings, and then its rule that a trust key only tightens, got in the operator's way
+more than they held back a stolen session, whose changes the log names. A retention alone keeps a floor, since what a
+shorter one removes is gone; the file can set any value, and the page may still lengthen one the file set under it.
 
 | Key | From the page |
 |---|---|
 | the counts in `capacity`, `loop.min_free_disk_mib`, and `policy`'s attempt, follow-up, epic, and attachment limits | anything the loader takes |
 | the paces and waits in `loop`, `policy`, `tracker`, `connect`, and `review`, and `runtime`'s timeouts | anything the loader takes |
 | `pools`' upkeep: `git_maintenance`, its thresholds and spacing, and an idle slot's age and timeout | anything the loader takes |
-| `review.agent_prs`, `paths.plan_archive_every_minutes` | anything the loader takes |
+| `review.agent_prs`, `paths.plan_archive_every_minutes`, and the archive's prompts, conversations, and comments | anything the loader takes |
+| `spend.monthly_budget_usd`, `spend.budget_alerts` | anything the loader takes; the 100% alert is sent whatever the alerts hold |
+| `policy.stacking`, `policy.plan`, `policy.feedback_plan`, `policy.planner_may_approve` | any value, looser or stricter |
+| `trust.authorized_repliers`, `trust.trusted_reviewers`, `artifacts.authorized_authors`, `artifacts.publish_roles` | entries added or removed |
+| `trust.review_replies`, `trust.rebase`, `trust.max_flaky_kicks`, `trust.commit_trailer` | any value, looser or stricter |
+| `memory.ticket_notes`, `memory.proposals`, `sessions.search` | any value |
 | `retention.run_files_days`, `retention.tick_files_days`, `retention.journal_days`, `retention.memory_days` | at least 7, 1, 30, 7, or 0 (forever) |
 | `retention.log_max_mib`, `retention.log_keep` | at least 50, 3, or 0 (forever) |
-| `spend.monthly_budget_usd` | anything the loader takes |
-| `spend.budget_alerts` | any list the loader takes; the 100% alert is sent whatever it holds |
-| `policy.stacking` | to `"never"` only |
-| `policy.plan`, `policy.feedback_plan` | to `"approve"` only |
-| `policy.planner_may_approve` | toward `"off"` only: `lenient`, `normal`, `strict`, `off` |
-| `trust.authorized_repliers`, `trust.trusted_reviewers` | entries removed, never added |
-| `trust.review_replies` | to `"approve"` only |
-| `memory.ticket_notes`, `memory.proposals` | toward `"off"` only: `use`, `record`, `off` |
-| `sessions.search` | toward `"off"` only: `text`, `titles`, `off` |
-| `artifacts.authorized_authors`, `artifacts.publish_roles` | entries removed, never added |
-| `paths.plan_archive_prompts`, `paths.plan_archive_conversations`, `paths.plan_archive_comments` | to false only |
-| `trust.rebase` | to `false` only |
-| `trust.max_flaky_kicks` | lowered only |
-| `trust.commit_trailer` | to `true` only |
 
 With no ceiling of the page's own, a stolen session can turn spend up as far as the file could. That raise outlives a
 new secret, and the residual is spend, which the page and the log show. `capacity.repo_slots` is edited as its entries:

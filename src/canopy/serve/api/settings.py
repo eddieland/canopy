@@ -1,6 +1,6 @@
 """The limits and trust settings the settings page edits in the workspace's private config (DESIGN §12, §22, M41).
 
-Only the keys `GET /config` lists, within their bounds, and trust settings only toward stricter (TRUST_MODEL T8). A
+Only the keys `GET /config` lists, a retention no shorter than its floor (TRUST_MODEL T8). A
 save writes the private file alone, keeping its comments, and then asks the loop to read its config again, as Reload
 does. Each agent's and chore's model the page shows and never changes: the operator chooses them in the file alone.
 """
@@ -48,7 +48,6 @@ def read_config(backend: BackendDep) -> ConfigSettings:
                 name=s.key.name,
                 value=_shown(s.value),
                 source=s.source,
-                kind=s.key.kind,
                 bound=s.key.bound,
                 forever_at_zero=s.key.forever_at_zero,
                 choices=list(s.key.choices),
@@ -70,9 +69,8 @@ def save_config(body: ConfigPatch, backend: BackendDep) -> ConfigSaved:
     """Write the changes to the workspace's private file, then ask the loop to read its config again, as Reload does.
 
     Refused, writing nothing: `inside_run`; `not_editable` for a key `GET /config` does not list; `past_bound` for a
-    retention shortened past its floor; `not_stricter` for a setting that only gets stricter loosened; `stale` when
-    the file changed since `hash` was read; `unsafe_file` for a private file that is a symlink or not the operator's;
-    `config_invalid` with the loader's message.
+    retention shortened past its floor; `stale` when the file changed since `hash` was read; `unsafe_file` for a
+    private file that is a symlink or not the operator's; `config_invalid` with the loader's message.
     """
     with backend.open() as ctx:
         root = ctx.repo_root

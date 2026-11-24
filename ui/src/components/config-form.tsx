@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useLocation } from '@tanstack/react-router'
-import { LockKeyhole, RotateCcw, Save } from 'lucide-react'
+import { Plus, RotateCcw, Save } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 
@@ -21,6 +21,8 @@ import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useFirstInView } from '@/hooks/use-first-in-view'
 import {
+    addedName,
+    ALERTS,
     bandCounts,
     bandsMatching,
     boundText,
@@ -30,12 +32,8 @@ import {
     configForm,
     configQueryOf,
     defaultText,
-    dropAsks,
     groupedKeys,
     groupSlug,
-    lockedText,
-    oneWay,
-    oneWayText,
     pendingText,
     REPO_SLOTS,
     resetDone,
@@ -43,7 +41,6 @@ import {
     savedText,
     SOURCE_MEANING,
     SOURCE_WORD,
-    strictest,
     SWITCH_NAME,
     unsetText,
     valueText,
@@ -66,7 +63,7 @@ const CHANGED_ROW = 'relative before:absolute before:inset-y-0 before:left-0 bef
 
 /**
  * The Loop settings form: the keys the loop reads that the web UI may change, edited in place (DESIGN §22, M41):
- * counts and paces freely, retentions down to the floor the server sets, and trust settings only toward stricter. The
+ * each to anything the config file would take, but a retention, which stops at the floor the server sets. The
  * keys come in bands by what they govern (`CONFIG_GROUPS`), a band of several kinds in labelled parts, each key in
  * words over its name in the file. A changed row is marked, and a save bar, kept in view at the page's foot once
  * something changed, lists the changes and writes them at once. A save writes the workspace's private file alone,
@@ -160,7 +157,6 @@ function Form({
         name in form.changes || Object.keys(form.errors).some((n) => n === name || n.startsWith(`${name}.`))
     // Shown once something changed, and kept while a save's outcome has something to say.
     const barShown = pending + errors > 0 || saved !== undefined || refused !== null
-    const stricter = oneWay(settings.keys, form.changes)
     const draft = (name: string, value: ConfigDrafts[string]) => setDrafts({ ...drafts, [name]: value })
     const perRepo = settings.keys.find((k) => k.name === 'capacity.slots_per_repo')?.value
     const bands = groupedKeys(settings.keys)
@@ -186,8 +182,7 @@ function Form({
         const to = resetDraft(setting, settings.keys)
         return to === null || resetDone(setting, form.changes) ? undefined : () => draft(setting.name, to)
     }
-    // A row of a band whose keys only get stricter leaves that rule to the band's header (`ruled`).
-    const row = ({ setting, label, unit }: LabelledKey, ruled: boolean) =>
+    const row = ({ setting, label, unit }: LabelledKey) =>
         setting.name === REPO_SLOTS ? (
             <RepoSlots
                 key={setting.name}
@@ -219,7 +214,6 @@ function Form({
                     label={label}
                     every={settings.every}
                     changed={touched(setting.name)}
-                    ruled={ruled}
                     onReset={resetFor(setting)}
                 />
                 <ControlCell unit={unit}>
@@ -308,16 +302,6 @@ function Form({
                                         {group.title}
                                     </h2>
                                     <p className="text-xs text-muted-foreground">{group.blurb}</p>
-                                    {group.oneWay === true && (
-                                        <p
-                                            className="flex items-center gap-1.5 text-xs text-muted-foreground"
-                                            data-testid="config-one-way-rule"
-                                        >
-                                            <LockKeyhole aria-hidden className="size-3 shrink-0" />
-                                            Only stricter from here: loosening one, adding a name, or raising a count is
-                                            an edit to config.toml.
-                                        </p>
-                                    )}
                                 </div>
                                 <Panel>
                                     {byPart(shown).map(({ part, keys: inPart }) => (
@@ -336,9 +320,7 @@ function Form({
                                                     {part}
                                                 </h3>
                                             )}
-                                            <ul className="divide-y">
-                                                {inPart.map((k) => row(k, group.oneWay === true))}
-                                            </ul>
+                                            <ul className="divide-y">{inPart.map((k) => row(k))}</ul>
                                         </section>
                                     ))}
                                 </Panel>
@@ -355,15 +337,6 @@ function Form({
                                             {pendingText(pending, errors)}
                                         </p>
                                         <ChangeList changes={changed} />
-                                        {stricter.length > 0 && (
-                                            <p
-                                                className="flex items-center gap-1.5 text-xs text-status-blocked"
-                                                data-testid="config-one-way"
-                                            >
-                                                <LockKeyhole aria-hidden className="size-3 shrink-0" />
-                                                {oneWayText(stricter)}
-                                            </p>
-                                        )}
                                         {/* A field in error says why on its own row; this is what the server said of a
                                         save. */}
                                         <Notice error={refused}>{saved ? savedText(saved) : null}</Notice>
@@ -525,15 +498,12 @@ function KeyLabel({
     label,
     every,
     changed = false,
-    ruled = false,
     onReset,
 }: {
     setting: ConfigKey
     label: string
     every: number | null
     changed?: boolean
-    /** Whether its band says once that its keys only get stricter, so the row need not. */
-    ruled?: boolean
     /** Sets its field back to its default, where the page may take it there; none offered otherwise. */
     onReset?: (() => void) | undefined
 }) {
@@ -543,8 +513,7 @@ function KeyLabel({
         setting.name === 'loop.interval_minutes' && every !== null
             ? `--every ${every} sets the pace until the loop restarts`
             : null
-    const bound = ruled && setting.kind === 'stricter' ? null : boundText(setting)
-    const rest = [bound, was, defaultText(setting), pace].filter(Boolean).join(' · ')
+    const rest = [boundText(setting), was, defaultText(setting), pace].filter(Boolean).join(' · ')
     return (
         <div className="flex min-w-0 flex-col gap-1">
             <span className="text-sm text-foreground">{label}</span>
@@ -675,8 +644,7 @@ function ControlCell({ unit, children }: { unit?: string | undefined; children: 
 }
 
 /**
- * The control for one key: a number field, a switch, a choice, a list's entries to keep, or the budget's alerts as
- * typed. A switch that goes either way is never locked.
+ * The control for one key: a number field, a switch, a choice, a list of names, or the budget's alerts as typed.
  */
 function Control({
     setting,
@@ -690,7 +658,7 @@ function Control({
     onDraft: (value: ConfigDrafts[string]) => void
 }) {
     const { name, value } = setting
-    if (setting.kind === 'free' && typeof value !== 'boolean') {
+    if (name === ALERTS) {
         return (
             <Input
                 aria-label={name}
@@ -703,17 +671,11 @@ function Control({
             />
         )
     }
-    if (strictest(setting)) {
-        return <Locked name={name} text={lockedText(setting)} />
-    }
     if (Array.isArray(value)) {
-        // A stricter key's entries are names; only the budget's alerts, drawn above, are numbers.
-        return <Entries setting={setting} entries={value.map(String)} draft={draft} onDraft={onDraft} />
+        return <Entries name={name} entries={value.map(String)} draft={draft} onDraft={onDraft} />
     }
     if (setting.choices.length > 0) {
-        // Loosest first: a choice before the one the files give now is looser, and the page does not offer it.
         const current = typeof value === 'string' ? value : ''
-        const now = setting.choices.indexOf(current)
         return (
             <ToggleGroup
                 type="single"
@@ -726,8 +688,8 @@ function Control({
                     }
                 }}
             >
-                {setting.choices.map((choice, i) => (
-                    <ToggleGroupItem key={choice} value={choice} disabled={i < now} data-testid={`${name}-${choice}`}>
+                {setting.choices.map((choice) => (
+                    <ToggleGroupItem key={choice} value={choice} data-testid={`${name}-${choice}`}>
                         {choice}
                     </ToggleGroupItem>
                 ))}
@@ -735,7 +697,7 @@ function Control({
         )
     }
     if (typeof value === 'boolean') {
-        // A stricter one is on its looser side, or it would be locked: named for what it does, never `on`.
+        // Named for what it does, never `on`.
         return (
             <label htmlFor={`${name}-field`} className="inline-flex items-center gap-2 text-xs">
                 <Checkbox
@@ -760,92 +722,80 @@ function Control({
 }
 
 /**
- * A key at its strictest, which the page can take no further: its value as text beside a lock, and how it loosens,
- * rather than a control whose every other choice is disabled, which reads as broken.
- */
-function Locked({ name, text }: { name: string; text: string }) {
-    return (
-        <span className="flex flex-col items-start gap-0.5 @xl:items-end" data-testid={`${name}-locked`}>
-            <span className="inline-flex items-center gap-1.5 font-mono text-xs text-foreground">
-                <LockKeyhole aria-hidden className="size-3 shrink-0 text-muted-foreground" />
-                {text}
-            </span>
-            <span className="text-2xs text-muted-foreground">strictest · loosen in config.toml</span>
-        </span>
-    )
-}
-
-/**
- * A stricter list's entries, each kept or dropped by its checkbox. Dropping one only the file adds back asks first,
- * inline (`dropAsks`): any authorized replier, and the list's last entry.
+ * A list of names: each entry kept or dropped by its checkbox, and a field that adds one. The list is sent whole, the
+ * entries kept in the order read and then the ones added, and the loader says which names it will not take.
  */
 function Entries({
-    setting,
+    name,
     entries,
     draft,
     onDraft,
 }: {
-    setting: ConfigKey
+    name: string
     entries: string[]
     draft: ConfigDrafts[string] | undefined
     onDraft: (value: ConfigDrafts[string]) => void
 }) {
-    const { name } = setting
     const kept = Array.isArray(draft) ? draft : entries
-    // The entry whose drop waits on the operator's word.
-    const [asking, setAsking] = useState<string>()
-    const keep = (entry: string, on: boolean) => onDraft(entries.filter((e) => (e === entry ? on : kept.includes(e))))
+    // The names read, then the ones added and not saved yet: an added one unchecked stays, to be checked again.
+    const [added, setAdded] = useState<string[]>([])
+    // A discard takes them away with the rest of what was typed.
+    const extra = draft === undefined ? [] : added
+    const shown = [...entries, ...extra.filter((entry) => !entries.includes(entry))]
+    const [typed, setTyped] = useState('')
+    const fresh = addedName(typed, shown)
+    const add = () => {
+        if (fresh !== null) {
+            setAdded([...added, fresh])
+            onDraft([...kept, fresh])
+            setTyped('')
+        }
+    }
     return (
         <div className="flex flex-col items-start gap-2 @xl:items-end">
-            <fieldset aria-label={name} className="flex flex-wrap gap-3 @xl:justify-end">
-                {entries.map((entry) => (
-                    <label key={entry} className="inline-flex items-center gap-2 font-mono text-xs">
-                        <Checkbox
-                            checked={kept.includes(entry) && asking !== entry}
-                            data-testid={`${name}-${entry}`}
-                            onCheckedChange={(checked) => {
-                                if (checked !== true && dropAsks(setting, entry, kept)) {
-                                    setAsking(entry)
-                                } else {
-                                    setAsking(undefined)
-                                    keep(entry, checked === true)
+            {shown.length > 0 && (
+                <fieldset aria-label={name} className="flex flex-wrap gap-3 @xl:justify-end">
+                    {shown.map((entry) => (
+                        <label key={entry} className="inline-flex items-center gap-2 font-mono text-xs">
+                            <Checkbox
+                                checked={kept.includes(entry)}
+                                data-testid={`${name}-${entry}`}
+                                onCheckedChange={(checked) =>
+                                    onDraft(shown.filter((e) => (e === entry ? checked === true : kept.includes(e))))
                                 }
-                            }}
-                        />
-                        {entry}
-                    </label>
-                ))}
-            </fieldset>
-            {asking !== undefined && (
-                <fieldset
-                    aria-label={`Drop ${asking}?`}
-                    className="flex flex-col gap-2 rounded-md border border-status-failed/40 p-2 text-xs"
-                    data-testid={`${name}-confirm`}
-                >
-                    <p>
-                        Drop <code className="font-mono">{asking}</code>? Only an edit to config.toml adds it back
-                        {name === 'trust.authorized_repliers'
-                            ? ": if it's your login, your replies stop reaching workers."
-                            : '.'}
-                    </p>
-                    <span className="flex gap-2">
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => {
-                                keep(asking, false)
-                                setAsking(undefined)
-                            }}
-                        >
-                            Drop
-                        </Button>
-                        <Button type="button" size="sm" variant="ghost" onClick={() => setAsking(undefined)}>
-                            Keep
-                        </Button>
-                    </span>
+                            />
+                            {entry}
+                        </label>
+                    ))}
                 </fieldset>
             )}
+            <span className="flex items-center gap-1">
+                <Input
+                    aria-label={`Add to ${name}`}
+                    value={typed}
+                    placeholder="add a name"
+                    className="h-8 w-40 font-mono text-xs"
+                    data-testid={`${name}-add`}
+                    onChange={(event) => setTyped(event.currentTarget.value)}
+                    onKeyDown={(event) => {
+                        // Enter adds the name; it never saves the form from here.
+                        if (event.key === 'Enter') {
+                            event.preventDefault()
+                            add()
+                        }
+                    }}
+                />
+                <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label={`Add ${fresh ?? 'a name'} to ${name}`}
+                    disabled={fresh === null}
+                    onClick={add}
+                >
+                    <Plus />
+                </Button>
+            </span>
         </div>
     )
 }

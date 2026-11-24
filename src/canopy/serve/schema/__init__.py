@@ -1082,7 +1082,10 @@ type ConfigValue = Annotated[
 
 
 class ConfigKey(Model):
-    """One config key the settings page edits (DESIGN §12, §22): its value as the files say now, and how far."""
+    """One config key the settings page edits (DESIGN §12, §22): its value as the files say now, and its floor.
+
+    A key may be set to anything the config loader takes, a retention no shorter than `bound`.
+    """
 
     name: str
     """The key, as `section.key`."""
@@ -1092,11 +1095,6 @@ class ConfigKey(Model):
     """Which file the value comes from: the workspace's private file, the user file (a save writes it to the private
     file, where it shadows the user file's for this workspace), the workspace file (a shared `policy.*` key), or
     none."""
-    kind: Literal["limit", "stricter", "free"]
-    """`limit`: raised or lowered to anything the config loader takes, a retention no shorter than `bound`.
-    `stricter`: only made stricter (a list only loses entries, a count only goes down, a choice only moves later in
-    `choices`). `free`: set whole to anything the config loader takes: a list (`spend.budget_alerts`, beside the 100%
-    alert always sent) or a switch that may go either way (`pools.git_maintenance`, `review.agent_prs`)."""
     bound: int | None
     """A retention's floor from the page, in the key's own unit (days; MiB and files for the log's rotation): the
     least it may be made. The file can set any. None for every other key."""
@@ -1104,11 +1102,9 @@ class ConfigKey(Model):
     """Whether 0 keeps that kind forever, as a `retention.*` key's does: the page may always set 0, and from 0 any
     other value is shorter."""
     choices: list[str]
-    """A `stricter` choice's values, loosest first: the page may move it only later in the list. Empty for any other
-    key."""
+    """A choice's values, in the order the page offers them. Empty for any other key."""
     default: ConfigValue
-    """Its value when no file sets it, the config model's default: what the page may reset it to, within its bound or
-    toward stricter."""
+    """Its value when no file sets it, the config model's default: what the page may reset it to, within its bound."""
 
 
 class ConfigSettings(Model):
@@ -1137,7 +1133,7 @@ class ConfigPatch(Model):
     hash: str
     """The `hash` the page read with `GET /config`."""
     changes: Annotated[dict[str, ConfigValue], Field(min_length=1)]
-    """The new values by key. A list's are the entries to keep; `capacity.repo_slots`'s the repositories whose count
+    """The new values by key. A list's is its new value whole; `capacity.repo_slots`'s the repositories whose count
     changes."""
 
 

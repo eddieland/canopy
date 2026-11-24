@@ -154,8 +154,9 @@ journal's own search still scans: rejected for it, an FTS5 index that keeps its 
 
 Private tickets and tracker comments changed TRUST_MODEL T1 and T6, and the web UI added T8. Operator messages on
 public tickets (D089) changed T1: one authorizes a `resume` as an authorized reply does. Seen marks changed T8: the web
-writes what no CLI verb does (D127). Limits and trust (M41) changed T8 too: the web writes a few config keys, limits
-within bounds and trust only stricter (D128). Dictation changed T8: the web runs the operator's own command on a recording.
+writes what no CLI verb does (D127). Limits and trust (M41) changed T8 too: the web writes a few config keys, each to
+what the loader takes, a retention to its floor (D128). Dictation changed T8: the web runs the operator's own command
+on a recording.
 The Sessions page changed T8: the web serves the titles of sessions the journal holds nothing else of.
 
 ### Open

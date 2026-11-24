@@ -1,16 +1,11 @@
 """The keys the web UI's settings page edits in the workspace's private config, and the save (DESIGN §12, §22, D128).
 
 Only the keys `EDITABLE` names, never a section's wildcard: a key added to a section later is not editable until it
-is named here. A limit may be set to anything the loader takes: the operator settled that the page's own ceilings and
-floors cost more than the spend they capped (TRUST_MODEL T8). A retention alone keeps a floor, since what a shorter one
-removes cannot be brought back: the page cannot shorten one past it, 0 keeps forever and may always be set, the file
-can set any value, and the page may still lengthen one the file set under its floor. A trust key
-moves only toward stricter: a config write outlives the listener secret, so a replier added through a stolen session
-would go on steering workers after a new secret ended it (TRUST_MODEL T8): a list only loses entries, a switch or a
-choice moves only to a stricter side, and a count only goes down. The budget's alerts are set whole, to anything the
-loader takes: none of their values silences the 100% alert, which is always sent. So is the switch for a pool's git
-maintenance, which runs only git's own upkeep and guards nothing, and the one for reviews of the loop's own PRs, whose
-spend the daily count caps.
+is named here. A key may be set to anything the loader takes: the operator settled that the page's own bounds, and
+then its rule that a trust key only tightens, cost more than what they guarded (TRUST_MODEL T8). A retention alone
+keeps a floor, since what a shorter one removes cannot be brought back: the page cannot shorten one past it, 0 keeps
+forever and may always be set, the file can set any value, and the page may still lengthen one the file set under its
+floor.
 
 A save writes the workspace's private file only (M49), never the workspace file (TRUST_MODEL T7) nor the user file,
 which serves every workspace. A key whose value comes from the user file is written to the private file, where it
@@ -51,7 +46,6 @@ type Source = Literal["private", "user", "workspace", "default"]
 #: Read by name from the request, so each guard's words are the operator's to act on.
 NOT_EDITABLE: Final = "not_editable"
 PAST_BOUND: Final = "past_bound"
-NOT_STRICTER: Final = "not_stricter"
 STALE: Final = "stale"
 UNSAFE_FILE: Final = "unsafe_file"
 NOT_ROUNDTRIP: Final = "not_roundtrip"
@@ -60,84 +54,74 @@ CONFIG_INVALID: Final = "config_invalid"
 
 @dataclass(frozen=True)
 class Editable:
-    """A key the settings page may change, and how far."""
+    """A key the settings page may change, and a retention's floor."""
 
     name: str
-    #: `limit`: raised or lowered to anything the loader takes, a retention no shorter than `bound`. `stricter`: only
-    #: toward stricter. `free`: set whole to anything the loader takes, for a key no value of which loosens a guard: a
-    #: list, or a switch that may go either way.
-    kind: Literal["limit", "stricter", "free"]
     #: A retention's floor from the page, in the key's own unit, days or, for the log's rotation, MiB and files: the
     #: least it may be made. None for every other key.
     bound: int | None = None
-    #: A stricter choice's values, loosest first: the page may move it only later in the list.
+    #: A choice's values, in the order the page offers them.
     choices: Sequence[str] = ()
     #: Whether 0 keeps that kind forever, as a retention's does: the strictest value, which the page may always set,
     #: and one any number of days is shorter than.
     forever_at_zero: bool = False
 
 
-def _limit(name: str) -> Editable:
-    return Editable(name, "limit")
-
-
 def _keep(name: str, floor: int) -> Editable:
-    return Editable(name, "limit", floor, forever_at_zero=True)
+    return Editable(name, floor, forever_at_zero=True)
 
 
 def _choice(name: str, *choices: str) -> Editable:
-    return Editable(name, "stricter", choices=choices)
+    return Editable(name, choices=choices)
 
 
-#: In the order the page shows them. A limit has no bound of the page's own: whoever holds a session can set one as far
-#: as the loader lets the file, a residual the page and the log show (TRUST_MODEL T8).
+#: In the order the page shows them. None but a retention has a bound of the page's own: whoever holds a session can
+#: set one as the file could, a residual the page and the log show (TRUST_MODEL T8).
 EDITABLE: Final[tuple[Editable, ...]] = (
-    _limit("capacity.max_workers"),
-    _limit("capacity.max_chores"),
-    _limit("capacity.max_reviews"),
-    _limit("capacity.max_reviews_per_day"),
-    # Free: on, it spends reviews the daily count already caps; off, a person still reviews the PR.
-    Editable("review.agent_prs", "free"),
-    _limit("capacity.max_tasks"),
-    _limit("loop.min_free_disk_mib"),
-    _limit("capacity.slots_per_repo"),
+    Editable("capacity.max_workers"),
+    Editable("capacity.max_chores"),
+    Editable("capacity.max_reviews"),
+    Editable("capacity.max_reviews_per_day"),
+    Editable("review.agent_prs"),
+    Editable("capacity.max_tasks"),
+    Editable("loop.min_free_disk_mib"),
+    Editable("capacity.slots_per_repo"),
     # The request names only the repositories whose count changes.
-    _limit("capacity.repo_slots"),
-    _limit("policy.max_implement_attempts"),
-    _limit("policy.max_resume_attempts"),
-    _limit("policy.max_reviews_per_pr"),
-    _limit("policy.max_plan_attempts"),
-    _limit("policy.max_feedback_plan_attempts"),
-    _limit("policy.max_revisions_per_draft"),
-    _limit("policy.max_follow_ups"),
-    _limit("policy.max_epic_tickets"),
-    _limit("policy.max_attachments"),
-    _limit("policy.max_attachment_kib"),
-    _limit("policy.max_attachments_total_kib"),
-    _limit("policy.ci_cooldown_minutes"),
-    _limit("policy.feedback_quiet_minutes"),
-    _limit("policy.feedback_ci_wait_minutes"),
-    _limit("review.settle_minutes"),
-    _limit("loop.interval_minutes"),
-    _limit("loop.idle_max_minutes"),
-    _limit("loop.min_gap_minutes"),
-    _limit("tracker.query_every_minutes"),
+    Editable("capacity.repo_slots"),
+    Editable("policy.max_implement_attempts"),
+    Editable("policy.max_resume_attempts"),
+    Editable("policy.max_reviews_per_pr"),
+    Editable("policy.max_plan_attempts"),
+    Editable("policy.max_feedback_plan_attempts"),
+    Editable("policy.max_revisions_per_draft"),
+    Editable("policy.max_follow_ups"),
+    Editable("policy.max_epic_tickets"),
+    Editable("policy.max_attachments"),
+    Editable("policy.max_attachment_kib"),
+    Editable("policy.max_attachments_total_kib"),
+    Editable("policy.ci_cooldown_minutes"),
+    Editable("policy.feedback_quiet_minutes"),
+    Editable("policy.feedback_ci_wait_minutes"),
+    Editable("review.settle_minutes"),
+    Editable("loop.interval_minutes"),
+    Editable("loop.idle_max_minutes"),
+    Editable("loop.min_gap_minutes"),
+    Editable("tracker.query_every_minutes"),
     # How often the operator's own remote is pushed to: a pace, as the others are.
-    _limit("paths.plan_archive_every_minutes"),
-    _limit("connect.every_minutes"),
-    _limit("connect.max_age_minutes"),
-    _limit("runtime.worker_timeout_minutes"),
-    _limit("runtime.review_timeout_minutes"),
-    _limit("runtime.overseer_timeout_minutes"),
-    _limit("runtime.setup_timeout_minutes"),
+    Editable("paths.plan_archive_every_minutes"),
+    Editable("connect.every_minutes"),
+    Editable("connect.max_age_minutes"),
+    Editable("runtime.worker_timeout_minutes"),
+    Editable("runtime.review_timeout_minutes"),
+    Editable("runtime.overseer_timeout_minutes"),
+    Editable("runtime.setup_timeout_minutes"),
     # A pool's upkeep (DESIGN §26): when a tick does it, never the command an idle slot runs, which stays the file's.
-    # Free: git's own maintenance, on or off, loosens no guard.
-    Editable("pools.git_maintenance", "free"),
-    _limit("pools.git_max_packs"),
-    _limit("pools.git_max_loose"),
-    _limit("pools.git_every_hours"),
-    _limit("pools.idle_after_days"),
-    _limit("pools.idle_timeout_minutes"),
+    Editable("pools.git_maintenance"),
+    Editable("pools.git_max_packs"),
+    Editable("pools.git_max_loose"),
+    Editable("pools.git_every_hours"),
+    Editable("pools.idle_after_days"),
+    Editable("pools.idle_timeout_minutes"),
     # Shorter removes history sooner, the transcripts that show what a run did among it: a floor, and 0, forever,
     # always (TRUST_MODEL T8).
     _keep("retention.run_files_days", 7),
@@ -148,32 +132,27 @@ EDITABLE: Final[tuple[Editable, ...]] = (
     # it, or all of it at 0, never less than a stock install does.
     _keep("retention.log_max_mib", 50),
     _keep("retention.log_keep", 3),
-    _limit("spend.monthly_budget_usd"),
-    # Free: an alert dropped is a warning less, but the 100% alert is always sent, whatever the list holds.
-    Editable("spend.budget_alerts", "free"),
+    Editable("spend.monthly_budget_usd"),
+    # The 100% alert is always sent, whatever the list holds.
+    Editable("spend.budget_alerts"),
     _choice("policy.stacking", "auto", "never"),
     _choice("policy.plan", "off", "approve"),
     _choice("policy.feedback_plan", "off", "approve"),
     _choice("policy.planner_may_approve", "lenient", "normal", "strict", "off"),
-    Editable("trust.authorized_repliers", "stricter"),
-    Editable("trust.trusted_reviewers", "stricter"),
+    Editable("trust.authorized_repliers"),
+    Editable("trust.trusted_reviewers"),
     _choice("trust.review_replies", "post", "approve"),
-    Editable("trust.rebase", "stricter"),
-    # Each kick rebases a PR's branch and pushes it with a lease: only fewer from the page.
-    Editable("trust.max_flaky_kicks", "stricter"),
-    Editable("trust.commit_trailer", "stricter"),
-    # What agents write into later prompts: toward recording only, then off.
+    Editable("trust.rebase"),
+    Editable("trust.max_flaky_kicks"),
+    Editable("trust.commit_trailer"),
     _choice("memory.ticket_notes", "use", "record", "off"),
     _choice("memory.proposals", "use", "record", "off"),
-    # Whose comments in the artifact store steer a worker, and which agents may publish there: only fewer.
-    Editable("artifacts.authorized_authors", "stricter"),
-    Editable("artifacts.publish_roles", "stricter"),
-    # What the page itself serves of the operator's sessions: toward less.
+    Editable("artifacts.authorized_authors"),
+    Editable("artifacts.publish_roles"),
     _choice("sessions.search", "text", "titles", "off"),
-    # What the plan archive sends to the operator's remote beside the plans: only less.
-    Editable("paths.plan_archive_prompts", "stricter"),
-    Editable("paths.plan_archive_conversations", "stricter"),
-    Editable("paths.plan_archive_comments", "stricter"),
+    Editable("paths.plan_archive_prompts"),
+    Editable("paths.plan_archive_conversations"),
+    Editable("paths.plan_archive_comments"),
 )
 BY_NAME: Final = {e.name: e for e in EDITABLE}
 #: The file as it was before the latest save, beside it: `config.toml.bak`. None when the save made the file.
@@ -181,14 +160,6 @@ BACKUP_SUFFIX: Final = ".bak"
 REPO_SLOTS: Final = "capacity.repo_slots"
 #: A private file the save makes: the operator's alone, as `config.load` requires of it.
 NEW_FILE_MODE: Final = 0o600
-#: The trust switches, and the value each may move to from the page: the stricter one.
-_STRICTER_BOOL: Final = {
-    "trust.rebase": False,
-    "trust.commit_trailer": True,
-    "paths.plan_archive_prompts": False,
-    "paths.plan_archive_conversations": False,
-    "paths.plan_archive_comments": False,
-}
 
 
 @dataclass(frozen=True)
@@ -265,10 +236,9 @@ def read(root: Path, user_file: Path) -> Settings:
 def save(root: Path, user_file: Path, expected: str, changes: Mapping[str, object]) -> Saved:
     """Write `changes` to the private file of the workspace at `root`, read with hash `expected`, if each is allowed.
 
-    The private file is loaded over `user_file`, as the loop loads them, before and after. A list's value is the entries
-    to keep, in the file's order, but for `spend.budget_alerts`, which is its new value whole; `capacity.repo_slots`'s
-    is the repositories whose count changes. Nothing is written when every value is already so, or when anything is
-    refused. The user file and the workspace file are never written.
+    The private file is loaded over `user_file`, as the loop loads them, before and after. A list's value is its new
+    value whole; `capacity.repo_slots`'s is the repositories whose count changes. Nothing is written when every value is
+    already so, or when anything is refused. The user file and the workspace file are never written.
 
     Returns:
         The keys changed, with their values before and after, and the file's hash now.
@@ -279,8 +249,7 @@ def save(root: Path, user_file: Path, expected: str, changes: Mapping[str, objec
             (D053), or whose backup cannot be written; `not_roundtrip` for one tomlkit would not write back byte for
             byte; `stale` when the file's hash is not `expected`; `config_invalid` for a value of None, for a
             workspace with no state directory, or when the files, before or after, do not load; `past_bound` for a
-            retention shortened past its floor; `not_stricter` for a key that only
-            gets stricter loosened.
+            retention shortened past its floor.
     """
     conversation.check_operator()
     target = config.private_config_path(root)
@@ -305,7 +274,7 @@ def save(root: Path, user_file: Path, expected: str, changes: Mapping[str, objec
         old = _load(root, user_file, None, target)
         doc = _parse_exactly(text, target)
         for name, wanted in changes.items():
-            _set(doc, BY_NAME[name], wanted, old, target)
+            _set(doc, BY_NAME[name], wanted, old)
         written = tomlkit.dumps(doc).encode()
         # Beside the file, so a relative `paths.*` value in it resolves as the file's own does.
         fd, temp = tempfile.mkstemp(dir=target.parent, prefix=f".{target.name}.", suffix=".tmp")
@@ -470,15 +439,12 @@ def _load(root: Path, user_file: Path, private_file: Path | None, shown: Path) -
         raise conversation.Refused(CONFIG_INVALID, message) from None
 
 
-def _set(doc: tomlkit.TOMLDocument, key: Editable, wanted: object, old: Config, path: Path) -> None:
+def _set(doc: tomlkit.TOMLDocument, key: Editable, wanted: object, old: Config) -> None:
     """Set `key` to `wanted` in `doc`, the private file's tree, keeping every comment and line around it.
 
     A key the tree does not set yet takes its whole value there, as the files give it now with `wanted` applied, so a
-    key from the user file keeps what the page did not change: a list's other entries, another repository's slots.
-
-    Raises:
-        Refused: `not_stricter` for a list given an entry it does not have. A value of the wrong type is written as
-            it is, for `config.load` to refuse with the loader's message.
+    key from the user file keeps what the page did not change: another repository's slots. A value of the wrong type
+    is written as it is, for `config.load` to refuse with the loader's message.
     """
     section, _, name = key.name.partition(".")
     table = doc.get(section)
@@ -488,22 +454,26 @@ def _set(doc: tomlkit.TOMLDocument, key: Editable, wanted: object, old: Config, 
     if key.name == REPO_SLOTS and isinstance(wanted, dict):
         _set_slots(table, name, wanted, value(old, key.name))
         return
-    current = value(old, key.name)
-    if key.kind == "stricter" and isinstance(current, tuple) and isinstance(wanted, list):
-        added = [str(v) for v in wanted if v not in current]
-        if added:
-            raise conversation.Refused(
-                NOT_STRICTER,
-                f"{key.name} may only lose entries from the web UI; add {', '.join(added)} in {path}",
-            )
-        entries = table.get(name)
-        if isinstance(entries, tomlkit.items.Array):
-            # Removed in place, so the entries kept keep their comments and the file's order.
-            for i in reversed(range(len(entries))):
-                if entries[i] not in wanted:
-                    del entries[i]
-            return
+    entries = table.get(name)
+    if isinstance(entries, tomlkit.items.Array) and isinstance(wanted, list) and _keeps_order(entries, wanted):
+        # Removed and added in place, so the entries kept keep their comments and the file's layout.
+        for i in reversed(range(len(entries))):
+            if entries[i] not in wanted:
+                del entries[i]
+        for entry in wanted[len(entries) :]:
+            entries.append(entry)
+        return
     table[name] = wanted
+
+
+def _keeps_order(entries: Sequence[object], wanted: Sequence[object]) -> bool:
+    """Whether `wanted` is `entries` with some dropped and others added at its end, so it can be edited in place.
+
+    Returns:
+        True when the entries of `entries` that `wanted` keeps open it, in the file's order.
+    """
+    kept = [e for e in entries if e in wanted]
+    return list(wanted[: len(kept)]) == kept and not any(e in kept for e in wanted[len(kept) :])
 
 
 def _set_slots(
@@ -542,34 +512,24 @@ def _check_rest(old: Config, new: Config, changes: Mapping[str, object], path: P
 
 
 def _check(key: Editable, change: Change, old: Config, path: Path) -> None:
-    """Refuse a change that loosens `key` further than the page may.
+    """Refuse a change that shortens a retention further than the page may.
 
     Raises:
-        Refused: `past_bound` for a retention under its floor and shorter than before; `not_stricter` for a trust
-            key loosened.
+        Refused: `past_bound` for a retention under its floor and shorter than before.
     """
-    if key.kind == "free":
-        return
-    if key.kind == "limit":
-        pairs: list[tuple[str, object, object]]
-        if isinstance(change.new, dict):
-            before = change.old if isinstance(change.old, dict) else {}
-            pairs = [
-                (f"{key.name}.{repo}", before.get(repo, old.capacity.slots_for(repo)), n)
-                for repo, n in change.new.items()
-                if before.get(repo) != n
-            ]
-        else:
-            pairs = [(key.name, change.old, change.new)]
-        for name, was, now in pairs:
-            if _past(key, was, now):
-                raise conversation.Refused(PAST_BOUND, _past_reason(key, name, path))
-        return
-    if not _stricter(key, change.old, change.new):
-        raise conversation.Refused(
-            NOT_STRICTER,
-            f"{key.name} may only be made stricter from the web UI; loosen it in {path}",
-        )
+    pairs: list[tuple[str, object, object]]
+    if isinstance(change.new, dict):
+        before = change.old if isinstance(change.old, dict) else {}
+        pairs = [
+            (f"{key.name}.{repo}", before.get(repo, old.capacity.slots_for(repo)), n)
+            for repo, n in change.new.items()
+            if before.get(repo) != n
+        ]
+    else:
+        pairs = [(key.name, change.old, change.new)]
+    for name, was, now in pairs:
+        if _past(key, was, now):
+            raise conversation.Refused(PAST_BOUND, _past_reason(key, name, path))
 
 
 def _past(key: Editable, was: object, now: object) -> bool:
@@ -586,22 +546,3 @@ def _past(key: Editable, was: object, now: object) -> bool:
 
 def _past_reason(key: Editable, name: str, path: Path) -> str:
     return f"{name} may be at least {key.bound}, or 0 to keep forever, from the web UI; set less in {path}"
-
-
-def _stricter(key: Editable, was: Value, now: Value) -> bool:
-    """Whether `now` is `was` or stricter, for a key that may move only toward stricter.
-
-    Returns:
-        True for the same value, a switch moved to its stricter side, a list that only lost entries, a later choice,
-        or a lower count.
-    """
-    if now == was:
-        return True
-    if key.name in _STRICTER_BOOL:
-        return now is _STRICTER_BOOL[key.name]
-    if isinstance(was, tuple) and isinstance(now, tuple):
-        return set(now) <= set(was)
-    if key.choices:
-        return was in key.choices and now in key.choices and key.choices.index(now) > key.choices.index(was)
-    # A count, as `trust.max_flaky_kicks`: fewer is stricter. A switch is never one, though Python counts it an int.
-    return type(was) is int and type(now) is int and now < was

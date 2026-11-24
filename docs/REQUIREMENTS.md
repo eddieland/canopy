@@ -220,10 +220,10 @@ the web UI's settings page, §8) lapses, reaches all of them, and shows on every
 Built (M41). Written down 2026-10-14. The operator changes some settings often enough that opening a config file is
 friction: a pool's slots, how many workers run at once, an attempt limit, how often the loop ticks. They should be
 able to change those from the web UI's settings page and have the loop take them up, as a reload does. Trust
-settings may be changed from the page only toward stricter: removing an authorized replier or a trusted reviewer,
-turning `trust.rebase` off, turning the commit trailer on. Loosening one, or changing any key that runs a command,
-chooses a prompt, or moves the listener, stays an edit to the file. The Loop settings page under Settings does
-this, writing the workspace's private file (§12, TRUST_MODEL T8, D128).
+settings were first changed from the page only toward stricter; since 2026-11-24 they move either way, an authorized
+replier or a trusted reviewer added as well as removed, and only a retention keeps a floor, since what it deletes is
+gone. Changing any key that runs a command, chooses a prompt, or moves the listener stays an edit to the file. The
+Loop settings page under Settings does this, writing the workspace's private file (§12, TRUST_MODEL T8, D128).
 
 ### R17. Review a coworker's PR on request, once or for as long as it is open
 

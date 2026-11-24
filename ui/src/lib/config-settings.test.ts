@@ -6,10 +6,8 @@ import {
     defaultText,
     resetDone,
     resetDraft,
+    addedName,
     bandCounts,
-    dropAsks,
-    lockedText,
-    strictest,
     bandsMatching,
     boundText,
     byPart,
@@ -19,8 +17,6 @@ import {
     configQueryOf,
     groupedKeys,
     groupSlug,
-    oneWay,
-    oneWayText,
     pendingText,
     savedText,
     settingsLine,
@@ -33,7 +29,6 @@ const WORKERS: ConfigKey = {
     name: 'capacity.max_workers',
     value: 2,
     source: 'user',
-    kind: 'limit',
     bound: null,
     forever_at_zero: false,
     choices: [],
@@ -43,7 +38,6 @@ const SLOTS: ConfigKey = {
     name: 'capacity.repo_slots',
     value: { web: 4 },
     source: 'user',
-    kind: 'limit',
     bound: null,
     forever_at_zero: false,
     choices: [],
@@ -56,7 +50,6 @@ const REVIEWERS: ConfigKey = {
     name: 'trust.trusted_reviewers',
     value: ['alice', 'lint-bot'],
     source: 'user',
-    kind: 'stricter',
     bound: null,
     forever_at_zero: false,
     choices: [],
@@ -76,7 +69,6 @@ const ALERTS: ConfigKey = {
     name: 'spend.budget_alerts',
     value: [50, 80],
     source: 'private',
-    kind: 'free',
 }
 const KEYS = [WORKERS, SLOTS, PER_REPO, PACE, REVIEWERS, REBASE]
 
@@ -161,10 +153,10 @@ describe('config settings', () => {
         })
     })
 
-    it('let a stricter count only fall', () => {
+    it('let a trust count rise or fall', () => {
         expect(configForm([KICKS], { 'trust.max_flaky_kicks': '3' })).toEqual({
-            changes: {},
-            errors: { 'trust.max_flaky_kicks': 'only fewer from here: at most 2; set more in the file' },
+            changes: { 'trust.max_flaky_kicks': 3 },
+            errors: {},
         })
         expect(configForm([KICKS], { 'trust.max_flaky_kicks': 'x' }).errors).toEqual({
             'trust.max_flaky_kicks': 'not a whole number',
@@ -199,9 +191,15 @@ describe('config settings', () => {
         })
     })
 
-    it('send a list as the entries kept, when one was dropped', () => {
+    it('send a list of names whole, when one was dropped or added', () => {
         expect(changes({ 'trust.trusted_reviewers': ['alice', 'lint-bot'] })).toEqual({})
         expect(changes({ 'trust.trusted_reviewers': ['alice'] })).toEqual({ 'trust.trusted_reviewers': ['alice'] })
+        expect(changes({ 'trust.trusted_reviewers': ['alice', 'carol'] })).toEqual({
+            'trust.trusted_reviewers': ['alice', 'carol'],
+        })
+        expect(addedName(' carol ', ['alice'])).toBe('carol')
+        expect(addedName('alice', ['alice'])).toBeNull()
+        expect(addedName('  ', ['alice'])).toBeNull()
     })
 
     it('say where a value comes from and how far the page may take it', () => {
@@ -211,8 +209,9 @@ describe('config settings', () => {
         expect(boundText(WORKERS)).toBe('')
         expect(boundText(PACE)).toBe('')
         expect(boundText(RUN_FILES)).toBe('at least 7, or 0 for forever, from here')
-        expect(boundText(REVIEWERS)).toBe('stricter only')
-        expect(boundText(KICKS)).toBe('only fewer from here')
+        expect(boundText(REVIEWERS)).toBe('')
+        expect(boundText(KICKS)).toBe('')
+        expect(boundText(ALERTS)).toBe('percentages, comma separated; 100% is always sent')
     })
 
     it('say what a save wrote apart from what its reload did', () => {
@@ -252,7 +251,6 @@ describe('a switch that goes either way', () => {
         const off = { ...MAINTAIN, value: false }
         expect(configForm([off], { 'pools.git_maintenance': true }).changes).toEqual({ 'pools.git_maintenance': true })
         expect(boundText(MAINTAIN)).toBe('')
-        expect(strictest(off)).toBe(false)
         expect(resetDraft(off)).toBe(true)
     })
 })
@@ -360,15 +358,6 @@ describe('the save bar', () => {
         ])
     })
 
-    it('name the stricter keys a save changes, which only the file undoes, and nothing else', () => {
-        expect(oneWay(KEYS, { 'capacity.max_workers': 5 })).toEqual([])
-        expect(oneWay(KEYS, { 'capacity.max_workers': 5, 'trust.rebase': false })).toEqual(['trust.rebase'])
-        expect(oneWayText(['trust.rebase'])).toBe('trust.rebase: only an edit to config.toml undoes this')
-        expect(oneWayText(['trust.rebase', 'policy.plan'])).toBe(
-            'trust.rebase, policy.plan: only an edit to config.toml undoes these',
-        )
-    })
-
     it('say a value in words', () => {
         expect(valueText(null, 'spend.monthly_budget_usd')).toBe('none')
         expect(valueText(null, 'capacity.slots_per_repo')).toBe('unmanaged')
@@ -432,34 +421,6 @@ describe("the page's header", () => {
     })
 })
 
-describe('the trust ratchet', () => {
-    it('knows a stricter key at its strictest, which the page can take no further', () => {
-        expect(strictest({ ...STACKING, value: 'never' })).toBe(true)
-        expect(strictest(STACKING)).toBe(false)
-        expect(strictest({ ...REBASE, value: false })).toBe(true)
-        expect(strictest(REBASE)).toBe(false)
-        expect(strictest({ ...REVIEWERS, value: [] })).toBe(true)
-        expect(strictest(REVIEWERS)).toBe(false)
-        expect(strictest({ ...KICKS, value: 0 })).toBe(true)
-        expect(strictest(KICKS)).toBe(false)
-        expect(strictest({ ...WORKERS, value: 0 })).toBe(false)
-    })
-
-    it('says a locked value in words, a switch by what it does', () => {
-        expect(lockedText({ ...REBASE, value: false })).toBe('rebase off')
-        expect(lockedText({ ...REBASE, name: 'trust.commit_trailer', value: true })).toBe('add trailer on')
-        expect(lockedText({ ...STACKING, value: 'never' })).toBe('never')
-        expect(lockedText({ ...REVIEWERS, value: [] })).toBe('none')
-    })
-
-    it('asks before dropping any authorized replier, or the last entry of a list', () => {
-        const repliers: ConfigKey = { ...REVIEWERS, name: 'trust.authorized_repliers', value: ['me', 'bot'] }
-        expect(dropAsks(repliers, 'bot', ['me', 'bot'])).toBe(true)
-        expect(dropAsks(REVIEWERS, 'alice', ['alice', 'lint-bot'])).toBe(false)
-        expect(dropAsks(REVIEWERS, 'alice', ['alice'])).toBe(true)
-    })
-})
-
 describe('defaults', () => {
     it("say a key's default once its value is not it", () => {
         expect(defaultText(WORKERS)).toBeNull()
@@ -478,22 +439,14 @@ describe('defaults', () => {
         expect(resetDraft({ ...ALERTS, default: [] })).toBe('')
     })
 
-    it('reset a stricter key only where its default is no looser than its value now', () => {
+    it('reset a count, a switch, a choice, or a list of names to its default, whichever way that is', () => {
         expect(resetDraft({ ...KICKS, default: 0 })).toBe('0')
-        expect(resetDraft({ ...KICKS, value: 1, default: 2 })).toBeNull()
+        expect(resetDraft({ ...KICKS, value: 1, default: 2 })).toBe('2')
         expect(resetDraft({ ...REBASE, value: true, default: false })).toBe(false)
-        expect(resetDraft({ ...REBASE, name: 'trust.commit_trailer', value: false, default: true })).toBe(true)
-        expect(resetDraft({ ...REBASE, value: false, default: true })).toBeNull()
-        expect(resetDraft({ ...STACKING, value: 'auto', default: 'never' })).toBe('never')
-        expect(resetDraft({ ...STACKING, value: 'never', default: 'auto' })).toBeNull()
-        expect(resetDraft({ ...STACKING, value: 'sometimes', default: 'often' })).toBeNull()
-        expect(resetDraft({ ...REVIEWERS, default: ['alice'] })).toEqual(['alice'])
-        expect(resetDraft({ ...REVIEWERS, default: ['carol'] })).toBeNull()
-        // Emptying a list, or dropping an authorized replier, asks first: the operator unchecks those, never a reset.
-        expect(resetDraft({ ...REVIEWERS, default: [] })).toBeNull()
-        expect(
-            resetDraft({ ...REVIEWERS, name: 'trust.authorized_repliers', value: ['me', 'bot'], default: ['me'] }),
-        ).toBeNull()
+        expect(resetDraft({ ...REBASE, value: false, default: true })).toBe(true)
+        expect(resetDraft({ ...STACKING, value: 'never', default: 'auto' })).toBe('auto')
+        expect(resetDraft({ ...REVIEWERS, default: ['carol'] })).toEqual(['carol'])
+        expect(resetDraft({ ...REVIEWERS, default: [] })).toEqual([])
     })
 
     it('offer no reset the loader would refuse beside its pair', () => {

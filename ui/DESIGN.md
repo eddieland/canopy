@@ -1336,19 +1336,16 @@ reader, so no table repeats them.
   there, the row lights once. A filter field over the form, kept in `?q=` as a list's is, narrows the rows to those
   whose label, key, or band's blurb holds it, and says how many; a row with an unsaved change stays whatever it says, so
   a change is never hidden, and the index dims a band left empty. Escape there empties it, since the usual visit is one
-  row and out. A key at its strictest shows its value as text beside a lock, and how it loosens, never a control with
-  every other choice disabled, which reads as broken; a band of keys that only get stricter says so once, with a lock,
-  in its header, and a switch is named for what it does, never `on`. Dropping an entry only the file adds back, an
-  authorized replier or a list's last, asks first, inline. A list keyed by repository lists only the repositories with a
-  value of their own and a repository picker to give another one, so a workspace of many repositories does not get a
-  field per repository. A changed row wears an accent hairline at its start and its old value in its meta line. A row
-  whose value is not its default says the default, and offers a reset where the page may take it there (within its
-  bound, or toward stricter); a reset is an ordinary change, listed and saved as any other. One save bar, sticky at the
-  page's foot, appears once something changed, so the page at rest shows no actions it cannot take and a change far down
-  the page is never left unseen; its height is held at the page's end, so its coming moves nothing. It lists each change
-  as `key: old → new`, folding the rest past a few, and warns when a change is one only the file undoes, before Discard
-  and Save. A save reads the file again, and the bar stays while its `Notice` keeps what the save did over the fresh
-  form.
+  row and out. A switch is named for what it does, never `on`. A list of names is a checkbox for each entry and a field
+  that adds one, Enter there adding the name and never saving the form. A list keyed by repository lists only the
+  repositories with a value of their own and a repository picker to give another one, so a workspace of many
+  repositories does not get a field per repository. A changed row wears an accent hairline at its start and its old
+  value in its meta line. A row whose value is not its default says the default, and offers a reset where the page may
+  take it there (within its bound); a reset is an ordinary change, listed and saved as any other. One save bar, sticky
+  at the page's foot, appears once something changed, so the page at rest shows no actions it cannot take and a change
+  far down the page is never left unseen; its height is held at the page's end, so its coming moves nothing. It lists
+  each change as `key: old → new`, folding the rest past a few, before Discard and Save. A save reads the file again,
+  and the bar stays while its `Notice` keeps what the save did over the fresh form.
 - **A page of the operator's files** (`InstructionsForm`, `/settings/instructions`, linked from Settings as a config
   page is): a panel per file, all shown at once, each saved from its own foot, since each save is a write of its own,
   never one save bar for the page. The index beside them is a config page's: each entry its panel's anchor, marking a
