@@ -91,6 +91,17 @@ describe('AllClear', () => {
         expect(screen.queryByTestId('all-clear-today')).toBeNull()
     })
 
+    it('shows the latest tick at a glance in a card when its line has the focus', async () => {
+        await renderRouted(<AllClear />, { client: seeded({ tick: { ...TICK, decisions: 3, woken_by: 'timer' } }) })
+        act(() => {
+            screen.getByTestId('all-clear-tick').focus()
+        })
+        const card = await waitFor(() => screen.getByTestId('tick-glance'))
+        expect(card.textContent).toContain('tick:812')
+        expect(card.textContent).toContain('3 decisions')
+        expect(card.textContent).toContain('timer')
+    })
+
     it('counts what works as the rail does, and links to Workspace', async () => {
         const working = mockRuns.filter((run) => run.state === 'running' || run.state === 'blocked')
         expect(working.length).toBeGreaterThan(0)

@@ -1,5 +1,5 @@
 import { QueryClient } from '@tanstack/react-query'
-import { cleanup, fireEvent, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { mockChores, mockReviews, mockRuns, mockTasks } from '@/api/mocks'
@@ -352,10 +352,27 @@ describe('SubjectRunsTable', () => {
         const [deps] = mockChores as [ChoreSummary]
         const running = { ...(deps.latest as NonNullable<ChoreSummary['latest']>), id: 3, status: 'running' }
         const chores = [{ ...deps, running: { ...running, state: 'running' as const, ended_at: null, summary: null } }]
-        await renderRouted(<SubjectRunsTable groups={subjectRuns({ runs: [], chores })} />, { client: client() })
+        const queries = client()
+        queries.setQueryData(keys.choreRun('deps', 3), {
+            chore: 'deps',
+            title: deps.title,
+            run: chores[0]?.running,
+            summary: null,
+            note: null,
+            model: null,
+            models: { status: 'running', models: [], error: null },
+            findings: [],
+        })
+        await renderRouted(<SubjectRunsTable groups={subjectRuns({ runs: [], chores })} />, { client: queries })
         const row = within(screen.getByTestId('chore-run-deps-3'))
         const number = row.getByRole('link', { name: '#3' })
         expect(number.getAttribute('href')).toBe('/chores/deps/runs/3')
+        // The number and its chore read as its reference, which its card leads with.
+        act(() => {
+            number.focus()
+        })
+        const card = await waitFor(() => screen.getByTestId('chore-run-card'))
+        expect(card.textContent).toContain('chore:deps#3running')
         expect(row.getByRole('link', { name: 'chore:deps' }).getAttribute('href')).toBe('/chores/deps')
         expect(row.getByText('chore')).toBeDefined()
         expect(row.getByText('Dependency advisories')).toBeDefined()
