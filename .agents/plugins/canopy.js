@@ -11,10 +11,10 @@
 // `status` call; the answer, the wrap-up, and the message, CANOPY_RUN_ID and each its one file canopy writes in the
 // directory CANOPY_ANSWERS names; the directory, a shell call's command and working directory; the wait, the MCP
 // servers' names and states and the tools' names; the model, the session's agent, its model, and the models the
-// runtime lists; the refusal, a refused call's permission and resources), changes only
-// what its hook is handed, writes no file, refuses no call, and grants no tool. Each job's hooks run in its own try, in
-// the order of `JOBS`, so a job that throws neither fails a call that has already run nor keeps the jobs after it from
-// theirs.
+// runtime lists; the refusal, a refused call's permission and resources, and a refused shell call's command), changes
+// only what its hook is handed, writes no file, refuses no call, and grants no tool. Each job's hooks run in its own
+// try, in the order of `JOBS`, so a job that throws neither fails a call that has already run nor keeps the jobs after
+// it from theirs.
 //
 // Its second is the nudge (DESIGN §41): in a worker's, planner's, reviewer's, or one-off task's run, after a number of
 // tool calls with no call of canopy's `status` tool, one line on the next tool call's result asks the agent to post an
@@ -46,8 +46,8 @@
 //
 // Its eighth is the refusal (DESIGN §33): a call the run's permission rules refuse, which the runtime reports to the
 // agent as no more than `Permission denied:` and the permission, also says what it asked for and that the refusal is
-// on purpose, not to be tried another way (`explain`); it reads the refusal's permission and resources, and changes
-// only the reason the agent is told.
+// on purpose, not to be tried another way (`explain`); it reads the refusal's permission and resources, and a refused
+// shell call's command, and changes only the reason the agent is told.
 //
 // OpenCode loads it by its one export, the default: its id, and `setup`, which registers the jobs' hooks. It calls no
 // other export, so the file has none.
@@ -133,6 +133,8 @@ const SHELL_TOOLS = new Set(["shell", "bash"]);
  * with nothing the shell would expand, and the space after the `&&`, a newline included.
  */
 const LEADING_CD = /^\s*cd[ \t]+(?:([\w./@%+=:,][\w./@%+=:,-]*)|'([^'\n]*)'|"([^"$`\\\n]*)")[ \t]*&&\s*/;
+/** A `cd` where a command of the shell starts: the command's start, or after `;`, `&`, `|`, `(`, or a line's end. */
+const A_CD = /(?:^|[;&|(\n])\s*cd(?=$|[\s;&|)])/;
 /** The longest a session's first prompt waits on MCP servers still connecting, in milliseconds. */
 const MCP_WAIT_MS = 30_000;
 /** The longest it waits, once none is connecting, for a connected server's tools to be registered. */
@@ -156,6 +158,13 @@ const REFUSED = new Map([
     ["execute", "This agent has no code mode, which can reach the web."],
     ["task", "This agent starts no subagents."],
 ]);
+/** What the reason says instead of the line every refusal ends with, for a shell command refused as leaving the
+ * agent's directory that holds a `cd` past its leading ones: the runtime checks it from where it starts. */
+const CD_REFUSED =
+    `${MARK} Every path in a shell command is checked from where the command starts, its \`workdir\`, not from` +
+    " where a `cd` earlier in it went, so one inside once that `cd` is followed can still be refused as outside. Pass" +
+    " that directory as `workdir`, or to a tool's `-C`, instead of the `cd`. A path outside the directories this run" +
+    " may reach is refused on purpose: do not try it another way.";
 
 /**
  * Each job the plugin does, in the order its hooks run: a function that returns its hooks.
@@ -664,6 +673,21 @@ function workdir() {
  * @returns {{ dirs: string[], rest: string } | null}
  */
 function leadingCd(command) {
+    const { dirs, rest } = leadingCds(command);
+    if (dirs.length === 0 || rest.trim() === "" || dirs.includes("")) {
+        return null;
+    }
+    return { dirs, rest };
+}
+
+/**
+ * The directories of every leading `cd` of a command that `LEADING_CD` takes, each joined by `&&`, and the command
+ * after them, the whole command when it opens with none.
+ *
+ * @param {string} command
+ * @returns {{ dirs: string[], rest: string }}
+ */
+function leadingCds(command) {
     /** @type {string[]} */
     const dirs = [];
     let rest = command;
@@ -671,9 +695,6 @@ function leadingCd(command) {
         const [whole, plain, single, double] = found;
         dirs.push(plain ?? single ?? double ?? "");
         rest = rest.slice(whole.length);
-    }
-    if (dirs.length === 0 || rest.trim() === "" || dirs.includes("")) {
-        return null;
     }
     return { dirs, rest };
 }
@@ -917,6 +938,11 @@ async function untilListed(ctx, providerID, id) {
  * the repository or the operator set (TRUST_MODEL T7) is explained as canopy's are: the line names the rules the run
  * is under, not whose they are.
  *
+ * A shell command refused as leaving the agent's directory may not leave it at all: the runtime checks each path in it
+ * from where the command starts, not from where a `cd` earlier in it went, and the directory's job moves only its
+ * leading `cd <dir> &&`. So `mkdir -p d && cd d && touch ../x`, or `cd sub; ls ..`, is refused though it stays inside.
+ * For a refused command that holds a `cd` past the leading ones, the line says so instead, and how to run it.
+ *
  * @returns {Job} The refusal's hooks.
  */
 function explain() {
@@ -938,9 +964,26 @@ function explain() {
                 return;
             }
             const permission = typeof refused.permission === "string" ? refused.permission : "";
-            refused.reason = `${said}${askedFor(refused.resources)}\n${refusal(permission)}`;
+            const line = permission === "external_directory" && cdsLater(event) ? CD_REFUSED : refusal(permission);
+            refused.reason = `${said}${askedFor(refused.resources)}\n${line}`;
         },
     };
+}
+
+/**
+ * Whether a call is of the shell with a command that holds a `cd` past those it opens with that the directory's job
+ * moves: a `cd` the runtime does not follow as it checks the paths after it.
+ *
+ * @param {AfterEvent} event
+ * @returns {boolean}
+ */
+function cdsLater(event) {
+    const input = event.input;
+    if (!SHELL_TOOLS.has(event.tool) || input === null || typeof input !== "object") {
+        return false;
+    }
+    const command = /** @type {{ command?: unknown }} */ (input).command;
+    return typeof command === "string" && A_CD.test(leadingCds(command).rest);
 }
 
 /**

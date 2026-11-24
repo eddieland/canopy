@@ -15,8 +15,9 @@ session's record names its model by (`canopy.runtime.opencode2.session_models`).
 `touched` says what a call did to files, from 2.1.4's tools: `read`, `edit`, and `write` name one by `path`, or by
 `filePath` in a session moved from OpenCode 1, `patch` each file its patch adds, updates, deletes, or moves to, and
 `grep`, `glob`, and a `shell` command that searches (`report.shell_searches`) search. `returned` says what a call put
-into the context, and whether OpenCode cut it, as the `truncated` its tool's metadata holds says; `command`, what a
-`shell` call ran.
+into the context, whether OpenCode cut it, as the `truncated` its tool's metadata holds says, and the permission its
+rules refused it under, as its error opens `Permission denied:` and the permission; `command`, what a `shell` call
+ran.
 
 `canopy.runtime.transcript` reads the file and bounds the transcript as a whole.
 """
@@ -57,6 +58,9 @@ _SHELLS: Final = frozenset({"shell", "bash"})
 _PATH_BY: Final = ("path", "filePath")
 #: A patch's line naming a file it changes: `*** Update File: src/a.py`, and the path it moves one to.
 _PATCH_FILE_RE: Final = re.compile(r"^\*\*\* (?:Add File|Update File|Delete File|Move to): (.+?)\s*$", re.MULTILINE)
+#: How a call's error opens when the run's permission rules refused it: the permission, `external_directory` or a
+#: tool's name, after it, whatever canopy's plugin adds (DESIGN §33).
+_REFUSED_RE: Final = re.compile(r"Permission denied: ([\w.:*-]+)")
 
 Millis = Annotated[StrictInt, Field(ge=0, le=_MAX_MS)]
 
@@ -172,8 +176,8 @@ def returned(event: Mapping[str, object]) -> Returned | None:
     """What the call a `tool_use` event ended returned: its output's characters, or its error's, and whether it was cut.
 
     Returns:
-        Them, cut as the call's metadata says (`_cut`), None when it says nothing; or None when `event` is not a
-        `tool_use` event that validates.
+        Them, cut as the call's metadata says (`_cut`), None when it says nothing, and the permission the rules refused
+        it under, from its error; or None when `event` is not a `tool_use` event that validates.
     """
     if event["type"] != events.TOOL_USE:
         return None
@@ -182,7 +186,8 @@ def returned(event: Mapping[str, object]) -> Returned | None:
     except ValidationError:
         return None
     said = state.output if state.status == "completed" else state.error
-    return Returned(len(said or ""), _cut(state.metadata))
+    refused = _REFUSED_RE.match(state.error or "") if state.status == "error" else None
+    return Returned(len(said or ""), _cut(state.metadata), refused[1] if refused is not None else None)
 
 
 def in_session(line: str, session_id: str) -> bool:

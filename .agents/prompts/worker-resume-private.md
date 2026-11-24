@@ -67,7 +67,8 @@ Post no comment about the fix: describe it in your summary.{{STANDING_SECTION}}
 
 - Stay inside your directory. Every shell command starts in it, whatever `cd` an earlier command made, and one that
   leads out of it is refused: run in a subdirectory by setting the command's working directory or opening the command
-  with `cd <subdirectory> &&`, never by a `cd ..` from where you think an earlier command left you.
+  with `cd <subdirectory> &&`, never by a `cd ..` from where you think an earlier command, or an earlier `cd` in the
+  same command, left you.
 - Never quote, paraphrase, or mention the operator's notice on a PR or in a commit message: it reaches nobody else.
 - Commit your work. {{COMMIT_ATTRIBUTION}} Never disguise agent work as human work.
 - Push only to your branch, with `git push origin HEAD:refs/heads/<branch>` in each repository you changed.

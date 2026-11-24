@@ -3,7 +3,8 @@
 From the transcripts canopy keeps (§13), per role and per tool, over the runs that started in a window of local days
 and ended (`spend.window`): the calls, the characters of what they returned, in total and at the median, each tool's
 share of its role's characters, how many results the runtime said it cut and how many it said nothing of, and the reads
-of a path the same run had read already; and per role, the characters each run's `status` calls sent (§41).
+of a path the same run had read already; and per role, the characters each run's `status` calls sent (§41), and the
+calls the run's permission rules refused, by the permission the runtime named, which OpenCode 1 does not.
 
 A role is a worker's or a planner's run kind, `review`, `task`, `epic-plan`, `chore`, or `overseer`. A call of the
 runtime's shell counts as the program it runs, as `$ gh run view`: its first stage that does more than move or set up
@@ -19,8 +20,8 @@ from __future__ import annotations
 import posixpath
 import re
 import statistics
-from collections import defaultdict
-from dataclasses import dataclass
+from collections import Counter, defaultdict
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, Literal, LiteralString
 
@@ -111,13 +112,15 @@ class RoleResults:
     status_median: float | None
     #: Each tool the role's runs called, the most characters first.
     tools: Sequence[ToolResult] = ()
+    #: The calls the run's permission rules refused, by the permission the runtime named, the most first.
+    refused: Mapping[str, int] = field(default_factory=dict)
 
     def as_json(self) -> dict[str, object]:
         """Return the role's figures and its tools' as one JSON object.
 
         Returns:
             `role`, `runs`, `read`, `cut_logs`, `calls`, `result_chars`, `repeated_reads`, `status` (its `runs`,
-            `calls`, `chars`, and `median_chars`), and `tools`.
+            `calls`, `chars`, and `median_chars`), `refused` (calls by permission), and `tools`.
         """
         return {
             "role": self.role,
@@ -133,6 +136,7 @@ class RoleResults:
                 "chars": self.status_chars,
                 "median_chars": self.status_median,
             },
+            "refused": dict(self.refused),
             "tools": [t.as_json() for t in self.tools],
         }
 
@@ -305,6 +309,7 @@ def _summed(role: str, runs: Sequence[Uses | None]) -> RoleResults:
         key=lambda t: (-t.chars, t.tool),
     )
     sent = [sum(u.input_chars for u in called) for called in status]
+    refused = Counter(report.kept_name(u.refused) for run in read for u in run.calls if u.refused is not None)
     return RoleResults(
         role=role,
         runs=len(runs),
@@ -318,6 +323,7 @@ def _summed(role: str, runs: Sequence[Uses | None]) -> RoleResults:
         status_chars=sum(sent),
         status_median=float(statistics.median(sent)) if sent else None,
         tools=tuple(tools),
+        refused=dict(sorted(refused.items(), key=lambda kv: (-kv[1], kv[0]))),
     )
 
 

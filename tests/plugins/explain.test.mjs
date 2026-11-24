@@ -31,9 +31,18 @@ async function after() {
 }
 
 /** A failed call's event, its error wrapping `cause` as the runtime's own tools wrap a refusal. */
-function failed(cause, tool = "shell") {
+function failed(cause, tool = "shell", input = {}) {
     const message = cause instanceof Error ? cause.message : "it failed";
-    return failedCall({ _tag: "Tool.Error", message, error: cause }, { tool });
+    return failedCall({ _tag: "Tool.Error", message, error: cause }, { tool, input });
+}
+
+/** The reason's canopy line for a shell `command` refused as leaving the agent's directory. */
+async function lineFor(command, tool = "shell") {
+    const refused = new BlockedError("external_directory", ["/pool/web/*"]);
+    await (await after())(failed(refused, tool, { command, description: "run it" }));
+    const lines = refused.message.split("\n");
+    assert.equal(lines.length, 2);
+    return lines[1];
 }
 
 test("a refused shell command is told what it asked for, and that the refusal is meant", async () => {
@@ -58,6 +67,41 @@ test("a permission whose refusal means more says so first", async () => {
     const web = new BlockedError("webfetch", ["https://example.com"]);
     await (await after())(failed(web, "webfetch"));
     assert.match(web.message, /\n\[canopy\] This agent has no web tools\. The rules this run is under /);
+});
+
+test("a command refused as leaving its directory, a `cd` past its start, is told where paths are checked", async () => {
+    const said =
+        "[canopy] Every path in a shell command is checked from where the command starts, its `workdir`, not from" +
+        " where a `cd` earlier in it went, so one inside once that `cd` is followed can still be refused as outside." +
+        " Pass that directory as `workdir`, or to a tool's `-C`, instead of the `cd`. A path outside the directories" +
+        " this run may reach is refused on purpose: do not try it another way.";
+    const refused = new BlockedError("external_directory", ["/pool/web/*"]);
+    await (await after())(failed(refused, "shell", { command: "mkdir -p d && cd d && true; cd .." }));
+    assert.equal(refused.message, `Permission denied: external_directory (\`/pool/web/*\`)\n${said}`);
+    for (const command of [
+        "cd sub; ls ..",
+        "cd sub\nmake -C ..",
+        "cd app && make; cd ../lib && make",
+        "ls && (cd sub && ls ..)",
+        "true || cd ..",
+        "cd \"$HOME\" && ls ..",
+    ]) {
+        assert.equal(await lineFor(command), said, command);
+    }
+    assert.equal(await lineFor("cd sub; ls ..", "bash"), said);
+});
+
+test("a refusal with no `cd` past the leading ones is told it is outside, as any other", async () => {
+    for (const command of ["ls ../..", "cd app && cd ../lib && ls ..", "echo cd ..", "cdk deploy ..", "abcd .."]) {
+        assert.match(await lineFor(command), /^\[canopy\] It is outside the directories this run may reach\./, command);
+    }
+    // Another tool's call, and another permission's refusal of a shell command, are told as before.
+    const read = new BlockedError("external_directory", ["/etc/*"]);
+    await (await after())(failed(read, "read", { command: "cd x; ls" }));
+    assert.match(read.message, /\n\[canopy\] It is outside /);
+    const shell = new BlockedError("shell", ["git push"]);
+    await (await after())(failed(shell, "shell", { command: "cd x; git push" }));
+    assert.match(shell.message, /\n\[canopy\] The rules this run is under /);
 });
 
 test("an MCP tool's refusal, which asks for the wildcard, names no resource", async () => {
