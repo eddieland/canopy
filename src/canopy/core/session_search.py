@@ -5,8 +5,16 @@ one of its messages hold every word between them, each matched as a word, its En
 matches (DESIGN §28), never as the index's query syntax, so no query is an error: a message's row holds the session's
 title beside its text, and is found only when its text holds one of the words, so a title that holds them all does not
 find every message of its session; the title's own row finds a session by its title alone. A session of canopy's is
-never found by what it was sent, whatever the index holds of it. Hits are ranked by how well they match, a word in a
-title weighing more, then newest first (`found`).
+never found by what it was sent, whatever the index holds of it.
+
+A name is found however it is written (`canopy.core.word_parts`): the index holds `ValidationManager` whole and by its
+parts, so `validation manager` finds it, and a word of the query that splits, `ValidationManager` or
+`validation_manager`, is looked for as its parts next to each other or joined, so it finds `validation-manager` and
+`validationManager` alike, and never a text that only holds both words apart.
+
+Hits are ranked by how well they match, a word in a title weighing more, then newest first (`found`). Words found close
+together weigh more than the same words apart, and in the order asked for, next to each other, more again: the query
+asks for them so as well, which adds to the rank of a row that holds them so and finds no row besides.
 
 A hit's snippet is read from the runtime's record when the search is made, for the hits shown alone (`hit`): the
 message whose row matched best, read again, on one line, nothing hidden in it, bounded, the query's words marked. The
@@ -20,7 +28,7 @@ import sqlite3
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
-from canopy.core import records, session_index, sql
+from canopy.core import records, session_index, sql, word_parts
 from canopy.runtime import indexed_text
 
 if TYPE_CHECKING:
@@ -40,6 +48,10 @@ MAX_SNIPPET: Final = 400
 # What `snippet()` marks a word found with: characters a snippet's text never holds, since every one that is not
 # printable is dropped first.
 _START, _END = "\x01", "\x02"
+#: How many words may stand between the words of a query for them to count as close together.
+NEAR_WORDS: Final = 10
+#: How many of a message's names a snippet marks by their parts at most.
+MAX_NAMES: Final = 500
 #: A message's row, found when its title and text hold every word between them and its text holds one.
 _MESSAGE_MATCH: Final = "{cols} : ({every}) AND {text} : ({any})"
 
@@ -87,18 +99,24 @@ def found(state_dir: Path, words: Sequence[str], *, canopy: bool, limit: int = M
     `words` are a query's, as memory's search reads them; with none, nothing is found.
 
     Returns:
-        At most `limit` sessions, ranked by how well they match, a word in a title weighing more, then newest first;
-        none when there is no index.
+        At most `limit` sessions, ranked by how well they match, a word in a title weighing more and words close
+        together more than the same words apart, then newest first; none when there is no index.
     """
     if not words:
         return []
-    every = " AND ".join(f'"{w}"' for w in words)
-    either = " OR ".join(f'"{w}"' for w in words)
+    every = " AND ".join(_term(w) for w in words)
+    either = " OR ".join(_term(w) for w in words)
     cols, text = ("{title body}", "{body}") if canopy else ("{title sent body}", "{sent body}")
+    in_messages = _MESSAGE_MATCH.format(cols=cols, every=every, text=text, any=either)
+    in_title = f"{{title}} : ({every})"
+    close = _close(words)
+    if close is not None:
+        in_messages = f"({in_messages}) OR {text} : ({close})"
+        in_title = f"({in_title}) OR {{title}} : ({close})"
     try:
         with session_index.read_only(state_dir) as idx:
-            messages = _rows(idx, _MESSAGE_MATCH.format(cols=cols, every=every, text=text, any=either), title=False)
-            titles = _rows(idx, f"{{title}} : ({every})", title=True)
+            messages = _rows(idx, in_messages, title=False)
+            titles = _rows(idx, in_title, title=True)
     except sqlite3.Error:
         return []
     best: dict[str, _Row] = {}
@@ -164,6 +182,26 @@ class _Row(records.View):
     cut: bool
 
 
+# What the index is asked for word `word`: the word, and when it splits into parts, its parts next to each other or
+# joined into one word, so a name is found however it is written.
+def _term(word: str) -> str:
+    split = word_parts.parts(word)
+    if len(split) < 2:  # noqa: PLR2004
+        return f'"{word}"'
+    return f'("{" ".join(split)}" OR "{"".join(split)}")'
+
+
+# What more the index is asked for, for the rank alone: `words` in their order, next to each other, and `words` within
+# `NEAR_WORDS` of each other. A row that holds them so holds every one, so this finds no row the words do not; None for
+# one word, which is close to nothing.
+def _close(words: Sequence[str]) -> str | None:
+    phrases = [" ".join(word_parts.parts(w)) for w in words]
+    if len(phrases) < 2 or not all(phrases):  # noqa: PLR2004
+        return None
+    near = " ".join(f'"{p}"' for p in phrases)
+    return f'"{" ".join(phrases)}" OR NEAR({near}, {NEAR_WORDS})'
+
+
 # The rows `match` finds, best first, at most `MAX_ROWS`: the title's rows, or the messages'.
 def _rows(idx: sqlite3.Connection, match: str, *, title: bool) -> list[_Row]:
     query = (
@@ -185,22 +223,42 @@ def _rows(idx: sqlite3.Connection, match: str, *, title: bool) -> list[_Row]:
 
 
 # The words of `text` around those of `words` found in it, as SQLite's `snippet()` picks them, each found marked: on one
-# line, every character that is not printable dropped, at most `MAX_SNIPPET` characters.
+# line, every character that is not printable dropped, at most `MAX_SNIPPET` characters. A name found by its parts is
+# marked whole.
 def _snippet(text: str, words: Sequence[str]) -> list[Mark]:
     flat = "".join(c for c in " ".join(text.split()) if c.isprintable())
     if not flat:
         return []
     picked = flat[:MAX_SNIPPET]
+    terms = [_term(w) for w in words]
     with contextlib.closing(sqlite3.connect(":memory:")) as conn:
         sql.execute(conn, sql.frag("CREATE VIRTUAL TABLE t USING fts5(body, tokenize='porter unicode61')"))
         sql.execute(conn, sql.frag("INSERT INTO t (body) VALUES (?)", flat))
         snippet = (
             sql.select("snippet(t, 0, ?, ?, '…', ?)", _START, _END, SNIPPET_WORDS)
             .from_("t")
-            .where("t MATCH ?", " OR ".join(f'"{w}"' for w in words))
+            .where("t MATCH ?", " OR ".join([*terms, *(f'"{n}"' for n in _names_found(conn, flat, terms))]))
         )
         found = records.fetch_value(conn, str, snippet)
     return _marks(picked if found is None else found)
+
+
+# The names in `flat` that one of `terms` finds by their parts, the first `MAX_NAMES` of them: the text is searched as
+# it is written, where such a name is one word, so each is looked for by name as well.
+def _names_found(conn: sqlite3.Connection, flat: str, terms: Sequence[str]) -> list[str]:
+    names = dict(word_parts.compounds(flat))
+    if not names:
+        return []
+    sql.execute(conn, sql.frag("CREATE VIRTUAL TABLE n USING fts5(parts, tokenize='porter unicode61')"))
+    sql.execute_many(
+        conn,
+        sql.frag("INSERT INTO n (rowid, parts) VALUES (?, ?)", sql.ROW, sql.ROW),
+        [(row, " ".join(split)) for row, split in enumerate(names.values())],
+    )
+    found = sql.select("rowid").from_("n").where("n MATCH ?", " OR ".join(terms)).order_by("rowid").limit(MAX_NAMES)
+    rows = records.fetch_values(conn, int, found)
+    listed = list(names)
+    return [listed[row] for row in rows]
 
 
 # A snippet `snippet()` marked, as its pieces, at most `MAX_SNIPPET` characters of text.

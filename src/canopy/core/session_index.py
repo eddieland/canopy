@@ -32,7 +32,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Final
 
-from canopy.core import db, records, runtime_sessions, session_sizes, sql
+from canopy.core import db, records, runtime_sessions, session_sizes, sql, word_parts
 from canopy.runtime import indexed_text
 
 if TYPE_CHECKING:
@@ -47,7 +47,7 @@ if TYPE_CHECKING:
 #: The index's file, in the workspace's state directory.
 FILE_NAME: Final = "sessions.db"
 #: The index's shape: its tables and how it splits text into words. A new one drops the index, and builds it again.
-SHAPE: Final = 1
+SHAPE: Final = 2
 #: The cut of a session's text the index holds, as the operator chose it from stage 0's measurement (ROADMAP M72).
 CUT: Final[Cut] = "read"
 #: How many characters of one message are indexed, how many of one session, and how many of its messages: far more than
@@ -70,7 +70,8 @@ OLD_SQLITE: Final = (
     "index of sessions' text needs: sessions are found by their titles"
 )
 #: The index's tables: the step's state, a row for each session indexed, a row for each of its messages, and the words,
-#: splitting text into words as memory's index does (DESIGN §28), so a word matches as memory's search matches it.
+#: splitting text into words as memory's index does (DESIGN §28), so a word matches as memory's search matches it. It
+#: is given each text with the parts of its names written out (`word_parts.spread`), so a name matches by them too.
 _SCHEMA: Final[tuple[sql.Fragment, ...]] = (
     sql.frag(
         "CREATE TABLE meta (id INTEGER PRIMARY KEY CHECK (id = 1), setting TEXT NOT NULL, front_ms INTEGER,"
@@ -543,7 +544,13 @@ def _replace(idx: sqlite3.Connection, head: SessionHead, *, ours: bool, version:
         ).lastrowid
         sql.execute(
             idx,
-            sql.frag("INSERT INTO words (rowid, title, sent, body) VALUES (?, ?, ?, ?)", row, title, sent, body),
+            sql.frag(
+                "INSERT INTO words (rowid, title, sent, body) VALUES (?, ?, ?, ?)",
+                row,
+                word_parts.spread(title),
+                word_parts.spread(sent),
+                word_parts.spread(body),
+            ),
         )
 
 
