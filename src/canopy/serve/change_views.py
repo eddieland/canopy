@@ -44,7 +44,7 @@ def run_changes_of(
     found: list[RunChange] = []
     commits = run_changes.commits_of(conn, run_id, table=table)
     for row in run_changes.of_run(conn, run_id, table=table):
-        path = run_changes.change_path(log_path, row.repo)
+        path = run_changes.own_path(log_path, row)
         removed = removed_after(conn, path, ended_at, "run_files_days") if row.change_kept else None
         found.append(
             RunChange(
@@ -81,7 +81,7 @@ def run_diff(
     if not rows or not rows[0].change_kept:
         return None
     # The path is made from the journal's repository name, never the request's.
-    diff = review_diff.read(run_changes.change_path(log_path, rows[0].repo))
+    diff = review_diff.read(run_changes.own_path(log_path, rows[0]))
     return diff_view(diff) if diff is not None else None
 
 

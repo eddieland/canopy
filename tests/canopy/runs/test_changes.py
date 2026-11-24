@@ -72,9 +72,10 @@ def changed(scenario: Scenario, ran: Ran) -> list[records.RunChange]:
     return run_changes.of_run(scenario.conn, ran.id)
 
 
-def change_of(ran: Ran, repo: str = "repo") -> str:
-    """The diff the run kept of its own change to `repo`."""
-    return run_changes.change_path(ran.row.log_path, repo).read_text()
+def change_of(scenario: Scenario, ran: Ran, repo: str = "repo") -> str:
+    """The diff the run kept of its own change to `repo`, in the file its row names."""
+    [row] = [r for r in changed(scenario, ran) if r.repo == repo]
+    return run_changes.own_path(ran.row.log_path, row).read_text()
 
 
 def branch_of(ran: Ran, repo: str = "repo") -> str:
@@ -96,16 +97,19 @@ def test_an_implement_records_the_bases_commit_origins_head_and_the_merge_base_a
     [row] = changed(scenario, ran)
     assert (row.start_sha, row.start_on_base, row.end_sha, row.merge_base_sha) == (base, True, head, base)
     assert (row.unpushed_sha, row.change_kept, row.branch_kept, row.missing) == (None, True, True, None)
-    assert change_of(ran).startswith("diff --git a/a.txt b/a.txt\n")
-    assert "+the change\n" in change_of(ran)
-    assert branch_of(ran) == change_of(ran)
+    assert change_of(scenario, ran).startswith("diff --git a/a.txt b/a.txt\n")
+    assert "+the change\n" in change_of(scenario, ran)
+    assert branch_of(ran) == change_of(scenario, ran)
+    # The two are the same diff, kept once.
+    assert not run_changes.change_path(ran.row.log_path, "repo").exists()
+    assert row.rebased is False
     assert review_diff.read_head(review_diff.run_path_for(ran.row.log_path, "repo")) == head
     assert (row.files_changed, row.lines_added, row.lines_removed) == (1, 1, 0)
     [counted] = run_changes.files_of(scenario.conn, ran.id, "repo")
     assert (counted.path, counted.old_path, counted.added, counted.removed) == ("a.txt", None, 1, 0)
     shown = scenario.operator("show", f"run:{ran.id}").out
     assert f"\nChanged:\n  repo  {base[:12]}..{head[:12]}, from its base, merge base {base[:12]}\n" in shown
-    assert f"\n    its change {run_changes.change_path(ran.row.log_path, 'repo')}\n" in shown
+    assert f"\n    its change {review_diff.run_path_for(ran.row.log_path, 'repo')}\n" in shown
     assert f"\n    against its base {review_diff.run_path_for(ran.row.log_path, 'repo')}\n" in shown
 
 
@@ -122,19 +126,20 @@ def test_a_resume_starts_from_origins_previous_head_and_its_own_diff_holds_the_f
     after = present(git_pool.remote_head(BRANCH))
     [row] = changed(scenario, ran)
     assert (row.start_sha, row.start_on_base, row.end_sha, row.merge_base_sha) == (before, False, after, base)
-    assert "b.txt" in change_of(ran)
-    assert "a.txt" not in change_of(ran)
+    assert row.rebased is False
+    assert "b.txt" in change_of(scenario, ran)
+    assert "a.txt" not in change_of(scenario, ran)
     # Counted of the run's own change alone.
     assert [f.path for f in run_changes.files_of(scenario.conn, ran.id, "repo")] == ["b.txt"]
     assert ("a.txt" in branch_of(ran), "b.txt" in branch_of(ran)) == (True, True)
     # For a pager: the run's own change, as git printed it.
     printed = scenario.operator("show", f"run:{ran.id}", "--diff").out
-    assert printed == change_of(ran)
+    assert printed == change_of(scenario, ran)
     shown = scenario.operator("show", f"run:{ran.id}").out
     assert f"  repo  {before[:12]}..{after[:12]}, merge base {base[:12]}\n" in shown
 
 
-def test_a_run_that_rebased_onto_a_moved_base_keeps_its_own_change_without_the_bases(
+def test_a_run_that_rebased_onto_a_moved_base_keeps_its_own_change_without_the_bases_and_says_it_rebased(
     scenario: Scenario,
     git_pool: GitPool,
 ) -> None:
@@ -151,13 +156,17 @@ def test_a_run_that_rebased_onto_a_moved_base_keeps_its_own_change_without_the_b
     ran = scenario.run(dispatches(kind=RunKind.RESUME, reasons=(ResumeReason.CI,)), worker=rebases)
     assert ran.status == "done", ran.row.result_json
     [row] = changed(scenario, ran)
-    assert (row.start_sha, row.end_sha) == (before, present(git_pool.remote_head(BRANCH)))
+    after = present(git_pool.remote_head(BRANCH))
+    assert (row.start_sha, row.end_sha, row.rebased) == (before, after, True)
     assert row.merge_base_sha == main_head(git_pool.origin)
-    assert "b.txt" in change_of(ran)
-    assert ("a.txt" in change_of(ran), "m.txt" in change_of(ran)) == (False, False)
+    assert "b.txt" in change_of(scenario, ran)
+    assert ("a.txt" in change_of(scenario, ran), "m.txt" in change_of(scenario, ran)) == (False, False)
     assert [f.path for f in run_changes.files_of(scenario.conn, ran.id, "repo")] == ["b.txt"]
     assert (row.files_changed, row.lines_added, row.lines_removed) == (1, 1, 0)
     assert ("a.txt" in branch_of(ran), "b.txt" in branch_of(ran), "m.txt" in branch_of(ran)) == (True, True, False)
+    shown = scenario.operator("show", f"run:{ran.id}").out
+    assert f"  repo  {before[:12]}..{after[:12]}, rebased, merge base {present(row.merge_base_sha)[:12]}\n" in shown
+    assert scenario.operator("show", f"run:{ran.id}", "--diff").out == change_of(scenario, ran)
 
 
 def test_a_run_that_merged_a_moved_base_in_keeps_its_own_change_without_the_bases(
@@ -174,8 +183,10 @@ def test_a_run_that_merged_a_moved_base_in_keeps_its_own_change_without_the_base
     )
     ran = scenario.run(dispatches(kind=RunKind.RESUME, reasons=(ResumeReason.CI,)), worker=merges)
     assert ran.status == "done", ran.row.result_json
-    assert "b.txt" in change_of(ran)
-    assert "m.txt" not in change_of(ran)
+    assert "b.txt" in change_of(scenario, ran)
+    assert "m.txt" not in change_of(scenario, ran)
+    # A merge keeps the run's start in the branch's history.
+    assert [row.rebased for row in changed(scenario, ran)] == [False]
     assert [f.path for f in run_changes.files_of(scenario.conn, ran.id, "repo")] == ["b.txt"]
 
 
@@ -196,8 +207,9 @@ def test_a_rebase_that_conflicted_keeps_how_the_run_resolved_it_and_none_of_the_
     ran = scenario.run(dispatches(kind=RunKind.RESUME, reasons=(ResumeReason.CI,)), worker=rebases)
     assert ran.status == "done", ran.row.result_json
     assert [f.path for f in run_changes.files_of(scenario.conn, ran.id, "repo")] == ["a.txt"]
-    assert "+resolved\n" in change_of(ran)
-    assert "-<<<<<<< " in change_of(ran)
+    assert [row.rebased for row in changed(scenario, ran)] == [True]
+    assert "+resolved\n" in change_of(scenario, ran)
+    assert "-<<<<<<< " in change_of(scenario, ran)
 
 
 def test_a_slot_whose_git_names_a_merge_driver_is_not_merged_and_the_change_is_read_from_the_start(
@@ -218,7 +230,7 @@ def test_a_slot_whose_git_names_a_merge_driver_is_not_merged_and_the_change_is_r
     )
     ran = scenario.run(dispatches(kind=RunKind.RESUME, reasons=(ResumeReason.CI,)), worker=rebases)
     assert ran.status == "done", ran.row.result_json
-    assert ("b.txt" in change_of(ran), "m.txt" in change_of(ran)) == (True, True)
+    assert ("b.txt" in change_of(scenario, ran), "m.txt" in change_of(scenario, ran)) == (True, True)
     assert not ran_driver.exists()
 
 
@@ -230,7 +242,7 @@ def test_a_run_whose_end_the_base_already_holds_keeps_its_change(scenario: Scena
     )
     [row] = changed(scenario, ran)
     assert row.merge_base_sha == row.end_sha
-    assert "a.txt" in change_of(ran)
+    assert "a.txt" in change_of(scenario, ran)
     assert row.files_changed == 1
 
 
@@ -245,8 +257,8 @@ def test_a_joint_run_records_a_row_and_its_diffs_per_repository(ws_scenario: Sce
     ]
     assert [r.start_sha for r in rows] == [main_head(ws.origins[name]) for name in repos]
     for name, other in (repos, reversed(repos)):
-        assert f"+{name}\n" in change_of(ran, name)
-        assert f"{other}.txt" not in change_of(ran, name)
+        assert f"+{name}\n" in change_of(ws_scenario, ran, name)
+        assert f"{other}.txt" not in change_of(ws_scenario, ran, name)
     # A joint run's diffs are each headed with their repository's range.
     printed = ws_scenario.operator("show", f"run:{ran.id}", "--diff").out
     assert printed.startswith(f"# api: {present(rows[0].start_sha)[:12]}..")
@@ -271,7 +283,7 @@ def test_a_task_run_records_its_range_and_keeps_its_diffs(
     [row] = run_changes.of_run(ctx.conn, run.id, table="task_runs")
     assert (row.task_run_id, row.run_id, row.start_sha, row.end_sha) == (run.id, None, base, head)
     assert (row.start_on_base, row.merge_base_sha, row.change_kept, row.branch_kept) == (True, base, True, True)
-    assert "+the fix\n" in run_changes.change_path(run.log_path, "repo").read_text()
+    assert "+the fix\n" in run_changes.own_path(run.log_path, row).read_text()
     shown = scenario.operator("show", "task:1").out
     assert f"\n    changed:\n      repo  {base[:12]}..{head[:12]}, from its base, merge base {base[:12]}\n" in shown
     assert "+the fix\n" in scenario.operator("show", "task:1", "--diff").out
@@ -289,7 +301,7 @@ def test_an_unpushed_run_keeps_the_diff_of_what_it_committed_marked_as_not_on_or
     assert (row.start_sha, row.end_sha, row.merge_base_sha) == (base, None, base)
     left = present(row.unpushed_sha)
     assert (row.change_kept, row.branch_kept) == (True, True)
-    assert "+the change\n" in change_of(ran)
+    assert "+the change\n" in change_of(scenario, ran)
     shown = scenario.operator("show", f"run:{ran.id}").out
     marked = "; not on origin: the run left it unpushed"
     assert f"  repo  {base[:12]}..{left[:12]}, from its base, merge base {base[:12]}{marked}\n" in shown
@@ -312,7 +324,7 @@ def test_a_run_that_moved_head_back_off_its_commits_keeps_the_last_of_them(
     assert git_pool.remote_head(BRANCH) is None
     [row] = changed(scenario, ran)
     assert row.unpushed_sha is not None
-    assert ("+first\n" in change_of(ran), "+second\n" in change_of(ran)) == (True, True)
+    assert ("+first\n" in change_of(scenario, ran), "+second\n" in change_of(scenario, ran)) == (True, True)
 
 
 def test_a_joint_run_with_one_push_refused_marks_that_repository_alone(ws_scenario: Scenario, ws: Ws) -> None:
@@ -325,7 +337,7 @@ def test_a_joint_run_with_one_push_refused_marks_that_repository_alone(ws_scenar
     assert (api.repo, api.unpushed_sha, api.end_sha) == ("api", None, ws.remote_head("api", BRANCH))
     assert (web.repo, web.end_sha) == ("web", None)
     assert web.unpushed_sha is not None
-    assert "+web\n" in change_of(ran, "web")
+    assert "+web\n" in change_of(ws_scenario, ran, "web")
 
 
 def test_a_crashed_run_keeps_nothing_and_the_journal_says_so(scenario: Scenario, git_pool: GitPool) -> None:
@@ -374,7 +386,7 @@ def test_a_kicked_run_keeps_what_it_left_before_the_kick(scenario: Scenario, git
     assert git_pool.remote_head(BRANCH) != before
     [row] = changed(scenario, ran)
     assert (row.start_sha, row.end_sha) == (before, before)
-    assert change_of(ran) == ""
+    assert change_of(scenario, ran) == ""
     assert review_diff.read_head(review_diff.run_path_for(ran.row.log_path, "repo")) == before
     assert "a.txt" in branch_of(ran)
 
@@ -383,7 +395,8 @@ def test_the_diffs_go_with_run_files_days_and_the_rows_stay(scenario: Scenario, 
     del git_pool
     ran = scenario.run(worker=worker_does(*writes("a.txt", "the change"), push()))
     kept = run_changes.files(ran.row.log_path, ["repo"])
-    assert all(p.is_file() for p in kept)
+    # An `implement` on its base keeps its own change as the branch's diff, one file for both.
+    assert [p.is_file() for p in kept] == [False, True, True]
     scenario.time_passes(hours=24 * 31)
     ctx = context(scenario.env)
     tick_id = db.start_tick(ctx.conn, dry_run=False)
@@ -392,7 +405,7 @@ def test_the_diffs_go_with_run_files_days_and_the_rows_stay(scenario: Scenario, 
     [row] = changed(scenario, ran)
     assert (row.change_kept, row.branch_kept) == (True, True)
     shown = scenario.operator("show", f"run:{ran.id}").out
-    assert f"    its change {kept[0]}, since removed\n" in shown
+    assert f"    its change {kept[1]}, since removed\n" in shown
 
 
 def test_a_diff_is_read_no_further_than_canopy_keeps_it(scenario: Scenario, git_pool: GitPool) -> None:
@@ -406,8 +419,9 @@ def test_a_diff_is_read_no_further_than_canopy_keeps_it(scenario: Scenario, git_
         ran = scenario.run(worker=worker_does(*writes("a.txt", "x" * 500), push()))
         printed = scenario.operator("show", f"run:{ran.id}", "--diff")
     diffs = [c for c in git_ran.call_args_list if c.args[1] == "diff" and "--no-color" in c.args]
-    assert [c.kwargs["max_stdout"] for c in diffs] == [100, 100]
-    assert len(change_of(ran)) == 100
+    # One diff, an `implement` on its base keeping its own change as the branch's.
+    assert [c.kwargs["max_stdout"] for c in diffs] == [100]
+    assert len(change_of(scenario, ran)) == 100
     assert f"run:{ran.id}'s diff of repo is cut where canopy's bounds end" in printed.err
 
 
