@@ -66,8 +66,12 @@ export function settingsLine(keys: ConfigKey[]): string {
 /** The trust switches, and the side the page may move each to: the stricter one (TRUST_MODEL T8). */
 export const STRICTER_ON: Record<string, boolean> = { 'trust.rebase': false, 'trust.commit_trailer': true }
 
-/** What each trust switch turns on, named for its checkbox: the behavior, never `on`. */
-export const SWITCH_NAME: Record<string, string> = { 'trust.rebase': 'rebase', 'trust.commit_trailer': 'add trailer' }
+/** What each switch turns on, named for its checkbox: the behavior, never `on`. */
+export const SWITCH_NAME: Record<string, string> = {
+    'trust.rebase': 'rebase',
+    'trust.commit_trailer': 'add trailer',
+    'pools.git_maintenance': 'maintain',
+}
 
 /**
  * Whether a key that only gets stricter is at its strictest already, so the page can take it no further: a choice at
@@ -195,7 +199,8 @@ export function boundText(key: ConfigKey): string {
         return typeof key.value === 'number' ? 'only fewer from here' : 'stricter only'
     }
     if (key.kind === 'free') {
-        return 'percentages, comma separated; 100% is always sent'
+        // A switch that goes either way has no rule to state; the budget's alerts are the list.
+        return typeof key.value === 'boolean' ? '' : 'percentages, comma separated; 100% is always sent'
     }
     return key.bound === null ? '' : `at least ${key.bound}, or 0 for forever, from here`
 }
@@ -238,7 +243,7 @@ export function configForm(keys: ConfigKey[], drafts: ConfigDrafts): ConfigForm 
             }
             continue
         }
-        if (key.kind === 'stricter' && (typeof draft === 'boolean' || key.choices.length > 0)) {
+        if (typeof draft === 'boolean' || (key.kind === 'stricter' && key.choices.length > 0)) {
             // A switch, or a choice such as `policy.stacking`'s: sent as picked.
             if (draft !== key.value) {
                 changes[key.name] = draft as ConfigValue
@@ -541,6 +546,18 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
             { name: 'runtime.review_timeout_minutes', label: 'Review run', unit: 'min' },
             { name: 'runtime.overseer_timeout_minutes', label: 'Overseer tick', unit: 'min' },
             { name: 'runtime.setup_timeout_minutes', label: "A slot's setup command", unit: 'min' },
+        ],
+    },
+    {
+        title: 'Upkeep',
+        blurb: "What a tick tidies in each pool: git's maintenance of a clone, and the cleanup of a slot left idle.",
+        keys: [
+            { name: 'pools.git_maintenance', label: "Run git's maintenance in a clone no run is using" },
+            { name: 'pools.git_max_packs', label: 'Packs in a clone before maintenance runs' },
+            { name: 'pools.git_max_loose', label: 'Loose objects in a clone before maintenance runs' },
+            { name: 'pools.git_every_hours', label: 'Time between looks at a clone', unit: 'h' },
+            { name: 'pools.idle_after_days', label: 'Idle time before a slot runs its idle command', unit: 'days' },
+            { name: 'pools.idle_timeout_minutes', label: "A slot's idle command", unit: 'min' },
         ],
     },
     {

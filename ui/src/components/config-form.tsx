@@ -676,7 +676,7 @@ function ControlCell({ unit, children }: { unit?: string | undefined; children: 
 
 /**
  * The control for one key: a number field, a switch, a choice, a list's entries to keep, or the budget's alerts as
- * typed.
+ * typed. A switch that goes either way is never locked.
  */
 function Control({
     setting,
@@ -690,7 +690,7 @@ function Control({
     onDraft: (value: ConfigDrafts[string]) => void
 }) {
     const { name, value } = setting
-    if (setting.kind === 'free') {
+    if (setting.kind === 'free' && typeof value !== 'boolean') {
         return (
             <Input
                 aria-label={name}
@@ -735,7 +735,7 @@ function Control({
         )
     }
     if (typeof value === 'boolean') {
-        // On its looser side, or it would be locked: named for what it does, never `on`.
+        // A stricter one is on its looser side, or it would be locked: named for what it does, never `on`.
         return (
             <label htmlFor={`${name}-field`} className="inline-flex items-center gap-2 text-xs">
                 <Checkbox

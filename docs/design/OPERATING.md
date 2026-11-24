@@ -155,6 +155,7 @@ secret, and a replier added through a stolen session would go on steering worker
 |---|---|
 | the counts in `capacity`, `loop.min_free_disk_mib`, and `policy`'s attempt, follow-up, epic, and attachment limits | anything the loader takes |
 | the paces and waits in `loop`, `policy`, `tracker`, `connect`, and `review`, and `runtime`'s timeouts | anything the loader takes |
+| `pools`' upkeep: `git_maintenance`, its thresholds and spacing, and an idle slot's age and timeout | anything the loader takes |
 | `retention.run_files_days`, `retention.tick_files_days`, `retention.journal_days`, `retention.memory_days` | at least 7, 1, 30, 7, or 0 (forever) |
 | `spend.monthly_budget_usd` | anything the loader takes |
 | `spend.budget_alerts` | any list the loader takes; the 100% alert is sent whatever it holds |

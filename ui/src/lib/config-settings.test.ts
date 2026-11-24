@@ -234,6 +234,29 @@ describe('config settings', () => {
     })
 })
 
+describe('a switch that goes either way', () => {
+    const MAINTAIN: ConfigKey = {
+        ...ALERTS,
+        name: 'pools.git_maintenance',
+        value: true,
+        source: 'default',
+        default: true,
+    }
+
+    it('is sent as picked, on or off, states no rule, and resets to its default', () => {
+        expect(configForm([MAINTAIN], { 'pools.git_maintenance': false })).toEqual({
+            changes: { 'pools.git_maintenance': false },
+            errors: {},
+        })
+        expect(configForm([MAINTAIN], { 'pools.git_maintenance': true }).changes).toEqual({})
+        const off = { ...MAINTAIN, value: false }
+        expect(configForm([off], { 'pools.git_maintenance': true }).changes).toEqual({ 'pools.git_maintenance': true })
+        expect(boundText(MAINTAIN)).toBe('')
+        expect(strictest(off)).toBe(false)
+        expect(resetDraft(off)).toBe(true)
+    })
+})
+
 describe('budget alerts', () => {
     it('send the percentages typed whole, commas or spaces between, when they differ from the ones read', () => {
         expect(configForm([ALERTS], { [ALERTS.name]: '50, 80' }).changes).toEqual({})
@@ -279,11 +302,12 @@ describe('config groups', () => {
         expect(byPart(capacity?.keys ?? []).map((p) => p.part)).toEqual([undefined])
     })
 
-    it('hold five bands, the minutes in one', () => {
+    it('hold six bands, the minutes in one', () => {
         expect(CONFIG_GROUPS.map((g) => g.title)).toEqual([
             'Capacity',
             'Attempts',
             'Timing',
+            'Upkeep',
             'Retention & budget',
             'Guardrails',
         ])
@@ -293,7 +317,7 @@ describe('config groups', () => {
     it('name every key the server edits in some band', () => {
         const named = CONFIG_GROUPS.flatMap((g) => g.keys.map((k) => k.name))
         expect(new Set(named).size).toBe(named.length)
-        expect(named).toHaveLength(49)
+        expect(named).toHaveLength(55)
     })
 
     it('count the unsaved changes', () => {

@@ -186,12 +186,19 @@ secret doesn't take either back. If a change shows up that you didn't make, the 
 **Open** takes you to a page of its own for the numbers you change most. The line under its title is the state of
 things: how many settings there are, how many this workspace sets, and how many come from your user config. Hover the
 title for the page's rules, and copy the path under it when you'd rather edit the file by hand. The settings come in
-five bands. **Capacity** is how many workers, chores, reviews, and tasks run at once, each pool's slots, and how much
+six bands. **Capacity** is how many workers, chores, reviews, and tasks run at once, each pool's slots, and how much
 you may attach to a ticket. **Attempts** is how many tries a ticket, a plan, or a review's draft gets, and how many
 tickets an epic holds. **Timing** comes in three parts, since every one of them is in minutes and you shouldn't have to
 guess which: **Pace**, how often the loop ticks and asks the tracker and the connectors what's new; **Waits**, how long
 it holds off after a red build, for feedback to go quiet or its checks to finish, and for a PR's head to settle before
 its review; and **Timeouts**, how long a run or a slot's setup may take before canopy stops it.
+
+**Upkeep** is the housekeeping a tick does in each pool. The first row turns git's own maintenance of a repository's
+clone on or off, and the next three say when it runs: past how many packs or loose objects, and how many hours pass
+between looks. It only ever runs while no run holds a slot of that pool, so it costs you nothing but a quieter disk.
+The last two are for a slot nobody has leased in a while: how many days it sits idle before its idle command runs, and
+how long that command may take. The command itself (`[pools] idle_cmd`) is not here, and won't be: what runs on your
+machine is an edit to the file.
 
 **Retention & budget** says how many days canopy keeps a run's files, a tick's, the journal's old rows, and a retired
 note's text before a tick removes them. Lengthen them as you like, or set 0 to keep that kind forever; shortening stops

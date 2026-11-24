@@ -207,6 +207,23 @@ describe('ConfigForm', () => {
         expect(screen.getByText('0')).toBeTruthy()
     })
 
+    it('offers a switch that goes either way as a checkbox, on or off, never locked', async () => {
+        const maintain: ConfigKey = {
+            ...WORKERS,
+            name: 'pools.git_maintenance',
+            value: false,
+            default: true,
+            kind: 'free',
+        }
+        await renderForm({ ...SETTINGS, keys: [maintain] })
+        const box = screen.getByRole('checkbox', { name: 'maintain' })
+        expect(box.getAttribute('aria-checked')).toBe('false')
+        fireEvent.click(box)
+        expect(screen.getByTestId('config-changes').textContent).toBe('pools.git_maintenance: off → on')
+        expect(screen.queryByTestId('config-one-way')).toBeNull()
+        expect(button('Save').disabled).toBe(false)
+    })
+
     it('asks before dropping an authorized replier, and drops it only on Drop', async () => {
         const repliers: ConfigKey = { ...KICKS, name: 'trust.authorized_repliers', value: ['me', 'bot'] }
         await renderForm({ ...SETTINGS, keys: [repliers] })

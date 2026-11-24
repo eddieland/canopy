@@ -419,6 +419,52 @@ def test_a_limit_has_no_bound_of_the_page_s_own(ctx: Context, canopy_env: Canopy
     assert refused(save(c, headers, {"capacity.max_workers": -1})).startswith("config_invalid: ")
 
 
+def test_a_pool_s_upkeep_is_saved_in_its_own_table_and_its_switch_goes_either_way(
+    ctx: Context,
+    canopy_env: CanopyEnv,
+) -> None:
+    """The maintenance switch turns off and back on, and the counts beside it take what the loader does."""
+    canopy_env.write_private(COMMENTED)
+    c, headers = signed_in_client(ctx)
+    assert key(settings(c), "pools.git_maintenance") == {
+        "name": "pools.git_maintenance",
+        "value": True,
+        "source": "default",
+        "kind": "free",
+        "bound": None,
+        "forever_at_zero": False,
+        "choices": [],
+        "default": True,
+    }
+
+    saved = save(
+        c,
+        headers,
+        {
+            "pools.git_maintenance": False,
+            "pools.git_max_packs": 20,
+            "pools.git_max_loose": 5000,
+            "pools.git_every_hours": 6,
+            "pools.idle_after_days": 1,
+            "pools.idle_timeout_minutes": 90,
+        },
+    )
+
+    assert saved.status_code == 200, saved.text
+    text = canopy_env.private_file.read_text()
+    assert text.startswith(COMMENTED)
+    assert "[pools]" in text
+    assert "git_maintenance = false" in text
+    found = settings(c)
+    assert key(found, "pools.git_every_hours")["value"] == 6
+    assert key(found, "pools.idle_timeout_minutes")["value"] == 90
+    assert save(c, headers, {"pools.git_maintenance": True}).status_code == 200
+    assert key(settings(c), "pools.git_maintenance")["value"] is True
+    # The loader's own rules still hold, and no other key of the table is the page's to set.
+    assert refused(save(c, headers, {"pools.git_every_hours": 0})).startswith("config_invalid: ")
+    assert refused(save(c, headers, {"pools.backend": "canopy"})).startswith("not_editable: ")
+
+
 def test_a_monthly_budget_may_be_set_raised_and_lowered(ctx: Context, canopy_env: CanopyEnv) -> None:
     canopy_env.write_private(COMMENTED)
     c, headers = signed_in_client(ctx)

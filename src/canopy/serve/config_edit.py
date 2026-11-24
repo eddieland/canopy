@@ -8,7 +8,8 @@ can set any value, and the page may still lengthen one the file set under its fl
 moves only toward stricter: a config write outlives the listener secret, so a replier added through a stolen session
 would go on steering workers after a new secret ended it (TRUST_MODEL T8): a list only loses entries, a switch or a
 choice moves only to a stricter side, and a count only goes down. The budget's alerts are set whole, to anything the
-loader takes: none of their values silences the 100% alert, which is always sent.
+loader takes: none of their values silences the 100% alert, which is always sent. So is the switch for a pool's git
+maintenance, which runs only git's own upkeep and guards nothing.
 
 A save writes the workspace's private file only (M49), never the workspace file (TRUST_MODEL T7) nor the user file,
 which serves every workspace. A key whose value comes from the user file is written to the private file, where it
@@ -62,7 +63,8 @@ class Editable:
 
     name: str
     #: `limit`: raised or lowered to anything the loader takes, a retention no shorter than `bound`. `stricter`: only
-    #: toward stricter. `free`: set whole to anything the loader takes, for a key no value of which loosens a guard.
+    #: toward stricter. `free`: set whole to anything the loader takes, for a key no value of which loosens a guard: a
+    #: list, or a switch that may go either way.
     kind: Literal["limit", "stricter", "free"]
     #: A retention's floor from the page, in days: the shortest it may be made. None for every other key.
     bound: int | None = None
@@ -122,6 +124,14 @@ EDITABLE: Final[tuple[Editable, ...]] = (
     _limit("runtime.review_timeout_minutes"),
     _limit("runtime.overseer_timeout_minutes"),
     _limit("runtime.setup_timeout_minutes"),
+    # A pool's upkeep (DESIGN §26): when a tick does it, never the command an idle slot runs, which stays the file's.
+    # Free: git's own maintenance, on or off, loosens no guard.
+    Editable("pools.git_maintenance", "free"),
+    _limit("pools.git_max_packs"),
+    _limit("pools.git_max_loose"),
+    _limit("pools.git_every_hours"),
+    _limit("pools.idle_after_days"),
+    _limit("pools.idle_timeout_minutes"),
     # Shorter removes history sooner, the transcripts that show what a run did among it: a floor, and 0, forever,
     # always (TRUST_MODEL T8). The log's rotation is not here: its files hold the same lines the journal does.
     _keep("retention.run_files_days", 7),

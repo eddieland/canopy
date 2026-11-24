@@ -1285,7 +1285,9 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   follow-up, and epic limits, the attachment limits under their own ceilings, and the CI cooldown, feedback quiet time,
   and feedback's wait on pending checks in `policy`, the paces and free-disk floor in `loop`, the tracker query's
   spacing, the connectors' poll and stale age, a review's settle time, the worker's, reviewer's, overseer's, and
-  setup's timeouts in `runtime`, and `spend.monthly_budget_usd`, which spends nothing but, raised, silences the sink
+  setup's timeouts in `runtime`, a pool's upkeep in `pools` (git maintenance on or off, its thresholds and spacing, and
+  how long a slot sits idle before its idle command runs and how long that may take, never the command or the
+  backend), and `spend.monthly_budget_usd`, which spends nothing but, raised, silences the sink
   that hears the month reached it. The day counts in `retention` may be lengthened, set to 0 (forever), or shortened to
   a floor, never past it: a shorter one removes the transcripts that show what a run did, and a removal outlives a new
   secret. `spend.budget_alerts` is set whole, to any list the loader takes: none silences the 100% alert. Trust
@@ -1293,7 +1295,7 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   `"approve"`, `policy.planner_may_approve` toward `"off"`, an entry removed from `trust.authorized_repliers` or
   `trust.trusted_reviewers` (never added), `trust.review_replies` to `"approve"`, `trust.rebase` to false,
   `trust.max_flaky_kicks` lowered, and `trust.commit_trailer` to true. Nothing that runs a command, chooses a prompt,
-  is read as words, or moves the listener: no other `runtime.*`, `review.*`, `tracker.*`, `connect.*`, or
+  is read as words, or moves the listener: no other `runtime.*`, `review.*`, `tracker.*`, `connect.*`, `pools.*`, or
   `retention.*`, no `notify.*`, `chores`, `paths.*`, `memory.*`, or `serve.*`, and no comment mark or trailer name.
   A config write outlives the secret, which is why trust only tightens: a replier added through a stolen session would
   go on steering workers after a new secret ended it. It writes the workspace's private file alone (M49), never the
