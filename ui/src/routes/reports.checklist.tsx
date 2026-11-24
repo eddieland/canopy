@@ -64,8 +64,9 @@ const HELP =
 
 // What the runs reminded count, in its name's tip.
 const REMINDED_HINT =
-    'The runs given the item, by when they started: each answered it, or is counted unanswered. A run still ' +
-    'running has answered nothing yet'
+    'The runs asked the item, by when they started: each answered it, or is counted unanswered. A run still ' +
+    'running has answered nothing yet. A run given it whose pushes changed none of its paths was never asked it, ' +
+    'and is counted unasked beside it'
 
 // What the verdict column says, in its name's tip.
 const VERDICT_HINT =
@@ -192,8 +193,8 @@ function checklistTiles(found: ChecklistCounts | undefined): ReadoutTile[] {
     return [
         {
             key: 'reminded',
-            label: 'items given',
-            hint: "How many times a run was given an item of its repositories' lists",
+            label: 'items asked',
+            hint: "How many times a run was asked an item of its repositories' lists, not counting the unasked",
             value: figures?.reminded,
             delta: readoutDelta(figures?.reminded, before?.reminded, wholeChange),
         },
@@ -312,7 +313,13 @@ function Items({ groups, repo, span }: { groups: RepoItems[]; repo: string | und
  */
 const ITEM_COLUMNS: ReportColumn<ChecklistItemCounts>[] = [
     { key: 'item', kind: 'free', label: 'item', cell: (item) => <ItemLink item={item} /> },
-    { key: 'reminded', kind: 'figure', label: 'reminded', hint: REMINDED_HINT, cell: (item) => item.reminded },
+    {
+        key: 'reminded',
+        kind: 'figure',
+        label: 'reminded',
+        hint: REMINDED_HINT,
+        cell: (item) => <Reminded item={item} />,
+    },
     { key: 'answers', kind: 'word', label: 'answers', cell: (item) => <AnswerBar item={item} /> },
     ...ANSWER_COLUMNS.map((c): ReportColumn<ChecklistItemCounts> => ({
         key: c.key,
@@ -342,6 +349,24 @@ function ItemLink({ item }: { item: ChecklistItemCounts }) {
             {/* The row's name, as the spend page's tools read: medium weight, cut to fit. */}
             <Clipped text={item.item} className="block font-sans font-medium" />
         </Link>
+    )
+}
+
+/**
+ * The runs asked an item, and beside them, muted, the runs given it that no push asked, as none changed its paths:
+ * counted apart from its n/a, which only a run asked gives.
+ */
+function Reminded({ item }: { item: ChecklistItemCounts }) {
+    if (item.unasked === 0) {
+        return item.reminded
+    }
+    return (
+        <span data-testid="checklist-reminded">
+            {item.reminded}{' '}
+            <Hinted hint="Runs given the item whose pushes changed none of its paths, so canopy never asked it">
+                <span className="text-muted-foreground">+{item.unasked} unasked</span>
+            </Hinted>
+        </span>
     )
 }
 
@@ -568,10 +593,10 @@ function ByWeek({
     )
 }
 
-/** The chart by week's numbers: each week, the items given, and each answer's count, a count of none muted. */
+/** The chart by week's numbers: each week, the items asked, and each answer's count, a count of none muted. */
 const WEEK_COLUMNS: ReportColumn<WeekAnswers>[] = [
     { key: 'week', kind: 'name', label: 'week', cell: (w) => <span className="font-mono">{weekLabel(w.week)}</span> },
-    { key: 'given', kind: 'figure', label: 'given', cell: (w) => w.reminded },
+    { key: 'asked', kind: 'figure', label: 'asked', cell: (w) => w.reminded },
     ...ANSWER_COLUMNS.map((c): ReportColumn<WeekAnswers> => ({
         key: c.key,
         kind: 'figure',

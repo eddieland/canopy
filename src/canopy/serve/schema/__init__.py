@@ -38,11 +38,12 @@ type LimitKind = Annotated[
     Field(description="What a limit counts: a unit's runs of one kind, or with `review` a PR's review runs."),
 ]
 type ItemAnswer = Annotated[
-    Literal["pass", "fixed", "held", "n/a", "unanswered"],
+    Literal["pass", "fixed", "held", "n/a", "unanswered", "unasked"],
     Field(
         description="What a worker answered of an item of its checklist (DESIGN §42): `pass`, the diff held to it; "
         "`fixed`, the run committed the fix; `held`, it left it failing, for a reason it gave; `n/a`, the diff changed "
-        "nothing it is about; `unanswered`, the run's result said nothing of it.",
+        "nothing it is about; `unanswered`, the run's result said nothing of it; `unasked`, canopy's hook never asked "
+        "it, as no push changed its paths, the harness's word.",
     ),
 ]
 type StartStatus = Annotated[

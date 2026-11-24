@@ -131,4 +131,14 @@ monorepo's list: parameter-types reminded 414 times, fixed 28 and held 14; narro
 trailing-commas 347, fixed 9, never held; each `n/a` on 18% to 36% and unanswered on about a fifth. By the operator's
 count, about zero checklist-type nits reached a human reviewer on canopy's PRs in the window. Open for the operator:
 whether to reword or drop an item, and the call on stage 3, which Accept records here. Stage 1's live checks are still
-to run.
+to run. A push is asked only the items whose `paths:` it changes, 2026-11-24, since, as issue #2501 reports, an item
+about one service's subtree was asked of every run in its repository and answered `n/a` on 73% of them: the hook
+compares each item's paths, as git's glob pathspecs, with the commits the push sends that no remote-tracking ref holds,
+prints the items asked and names the rest, lets a push that asks none through unheld, prints in the push after a hold,
+which still goes through, any item it newly asks, and notes each item asked and not; `_run` and `_task` record an item
+no push asked `unasked`, the harness's word, apart from the worker's `n/a`, and `canopy checklist` and Reports'
+Checklist page count it apart from `reminded`. Chosen conservatively, for the operator to change: an item git cannot
+compare is asked; a run that never pushed is asked every item, as before; a worker's `pass`, `fixed`, or `held` of an
+item never asked stands, and only its `n/a` or silence becomes `unasked`; the stretch is what the push sends that no
+remote has, so a resume's push is asked the items of its new commits alone; and a joint run's slots are each narrowed by
+their own pushes.

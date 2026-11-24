@@ -30,6 +30,7 @@ function item(repo: string, id: string, extra: Partial<ChecklistItemCounts> = {}
         held: 0,
         not_applicable: 0,
         unanswered: 0,
+        unasked: 0,
         held_by: 0,
         paths: [],
         held_runs: [],
@@ -119,7 +120,7 @@ describe('answersLine', () => {
 })
 
 describe('checklistFigures', () => {
-    it('sums the items given, held, and unanswered over every repository', () => {
+    it('sums the items asked, held, and unanswered over every repository', () => {
         const items = [
             item('api', 'a', { reminded: 3, held: 1, unanswered: 0 }),
             item('web', 'b', { reminded: 2, held: 0, unanswered: 2 }),
@@ -261,6 +262,7 @@ function week(repo: string, id: string, at: string, extra: Partial<ChecklistWeek
         held: 0,
         not_applicable: 0,
         unanswered: 0,
+        unasked: 0,
         ...extra,
     }
 }
@@ -293,7 +295,7 @@ describe('answersByWeek and weekBars', () => {
     it('draws a bar a week, named by its week, its answers stacked in the table order', () => {
         const [first] = weekBars(answersByWeek(WEEKS, undefined, 'api'))
         expect(first?.label).toBe('W40')
-        expect(first?.hint).toBe('2026-W40: 2 items given · 1 pass · 1 held')
+        expect(first?.hint).toBe('2026-W40: 2 items asked · 1 pass · 1 held')
         expect(first?.segments.map((s) => [s.key, s.value])).toEqual([
             ['passed', 1],
             ['fixed', 0],

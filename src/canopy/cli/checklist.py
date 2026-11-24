@@ -38,11 +38,12 @@ _COUNTS: Final = ("reminded", *(str(a) for a in ItemAnswer))
 def cmd_checklist(click_ctx: click.Context, *, days: int, repo: str | None, as_json: bool) -> int:
     """Count, per repository and item of its checklist, how the worker runs of the last days answered it.
 
-    Reminded is the runs given the item, a task's included, by when they started. Each answered it pass, fixed, held,
-    or n/a, or said nothing of it, counted unanswered. An item that never fails where it applies is one to drop, and one
-    held often, by several tickets, one to argue: held_by in --json counts the tickets. An item its list now marks
-    status: retired is asked of no run, and its counts are marked retired. Why a run held an item is on its run:
-    canopy show run:ID, or task:N for a task's.
+    Reminded is the runs asked the item, a task's included, by when they started. Each answered it pass, fixed, held,
+    or n/a, or said nothing of it, counted unanswered. Unasked counts apart the runs given the item that canopy's hook
+    never asked it, as no push changed a path its paths line names. An item that never fails where it applies is one
+    to drop, and one held often, by several tickets, one to argue: held_by in --json counts the tickets. An item its
+    list now marks status: retired is asked of no run, and its counts are marked retired. Why a run held an item is on
+    its run: canopy show run:ID, or task:N for a task's.
     """
     ctx = open_context(click_ctx)
     found = checklist_answers.counts(ctx.conn, datetime.now(UTC), days, repo=repo)

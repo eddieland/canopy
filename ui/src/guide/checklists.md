@@ -42,7 +42,7 @@ migration's sha256. Passes: both files in the diff. Fails: a migration alone.
   the item, so renaming one starts its count over.
 - **`paths:`** lists the paths the item is about, separated by commas, from the repository's root: `docs/`, or a
   pattern such as `services/*/migrations/` or `**/OWNERS`, with `*` and `?` inside a part and `**` only as a whole
-  part. With no `paths:` line, the item is about every path.
+  part. With no `paths:` line, the item is about every path, and every push is asked it.
 - **`severity:`** is `blocking`, `major`, or `minor`, the default. The reminder doesn't use it; it's there for a review
   that asks the same list of a PR, which canopy doesn't run yet.
 - **`status:`** is `active`, the default, or `retired`: see [Retiring an item](#retiring-an-item).
@@ -98,6 +98,9 @@ worker is held once, never kept from pushing.
   the push through, and asks for any fix in a push after it, since a held push that late risks a run that ends with
   nothing pushed at all.
 - A run across several repositories is held in each, with that repository's own list.
+- A push is asked only the items whose `paths:` it changes, counting the commits it sends that no branch on the remote
+  already has: the stretch of work since the last push. It prints those items alone and names the rest. A push that
+  changes none of any item's paths isn't held at all, and says so. When git can't tell, the item is asked.
 
 It's a reminder, not a guard: `git push --no-verify` skips it, as it skips every hook. The worker's prompt says a held
 push is to be pushed again, unlike a push the remote rejects, which a worker still never retries.
@@ -112,10 +115,15 @@ The worker answers every item in its result, under its repository:
 - **n/a**: the diff touches none of the paths the item is about, or nothing its rule speaks of, so there was nothing
   to hold it to. An item the worker checked is never n/a.
 
+An item no push of the run asked, because none changed its paths, is recorded **unasked**: canopy's word, not the
+worker's, and apart from n/a, so an item's n/a count is diffs that touched its paths and still had nothing for it. If
+the worker answered it anyway with pass, fixed, or held, that answer stands; an n/a, or nothing, is unasked.
+
 An item the result leaves out is recorded **unanswered**, however the run ended, so a run that ended without a result
-counts every item so. The worker is told to answer every item, n/a included, whether or not its push was held, so an
-unanswered item on a run that pushed is one the worker skipped, not one it found nothing to say about. An answer to an
-item or a repository the run's lists don't hold is dropped.
+counts every item so. A run that never pushed was never narrowed, so every item it was given counts. The worker is told
+to answer every item, n/a included, whether or not its push was held, so an unanswered item on a run that pushed is one
+the worker skipped, not one it found nothing to say about. An answer to an item or a repository the run's lists don't
+hold is dropped.
 
 No answer raises an attention item, `held` included: a person still reviews the PR, and a held item is the worker's
 case made in advance, on the run for that person to read. Each run's answers are in the **Checklist** panel of
@@ -133,8 +141,9 @@ or 30 days, and applies the advice below for you, in its **verdict** column. `ca
 same counts, `--repo NAME` keeps one repository's list, and `--json` gives you the numbers to do your own arithmetic,
 `held_by` among them: how many tickets the held answers came from.
 
-Read an item by the answers where it applied: **pass**, **fixed**, and **held**. An **n/a** is the item's `paths:` doing
-their job, not a rule kept, so a migrations item that's n/a on most diffs is fine.
+Read an item by the answers where it applied: **pass**, **fixed**, and **held**. **unasked** is the item's `paths:`
+doing their job before the worker ever saw it, and isn't counted among the runs reminded. An **n/a** on an item with
+paths is a diff that touched them and had nothing the rule speaks of, which is worth a look if it happens a lot.
 
 - An item without `paths:` that's mostly **n/a** is about less than every diff. Give it the paths it's about, so runs
   that never touch them stop paying to read it.

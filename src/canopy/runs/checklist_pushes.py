@@ -7,12 +7,16 @@ the commit it was shown at to the commit of the next push, or to the one the run
 what the run changed after being shown the list, with whatever else it did in that stretch. The commit it was shown
 at may be one the run never pushed, whose objects go with the run's, so the diff is kept now or never.
 
+The hook notes too which items of the list each push asked, and which it did not, as the push changed none of their
+paths: `keep` gives back the items no push asked, which the run's answers record `unasked` (`Checked.asking`).
+
 The notes are the run's to write: each commit is checked to be one, and a stretch git cannot diff is dropped. Best
 effort throughout, as a kept diff is (§29): the run needs none of it, so a failure is logged, and loses only the record.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -20,7 +24,21 @@ from canopy.core import checklist_answers, commit_hooks, review_diff
 from canopy.runs import checkpoint
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from collections.abc import Set as AbstractSet
+
     from canopy.infra import logs
+
+
+@dataclass(frozen=True)
+class Kept:
+    """What a run did after canopy showed it a repository's list, as `keep` read it from one slot."""
+
+    repo: str
+    #: Each stretch whose diff was kept, oldest first.
+    pushes: Sequence[checklist_answers.Pushed] = ()
+    #: The items, by id, of the repository's list no push of the run asked, as it changed none of their paths.
+    unasked: AbstractSet[str] = frozenset()
 
 
 def keep(
@@ -31,25 +49,26 @@ def keep(
     run_id: str,
     log_path: str | Path,
     log: logs.TickAdapter,
-) -> list[checklist_answers.Pushed]:
+) -> Kept:
     """Keep the diff of each push run `run_id` made to `repo` after being shown its list, in the slot `git` runs in.
 
     `run_id` is the run's `CANOPY_RUN_ID`, as the hook noted it. `branch` is the run's, whose commit on origin closes a
     stretch no push closed.
 
     Returns:
-        Each stretch whose diff was kept, oldest first: the commit the list was shown at, and the commit after.
+        Each stretch whose diff was kept, oldest first: the commit the list was shown at, and the commit after; and
+        the items no push asked.
     """
     fields = {"repo": repo, "branch": branch}
     try:
         own = git.run("rev-parse", "--absolute-git-dir")
-        stretches = commit_hooks.pushes_after(Path(own), run_id)
-        left = checkpoint.remote_head(git, branch) if any(sent is None for _, sent in stretches) else ""
+        noted = commit_hooks.pushes_after(Path(own), run_id)
+        left = checkpoint.remote_head(git, branch) if any(sent is None for _, sent in noted.stretches) else ""
     except checkpoint.SetupError as e:
         log.warning("checklist pushes not read", extra={**fields, "error": str(e)})
-        return []
+        return Kept(repo)
     kept: list[checklist_answers.Pushed] = []
-    for shown, sent in stretches:
+    for shown, sent in noted.stretches:
         pushed = sent or left
         if not pushed:
             continue
@@ -64,4 +83,4 @@ def keep(
             log.warning("checklist push not kept", extra={**fields, "shown": shown, "error": str(e)})
             continue
         kept.append(checklist_answers.Pushed(repo, shown, pushed))
-    return kept
+    return Kept(repo, tuple(kept), noted.unasked)

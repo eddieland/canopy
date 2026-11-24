@@ -23,6 +23,7 @@ function item(id: string, extra: Partial<ChecklistItemCounts>): ChecklistItemCou
         held: 0,
         not_applicable: 0,
         unanswered: 0,
+        unasked: 0,
         held_by: 0,
         paths: [],
         held_runs: [],
@@ -32,7 +33,8 @@ function item(id: string, extra: Partial<ChecklistItemCounts>): ChecklistItemCou
 }
 
 // Two weeks of one list, in its order: an item held three times, by a worker's run and a task's among them; one that
-// never failed in twelve runs, too few to call; one mostly n/a, with no paths; and one the runs fixed often.
+// never failed in the twelve runs that asked it, too few to call, and was never asked of thirty whose pushes changed
+// none of its paths; one mostly n/a, with no paths; and one the runs fixed often.
 const COUNTS: ChecklistCounts = {
     since: '2026-09-25T00:00:00Z',
     until: '2026-10-09T00:00:00Z',
@@ -54,7 +56,7 @@ const COUNTS: ChecklistCounts = {
                 { kind: 'task', id: 2, task_id: 6, started_at: '2026-10-07T10:00:00Z', reason: null },
             ],
         }),
-        item('doc-comments', { passed: 12 }),
+        item('doc-comments', { passed: 12, unasked: 30, paths: ['src/'] }),
         item('migration', { passed: 2, not_applicable: 9, unanswered: 1 }),
         item('general-types', { passed: 6, fixed: 4, unanswered: 2, fixed_runs: [] }),
     ],
@@ -69,6 +71,7 @@ const COUNTS: ChecklistCounts = {
             held: 2,
             not_applicable: 0,
             unanswered: 0,
+            unasked: 0,
         },
         {
             repo: 'api',
@@ -80,6 +83,7 @@ const COUNTS: ChecklistCounts = {
             held: 1,
             not_applicable: 0,
             unanswered: 0,
+            unasked: 0,
         },
         {
             repo: 'api',
@@ -91,6 +95,7 @@ const COUNTS: ChecklistCounts = {
             held: 0,
             not_applicable: 0,
             unanswered: 0,
+            unasked: 0,
         },
         {
             repo: 'api',
@@ -102,6 +107,7 @@ const COUNTS: ChecklistCounts = {
             held: 0,
             not_applicable: 0,
             unanswered: 0,
+            unasked: 0,
         },
     ],
     previous: { since: '2026-09-11T00:00:00Z', until: '2026-09-25T00:00:00Z', reminded: 40, held: 1, unanswered: 3 },
@@ -145,7 +151,7 @@ describe('the checklist page', () => {
         expect(await screen.findByText('4 items in 1 repository over 14 days · 3 held')).toBeTruthy()
         expect(await rows()).toEqual([
             ['newspaper', '12', '9 pass · 3 held', '9', '0', '3', '0', '0', 'argue'],
-            ['doc-comments', '12', '12 pass', '12', '0', '0', '0', '0', 'too few'],
+            ['doc-comments', '12 +30 unasked', '12 pass', '12', '0', '0', '0', '0', 'too few'],
             ['migration', '12', '2 pass · 9 n/a · 1 unanswered', '2', '0', '0', '9', '1', 'narrow'],
             ['general-types', '12', '6 pass · 4 fixed · 2 unanswered', '6', '4', '0', '0', '2', 'earning'],
         ])
@@ -154,6 +160,9 @@ describe('the checklist page', () => {
         expect(bar.getByTestId('checklist-bar-passed').style.width).toBe('75%')
         expect(bar.getByTestId('checklist-bar-held').style.width).toBe('25%')
         expect(bar.queryByTestId('checklist-bar-fixed')).toBeNull()
+        // An item's unasked runs are beside its count, never in its bar: twelve passes of twelve asked fill it.
+        const asked = within(screen.getAllByTestId('checklist-bar')[1] ?? document.body)
+        expect(asked.getByTestId('checklist-bar-passed').style.width).toBe('100%')
         // Its legend once, under the table, in the table's order.
         expect(
             within(screen.getByTestId('checklist-legend'))

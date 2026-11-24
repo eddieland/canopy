@@ -194,22 +194,23 @@ def test_the_checklist_counts_each_repositorys_items_as_the_cli_does(ctx: Contex
     found = c.get("/api/reports/checklist").json()
     assert (found["days"], found["repo"]) == (spend.DEFAULT_DAYS, None)
     assert found["since"] < found["until"]
-    columns = ("repo", "item", "reminded", "passed", "fixed", "held", "not_applicable", "unanswered")
+    columns = ("repo", "item", "reminded", "passed", "fixed", "held", "not_applicable", "unanswered", "unasked")
+    # An item no push asked is counted apart, and not among the runs reminded of it.
     assert [tuple(row[k] for k in columns) for row in found["items"]] == [
-        ("api", "general-types", 3, 2, 1, 0, 0, 0),
-        ("api", "newspaper", 3, 0, 1, 1, 1, 0),
-        ("api", "doc-comments", 3, 1, 0, 0, 0, 2),
-        ("web", "no-any", 1, 0, 0, 1, 0, 0),
+        ("api", "general-types", 3, 2, 1, 0, 0, 0, 0),
+        ("api", "newspaper", 3, 0, 1, 1, 1, 0, 0),
+        ("api", "doc-comments", 2, 1, 0, 0, 0, 1, 1),
+        ("web", "no-any", 1, 0, 0, 1, 0, 0, 0),
     ]
     # A held item's reason is sent beside the run that gave it, never counted.
     month = c.get("/api/reports/checklist", params={"days": 30}).json()
     assert [r["reason"] for r in month["items"][0]["held_runs"]] == ["Its reason."]
     today = c.get("/api/reports/checklist", params={"days": 1}).json()
-    assert [(row["item"], row["reminded"]) for row in today["items"]] == [
-        ("general-types", 1),
-        ("newspaper", 1),
-        ("doc-comments", 1),
-        ("no-any", 1),
+    assert [(row["item"], row["reminded"], row["unasked"]) for row in today["items"]] == [
+        ("general-types", 1, 0),
+        ("newspaper", 1, 0),
+        ("doc-comments", 0, 1),
+        ("no-any", 1, 0),
     ]
     web = c.get("/api/reports/checklist", params={"repo": "web"}).json()
     assert (web["repo"], [row["item"] for row in web["items"]]) == ("web", ["no-any"])

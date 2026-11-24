@@ -676,16 +676,17 @@ Controls now:
   file in the same directory and writes nothing; it opens no journal, so a sandboxed run, and the servers it starts,
   reach no more than before.
 - canopy's git hooks, from the same snapshot, run in every worker's git (T5). Their `pre-push` holds a worker's first
-  push of a stretch for its repository's checklist (DESIGN §42): it reads one more file, the slot's list in the run's
-  answers directory, which the run cannot write, and writes one marker, the run's id and the time, in the slot's own
-  git directory, which a sandboxed run may write and nothing on the host reads. Beside it, it notes the commit each
-  time it shows the list and each push it lets through after a hold, which the harness reads as the run ends, to keep
-  the diff of what the run changed after the list: untrusted, bounded, read through no link, a line not the run's or
-  naming no commit skipped, and each commit diffed by the harness's git with no driver or textconv, so a forged note
-  can only misrecord that diff, never run anything or reach past the slot. The push it holds is only delayed: the
-  next of the same run goes through, the repository's own `pre-push` with it, and none is held in the run's last
-  stretch (§33). What it cannot read or write lets the push through. It is a reminder, not a guard: `--no-verify`
-  skips it, as it skips the repository's own hooks.
+  push of a stretch for its repository's checklist (DESIGN §42): it reads the slot's list in the run's answers
+  directory, and its items one by one beside it, which the run cannot write, and writes one marker, the run's id and the
+  time, in the slot's own git directory, which a sandboxed run may write and nothing on the host reads. Beside it, it
+  notes the commit each time it shows the list and each push it lets through after a hold, which the harness reads as
+  the run ends, to keep the diff of what the run changed after the list: untrusted, bounded, read through no link, a
+  line not the run's or naming no commit skipped, and each commit diffed by the harness's git with no driver or
+  textconv, so a forged note can only misrecord that diff, never run anything or reach past the slot. It notes too which
+  items each push asked, by the paths the push changes, which a forged note can only turn from the run's own `n/a` or
+  silence into `unasked`. The push it holds is only delayed: the next of the same run goes through, the repository's own
+  `pre-push` with it, and none is held in the run's last stretch (§33). What it cannot read or write lets the push
+  through. It is a reminder, not a guard: `--no-verify` skips it, as it skips the repository's own hooks.
 - `runtime.setup_cmd` (DESIGN §9) runs on the host in each slot of a worker run, after the run's branch is checked out
   and before the worker starts. It runs that branch's code, which a worker wrote (install scripts, generators), outside
   the agent runtime's permissions. It is private (T7), and the code is what the worker's own shell runs a moment

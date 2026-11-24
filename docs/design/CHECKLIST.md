@@ -49,12 +49,19 @@ again. Each time it shows the list, and each push it lets through after a hold, 
 as the run ends, the harness keeps the diff from the commit the list was shown at to the next push, or to what the run
 left on origin, beside the run's log, with its answers: what the run changed after being shown the list, with whatever
 else it did in that stretch, shown with its answers wherever the run is (§45, Where it shows). It is kept then or never,
-since a held commit may never reach origin. Near the deadline,
-in the clock's last stretch (§33), it holds nothing, since a held push then risks the run
-ending `unpushed`: it prints the list and lets the push through, asking for the fix pushed again, which D116 allows. So
-it does when it cannot write its marker, since a hold it could not mark would hold every push. A joint run's slots are
-each held on their own, each with its repository's list. A push the remote will refuse is held first, as git runs the
-hook before it learns that; the next is git's rejection, which a worker never retries (§8).
+since a held commit may never reach origin. Near the deadline, in the clock's last stretch (§33), it holds nothing,
+since a held push then risks the run ending `unpushed`: it prints the list and lets the push through, asking for the fix
+pushed again, which D116 allows. So it does when it cannot write its marker, since a hold it could not mark would hold
+every push. A joint run's slots are each held on their own, each with its repository's list. A push the remote will
+refuse is held first, as git runs the hook before it learns that; the next is git's rejection, which a worker never
+retries (§8).
+
+A push is asked only the items whose paths it changes, over the commits it sends that no remote-tracking ref holds, by
+git reading each entry as `high_impact_paths` are read; it names the rest, and a push that changes no item's paths goes
+through unheld. The push after a hold, which goes through, prints any item it newly asks as a reminder. An item no push
+of the run asked is recorded `unasked`, the harness's, apart from the worker's `n/a`, so its counts measure the rule and
+not the list; an answer the worker gave it all the same, but `n/a`, stands. What git cannot compare is asked, and a run
+that never pushed is asked every item.
 
 The list reaches the hook as the operator's answer reaches a running agent (§41): a file in the run's answers
 directory, which a sandboxed run may read and not write, and canopy points a worker's git at its hooks whenever the run
@@ -62,18 +69,19 @@ has a list, not only when it has a mark to add. The hook's line and the worker's
 worker whose output reaches it cut short reads the list there. It is a reminder, not a guard: `--no-verify` skips it
 as it skips the repository's own hooks. The overseer, a planner, a reviewer, and a chore hear none.
 
-The worker's result gains `checklist`: for each repository and item, `pass`, `fixed`, `held` with the reason, or
-`n/a`, validated (D026). A reminded run whose result answers no item is recorded as unanswered, never refused: its push
-is already made. The answers are the record the standing instructions lacked: the run's page shows them, and canopy
-counts, per repository and item, how often it was reminded, passed, fixed, held, and left unanswered, so an item earns
-its place or is dropped. No answer raises attention: a human reviewer still reads the PR, and a `held` item is on its
-page for them.
+The worker's result gains `checklist`: for each repository and item, `pass`, `fixed`, `held` with the reason, or `n/a`,
+validated (D026). A reminded run whose result answers no item is recorded as unanswered, never refused: its push is
+already made. The answers are the record the standing instructions lacked: the run's page shows them, and canopy counts,
+per repository and item, how often it was reminded, passed, fixed, held, and left unanswered, and apart, how often it
+was given and never asked, so an item earns its place or is dropped. No answer raises attention: a human reviewer still
+reads the PR, and a `held` item is on its page for them.
 
 What lets it run (TRUST_MODEL): a forged `[canopy]` line can only ask the agent to check its own diff against a list it
 already holds, so it fails safe, as the clock's and the nudge's do (T1); nothing a worker does with it extends its run
-(T3); canopy's hook, which every worker's git already runs (T5), reads one more file in a directory the harness made and
-writes one marker and its notes in the slot's own git directory, which a sandboxed run may write; the harness reads the
-notes alone, as untrusted commits it diffs and runs nothing of, and the push it holds is only delayed (T4).
+(T3); canopy's hook, which every worker's git already runs (T5), reads the list's files in a directory the harness made
+and writes one marker and its notes in the slot's own git directory, which a sandboxed run may write; the harness reads
+the notes alone, as untrusted: commits it diffs and runs nothing of, and the items asked, which can only turn the run's
+own `n/a` or silence into `unasked`. The push it holds is only delayed (T4).
 
 ### The review
 

@@ -20,6 +20,15 @@ the push through. It is a reminder, not a guard: what it cannot read or write le
 the list, and each push it lets through after a hold, it notes the commit in the slot's own git directory too, so the
 harness can keep what the run changed after the list was shown (`pushes_after`).
 
+It asks only the items whose `paths:` the push changes, when the list's items are written one by one beside it
+(`checklists.items_of`): by git's glob pathspecs, over the commits the push sends that no remote-tracking ref holds, so
+over the stretch of work since the last push. It prints those items alone and names the rest, a push that changes no
+item's paths goes through unheld. The push it lets through after a hold is asked too, unheld: it prints each item it
+asks that no push of the run asked before, as a reminder. It notes each item asked and each not, which the harness
+reads with the pushes:
+an item no push of the run asked, and whose answer is none or `n/a`, is recorded `unasked`. An item git cannot compare
+is asked, as is every item of a list none of whose items names paths.
+
 canopy's entry is the last of the `GIT_CONFIG_*` ones, after any the operator's environment holds, so a hook finds
 the repository's own hooks by asking git with one entry fewer, or more where a tool added its own after canopy's.
 `GIT_CONFIG_COUNT` needs git 2.31; an older git ignores it and adds no marks, so each tick checks the git on `PATH`
@@ -43,6 +52,7 @@ from canopy.infra import procs
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+    from collections.abc import Set as AbstractSet
     from pathlib import Path
 
     from canopy.core.config import Config
@@ -60,11 +70,12 @@ CHECKLISTS_ENV: Final = "CANOPY_CHECKLISTS"
 #: The file in a slot's own git directory where `pre-push` marks its hold: the run's id and the time, in Unix seconds.
 HOLD_MARKER: Final = "canopy-checklist-hold"
 #: The file in a slot's own git directory where `pre-push` notes each time it showed the run its list, and each push it
-#: let through after a hold: a line `<shown|sent> <run id> <commit>`, which the harness reads, and removes, as the run
-#: ends (`pushes_after`).
+#: let through after a hold: a line `<shown|sent> <run id> <commit>`, and each item it asked or did not, a line
+#: `<asked|unasked> <run id> <item>`, which the harness reads, and removes, as the run ends (`pushes_after`).
 PUSHES_LOG: Final = "canopy-checklist-pushes"
-#: How much of that file the harness reads: far more than a run's pushes fill.
-MAX_PUSHES_BYTES: Final = 64 * 1024
+#: How much of that file the harness reads: far more than a run's pushes fill, each noting a line for every item of its
+#: list, and still a bound on a file the run may write.
+MAX_PUSHES_BYTES: Final = 4 * 1024 * 1024
 #: A commit id, as git names one: SHA-1, or SHA-256.
 _COMMIT_RE: Final = re.compile(r"[0-9a-f]{40}(?:[0-9a-f]{24})?")
 #: How long after a hold a push of the same run goes through: past it, a push after a long stretch of work is held
@@ -106,17 +117,21 @@ SCRIPT: Final = (
 # name.
 name=${0##*/}
 read_refs=
+nl='
+'
+tab=$(printf '\t')
 # Holds a push of the refs in $1 for the list CANOPY_CHECKLISTS names for this slot: prints it and exits, or returns to
 # let the push through. What it cannot read or write lets the push through, since the hold is a reminder, not a guard.
 hold() {
-    # Something to send: a ref whose local sha is not all zeros, as a deletion's is. Its commit is the one noted.
+    # Something to send: each ref whose local sha is not all zeros, as a deletion's is, a line each. The first's commit
+    # is the one noted.
     sending=$(printf '%s\n' "$1" | while read -r _ sha _ _; do
-        case $sha in *[!0]*) echo "$sha" && break ;; esac
+        case $sha in *[!0]*) echo "$sha" ;; esac
     done)
     [ -n "$sending" ] || return 0
+    first=${sending%%"$nl"*}
     # git runs pre-push at the top of the slot's working tree.
     top=$(pwd -P) || return 0
-    tab=$(printf '\t')
     list=$(printf '%s\n' "$CANOPY_CHECKLISTS" | while IFS=$tab read -r slot file; do
         if [ "$slot" = "$top" ]; then printf '%s' "$file" && break; fi
     done)
@@ -132,17 +147,20 @@ hold() {
         "" | *[!0-9]*) ;;
         *)
             if [ $((CANOPY_DEADLINE - now)) -le @LAST_STRETCH@ ]; then
+                pick "$sending"
+                if unheld; then return 0; fi
                 {
                     echo "[canopy] Pushed, not held, as this run is near canopy's deadline. $repo's checklist is" \
                         "below, and in $list, should this output be cut short. Diff this branch against its base and" \
                         "hold each item of the checklist to the diff; if one fails and there is time, commit the" \
                         "fix and push it. Answer every item in your result's \`checklist\`, under $repo," \
                         "none left out: pass, fixed, held with the reason, or n/a only for an item whose paths" \
-                        "the diff does not touch."
+                        "the diff does not touch.$(narrowed)"
                     echo
-                    cat "$list"
+                    show
                 } >&2
-                note shown "$sending"
+                note shown "$first"
+                note_items
                 return 0
             fi
             ;;
@@ -158,21 +176,123 @@ hold() {
     # Held already in this run, a moment ago: this is the push after the hold. A marker another run left in the slot,
     # or one from before a long stretch of work, counts for nothing.
     if [ "$held_run" = "${CANOPY_RUN_ID-}" ] && [ $((now - held_at)) -lt @WINDOW@ ]; then
-        note sent "$sending"
+        note sent "$first"
+        pick "$sending"
+        remind
         return 0
     fi
+    pick "$sending"
+    if unheld; then return 0; fi
     { printf '%s %s\n' "${CANOPY_RUN_ID-}" "$now" >"$marker"; } 2>/dev/null || return 0
-    note shown "$sending"
+    note shown "$first"
+    note_items
     {
         echo "[canopy] Push held, not rejected: nothing was sent. $repo's checklist is below, and in $list," \
             "should this output be cut short. Before this branch goes up, diff it against its base and hold each" \
             "item of the checklist to the diff. Commit a fix for each item that fails, then push again: the next" \
             "push goes through. Answer every item in your result's \`checklist\`, under $repo, none left" \
-            "out: pass, fixed, held with the reason, or n/a only for an item whose paths the diff does not touch."
+            "out: pass, fixed, held with the reason, or n/a only for an item whose paths the diff does not" \
+            "touch.$(narrowed)"
         echo
-        cat "$list"
+        show
     } >&2
     exit 1
+}
+# Sorts the list's items into those the push of the commits in $1, a line each, asks, in $asked, and those it does not,
+# in $unasked, each a list of ids split by spaces: an item none of whose paths the push changes is not asked. A list
+# none of whose items names paths has no file of them, and both stay empty: the whole list is asked.
+pick() {
+    asked=
+    unasked=
+    items=${list%.md}.items
+    [ -f "$items/paths" ] && [ -r "$items/paths" ] || return 0
+    while IFS=$tab read -r id specs; do
+        if [ -z "$specs" ] || touches "$1" "$specs"; then
+            asked="$asked $id"
+        else
+            unasked="$unasked $id"
+        fi
+    done <"$items/paths"
+}
+# Whether the commits in $1, a line each, change a path the pathspecs in $2, split by tabs, cover, in a commit no
+# remote-tracking ref holds: what the push sends that its remote has not seen. Yes when git cannot tell, so the item is
+# asked: a git that fails exits the subshell 0, a match, whatever it printed. Every parent of a merge is walked, so a
+# commit on a side branch the push sends counts; a merge itself does not, as what it brings is its parents' commits,
+# and a merge of the base would otherwise count every path the base changed. A subshell, so the IFS and the noglob it
+# sets end with it.
+touches() (
+    commits=$1
+    specs=$2
+    set -f
+    IFS=$tab
+    set -- $specs
+    IFS=$nl
+    found=$(git rev-list -1 --full-history --no-merges $commits --not --remotes -- "$@" 2>/dev/null) || exit 0
+    [ -n "$found" ]
+)
+# Lets a push that asks none of the list's items through, saying so, and notes them; fails when it asks one.
+unheld() {
+    [ -n "$unasked" ] && [ -z "$asked" ] || return 1
+    echo "[canopy] Pushed, not held: this push changes none of the paths the items of $repo's checklist name, so it" \
+        "asks none of them. Leave an item no push asked out of your result's \`checklist\`: canopy records it" \
+        "unasked." >&2
+    note_items
+}
+# After a hold, in the push it lets through: prints each item this push asks that no push of the run asked before, as
+# a reminder, and notes every item as `pick` sorted them, so one whose paths only this push changes is recorded asked.
+# The push still goes through: the run was held once in this stretch, and a second hold would keep it from pushing.
+remind() {
+    new=
+    for id in $asked; do
+        grep -Fqx "asked ${CANOPY_RUN_ID-} $id" "$own/@PUSHES@" 2>/dev/null || new="$new $id"
+    done
+    note_items
+    [ -n "$new" ] || return 0
+    words=
+    for id in $new; do words="${words:+$words, }$id"; done
+    {
+        echo "[canopy] Pushed, not held: this push changes the paths of $words, which no push of this run asked" \
+            "before. Hold the diff to each item below; if one fails, commit the fix and push it. Answer each in" \
+            "your result's \`checklist\`, under $repo: pass, fixed, held with the reason, or n/a."
+        echo
+        sep=
+        for id in $new; do
+            printf '%s' "$sep"
+            [ -r "$items/$id.md" ] && cat "$items/$id.md"
+            sep=$nl
+        done
+    } >&2
+}
+# What the line before the list adds when some of its items are not asked: which, and that they are left out.
+narrowed() {
+    [ -n "$unasked" ] || return 0
+    words=
+    for id in $unasked; do words="${words:+$words, }$id"; done
+    printf ' This push changes none of the paths of %s, so only the items below are asked: leave those out of' "$words"
+    printf ' %s' "\`checklist\` unless a push before asked them, and canopy records them unasked."
+}
+# Prints the items asked: the whole list when every one is, else each asked item's own text, or the whole list when
+# one cannot be read.
+show() {
+    if [ -z "$unasked" ]; then
+        cat "$list"
+        return
+    fi
+    for id in $asked; do
+        [ -r "$items/$id.md" ] || { cat "$list" && return; }
+    done
+    sep=
+    for id in $asked; do
+        printf '%s' "$sep"
+        cat "$items/$id.md"
+        sep=$nl
+    done
+}
+# Notes each item the push asked and each it did not, so the harness can tell an item no push asked from one asked and
+# answered n/a: a line `<asked|unasked> <run id> <item>` each, beside the pushes' notes.
+note_items() {
+    for id in $asked; do note asked "$id"; done
+    for id in $unasked; do note unasked "$id"; done
 }
 # Notes for the harness, which reads them as the run ends, that the run was shown its list with the branch at the
 # commit $2, or pushed $2 through: a line `<shown|sent> <run id> <commit>` in the slot's own git directory. Best effort:
@@ -358,17 +478,29 @@ def env(
     }
 
 
-def pushes_after(git_dir: Path, run_id: str) -> list[tuple[str, str | None]]:
+@dataclass(frozen=True)
+class Noted:
+    """What `pre-push` noted of one run in one slot: the stretches after each showing of its list, and what it asked."""
+
+    #: Each stretch, oldest first: the commit the branch was at when the list was shown, and the commit of the next
+    #: push let through, or None for one no push closed.
+    stretches: Sequence[tuple[str, str | None]] = ()
+    #: The items, by id, some push did not ask, as it changed none of their paths, and none asked: none for a run whose
+    #: pushes asked every item, or were never noted.
+    unasked: AbstractSet[str] = frozenset()
+
+
+def pushes_after(git_dir: Path, run_id: str) -> Noted:
     """Take what `pre-push` noted of run `run_id` in the slot whose own git directory is `git_dir`, and remove it.
 
-    The notes are the run's to write, so untrusted: a line that is not `<shown|sent> <run id> <commit>`, or names
-    another run, counts for nothing, and only the first `MAX_PUSHES_BYTES` are read. Each showing of the list opens a
-    stretch, and the next push let through closes it; one shown again while open keeps the first commit, since all
-    that follows it came after the list. The file is removed, so a later run in the slot starts with none.
+    The notes are the run's to write, so untrusted: a line that is not `<shown|sent> <run id> <commit>` or
+    `<asked|unasked> <run id> <item>`, or names another run, counts for nothing, and only the first `MAX_PUSHES_BYTES`
+    are read. Each showing of the list opens a stretch, and the next push let through closes it; one shown again while
+    open keeps the first commit, since all that follows it came after the list. An item asked by any push counts as
+    asked. The file is removed, so a later run in the slot starts with none.
 
     Returns:
-        Each stretch, oldest first: the commit the branch was at when the list was shown, and the commit of the next
-        push let through, or None for one no push closed.
+        The stretches, and the items no push asked.
     """
     path = git_dir / PUSHES_LOG
     text = _read_bounded(path, MAX_PUSHES_BYTES)
@@ -376,8 +508,14 @@ def pushes_after(git_dir: Path, run_id: str) -> list[tuple[str, str | None]]:
         path.unlink(missing_ok=True)
     found: list[tuple[str, str | None]] = []
     opened: str | None = None
+    asked: set[str] = set()
+    unasked: set[str] = set()
     for line in text.splitlines():
         match line.split():
+            case ["asked", run, item] if run == run_id:
+                asked.add(item)
+            case ["unasked", run, item] if run == run_id:
+                unasked.add(item)
             case [event, run, sha] if run == run_id and _COMMIT_RE.fullmatch(sha):
                 if event == "shown" and opened is None:
                     opened = sha
@@ -388,7 +526,7 @@ def pushes_after(git_dir: Path, run_id: str) -> list[tuple[str, str | None]]:
                 pass
     if opened is not None:
         found.append((opened, None))
-    return found
+    return Noted(tuple(found), frozenset(unasked - asked))
 
 
 def git_too_old(config: Config, runner: procs.Runner) -> str | None:

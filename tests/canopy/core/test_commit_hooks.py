@@ -173,10 +173,10 @@ def test_each_showing_of_the_list_is_paired_with_the_next_push_it_let_through(tm
     """A list shown again before a push keeps the first commit: all that follows it came after the list."""
     notes = tmp_path / commit_hooks.PUSHES_LOG
     notes.write_text(f"shown 3 {A}\nsent 3 {B}\nsent 3 {A}\nshown 3 {B}\nshown 3 {A}\nsent 3 {C}\nshown 3 {C}\n")
-    assert commit_hooks.pushes_after(tmp_path, "3") == [(A, B), (B, C), (C, None)]
+    assert commit_hooks.pushes_after(tmp_path, "3").stretches == ((A, B), (B, C), (C, None))
     # Taken: a later run in the slot starts with none.
     assert not notes.exists()
-    assert commit_hooks.pushes_after(tmp_path, "3") == []
+    assert commit_hooks.pushes_after(tmp_path, "3").stretches == ()
 
 
 def test_a_note_that_is_not_the_runs_or_not_a_commit_counts_for_nothing(tmp_path: Path) -> None:
@@ -185,7 +185,15 @@ def test_a_note_that_is_not_the_runs_or_not_a_commit_counts_for_nothing(tmp_path
         f"shown 4 {A}\nshown task-3 {A}\nshown 3 HEAD\nshown 3 {A[:12]}\nheld 3 {A}\nshown 3 {A} more\n"
         f"shown 3\nsent 3 {B.upper()}\n\0\nshown 3 {B}\nsent 30 {A}\nsent 3 {C}\n",
     )
-    assert commit_hooks.pushes_after(tmp_path, "3") == [(B, C)]
+    assert commit_hooks.pushes_after(tmp_path, "3").stretches == ((B, C),)
+
+
+def test_an_item_a_push_asks_after_many_pushes_notes_is_asked(tmp_path: Path) -> None:
+    """Each push notes every item of its list, so a long run's notes run long: a late `asked` still counts."""
+    pushes = f"shown 3 {A}\n" + "".join(f"unasked 3 item-{n}\n" for n in range(15)) + f"sent 3 {B}\n"
+    (tmp_path / commit_hooks.PUSHES_LOG).write_text(pushes * 1000 + "asked 3 item-7\n")
+    assert len(pushes) * 1000 > 256 * 1024
+    assert commit_hooks.pushes_after(tmp_path, "3").unasked == {f"item-{n}" for n in range(15)} - {"item-7"}
 
 
 def test_notes_past_the_bound_or_not_in_a_regular_file_are_not_read(tmp_path: Path) -> None:
@@ -194,11 +202,20 @@ def test_notes_past_the_bound_or_not_in_a_regular_file_are_not_read(tmp_path: Pa
     padding = "x" * (commit_hooks.MAX_PUSHES_BYTES - len(line) - 1) + "\n"
     # The line cut by the bound is dropped whole, not read in part.
     notes.write_text(f"{line}{padding}sent 3 {B}\n")
-    assert commit_hooks.pushes_after(tmp_path, "3") == [(A, None)]
+    assert commit_hooks.pushes_after(tmp_path, "3").stretches == ((A, None),)
     elsewhere = tmp_path / "elsewhere"
     elsewhere.write_text(f"shown 3 {A}\nsent 3 {B}\n")
     notes.symlink_to(elsewhere)
-    assert commit_hooks.pushes_after(tmp_path, "3") == []
+    assert commit_hooks.pushes_after(tmp_path, "3").stretches == ()
     # The link is taken, not what it names.
     assert not notes.is_symlink()
     assert elsewhere.exists()
+
+
+def test_an_item_some_push_did_not_ask_and_none_asked_is_unasked(tmp_path: Path) -> None:
+    """An item asked by one push and not by another was asked; the notes of another run, or of no item, count not."""
+    (tmp_path / commit_hooks.PUSHES_LOG).write_text(
+        f"shown 3 {A}\nasked 3 everywhere\nunasked 3 migrations\nunasked 3 docs\nsent 3 {B}\n"
+        "asked 3 docs\nunasked 4 api\nunasked 3\nunasked 3 two words\n",
+    )
+    assert commit_hooks.pushes_after(tmp_path, "3") == commit_hooks.Noted(((A, B),), frozenset({"migrations"}))
