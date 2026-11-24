@@ -649,7 +649,10 @@ def test_a_merge_queues_check_holds_no_pr_from_its_reviewer(scenario: Scenario, 
     # Failing, as a queue's status does on a PR not yet in it, it is no more CI: the PR still passes its checks.
     github_checks(github_state, {"name": "merge-queue", "status": "completed", "conclusion": "failure", "run_id": 12})
     ticked = scenario.tick(*waits(KEY))
-    assert [d.action for d in ticked.decisions if d.decider is Decider.HARNESS] == ["attention:needs_reviewer"]
+    assert [d.action for d in ticked.decisions if d.decider is Decider.HARNESS] == [
+        "attention:needs_reviewer",
+        "queried",
+    ]
     assert scenario.attention() == [(KEY, "needs_reviewer")]
 
 
@@ -664,7 +667,10 @@ def test_an_ownership_check_that_waits_on_a_person_is_never_ci_red(scenario: Sce
     # It fails until the right people approve: not `ci_red`, so nothing resumes a worker for ci.
     github_checks(github_state, {"name": "owners", "status": "completed", "conclusion": "failure", "run_id": 12})
     ticked = scenario.tick(*waits(KEY))
-    assert [d.action for d in ticked.decisions if d.decider is Decider.HARNESS] == ["attention:needs_reviewer"]
+    assert [d.action for d in ticked.decisions if d.decider is Decider.HARNESS] == [
+        "attention:needs_reviewer",
+        "queried",
+    ]
     assert ticked.runs == []
     [unit] = [d for d in phases.recorded(scenario.conn, ticked.tick.id) if d.repo == "repo"]
     assert unit.phases == (phases.Phase.GREEN_UNREVIEWED,)
