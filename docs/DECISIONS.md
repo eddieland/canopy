@@ -551,13 +551,14 @@ such as a shipped migration, may still cite one, and git history has its text.
 - Rejected: a CLI verb for every web write (`canopy seen`, built and removed).
 - Revisit: before a page-only write that authorizes work, which T8 would then have to guard as the CLI's verbs are.
 
-## D128. The web channel writes only named config keys: limits freely, retentions to a floor, trust only stricter
+## D128. The web channel writes only named config keys: any value the loader takes, retentions to a floor
 
 - An allowlist by key name in `serve/config_edit.py`, never a section; a new key is not writable until named. Only the
   workspace's private file (M49), never the workspace file or the user file. Settled by the operator (ROADMAP M41).
 - Why: a config write outlives the listener secret. A raised limit is spend, which the operator accepted unbounded
-  (2026-11-23: the page's ceilings got in the way); a shortened retention deletes history, so it keeps a floor; an
-  added replier or reviewer would steer workers after a new secret, so trust settings only tighten.
+  (2026-11-23: the page's ceilings got in the way); a shortened retention deletes history, so it keeps a floor.
+- Trust settings move either way too, a replier or reviewer added among them (operator, 2026-11-24: the only-stricter
+  rule made little sense for most keys). The log names each change; never add a one-way rule back unasked.
 - Nothing that runs a command, picks a prompt, is read as words, or moves the listener. No CLI verb: it would be in
   reach of the overseer's `canopy *` rule.
 

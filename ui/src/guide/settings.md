@@ -186,28 +186,46 @@ secret doesn't take either back. If a change shows up that you didn't make, the 
 **Open** takes you to a page of its own for the numbers you change most. The line under its title is the state of
 things: how many settings there are, how many this workspace sets, and how many come from your user config. Hover the
 title for the page's rules, and copy the path under it when you'd rather edit the file by hand. The settings come in
-five bands. **Capacity** is how many workers, chores, reviews, and tasks run at once, each pool's slots, and how much
+six bands. **Capacity** is how many workers, chores, reviews, and tasks run at once, each pool's slots, and how much
 you may attach to a ticket. **Attempts** is how many tries a ticket, a plan, or a review's draft gets, and how many
 tickets an epic holds. **Timing** comes in three parts, since every one of them is in minutes and you shouldn't have to
 guess which: **Pace**, how often the loop ticks and asks the tracker and the connectors what's new; **Waits**, how long
 it holds off after a red build, for feedback to go quiet or its checks to finish, and for a PR's head to settle before
 its review; and **Timeouts**, how long a run or a slot's setup may take before canopy stops it.
 
+Two rows in those bands aren't counts. Under Capacity, a switch says whether the loop's own PRs get a review before a
+person is asked; it goes either way, and what it spends stays under your reviews a day. Under Pace, the shortest gap
+between [plan archives](plans) says how often your archive's remote hears from canopy.
+
+**Upkeep** is the housekeeping a tick does in each pool. The first row turns git's own maintenance of a repository's
+clone on or off, and the next three say when it runs: past how many packs or loose objects, and how many hours pass
+between looks. It only ever runs while no run holds a slot of that pool, so it costs you nothing but a quieter disk.
+The last two are for a slot nobody has leased in a while: how many days it sits idle before its idle command runs, and
+how long that command may take. The command itself (`[pools] idle_cmd`) is not here, and won't be: what runs on your
+machine is an edit to the file.
+
 **Retention & budget** says how many days canopy keeps a run's files, a tick's, the journal's old rows, and a retired
 note's text before a tick removes them. Lengthen them as you like, or set 0 to keep that kind forever; shortening stops
 at a floor (a week of run files, a month of journal), since the transcript a shorter one would delete is the one that
-shows what a run did. If you want last Tuesday gone, the file still takes 1. Below them sits the monthly budget the
+shows what a run did. If you want last Tuesday gone, the file still takes 1. The log's rotation sits with them: the
+size `canopy.log` rotates at and how many rotated files stay. The page will keep more log than stock, or all of it at
+0, but never less, since the log is where each save made here is written down. Below them sits the monthly budget the
 [spend page](reports#the-spend-page) tracks, with any alerts short of or past it. You can add and drop alerts freely:
 the 100% one isn't in the list, so dropping everything still leaves it.
 
-**Guardrails** holds the settings that only get stricter from here. You can make tickets wait on a plan you approve, or
-take a planner's say over its own plan away, but not the reverse. You can drop a trusted reviewer or an authorized
-replier, never add one, have workers draft their review replies for you instead of posting them, turn `trust.rebase` off
-but not on, and cut the reruns of flaky checks but not raise them. A stolen session that could add a replier would keep
-steering your workers after you changed the secret, so adding one stays an edit to the file. The band says that once,
-with a lock, and a setting already as strict as it goes shows its value beside a lock rather than a row of greyed-out
-buttons, which looked broken and wasn't. Unchecking an authorized replier, or a list's last name, asks first: if that
-name is yours, your replies on the ticket stop reaching workers, and the page can't put it back.
+**Guardrails** holds the settings that decide what waits on you and whose words count. You can make tickets wait on
+a plan you approve, or stop; give a planner more or less say over its own plan; have workers draft their review
+replies for you or post them; turn `trust.rebase` and the commit trailer on or off; and set how many times a flaky
+check is rerun. The same band holds what canopy remembers and sends: the memory tiers, session search, and whether the
+plan archive takes prompts, conversations, and your comments. All of it goes both ways. The page used to let these
+only tighten, on the theory that anything looser deserved a trip to the file; in practice it meant a trip to the file.
+
+Four rows are lists of names: who may answer a worker, whose review a worker acts on unasked, whose comments on an
+artifact count, and which agents may publish. Uncheck a name to drop it, or type one into **add a name** and press
+Enter to add it. The config loader still has opinions, so a publishing agent it has never heard of is refused on save.
+One caution survives from the old rule, as advice rather than a lock: a name on these lists steers your workers, and a
+save outlives the sign-in secret. If a name shows up that you didn't add, the log has who changed what, old value and
+new.
 
 Each row's chip says where its value comes from, `this workspace`, `user`, `workspace`, or `default` (hover it, or
 the page's title, for what each means), and the line beside it says how far the page will take it. Units sit after the
@@ -231,12 +249,9 @@ that row and lights it for a moment, which is handy for a note to your future se
 
 A setting you've moved off its default says what the default is, so you can tell how far from stock you've wandered,
 and **reset** puts the field back. It's an ordinary change: it shows in the bar and waits for **Save** like any other.
-On a setting that only gets stricter, reset shows up only when the default isn't looser than what you have, since the
-page won't loosen anything for you, reset or not, and it never drops a name the page would ask you about first.
 
 Change something and its row gets a line down its edge and says what it was, and a bar appears at the foot listing
-each change as `key: old → new`. When one of them only gets stricter from here, the bar says so before you save, since
-the page can't take it back: only an edit to the file can.
+each change as `key: old → new`.
 
 **Save** writes `.canopy/config.toml`, this workspace's own file, editing it in place so your comments and layout stay,
 then reloads the loop as **Reload** below does. It never touches `canopy-workspace.toml` or

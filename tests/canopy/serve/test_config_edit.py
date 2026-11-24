@@ -1,6 +1,6 @@
 """The settings page's config writes (DESIGN §12, §22, ROADMAP M41).
 
-Only the keys it lists, within their bounds, trust settings only toward stricter, the workspace's private file alone,
+Only the keys it lists, a retention no shorter than its floor, the workspace's private file alone,
 its comments kept, and a reload asked for after.
 """
 
@@ -83,7 +83,6 @@ def test_the_page_lists_each_editable_key_with_its_value_source_and_bound(ctx: C
         "name": "capacity.max_workers",
         "value": 2,
         "source": "private",
-        "kind": "limit",
         "bound": None,
         "forever_at_zero": False,
         "choices": [],
@@ -95,7 +94,6 @@ def test_the_page_lists_each_editable_key_with_its_value_source_and_bound(ctx: C
         "name": "loop.interval_minutes",
         "value": None,
         "source": "user",
-        "kind": "limit",
         "bound": None,
         "forever_at_zero": False,
         "choices": [],
@@ -106,7 +104,6 @@ def test_the_page_lists_each_editable_key_with_its_value_source_and_bound(ctx: C
         "name": "trust.trusted_reviewers",
         "value": None,
         "source": "private",
-        "kind": "stricter",
         "bound": None,
         "forever_at_zero": False,
         "choices": [],
@@ -116,7 +113,6 @@ def test_the_page_lists_each_editable_key_with_its_value_source_and_bound(ctx: C
         "name": "policy.planner_may_approve",
         "value": "off",
         "source": "default",
-        "kind": "stricter",
         "bound": None,
         "forever_at_zero": False,
         "choices": ["lenient", "normal", "strict", "off"],
@@ -278,11 +274,7 @@ def test_each_refusal_leaves_the_files_as_they_were(ctx: Context, canopy_env: Ca
         ({"capacity": {"max_workers": 3}}, "not_editable"),
         ({"retention.run_files_days": 6}, "past_bound"),
         ({"retention.journal_days": 29}, "past_bound"),
-        ({"trust.rebase": True}, "not_stricter"),
-        ({"trust.commit_trailer": False}, "not_stricter"),
-        ({"trust.max_flaky_kicks": 1}, "not_stricter"),
-        ({"trust.trusted_reviewers": ["alice", "lint-bot", "mallory"]}, "not_stricter"),
-        ({"trust.authorized_repliers": ["mallory"]}, "not_stricter"),
+        ({"trust.trusted_reviewers": ["alice", ""]}, "config_invalid"),
         ({"capacity.max_workers": -1}, "config_invalid"),
         ({"capacity.max_workers": "many"}, "config_invalid"),
         ({"capacity.max_workers": True}, "config_invalid"),
@@ -314,7 +306,7 @@ def test_the_loader_s_message_names_the_private_file_not_the_copy_it_checked(
     assert ".tmp" not in reason
 
 
-def test_a_trust_setting_may_be_made_stricter(ctx: Context, canopy_env: CanopyEnv) -> None:
+def test_a_trust_setting_moves_either_way(ctx: Context, canopy_env: CanopyEnv) -> None:
     canopy_env.write_private(COMMENTED.replace("rebase = false", "rebase = true\ncommit_trailer = false"))
     c, headers = signed_in_client(ctx)
 
@@ -335,15 +327,45 @@ def test_a_trust_setting_may_be_made_stricter(ctx: Context, canopy_env: CanopyEn
         ("policy.stacking", '"never"'),
         ("trust.trusted_reviewers", "[]"),
     }
-    assert refused(save(c, headers, {"policy.stacking": "auto"})).startswith("not_stricter: ")
+    loosened = save(
+        c,
+        headers,
+        {"trust.rebase": True, "trust.commit_trailer": False, "policy.stacking": "auto"},
+    )
+    assert loosened.status_code == 200, loosened.text
+    assert key(settings(c), "trust.rebase")["value"] is True
+
+
+def test_a_list_gains_and_loses_names_in_place_keeping_its_comments(ctx: Context, canopy_env: CanopyEnv) -> None:
+    canopy_env.write_private(COMMENTED)
+    c, headers = signed_in_client(ctx)
+
+    saved = save(
+        c,
+        headers,
+        {"trust.trusted_reviewers": ["alice", "carol"], "trust.authorized_repliers": ["me"]},
+    )
+
+    assert saved.status_code == 200, saved.text
+    text = canopy_env.private_file.read_text()
+    assert '"alice",  # reviews everything' in text
+    assert "lint-bot" not in text
+    found = settings(c)
+    assert key(found, "trust.trusted_reviewers")["value"] == ["alice", "carol"]
+    assert key(found, "trust.authorized_repliers")["value"] == ["me"]
+    # A new order is the list written whole.
+    assert save(c, headers, {"trust.trusted_reviewers": ["carol", "alice"]}).status_code == 200
+    assert key(settings(c), "trust.trusted_reviewers")["value"] == ["carol", "alice"]
 
 
 def test_each_choice_lists_every_value_the_loader_takes() -> None:
-    """A choice the loader gained would be refused as no stricter, and one it lost offered for nothing."""
+    """A choice the loader gained would not be offered, and one it lost offered for nothing."""
     for editable in config_edit.EDITABLE:
         if not editable.choices:
             continue
         annotation = config.SPECS[editable.name].field.annotation
+        # A `type` alias of a Literal, as `sessions.search`'s is, names its values a step down.
+        annotation = getattr(annotation, "__value__", annotation)
         if isinstance(annotation, type) and issubclass(annotation, enum.Enum):
             values = {str(member.value) for member in annotation}
         else:
@@ -351,7 +373,7 @@ def test_each_choice_lists_every_value_the_loader_takes() -> None:
         assert set(editable.choices) == values, editable.name
 
 
-def test_a_choice_moves_only_later_and_a_count_only_down(ctx: Context, canopy_env: CanopyEnv) -> None:
+def test_a_choice_and_a_count_move_either_way(ctx: Context, canopy_env: CanopyEnv) -> None:
     canopy_env.write_private(
         COMMENTED.replace(
             "rebase = false",
@@ -379,15 +401,19 @@ def test_a_choice_moves_only_later_and_a_count_only_down(ctx: Context, canopy_en
         ("trust.review_replies", '"approve"'),
         ("trust.max_flaky_kicks", "1"),
     }
-    for changes in (
-        {"policy.planner_may_approve": "lenient"},
-        {"policy.plan": "off"},
-        {"policy.feedback_plan": "off"},
-        {"trust.review_replies": "post"},
-        {"trust.max_flaky_kicks": 2},
-    ):
-        assert refused(save(c, headers, changes)).startswith("not_stricter: "), changes
-    assert save(c, headers, {"policy.planner_may_approve": "off", "trust.max_flaky_kicks": 0}).status_code == 200
+    back = save(
+        c,
+        headers,
+        {
+            "policy.planner_may_approve": "lenient",
+            "policy.plan": "off",
+            "policy.feedback_plan": "off",
+            "trust.review_replies": "post",
+            "trust.max_flaky_kicks": 5,
+        },
+    )
+    assert back.status_code == 200, back.text
+    assert key(settings(c), "trust.max_flaky_kicks")["value"] == 5
 
 
 def test_a_limit_has_no_bound_of_the_page_s_own(ctx: Context, canopy_env: CanopyEnv) -> None:
@@ -419,6 +445,128 @@ def test_a_limit_has_no_bound_of_the_page_s_own(ctx: Context, canopy_env: Canopy
     assert refused(save(c, headers, {"capacity.max_workers": -1})).startswith("config_invalid: ")
 
 
+def test_a_pool_s_upkeep_is_saved_in_its_own_table_and_its_switch_goes_either_way(
+    ctx: Context,
+    canopy_env: CanopyEnv,
+) -> None:
+    """The maintenance switch turns off and back on, and the counts beside it take what the loader does."""
+    canopy_env.write_private(COMMENTED)
+    c, headers = signed_in_client(ctx)
+    assert key(settings(c), "pools.git_maintenance") == {
+        "name": "pools.git_maintenance",
+        "value": True,
+        "source": "default",
+        "bound": None,
+        "forever_at_zero": False,
+        "choices": [],
+        "default": True,
+    }
+
+    saved = save(
+        c,
+        headers,
+        {
+            "pools.git_maintenance": False,
+            "pools.git_max_packs": 20,
+            "pools.git_max_loose": 5000,
+            "pools.git_every_hours": 6,
+            "pools.idle_after_days": 1,
+            "pools.idle_timeout_minutes": 90,
+        },
+    )
+
+    assert saved.status_code == 200, saved.text
+    text = canopy_env.private_file.read_text()
+    assert text.startswith(COMMENTED)
+    assert "[pools]" in text
+    assert "git_maintenance = false" in text
+    found = settings(c)
+    assert key(found, "pools.git_every_hours")["value"] == 6
+    assert key(found, "pools.idle_timeout_minutes")["value"] == 90
+    assert save(c, headers, {"pools.git_maintenance": True}).status_code == 200
+    assert key(settings(c), "pools.git_maintenance")["value"] is True
+    # The loader's own rules still hold, and no other key of the table is the page's to set.
+    assert refused(save(c, headers, {"pools.git_every_hours": 0})).startswith("config_invalid: ")
+    assert refused(save(c, headers, {"pools.backend": "canopy"})).startswith("not_editable: ")
+
+
+def test_what_canopy_remembers_and_sends_moves_either_way(ctx: Context, canopy_env: CanopyEnv) -> None:
+    """A memory tier, session search, an artifact list, and the plan archive's extras are each set as asked."""
+    canopy_env.write_private(
+        COMMENTED
+        + '\n[memory]\nticket_notes = "use"\n\n[sessions]\nsearch = "text"\n'
+        + '\n[artifacts]\nauthorized_authors = ["me", "you"]\n',
+    )
+    c, headers = signed_in_client(ctx)
+    assert key(settings(c), "memory.ticket_notes")["choices"] == ["use", "record", "off"]
+
+    saved = save(
+        c,
+        headers,
+        {
+            "memory.ticket_notes": "record",
+            "sessions.search": "titles",
+            "artifacts.authorized_authors": ["me"],
+            "paths.plan_archive_prompts": False,
+        },
+    )
+
+    assert saved.status_code == 200, saved.text
+    text = canopy_env.private_file.read_text()
+    assert 'ticket_notes = "record"' in text
+    assert 'authorized_authors = ["me"]' in text
+    assert "plan_archive_prompts = false" in text
+    back = save(
+        c,
+        headers,
+        {
+            "memory.ticket_notes": "use",
+            "memory.proposals": "record",
+            "sessions.search": "text",
+            "artifacts.authorized_authors": ["me", "you"],
+            "paths.plan_archive_prompts": True,
+            "paths.plan_archive_conversations": True,
+        },
+    )
+    assert back.status_code == 200, back.text
+    found = settings(c)
+    assert key(found, "artifacts.authorized_authors")["value"] == ["me", "you"]
+    assert key(found, "paths.plan_archive_conversations")["value"] is True
+    # The loader's own rules still hold for a name it does not know.
+    assert refused(save(c, headers, {"artifacts.publish_roles": ["nobody"]})).startswith("config_invalid: ")
+
+
+def test_the_log_s_rotation_keeps_its_defaults_as_floors_and_the_other_switches_and_paces_move_freely(
+    ctx: Context,
+    canopy_env: CanopyEnv,
+) -> None:
+    """The page keeps more log, or all of it, never less than stock; a review switch and the archive's pace move."""
+    canopy_env.write_private(COMMENTED)
+    c, headers = signed_in_client(ctx)
+    assert key(settings(c), "retention.log_keep")["bound"] == 3
+
+    assert refused(save(c, headers, {"retention.log_max_mib": 10})).startswith("past_bound: ")
+    assert refused(save(c, headers, {"retention.log_keep": 1})).startswith("past_bound: ")
+    saved = save(
+        c,
+        headers,
+        {
+            "retention.log_max_mib": 200,
+            "retention.log_keep": 0,
+            "review.agent_prs": True,
+            "paths.plan_archive_every_minutes": 30,
+        },
+    )
+
+    assert saved.status_code == 200, saved.text
+    found = settings(c)
+    assert key(found, "retention.log_keep")["value"] == 0
+    assert key(found, "paths.plan_archive_every_minutes")["value"] == 30
+    assert key(found, "review.agent_prs")["value"] is True
+    assert save(c, headers, {"review.agent_prs": False}).status_code == 200
+    assert key(settings(c), "review.agent_prs")["value"] is False
+
+
 def test_a_monthly_budget_may_be_set_raised_and_lowered(ctx: Context, canopy_env: CanopyEnv) -> None:
     canopy_env.write_private(COMMENTED)
     c, headers = signed_in_client(ctx)
@@ -426,7 +574,6 @@ def test_a_monthly_budget_may_be_set_raised_and_lowered(ctx: Context, canopy_env
         "name": "spend.monthly_budget_usd",
         "value": None,
         "source": "default",
-        "kind": "limit",
         "bound": None,
         "forever_at_zero": False,
         "choices": [],
@@ -452,7 +599,6 @@ def test_a_retention_may_be_lengthened_shortened_to_its_floor_or_kept_forever(
         "name": "retention.run_files_days",
         "value": 30,
         "source": "default",
-        "kind": "limit",
         "bound": 7,
         "forever_at_zero": True,
         "choices": [],
@@ -515,7 +661,6 @@ def test_the_budget_s_alerts_are_set_whole_to_anything_the_loader_takes(ctx: Con
         "name": "spend.budget_alerts",
         "value": [],
         "source": "default",
-        "kind": "free",
         "bound": None,
         "forever_at_zero": False,
         "choices": [],

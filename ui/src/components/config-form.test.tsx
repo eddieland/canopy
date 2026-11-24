@@ -13,7 +13,6 @@ const WORKERS: ConfigKey = {
     name: 'capacity.max_workers',
     value: 3,
     source: 'user',
-    kind: 'limit',
     bound: null,
     forever_at_zero: false,
     choices: [],
@@ -23,7 +22,6 @@ const KICKS: ConfigKey = {
     name: 'trust.max_flaky_kicks',
     value: 2,
     source: 'default',
-    kind: 'stricter',
     bound: null,
     forever_at_zero: false,
     choices: [],
@@ -70,7 +68,6 @@ function type(name: string, text: string) {
 describe('ConfigForm', () => {
     it.each([
         ['capacity.max_workers', 'abc', 'not a whole number'],
-        ['trust.max_flaky_kicks', '3', 'only fewer from here: at most 2; set more in the file'],
         ['trust.max_flaky_kicks', '1.5', 'not a whole number'],
         ['capacity.max_workers', '', 'empty: type a count, or Discard to keep 3'],
     ])('marks %s holding %s invalid, says why under it, and keeps Save off', async (name, text, why) => {
@@ -87,6 +84,7 @@ describe('ConfigForm', () => {
     it.each([
         ['capacity.max_workers', '32'],
         ['trust.max_flaky_kicks', '1'],
+        ['trust.max_flaky_kicks', '9'],
     ])('takes %s at %s, within how far the page may take it', async (name, text) => {
         await renderForm()
         type(name, text)
@@ -111,7 +109,6 @@ describe('ConfigForm', () => {
         type('capacity.max_workers', '5')
         expect(screen.getByText('was 3')).toBeTruthy()
         expect(changes()).toEqual(['capacity.max_workers: 3 → 5'])
-        expect(screen.queryByTestId('config-one-way')).toBeNull()
     })
 
     it("names each row's source in a chip, and puts a minute's unit after its field", async () => {
@@ -132,14 +129,6 @@ describe('ConfigForm', () => {
         type('capacity.repo_slots.web', '5')
         expect(screen.getByTestId('config-pending').textContent).toBe('2 unsaved changes')
         expect(changes()).toEqual(['capacity.repo_slots.api: 2 → 3', 'capacity.repo_slots.web: 4 → 5'])
-    })
-
-    it('warns that only the file undoes a stricter change', async () => {
-        await renderForm()
-        type('trust.max_flaky_kicks', '1')
-        expect(screen.getByTestId('config-one-way').textContent).toBe(
-            'trust.max_flaky_kicks: only an edit to config.toml undoes this',
-        )
     })
 
     it('folds the list of changes away past three', async () => {
@@ -200,25 +189,54 @@ describe('ConfigForm', () => {
         )
     })
 
-    it('shows a key at its strictest as its value beside a lock, not as a control', async () => {
-        await renderForm({ ...SETTINGS, keys: [{ ...KICKS, value: 0 }] })
-        expect(screen.queryByRole('textbox', { name: 'trust.max_flaky_kicks' })).toBeNull()
-        expect(screen.getByText('strictest · loosen in config.toml')).toBeTruthy()
-        expect(screen.getByText('0')).toBeTruthy()
+    it('offers a switch as a checkbox that goes on or off', async () => {
+        const maintain: ConfigKey = {
+            ...WORKERS,
+            name: 'pools.git_maintenance',
+            value: false,
+            default: true,
+        }
+        await renderForm({ ...SETTINGS, keys: [maintain] })
+        const box = screen.getByRole('checkbox', { name: 'maintain' })
+        expect(box.getAttribute('aria-checked')).toBe('false')
+        fireEvent.click(box)
+        expect(screen.getByTestId('config-changes').textContent).toBe('pools.git_maintenance: off → on')
+        expect(button('Save').disabled).toBe(false)
     })
 
-    it('asks before dropping an authorized replier, and drops it only on Drop', async () => {
-        const repliers: ConfigKey = { ...KICKS, name: 'trust.authorized_repliers', value: ['me', 'bot'] }
+    it('drops a name from a list by its checkbox, and adds one typed into its field', async () => {
+        const repliers: ConfigKey = { ...KICKS, name: 'trust.authorized_repliers', value: ['me', 'bot'], default: [] }
         await renderForm({ ...SETTINGS, keys: [repliers] })
         fireEvent.click(screen.getByRole('checkbox', { name: 'me' }))
-        const asking = screen.getByRole('group', { name: 'Drop me?' })
-        expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
-        fireEvent.click(within(asking).getByRole('button', { name: 'Keep' }))
-        expect(screen.queryByRole('group', { name: 'Drop me?' })).toBeNull()
-        expect(screen.getByRole('checkbox', { name: 'me' }).getAttribute('aria-checked')).toBe('true')
-        fireEvent.click(screen.getByRole('checkbox', { name: 'me' }))
-        fireEvent.click(within(screen.getByRole('group', { name: 'Drop me?' })).getByRole('button', { name: 'Drop' }))
         expect(changes()).toEqual(['trust.authorized_repliers: me, bot → bot'])
+        expect(button('Add a name to trust.authorized_repliers').disabled).toBe(true)
+        type('Add to trust.authorized_repliers', ' carol ')
+        fireEvent.click(button('Add carol to trust.authorized_repliers'))
+        expect(changes()).toEqual(['trust.authorized_repliers: me, bot → bot, carol'])
+        expect(screen.getByRole('checkbox', { name: 'carol' }).getAttribute('aria-checked')).toBe('true')
+        // Enter in the field adds the name, and never saves the form.
+        const field = screen.getByRole<HTMLInputElement>('textbox', { name: 'Add to trust.authorized_repliers' })
+        fireEvent.change(field, { target: { value: 'dave' } })
+        fireEvent.keyDown(field, { key: 'Enter' })
+        expect(field.value).toBe('')
+        expect(changes()).toEqual(['trust.authorized_repliers: me, bot → bot, carol, dave'])
+        fireEvent.click(button('Discard'))
+        expect(screen.queryByRole('checkbox', { name: 'carol' })).toBeNull()
+    })
+
+    it('offers every value of a choice, whichever the files give now', async () => {
+        const approve: ConfigKey = {
+            ...KICKS,
+            name: 'policy.planner_may_approve',
+            value: 'strict',
+            default: 'off',
+            choices: ['lenient', 'normal', 'strict', 'off'],
+        }
+        await renderForm({ ...SETTINGS, keys: [approve] })
+        const lenient = screen.getByRole<HTMLButtonElement>('radio', { name: 'lenient' })
+        expect(lenient.disabled).toBe(false)
+        fireEvent.click(lenient)
+        expect(changes()).toEqual(['policy.planner_may_approve: strict → lenient'])
     })
 
     it('shows a key away from its default with a reset, which is an ordinary change', async () => {
@@ -230,7 +248,7 @@ describe('ConfigForm', () => {
         expect(screen.queryByRole('button', { name: 'Reset trust.max_flaky_kicks to its default' })).toBeNull()
     })
 
-    it('withholds the reset of a stricter key whose default is looser than its value now', async () => {
+    it('offers the reset of a choice whichever way its default lies', async () => {
         const approve: ConfigKey = {
             ...KICKS,
             name: 'policy.planner_may_approve',
@@ -239,8 +257,8 @@ describe('ConfigForm', () => {
             choices: ['lenient', 'normal', 'strict', 'off'],
         }
         await renderForm({ ...SETTINGS, keys: [approve] })
-        expect(screen.getByText('default lenient')).toBeTruthy()
-        expect(screen.queryByRole('button', { name: /^Reset/u })).toBeNull()
+        fireEvent.click(button('Reset policy.planner_may_approve to its default'))
+        expect(changes()).toEqual(['policy.planner_may_approve: normal → lenient'])
     })
 })
 

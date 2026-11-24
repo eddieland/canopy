@@ -252,12 +252,10 @@ test('the settings page saves a limit and drops a trusted reviewer, but shortens
     await form.getByTestId('config-discard').click()
     await expect(workers).toHaveValue(before)
     await expect(form.getByTestId('config-save-bar')).toHaveCount(0)
-    // A choice moves only toward stricter, and one already at its strictest is its value beside a lock; picking the
-    // value back leaves nothing to save.
-    await expect(form.getByTestId('policy.planner_may_approve-locked')).toContainText('off')
+    // A choice offers every value, whichever the files give now; picking the value back leaves nothing to save.
+    await expect(form.getByTestId('policy.planner_may_approve-lenient')).toBeEnabled()
     await form.getByTestId('policy.plan-approve').click()
     await expect(form.getByTestId('config-pending')).toHaveText('1 unsaved change')
-    await expect(form.getByTestId('config-one-way')).toHaveText('policy.plan: only an edit to config.toml undoes this')
     await form.getByTestId('policy.plan-off').click()
     await expect(form.getByTestId('config-save-bar')).toHaveCount(0)
     // A field the server would refuse says why on its own row, and keeps Save off.
@@ -273,6 +271,10 @@ test('the settings page saves a limit and drops a trusted reviewer, but shortens
 
     await workers.fill(after)
     await form.getByTestId('trust.trusted_reviewers-lint-bot').click()
+    // A name typed into a list's field joins it, checked, on Enter.
+    await form.getByTestId('trust.trusted_reviewers-add').fill('carol')
+    await form.getByTestId('trust.trusted_reviewers-add').press('Enter')
+    await expect(form.getByTestId('trust.trusted_reviewers-carol')).toBeChecked()
     // Only web has a count of its own; api gets one through the repository picker, not a field per repository.
     const slots = form.getByTestId('repo-slots')
     await expect(slots.getByRole('textbox', { name: /^capacity\.repo_slots\./u })).toHaveCount(1)
@@ -286,12 +288,13 @@ test('the settings page saves a limit and drops a trusted reviewer, but shortens
         "Saved capacity.max_workers, capacity.repo_slots, trust.trusted_reviewers to this workspace's config.",
     )
     await expect(slots.getByTestId('capacity.repo_slots.api')).toHaveValue('3')
-    // Read again from the file: the reviewer is gone, and a trust switch at its stricter side is locked.
+    // Read again from the file: one reviewer is gone and one added, and a trust switch goes either way.
     await expect(workers).toHaveValue(after)
     await expect(form.getByTestId('trust.trusted_reviewers-lint-bot')).toHaveCount(0)
     await expect(form.getByTestId('trust.trusted_reviewers-canopy:review')).toBeChecked()
-    await expect(form.getByTestId('trust.rebase-locked')).toContainText('rebase off')
-    await expect(form.getByTestId('trust.commit_trailer-locked')).toContainText('add trailer on')
+    await expect(form.getByTestId('trust.trusted_reviewers-carol')).toBeChecked()
+    await expect(form.getByTestId('trust.rebase')).not.toBeChecked()
+    await expect(form.getByTestId('trust.commit_trailer')).toBeChecked()
 
     // A retention shortens only to its floor, but keeping it forever is always allowed.
     const runFiles = form.getByTestId('retention.run_files_days')

@@ -2,13 +2,16 @@ import type { ConfigKey, ConfigSaved, ConfigValue } from '@/api/types'
 
 /**
  * What the Loop settings form holds before a save, by key: a count's or a pace's text as typed,
- * `capacity.repo_slots`'s text by repository, a switch or choice as picked, and a list's entries kept. A key the
+ * `capacity.repo_slots`'s text by repository, a switch or choice as picked, and a list of names whole. A key the
  * operator has not touched is absent.
  */
 export type ConfigDrafts = Record<string, string | boolean | string[] | Record<string, string>>
 
 /** The key whose value is a count per repository, which the form shows a field for each. */
 export const REPO_SLOTS = 'capacity.repo_slots'
+
+/** The key whose value is a list of percentages, typed in one field; every other list is one of names. */
+export const ALERTS = 'spend.budget_alerts'
 
 /** Every place a key's value can come from, nearest first. */
 const SOURCES: ConfigKey['source'][] = ['private', 'user', 'workspace', 'default']
@@ -39,13 +42,13 @@ export const SOURCES_HELP = `Each row's chip says where its value comes from: ${
 
 /**
  * What Loop settings shows the same on every visit, for its title's help: where a save goes and what it keeps, how far
- * each kind of key moves, and what each row's chip means.
+ * a key moves, and what each row's chip means.
  */
 export const LIMITS_HELP =
     "What the loop runs, spends, polls, and keeps, and whose words it acts on. A save writes this workspace's own " +
     'config, keeping its comments, with the old file beside it as config.toml.bak, then reloads the loop; your user ' +
-    'config is never changed. Limits move freely and retentions down to a floor; trust settings only get stricter; ' +
-    `anything else is an edit to the file. ${SOURCES_HELP}`
+    'config is never changed. Every setting takes what the file would, but a retention, which stops at a floor; ' +
+    `a key not listed here is an edit to the file. ${SOURCES_HELP}`
 
 /**
  * Loop settings' description, one line of its state: how many settings it shows, how many this workspace sets, and how
@@ -63,49 +66,21 @@ export function settingsLine(keys: ConfigKey[]): string {
         .join(' · ')
 }
 
-/** The trust switches, and the side the page may move each to: the stricter one (TRUST_MODEL T8). */
-export const STRICTER_ON: Record<string, boolean> = { 'trust.rebase': false, 'trust.commit_trailer': true }
-
-/** What each trust switch turns on, named for its checkbox: the behavior, never `on`. */
-export const SWITCH_NAME: Record<string, string> = { 'trust.rebase': 'rebase', 'trust.commit_trailer': 'add trailer' }
-
-/**
- * Whether a key that only gets stricter is at its strictest already, so the page can take it no further: a choice at
- * its last, a switch on its stricter side, a list with no entry left, or a count at 0.
- */
-export function strictest(key: ConfigKey): boolean {
-    if (key.kind !== 'stricter') {
-        return false
-    }
-    const { value } = key
-    if (key.choices.length > 0) {
-        return value === key.choices.at(-1)
-    }
-    if (typeof value === 'boolean') {
-        return value === STRICTER_ON[key.name]
-    }
-    if (Array.isArray(value)) {
-        return value.length === 0
-    }
-    return value === 0
+/** What each switch turns on, named for its checkbox: the behavior, never `on`. */
+export const SWITCH_NAME: Record<string, string> = {
+    'trust.rebase': 'rebase',
+    'trust.commit_trailer': 'add trailer',
+    'pools.git_maintenance': 'maintain',
+    'review.agent_prs': 'review',
+    'paths.plan_archive_prompts': 'archive',
+    'paths.plan_archive_conversations': 'archive',
+    'paths.plan_archive_comments': 'archive',
 }
 
-/** A key at its strictest, in words for its locked readout: a switch by what it does, `rebase off`. */
-export function lockedText(key: ConfigKey): string {
-    const { name, value } = key
-    if (typeof value === 'boolean') {
-        return `${SWITCH_NAME[name] ?? name} ${value ? 'on' : 'off'}`
-    }
-    return valueText(value, name)
-}
-
-/**
- * Whether dropping `entry` from stricter list `key`, which keeps `kept` now, asks first: any authorized replier, since
- * the page does not know which login is the operator's and losing it ends the reply path, and a list's last entry.
- * Only an edit to the file adds either back.
- */
-export function dropAsks(key: ConfigKey, entry: string, kept: readonly string[]): boolean {
-    return key.name === 'trust.authorized_repliers' || (kept.length === 1 && kept[0] === entry)
+/** A name as typed into a list's add field, trimmed; null when empty or already in `entries`. */
+export function addedName(text: string, entries: readonly string[]): string | null {
+    const name = text.trim()
+    return name === '' || entries.includes(name) ? null : name
 }
 
 /** A key's default in words for its row, `default 2`, once its value is not the default; null while it is. */
@@ -116,45 +91,25 @@ export function defaultText(key: ConfigKey): string | null {
 /**
  * What a reset types into key's field, its default as the form holds it, for a key whose value is not its default;
  * null when the page cannot take it there: a default that unsets the key (an unmanaged pool, no budget) or removes a
- * repository's own count, a retention's default under its floor from the value now, a stricter key's default looser
- * than its value now, which only the file may set, a list's default that drops an entry the page asks about first, or a
- * default the loader would refuse beside its pair's value in `keys` (`PAIRS`). A reset is an ordinary change, saved as
- * any other.
+ * repository's own count, a retention's default under its floor from the value now, or a default the loader would
+ * refuse beside its pair's value in `keys` (`PAIRS`). A reset is an ordinary change, saved as any other.
  */
 export function resetDraft(key: ConfigKey, keys: ConfigKey[] = []): ConfigDrafts[string] | null {
     const { value, default: to } = key
     if (sameValue(value, to) || to === null || (typeof to === 'object' && !Array.isArray(to))) {
         return null
     }
-    if (typeof to === 'number' && !keepsPair(key.name, to, keys)) {
-        return null
-    }
     if (Array.isArray(to)) {
         const entries = to.map(String)
-        if (key.kind === 'free') {
-            return entries.join(', ')
-        }
-        // A stricter list only loses entries: back to its default only if every default entry is still there, and
-        // never by dropping one the page asks about first (`dropAsks`), which stays the operator's own uncheck.
-        const now = Array.isArray(value) ? value.map(String) : []
-        const dropped = now.filter((e) => !entries.includes(e))
-        const asks = entries.length === 0 || dropped.some((e) => dropAsks(key, e, now))
-        return entries.every((e) => now.includes(e)) && !asks ? entries : null
+        return key.name === ALERTS ? entries.join(', ') : entries
     }
-    if (typeof to === 'boolean') {
-        return key.kind !== 'stricter' || to === STRICTER_ON[key.name] ? to : null
+    if (typeof to === 'boolean' || typeof to === 'string') {
+        return to
     }
-    if (typeof to === 'string') {
-        // A choice moves only later, toward stricter; one the page does not list, now or as the default, stays put.
-        const now = typeof value === 'string' ? key.choices.indexOf(value) : -1
-        const then = key.choices.indexOf(to)
-        return now !== -1 && then >= now ? to : null
+    if (!keepsPair(key.name, to, keys)) {
+        return null
     }
-    const was = typeof value === 'number' ? value : null
-    if (key.kind === 'stricter') {
-        return was === null || to <= was ? String(to) : null
-    }
-    return pastText(key, was, to) === null ? String(to) : null
+    return pastText(key, typeof value === 'number' ? value : null, to) === null ? String(to) : null
 }
 
 /** Whether the form's `changes` already take key back to its default, so its reset has nothing left to do. */
@@ -189,12 +144,9 @@ function sameValue(a: ConfigValue, b: ConfigValue): boolean {
     return JSON.stringify(a) === JSON.stringify(b)
 }
 
-/** How far the page may take a retention, or that a trust setting only gets stricter; nothing for a limit. */
+/** How far the page may take a retention, and how the budget's alerts are typed; nothing for any other key. */
 export function boundText(key: ConfigKey): string {
-    if (key.kind === 'stricter') {
-        return typeof key.value === 'number' ? 'only fewer from here' : 'stricter only'
-    }
-    if (key.kind === 'free') {
+    if (key.name === ALERTS) {
         return 'percentages, comma separated; 100% is always sent'
     }
     return key.bound === null ? '' : `at least ${key.bound}, or 0 for forever, from here`
@@ -213,10 +165,10 @@ export interface ConfigForm {
 
 /**
  * The changes a save sends: each touched key whose value differs from the one read. `capacity.repo_slots` sends only
- * the repositories whose count changed, and a list the entries kept. A count left empty changes nothing when the file
+ * the repositories whose count changed, and a list whole. A count left empty changes nothing when the file
  * sets none, and is named in `errors` when it does, as is a repository picked and left empty. A count that is not a
  * whole number, or that the server would refuse as past its bound, is named in `errors` with why, as the server checks
- * it: a retention under its floor and shorter than the value read, or a stricter count raised. The server checks again
+ * it: a retention under its floor and shorter than the value read. The server checks again
  * on save, and checks what the loader refuses.
  */
 export function configForm(keys: ConfigKey[], drafts: ConfigDrafts): ConfigForm {
@@ -228,7 +180,7 @@ export function configForm(keys: ConfigKey[], drafts: ConfigDrafts): ConfigForm 
         if (draft === undefined) {
             continue
         }
-        if (key.kind === 'free' && typeof draft === 'string') {
+        if (key.name === ALERTS && typeof draft === 'string') {
             // The budget's alerts, typed as a list: sent whole, the loader checking each.
             const percents = wholeNumbers(draft)
             if (percents === 'invalid') {
@@ -238,7 +190,7 @@ export function configForm(keys: ConfigKey[], drafts: ConfigDrafts): ConfigForm 
             }
             continue
         }
-        if (key.kind === 'stricter' && (typeof draft === 'boolean' || key.choices.length > 0)) {
+        if (typeof draft === 'boolean' || key.choices.length > 0) {
             // A switch, or a choice such as `policy.stacking`'s: sent as picked.
             if (draft !== key.value) {
                 changes[key.name] = draft as ConfigValue
@@ -271,11 +223,9 @@ export function configForm(keys: ConfigKey[], drafts: ConfigDrafts): ConfigForm 
             } else if (typeof count === 'number') {
                 changes[key.name] = count
             }
-        } else if (Array.isArray(draft)) {
-            const was = Array.isArray(key.value) ? key.value : []
-            if (draft.length !== was.length) {
-                changes[key.name] = draft
-            }
+        } else if (Array.isArray(draft) && !sameValue(draft, key.value)) {
+            // A list of names, sent whole: the entries kept and the ones added, in that order.
+            changes[key.name] = draft
         }
     }
     return { changes, errors }
@@ -312,19 +262,16 @@ function countError(
 }
 
 /**
- * Why the page would not send `now` for `key`, whose value read was `was`, as the server's own check (`_past` and
- * `_stricter` in `canopy/serve/config_edit.py`) refuses it; null when the server would take it. A retention is refused
- * only under its floor and shorter than `was`, so a value the file set under the floor stays as it is.
+ * Why the page would not send `now` for `key`, whose value read was `was`, as the server's own check (`_past` in
+ * `canopy/serve/config_edit.py`) refuses it; null when the server would take it. A retention is refused only under its
+ * floor and shorter than `was`, so a value the file set under the floor stays as it is.
  */
 function pastText(key: ConfigKey, was: number | null, now: number): string | null {
-    if (key.kind === 'stricter') {
-        return was !== null && now > was ? `only fewer from here: at most ${was}; set more in the file` : null
-    }
-    if (key.kind !== 'limit' || key.bound === null) {
+    if (key.bound === null) {
         return null
     }
     const { bound } = key
-    // Forever is the strictest: always allowed, and any count of days shorter than it.
+    // Forever keeps the most: always allowed, and any other value keeps less than it.
     return now !== 0 && now < bound && (was === null || was === 0 || now < was)
         ? `at least ${bound}, or 0 for forever, from here; set less in the file`
         : null
@@ -427,19 +374,6 @@ export function changeList(keys: ConfigKey[], changes: Record<string, ConfigValu
     return found
 }
 
-/**
- * The keys a save would change that only get stricter from the page: ones only an edit to the file undoes, so the save
- * bar says so before the save.
- */
-export function oneWay(keys: ConfigKey[], changes: Record<string, ConfigValue>): string[] {
-    return keys.filter((k) => k.kind === 'stricter' && k.name in changes).map((k) => k.name)
-}
-
-/** What the save bar says of the stricter keys a save would change, `names`: that only the file undoes them. */
-export function oneWayText(names: string[]): string {
-    return `${names.join(', ')}: only an edit to config.toml undoes ${names.length === 1 ? 'this' : 'these'}`
-}
-
 /** What an unset key is, in words: an unmanaged pool for the pools' counts, no budget for the budget. */
 export function unsetText(name: string): string {
     return name === 'spend.monthly_budget_usd' ? 'none' : 'unmanaged'
@@ -470,11 +404,6 @@ export interface ConfigGroup {
     /** One line under the label on what the keys in it govern. */
     blurb: string
     /**
-     * Whether its keys only get stricter from the page: the band's header says so once, with a lock, instead of each
-     * row.
-     */
-    oneWay?: boolean
-    /**
      * The keys it shows, in order, by name, each with its label in words, the unit its field is in, and the part of the
      * band it heads, if the band is in labelled parts: a key with a `part` starts that part, and the keys after it are
      * in it.
@@ -496,6 +425,7 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
             { name: 'capacity.max_reviews', label: 'Review runs at once' },
             { name: 'capacity.max_tasks', label: 'Task runs at once' },
             { name: 'capacity.max_reviews_per_day', label: 'Reviews a day' },
+            { name: 'review.agent_prs', label: "Review the loop's own PRs before a person is asked" },
             { name: 'loop.min_free_disk_mib', label: 'Free disk a tick needs to dispatch', unit: 'MiB' },
             { name: 'capacity.slots_per_repo', label: 'Slots per repository' },
             { name: REPO_SLOTS, label: 'Repositories with a count of their own' },
@@ -528,6 +458,7 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
             { name: 'tracker.query_every_minutes', label: 'Shortest gap between tracker queries', unit: 'min' },
             { name: 'connect.every_minutes', label: 'Time between connector polls', unit: 'min' },
             { name: 'connect.max_age_minutes', label: 'Age at which an observation is stale', unit: 'min' },
+            { name: 'paths.plan_archive_every_minutes', label: 'Shortest gap between plan archives', unit: 'min' },
             {
                 name: 'policy.ci_cooldown_minutes',
                 label: 'Wait after red CI before a resume',
@@ -544,6 +475,18 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
         ],
     },
     {
+        title: 'Upkeep',
+        blurb: "What a tick tidies in each pool: git's maintenance of a clone, and the cleanup of a slot left idle.",
+        keys: [
+            { name: 'pools.git_maintenance', label: "Run git's maintenance in a clone no run is using" },
+            { name: 'pools.git_max_packs', label: 'Packs in a clone before maintenance runs' },
+            { name: 'pools.git_max_loose', label: 'Loose objects in a clone before maintenance runs' },
+            { name: 'pools.git_every_hours', label: 'Time between looks at a clone', unit: 'h' },
+            { name: 'pools.idle_after_days', label: 'Idle time before a slot runs its idle command', unit: 'days' },
+            { name: 'pools.idle_timeout_minutes', label: "A slot's idle command", unit: 'min' },
+        ],
+    },
+    {
         title: 'Retention & budget',
         blurb: 'How long canopy keeps its own history, 0 for forever, and what a month of agent runs should cost.',
         keys: [
@@ -551,14 +494,15 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
             { name: 'retention.tick_files_days', label: "Keep a tick's log and prompt", unit: 'days' },
             { name: 'retention.journal_days', label: "Keep the journal's old rows", unit: 'days' },
             { name: 'retention.memory_days', label: 'Keep a retired note or proposal', unit: 'days' },
+            { name: 'retention.log_max_mib', label: 'Rotate canopy.log past this size', unit: 'MiB' },
+            { name: 'retention.log_keep', label: 'Rotated logs kept' },
             { name: 'spend.monthly_budget_usd', label: 'Monthly budget', unit: '$' },
             { name: 'spend.budget_alerts', label: 'Also alert at these shares of the budget', unit: '%' },
         ],
     },
     {
         title: 'Guardrails',
-        blurb: 'Which work waits on a plan you approve, and whose words workers act on.',
-        oneWay: true,
+        blurb: 'Which work waits on a plan, whose words workers act on, and what canopy remembers and sends.',
         keys: [
             { name: 'policy.plan', label: 'Before a ticket is implemented' },
             { name: 'policy.feedback_plan', label: 'Before a resume acts on review feedback' },
@@ -570,6 +514,14 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
             { name: 'trust.rebase', label: 'Workers rebase and push with a lease' },
             { name: 'trust.max_flaky_kicks', label: 'Reruns of checks judged flaky, per pushed head' },
             { name: 'trust.commit_trailer', label: 'Workers add a Co-authored-by trailer' },
+            { name: 'memory.ticket_notes', label: "Notes a ticket's runs keep for its later runs" },
+            { name: 'memory.proposals', label: 'Lessons workers propose for every run' },
+            { name: 'artifacts.authorized_authors', label: 'Whose comments on an artifact a worker acts on' },
+            { name: 'artifacts.publish_roles', label: 'Which agents may publish artifacts' },
+            { name: 'sessions.search', label: "How much of your runtime's sessions canopy lists and searches" },
+            { name: 'paths.plan_archive_prompts', label: "The plan archive takes each planner's prompt" },
+            { name: 'paths.plan_archive_conversations', label: "The plan archive takes each ticket's conversation" },
+            { name: 'paths.plan_archive_comments', label: 'The plan archive takes your comments on plans' },
         ],
     },
 ]

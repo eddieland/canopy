@@ -1279,31 +1279,38 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   allows one more run a request, with `canopy grant`'s guards. A try is the operator's, as the CLI's is: it waits for
   no `every_minutes`, hours, or `capacity.max_chores` (DESIGN §19), and only a run of the same chore already running
   refuses it.
-- Its config writes (DESIGN §12, §22, D128) are an allowlist in code, by key name, never a section's wildcard, so a key
-  added later is not writable until it is named. Limits may be raised or lowered to anything the config loader
-  takes, with no bound of the page's own: the counts in `capacity`, the attempt,
-  follow-up, and epic limits, the attachment limits under their own ceilings, and the CI cooldown, feedback quiet time,
-  and feedback's wait on pending checks in `policy`, the paces and free-disk floor in `loop`, the tracker query's
-  spacing, the connectors' poll and stale age, a review's settle time, the worker's, reviewer's, overseer's, and
-  setup's timeouts in `runtime`, and `spend.monthly_budget_usd`, which spends nothing but, raised, silences the sink
-  that hears the month reached it. The day counts in `retention` may be lengthened, set to 0 (forever), or shortened to
-  a floor, never past it: a shorter one removes the transcripts that show what a run did, and a removal outlives a new
-  secret. `spend.budget_alerts` is set whole, to any list the loader takes: none silences the 100% alert. Trust
-  settings move only toward stricter: `policy.stacking` to `"never"`, `policy.plan` and `policy.feedback_plan` to
-  `"approve"`, `policy.planner_may_approve` toward `"off"`, an entry removed from `trust.authorized_repliers` or
-  `trust.trusted_reviewers` (never added), `trust.review_replies` to `"approve"`, `trust.rebase` to false,
-  `trust.max_flaky_kicks` lowered, and `trust.commit_trailer` to true. Nothing that runs a command, chooses a prompt,
-  is read as words, or moves the listener: no other `runtime.*`, `review.*`, `tracker.*`, `connect.*`, or
-  `retention.*`, no `notify.*`, `chores`, `paths.*`, `memory.*`, or `serve.*`, and no comment mark or trailer name.
-  A config write outlives the secret, which is why trust only tightens: a replier added through a stolen session would
-  go on steering workers after a new secret ended it. It writes the workspace's private file alone (M49), never the
-  workspace file (T7) nor the user file, which serves every workspace: a key from the user file is written to the
-  private file, where it shadows the user file's for this workspace alone. It keeps the file as it was as
-  `config.toml.bak`; refuses a private file that is a symlink or not the operator's (D053's check), one tomlkit would
-  not write back byte for byte, and one that changed since the page read it; validates the result as any `canopy`
-  command would load it; and refuses inside a tick or run (`inside_run`). Each change is logged with its old and new
-  values. A running run keeps the prompt and permissions it started with, so a stricter setting reaches only runs
-  started after it.
+- Its config writes (DESIGN §12, §22, D128) are an allowlist in code, by key name, never a section's wildcard, so a
+  key added later is not writable until it is named. A named key may be set to anything the config loader takes, with
+  no bound or direction of the page's own. The limits: the counts in `capacity`, the attempt, follow-up, and epic
+  limits, the attachment limits under their own ceilings, and the CI cooldown, feedback quiet time, and feedback's
+  wait on pending checks in `policy`, the paces and free-disk floor in `loop`, the tracker query's spacing, the
+  connectors' poll and stale age, a review's settle time, the worker's, reviewer's, overseer's, and setup's timeouts
+  in `runtime`, a pool's upkeep in `pools` (git maintenance on or off, its thresholds and spacing, and how long a slot
+  sits idle before its idle command runs and how long that may take, never the command or the backend), whether the
+  loop's own PRs are reviewed (`review.agent_prs`, whose spend `capacity.max_reviews_per_day` caps), how often the
+  plan archive is pushed, `spend.monthly_budget_usd`, which spends nothing but, raised, silences the sink that hears
+  the month reached it, and `spend.budget_alerts`, none of whose values silences the 100% alert. And the trust
+  settings, loosened as well as tightened: `policy.stacking`, `policy.plan`, `policy.feedback_plan`,
+  `policy.planner_may_approve`, the entries of `trust.authorized_repliers` and `trust.trusted_reviewers`, added as
+  well as removed, `trust.review_replies`, `trust.rebase`, `trust.max_flaky_kicks`, `trust.commit_trailer`, the
+  `memory` tiers, `sessions.search`, the entries of `artifacts.authorized_authors` and `artifacts.publish_roles`, and
+  whether the plan archive takes prompts, conversations, and comments. The retentions alone keep a floor: the day
+  counts in `retention` may be lengthened, set to 0 (forever), or shortened to a floor, never past it, since a shorter
+  one removes the transcripts that show what a run did, and a removal cannot be undone. The log's rotation
+  (`retention.log_max_mib`, `retention.log_keep`) is held the same way, to its defaults as floors, since the log names
+  each change the page made. Nothing that runs a command, chooses a prompt, is read as words, or moves the listener:
+  no other `runtime.*`, `review.*`, `tracker.*`, `connect.*`, `pools.*`, `paths.*`, `artifacts.*`, or `sessions.*`, no
+  `notify.*`, `chores`, `telemetry.*`, or `serve.*`, and no comment mark or trailer name. A config write outlives the
+  secret. The page once let a trust setting only tighten for that reason; the operator settled (2026-11-24) that the
+  rule cost more than it guarded, so a replier or reviewer added through a stolen session goes on steering workers
+  after a new secret ends it, until the operator reads the private file or the log (the residual below). It writes the
+  workspace's private file alone (M49), never the workspace file (T7) nor the user file, which serves every workspace:
+  a key from the user file is written to the private file, where it shadows the user file's for this workspace alone.
+  It keeps the file as it was as `config.toml.bak`; refuses a private file that is a symlink or not the operator's
+  (D053's check), one tomlkit would not write back byte for byte, and one that changed since the page read it;
+  validates the result as any `canopy` command would load it; and refuses inside a tick or run (`inside_run`). Each
+  change is logged with its old and new values. A running run keeps the prompt and permissions it started with, so a
+  changed setting reaches only runs started after it.
 
 The mock server is not such a listener: it serves a journal seeded from fixtures, on loopback for development, or
 under public host names as the web UI's demo on a host such as Vercel (D122). It holds nothing of the operator's, so it
@@ -1332,9 +1339,12 @@ for the rest. A local user on a
 shared machine can reach loopback, and is stopped only by the secret. A browser sends a host's cookies to every port
 on it, so a local service on another port that the operator's browser visits receives the session cookie; it can then
 read the UI, and write with it only by also reading the token, which takes a same-origin page. A signed-in session
-cannot be ended alone before its 30 days: a new secret ends them all. Whoever holds a session can raise the limits
-for that workspace as far as the file could, and that outlives a new secret until the operator reads the private file
-or the log: the residual is spend, which no ceiling of the page's bounds, never authority. It can also shorten a
+cannot be ended alone before its 30 days: a new secret ends them all. Whoever holds a session can set that
+workspace's limits and trust settings as the file could, and that outlives a new secret until the operator reads the
+private file or the log, which names each change with its old and new values: the residual is spend, which no ceiling
+of the page's bounds, and authority over workers, since it can add an authorized replier or a trusted reviewer, turn
+plan approval off, or let workers post their replies and rebase. The operator accepted both (D128). It can also
+shorten a
 retention to its floor, so a tick removes history older than that, the floor's worth always kept. Plain HTTP on a
 private address can be read on the network (D076), transcripts included: a secret a worker's tool printed into its log
 is then on the network too.
