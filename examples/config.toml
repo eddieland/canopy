@@ -321,7 +321,9 @@ cmd = "canopy-connect-jira --site acme.atlassian.net"
 # low_impact = "Only docs, comments, or tests change."
 # settle_minutes = 30   # review a head once it has been the head this long; a push starts over. 0 to 10080
 # On the loop's own PRs, a finding less severe than this is held for you: no worker gets it and nothing asks you about
-# it until you send it from the review. "blocking", "major", or "minor", which holds none.
+# it until you send it from the review. "blocking", "major", or "minor", which holds none. With the reviewer's default
+# levels, "major" holds what changes no behavior, such as docs and comments, and lets behavior bugs and new logic left
+# untested through: to a worker with "canopy:review" in trust.trusted_reviewers, else to your attention list.
 # min_severity = "major"
 #
 # Cases `canopy review eval` scores the reviewer on, after you change reviewer.md, a persona, or its model; best in the

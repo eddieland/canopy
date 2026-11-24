@@ -16,8 +16,8 @@ dropped; and each text, the transcript's entries, and their characters altogethe
 
 `uses` reads the same file for a measurement (ROADMAP M70, M71): each tool call of the session, in order, with what it
 did to files (`report.Touch`), what the session had spent when it ended, the command a shell call ran, and the
-characters of what the agent sent and of what the call returned, whole as the runtime printed it, and whether the
-runtime said it cut that.
+characters of what the agent sent and of what the call returned, whole as the runtime printed it, whether the
+runtime said it cut that, and the permission the run's rules refused it under, where the runtime names it.
 
 `tail` reads the end of such a file as written, for a tick's output shown whole: stderr and every line the transcript
 leaves out. The same checks hold, at most `MAX_TAIL` of it is read, and its control characters are dropped.
@@ -121,6 +121,9 @@ class Use:
     result_chars: int = 0
     #: Whether the runtime said it cut what the call returned; None when it did not say.
     cut: bool | None = None
+    #: The permission the run's rules refused it under, as the runtime named it; None when they did not, or it did not
+    #: say.
+    refused: str | None = None
 
 
 @dataclass(frozen=True)
@@ -170,6 +173,7 @@ def uses(path: Path, session_id: str, *, version: Version) -> Uses | None:
                     input_chars=len(json.dumps(call.input, ensure_ascii=False, separators=(",", ":"), default=str)),
                     result_chars=returned.chars if returned is not None else 0,
                     cut=returned.cut if returned is not None else None,
+                    refused=returned.refused if returned is not None else None,
                 ),
             )
         if printed.ended_call:

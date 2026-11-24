@@ -4,6 +4,7 @@ import { Server } from 'lucide-react'
 
 import { hostQuery } from '@/api/queries'
 import type { HostResources } from '@/api/types'
+import { CardRow, CardRows, Glance, GlanceCard } from '@/components/glance'
 import {
     bytesText,
     concerns,
@@ -21,8 +22,6 @@ import {
 import { age, useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
-import { CardRow, CardRows, ReadoutCard, ReadoutHover } from './readout-card'
-
 /**
  * The machine the loop runs on, in the header's readouts: a server's icon and `host ok` muted, or its worst pressure
  * in two words, `disk low` in `status-failed` past what canopy works with and `status-blocked` short of it; under
@@ -39,7 +38,7 @@ export function HostReadout() {
     const pressure = hostPressure(host)
     const readout = hostReadout(host)
     return (
-        <ReadoutHover card={<HostCard host={host} />} testId="host-card">
+        <Glance card={<HostCard host={host} />} testId="host-card">
             <Link
                 to="/system"
                 className={cn(
@@ -56,7 +55,7 @@ export function HostReadout() {
                 color, as the rail's strip shows a count on its icon; the words are its name and the card's. */}
                 <span className="hidden lg:inline">{readout}</span>
             </Link>
-        </ReadoutHover>
+        </Glance>
     )
 }
 
@@ -67,7 +66,7 @@ function HostCard({ host }: { host: HostResources }) {
     const { cpu, memory, process } = host
     const used = memory.total === null || memory.available === null ? 0 : usedShare(memory.total, memory.available)
     return (
-        <ReadoutCard title={host.hostname} aside={`${host.system} ${host.machine}`}>
+        <GlanceCard title={host.hostname} aside={`${host.system} ${host.machine}`}>
             {found.length > 0 && (
                 <ul className="flex flex-col gap-1">
                     {found.map((c) => (
@@ -112,7 +111,7 @@ function HostCard({ host }: { host: HostResources }) {
                     )}
                 </CardRow>
             </CardRows>
-        </ReadoutCard>
+        </GlanceCard>
     )
 }
 

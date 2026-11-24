@@ -93,9 +93,13 @@ class Change:
     end: str | None = None
     #: Where the diffed commit leaves the base, as the slot last fetched it.
     merge_base: str | None = None
+    #: Whether the run rewrote its branch, `start` no longer an ancestor of the diffed commit, as a rebase leaves it;
+    #: None when canopy could not tell.
+    rebased: bool | None = None
     #: For a slot the run left unpushed, the last commit the run made there, whose diffs are of work not on origin.
     unpushed: str | None = None
-    #: Whether the run's own change was kept, at `change_path`.
+    #: Whether the run's own change was kept, at `own_path`: `change_path`, or the branch's diff for a run that
+    #: started where its branch leaves the base.
     change_kept: bool = False
     #: Whether the branch against its base was kept, at `review_diff.run_path_for`.
     branch_kept: bool = False
@@ -121,13 +125,29 @@ def crashed(repos: Iterable[str]) -> tuple[Change, ...]:
 def change_path(log_path: str | Path, repo: str) -> Path:
     """Where a run keeps the diff of its own change to `repo`: from the commit it started from to the one it left.
 
-    Without what a base the run brought in, by a rebase or a merge, changed between the two.
+    Without what a base the run brought in, by a rebase or a merge, changed between the two. A run whose own change
+    is its branch's diff keeps none here (`own_path`).
 
     Returns:
         `<id>.<repo>.change.diff` beside `log_path`. The file may not exist.
     """
     log = Path(log_path)
     return log.with_name(f"{log.stem}.{repo}.change.diff")
+
+
+def own_path(log_path: str | Path, change: records.RunChange) -> Path:
+    """Where a run keeps the diff of its own change to `change.repo`, as `runs.changes` kept it.
+
+    A run that started where its branch leaves the base, as an `implement` on a base that has not moved, changed the
+    branch from its base and nothing else, so its own change is the branch against its base, byte for byte, and the
+    one file is kept for both.
+
+    Returns:
+        The branch's diff for such a run, else `change_path`. The file may not exist.
+    """
+    if change.start_sha is not None and change.start_sha == change.merge_base_sha:
+        return review_diff.run_path_for(log_path, change.repo)
+    return change_path(log_path, change.repo)
 
 
 def files(log_path: str | Path, repos: Iterable[str]) -> list[Path]:
@@ -157,6 +177,7 @@ def record(conn: sqlite3.Connection, run_id: int, changes: Iterable[Change], *, 
             c.start_on_base,
             c.end,
             c.merge_base,
+            c.rebased,
             c.unpushed,
             c.change_kept,
             c.branch_kept,
@@ -177,6 +198,7 @@ def record(conn: sqlite3.Connection, run_id: int, changes: Iterable[Change], *, 
         "start_on_base",
         "end_sha",
         "merge_base_sha",
+        "rebased",
         "unpushed_sha",
         "change_kept",
         "branch_kept",

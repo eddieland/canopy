@@ -327,8 +327,9 @@ on the host. A command named in that directory's config still runs (§24, Git st
 
 A worker's own git runs canopy's hooks, from the snapshot (§13), in place of the repository's: `prepare-commit-msg`
 adds canopy's trailers and the operator's subject prefix, if set, but not to a `fixup!`, `squash!`, or `amend!` subject,
-which `--autosquash` matches; `pre-push` holds a worker's first push for its repository's checklist (§42); and each
-hook then runs the repository's own of its name, so the operator's hooks run as before. They mark and hold in the
+which `--autosquash` matches, and a fixup of a fixup keeps one marker, not `fixup! fixup!`; `pre-push` holds a
+worker's first push for its repository's checklist (§42); and each hook then runs the repository's own of its name,
+so the operator's hooks run as before. They mark and hold in the
 run's own slots alone: a repository the worker's tools make elsewhere, as a test's, runs only its own hooks. Step 5
 names a pushed commit that lacks either in the run's note, and never rewrites it (TRUST_MODEL T5).
 

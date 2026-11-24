@@ -1,5 +1,3 @@
--- sha256 of 0027_unasked_items.sql: 3c88127c86ca87868d077d3566ed5eff0fb6e2e2a900b63c26b9c527a26d46ab
+-- sha256 of 0027_rebased_runs.sql: a86434fa32ec80078ade3120dfaf26a7b9836799ccafa410b95befe2bffe6bb4
 
--- Rebuilds `checklist_answers` and creates no table; an item no push asked shows the new answer is taken.
-INSERT INTO checklist_answers (run_id, repo, item, answer)
-VALUES ((SELECT min(id) FROM runs), 'repo', 'narrow-except', 'unasked');
+-- Creates no table, so seeds no row.

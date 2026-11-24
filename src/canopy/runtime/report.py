@@ -450,6 +450,9 @@ class Returned:
     #: Whether the runtime said it cut the result, so the agent saw less than the whole; None when the call did not say
     #: (ROADMAP M71).
     cut: bool | None = None
+    #: The permission the run's rules refused the call under, as the runtime's error names it; None for a call they
+    #: did not refuse, or a runtime whose error does not name it.
+    refused: str | None = None
 
 
 #: What a tool call did to the repository's files, as the outline's measurement counts it (ROADMAP M70): read a file,

@@ -232,7 +232,7 @@ class RunChange(Row):
     #: For a slot the run left unpushed, the last commit the run made there, whose diffs are kept as work not on
     #: origin; None for a slot that pushed.
     unpushed_sha: str | None
-    #: Whether the diff of the run's own change was kept.
+    #: Whether the diff of the run's own change was kept, at `run_changes.own_path`.
     change_kept: bool
     #: Whether the diff of the branch against its base was kept.
     branch_kept: bool
@@ -246,6 +246,9 @@ class RunChange(Row):
     lines_removed: int | None
     #: How many commits its range held, those past `run_changes.MAX_COMMITS` included; None when canopy read none.
     commit_count: int | None
+    #: Whether the run rewrote its branch: `start_sha` is not an ancestor of the commit its diffs are of, as a rebase
+    #: leaves it; None when canopy could not tell, or recorded before it read this.
+    rebased: bool | None
 
 
 @dataclass(frozen=True)

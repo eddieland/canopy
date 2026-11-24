@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { Moon, Sun } from 'lucide-react'
 import { useRef, useState } from 'react'
 
+import { GlanceCard } from '@/components/glance'
 import { Button } from '@/components/ui/button'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
@@ -9,8 +10,6 @@ import { paletteOptions, usePalettes } from '@/theme/palette'
 import type { ResolvedTheme } from '@/theme/store'
 import { switchPalette, switchTheme } from '@/theme/transition'
 import { useTheme } from '@/theme/use-theme'
-
-import { ReadoutCard } from './readout-card'
 
 /**
  * Flips between light and dark with a circular reveal from the button. System is chosen in Settings.
@@ -82,7 +81,7 @@ function PalettePicker({ theme, onPick }: { theme: ResolvedTheme; onPick: (revea
     const palettes = usePalettes()
     const other = theme === 'light' ? 'dark' : 'light'
     return (
-        <ReadoutCard
+        <GlanceCard
             title="Palette"
             aside={theme}
             foot={
@@ -115,6 +114,6 @@ function PalettePicker({ theme, onPick }: { theme: ResolvedTheme; onPick: (revea
                     </ToggleGroupItem>
                 ))}
             </ToggleGroup>
-        </ReadoutCard>
+        </GlanceCard>
     )
 }

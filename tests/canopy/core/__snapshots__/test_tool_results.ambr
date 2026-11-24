@@ -21,6 +21,7 @@
           "chars": 113,
           "median_chars": 56.5
         },
+        "refused": {},
         "tools": [
           {
             "tool": "$ gh run view",
@@ -88,6 +89,7 @@
           "chars": 0,
           "median_chars": null
         },
+        "refused": {},
         "tools": [
           {
             "tool": "read",
@@ -115,6 +117,7 @@
           "chars": 0,
           "median_chars": null
         },
+        "refused": {},
         "tools": [
           {
             "tool": "$ rg",
@@ -142,6 +145,7 @@
           "chars": 0,
           "median_chars": null
         },
+        "refused": {},
         "tools": [
           {
             "tool": "canopy_decide",
