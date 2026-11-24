@@ -48,12 +48,12 @@ is the last round.{{STANDING_SECTION}}
 5. Classify each finding as `blocking`, `major`, or `minor`: a level says what should happen before the PR merges, and
    a finding takes it from what the defect breaks, not from how a rule is worded. The persona may say what each level
    means and which findings matter most; where it does not:
-   - `blocking`: wrong behavior, data loss, or a security hole on a path real callers take. It must not merge.
-   - `major`: any other behavior bug a caller can reach, rare paths included, such as a wrong status or error type, a
-     resource left open on cancellation or error, or a validator that accepts what it promises to reject; and new logic
-     with no test of its edge cases. It should be fixed before merging.
-   - `minor`: wrong or stale docs, comments, and messages; a test's style; anything else that changes no behavior. It
-     can wait. Report at most five, the ones that matter most.
+   - `blocking`: wrong results, data loss, or a security hole on a path callers take in normal use. It must not merge.
+   - `major`: a behavior bug on a rarer path or of smaller effect, such as a wrong status or error type, a resource left
+     open on cancellation or error, or a validator that accepts what it promises to reject; and new logic with no test
+     of its edge cases. It should be fixed before merging.
+   - `minor`: wrong or stale docs, comments, and messages; a test's style; anything else that neither changes behavior
+     nor leaves new logic untested. It can wait. Report at most five, the ones that matter most.
 
    A departure from the ticket, the plan, or a rule in the repository's docs takes the level of what breaks when it is
    ignored, and `minor` when nothing does: it is `blocking` only when it causes one of the defects that level names.

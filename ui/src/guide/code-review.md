@@ -77,17 +77,19 @@ Your CI already has opinions about whitespace; it doesn't need a second one.
 A finding's level says what should happen before the PR merges, and it comes from what the defect breaks, not from
 how loudly a rule is worded:
 
-- **`blocking`**: wrong behavior, data loss, or a security hole on a path real callers take. It must not merge.
-- **`major`**: any other behavior bug a caller can reach, rare paths included, such as a wrong status, a resource left
-  open when something is cancelled, or a validator that lets through what it promised to refuse; and new logic whose
-  edge cases no test tries. Fix it before merging.
-- **`minor`**: wrong or stale docs, comments, and messages, a test's style, and anything else that changes no
-  behavior. It can wait.
+- **`blocking`**: wrong results, data loss, or a security hole on a path callers take in normal use. It must not
+  merge.
+- **`major`**: a behavior bug on a rarer path or of smaller effect, such as a wrong status, a resource left open when
+  something is cancelled, or a validator that lets through what it promised to refuse; and new logic whose edge cases
+  no test tries. Fix it before merging.
+- **`minor`**: wrong or stale docs, comments, and messages, a test's style, and anything else that neither changes
+  behavior nor leaves new logic untested. It can wait.
 
 A broken rule from your docs, the ticket, or its plan takes the level of what breaks when it's ignored, and `minor`
 when nothing does, so a house convention a PR skipped doesn't outrank a write it loses. On the loop's
-own PRs, that makes [`review.min_severity = "major"`](pull-requests#when-canopy-reviews) mean what you'd hope:
-behavior goes to a worker, words wait for you.
+own PRs, that makes [`review.min_severity = "major"`](pull-requests#when-canopy-reviews) mean what you'd hope: words
+are held for you, and behavior and its missing tests go on, to a worker once you trust `canopy:review`, and to your
+attention list until then.
 
 By default a review reports at most five minor findings, the ones that matter most, because the sixth nit is where
 people stop reading. A persona may draw those lines differently, and say how many minor ones are worth your time.
