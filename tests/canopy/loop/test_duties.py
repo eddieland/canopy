@@ -61,8 +61,8 @@ def test_a_query_a_source_read_is_recorded_by_the_harness(
     ticked = scenario.tick(*waits("PROJ-2"))
     assert ticked.tick.status == "ok"
     # Recorded before the overseer ran, each ticket touched into the journal.
-    assert [(d.action, d.rationale) for d in ticked.decisions if d.action == "queried"] == [
-        ("queried", "the query returned these open tickets: PROJ-9 PROJ-2"),
+    assert [(d.action, d.rationale, d.decider) for d in ticked.decisions if d.action == "queried"] == [
+        ("queried", "the query returned these open tickets: PROJ-9 PROJ-2", Decider.HARNESS),
     ]
     assert scenario.state()["observations"]["query"]["result"] == ["PROJ-9", "PROJ-2", "PROJ-9"]
     # One the source has not read yet waits for the read that does, by the harness (DESIGN §39).
@@ -208,7 +208,14 @@ def test_stopped_and_recently_done_tickets_are_owed_nothing(
 ) -> None:
     conn = scenario.conn
     with in_tick(conn) as tick_id:
-        db.record_decision(conn, tick_id, None, duties.QUERIED_ACTION, duties.queried_rationale(["PROJ-2"]))
+        db.record_decision(
+            conn,
+            tick_id,
+            None,
+            duties.QUERIED_ACTION,
+            duties.queried_rationale(["PROJ-2"]),
+            decider=Decider.HARNESS,
+        )
         db.set_ticket(conn, "PROJ-2", str(canopy_env.root), done=True)
         db.record_decision(conn, tick_id, "PROJ-2", "done", "merged")
         db.finish_tick(conn, tick_id, TickStatus.OK, "")
