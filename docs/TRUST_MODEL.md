@@ -162,8 +162,7 @@ Controls:
   refused recording one (`raised`), so a steered overseer can neither drop such
   an item nor raise a false one; a guard that refuses it a run past a limit still records the item. Residual: a
   derivation's mistake raises or ends an item wrongly until a fresh read corrects it.
-  - The overseer's own three items (`needs_author`, `multi_repo`, `notice_rerun`) are recorded once and held by the
-  harness
+- The overseer's own three items (`needs_author`, `multi_repo`, `notice_rerun`) are recorded once and held by the harness
   until what each names ends it, or its ticket is done or stopped (DESIGN §37): a steered overseer cannot drop one by
   leaving it out, only by moving a cursor past the item a `needs_author` names, as it could always decline to record
   one. No coworker's comment ends one: only the operator's own message, a cursor, or a newer run of the held check.
@@ -725,8 +724,7 @@ Controls now:
   run whose repositories disagree. Under the shipped templates a sandboxed run reads, under
   `$HOME`, only its worktrees and their git directories, canopy's agent definitions, and the runtime's and toolchains'
   files: not `~/.ssh`, other repositories, `~/.config/canopy`, the workspace's `.canopy/`, or the operator's OpenCode
-  data. It writes only its worktrees, its slot's own HEAD, index, reflog, and checklist marker and notes, a per-run
-  object
+  data. It writes only its worktrees, its slot's own HEAD, index, reflog, and checklist marker and notes, a per-run object
   directory and temp directory, and its role's own cache and data directories: no ref another slot shares, no hook,
   git config, `.git` link, or `commondir` that git on the host later reads, and none of the operator's caches or
   OpenCode data, which the host's OpenCode, the overseer's included, acts on. Its OpenCode starts with a copy of the
@@ -757,8 +755,7 @@ Controls now:
   commits for their ids, subjects, and trailers, bounded, as the marks' check already read them. Nothing new is read
   from a slot, and nothing there is fetched, pushed, or moved.
 - The sandbox canary (`tests/canopy_sandbox/test_sandbox_canary.py`, HOST_ISOLATION §6) runs a plain script, no model,
-  through the real prefix and the shipped templates, and checks every sandbox denial above on the host, with positive
-  controls
+  through the real prefix and the shipped templates, and checks every sandbox denial above on the host, with positive controls
   so that a sandbox that refuses everything fails. CI runs it on Linux.
 - The runtime's record, which the index of sessions' words reads (DESIGN §13), is what runs write: an unsandboxed
   run's the operator's own, a sandboxed one's its role's. It is opened as the spend's read opens it, read-only,
@@ -1054,8 +1051,7 @@ worktree and before any agent starts. If it could set the runtime commands, the 
 refused, prompt paths, capacity, queue labels, authorized repliers, agent memory's tiers, the agents' personas or
 models, the checklists, which agents publish artifacts and whose comments on them count, or which of the runtime's
 sessions canopy lists by title, one commit would be enough
-  to run commands on operators' machines, raise their spend, send what workers read off the machine, or pick who steers
-  their
+to run commands on operators' machines, raise their spend, send what workers read off the machine, or pick who steers their
 workers.
 
 The workspace file also holds the map: repository names, one-line summaries, and clone URLs. Names and summaries are
@@ -1331,8 +1327,7 @@ outlives a new secret; the banner on every page and `canopy status` show it whil
 in force. A lesson promoted that way reaches every worker's prompt while `memory.proposals` is `use`, as such a notice
 does, with no lapse: it outlives a new secret until the operator forgets it, and `canopy memory lessons` and the
 memory page list it, with where it came from. It can also edit a run's draft into text and a reaction of its choosing
-  and send it, which posts them on GitHub as the operator, unmarked, on a PR or a ticket a run drafted for; the journal
-  records
+and send it, which posts them on GitHub as the operator, unmarked, on a PR or a ticket a run drafted for; the journal records
 the edit, the send, and the channel. Likewise it can edit a review's draft into a review of its choosing and publish it,
 which posts it as the operator, unmarked, as a comment review on any PR canopy reviewed and the loop does not own, a
 coworker's included; the journal records each version, who wrote it, the channel, and what was posted. A note it
