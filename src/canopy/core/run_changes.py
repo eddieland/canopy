@@ -98,7 +98,8 @@ class Change:
     rebased: bool | None = None
     #: For a slot the run left unpushed, the last commit the run made there, whose diffs are of work not on origin.
     unpushed: str | None = None
-    #: Whether the run's own change was kept, at `change_path`.
+    #: Whether the run's own change was kept, at `own_path`: `change_path`, or the branch's diff for a run that
+    #: started where its branch leaves the base.
     change_kept: bool = False
     #: Whether the branch against its base was kept, at `review_diff.run_path_for`.
     branch_kept: bool = False

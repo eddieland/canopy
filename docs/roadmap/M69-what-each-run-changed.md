@@ -132,7 +132,7 @@ did not form, since canopy knows no runtime's; a commit counts as canopy's push 
 kick's copy, which the kick's line names. The mock's runs 39 and 45 and task 1's run carry commits, so the screenshots
 of `workspace/runs/39`, `tasks/1/runs/1`, and PR 88's page are to be taken again. Stage 4, the files against the
 plan, was dropped 2026-11-12 (Rejected, above). 2026-11-24 (#2499): a run whose start the commit it left no longer
-holds, as a rebase leaves it, is recorded as rebased (migration 0026) and `canopy show run:ID` says so, its own change
+holds, as a rebase leaves it, is recorded as rebased (migration 0027) and `canopy show run:ID` says so, its own change
 read without the base's as #2438 reads it; an `implement` on a base that has not moved keeps one diff for both.
 Live check next: this milestone's Accept, stage 3's line included.
 Measured 2026-11-10 (MEASUREMENTS "2026-11-10: M69, the disk canopy's files take"): the journal's diff tables take about

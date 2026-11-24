@@ -599,3 +599,28 @@ def test_models_served_at_a_variant_are_named_as_config_spells_them(tmp_path: Pa
     assert {tuple(r) for r in conn.execute("SELECT model, replies, cost_usd FROM runtime_session_models")} == named
     replies = conn.execute("SELECT message, model FROM run_reply_models ORDER BY message").fetchall()
     assert [tuple(r) for r in replies] == [("msg_1", "a/opus@high"), ("msg_2", "a/opus")]
+
+
+def test_the_queries_the_harness_recorded_are_named_its_own(tmp_path: Path, journals: Journals) -> None:
+    """0026 names the harness as who made each `queried` decision, which canopy had recorded as the overseer's."""
+    conn = journal_at(journals, tmp_path, 25)
+    conn.execute("INSERT INTO ticks (started_at, status) VALUES ('x', 'ok')")
+    conn.executemany(
+        "INSERT INTO decisions (tick_id, ticket_key, action, rationale, decider) VALUES (1, ?, ?, 'r', ?)",
+        [
+            (None, "queried", "overseer"),
+            (None, "queried", None),
+            ("PROJ-1", "wait", "overseer"),
+            ("PROJ-2", "skip", "harness"),
+        ],
+    )
+
+    db.migrate(conn, resources.migrations_dir())
+
+    deciders = conn.execute("SELECT ticket_key, action, decider FROM decisions ORDER BY id").fetchall()
+    assert [tuple(r) for r in deciders] == [
+        (None, "queried", "harness"),
+        (None, "queried", "harness"),
+        ("PROJ-1", "wait", "overseer"),
+        ("PROJ-2", "skip", "harness"),
+    ]

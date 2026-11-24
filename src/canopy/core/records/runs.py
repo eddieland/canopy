@@ -232,7 +232,7 @@ class RunChange(Row):
     #: For a slot the run left unpushed, the last commit the run made there, whose diffs are kept as work not on
     #: origin; None for a slot that pushed.
     unpushed_sha: str | None
-    #: Whether the diff of the run's own change was kept.
+    #: Whether the diff of the run's own change was kept, at `run_changes.own_path`.
     change_kept: bool
     #: Whether the diff of the branch against its base was kept.
     branch_kept: bool
