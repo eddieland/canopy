@@ -320,6 +320,9 @@ cmd = "canopy-connect-jira --site acme.atlassian.net"
 # query = 'repo:acme/api is:pr is:open author:@me -is:draft'  # your own PRs, reviewed for you alone
 # low_impact = "Only docs, comments, or tests change."
 # settle_minutes = 30   # review a head once it has been the head this long; a push starts over. 0 to 10080
+# On the loop's own PRs, a finding less severe than this is held for you: no worker gets it and nothing asks you about
+# it until you send it from the review. "blocking", "major", or "minor", which holds none.
+# min_severity = "major"
 #
 # Cases `canopy review eval` scores the reviewer on, after you change reviewer.md, a persona, or its model; best in the
 # workspace's .canopy/config.toml, since each names one of its repositories. A bug case is a change that was reverted or

@@ -52,7 +52,8 @@ def for_worker(conn: sqlite3.Connection, run_id: int, key: str, repos: Sequence[
     if len(withheld) >= len(stored.findings):
         raise Unusable(
             f"every finding of review run {run_id} the operator did not dismiss is held for them, a rebuttal of a "
-            "worker's decline or a late one: none is left to address until they send one",
+            "worker's decline, a late one, or one less severe than `review.min_severity`: none is left to address "
+            "until they send one",
         )
     beside = [(r, result.stored(r.result_json), review_runs.withheld(conn, r.id)) for r in _beside(conn, run)]
     kept = [(r, found, left) for r, found, left in beside if found is not None and len(left) < len(found.findings)]
@@ -253,5 +254,7 @@ def _held_for(hold: records.ReviewHold) -> str:
             return f"it rebuts the author's decline of {rebuts}"
         case HoldKind.LATE:
             return "it is on code unchanged since the PR's first reviewed commit"
+        case HoldKind.SEVERITY:
+            return "it is less severe than `review.min_severity`"
         case _:
             assert_never(hold.kind)

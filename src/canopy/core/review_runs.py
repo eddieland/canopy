@@ -140,17 +140,24 @@ def withheld(conn: sqlite3.Connection, run_id: int) -> frozenset[int]:
     return frozenset(review_dismissals(conn, run_id)) | frozenset(held(conn, run_id))
 
 
-def hold(conn: sqlite3.Connection, run_id: int, finding: int, *, rebuts: tuple[int, int] | None) -> None:
-    """Hold review run `run_id`'s finding number `finding` for the operator: a rebuttal of `rebuts`'s finding, or late.
+def hold(
+    conn: sqlite3.Connection,
+    run_id: int,
+    finding: int,
+    kind: HoldKind,
+    *,
+    rebuts: tuple[int, int] | None = None,
+) -> None:
+    """Hold review run `run_id`'s finding number `finding` for the operator, as a hold of `kind`.
 
-    `rebuts` is the earlier review run, and its finding, that the worker declined; None holds the finding as `late`, on
-    code unchanged since the PR's first reviewed commit. A finding already held keeps its first hold.
+    `rebuts` is the earlier review run, and its finding, that the worker declined, which a `rebuttal` names and no
+    other kind does. A finding already held keeps its first hold.
     """
     records.insert(
         records.ReviewHold,
         review_run_id=run_id,
         finding=finding,
-        kind=HoldKind.LATE if rebuts is None else HoldKind.REBUTTAL,
+        kind=kind,
         rebuts_run_id=rebuts[0] if rebuts is not None else None,
         rebuts_finding=rebuts[1] if rebuts is not None else None,
         held_at=db.now(),

@@ -325,8 +325,10 @@ A `resume` handed findings answers each in its result's `review_answers`, `fixed
 only for a `done` review of its own ticket. A declined finding comes back only as a rebuttal naming it in `rebuts`,
 which the harness holds for the operator under `review_rebuttal`: it reaches no worker until the operator sends it. A
 later review's finding that is not `blocking`, on lines no change since the PR's first reviewed commit touched, is late,
-held the same way under `review_late`. So an author and a reviewer that disagree, or a reviewer finding more of code
-already read each round, reach a person instead of the per-PR limit.
+held the same way under `review_late`. A finding less severe than `review.min_severity`, `minor` by default, which
+holds none, is held too, and raises no item: the operator reads it with the PR, and sends it if it matters. So an
+author and a reviewer that disagree, or a reviewer finding more of code already read each round, reach a person
+instead of the per-PR limit.
 
 ### Review requests
 

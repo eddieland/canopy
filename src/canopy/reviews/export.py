@@ -142,6 +142,8 @@ def _standing(hold: records.ReviewHold | None, answer: records.ReviewAnswer | No
                 why = f"it rebuts the worker's decline of {declined}"
             case HoldKind.LATE:
                 why = "it is on code unchanged since the PR's first reviewed commit"
+            case HoldKind.SEVERITY:
+                why = "it is less severe than `review.min_severity`"
             case _:
                 assert_never(hold.kind)
         return f"held for the operator, {why}"
