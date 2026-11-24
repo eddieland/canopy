@@ -1,7 +1,8 @@
 import { Link } from '@tanstack/react-router'
 
+import { Glance } from '@/components/glance'
 import { LinkOut } from '@/components/link-out-icon'
-import { Tip } from '@/components/tip'
+import { TicketGlance } from '@/components/ref-glances'
 import { useTicketUrl } from '@/hooks/use-ticket-url'
 import { cn } from '@/lib/utils'
 
@@ -13,7 +14,7 @@ export function TicketLink({ ticketKey, className }: { ticketKey: string; classN
     const tracker = useTicketUrl(ticketKey)
     return (
         <span className={cn('inline-flex min-w-0 items-center gap-1 font-mono text-xs', className)}>
-            <Tip fact={ticketKey} mono whenCut>
+            <Glance card={<TicketGlance ticketKey={ticketKey} />} testId="ticket-card" align="start">
                 <Link
                     to="/tickets/$key"
                     params={{ key: ticketKey }}
@@ -21,7 +22,7 @@ export function TicketLink({ ticketKey, className }: { ticketKey: string; classN
                 >
                     {ticketKey}
                 </Link>
-            </Tip>
+            </Glance>
             {tracker && <LinkOut href={tracker} label={`${ticketKey} in the tracker`} />}
         </span>
     )

@@ -652,6 +652,17 @@ test('the header names the latest tick and how long ago it ended, and shows it a
     await expect(card).toContainText('mock tick')
 })
 
+test("a reference shows its page at a glance on hover: a run's state, ticket, and kind", async ({ page }) => {
+    await page.goto('workspace/runs')
+    await settled(page)
+    await page.getByRole('main').getByRole('link', { name: 'run:41', exact: true }).first().hover()
+    const card = page.getByTestId('run-card')
+    await expect(card).toContainText('run:41')
+    await expect(card).toContainText('Sign in with SSO')
+    await expect(card).toContainText('ABC-101')
+    await expect(card).toContainText('implement')
+})
+
 test("the header's tick opens its decisions, each about its subject, the overseer's text shown as text", async ({
     page,
 }) => {

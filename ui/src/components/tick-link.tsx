@@ -1,13 +1,14 @@
 import { Link } from '@tanstack/react-router'
 
-import { Tip } from '@/components/tip'
+import { Glance } from '@/components/glance'
+import { TickGlance } from '@/components/ref-glances'
 import { tickRef } from '@/lib/refs'
 import { cn } from '@/lib/utils'
 
 /** `tick:N`, opening the tick's page: what it decided and why. Cut to fit its cell, it is whole on hover. */
 export function TickLink({ id, className }: { id: number; className?: string }) {
     return (
-        <Tip fact={tickRef(id)} mono whenCut>
+        <Glance card={<TickGlance id={id} />} testId="tick-glance" align="start">
             <Link
                 to="/workspace/ticks/$id"
                 params={{ id: String(id) }}
@@ -15,6 +16,6 @@ export function TickLink({ id, className }: { id: number; className?: string }) 
             >
                 {tickRef(id)}
             </Link>
-        </Tip>
+        </Glance>
     )
 }

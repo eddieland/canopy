@@ -1,7 +1,8 @@
 import { Link } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 
-import { Tip } from '@/components/tip'
+import { Glance } from '@/components/glance'
+import { ReviewGlance } from '@/components/ref-glances'
 import { reviewRef } from '@/lib/refs'
 import { cn } from '@/lib/utils'
 
@@ -12,7 +13,7 @@ import { cn } from '@/lib/utils'
  */
 export function ReviewLink({ id, className, children }: { id: number; className?: string; children?: ReactNode }) {
     return (
-        <Tip fact={children === undefined ? reviewRef(id) : null} mono whenCut>
+        <Glance card={<ReviewGlance id={id} />} testId="review-card" align="start">
             <Link
                 to="/pull-requests/reviews/$id"
                 params={{ id: String(id) }}
@@ -20,7 +21,7 @@ export function ReviewLink({ id, className, children }: { id: number; className?
             >
                 {children ?? reviewRef(id)}
             </Link>
-        </Tip>
+        </Glance>
     )
 }
 

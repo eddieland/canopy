@@ -1,13 +1,14 @@
 import { Link } from '@tanstack/react-router'
 
-import { Tip } from '@/components/tip'
+import { Glance } from '@/components/glance'
+import { TaskGlance, TaskRunGlance } from '@/components/ref-glances'
 import { taskRef, taskRunRef } from '@/lib/refs'
 import { cn } from '@/lib/utils'
 
 /** `task:N`, opening the task's page: its instruction and conversation, its report, and what it left. */
 export function TaskLink({ id, className }: { id: number; className?: string }) {
     return (
-        <Tip fact={taskRef(id)} mono whenCut>
+        <Glance card={<TaskGlance id={id} />} testId="task-card" align="start">
             <Link
                 to="/tasks/$id"
                 params={{ id: String(id) }}
@@ -15,7 +16,7 @@ export function TaskLink({ id, className }: { id: number; className?: string }) 
             >
                 {taskRef(id)}
             </Link>
-        </Tip>
+        </Glance>
     )
 }
 
@@ -25,7 +26,7 @@ export function TaskLink({ id, className }: { id: number; className?: string }) 
  */
 export function TaskRunLink({ task, run, className }: { task: number; run: number; className?: string }) {
     return (
-        <Tip fact={taskRunRef(task, run)} mono whenCut>
+        <Glance card={<TaskRunGlance task={task} run={run} />} testId="task-run-card" align="start">
             <Link
                 to="/tasks/$id/runs/$run"
                 params={{ id: String(task), run: String(run) }}
@@ -33,6 +34,6 @@ export function TaskRunLink({ task, run, className }: { task: number; run: numbe
             >
                 {taskRunRef(task, run)}
             </Link>
-        </Tip>
+        </Glance>
     )
 }
