@@ -42,8 +42,9 @@ def cmd_tool_results(click_ctx: click.Context, *, days: int, as_json: bool) -> i
     Each ended run's transcript is read: per tool, its calls, the characters they returned in total and at the median,
     and the share of the role's characters that is; cut counts the results the runtime said it cut, unknown those it
     said nothing of, and repeated the reads of a path the same run had read already. A shell call counts as the program
-    it runs, as `$ gh run view`. Per role, the characters its runs' `status` calls sent. A log is read to the
-    transcript's bound, which the report names, and a run whose log holds more is counted as cut.
+    it runs, as `$ gh run view`. Per role, the characters its runs' `status` calls sent, and the calls the permission
+    rules refused, by permission, where the runtime names it. A log is read to the transcript's bound, which the report
+    names, and a run whose log holds more is counted as cut.
     """
     ctx = open_context(click_ctx)
     found = tool_results.measure(
@@ -91,6 +92,9 @@ def _role(role: RoleResults) -> list[str]:
             f"  status: {_count(role.status_calls, 'call')} in {_count(role.status_runs, 'run')} sent "
             f"{count_text(role.status_chars)} characters, a median of {median} a run.",
         )
+    if role.refused:
+        by = ", ".join(f"{permission} {n}" for permission, n in role.refused.items())
+        lines.append(f"  refused: {_count(sum(role.refused.values()), 'call')}, by permission: {by}.")
     if not role.tools:
         return lines
     rows = [_cells(t) for t in role.tools]

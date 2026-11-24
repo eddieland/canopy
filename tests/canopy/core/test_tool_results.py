@@ -294,3 +294,31 @@ def test_canopy_tool_results_reads_the_last_two_weeks(
         "repeated_reads": 0,
     }
     assert main(["tool-results", "--days", "0"]) == 2
+
+
+def test_refused_calls_are_counted_by_the_permission_the_runtime_names(
+    tmp_path: Path,
+    journals: Journals,
+    runtime: Version,
+) -> None:
+    """OpenCode 2's error opens `Permission denied:` and the permission, whatever the plugin adds; 1's names none."""
+    conn = journals.open(tmp_path / "canopy.db")
+    outside = "Permission denied: external_directory (`/pool/web/*`)\n[canopy] Every path in a shell command is ..."
+    calls = [
+        Made("shell", {"command": "mkdir -p d && cd d && true; cd .."}, outside, failed=True),
+        Made("shell", {"command": "cd sub; ls .."}, outside, failed=True),
+        Made("read", {"path": "/etc/hosts"}, "Permission denied: external_directory", failed=True),
+        Made("shell", {"command": "git push --force"}, "Permission denied: shell", failed=True),
+        Made("shell", {"command": "false"}, "Permission denied: shell, said the program"),
+        Made("grep", {"pattern": "x"}, "it failed", failed=True),
+    ]
+    worker(conn, tmp_path / "refused.log", NOW - timedelta(hours=1), calls, runtime)
+    found = tool_results.measure(conn, NOW, 1, state_dir=tmp_path, version=runtime)
+    [implement] = found.roles
+    if runtime is Version.ONE:
+        assert implement.refused == {}
+        assert not any(line.startswith("  refused:") for line in tool_results_cli.render(found))
+        return
+    assert list(implement.refused.items()) == [("external_directory", 3), ("shell", 1)]
+    assert implement.as_json()["refused"] == {"external_directory": 3, "shell": 1}
+    assert "  refused: 4 calls, by permission: external_directory 3, shell 1." in tool_results_cli.render(found)

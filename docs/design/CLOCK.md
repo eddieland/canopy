@@ -96,9 +96,11 @@ is refused as before. A directory the shell would expand is left in the command.
 OpenCode tells an agent a call its permission rules refuse as `Permission denied:` and the permission, nothing more,
 so an agent tries the same another way and spends its run on it. After such a call (`execute.after`) the plugin sets
 the refusal's reason to the runtime's words, what the call asked for, and one `[canopy]` line: the rules refuse it on
-purpose, it is not to be tried another way, and the result says what remains if the work needs it. It changes
-nothing else of the error, so the call stays refused as it was, and it reads only the refusal's permission and
-resources. A rule the repository or the operator set is explained as canopy's are (T7). OpenCode's `evaluate`
+purpose, it is not to be tried another way, and the result says what remains if the work needs it. A shell command
+refused as leaving the directory that holds a `cd` past the leading one the plugin moves is told instead that the
+`cd` was not followed, and how to run what follows it from that directory. It changes nothing else of the error, so
+the call stays refused as it was, and it reads only the refusal's permission and resources, and a refused shell call's
+command. A rule the repository or the operator set is explained as canopy's are (T7). OpenCode's `evaluate`
 permission hook cannot do it: a refusal by the rules returns before the hook (2.1.2, read 2026-11-03; 2.2.5's build,
 2026-11-11).
 
