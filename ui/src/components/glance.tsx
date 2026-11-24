@@ -14,7 +14,7 @@ const InGlance = createContext(false)
  * A link with its page at a glance in a hover card (ui/DESIGN.md, "A link's page at a glance is a hover card"):
  * `children` is the link, or what holds it, and `card` what the card shows, a `GlanceCard`, made only once the card
  * opens, so a card that reads its data reads nothing until then. Hovered or focused, the card opens; a click still
- * follows the link. Inside another card it is its link alone.
+ * follows the link, and so does a click on a link the card covers. Inside another card it is its link alone.
  */
 export function Glance({
     card,
@@ -34,7 +34,9 @@ export function Glance({
     return (
         <HoverCard>
             <HoverCardTrigger asChild>{children}</HoverCardTrigger>
-            <HoverCardContent data-testid={testId} align={align}>
+            {/* It holds nothing to point at, so the pointer passes through it: leaving the link closes it, and a
+                link it covers still takes its click. */}
+            <HoverCardContent data-testid={testId} align={align} className="pointer-events-none">
                 <InGlance value>{card}</InGlance>
             </HoverCardContent>
         </HoverCard>

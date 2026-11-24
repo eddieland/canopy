@@ -663,6 +663,27 @@ test("a reference shows its page at a glance on hover: a run's state, ticket, an
     await expect(card).toContainText('implement')
 })
 
+test("a reference's card never takes a click: a link it covers still opens its page", async ({ page }) => {
+    await page.goto('workspace/runs')
+    await settled(page)
+    const main = page.getByRole('main')
+    await main.getByRole('link', { name: 'run:41', exact: true }).first().hover()
+    const card = page.getByTestId('run-card')
+    await expect(card).toContainText('Sign in with SSO')
+    const under = main.getByRole('link', { name: 'run:43', exact: true }).first()
+    const [over, link] = await Promise.all([card.boundingBox(), under.boundingBox()])
+    // The card lies over the link: its left edge and its line are inside the card's box.
+    const covered =
+        over !== null &&
+        link !== null &&
+        link.x >= over.x &&
+        link.y >= over.y &&
+        link.y + link.height <= over.y + over.height
+    expect(covered).toBe(true)
+    await under.click()
+    await expect(page).toHaveURL(/\/workspace\/runs\/43$/u)
+})
+
 test("the header's tick opens its decisions, each about its subject, the overseer's text shown as text", async ({
     page,
 }) => {
