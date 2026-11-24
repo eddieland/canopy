@@ -260,6 +260,7 @@ def test_its_runs_are_made_after_a_failed_overseer_run_too(pushed: Scenario) -> 
         failed = pushed.tick(exit_code=1, code=1)
     assert failed.tick.status == TickStatus.OVERSEER_FAILED
     assert [(d.ticket_key, d.action) for d in failed.decisions if d.decider is Decider.HARNESS] == [
+        (None, "queried"),
         (KEY, "dispatch:resume"),
     ]
     assert [r.key for r in failed.runs] == [KEY]
@@ -269,6 +270,7 @@ def test_a_dry_run_starts_none_of_its_runs(pushed: Scenario) -> None:
     with enabled(), derived(*unit_at(KEY, Phase.CONFLICTED)):
         dry = pushed.tick(*waits("PROJ-2", "PROJ-3"), dry_run=True)
     assert [(d.action, d.rationale) for d in dry.decisions if d.decider is Decider.HARNESS] == [
+        ("queried", "the query returned no open ticket"),
         ("dispatch:resume", f"dry run: not dispatched; resume {KEY} in repo, for conflicted"),
     ]
     assert dry.runs == []
@@ -402,6 +404,7 @@ def test_a_dry_run_names_the_cursors_it_would_move_and_moves_none(red: Scenario)
         dry = red.tick(dry_run=True)
     failed = number_of(red.conn, NumberedItem.CHECK_RUN, 11)
     assert [(d.action, d.rationale) for d in dry.decisions if d.decider is Decider.HARNESS] == [
+        ("queried", "the query returned no open ticket"),
         ("dispatch:resume", f"dry run: not dispatched; resume {KEY} in repo, for ci_red; cursor ci={failed}"),
     ]
     assert dry.runs == []
