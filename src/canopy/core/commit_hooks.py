@@ -4,7 +4,8 @@ The marks are formed by the harness and added by git, not by the agent: a worker
 `core.hooksPath` at the hooks in canopy's snapshot (DESIGN §13), through `GIT_CONFIG_COUNT` and its keys, and names
 the marks in `CANOPY_COMMIT_TRAILERS` and `CANOPY_COMMIT_PREFIX`. In a commit in one of the run's slots, which
 `CANOPY_SLOTS` names, `prepare-commit-msg` puts the prefix before a subject that lacks it, but a `fixup!`, `squash!`,
-or `amend!` one, which `--autosquash` matches by its subject, and adds each trailer the message lacks; git runs it
+or `amend!` one, which `--autosquash` matches by its subject, and adds each trailer the message lacks; a fixup or
+squash of a fixup, which git would name `fixup! fixup! ...`, it leaves the first marker alone; git runs it
 for a commit, an amend, a merge, a rebase, a cherry-pick, and a revert, `--no-verify` or not, and only plumbing such
 as `commit-tree` makes a commit without it. Every hook, that one included, then runs the repository's own hook of its
 name, the one git would have run without canopy's entry, so the operator's hooks run as before (docs/HOOKS.md).
@@ -188,6 +189,26 @@ if [ "$name" = prepare-commit-msg ]; then
     top=$(pwd -P) && mark=$(printf '%s\n' "${CANOPY_SLOTS-}" | while IFS= read -r slot; do
         if [ "$slot" = "$top" ]; then echo yes && break; fi
     done)
+fi
+if [ -n "$mark" ] && [ -s "$1" ]; then
+    # A fixup of a fixup, which git names `fixup! fixup! <subject>`, keeps its first marker alone: --autosquash folds
+    # it into the commit <subject> names either way. Not an `amend!`, whose body is that commit's new message.
+    subject=$(head -n 1 "$1")
+    case $subject in
+        "fixup! "* | "squash! "*)
+            rest=${subject#*! }
+            while :; do
+                case $rest in
+                    "fixup! "* | "squash! "* | "amend! "*) rest=${rest#*! } ;;
+                    *) break ;;
+                esac
+            done
+            once="${subject%%!*}! $rest"
+            if [ "$once" != "$subject" ]; then
+                { printf '%s\n' "$once" && tail -n +2 "$1"; } >"$1.canopy" && mv "$1.canopy" "$1" || exit
+            fi
+            ;;
+    esac
 fi
 if [ -n "$mark" ] && [ -n "${CANOPY_COMMIT_PREFIX-}" ] && [ -s "$1" ]; then
     # Not an empty subject or a comment, which git drops, nor one --autosquash matches the commit it is for by.
