@@ -38,6 +38,24 @@ severity, and order, is the persona's: the prompt gives only defaults, and canop
 Rejected: an empty default over today's prompts, where a chosen persona and the built-in voice pull against each other
 and the result turns on which the model weighs more.
 
+### A part for each agent
+
+Proposed, not built. Today a run carries its persona's whole file, so a persona written for several agents shares one
+bound among them, and a planner reads how to word a review comment.
+
+- A persona's file may mark a part for the worker, the planner, or the reviewer. What comes before the first part is
+  shared. A run carries the shared text and its own agent's part, and never another agent's. A file that marks no part
+  is carried whole by every agent, as now.
+- The size bound is on what one run carries, not on the file, so each agent has the whole of it.
+- What a run records is the name and a digest of the text it carried. Editing the reviewer's part then splits the
+  reviews into before and after, and leaves the plans alone.
+- A persona that marks parts and has none for an agent is refused for that agent, when it is set and when a run
+  starts, as a persona with no file is (No silent fallback): a planner in a reviewer's persona would otherwise run in
+  the shared text alone, in a voice written for nobody.
+
+Rejected: the agent reading its part from a file beside its prompt, since canopy could then record only what it
+offered, not what ran, and a run that skipped the file would read as the chosen persona's.
+
 ### Where personas come from
 
 canopy ships a few beside its prompts (§5), `canopy` among them. A file of the same name in the operator's personas
