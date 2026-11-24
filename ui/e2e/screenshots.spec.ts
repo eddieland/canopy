@@ -167,6 +167,10 @@ for (const theme of THEMES) {
     for (const palette of OTHER_PALETTES[theme]) {
         test(`attention in ${palette} ${theme}`, async ({ page }) => {
             await page.clock.setFixedTime(NOW)
+            // A screenshot freezes what moves, and a palette whose canvas moves (Starry Skies, Komorebi, Koi Pond)
+            // draws it again when it does, which costs a slow frame inside the capture. Asked for no motion, the
+            // canvas rests as the frozen one does, so the image is the same and nothing is drawn twice.
+            await page.emulateMedia({ reducedMotion: 'reduce' })
             await storeTheme(page, theme)
             await storePalette(page, theme, palette)
             await signIn(page)

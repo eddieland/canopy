@@ -317,6 +317,20 @@ async function growToPage(page: Page): Promise<void> {
         }
         expect(scrolls).toBe(false)
     }).toPass()
+    // The window just grew, and a palette that paints the canvas through masks (Komorebi's light and shade) draws
+    // the taller one in a frame that takes a second here and several on a busy runner. A screenshot waits for the
+    // page to hold still within its own five seconds, which that one frame used up: wait for it here, outside them.
+    await page.evaluate(nextPaint)
+}
+
+/** Resolves once the page has drawn a frame and started the next: what it laid out is on screen. Run in the page. */
+async function nextPaint(): Promise<void> {
+    await new Promise((resolve) => {
+        requestAnimationFrame(resolve)
+    })
+    await new Promise((resolve) => {
+        requestAnimationFrame(resolve)
+    })
 }
 
 /**
