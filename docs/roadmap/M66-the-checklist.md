@@ -134,7 +134,8 @@ whether to reword or drop an item, and the call on stage 3, which Accept records
 to run. A push is asked only the items whose `paths:` it changes, 2026-11-24 (#2501), since an item about one service's
 subtree was asked of every run in its repository and answered `n/a` on 73% of them: the hook compares each item's paths,
 as git's glob pathspecs, with the commits the push sends that no remote-tracking ref holds, prints the items asked and
-names the rest, lets a push that asks none through unheld, and notes each item asked and not; `_run` and `_task` record
+names the rest, lets a push that asks none through unheld, prints in the push after a hold, which still goes through,
+any item it newly asks, and notes each item asked and not; `_run` and `_task` record
 an item no push asked `unasked`, the harness's word, apart from the worker's `n/a`, and `canopy checklist` and Reports'
 Checklist page count it apart from `reminded`. Chosen conservatively, for the operator to change: an item git cannot
 compare is asked; a run that never pushed is asked every item, as before; a worker's `pass`, `fixed`, or `held` of an

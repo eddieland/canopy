@@ -22,7 +22,9 @@ harness can keep what the run changed after the list was shown (`pushes_after`).
 It asks only the items whose `paths:` the push changes, when the list's items are written one by one beside it
 (`checklists.items_of`): by git's glob pathspecs, over the commits the push sends that no remote-tracking ref holds, so
 over the stretch of work since the last push. It prints those items alone and names the rest, a push that changes no
-item's paths goes through unheld, and it notes each item asked and each not, which the harness reads with the pushes:
+item's paths goes through unheld. The push it lets through after a hold is asked too, unheld: it prints each item it
+asks that no push of the run asked before, as a reminder. It notes each item asked and each not, which the harness
+reads with the pushes:
 an item no push of the run asked, and whose answer is none or `n/a`, is recorded `unasked`. An item git cannot compare
 is asked, as is every item of a list none of whose items names paths.
 
@@ -173,6 +175,8 @@ hold() {
     # or one from before a long stretch of work, counts for nothing.
     if [ "$held_run" = "${CANOPY_RUN_ID-}" ] && [ $((now - held_at)) -lt @WINDOW@ ]; then
         note sent "$first"
+        pick "$sending"
+        remind
         return 0
     fi
     pick "$sending"
@@ -228,6 +232,31 @@ unheld() {
         "asks none of them. Leave an item no push asked out of your result's \`checklist\`: canopy records it" \
         "unasked." >&2
     note_items
+}
+# After a hold, in the push it lets through: prints each item this push asks that no push of the run asked before, as
+# a reminder, and notes every item as `pick` sorted them, so one whose paths only this push changes is recorded asked.
+# The push still goes through: the run was held once in this stretch, and a second hold would keep it from pushing.
+remind() {
+    new=
+    for id in $asked; do
+        grep -Fqx "asked ${CANOPY_RUN_ID-} $id" "$own/@PUSHES@" 2>/dev/null || new="$new $id"
+    done
+    note_items
+    [ -n "$new" ] || return 0
+    words=
+    for id in $new; do words="${words:+$words, }$id"; done
+    {
+        echo "[canopy] Pushed, not held: this push changes the paths of $words, which no push of this run asked" \
+            "before. Hold the diff to each item below; if one fails, commit the fix and push it. Answer each in" \
+            "your result's \`checklist\`, under $repo: pass, fixed, held with the reason, or n/a."
+        echo
+        sep=
+        for id in $new; do
+            printf '%s' "$sep"
+            [ -r "$items/$id.md" ] && cat "$items/$id.md"
+            sep=$nl
+        done
+    } >&2
 }
 # What the line before the list adds when some of its items are not asked: which, and that they are left out.
 narrowed() {

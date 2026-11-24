@@ -55,6 +55,15 @@ MIGRATION: Final = [
         "&& git add services && git commit -q -m 'PROJ-1: the migration'"
     ),
 ]
+#: A commit of a workflow, which the `workflows` item of `NARROW` is about.
+WORKFLOW: Final = [
+    "sh",
+    "-c",
+    (
+        "mkdir -p .github/workflows && echo 'on: push' >.github/workflows/ci.yml "
+        "&& git add .github && git commit -q -m 'PROJ-1: the workflow'"
+    ),
+]
 #: The first line of what a held push prints.
 HELD: Final = "[canopy] Push held, not rejected: nothing was sent."
 #: The first line of what a push that asks no item prints.
@@ -377,3 +386,33 @@ def test_an_item_a_later_push_asks_is_asked(scenario: Scenario, git_pool: GitPoo
         ("migrations", ItemAnswer.UNANSWERED),
         ("workflows", ItemAnswer.UNASKED),
     ]
+
+
+def test_an_item_the_push_after_the_hold_newly_asks_is_shown_and_asked(scenario: Scenario, git_pool: GitPool) -> None:
+    """The push after a hold goes through, and reminds of an item whose paths only it changes, which is then asked."""
+    (checklists_dir(scenario.env) / "repo.md").write_text(NARROW)
+    answered = {"repo": {"everywhere": "pass", "migrations": "pass"}}
+    run = scenario.run(worker=worker_does(MIGRATION, PUSH, WORKFLOW, PUSH, result=worker_result(checklist=answered)))
+    _, held, _, sent = ran(scenario.agent_log)
+    assert str(held["stderr"]).startswith(HELD)
+    assert "the paths of workflows, so only" in str(held["stderr"])
+    assert sent["returncode"] == 0
+    reminded = str(sent["stderr"])
+    assert reminded.startswith(
+        "[canopy] Pushed, not held: this push changes the paths of workflows, which no push of this run asked before.",
+    )
+    assert "\n\n## workflows\npaths: .github/\n\nA workflow's action is pinned.\n" in reminded
+    # Asked, and left out of the result: unanswered, never unasked.
+    assert [(a.item, a.answer) for a in checklist_answers.of_run(scenario.conn, run.id)] == [
+        ("everywhere", ItemAnswer.PASSED),
+        ("migrations", ItemAnswer.PASSED),
+        ("workflows", ItemAnswer.UNANSWERED),
+    ]
+
+
+def test_the_push_after_the_hold_reminds_of_nothing_already_asked(scenario: Scenario, git_pool: GitPool) -> None:
+    (checklists_dir(scenario.env) / "repo.md").write_text(NARROW)
+    scenario.run(worker=worker_does(MIGRATION, PUSH, FIX, PUSH))
+    sent = ran(scenario.agent_log)[-1]
+    assert sent["returncode"] == 0
+    assert "[canopy]" not in str(sent["stderr"])

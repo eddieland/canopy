@@ -58,9 +58,10 @@ retries (§8).
 
 A push is asked only the items whose paths it changes, over the commits it sends that no remote-tracking ref holds, by
 git reading each entry as `high_impact_paths` are read; it names the rest, and a push that changes no item's paths goes
-through unheld. An item no push of the run asked is recorded `unasked`, the harness's, apart from the worker's `n/a`,
-so its counts measure the rule and not the list; an answer the worker gave it all the same, but `n/a`, stands. What git
-cannot compare is asked, and a run that never pushed is asked every item.
+through unheld. The push after a hold, which goes through, prints any item it newly asks as a reminder. An item no push
+of the run asked is recorded `unasked`, the harness's, apart from the worker's `n/a`, so its counts measure the rule and
+not the list; an answer the worker gave it all the same, but `n/a`, stands. What git cannot compare is asked, and a run
+that never pushed is asked every item.
 
 The list reaches the hook as the operator's answer reaches a running agent (§41): a file in the run's answers
 directory, which a sandboxed run may read and not write, and canopy points a worker's git at its hooks whenever the run
