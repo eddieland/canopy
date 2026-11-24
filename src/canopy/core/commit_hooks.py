@@ -72,8 +72,9 @@ HOLD_MARKER: Final = "canopy-checklist-hold"
 #: let through after a hold: a line `<shown|sent> <run id> <commit>`, and each item it asked or did not, a line
 #: `<asked|unasked> <run id> <item>`, which the harness reads, and removes, as the run ends (`pushes_after`).
 PUSHES_LOG: Final = "canopy-checklist-pushes"
-#: How much of that file the harness reads: far more than a run's pushes fill.
-MAX_PUSHES_BYTES: Final = 64 * 1024
+#: How much of that file the harness reads: far more than a run's pushes fill, each noting a line for every item of its
+#: list, and still a bound on a file the run may write.
+MAX_PUSHES_BYTES: Final = 4 * 1024 * 1024
 #: A commit id, as git names one: SHA-1, or SHA-256.
 _COMMIT_RE: Final = re.compile(r"[0-9a-f]{40}(?:[0-9a-f]{24})?")
 #: How long after a hold a push of the same run goes through: past it, a push after a long stretch of work is held
@@ -214,7 +215,10 @@ pick() {
 }
 # Whether the commits in $1, a line each, change a path the pathspecs in $2, split by tabs, cover, in a commit no
 # remote-tracking ref holds: what the push sends that its remote has not seen. Yes when git cannot tell, so the item is
-# asked. A subshell, so the IFS and the noglob it sets end with it.
+# asked: a git that fails exits the subshell 0, a match, whatever it printed. Every parent of a merge is walked, so a
+# commit on a side branch the push sends counts; a merge itself does not, as what it brings is its parents' commits,
+# and a merge of the base would otherwise count every path the base changed. A subshell, so the IFS and the noglob it
+# sets end with it.
 touches() (
     commits=$1
     specs=$2
@@ -222,7 +226,7 @@ touches() (
     IFS=$tab
     set -- $specs
     IFS=$nl
-    found=$(git rev-list -1 $commits --not --remotes -- "$@" 2>/dev/null) || exit 0
+    found=$(git rev-list -1 --full-history --no-merges $commits --not --remotes -- "$@" 2>/dev/null) || exit 0
     [ -n "$found" ]
 )
 # Lets a push that asks none of the list's items through, saying so, and notes them; fails when it asks one.

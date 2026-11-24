@@ -133,7 +133,7 @@ export function checklistLine(items: readonly ChecklistItemCounts[], days: numbe
 
 /** The window's headline figures, over every item of every repository, as the page's tiles show them. */
 export interface ChecklistFigures {
-    /** How many times its runs were given an item. */
+    /** How many times its runs were asked an item. */
     reminded: number
     /** Of those, how many answered `held`. */
     held: number
@@ -141,7 +141,7 @@ export interface ChecklistFigures {
     unanswered: number
 }
 
-/** The window's items given, held, and unanswered, summed over every item, as the window before's figures are. */
+/** The window's items asked, held, and unanswered, summed over every item, as the window before's figures are. */
 export function checklistFigures(items: readonly ChecklistItemCounts[]): ChecklistFigures {
     return {
         reminded: items.reduce((sum, i) => sum + i.reminded, 0),
@@ -286,7 +286,7 @@ export function answersWords(counts: Pick<ChecklistItemCounts, AnswerColumn['key
 export interface WeekAnswers {
     /** The ISO week, `2026-W41`. */
     week: string
-    /** How many runs of it were given the item, or an item of the list. */
+    /** How many runs of it were asked the item, or an item of the list. */
     reminded: number
     /** How many answered `pass`. */
     passed: number
@@ -342,7 +342,7 @@ export function weekBars(weeks: readonly WeekAnswers[]): DayBar[] {
     return weeks.map((w) => ({
         key: w.week,
         label: weekLabel(w.week),
-        hint: `${w.week}: ${counted(w.reminded, 'item')} given · ${answersWords(w)}`,
+        hint: `${w.week}: ${counted(w.reminded, 'item')} asked · ${answersWords(w)}`,
         total: w.reminded,
         totalText: String(w.reminded),
         segments: ANSWER_COLUMNS.map((c) => ({ key: c.key, fill: c.fill, value: w[c.key] })),

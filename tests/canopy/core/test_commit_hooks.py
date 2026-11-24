@@ -188,6 +188,14 @@ def test_a_note_that_is_not_the_runs_or_not_a_commit_counts_for_nothing(tmp_path
     assert commit_hooks.pushes_after(tmp_path, "3").stretches == ((B, C),)
 
 
+def test_an_item_a_push_asks_after_many_pushes_notes_is_asked(tmp_path: Path) -> None:
+    """Each push notes every item of its list, so a long run's notes run long: a late `asked` still counts."""
+    pushes = f"shown 3 {A}\n" + "".join(f"unasked 3 item-{n}\n" for n in range(15)) + f"sent 3 {B}\n"
+    (tmp_path / commit_hooks.PUSHES_LOG).write_text(pushes * 1000 + "asked 3 item-7\n")
+    assert len(pushes) * 1000 > 256 * 1024
+    assert commit_hooks.pushes_after(tmp_path, "3").unasked == {f"item-{n}" for n in range(15)} - {"item-7"}
+
+
 def test_notes_past_the_bound_or_not_in_a_regular_file_are_not_read(tmp_path: Path) -> None:
     notes = tmp_path / commit_hooks.PUSHES_LOG
     line = f"shown 3 {A}\n"

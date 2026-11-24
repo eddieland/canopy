@@ -848,6 +848,8 @@ reader, so no table repeats them.
 - **The answer bar** (the checklist page's By item) is an item's answers as one rounded bar, each answer its share of
   the runs reminded in its answer fill, in `canopy checklist`'s order. Every bar is the same length, since the share is
   the point, not the count; the counts stay in the row's columns, and in words in the bar's tip and for a screen reader.
+  The runs given an item and never asked it stay out of the bar and the columns: a muted `+N unasked` beside its
+  reminded count, with why on its hover, only when N is not zero.
   A held or fixed count opens a `Popover` of the runs behind it, on a mouse's hover after half a second as a tip does,
   staying while the pointer moves onto it, and on a click, a tap, or the keyboard, which keep it until a click outside
   or Escape. A hover leaves the focus where it was.

@@ -416,3 +416,45 @@ def test_the_push_after_the_hold_reminds_of_nothing_already_asked(scenario: Scen
     sent = ran(scenario.agent_log)[-1]
     assert sent["returncode"] == 0
     assert "[canopy]" not in str(sent["stderr"])
+
+
+def test_an_item_git_cannot_compare_is_asked(scenario: Scenario, git_pool: GitPool) -> None:
+    """A pathspec git refuses fails the comparison, and a comparison that fails asks the item."""
+    (checklists_dir(scenario.env) / "repo.md").write_text(NARROW)
+    paths = f'"${cards.ANSWERS_ENV}/{checklists.DIR}/repo{checklists.ITEMS_SUFFIX}/{checklists.PATHS_FILE}"'
+    # The workflows item's line, as the harness wrote it, with a pathspec git refuses in its place.
+    spoils = [
+        "sh",
+        "-c",
+        f"sed 's/^workflows\\t.*/workflows\\t:(bogus)x/' {paths} >{paths}.new && mv {paths}.new {paths}",
+    ]
+    run = scenario.run(worker=worker_does(spoils, MIGRATION, PUSH, PUSH))
+    spoiled, _, held, _ = ran(scenario.agent_log)
+    assert spoiled["returncode"] == 0
+    printed = str(held["stderr"])
+    assert printed.startswith(HELD)
+    assert "only the items below" not in printed
+    assert f"\n\n{NARROW}" in printed
+    assert {a.answer for a in checklist_answers.of_run(scenario.conn, run.id)} == {ItemAnswer.UNANSWERED}
+
+
+def test_a_commit_on_a_merged_side_branch_counts(scenario: Scenario, git_pool: GitPool) -> None:
+    """Every parent of a merge the push sends is walked: a merge that keeps its first parent's tree sends the side's."""
+    (checklists_dir(scenario.env) / "repo.md").write_text(ALL_NARROW)
+    workflow = shlex.join(WORKFLOW)
+    merged = [
+        "sh",
+        "-c",
+        f"git checkout -q -b side && {workflow} && git checkout -q - && git merge -q -s ours --no-edit side",
+    ]
+    run = scenario.run(worker=worker_does(COMMIT, merged, PUSH, PUSH))
+    _, did_merge, held, sent = ran(scenario.agent_log)
+    assert did_merge["returncode"] == 0
+    assert str(held["stderr"]).startswith(HELD)
+    assert "the paths of everywhere, migrations, so only" in str(held["stderr"])
+    assert sent["returncode"] == 0
+    assert [(a.item, a.answer) for a in checklist_answers.of_run(scenario.conn, run.id)] == [
+        ("everywhere", ItemAnswer.UNASKED),
+        ("migrations", ItemAnswer.UNASKED),
+        ("workflows", ItemAnswer.UNANSWERED),
+    ]

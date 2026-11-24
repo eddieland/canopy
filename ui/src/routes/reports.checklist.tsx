@@ -193,8 +193,8 @@ function checklistTiles(found: ChecklistCounts | undefined): ReadoutTile[] {
     return [
         {
             key: 'reminded',
-            label: 'items given',
-            hint: "How many times a run was given an item of its repositories' lists",
+            label: 'items asked',
+            hint: "How many times a run was asked an item of its repositories' lists, not counting the unasked",
             value: figures?.reminded,
             delta: readoutDelta(figures?.reminded, before?.reminded, wholeChange),
         },
@@ -593,10 +593,10 @@ function ByWeek({
     )
 }
 
-/** The chart by week's numbers: each week, the items given, and each answer's count, a count of none muted. */
+/** The chart by week's numbers: each week, the items asked, and each answer's count, a count of none muted. */
 const WEEK_COLUMNS: ReportColumn<WeekAnswers>[] = [
     { key: 'week', kind: 'name', label: 'week', cell: (w) => <span className="font-mono">{weekLabel(w.week)}</span> },
-    { key: 'given', kind: 'figure', label: 'given', cell: (w) => w.reminded },
+    { key: 'asked', kind: 'figure', label: 'asked', cell: (w) => w.reminded },
     ...ANSWER_COLUMNS.map((c): ReportColumn<WeekAnswers> => ({
         key: c.key,
         kind: 'figure',

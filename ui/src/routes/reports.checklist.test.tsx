@@ -160,6 +160,9 @@ describe('the checklist page', () => {
         expect(bar.getByTestId('checklist-bar-passed').style.width).toBe('75%')
         expect(bar.getByTestId('checklist-bar-held').style.width).toBe('25%')
         expect(bar.queryByTestId('checklist-bar-fixed')).toBeNull()
+        // An item's unasked runs are beside its count, never in its bar: twelve passes of twelve asked fill it.
+        const asked = within(screen.getAllByTestId('checklist-bar')[1] ?? document.body)
+        expect(asked.getByTestId('checklist-bar-passed').style.width).toBe('100%')
         // Its legend once, under the table, in the table's order.
         expect(
             within(screen.getByTestId('checklist-legend'))

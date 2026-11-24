@@ -106,7 +106,7 @@ class ChecklistPrevious(Model):
     until: datetime
     """When it ends: where the counts' window starts."""
     reminded: int
-    """How many times its runs were given an item, over every item counted."""
+    """How many times its runs were asked an item, over every item counted."""
     held: int
     """Of those, how many answered `held`."""
     unanswered: int
