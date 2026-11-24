@@ -469,7 +469,7 @@ def journal_of_answers(conn: sqlite3.Connection, now: datetime) -> None:
     answered(conn, earlier(now, 2), "api", general_types=a.PASSED, newspaper=a.HELD, doc_comments=a.UNANSWERED)
     answered(conn, earlier(now, 1), "api", general_types=a.FIXED, newspaper=a.NOT_APPLICABLE, doc_comments=a.PASSED)
     answered(conn, earlier(now, 0), "web", no_any=a.HELD)
-    answered(conn, earlier(now, 0), "api", general_types=a.PASSED, newspaper=a.FIXED, doc_comments=a.UNANSWERED)
+    answered(conn, earlier(now, 0), "api", general_types=a.PASSED, newspaper=a.FIXED, doc_comments=a.UNASKED)
 
 
 def check_ran(conn: sqlite3.Connection, pr: str, head: str, name: str, conclusion: CheckConclusion, at: str) -> None:

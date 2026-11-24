@@ -74,6 +74,19 @@ def test_an_item_left_out_is_unanswered() -> None:
     assert checked.note() == ""
 
 
+def test_an_item_no_push_asked_is_unasked_unless_the_run_held_it_to_the_diff_all_the_same() -> None:
+    """Nothing, or `n/a`, of an item never asked is the harness's `unasked`; what a run found checking it stays."""
+    reported = {"api": {"general-types": "n/a", "newspaper": "fixed"}, "web": {"no-any": "pass"}}
+    unasked = {("api", "general-types"), ("api", "newspaper"), ("api", "doc-comments")}
+    checked = checklist_answers.check([API, WEB], reported).asking(unasked)
+    assert [(a.item, a.answer) for a in checked.answers] == [
+        ("general-types", ItemAnswer.UNASKED),
+        ("newspaper", ItemAnswer.FIXED),
+        ("doc-comments", ItemAnswer.UNASKED),
+        ("no-any", ItemAnswer.PASSED),
+    ]
+
+
 def test_answers_the_lists_do_not_hold_are_dropped_and_named() -> None:
     """An item or a repository the run was not given is dropped, and so is an answer that is none."""
     reported = {
@@ -137,8 +150,9 @@ def test_the_contract_names_each_repository_with_a_list() -> None:
     assert "Each list is also in `$CANOPY_ANSWERS/checklists/<repository>.md`" in text
     # What each answer is, the `result` tool's input says: the prompt points at the field.
     assert text.endswith(
-        "Answer every item of each list in your result's `checklist`, under its repository, none left out, whether or "
-        "not your push was held.",
+        "Answer every item of each list in your result's `checklist`, under its repository, whether or not your push "
+        "was held, leaving out only an item no push asked: the hook asks only the items whose paths a push changes, "
+        "and names the rest.",
     )
 
 
@@ -149,17 +163,17 @@ def test_answers_are_counted_per_repository_and_item_over_the_window(tmp_path: P
     found = checklist_answers.counts(conn, NOW, 7)
     assert (found.days, found.repo) == (7, None)
     assert [(c.repo, c.item, c.reminded, *(c.of(a) for a in ItemAnswer)) for c in found.items] == [
-        # repo, item, reminded, pass, fixed, held, n/a, unanswered
-        ("api", "general-types", 3, 2, 1, 0, 0, 0),
-        ("api", "newspaper", 3, 0, 1, 1, 1, 0),
-        ("api", "doc-comments", 3, 1, 0, 0, 0, 2),
-        ("web", "no-any", 1, 0, 0, 1, 0, 0),
+        # repo, item, reminded, pass, fixed, held, n/a, unanswered, unasked: a run never asked an item is no reminder.
+        ("api", "general-types", 3, 2, 1, 0, 0, 0, 0),
+        ("api", "newspaper", 3, 0, 1, 1, 1, 0, 0),
+        ("api", "doc-comments", 2, 1, 0, 0, 0, 1, 1),
+        ("web", "no-any", 1, 0, 0, 1, 0, 0, 0),
     ]
-    assert [(c.item, c.reminded) for c in checklist_answers.counts(conn, NOW, 1).items] == [
-        ("general-types", 1),
-        ("newspaper", 1),
-        ("doc-comments", 1),
-        ("no-any", 1),
+    assert [(c.item, c.reminded, c.unasked) for c in checklist_answers.counts(conn, NOW, 1).items] == [
+        ("general-types", 1, 0),
+        ("newspaper", 1, 0),
+        ("doc-comments", 0, 1),
+        ("no-any", 1, 0),
     ]
     assert [(c.repo, c.item, c.held) for c in checklist_answers.counts(conn, NOW, 7, repo="web").items] == [
         ("web", "no-any", 1),
@@ -203,8 +217,8 @@ def test_canopy_checklist_counts_the_last_days(canopy_env: CanopyEnv, capsys: py
     assert main(["checklist"]) == 0
     out = capsys.readouterr().out.splitlines()
     assert out[2:4] == [
-        "repo  item           reminded  pass  fixed  held  n/a  unanswered",
-        "api   general-types         3     2      1     0    0           0",
+        "repo  item           reminded  pass  fixed  held  n/a  unanswered  unasked",
+        "api   general-types         3     2      1     0    0           0        0",
     ]
     assert main(["checklist", "--repo", "web", "--days", "1", "--json"]) == 0
     found = json.loads(capsys.readouterr().out)
@@ -219,6 +233,7 @@ def test_canopy_checklist_counts_the_last_days(canopy_env: CanopyEnv, capsys: py
             "held": 1,
             "n/a": 0,
             "unanswered": 0,
+            "unasked": 0,
             "held_by": 1,
             "retired": False,
         },

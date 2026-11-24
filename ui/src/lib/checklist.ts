@@ -356,6 +356,7 @@ export const ANSWER_MEANING: Readonly<Record<ItemAnswer, string>> = {
     held: 'The diff does not, and the run left it so, for the reason under it',
     'n/a': 'The item is about nothing the diff changed',
     unanswered: 'The run was given the item and its result said nothing of it',
+    unasked: 'No push of the run changed a path the item names, so canopy never asked it',
 }
 
 /** One repository's answers, on a run's page, in its list's order. */

@@ -478,13 +478,14 @@ def _keep_checklist_pushes(
     """Keep what the worker pushed after canopy's `pre-push` showed it the repository's list (§42).
 
     Returns:
-        `listed`, with the pushes whose diffs were kept; None for a run given no list.
+        `listed`, with the pushes whose diffs were kept, and each item no push asked recorded `unasked`; None for a run
+        given no list.
     """
     if listed is None:
         return None
     run_id = f"{RUN_ID_PREFIX}{run.id}"
-    pushed = checklist_pushes.keep(git, repo=run.repo, branch=run.branch, run_id=run_id, log_path=run.log_path, log=log)
-    return listed.pushing(pushed)
+    kept = checklist_pushes.keep(git, repo=run.repo, branch=run.branch, run_id=run_id, log_path=run.log_path, log=log)
+    return listed.pushing(kept.pushes).asking({(run.repo, item) for item in kept.unasked})
 
 
 def _check_checklist(run: records.TaskRun, text: str) -> checklist_answers.Checked | None:

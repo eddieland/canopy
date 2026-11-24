@@ -46,7 +46,8 @@ class ChecklistItemCounts(Model):
     item: str
     """The item's id, as the operator's list names it: untrusted text, as every journal string is."""
     reminded: int
-    """How many runs were given the item: each answered it, or is counted `unanswered`."""
+    """How many runs were asked the item: each answered it, or is counted `unanswered`. A run whose pushes never asked
+    it, as none changed its paths, is counted in `unasked` alone."""
     passed: int
     """How many answered `pass`: the diff held to the item as it was."""
     fixed: int
@@ -57,6 +58,9 @@ class ChecklistItemCounts(Model):
     """How many answered `n/a`: the item is about nothing the diff changes."""
     unanswered: int
     """How many said nothing of it in their result."""
+    unasked: int
+    """How many runs were given the item and never asked it, as no push of theirs changed a path it names: `n/a` by
+    the harness, apart from the worker's own."""
     held_by: int
     """How many tickets the runs that answered `held` were of, a task's runs counting as one: a ticket's runs hold an
     item over the same diff, so they make one disagreement."""
@@ -79,7 +83,7 @@ class ChecklistWeek(Model):
     week: str
     """The ISO week, `2026-W41`, of canopy's clock: Monday to Sunday. The window's first and last may be part weeks."""
     reminded: int
-    """How many runs of the week were given the item; 0 for a week none was."""
+    """How many runs of the week were asked the item; 0 for a week none was."""
     passed: int
     """How many answered `pass`."""
     fixed: int
@@ -90,6 +94,8 @@ class ChecklistWeek(Model):
     """How many answered `n/a`."""
     unanswered: int
     """How many said nothing of it."""
+    unasked: int
+    """How many were given it and never asked it, as no push of theirs changed its paths."""
 
 
 class ChecklistPrevious(Model):

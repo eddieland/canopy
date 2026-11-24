@@ -1,13 +1,15 @@
 """What a worker answered of its repositories' checklists (DESIGN §42, The reminder).
 
 A worker run that may push, or a one-off task's (§36), is given the list of each of its repositories that has one, in
-its answers directory, and canopy's `pre-push` holds its push to ask it (`commit_hooks`). It answers each item in its
-result's `checklist` field, by repository and item id: `pass`, `fixed`, `held` with its reason, or `n/a`. `_run`,
-or `_task`, checks the answers against the lists the run was given, read back from its answers directory, and records a
-row for every item of every list, naming the run, a worker's or a task's: the answer, or `unanswered` for an item its
-result said nothing of. An answer to an item or a repository the run's lists do not hold is dropped, and named in the
-run's note; a result with no `checklist` is never refused, since its push is already made. The reason is the worker's
-text, which read the PR: it is shown as data, made printable, and authorizes nothing. `canopy checklist` counts the
+its answers directory, and canopy's `pre-push` holds its push to ask it (`commit_hooks`), only the items whose paths
+the push changes. It answers each item in its result's `checklist` field, by repository and item id: `pass`, `fixed`,
+`held` with its reason, or `n/a`. `_run`, or `_task`, checks the answers against the lists the run was given, read back
+from its answers directory, and records a row for every item of every list, naming the run, a worker's or a task's: the
+answer, `unasked` for an item no push of the run asked, as it changed none of the item's paths, and the run answered
+nothing or `n/a` (`Checked.asking`), or `unanswered` for an item its result said nothing of. An answer to an item or a
+repository the run's lists do not hold is dropped, and named in the run's note; a result with no `checklist` is never
+refused, since its push is already made. The reason is the worker's text, which read the PR: it is shown as data, made
+printable, and authorizes nothing. `canopy checklist` counts the
 answers per repository and item over a window (`counts`), so an item earns its place or is dropped; the web UI's
 checklist page also groups them by the runs behind each `held` and `fixed` answer, and by week (`details`).
 
@@ -43,8 +45,11 @@ CHECKLIST: Final = "CHECKLIST"
 MAX_REASON: Final = 1000
 #: How many dropped answers a note names; the rest are counted.
 MAX_NAMED: Final = 10
-#: The answers a worker may give: `unanswered` is the harness's alone.
-GIVEN: Final[frozenset[ItemAnswer]] = frozenset(ItemAnswer) - {ItemAnswer.UNANSWERED}
+#: The answers a worker may give: `unanswered` and `unasked` are the harness's alone.
+GIVEN: Final[frozenset[ItemAnswer]] = frozenset(ItemAnswer) - {ItemAnswer.UNANSWERED, ItemAnswer.UNASKED}
+#: The answers an item no push asked gives way to: what a run says of an item it was never asked is no answer, but an
+#: item it held to the diff all the same keeps what it found.
+_NOT_ASKED: Final = frozenset({ItemAnswer.UNANSWERED, ItemAnswer.NOT_APPLICABLE})
 #: How many runs `details` names behind each item's `held` answers, and its `fixed`: the newest, which a page lists.
 MAX_RUNS: Final = 20
 #: The tables of the runs that answer a checklist: a worker's, and a one-off task's (DESIGN §36).
@@ -88,6 +93,20 @@ class Checked:
         """Return the answers, with `pushes` as what the run pushed after its lists."""
         return replace(self, pushes=tuple(pushes))
 
+    def asking(self, unasked: AbstractSet[tuple[str, str]]) -> Checked:
+        """Return the answers, each item of `unasked`, by repository and id, that no push asked recorded `unasked`.
+
+        Only where the run answered nothing or `n/a`: one it answered `pass`, `fixed`, or `held` it held to the diff
+        all the same, and keeps that answer.
+        """
+        return replace(
+            self,
+            answers=tuple(
+                replace(a, answer=ItemAnswer.UNASKED) if (a.repo, a.item) in unasked and a.answer in _NOT_ASKED else a
+                for a in self.answers
+            ),
+        )
+
     def note(self) -> str:
         """The run's harness note about what was dropped, or "" when nothing was.
 
@@ -113,13 +132,16 @@ class ItemCounts(records.View):
     repo: str
     #: The item's id, the operator's, as their list names it.
     item: str
-    #: The runs given the item: each answered it, or is counted `unanswered`.
+    #: The runs asked the item: each answered it, or is counted `unanswered`. A run given it and never asked is not
+    #: one, and is counted `unasked` alone.
     reminded: int
     passed: int
     fixed: int
     held: int
     not_applicable: int
     unanswered: int
+    #: The runs given the item whose pushes never asked it, as none changed its paths.
+    unasked: int
     #: The tickets whose runs answered `held`, a task's runs counted as one ticket: the runs of one ticket hold an
     #: item over the same diff, so they are one disagreement, not several.
     held_by: int
@@ -137,6 +159,8 @@ class ItemCounts(records.View):
                 return self.not_applicable
             case ItemAnswer.UNANSWERED:
                 return self.unanswered
+            case ItemAnswer.UNASKED:
+                return self.unasked
             case _:
                 assert_never(answer)
 
@@ -155,7 +179,7 @@ class Counts:
 
     @property
     def reminded(self) -> int:
-        """How many times the window's runs were given an item, over every item counted."""
+        """How many times the window's runs were asked an item, over every item counted."""
         return sum(c.reminded for c in self.items)
 
     @property
@@ -177,8 +201,8 @@ class Counts:
 
         Returns:
             `since`, `until`, `days`, `repo`, and `items`, each with its `repo`, `item`, `reminded`, a count under
-            each answer's word: `pass`, `fixed`, `held`, `n/a`, and `unanswered`, `held_by`, the tickets that held it,
-            and `retired`, whether it is one of `retired`.
+            each answer's word: `pass`, `fixed`, `held`, `n/a`, `unanswered`, and `unasked`, `held_by`, the tickets
+            that held it, and `retired`, whether it is one of `retired`.
         """
         return {
             "since": self.since,
@@ -295,7 +319,8 @@ class Group(BaseModel):
         "left out, whether or not your push was held: `pass` when you held the diff to the rule and it holds; `fixed` "
         "when this run committed the fix; an object with `held` and a reason when you left it failing; `n/a` only "
         "when the diff touches none of the paths the item is about, or nothing its rule speaks of. An item you "
-        "checked is never `n/a`, and one you leave out is recorded unanswered, which says you never looked.",
+        "checked is never `n/a`, and one you leave out is recorded unanswered, which says you never looked, unless "
+        "no push asked it: canopy's hook names the items a push does not ask, and records them so.",
     )
 
 
@@ -435,15 +460,18 @@ def between(conn: sqlite3.Connection, start: datetime, end: datetime, *, repo: s
     days = spend.days_between(start, end)
     query = _in_window(
         sql.select(
-            "a.repo, a.item, count(*) AS reminded, sum(a.answer = ?) AS passed, sum(a.answer = ?) AS fixed, "
+            "a.repo, a.item, sum(a.answer != ?) AS reminded, sum(a.answer = ?) AS passed, sum(a.answer = ?) AS fixed, "
             "sum(a.answer = ?) AS held, sum(a.answer = ?) AS not_applicable, sum(a.answer = ?) AS unanswered, "
+            "sum(a.answer = ?) AS unasked, "
             # A ticket's runs, or a task's, by the key no ticket's can take: a task has no ticket.
             "count(DISTINCT CASE WHEN a.answer = ? THEN coalesce(r.ticket_key, 'task ' || t.task_id) END) AS held_by",
+            ItemAnswer.UNASKED,
             ItemAnswer.PASSED,
             ItemAnswer.FIXED,
             ItemAnswer.HELD,
             ItemAnswer.NOT_APPLICABLE,
             ItemAnswer.UNANSWERED,
+            ItemAnswer.UNASKED,
             ItemAnswer.HELD,
         ),
         since,
@@ -539,8 +567,9 @@ def contract_text(lists: Sequence[Checklist]) -> str:
             ),
             "",
             (
-                "Answer every item of each list in your result's `checklist`, under its repository, none left out, "
-                "whether or not your push was held."
+                "Answer every item of each list in your result's `checklist`, under its repository, whether or not "
+                "your push was held, leaving out only an item no push asked: the hook asks only the items whose paths "
+                "a push changes, and names the rest."
             ),
         ],
     )
@@ -587,12 +616,13 @@ def _counted(repo: str, item: str, answers: Mapping[ItemAnswer, int], held_by: i
     return ItemCounts(
         repo=repo,
         item=item,
-        reminded=sum(answers.values()),
+        reminded=sum(n for answer, n in answers.items() if answer is not ItemAnswer.UNASKED),
         passed=answers.get(ItemAnswer.PASSED, 0),
         fixed=answers.get(ItemAnswer.FIXED, 0),
         held=answers.get(ItemAnswer.HELD, 0),
         not_applicable=answers.get(ItemAnswer.NOT_APPLICABLE, 0),
         unanswered=answers.get(ItemAnswer.UNANSWERED, 0),
+        unasked=answers.get(ItemAnswer.UNASKED, 0),
         held_by=held_by,
     )
 

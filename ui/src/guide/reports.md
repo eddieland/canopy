@@ -210,16 +210,19 @@ A [checklist](checklists) is your list of rules for a repository that no linter 
 item and answer it. The checklist page, which **Checklist** on [Reports](/reports) opens, counts those answers so you
 can tell which items earn their place. It's what `canopy checklist` prints; [Tuning the
 list](checklists#tuning-the-list) says what to do with the numbers. The figures under the title are the window's
-headline over every repository: how many times runs were given an item, and how many of those were held or unanswered.
+headline over every repository: how many times runs were asked an item, and how many of those were held or unanswered.
 
 **By item** is one table, a group of rows per repository under its name and how many items it has. **reminded** is how
-many worker runs were given the item, a task's among them, by when they started. **answers** is the same runs as a
-bar, each answer its share in its own color: green for **pass** (the diff already held to it), blue for **fixed** (it
-didn't, and the worker committed the fix), red for **held** (it doesn't, and the worker left it so for a reason it
-gave), grey for **n/a** (the diff touches nothing the item is about), and amber for **unanswered** (the run said
-nothing of it). The legend is under the table, and the counts follow the bar, one column per answer, for when you want
-the numbers rather than the gist. A run still running hasn't answered yet, so it isn't counted. A zero is dimmed, so
-the answers that happened stand out. Hover a column's name for what it counts, or a bar for its answers in words.
+many worker runs were asked the item, a task's among them, by when they started. Runs given the item whose pushes
+changed none of its `paths:` were never asked it, and show beside the count, dimmed, as **+N unasked**: they aren't in
+the bar or the columns, so an n/a there is a diff that touched the item's paths and still had nothing for it.
+**answers** is the same runs as a bar, each answer its share in its own color: green for **pass** (the diff already held
+to it), blue for **fixed** (it didn't, and the worker committed the fix), red for **held** (it doesn't, and the worker
+left it so for a reason it gave), grey for **n/a** (the diff touches nothing the item is about), and amber for
+**unanswered** (the run said nothing of it). The legend is under the table, and the counts follow the bar, one column
+per answer, for when you want the numbers rather than the gist. A run still running hasn't answered yet, so it isn't
+counted. A zero is dimmed, so the answers that happened stand out. Hover a column's name for what it counts, or a bar
+for its answers in words.
 
 You read the bars before the numbers: an item that's one grey bar is about diffs your workers don't make, one solid
 green bar is a rule they keep without being asked, and a red band is a rule they keep declining.

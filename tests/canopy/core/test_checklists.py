@@ -9,7 +9,9 @@ import pytest
 from canopy.core import checklists
 from canopy.core.config import load
 from canopy.core.vocab import RunKind
+from canopy.reviews import impact
 from tests.canopy.helpers import checklists_dir
+from tests.conftest import git
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -117,6 +119,65 @@ def test_the_lists_are_written_each_under_its_repository(canopy_env: CanopyEnv) 
     assert checklists.file_of(answers, "api").read_text() == "## one\nRule one.\n"
     assert checklists.file_of(answers, "api").stat().st_mode & 0o077 == 0
     assert (answers / checklists.DIR).stat().st_mode & 0o077 == 0
+
+
+def test_a_list_whose_items_name_paths_is_written_item_by_item_too(tmp_path: Path) -> None:
+    """For the hook, which prints the items a push asks alone, each item's text and its paths as git's pathspecs."""
+    listed = checklists.Checklist("api", *checklists.parse("api", LIST))
+    checklists.write(tmp_path, [listed])
+    items = checklists.items_of(tmp_path, "api")
+    assert items.stat().st_mode & 0o077 == 0
+    assert (items / checklists.PATHS_FILE).read_text() == (
+        "general-types\t:(top,glob)src/**/*.py\t:(top,glob)src/**/*.py/**\t:(top,glob)packages\t:(top,glob)packages/**\n"
+        "newspaper-order\ndoc-comments\n"
+    )
+    assert (items / "newspaper-order.md").read_text() == (
+        "## newspaper-order\n\nA module reads top-down: public names first, helpers below their first caller.\n"
+    )
+    assert (items / "doc-comments.md").read_text().endswith("`#: Seconds a lease is held.`\n")
+    # A list none of whose items names a path is asked whole, and needs none.
+    checklists.write(tmp_path, [checklists.Checklist("web", *checklists.parse("web", "## one\nRule one.\n"))])
+    assert not checklists.items_of(tmp_path, "web").exists()
+
+
+#: Paths of a repository, each a file, and the entries a test compares over them.
+_PATHS: Final = (
+    "OWNERS",
+    "top.py",
+    ".agentsrc",
+    ".agents/x.md",
+    "src/a/x.py",
+    "src/b.py",
+    "services/billing/OWNERS",
+    "services/billing/migrations/0001.sql",
+    "services/billing/migrations-old/0001.sql",
+    "docs/TRUST_MODEL.md",
+)
+_ENTRIES: Final = (
+    ".agents/",
+    ".agents",
+    "src/",
+    "src/**/*.py",
+    "**/OWNERS",
+    "services/*/migrations/",
+    "*.py",
+    "src/*",
+    "docs/TRUST_MODEL.md",
+    "s?c",
+    "**",
+)
+
+
+@pytest.mark.parametrize("entry", _ENTRIES)
+def test_the_pathspecs_cover_what_a_high_impact_path_does(tmp_path: Path, entry: str) -> None:
+    """git, which the hook asks, reads an entry's pathspecs as a review reads a `high_impact_paths` entry."""
+    git("init", "--quiet", cwd=tmp_path)
+    for path in _PATHS:
+        (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / path).write_text("x\n")
+    git("add", "--all", cwd=tmp_path)
+    found = git("ls-files", "--full-name", "--", *checklists.pathspecs(entry), cwd=tmp_path / "src").splitlines()
+    assert sorted(found) == sorted(p for p in _PATHS if impact.matched([entry], [p]) is not None)
 
 
 def test_no_list_writes_no_file(tmp_path: Path) -> None:

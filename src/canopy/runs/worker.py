@@ -1546,16 +1546,14 @@ def _keep_checklist_pushes(
     """Keep what the worker pushed after canopy's `pre-push` showed it each slot's list (DESIGN §42).
 
     Returns:
-        `listed`, with the pushes whose diffs were kept; None for a run given no list.
+        `listed`, with the pushes whose diffs were kept, and each item no push asked recorded `unasked`; None for a run
+        given no list.
     """
     if listed is None:
         return None
     repos = {a.repo for a in listed.answers}
-    return listed.pushing(
-        pushed
-        for slot in slots
-        if slot.repo in repos
-        for pushed in checklist_pushes.keep(
+    kept = [
+        checklist_pushes.keep(
             slot.git,
             repo=slot.repo,
             branch=branch,
@@ -1563,7 +1561,11 @@ def _keep_checklist_pushes(
             log_path=run.log_path,
             log=log,
         )
-    )
+        for slot in slots
+        if slot.repo in repos
+    ]
+    unasked = {(k.repo, item) for k in kept for item in k.unasked}
+    return listed.pushing(pushed for k in kept for pushed in k.pushes).asking(unasked)
 
 
 def _keep_changes(

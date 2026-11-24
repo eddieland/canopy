@@ -30,6 +30,7 @@ function item(repo: string, id: string, extra: Partial<ChecklistItemCounts> = {}
         held: 0,
         not_applicable: 0,
         unanswered: 0,
+        unasked: 0,
         held_by: 0,
         paths: [],
         held_runs: [],
@@ -261,6 +262,7 @@ function week(repo: string, id: string, at: string, extra: Partial<ChecklistWeek
         held: 0,
         not_applicable: 0,
         unanswered: 0,
+        unasked: 0,
         ...extra,
     }
 }

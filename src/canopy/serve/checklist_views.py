@@ -93,6 +93,7 @@ def checklist_counts(backend: Backend, ctx: Context, days: int, *, repo: str | N
                 held=c.held,
                 not_applicable=c.not_applicable,
                 unanswered=c.unanswered,
+                unasked=c.unasked,
                 held_by=c.held_by,
                 paths=paths.get((c.repo, c.item)),
                 held_runs=_runs(runs[c.repo, c.item].held),
@@ -111,6 +112,7 @@ def checklist_counts(backend: Backend, ctx: Context, days: int, *, repo: str | N
                 held=w.counts.held,
                 not_applicable=w.counts.not_applicable,
                 unanswered=w.counts.unanswered,
+                unasked=w.counts.unasked,
             )
             for w in grouped.weeks
         ],
@@ -224,6 +226,8 @@ def _word(answer: ItemAnswer) -> AnswerWord:
             return "n/a"
         case ItemAnswer.UNANSWERED:
             return "unanswered"
+        case ItemAnswer.UNASKED:
+            return "unasked"
         case _:
             assert_never(answer)
 

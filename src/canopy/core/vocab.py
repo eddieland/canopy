@@ -500,6 +500,9 @@ class ItemAnswer(StrEnum):
     NOT_APPLICABLE = "n/a"
     #: The run was given the item and its result said nothing of it: recorded by the harness, never the worker's word.
     UNANSWERED = "unanswered"
+    #: canopy's `pre-push` never asked the item, as no push the run made changed a path it names, and the run gave it
+    #: no answer of its own but `n/a`: recorded by the harness, never the worker's word.
+    UNASKED = "unasked"
 
 
 class HoldKind(StrEnum):

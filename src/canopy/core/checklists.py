@@ -12,13 +12,15 @@ the list.
 
 Before a worker run that may push starts, or a one-off task's (§36), the list of each of its repositories is written
 to its answers directory (§41), a file to a repository, where canopy's `pre-push` hook in that repository's slot finds
-it, to hold the worker's push and print it (`commit_hooks`).
+it, to hold the worker's push and print it (`commit_hooks`). A list one of whose items names paths gets a directory
+beside it too, `<repo>.items`: each item's text alone, and a file of each item's paths as git's glob pathspecs, which
+cover what `high_impact_paths` entries do, so the hook asks only the items whose paths the push changes.
 """
 
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Final, Literal
 
 from canopy.core import memory_text, workspace
@@ -37,6 +39,12 @@ SUFFIX: Final = ".md"
 MAX_BYTES: Final = 16 * 1024
 #: The directory in a run's answers directory that holds its repositories' lists, `<repo>.md` each, for canopy's hook.
 DIR: Final = "checklists"
+#: The suffix of the directory beside a list that holds its items one by one, for a list one of whose items names paths:
+#: no list's file ends so, so no repository's directory is another's list.
+ITEMS_SUFFIX: Final = ".items"
+#: The file in that directory that holds each item's paths: a line per item, in the list's order, its id, then each of
+#: its pathspecs, split by tabs, none for an item about every path.
+PATHS_FILE: Final = "paths"
 #: How much an item that fails weighs in the checklist review, as a review's finding does.
 type Severity = Literal["blocking", "major", "minor"]
 #: Every severity an item may name, gravest first.
@@ -76,6 +84,8 @@ class Item:
     status: Status = "active"
     #: The operator's own word on the item, such as why it was retired; empty when it has none.
     note: str = ""
+    #: The item's lines in its list, its heading's among them, without surrounding blank lines: what a run reads of it.
+    text: str = ""
 
     @property
     def retired(self) -> bool:
@@ -188,6 +198,7 @@ def parse(where: str, text: str) -> tuple[list[Item], str, list[Item]]:
     if heading is None:
         raise ChecklistError(f"{where}: no item, each opening with a '## <id>' heading")
     items.append(_item(where, heading, sections[-1][1:]))
+    items = [replace(item, text="\n".join(lines).strip()) for item, lines in zip(items, sections, strict=True)]
     asked = [item for item in items if not item.retired]
     if len(asked) == len(items):
         return asked, text.strip(), []
@@ -200,10 +211,16 @@ def file_of(answers: Path, repo: str) -> Path:
     return answers / DIR / f"{repo}{SUFFIX}"
 
 
+def items_of(answers: Path, repo: str) -> Path:
+    """Return where the answers directory at `answers` holds `repo`'s list item by item, when an item names paths."""
+    return answers / DIR / f"{repo}{ITEMS_SUFFIX}"
+
+
 def write(answers: Path, lists: Iterable[Checklist]) -> None:
     """Write each of `lists` to the answers directory at `answers`, for canopy's hook; nothing when there are none.
 
-    Each file holds the list's text, which its bound holds to `MAX_BYTES` and a line feed.
+    Each file holds the list's text, which its bound holds to `MAX_BYTES` and a line feed. A list one of whose items
+    names paths gets its items one by one too (`items_of`): each item's text, and the paths of each, as `pathspecs`.
 
     Raises:
         OSError: a file cannot be written.
@@ -212,6 +229,29 @@ def write(answers: Path, lists: Iterable[Checklist]) -> None:
         target = file_of(answers, found.repo)
         target.parent.mkdir(mode=0o700, exist_ok=True)
         logs.write_private(target, f"{found.text}\n")
+        if not any(item.paths for item in found.items):
+            continue
+        items = items_of(answers, found.repo)
+        items.mkdir(mode=0o700, exist_ok=True)
+        for item in found.items:
+            logs.write_private(items / f"{item.id}{SUFFIX}", f"{item.text}\n")
+        lines = [
+            "\t".join([item.id, *(spec for entry in item.paths for spec in pathspecs(entry))]) for item in found.items
+        ]
+        logs.write_private(items / PATHS_FILE, "".join(f"{line}\n" for line in lines))
+
+
+def pathspecs(entry: str) -> tuple[str, str]:
+    """Return git's pathspecs for the paths a `paths:` entry covers, as `high_impact_paths` compares an entry.
+
+    Each is from the repository's root, whatever directory git runs in, and read as a glob, whose `*` and `?` match
+    within a component and whose `**` matches any number of components: the entry's paths, and everything under them.
+
+    Returns:
+        The two pathspecs.
+    """
+    base = entry.removesuffix("/")
+    return f":(top,glob){base}", f":(top,glob){base}/**"
 
 
 def given(answers: Path, repos: Iterable[str]) -> list[Checklist]:

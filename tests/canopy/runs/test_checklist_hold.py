@@ -16,7 +16,8 @@ from typing import TYPE_CHECKING, Final, cast
 import pytest
 
 from canopy.core import cards, checklist_answers, checklists, commit_hooks, records
-from tests.canopy.helpers import WORKER_DONE, agent_runs, checklists_dir, trailers_on, worker_does
+from canopy.core.vocab import ItemAnswer
+from tests.canopy.helpers import WORKER_DONE, agent_runs, checklists_dir, trailers_on, worker_does, worker_result
 from tests.canopy.scenario_helpers import dispatches
 from tests.conftest import executable, git
 
@@ -27,8 +28,16 @@ if TYPE_CHECKING:
 
 TRAILER: Final = "Co-authored-by: canopy worker <noreply@canopy.invalid>"
 BRANCH: Final = "agent/PROJ-1-work"
-#: A list of one item, as the operator writes it.
-LIST: Final = "## general-types\npaths: src/\n\nA parameter takes the most general type its body needs.\n"
+#: A list of one item, as the operator writes it: about every path, so asked of every push, an empty commit's too.
+LIST: Final = "## general-types\n\nA parameter takes the most general type its body needs.\n"
+#: A list of an item about every path, and two about paths of their own.
+NARROW: Final = (
+    "## everywhere\n\nAbout every path.\n\n"
+    "## migrations\npaths: services/*/migrations/\n\nA migration has its companion.\n\n"
+    "## workflows\npaths: .github/\n\nA workflow's action is pinned.\n"
+)
+#: `NARROW` with its first item about `src/` alone, so every item names paths.
+ALL_NARROW: Final = NARROW.replace("## everywhere\n", "## everywhere\npaths: src/\n")
 COMMIT: Final = ["git", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: the change"]
 PUSH: Final = ["git", "push", "--quiet", "origin", f"HEAD:refs/heads/{BRANCH}"]
 #: The fix a worker commits once the list is shown.
@@ -37,8 +46,19 @@ FIX: Final = [
     "-c",
     "echo 'def f(xs: Iterable[str]): ...' >fix.py && git add fix.py && git commit -q -m 'PROJ-1: fix'",
 ]
+#: A commit of a migration, which the `migrations` item of `NARROW` is about, and `workflows` not.
+MIGRATION: Final = [
+    "sh",
+    "-c",
+    (
+        "mkdir -p services/billing/migrations && echo 'CREATE TABLE t (a);' >services/billing/migrations/0001.sql "
+        "&& git add services && git commit -q -m 'PROJ-1: the migration'"
+    ),
+]
 #: The first line of what a held push prints.
 HELD: Final = "[canopy] Push held, not rejected: nothing was sent."
+#: The first line of what a push that asks no item prints.
+UNASKED: Final = "[canopy] Pushed, not held: this push changes none of the paths the items of repo's checklist name"
 #: The first line of what a push in the run's last stretch prints.
 NEAR: Final = "[canopy] Pushed, not held, as this run is near canopy's deadline."
 
@@ -277,4 +297,83 @@ def test_a_joint_runs_slots_are_each_held_with_their_own_list(ws_scenario: Scena
     assert [(p.repo, p.shown_sha, p.pushed_sha) for p in pushed] == [
         ("api", api_head, api_head),
         ("web", web_head, web_head),
+    ]
+
+
+def test_a_push_is_asked_only_the_items_whose_paths_it_changes(scenario: Scenario, git_pool: GitPool) -> None:
+    """The rest are named, left out of what it prints, and recorded unasked: neither the worker's n/a nor unanswered."""
+    (checklists_dir(scenario.env) / "repo.md").write_text(NARROW)
+    answered = {"repo": {"everywhere": "pass", "migrations": "fixed", "workflows": "n/a"}}
+    run = scenario.run(worker=worker_does(MIGRATION, PUSH, PUSH, result=worker_result(checklist=answered)))
+    _, held, sent = ran(scenario.agent_log)
+    printed = str(held["stderr"])
+    assert printed.startswith(HELD)
+    assert (
+        "This push changes none of the paths of workflows, so only the items below are asked: leave those out of "
+        "`checklist` unless a push before asked them, and canopy records them unasked."
+    ) in printed
+    # The asked items alone, a blank line between them, and git's own line after.
+    assert (
+        "\n\n## everywhere\n\nAbout every path.\n\n"
+        "## migrations\npaths: services/*/migrations/\n\nA migration has its companion.\nerror: "
+    ) in printed
+    assert "pinned" not in printed
+    assert sent["returncode"] == 0
+    assert [(a.item, a.answer) for a in checklist_answers.of_run(scenario.conn, run.id)] == [
+        ("everywhere", ItemAnswer.PASSED),
+        ("migrations", ItemAnswer.FIXED),
+        ("workflows", ItemAnswer.UNASKED),
+    ]
+    found = json.loads(scenario.operator("checklist", "--json").out)
+    assert [(i["item"], i["reminded"], i["n/a"], i["unasked"]) for i in found["items"]] == [
+        ("everywhere", 1, 0, 0),
+        ("migrations", 1, 0, 0),
+        ("workflows", 0, 0, 1),
+    ]
+
+
+def test_a_push_that_changes_every_items_paths_is_asked_the_whole_list(scenario: Scenario, git_pool: GitPool) -> None:
+    whole = NARROW.replace(".github/", "**/migrations")
+    (checklists_dir(scenario.env) / "repo.md").write_text(whole)
+    run = scenario.run(worker=worker_does(MIGRATION, PUSH, PUSH))
+    printed = str(ran(scenario.agent_log)[1]["stderr"])
+    assert printed.startswith(HELD)
+    assert "only the items below" not in printed
+    assert f"\n\n{whole}" in printed
+    # Asked, and answered nothing: unanswered, as before.
+    assert {a.answer for a in checklist_answers.of_run(scenario.conn, run.id)} == {ItemAnswer.UNANSWERED}
+
+
+def test_a_push_that_changes_no_items_paths_goes_through_unheld(scenario: Scenario, git_pool: GitPool) -> None:
+    """Only the commits the push sends count: the base's history, which a remote-tracking ref holds, does not."""
+    (checklists_dir(scenario.env) / "repo.md").write_text(ALL_NARROW)
+    answered = {"repo": {"everywhere": "n/a", "migrations": "pass"}}
+    run = scenario.run(worker=worker_does(COMMIT, PUSH, result=worker_result(checklist=answered)))
+    [_, pushed] = ran(scenario.agent_log)
+    assert pushed["returncode"] == 0
+    assert str(pushed["stderr"]).startswith(UNASKED)
+    assert git_pool.remote_head(BRANCH) is not None
+    # The worker's n/a of an item never asked is the harness's unasked; what it found of one it checked anyway stays.
+    assert [(a.item, a.answer) for a in checklist_answers.of_run(scenario.conn, run.id)] == [
+        ("everywhere", ItemAnswer.UNASKED),
+        ("migrations", ItemAnswer.PASSED),
+        ("workflows", ItemAnswer.UNASKED),
+    ]
+    # Nothing was shown, so no stretch is kept.
+    assert checklist_answers.pushes_of(scenario.conn, run.id) == []
+
+
+def test_an_item_a_later_push_asks_is_asked(scenario: Scenario, git_pool: GitPool) -> None:
+    """A push that asks nothing marks no hold, so the next push that changes an item's paths is held and asks it."""
+    (checklists_dir(scenario.env) / "repo.md").write_text(ALL_NARROW)
+    run = scenario.run(worker=worker_does(COMMIT, PUSH, MIGRATION, PUSH, PUSH))
+    _, first, _, held, sent = ran(scenario.agent_log)
+    assert str(first["stderr"]).startswith(UNASKED)
+    assert str(held["stderr"]).startswith(HELD)
+    assert "the paths of everywhere, workflows, so only" in str(held["stderr"])
+    assert sent["returncode"] == 0
+    assert [(a.item, a.answer) for a in checklist_answers.of_run(scenario.conn, run.id)] == [
+        ("everywhere", ItemAnswer.UNASKED),
+        ("migrations", ItemAnswer.UNANSWERED),
+        ("workflows", ItemAnswer.UNASKED),
     ]

@@ -154,6 +154,7 @@ def test_canopy_checklist_counts_what_the_runs_answered(scenario: Scenario, git_
             "held": 0,
             "n/a": 0,
             "unanswered": 1,
+            "unasked": 0,
             "held_by": 0,
             "retired": False,
         },
@@ -166,6 +167,7 @@ def test_canopy_checklist_counts_what_the_runs_answered(scenario: Scenario, git_
             "held": 1,
             "n/a": 0,
             "unanswered": 1,
+            "unasked": 0,
             "held_by": 1,
             "retired": False,
         },
@@ -194,7 +196,7 @@ def test_a_retired_item_is_asked_of_no_run_and_its_counts_read_on(scenario: Scen
     ]
     table = scenario.operator("checklist").out.splitlines()
     assert [line.split() for line in table if "newspaper" in line] == [
-        ["repo", "newspaper", "(retired)", "1", "1", "0", "0", "0", "0"],
+        ["repo", "newspaper", "(retired)", "1", "1", "0", "0", "0", "0", "0"],
     ]
     # Every item retired: the repository's runs are given no list, and so never held.
     path.write_text("## general-types\nstatus: retired\n\n## newspaper\nstatus: retired\n")

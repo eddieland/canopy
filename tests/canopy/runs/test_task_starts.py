@@ -716,7 +716,9 @@ def test_a_tasks_first_push_is_held_for_its_checklist_and_the_next_goes_through(
     _, held, _, sent = worker["commands"]
     assert held["returncode"] != 0
     assert str(held["stderr"]).startswith("[canopy] Push held, not rejected: nothing was sent.")
-    assert f"\n\n{CHECKLIST}" in str(held["stderr"])
+    # Its commits change nothing under `src/`, so it is asked the item about every path alone.
+    assert "This push changes none of the paths of general-types, so only the items below" in str(held["stderr"])
+    assert "\n\n## newspaper\n\nPublic names first.\nerror: " in str(held["stderr"])
     assert sent["returncode"] == 0
     assert (run.status, run.head) == (RunStatus.DONE, git_pool.remote_head(BRANCH))
     assert run.head is not None
@@ -726,9 +728,10 @@ def test_a_tasks_first_push_is_held_for_its_checklist_and_the_next_goes_through(
         records.ChecklistPush(None, run.id, "repo", shown, run.head),
     ]
     assert "+fixed\n" in checklist_answers.diff_path(run.log_path, "repo", shown).read_text()
-    # A result that answers nothing is never refused: its push is made, and each item counted unanswered.
+    # A result that answers nothing is never refused: its push is made, and each item asked counted unanswered, the
+    # one never asked unasked.
     assert [(a.item, a.answer) for a in checklist_answers.of_run(checking.conn, run.id, table="task_runs")] == [
-        ("general-types", ItemAnswer.UNANSWERED),
+        ("general-types", ItemAnswer.UNASKED),
         ("newspaper", ItemAnswer.UNANSWERED),
     ]
 
