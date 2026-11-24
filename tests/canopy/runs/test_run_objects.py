@@ -141,7 +141,7 @@ def test_reconcile_tidies_the_slots_of_a_killed_run(
     scenario.tick(*waits("PROJ-1"))
 
     run = present(db.get_run(conn, run_id))
-    assert run["status"] == "crashed"
+    assert run.status == "crashed"
     assert (slot / ".git").read_bytes() == link  # put back, from what `_run` recorded, before any git ran there
     assert (own / "commondir").read_bytes() == hostgit.COMMONDIR_CONTENT
     assert git("rev-parse", "HEAD", cwd=slot) == git_pool.remote_head("main")

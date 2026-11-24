@@ -872,7 +872,7 @@ def test_a_resume_for_a_review_carries_its_findings_from_the_journal(
     review_id = scenario.review(reviews(sha, ticket="PROJ-1"), reviewer=reviewer_reports(FINDINGS)).id
     scenario.run(worker=pushes())
     resumed = scenario.run(resume(review_id, context="Address review run 1"), worker=pushes())
-    [(action, rationale)] = decisions(scenario.conn, int(resumed.row["tick_id"]))
+    [(action, rationale)] = decisions(scenario.conn, int(resumed.row.tick_id))
     assert action == "dispatch:resume"
     assert rationale.endswith(f"; review run {review_id}; for review")
     section = resumed.prompt.split("## canopy's review\n\n", 1)[1].split("\n\nThese findings", 1)[0]
@@ -1363,7 +1363,7 @@ def test_a_declined_finding_reaches_the_next_review_and_its_rebuttal_waits_on_th
         (1, FindingAnswer.FIXED, None),
         (2, FindingAnswer.DECLINED, DECLINED),
     ]
-    note = json.loads(ran.row["result_json"])["harness"]
+    note = json.loads(present(ran.row.result_json))["harness"]
     assert note == (
         f"review answers not recorded: entry 3: review run {first} has no finding 3; entry 4: review run 99 is not a "
         "done review of PROJ-1; entry 5: a decline gives no reason"

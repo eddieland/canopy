@@ -439,7 +439,7 @@ def question(conn: sqlite3.Connection, key: str) -> records.Message | None:
     if found is None or found.run_id is None:
         return None
     run = db.get_run(conn, found.run_id)
-    return found if run is not None and run["kind"] == RunKind.PLAN else None
+    return found if run is not None and run.kind == RunKind.PLAN else None
 
 
 def path_for(state_dir: Path, key: str, run_id: int) -> Path:

@@ -42,7 +42,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Final
 
 from canopy.core.vocab import RunStatus
-from tests.canopy.helpers import branch_behind_main, commands_run, commit_file, worker_does
+from tests.canopy.helpers import branch_behind_main, commands_run, commit_file, present, worker_does
 from tests.conftest import git
 
 if TYPE_CHECKING:
@@ -292,7 +292,7 @@ def play(story: Story, scenario: Scenario, git_pool: GitPool) -> None:
     for step, command in zip(story.steps, ran, strict=True):
         code, said = command["returncode"], str(command["stderr"]).strip()
         scenario.story.append(f"the worker: {step.says}, exit {code}" + (f": {said}" if code else ""))
-    note = json.loads(run.row["result_json"]).get("harness", "")
+    note = json.loads(present(run.row.result_json)).get("harness", "")
     # Canopy pushed if origin's branch is elsewhere than the worker left it: nothing else pushes after the worker.
     pushed = next(iter(str(left["stdout"]).split()), None) != git_pool.remote_head(BRANCH)
     scenario.story.append(f"canopy: {'pushes, ' if pushed else ''}{run.status}" + (f": {note}" if note else ""))

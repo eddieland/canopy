@@ -177,11 +177,11 @@ def state_section(
         },
         "running": [
             {
-                "run_id": r["id"],
-                "pr": r["pr_url"],
-                "sha": r["sha"],
-                "ticket": r["ticket_key"],
-                "started_at": r["started_at"],
+                "run_id": r.id,
+                "pr": r.pr_url,
+                "sha": r.sha,
+                "ticket": r.ticket_key,
+                "started_at": r.started_at,
             }
             for r in db.running_runs(conn, "review_runs")
         ],

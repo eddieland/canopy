@@ -114,7 +114,7 @@ def test_a_prs_threads_stay_on_the_diff_of_the_latest_run_that_pushed(
     late = scenario.run(dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CONFLICT]), worker=commits)
     assert late.status is RunStatus.UNPUSHED
     # The late run kept its branch's diff, marked as work not on origin, which the PR does not have.
-    assert "late.txt" in review_diff.run_path_for(late.row["log_path"], "repo").read_text()
+    assert "late.txt" in review_diff.run_path_for(late.row.log_path, "repo").read_text()
     found = threads_of(c)
     assert found["diff_run"] == run_id
     assert found["diff"] == {"files": [], "truncated": False}

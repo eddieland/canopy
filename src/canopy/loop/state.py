@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import re
-import sqlite3
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
@@ -245,10 +244,10 @@ def state_block(
     capacity: Capacity,
     workspace: Workspace,
     leased: Mapping[str, Sequence[pools.Slot]],
-    running: Iterable[sqlite3.Row],
+    running: Iterable[records.Run],
     tickets: Iterable[records.Ticket],
     stopped: Sequence[str],
-    recently_done: Sequence[sqlite3.Row] = (),
+    recently_done: Sequence[db.DoneTicket] = (),
     harness: Sequence[Decided] = (),
     dispatches_to_come: ToCome | None = None,
     units: Mapping[str, Sequence[records.TicketUnit]],
@@ -415,7 +414,7 @@ def state_block(
         "stopped": list(stopped),
         # Tickets marked done lately that the query still finds: owed no decision while the tracker shows them open
         # (DESIGN §7). Keys alone, since the overseer only leaves them out.
-        "recently_done": [str(t["key"]) for t in recently_done],
+        "recently_done": [str(t.key) for t in recently_done],
         # Tickets the harness decided this tick, in code: the overseer records nothing about one (DESIGN §37).
         **({"harness": list(harness)} if harness else {}),
         # What the harness starts after the overseer, and the workers it holds for them (DESIGN §37).
@@ -559,20 +558,20 @@ def _under(prefix: str, branch: str | None) -> bool:
 
 
 def _running_summary(
-    run: sqlite3.Row,
+    run: records.Run,
     run_slots: Mapping[int, Sequence[records.RunSlot]],
     run_reasons: Mapping[int, Sequence[str]],
 ) -> RunningWorker:
     summary: RunningWorker = {
-        "run_id": run["id"],
-        "ticket": run["ticket_key"],
-        "repos": [s.repo for s in run_slots.get(int(run["id"]), [])],
-        "kind": run["kind"],
-        "branch": run["branch"],
-        "started_at": run["started_at"],
+        "run_id": run.id,
+        "ticket": run.ticket_key,
+        "repos": [s.repo for s in run_slots.get(int(run.id), [])],
+        "kind": run.kind,
+        "branch": run.branch,
+        "started_at": run.started_at,
     }
-    if int(run["id"]) in run_reasons:
-        summary["reasons"] = list(run_reasons[int(run["id"])])
+    if int(run.id) in run_reasons:
+        summary["reasons"] = list(run_reasons[int(run.id)])
     return summary
 
 

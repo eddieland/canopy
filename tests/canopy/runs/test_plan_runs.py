@@ -56,7 +56,7 @@ def test_a_plan_is_written_to_its_file_and_recorded_proposed(
     before = time.time()
     run = scenario.run(PLAN, worker=planner_does(status, plan=TEXT))
     after = time.time()
-    assert run.status == RunStatus.DONE, Path(run.row["log_path"]).read_text()
+    assert run.status == RunStatus.DONE, Path(run.row.log_path).read_text()
 
     # Planned in a desk, even over one repository, at the base and detached: a plan makes no branch.
     desk = env.root / "desks" / KEY
@@ -173,7 +173,7 @@ def test_a_revision_starts_as_the_plan_it_replaces_and_keeps_what_its_planner_do
     scenario.operator("reply", KEY, "Blue, not red.")
     edit = edits_plan("red", "blue")
     second = scenario.run(PLAN, worker=planner_does(["cat", plans.WRITTEN], edit, plan=None))
-    assert second.status == RunStatus.DONE, second.row["result_json"]
+    assert second.status == RunStatus.DONE, second.row.result_json
     [_, [cat, _]] = commands_run(scenario.agent_log)
     assert cat["stdout"] == edited
     # What the planner did not edit is the plan it replaces, byte for byte.
@@ -194,7 +194,7 @@ def test_a_revision_left_as_it_was_seeded_after_the_operator_wrote_records_no_pl
     scenario.operator("reply", KEY, "Blue, not red.")
     second = scenario.run(PLAN, worker=planner_does(plan=None))
     assert second.status == RunStatus.UNKNOWN
-    assert plans.UNREVISED in str(second.row["result_json"])
+    assert plans.UNREVISED in str(second.row.result_json)
     # The plan it would have replaced still waits on the operator.
     assert [(p.run_id, p.status) for p in plans.history(scenario.conn, KEY)] == [(first.id, PlanStatus.PROPOSED)]
 
@@ -209,7 +209,7 @@ def test_a_revision_left_as_it_was_is_recorded_when_the_operator_asked_for_no_ch
     working = scenario.starts(PLAN, worker=planner_does(plan=None))
     scenario.operator("reply", KEY, "Blue, not red.")
     second = working.finishes()
-    assert second.status == RunStatus.DONE, second.row["result_json"]
+    assert second.status == RunStatus.DONE, second.row.result_json
     assert [(p.run_id, p.status) for p in plans.history(scenario.conn, KEY)] == [
         (first.id, PlanStatus.SUPERSEDED),
         (second.id, PlanStatus.PROPOSED),
@@ -244,7 +244,7 @@ def test_only_a_done_plan_within_its_bound_is_recorded(
 ) -> None:
     run = scenario.run(PLAN, worker=planner_does(plan=plan, result=result))
     assert run.status == status
-    assert note in str(run.row["result_json"])
+    assert note in str(run.row.result_json)
     assert plans.history(scenario.conn, KEY) == []
     assert not (scenario.env.state_dir / "plans").exists()
 
@@ -265,7 +265,7 @@ def test_a_plan_file_that_is_a_link_is_never_read(scenario: Scenario, git_pool: 
     secret.write_text("not a plan\n")
     run = scenario.run(PLAN, worker=planner_does(["ln", "-s", str(secret), plans.WRITTEN], plan=None))
     assert run.status == RunStatus.UNKNOWN
-    assert "but its .canopy-new-plan.md is not a regular file" in str(run.row["result_json"])
+    assert "but its .canopy-new-plan.md is not a regular file" in str(run.row.result_json)
     assert plans.history(scenario.conn, KEY) == []
 
 
@@ -274,7 +274,7 @@ def test_a_name_already_taken_is_never_overwritten(scenario: Scenario, git_pool:
     plans.write(scenario.env.state_dir, KEY, 1, "left by a run that died")
     run = scenario.run(PLAN, worker=planner_does(plan=TEXT))
     assert run.status == RunStatus.CRASHED
-    assert "a plan named 1.md is already there, so canopy leaves it as it is" in str(run.row["result_json"])
+    assert "a plan named 1.md is already there, so canopy leaves it as it is" in str(run.row.result_json)
     assert plan_file(scenario.env, 1).read_text() == "left by a run that died"
     assert plans.history(scenario.conn, KEY) == []
 
@@ -349,7 +349,7 @@ def test_a_private_ticket_is_planned_from_its_conversation(scenario: Scenario, g
     scenario.operator("start", KEY)
     scenario.operator("reply", KEY, "Keep it small.")
     run = scenario.run(dispatches(kind=RunKind.PLAN, label=None), worker=planner_does(plan=TEXT))
-    assert (run.status, run.row["private"]) == (RunStatus.DONE, 1)
+    assert (run.status, run.row.private) == (RunStatus.DONE, 1)
     [planner] = agent_runs(scenario.agent_log)
     argv = planner["argv"]
     assert isinstance(argv, list)
@@ -364,7 +364,7 @@ def test_under_tracker_private_a_tickets_first_plan_starts_it_privately(scenario
     # As its first implement would: otherwise the plan, posting nothing, would leave the ticket public for good.
     scenario.configures(tracker={"private": True})
     run = scenario.run(PLAN, worker=planner_does(plan=TEXT))
-    assert (run.status, run.row["private"]) == (RunStatus.DONE, 1)
+    assert (run.status, run.row.private) == (RunStatus.DONE, 1)
     assert conversation.is_started(conversation.start_of(scenario.conn, KEY))
 
 
@@ -405,7 +405,7 @@ def test_an_effort_a_planner_misspells_is_refused_and_the_reader_drops_it_alone(
     result = {"status": "done", "summary": "planned it", "effort": said}
     run = scenario.run(PLAN, worker=planner_does(plan=TEXT, result=result))
     assert run.status == RunStatus.UNKNOWN
-    assert json.loads(run.row["result_json"]) == {"harness": "the planner reported no result"}
+    assert json.loads(present(run.row.result_json)) == {"harness": "the planner reported no result"}
     assert plans.history(scenario.conn, KEY) == []
     read = worker.PlanResult.model_validate(result)
     assert (read.status, read.effort) == ("done", None)
@@ -464,7 +464,7 @@ def test_a_plan_its_planner_says_needs_no_review_is_approved_as_the_planners_and
     # The implement goes ahead on it, no operator in between.
     implement = scenario.run(dispatches(slug="work"), worker=pushes())
     assert implement.status == RunStatus.DONE
-    assert implement.row["plan_id"] == plan.id
+    assert implement.row.plan_id == plan.id
     # Its worker is told who approved the plan it follows: the planner, on the operator's leave.
     assert "is the plan its planner approved, saying it needs no review, where the operator lets" in implement.prompt
 
@@ -518,7 +518,7 @@ def test_a_plan_waits_on_the_operator_unless_the_key_is_on_and_its_planner_says_
     run = scenario.run(PLAN, worker=planner_does(plan=TEXT, result=result))
     assert run.status == RunStatus.DONE
     assert ("## Whether the operator reviews this plan" in run.prompt) is on
-    assert run.row["plan_review"] == ("strict" if on else "off")
+    assert run.row.plan_review == ("strict" if on else "off")
     [plan] = plans.history(scenario.conn, KEY)
     assert (plan.status, plan.approved_channel, plan.approved_reason) == (PlanStatus.PROPOSED, None, None)
 
@@ -530,7 +530,7 @@ def test_a_planner_that_may_not_approve_is_not_asked_whether_its_plan_needs_revi
     """With the key off its result has no `review`, so one that says so is refused, and reports nothing."""
     run = scenario.run(PLAN, worker=planner_does(plan=TEXT, result=NO_REVIEW))
     assert run.status == RunStatus.UNKNOWN
-    assert json.loads(run.row["result_json"]) == {"harness": "the planner reported no result"}
+    assert json.loads(present(run.row.result_json)) == {"harness": "the planner reported no result"}
     assert "## Whether the operator reviews this plan" not in run.prompt
     # Its start, and the one that asks it again for the result it did not report, sending the same.
     assert asked_of(scenario) == ["plan", "plan"]
@@ -563,7 +563,7 @@ def test_at_each_level_the_planner_hears_its_bar_and_its_word_approves_the_plan(
     assert run.status == RunStatus.DONE
     assert bar in run.prompt
     # Its run keeps the level it was asked at, which the Plans report splits by.
-    assert run.row["plan_review"] == level
+    assert run.row.plan_review == level
     # No level waives these.
     assert "touches security, credentials," in run.prompt
     [plan] = plans.history(scenario.conn, KEY)
@@ -586,7 +586,7 @@ def test_a_plan_the_operator_had_a_word_on_waits_on_them_whatever_its_planner_sa
     # The first planner was told how to say so; neither after it is, since its word would not count.
     assert "## Whether the operator reviews this plan" in first.prompt
     assert "## Whether the operator reviews this plan" not in second.prompt
-    assert (first.row["plan_review"], second.row["plan_review"]) == ("strict", "off")
+    assert (first.row.plan_review, second.row.plan_review) == ("strict", "off")
     # One the operator asked for by name, with `canopy plan KEY`.
     scenario.operator("plan", KEY)
     third = scenario.run(PLAN, worker=planner_does(plan=TEXT))

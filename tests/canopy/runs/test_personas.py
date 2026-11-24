@@ -29,7 +29,7 @@ def test_each_run_records_the_persona_its_prompt_carried(scenario: Scenario) -> 
     run = scenario.run()
     cfg = load(scenario.env.root, scenario.env.user_file)
     canopy = personas.load(cfg, personas.DEFAULT)
-    assert (run.row["persona"], run.row["persona_digest"]) == ("canopy", canopy.digest)
+    assert (run.row.persona, run.row.persona_digest) == ("canopy", canopy.digest)
     assert f"## Persona\n\n{canopy.text}\n" in run.prompt
 
 
@@ -38,12 +38,12 @@ def test_a_persona_reaches_every_run_of_its_agent_and_no_other(scenario: Scenari
     cfg = load(scenario.env.root, scenario.env.user_file)
     minimalist, canopy = personas.load(cfg, "minimalist"), personas.load(cfg, "canopy")
     plan = scenario.run(PLAN, worker=planner_does(plan=TEXT))
-    assert (plan.row["persona"], plan.row["persona_digest"]) == ("canopy", canopy.digest)
+    assert (plan.row.persona, plan.row.persona_digest) == ("canopy", canopy.digest)
     assert minimalist.text not in plan.prompt
     # The plan is written; the operator waives it, so the implement goes ahead.
     scenario.operator("plan", KEY, "--skip")
     run = scenario.run()
-    assert (run.row["persona"], run.row["persona_digest"]) == ("minimalist", minimalist.digest)
+    assert (run.row.persona, run.row.persona_digest) == ("minimalist", minimalist.digest)
     assert f"## Persona\n\n{minimalist.text}\n" in run.prompt
     assert canopy.text not in run.prompt
 
@@ -55,14 +55,14 @@ def test_a_persona_edited_between_runs_splits_them_by_digest(scenario: Scenario,
     first = scenario.run(worker=pushes())
     (yours / "terse.md").write_text("Be terser.\n")
     second = scenario.run(RESUME, worker=pushes())
-    assert (first.row["persona"], second.row["persona"]) == ("terse", "terse")
-    assert first.row["persona_digest"] != second.row["persona_digest"]
+    assert (first.row.persona, second.row.persona) == ("terse", "terse")
+    assert first.row.persona_digest != second.row.persona_digest
     assert "Be terser." in second.prompt
     # Each text is kept once, under its digest, so the first run's instructions outlive the edit.
-    assert db.persona_text(scenario.conn, str(first.row["persona_digest"])) == "Be terse."
-    assert db.persona_text(scenario.conn, str(second.row["persona_digest"])) == "Be terser."
+    assert db.persona_text(scenario.conn, str(first.row.persona_digest)) == "Be terse."
+    assert db.persona_text(scenario.conn, str(second.row.persona_digest)) == "Be terser."
     third = scenario.run(RESUME, worker=pushes())
-    assert third.row["persona_digest"] == second.row["persona_digest"]
+    assert third.row.persona_digest == second.row.persona_digest
     assert scenario.conn.execute("SELECT count(*) FROM persona_texts").fetchone()[0] == 2
 
 
@@ -91,7 +91,7 @@ def test_a_run_whose_persona_has_no_file_is_refused_with_an_attention_item(
     dry = scenario.refuses(RESUME, dry_run=True)
     assert dry == [("refused:persona_missing", reason), ("attention:persona_missing", reason)]
     (yours / "terse.md").write_text("Be terse.\n")
-    assert scenario.run(RESUME, worker=pushes()).row["persona"] == "terse"
+    assert scenario.run(RESUME, worker=pushes()).row.persona == "terse"
 
 
 def test_a_run_whose_persona_file_canopy_will_not_use_is_refused(scenario: Scenario) -> None:
@@ -120,9 +120,9 @@ def test_an_override_without_the_placeholder_serves_only_a_canopy_run(scenario: 
 def test_status_and_the_web_api_show_the_persona_a_run_had(scenario: Scenario) -> None:
     scenario.configures(personas={"worker": "explainer"})
     run = scenario.run()
-    digest = str(run.row["persona_digest"])
+    digest = str(run.row.persona_digest)
     out = scenario.operator("status").out
-    assert f"  persona explainer {digest[:12]}  log {run.row['log_path']}\n" in out
+    assert f"  persona explainer {digest[:12]}  log {run.row.log_path}\n" in out
     ctx = context(scenario.env)
     try:
         c, _ = signed_in_client(ctx)
@@ -138,15 +138,15 @@ def test_a_tickets_override_reaches_every_run_of_its_agent_until_cleared(scenari
     said = scenario.operator("persona", KEY, "minimalist").out
     assert said == f"{KEY}'s worker runs write in minimalist from their next run: this ticket's override.\n"
     plan = scenario.run(PLAN, worker=planner_does(plan=TEXT))
-    assert plan.row["persona"] == "canopy"
+    assert plan.row.persona == "canopy"
     scenario.operator("plan", KEY, "--skip")
-    assert scenario.run(worker=pushes()).row["persona"] == "minimalist"
-    assert scenario.run(RESUME, worker=pushes()).row["persona"] == "minimalist"
+    assert scenario.run(worker=pushes()).row.persona == "minimalist"
+    assert scenario.run(RESUME, worker=pushes()).row.persona == "minimalist"
     # No other ticket's runs.
-    assert scenario.run(dispatches("PROJ-2")).row["persona"] == "canopy"
+    assert scenario.run(dispatches("PROJ-2")).row.persona == "canopy"
     said = scenario.operator("persona", KEY, "--clear").out
     assert said == f"{KEY}'s worker runs write in canopy from their next run: canopy's default.\n"
-    assert scenario.run(RESUME, worker=pushes()).row["persona"] == "canopy"
+    assert scenario.run(RESUME, worker=pushes()).row.persona == "canopy"
 
 
 def test_an_override_takes_the_place_of_the_agents_persona_in_config(scenario: Scenario) -> None:
@@ -159,7 +159,7 @@ def test_an_override_takes_the_place_of_the_agents_persona_in_config(scenario: S
         "  planner   explainer  (this ticket's override)\n"
         "  reviewer  canopy  (canopy's default)\n"
     )
-    assert scenario.run(PLAN, worker=planner_does(plan=TEXT)).row["persona"] == "explainer"
+    assert scenario.run(PLAN, worker=planner_does(plan=TEXT)).row.persona == "explainer"
     said = scenario.operator("persona", KEY, "--agent", "planner", "--clear").out
     assert said == f"{KEY}'s planner runs write in skeptic from their next run: [personas].\n"
 
@@ -189,7 +189,7 @@ def test_an_override_whose_persona_file_was_removed_refuses_the_tickets_next_run
     yours = personas_dir(scenario.env)
     (yours / "terse.md").write_text("Be terse.\n")
     scenario.operator("persona", KEY, "terse")
-    assert scenario.run(worker=pushes()).row["persona"] == "terse"
+    assert scenario.run(worker=pushes()).row.persona == "terse"
     (yours / "terse.md").unlink()
     reason = (
         f"{KEY}'s worker override: persona terse has no file in {yours} or among canopy's own: add it, or name one "
@@ -223,9 +223,9 @@ def test_a_persona_chosen_for_the_next_run_reaches_that_run_alone(scenario: Scen
     scenario.tick(dispatches(), dry_run=True)
     assert personas.next_run(scenario.conn, KEY, "worker") == "skeptic"
     first = scenario.run(worker=pushes())
-    assert first.row["persona"] == "skeptic"
+    assert first.row.persona == "skeptic"
     assert personas.next_run(scenario.conn, KEY, "worker") is None
-    assert scenario.run(RESUME, worker=pushes()).row["persona"] == "explainer"
+    assert scenario.run(RESUME, worker=pushes()).row.persona == "explainer"
 
 
 def test_canopy_start_and_plan_choose_the_persona_of_the_run_they_ask_for(
@@ -234,20 +234,20 @@ def test_canopy_start_and_plan_choose_the_persona_of_the_run_they_ask_for(
 ) -> None:
     out = scenario.operator("start", KEY, "--persona", "minimalist").out
     assert out.splitlines()[1] == "Its next worker run alone writes in minimalist."
-    assert scenario.run(worker=pushes()).row["persona"] == "minimalist"
-    assert scenario.run(RESUME, worker=pushes()).row["persona"] == "canopy"
+    assert scenario.run(worker=pushes()).row.persona == "minimalist"
+    assert scenario.run(RESUME, worker=pushes()).row.persona == "canopy"
 
     other = "PROJ-2"
     scenario.operator("start", other, "--plan", "--persona", "skeptic")
     assert personas.next_run(scenario.conn, other, "planner") == "skeptic"
     assert personas.next_run(scenario.conn, other, "worker") is None
     plan = scenario.run(dispatches(other, kind=RunKind.PLAN), worker=planner_does(plan=TEXT))
-    assert plan.row["persona"] == "skeptic"
+    assert plan.row.persona == "skeptic"
     # Asked again, the plan's planner writes in the one chosen for it, and the next in [personas]' again.
     said = scenario.operator("plan", other, "--persona", "explainer").out
     assert said.endswith("Its next planner run alone writes in explainer.\n")
     again = scenario.run(dispatches(other, kind=RunKind.PLAN), worker=planner_does(plan=TEXT))
-    assert again.row["persona"] == "explainer"
+    assert again.row.persona == "explainer"
 
 
 def test_a_next_runs_persona_is_refused_unknown_or_inside_a_run_and_starts_nothing(
@@ -292,7 +292,7 @@ def test_a_next_runs_persona_whose_file_was_removed_refuses_until_cleared(
     assert scenario.operator("persona", KEY, "--next", "--clear").out == (
         f"{KEY}'s next worker run writes in canopy: canopy's default.\n"
     )
-    assert scenario.run(worker=pushes()).row["persona"] == "canopy"
+    assert scenario.run(worker=pushes()).row.persona == "canopy"
 
 
 def test_the_web_api_names_the_persona_of_an_agents_next_run_alone(scenario: Scenario) -> None:

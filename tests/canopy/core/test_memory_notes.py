@@ -65,7 +65,7 @@ def test_with_memory_off_a_note_a_worker_sends_is_stored_nowhere(
     assert (run.status, harness_note(run)) == (RunStatus.UNKNOWN, NO_RESULT)
     assert memories(conn) == []
     assert memory.run_memory(conn, run.id) is None
-    assert "notes" not in str(run.row["result_json"])
+    assert "notes" not in str(run.row.result_json)
     assert conn.execute("SELECT count(*) FROM memory_reads").fetchone()[0] == 0
 
 
@@ -78,10 +78,10 @@ def test_at_record_a_note_is_stored_and_reaches_no_prompt(
     first = scenario.run(WORK, worker=pushes(notes=[{"key": "lint", "text": f"  {NOTE} "}]))
     [note] = memories(scenario.conn)
     assert (note.ticket_key, note.key, note.body, note.status) == (KEY, "lint", NOTE, MemoryStatus.ACTIVE)
-    assert (note.run_id, note.tick_id, note.author) == (first.id, first.row["tick_id"], "worker")
+    assert (note.run_id, note.tick_id, note.author) == (first.id, first.row.tick_id, "worker")
     assert note.head is not None
     assert len(note.head) == 12
-    assert "notes" not in str(first.row["result_json"])
+    assert "notes" not in str(first.row.result_json)
     # The run's `result` tool asked for notes, and the next one's does too, without serving the one written.
     assert "notes" in asked_of(agent_log)
     text = scenario.run(FIX_CI).prompt
@@ -309,7 +309,7 @@ def asked_of(agent_log: Path) -> list[str]:
 
 def harness_note(run: Ran) -> str | None:
     """What the harness said of how `run` ended, in its recorded result."""
-    note: str | None = json.loads(run.row["result_json"] or "{}").get("harness")
+    note: str | None = json.loads(run.row.result_json or "{}").get("harness")
     return note
 
 

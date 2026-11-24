@@ -24,8 +24,8 @@ def run(ctx: Context, log: logs.TickAdapter) -> list[int]:
     """
     closed: list[int] = []
     for row in dead_runs.find(ctx.conn, "review_runs"):
-        # Read again as a typed row, for what returns its slot and builds its event.
-        run = review_runs.get_review_run(ctx.conn, int(row["id"]))
+        # Read again, for what returns its slot and builds its event: the run as it stands now.
+        run = review_runs.get_review_run(ctx.conn, row.id)
         if run is None:
             continue
         fields = {"review_run_id": run.id, "pr": run.pr_url, "pid": run.pid}

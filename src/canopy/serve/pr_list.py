@@ -78,11 +78,17 @@ def _weighed_pull_requests(conn: sqlite3.Connection, urls: str, limit: int) -> l
 #: review requests by when each ended, or was made while it is open.
 #: CROSS JOIN keeps SQLite reading the tickets in order and each one's units after, rather than sorting every unit.
 _PR_ACTIVITY: Final = (
-    sql.select("u.pr_url, t.changed_at")
+    sql.select("u.pr_url AS key, t.changed_at AS at")
     .from_("tickets t CROSS JOIN ticket_units u ON u.ticket_key = t.key")
     .where("u.pr_url IS NOT NULL")
     .order_by("t.changed_at DESC"),
-    sql.select("pr_url, ended_at").from_("review_runs").where("ended_at IS NOT NULL").order_by("ended_at DESC"),
-    sql.select("pr_url, started_at").from_("review_runs").where("status = 'running'").order_by("started_at DESC"),
-    sql.select("pr_url, coalesce(ended_at, created_at) AS at").from_("review_requests").order_by("at DESC"),
+    sql.select("pr_url AS key, ended_at AS at")
+    .from_("review_runs")
+    .where("ended_at IS NOT NULL")
+    .order_by("ended_at DESC"),
+    sql.select("pr_url AS key, started_at AS at")
+    .from_("review_runs")
+    .where("status = 'running'")
+    .order_by("started_at DESC"),
+    sql.select("pr_url AS key, coalesce(ended_at, created_at) AS at").from_("review_requests").order_by("at DESC"),
 )

@@ -112,7 +112,7 @@ def test_under_canopy_a_run_leases_from_canopy_s_pool_and_its_slot_goes_back_the
         assert canopy_rows(conn) == [("api", slot.slot_path, "canopy:PROJ-1")]
         assert main(["_run", "1"], runner=runner) == 0
     run = present(db.get_run(conn, 1))
-    assert run["status"] == RunStatus.DONE
+    assert run.status == RunStatus.DONE
     assert canopy_rows(conn) == [("api", slot.slot_path, None)]
     assert ws.remote_head("api", BRANCH) is not None
     # treehouse was never asked.

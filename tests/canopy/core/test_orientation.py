@@ -257,7 +257,7 @@ def test_a_run_whose_log_was_cut_is_read_and_not_anchored(tmp_path: Path, journa
     conn = journals.open(tmp_path / "canopy.db")
     calls = [GREP, read("/pool/web/1/src/a.py"), edit("/pool/web/1/src/a.py"), TESTS, TESTS, TESTS]
     run_id = worker(conn, tmp_path, RunKind.IMPLEMENT, NOW - timedelta(hours=1), calls)
-    log = Path(present(db.get_run(conn, run_id))["log_path"])
+    log = Path(present(db.get_run(conn, run_id)).log_path)
     # Room for the first four events of the log, its first two calls and their model calls, and no more.
     bound = sum(len(line) + 1 for line in log.read_text().splitlines()[:4])
     with mock.patch.object(transcript, "MAX_BYTES", bound):

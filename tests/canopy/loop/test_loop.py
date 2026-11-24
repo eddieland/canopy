@@ -561,7 +561,7 @@ def test_sigterm_stops_the_loop_without_waiting_for_runs(
             )
         assert len(time.slept) == 1
         assert "waiting for runs" not in out.getvalue()
-        assert present(db.get_run(ctx.conn, run_id))["status"] == "running"
+        assert present(db.get_run(ctx.conn, run_id)).status is RunStatus.RUNNING
 
 
 def test_a_second_ctrl_c_stops_waiting_and_leaves_the_runs_running(
@@ -589,7 +589,7 @@ def test_a_second_ctrl_c_stops_waiting_and_leaves_the_runs_running(
         assert statuses == {"ok": 1}
         assert len(time.slept) == 2  # the wait after the tick, then one step of the wait for runs
         assert "left runs running  1 run: PROJ-9 implement" in out.getvalue()
-        assert present(db.get_run(ctx.conn, run_id))["status"] == "running"
+        assert present(db.get_run(ctx.conn, run_id)).status is RunStatus.RUNNING
 
 
 def test_a_tick_that_raises_closes_error_and_the_loop_goes_on(

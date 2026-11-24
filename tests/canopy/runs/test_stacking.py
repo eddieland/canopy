@@ -68,7 +68,7 @@ def test_implement_stacked_on_a_blocker_starts_from_its_branch_and_targets_it(
 
     slot = slot_of(scenario.conn, run.id)
     assert (run.status, run.branch, slot.base_branch) == ("done", "agent/PROJ-2-second", FIRST)
-    assert decisions(scenario.conn, int(run.row["tick_id"])) == [
+    assert decisions(scenario.conn, int(run.row.tick_id)) == [
         (
             "dispatch:implement",
             f"run 2: agent/PROJ-2-second on {FIRST} in repo at {slot.slot_path}; label {LABEL}",
@@ -136,7 +136,7 @@ def test_a_base_gone_from_origin_is_crashed_and_returns_the_slot(
     # The blocker's PR merged and its branch was deleted between the overseer's look and the run.
     run = scenario.run(dispatches("PROJ-2", base=FIRST))
     assert run.status == "crashed"
-    note = json.loads(run.row["result_json"])["harness"]
+    note = json.loads(run.row.result_json)["harness"]
     assert note == f"repo: the base branch {FIRST} is not on origin; if it was stacked on, its PR may have merged"
     assert not scenario.agent_log.exists()  # the worker never ran
     assert all(s["status"] == "available" for s in pool(treehouse_state))
@@ -158,7 +158,7 @@ def test_a_continued_branch_whose_base_is_gone_is_crashed(
         worker=pushes(SECOND),
     )
     assert run.status == "crashed"
-    assert json.loads(run.row["result_json"])["harness"].startswith(f"repo: the base branch {FIRST} is not on origin")
+    assert json.loads(run.row.result_json)["harness"].startswith(f"repo: the base branch {FIRST} is not on origin")
     assert len(agent_runs(scenario.agent_log)) == workers  # the worker never ran
     assert all(s["status"] == "available" for s in pool(treehouse_state))
 

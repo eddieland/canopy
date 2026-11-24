@@ -58,8 +58,8 @@ def test_worker_that_pushes_is_done(scenario: Scenario, git_pool: GitPool, treeh
     after = time.time()
 
     assert run.status == "done"
-    assert run.row["ended_at"] is not None
-    assert json.loads(run.row["result_json"]) == {
+    assert run.row.ended_at is not None
+    assert json.loads(run.row.result_json) == {
         "status": "done",
         "branch": "agent/PROJ-1-work",
         "pr": None,  # the contract before joint runs, which the `result` tool no longer takes
@@ -177,7 +177,7 @@ def test_a_private_tickets_worker_is_given_no_origin(scenario: Scenario) -> None
         dispatches(label=None),
         worker=private_worker_does(*commit_and_push("agent/PROJ-1-work"), result=done),
     )
-    assert run.row["private"] == 1
+    assert run.row.private == 1
     [w] = agent_runs(scenario.agent_log)
     assert "CANOPY_ARTIFACT_ORIGIN" not in w["env"]
 
@@ -272,7 +272,7 @@ def test_commits_the_worker_moved_head_off_are_unpushed(scenario: Scenario, git_
         ),
     )
     assert run.status == "unpushed"
-    assert "the worker moved HEAD off 1 commit(s) not on origin" in json.loads(run.row["result_json"])["harness"]
+    assert "the worker moved HEAD off 1 commit(s) not on origin" in json.loads(run.row.result_json)["harness"]
     assert git_pool.remote_head("agent/PROJ-1-work") is None
 
 
@@ -294,7 +294,7 @@ def test_a_rebase_dropped_for_the_same_work_pushed_another_way_is_done(scenario:
             ["git", "push", "--quiet", "origin", "HEAD:refs/heads/agent/PROJ-1-work"],
         ),
     )
-    assert run.status == "done", run.row["result_json"]
+    assert run.status == "done", run.row.result_json
     slot = Path(slot_of(scenario.conn, run.id).slot_path)
     assert git_pool.remote_head("agent/PROJ-1-work") == git("rev-parse", "HEAD", cwd=slot)
 
@@ -316,7 +316,7 @@ def test_a_rebase_aborted_and_made_again_leaves_nothing_behind(scenario: Scenari
             ["git", "push", "--quiet", "--force-with-lease", "origin", "HEAD:refs/heads/agent/PROJ-1-work"],
         ),
     )
-    assert run.status == "done", run.row["result_json"]
+    assert run.status == "done", run.row.result_json
     slot = Path(slot_of(scenario.conn, run.id).slot_path)
     assert git_pool.remote_head("agent/PROJ-1-work") == git("rev-parse", "HEAD", cwd=slot)
 
@@ -336,7 +336,7 @@ def test_with_rebase_a_worker_that_rebased_and_squashed_is_done(scenario: Scenar
             ["git", "push", "--quiet", "--force-with-lease", "origin", "HEAD:refs/heads/agent/PROJ-1-work"],
         ),
     )
-    assert run.status == "done", run.row["result_json"]
+    assert run.status == "done", run.row.result_json
     slot = Path(slot_of(scenario.conn, run.id).slot_path)
     assert git_pool.remote_head("agent/PROJ-1-work") == git("rev-parse", "HEAD", cwd=slot)
 
@@ -346,7 +346,7 @@ def test_without_rebase_a_rebased_branch_is_never_forced(scenario: Scenario, git
     before = git_pool.remote_head("agent/PROJ-1-work")
     run = scenario.run(worker=worker_does(["git", "rebase", "--quiet", "origin/main"]))
     assert run.status == "unpushed"
-    assert "not on origin; the push failed: " in json.loads(run.row["result_json"])["harness"]
+    assert "not on origin; the push failed: " in json.loads(run.row.result_json)["harness"]
     assert git_pool.remote_head("agent/PROJ-1-work") == before
 
 
@@ -364,7 +364,7 @@ def test_with_rebase_a_worker_that_rebased_and_pushed_with_a_lease_is_done(
             ["git", "push", "--quiet", "--force-with-lease", "origin", "HEAD:refs/heads/agent/PROJ-1-work"],
         ),
     )
-    assert run.status == "done", run.row["result_json"]
+    assert run.status == "done", run.row.result_json
     slot = Path(slot_of(scenario.conn, run.id).slot_path)
     assert git_pool.remote_head("agent/PROJ-1-work") == git("rev-parse", "HEAD", cwd=slot)
     assert git("merge-base", "--is-ancestor", "origin/main", "HEAD", cwd=slot) == ""
@@ -374,7 +374,7 @@ def test_with_rebase_canopy_pushes_a_rebased_branch_with_a_lease(scenario: Scena
     scenario.configures(trust={"rebase": True})
     branch_behind_main(git_pool)
     run = scenario.run(worker=worker_does(["git", "rebase", "--quiet", "origin/main"]))
-    assert run.status == "done", run.row["result_json"]
+    assert run.status == "done", run.row.result_json
     slot = Path(slot_of(scenario.conn, run.id).slot_path)
     assert git_pool.remote_head("agent/PROJ-1-work") == git("rev-parse", "HEAD", cwd=slot)
 
@@ -394,7 +394,7 @@ def test_with_rebase_canopy_never_overwrites_a_push_made_since_the_run_started(
     pushed_meanwhile = ["sh", "-c", script]
     run = scenario.run(worker=worker_does(pushed_meanwhile, ["git", "rebase", "--quiet", "origin/main"]))
     assert run.status == "unpushed"
-    assert "not on origin; the push failed: " in json.loads(run.row["result_json"])["harness"]
+    assert "not on origin; the push failed: " in json.loads(run.row.result_json)["harness"]
     assert git("log", "-1", "--format=%s", git_pool.remote_head("agent/PROJ-1-work") or "", cwd=other) == "a coworker"
 
 
@@ -421,7 +421,7 @@ def test_failed_push_is_unpushed(scenario: Scenario, git_pool: GitPool, treehous
     git_pool.reject_pushes()
     run = scenario.run(worker=pushes())
     assert run.status == "unpushed"
-    result = json.loads(run.row["result_json"])
+    result = json.loads(run.row.result_json)
     assert result["status"] == "done"  # what the worker claimed is kept
     assert "not on origin; the push failed: " in result["harness"]
     assert "push refused by test hook" in result["harness"]
@@ -431,7 +431,7 @@ def test_failed_push_is_unpushed(scenario: Scenario, git_pool: GitPool, treehous
 def test_no_commits_is_not_unpushed(scenario: Scenario, git_pool: GitPool) -> None:
     run = scenario.run(worker=asks("which API?"))
     assert run.status == "blocked"
-    assert json.loads(run.row["result_json"])["question"] == "which API?"
+    assert json.loads(run.row.result_json)["question"] == "which API?"
     assert git_pool.remote_head("agent/PROJ-1-work") is None
 
 
@@ -459,7 +459,7 @@ def test_a_worker_that_reports_no_result_is_unknown(
 ) -> None:
     run = scenario.run(worker=worker_does(result=result, exit_code=exit_code))
     assert run.status == "unknown"
-    assert json.loads(run.row["result_json"]) == {"harness": "the worker reported no result"}
+    assert json.loads(run.row.result_json) == {"harness": "the worker reported no result"}
 
 
 def test_a_worker_that_ends_without_a_result_is_asked_once_more_in_its_session(
@@ -470,7 +470,7 @@ def test_a_worker_that_ends_without_a_result_is_asked_once_more_in_its_session(
     blocked = json.dumps(blocked_result())
     run = scenario.run(worker=worker_does(result="", resent=blocked, session="ses_work"))
     assert run.status == "blocked"
-    assert json.loads(run.row["result_json"])["question"] == QUESTION
+    assert json.loads(run.row.result_json)["question"] == QUESTION
     first, again = agent_runs(scenario.agent_log)
     # The same command, told the same of its result, sent the message in place of the prompt, in the same session.
     assert again["argv"][:-2] == first["argv"][:-1]
@@ -483,7 +483,7 @@ def test_a_worker_asked_again_that_still_reports_none_is_unknown(scenario: Scena
     """It is asked once: a second answer that is no result leaves the run as it was."""
     run = scenario.run(worker=worker_does(result="not json"))
     assert run.status == "unknown"
-    assert json.loads(run.row["result_json"]) == {"harness": "the worker reported no result"}
+    assert json.loads(run.row.result_json) == {"harness": "the worker reported no result"}
     assert len(agent_runs(scenario.agent_log)) == 2
 
 
@@ -521,7 +521,7 @@ def test_a_result_reported_with_the_result_tool_is_the_runs_result(scenario: Sce
     line = '{"status": "failed", "summary": "printed, so read by nobody"}'
     run = scenario.run(worker=worker_does(then_tools=reported, result=f"chatter\n{line}"))
     assert run.status == "blocked"
-    result = json.loads(run.row["result_json"])
+    result = json.loads(run.row.result_json)
     assert (result["question"], result.get("harness")) == ("which API?", None)
     assert git_pool.remote_head("agent/PROJ-1-work") is None
 
@@ -532,20 +532,20 @@ def test_a_result_the_result_tool_refused_is_no_result(scenario: Scenario, git_p
     refused = calls(RESULT, status="finished")
     run = scenario.run(worker=worker_does(then_tools=[taken, refused], result=""))
     assert run.status == "blocked"
-    assert json.loads(run.row["result_json"])["question"] == "which API?"
+    assert json.loads(run.row.result_json)["question"] == "which API?"
 
     # Nor is a line the worker printed read in its place.
     line = '{"status": "blocked", "question": "which API?"}'
     unreported = scenario.run(worker=worker_does(then_tools=[refused], result=f"chatter\n{line}"))
     assert unreported.status == "unknown"
-    assert json.loads(unreported.row["result_json"]) == {"harness": "the worker reported no result"}
+    assert json.loads(unreported.row.result_json) == {"harness": "the worker reported no result"}
 
 
 def test_result_text_is_bounded(scenario: Scenario, git_pool: GitPool) -> None:
     """The tool takes text of any length, and what canopy keeps of it is cut to its bound."""
     result = json.dumps({"status": "failed", "summary": "x" * 10000})
     run = scenario.run(worker=worker_does(result=result))
-    stored = json.loads(run.row["result_json"])
+    stored = json.loads(present(run.row.result_json))
     assert run.status == "failed"
     assert len(stored["summary"]) == 2000
     # The reader, which reads what the tool took, passes over a field it does not know.
@@ -557,7 +557,7 @@ def test_result_text_is_bounded(scenario: Scenario, git_pool: GitPool) -> None:
 def test_timeout(scenario: Scenario, git_pool: GitPool, treehouse_state: Path) -> None:
     run = scenario.run(runner=InlineRunner(timeout_agent=True))
     assert run.status == "timeout"
-    assert json.loads(run.row["result_json"]) == {"harness": "the worker timed out after 45 minutes"}
+    assert json.loads(run.row.result_json) == {"harness": "the worker timed out after 45 minutes"}
     assert all(s["status"] == "available" for s in pool(treehouse_state))
 
 
@@ -593,7 +593,7 @@ def test_worker_refuses_to_start_on_a_branch_that_defines_its_agent(
 
     run = scenario.run()
     assert run.status == "crashed"
-    assert "defines one of canopy's agents" in json.loads(run.row["result_json"])["harness"]
+    assert "defines one of canopy's agents" in json.loads(run.row.result_json)["harness"]
     assert not scenario.agent_log.exists()
     assert all(s["status"] == "available" for s in pool(treehouse_state))
 
@@ -607,7 +607,7 @@ def test_git_failure_is_crashed_and_returns_the_slot(
         git("remote", "set-url", "origin", str(git_pool.origin.parent / "gone.git"), cwd=slot)
     run = scenario.run()
     assert run.status == "crashed"
-    assert json.loads(run.row["result_json"])["harness"].startswith("repo: git fetch exited 128")
+    assert json.loads(run.row.result_json)["harness"].startswith("repo: git fetch exited 128")
     assert not scenario.agent_log.exists()  # the worker never ran
     assert all(s["status"] == "available" for s in pool(treehouse_state))
 
@@ -626,7 +626,7 @@ def test_a_run_is_claimed_once(scenario: Scenario, git_pool: GitPool, capsys: py
     assert main(["_run", str(working.id)]) == 1
     assert "is not waiting to start" in capsys.readouterr().err
     still = present(db.get_run(conn, working.id))
-    assert (still["status"], still["pid"]) == ("running", working.row["pid"])
+    assert (still.status, still.pid) == ("running", working.row.pid)
     assert len(agent_runs(scenario.agent_log)) == 1
 
 
@@ -639,7 +639,7 @@ def test_sigterm_returns_the_slot(scenario: Scenario, git_pool: GitPool, treehou
     finally:
         timer.cancel()
     assert run.status == "crashed"
-    assert json.loads(run.row["result_json"]) == {"harness": "stopped by signal SIGTERM"}
+    assert json.loads(run.row.result_json) == {"harness": "stopped by signal SIGTERM"}
     assert all(s["status"] == "available" for s in pool(treehouse_state))
     assert signal.getsignal(signal.SIGTERM) is signal.SIG_DFL
 
@@ -720,18 +720,20 @@ def test_a_worker_records_the_session_and_cost_it_reported(
 
     # The result is read from the events: its `result` call.
     assert run.status == "done"
-    assert json.loads(run.row["result_json"])["summary"] == "did it"
+    assert json.loads(run.row.result_json)["summary"] == "did it"
     assert unit_of(scenario.conn, "PROJ-1").pr_url == "https://example.test/pr/1"
     # Two model calls, summed.
     row = run.row
-    assert row["session_id"] == "ses_w1"
-    assert row["cost_usd"] == 0.25
+    assert row.session_id == "ses_w1"
+    assert row.cost_usd == 0.25
     tokens = ("tokens_input", "tokens_output", "tokens_reasoning", "tokens_cache_read", "tokens_cache_write")
-    assert tuple(row[c] for c in tokens) == (2000, 400, 60, 8000, 1000)
-    assert row["tokens_peak_context"] == 1000 + 4000 + 500  # one call's input, cache read, and cache write
+    assert tuple(getattr(row, c) for c in tokens) == (2000, 400, 60, 8000, 1000)
+    assert row.tokens_peak_context == 1000 + 4000 + 500  # one call's input, cache read, and cache write
     first = ("tokens_first_call", "tokens_first_cache_write", "tokens_first_cache_read")
-    assert tuple(row[c] for c in first) == (5500, 500, 4000)
-    assert (scenario.env.state_dir / definitions.RUNTIME_DIR / row["definitions_digest"]).is_dir()  # the one it loaded
+    assert tuple(getattr(row, c) for c in first) == (5500, 500, 4000)
+    assert (
+        scenario.env.state_dir / definitions.RUNTIME_DIR / present(row.definitions_digest)
+    ).is_dir()  # the one it loaded
     # Its `result` call is one of its tool calls, and each command the fake ran a `bash` call that returned its stdout.
     [reporting, *ran] = tools_of(scenario.conn, "runs", run.id)
     assert reporting[:3] == (RESULT, 1, 0)
@@ -746,9 +748,9 @@ def test_a_worker_records_the_session_and_cost_it_reported(
     out = scenario.operator("status").out
     assert re.search(r"\nRecent runs \(1\):\n  PROJ-1  implement  done  \d+s ago  https://example.test/pr/1\n", out)
     # And the persona it ran in, by name and the start of its digest (DESIGN §31), and the model that served it.
-    persona = f"persona canopy {row['persona_digest'][:12]}"
+    persona = f"persona canopy {present(row.persona_digest)[:12]}"
     said = f"session ses_w1  $0.25, 3.5k tokens, 5.5k peak context  {persona}  served anthropic/claude-x"
-    assert f"\n    did it\n    {said}  log {row['log_path']}\n" in out
+    assert f"\n    did it\n    {said}  log {row.log_path}\n" in out
 
 
 def test_status_names_each_model_that_served_a_run_with_its_cost(
@@ -763,7 +765,7 @@ def test_status_names_each_model_that_served_a_run_with_its_cost(
         run = scenario.run(worker=pushes())
 
     out = scenario.operator("status").out
-    assert f"  served anthropic/claude-x $0.40, openai/gpt-y $0.10  log {run.row['log_path']}\n" in out
+    assert f"  served anthropic/claude-x $0.40, openai/gpt-y $0.10  log {run.row.log_path}\n" in out
 
 
 def test_a_running_worker_shows_its_session_spend_and_latest_tool_call(scenario: Scenario, git_pool: GitPool) -> None:
@@ -782,9 +784,9 @@ def test_a_running_worker_shows_its_session_spend_and_latest_tool_call(scenario:
     assert re.search(line, shown["stdout"])
 
     # Once it ends, its row has its whole report, and its log what it printed in the same shape as ever.
-    assert (run.status, run.row["session_id"], run.row["cost_usd"]) == ("done", "ses_w1", 0.25)
+    assert (run.status, run.row.session_id, run.row.cost_usd) == ("done", "ses_w1", 0.25)
     # The last call it made was the one that reported its result.
-    assert (run.row["activity_tool"], run.row["activity"]) == (RESULT, "")
+    assert (run.row.activity_tool, run.row.activity) == (RESULT, "")
     out = run.printed.out
     assert re.search(r"--- worker stdout ---\n(\{.*\}\n)+\n--- worker stderr ---\n\n--- worker exit 0 ---\n", out)
 
@@ -801,7 +803,7 @@ def test_a_journal_that_refuses_a_progress_write_does_not_stop_the_worker(
         run = scenario.run(worker=pushes())
     assert progress.called
     # Recorded once it ended, as ever.
-    assert (run.status, run.row["session_id"], run.row["cost_usd"]) == ("done", "ses_w1", 0.25)
+    assert (run.status, run.row.session_id, run.row.cost_usd) == ("done", "ses_w1", 0.25)
 
 
 def test_a_timed_out_worker_records_what_it_reported_before_the_kill(scenario: Scenario, git_pool: GitPool) -> None:
@@ -814,14 +816,14 @@ def test_a_timed_out_worker_records_what_it_reported_before_the_kill(scenario: S
     with report_events(scenario.env):
         run = scenario.run(runner=InlineRunner(timeout_agent=True, timeout_stdout=stdout))
     assert run.status == "timeout"
-    assert (run.row["session_id"], run.row["cost_usd"], run.row["tokens_cache_write"]) == ("ses_slow", 0.5, 4)
+    assert (run.row.session_id, run.row.cost_usd, run.row.tokens_cache_write) == ("ses_slow", 0.5, 4)
 
 
 def test_status_prints_what_a_worker_said_on_one_line(scenario: Scenario, git_pool: GitPool) -> None:
     summary = "\x1b[2Jcleared the screen\nand  went on   " + "x" * 300
     result = json.dumps({"status": "failed", "summary": summary, "prs": {"repo": "https://x.test/\x1b"}})
     run = scenario.run(worker=worker_does(result=result))
-    assert (run.status, run.row["session_id"], run.row["cost_usd"]) == ("failed", "ses_fake", 0.25)
+    assert (run.status, run.row.session_id, run.row.cost_usd) == ("failed", "ses_fake", 0.25)
 
     out = scenario.operator("status").out
     # Agent-written text reaches the terminal on one line, without control characters, and cut; a PR that is not a
@@ -831,9 +833,9 @@ def test_status_prints_what_a_worker_said_on_one_line(scenario: Scenario, git_po
     [said] = [line for line in out.splitlines() if line.startswith("    [2J")]
     assert said == "    [2Jcleared the screen and went on " + "x" * 123 + "..."
     assert len(said) == 4 + 160
-    persona = f"persona canopy {run.row['persona_digest'][:12]}"
+    persona = f"persona canopy {present(run.row.persona_digest)[:12]}"
     spent = "$0.25, 3.5k tokens, 5.5k peak context"
-    assert f"\n    session ses_fake  {spent}  {persona}  log {run.row['log_path']}\n" in out
+    assert f"\n    session ses_fake  {spent}  {persona}  log {run.row.log_path}\n" in out
 
 
 def test_status_lists_recent_runs_newest_first(

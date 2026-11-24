@@ -96,7 +96,7 @@ def test_a_run_whose_process_died_is_crashed_its_worker_killed_and_its_slot_retu
 ) -> None:
     dies = scenario.starts(worker=pushes())
     lives = scenario.starts(dispatches("PROJ-2"), worker=pushes())
-    left_behind = int(dies.row["worker_pid"])
+    left_behind = present(dies.row.worker_pid)
     dies.dies()
     assert procs.alive(left_behind)  # the worker leads its own group, so it outlives the run's process
 
@@ -104,8 +104,8 @@ def test_a_run_whose_process_died_is_crashed_its_worker_killed_and_its_slot_retu
     ticked = scenario.tick(*waits("PROJ-1"))
     assert ticked.actions == ["attention:crashed", "wait", "queried", "wait"]
     crashed = dies.row
-    assert crashed["status"] == "crashed"
-    assert json.loads(crashed["result_json"]) == {"harness": "the worker process is gone"}
+    assert crashed.status == "crashed"
+    assert json.loads(crashed.result_json) == {"harness": "the worker process is gone"}
     deadline = time.monotonic() + 30
     while procs.alive(left_behind) and time.monotonic() < deadline:
         time.sleep(0.05)
@@ -130,8 +130,8 @@ def test_a_run_never_claimed_is_crashed_and_its_slot_returned(
         never_started = add_run(conn, "PROJ-1", lease(treehouse_state, "PROJ-1"), pid=None)
         assert main(["tick"]) == 0
     run = present(db.get_run(conn, never_started))
-    assert run["status"] == "crashed"
-    assert json.loads(run["result_json"]) == {"harness": "the worker process is gone"}
+    assert run.status == "crashed"
+    assert json.loads(run.result_json) == {"harness": "the worker process is gone"}
     assert [s["status"] for s in pool(treehouse_state)] == ["available"]
     assert last_tick_decisions(conn)[0][:2] == ("PROJ-1", "attention:crashed")
 
@@ -148,8 +148,8 @@ def test_a_run_a_stop_killed_is_closed_stopped_though_the_stop_died_before_closi
         assert db.ask_stop(conn, "runs", killed)
         assert main(["tick"]) == 0
     run = present(db.get_run(conn, killed))
-    assert run["status"] == "stopped"
-    assert json.loads(run["result_json"]) == {"harness": reconcile.STOP_NOTE}
+    assert run.status == "stopped"
+    assert json.loads(run.result_json) == {"harness": reconcile.STOP_NOTE}
     assert [s["status"] for s in pool(treehouse_state)] == ["available"]
     assert attention.from_runs(conn) == []
     # Asked of a run that has ended, it records nothing.
@@ -175,7 +175,7 @@ def test_a_worker_is_alive_while_it_holds_its_lifelock_whatever_its_pid(
             assert main(["tick"]) == 0
         finally:
             os.close(held)
-        statuses = {r: (run["status"] if (run := db.get_run(conn, r)) else None) for r in (holding, let_go)}
+        statuses = {r: (run.status if (run := db.get_run(conn, r)) else None) for r in (holding, let_go)}
         assert statuses == {holding: "running", let_go: "crashed"}
         # The crashed run's lock file goes with its row; the running one's stays, as it says the run lives.
         assert not procs.lifelock(runs / f"{let_go}.log").exists()
@@ -387,12 +387,12 @@ def test_live_tick_takes_a_ticket_to_a_pushed_branch(
     assert capsys.readouterr().out.startswith("tick 1: ok: 2 decisions: dispatch:implement=1, queried=1")
 
     run = wait_for_run(conn, 1)
-    assert run["status"] == "done", Path(run["log_path"]).read_text()
-    assert (run["tick_id"], run["ticket_key"], run["kind"]) == (1, "PROJ-1", "implement")
-    assert run["branch"] == "agent/PROJ-1-add-login"
-    assert run["pid"] is not None
-    assert run["ended_at"] is not None
-    assert json.loads(run["result_json"])["prs"] == {"repo": READ_PR}
+    assert run.status == "done", Path(run.log_path).read_text()
+    assert (run.tick_id, run.ticket_key, run.kind) == (1, "PROJ-1", "implement")
+    assert run.branch == "agent/PROJ-1-add-login"
+    assert run.pid is not None
+    assert run.ended_at is not None
+    assert json.loads(run.result_json)["prs"] == {"repo": READ_PR}
     assert git_pool.remote_head("agent/PROJ-1-add-login") is not None
     assert all(s["status"] == "available" for s in pool(treehouse_state))
 
@@ -428,13 +428,13 @@ def test_killed_worker_is_detected_on_the_next_tick(
     # pipe and kill it too.
     deadline = time.monotonic() + 30
     run = db.get_run(conn, 1)
-    while (run is None or run["worker_pid"] is None or not agent_log.exists()) and time.monotonic() < deadline:
+    while (run is None or run.worker_pid is None or not agent_log.exists()) and time.monotonic() < deadline:
         time.sleep(0.05)
         run = db.get_run(conn, 1)
     assert agent_log.exists(), "the worker never started"
     assert run is not None
-    assert run["worker_pid"] is not None, "`_run` never recorded the worker's pid"
-    pid, worker_pid = int(run["pid"]), int(run["worker_pid"])
+    assert run.worker_pid is not None, "`_run` never recorded the worker's pid"
+    pid, worker_pid = present(run.pid), present(run.worker_pid)
     # `kill -9` of `_run` alone: the worker leads its own process group and is left running, orphaned.
     os.kill(pid, signal.SIGKILL)
     while procs.alive(pid) and time.monotonic() < deadline:
@@ -446,7 +446,7 @@ def test_killed_worker_is_detected_on_the_next_tick(
     with overseer_does(*waits("PROJ-1")):
         assert main(["tick"]) == 0
     crashed = present(db.get_run(conn, 1))
-    assert crashed["status"] == "crashed"
+    assert crashed.status == "crashed"
     while procs.alive(worker_pid) and time.monotonic() < deadline:
         time.sleep(0.05)
     assert not procs.alive(worker_pid)  # stopped before its slot went back to the pool

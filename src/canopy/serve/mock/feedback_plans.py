@@ -862,7 +862,9 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str], tr
         base_branch="main",
     ).run(conn)
     written = plans.write(state_dir, _KEY, RUN, _TEXT)
-    [plan_id] = (
+    [plan_id] = records.fetch_values(
+        conn,
+        int,
         records.insert(
             records.FeedbackPlan,
             ticket_key=_KEY,
@@ -871,10 +873,7 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str], tr
             status=PlanStatus.PROPOSED,
             sha256=written.sha256,
             size=written.size,
-        )
-        .returning("id")
-        .run(conn)
-        .fetchone()
+        ).returning("id"),
     )
     records.insert_rows(
         records.FeedbackPlanItem,
@@ -939,7 +938,9 @@ def seed_answered(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int],
         base_branch="main",
     ).run(conn)
     written = plans.write(state_dir, _KEY, ANSWERED_RUN, _ANSWERED_TEXT)
-    [plan_id] = (
+    [plan_id] = records.fetch_values(
+        conn,
+        int,
         records.insert(
             records.FeedbackPlan,
             ticket_key=_KEY,
@@ -954,10 +955,7 @@ def seed_answered(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int],
             approved_channel=plans.PLANNER,
             approved_reason="a small fix, a nit, and a decline with its reason; nothing touches security or the API",
             spent_run_id=drafts.RUN,
-        )
-        .returning("id")
-        .run(conn)
-        .fetchone()
+        ).returning("id"),
     )
     records.insert_rows(
         records.FeedbackPlanItem,
@@ -1088,7 +1086,9 @@ def _plan(
         slot=slot,
     )
     written = plans.write(state_dir, state.key, state.run, state.text)
-    [plan_id] = (
+    [plan_id] = records.fetch_values(
+        conn,
+        int,
         records.insert(
             records.FeedbackPlan,
             ticket_key=state.key,
@@ -1097,10 +1097,7 @@ def _plan(
             status=PlanStatus.PROPOSED,
             sha256=written.sha256,
             size=written.size,
-        )
-        .returning("id")
-        .run(conn)
-        .fetchone()
+        ).returning("id"),
     )
     kinds = {s.id: ReviewItem.REVIEW if s.thread is None else ReviewItem.COMMENT for s in state.said}
     records.insert_rows(

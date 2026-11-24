@@ -59,12 +59,12 @@ def run_scope(conn: sqlite3.Connection, run_id: int) -> RunScope:
     run = db.get_run(conn, run_id)
     if run is None:
         raise Unsearchable(f"no run {run_id}")
-    if run["status"] != RunStatus.RUNNING:
+    if run.status != RunStatus.RUNNING:
         raise Unsearchable(f"run {run_id} has ended")
     rendered = memory.run_memory(conn, run_id)
     return RunScope(
         run_id=run_id,
-        ticket_key=str(run["ticket_key"]),
+        ticket_key=run.ticket_key,
         notes=rendered is not None and rendered.ticket_notes is MemoryMode.USE,
         lessons=rendered is not None and rendered.proposals is MemoryMode.USE,
         repos=frozenset(str(s.repo) for s in db.run_slots(conn, run_id) if s.repo is not None),

@@ -14,6 +14,7 @@ from collections.abc import Collection, Sequence
 from typing import TYPE_CHECKING, Final, cast
 
 from canopy.core import contract, conversation, db, review_drafts, review_runs
+from canopy.core.vocab import RunStatus
 from canopy.reviews import review_requests
 from canopy.serve import change_views, pr_list, threads
 from canopy.serve.reviews import summaries
@@ -70,10 +71,10 @@ def pull_request(backend: Backend, ctx: Context, url: str) -> PullRequestDetail 
         found = PullRequest(url=url, active_at=db.parse_time(decisions[0].created_at))
     else:
         return None
-    runs: list[sqlite3.Row] = _runs(ctx.conn, found.ticket_key, url) if found.ticket_key is not None else []
+    runs: list[db.ShownRun] = _runs(ctx.conn, found.ticket_key, url) if found.ticket_key is not None else []
     shown = runs[:PR_RUNS]
     # The branch's history in the PR's repository: each run's commits, and the kick canopy pushed after it (§45).
-    ranges = change_views.ranges_of(ctx.conn, [int(r["id"]) for r in shown], history_in=found.repo)
+    ranges = change_views.ranges_of(ctx.conn, [int(r.id) for r in shown], history_in=found.repo)
     reviewed = backend.review_limit(ctx, url)
     return PullRequestDetail(
         pull_request=found,
@@ -84,7 +85,7 @@ def pull_request(backend: Backend, ctx: Context, url: str) -> PullRequestDetail 
                 ctx.workspace.root,
                 models=m,
                 # A joint run's other repositories are their own PRs': this page names the range in its own.
-                ranges=[g for g in ranges.get(int(r["id"]), ()) if found.repo is None or g.repo == found.repo],
+                ranges=[g for g in ranges.get(int(r.id), ()) if found.repo is None or g.repo == found.repo],
                 timeout_minutes=ctx.config.runtime.worker_timeout_minutes,
             )
             for r, m in zip(shown, runs_served(ctx.conn, shown), strict=True)
@@ -153,19 +154,19 @@ def _one_line(text: object) -> str | None:
     return found or None
 
 
-def _runs(conn: sqlite3.Connection, key: str, url: str) -> list[sqlite3.Row]:
+def _runs(conn: sqlite3.Connection, key: str, url: str) -> list[db.ShownRun]:
     # A run names the PRs it pushed to in its result; one still running has no result yet, so it is kept as well.
     # Every run of the ticket is read, not only the page's 20, so the PR's cost counts them all.
     return [
         r
         for r in db.runs_of(conn, key, None)
-        if r["status"] == "running" or url in contract.stored_prs(contract.stored_object(r["result_json"]))
+        if r.status is RunStatus.RUNNING or url in contract.stored_prs(contract.stored_object(r.result_json))
     ]
 
 
-def _cost(runs: Collection[sqlite3.Row], reviews: Collection[records.ReviewRun]) -> CostTotal:
+def _cost(runs: Collection[records.Run], reviews: Collection[records.ReviewRun]) -> CostTotal:
     # A run that pushed to two PRs, one per repository, counts on each one's page, and once on its ticket's.
-    costs = [float(r["cost_usd"]) for r in runs if r["cost_usd"] is not None]
+    costs = [float(r.cost_usd) for r in runs if r.cost_usd is not None]
     costs += [r.cost_usd for r in reviews if r.cost_usd is not None]
     return CostTotal(
         runs=len(runs),

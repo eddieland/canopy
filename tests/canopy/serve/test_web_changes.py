@@ -396,7 +396,7 @@ def ended_run(ctx: Context, status: RunStatus = RunStatus.DONE, *, prs: dict[str
 
 def keep(ctx: Context, run_id: int, repo: str, change: str, branch: str) -> str:
     """Keep run `run_id`'s two diffs of `repo` beside its log, as `runs.changes` does, and return the log's path."""
-    log_path = str(present(db.get_run(ctx.conn, run_id))["log_path"])
+    log_path = str(present(db.get_run(ctx.conn, run_id)).log_path)
     path = run_changes.change_path(log_path, repo)
     path.parent.mkdir(parents=True, exist_ok=True)
     review_diff.keep(path, change)

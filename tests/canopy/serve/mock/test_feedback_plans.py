@@ -52,4 +52,4 @@ def test_the_states_are_older_than_the_spend_page_s_week(backend: Backend) -> No
         for state in feedback_plans.STATES.values():
             row = db.get_run(ctx.conn, state.run)
             assert row is not None
-            assert (backend.clock() - db.parse_time(str(row["ended_at"]))).days >= 8
+            assert (backend.clock() - db.parse_time(str(row.ended_at))).days >= 8

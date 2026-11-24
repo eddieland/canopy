@@ -216,7 +216,9 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str], sl
     _read(conn, at)
     for number, kind, comment, stance, text, edit, reaction in _DRAFTS:
         thread = next((t[0] for t in _THREADS if t[1] == comment), None)
-        found = (
+        [draft_id] = records.fetch_values(
+            conn,
+            int,
             records.insert(
                 records.Draft,
                 run_id=RUN,
@@ -232,10 +234,7 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str], sl
                 basis=at(_STARTED),
                 created_at=at(_ENDED),
                 checked_at=at(-18),
-            )
-            .returning("id")
-            .run(conn)
-            .fetchone()
+            ).returning("id"),
         )
         versions: list[tuple[int, str, str, str | None, str, str | None]] = [
             (1, text, "worker", None, at(_ENDED), reaction),
@@ -245,7 +244,7 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str], sl
         records.insert_rows(
             records.DraftVersion,
             ("draft_id", "version", "body", "author", "channel", "created_at", "reaction"),
-        ).many(conn, [(found["id"], *v) for v in versions])
+        ).many(conn, [(draft_id, *v) for v in versions])
 
 
 @dataclass
@@ -363,57 +362,56 @@ class GitHub(procs.SubprocessRunner):
     def _read(self, request: Mapping[str, list[str]]) -> str:
         conn = db.connect(self.journal)
         try:
-            prs = sql.execute(
-                conn,
-                sql.select("*")
-                .from_("observed_prs")
-                .where("url IN (SELECT value FROM json_each(?))", json.dumps(request.get("prs", []))),
-            ).fetchall()
+            prs = (
+                records.select(records.ObservedPr)
+                .where("url IN (SELECT value FROM json_each(?))", json.dumps(request.get("prs", [])))
+                .all(conn)
+            )
             lines: list[dict[str, object]] = []
             for pr in prs:
                 lines.append(
                     {
                         "kind": "pr",
-                        "url": pr["url"],
-                        "repository": pr["repository"],
-                        "number": pr["number"],
-                        "head_sha": pr["head_sha"],
-                        "base_ref": pr["base_ref"],
-                        "state": pr["state"],
-                        "draft": bool(pr["draft"]),
-                        "mergeable": pr["mergeable"],
-                        "author": pr["author"],
+                        "url": pr.url,
+                        "repository": pr.repository,
+                        "number": pr.number,
+                        "head_sha": pr.head_sha,
+                        "base_ref": pr.base_ref,
+                        "state": pr.state,
+                        "draft": bool(pr.draft),
+                        "mergeable": pr.mergeable,
+                        "author": pr.author,
                     },
                 )
-                reviews = sql.select("*").from_("observed_reviews").where("pr_url = ?", pr["url"]).order_by("id")
-                for r in sql.execute(conn, reviews):
+                reviews = records.select(records.ObservedReview).where("pr_url = ?", pr.url).order_by("id")
+                for r in reviews.all(conn):
                     thread = None
-                    if r["thread_id"] is not None:
+                    if r.thread_id is not None:
                         thread = {
-                            "id": r["thread_id"],
-                            "path": r["path"],
-                            "line": r["line"],
-                            "side": r["side"],
-                            "outdated": bool(r["outdated"]),
-                            "resolved": bool(r["resolved"]),
+                            "id": r.thread_id,
+                            "path": r.path,
+                            "line": r.line,
+                            "side": r.side,
+                            "outdated": bool(r.outdated),
+                            "resolved": bool(r.resolved),
                         }
                     lines.append(
                         {
                             "kind": "review",
-                            "item": r["item"],
-                            "pr": r["pr_url"],
-                            "id": r["id"],
-                            "author": r["author"],
-                            "bot": bool(r["bot"]),
-                            "state": r["state"],
-                            "time": r["created_at"],
-                            "body": r["body"],
-                            "url": r["url"],
-                            "review": r["review_id"],
+                            "item": r.item,
+                            "pr": r.pr_url,
+                            "id": r.id,
+                            "author": r.author,
+                            "bot": bool(r.bot),
+                            "state": r.state,
+                            "time": r.created_at,
+                            "body": r.body,
+                            "url": r.url,
+                            "review": r.review_id,
                             "thread": thread,
                         },
                     )
-            lines.append({"kind": "end", "prs": [pr["url"] for pr in prs]})
+            lines.append({"kind": "end", "prs": [pr.url for pr in prs]})
         finally:
             conn.close()
         return "".join(json.dumps(line) + "\n" for line in lines)

@@ -442,8 +442,8 @@ def cmd_history(click_ctx: click.Context, memory_id: int) -> int:
 def _provenance(ctx: Context, p: records.Memory) -> str:
     run = db.get_run(ctx.conn, p.run_id) if p.run_id is not None else None
     ticket = db.get_ticket(ctx.conn, p.ticket_key) if p.ticket_key is not None else None
-    how = f"run {p.run_id} ({run['kind']}, {run['status']})" if run is not None else "a run"
-    private = ", private" if run is not None and run["private"] else ""
+    how = f"run {p.run_id} ({run.kind}, {run.status})" if run is not None else "a run"
+    private = ", private" if run is not None and run.private else ""
     merged = "its ticket marked done" if ticket is not None and ticket.done else "its ticket not yet done"
     where = f" for {p.repo}" if p.repo else ""
     return f"  {p.id}  `{p.key}`{where}; from {p.ticket_key}{private}, {how}, {merged}; at {p.created_at}"
@@ -610,7 +610,7 @@ def _print_run(ctx: Context, run_id: int) -> None:
     if rendered is None:
         click.echo(f"\nRun {run_id} was rendered with memory off: it wrote and read nothing.")
         return
-    click.echo(f"\nRun {run_id} ({run['kind']} of {run['ticket_key']}), rendered with {_rendered(rendered)}.")
+    click.echo(f"\nRun {run_id} ({run.kind} of {run.ticket_key}), rendered with {_rendered(rendered)}.")
     wrote = memory.written_by(ctx.conn, run_id)
     read = memory.read_by(ctx.conn, run_id)
     seen = memory.reads(ctx.conn, [m.id for m in (*wrote, *read)])

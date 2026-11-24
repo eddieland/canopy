@@ -153,7 +153,7 @@ def marked_text(snippet: Sequence[Mark], *, mark: str = "*") -> str:
 
 
 @dataclass(frozen=True)
-class _Row:
+class _Row(records.View):
     """A row of the index a search matched: its session, its message, how well it matched, and its session's facts."""
 
     session_id: str
@@ -167,7 +167,7 @@ class _Row:
 # The rows `match` finds, best first, at most `MAX_ROWS`: the title's rows, or the messages'.
 def _rows(idx: sqlite3.Connection, match: str, *, title: bool) -> list[_Row]:
     query = (
-        sql.select("m.session_id, m.message_id, h.rank, s.record, s.updated_ms, s.cut")
+        records.view(_Row, "m.session_id, m.message_id, h.rank, s.record, s.updated_ms, s.cut")
         # bm25() runs only in the query of the index itself, so its rows are read first, and joined after.
         .with_(
             "h AS MATERIALIZED (SELECT rowid AS row, bm25(words, ?, 1.0, 1.0) AS rank FROM words WHERE words MATCH ?"
@@ -181,17 +181,7 @@ def _rows(idx: sqlite3.Connection, match: str, *, title: bool) -> list[_Row]:
         .join("sessions s ON s.session_id = m.session_id")
         .where("(m.message_id IS NULL) = ?", title)
     )
-    return [
-        _Row(
-            str(session_id),
-            None if message_id is None else str(message_id),
-            float(rank),
-            str(record),
-            int(at),
-            bool(c),
-        )
-        for session_id, message_id, rank, record, at, c in sql.execute(idx, query)
-    ]
+    return query.all(idx)
 
 
 # The words of `text` around those of `words` found in it, as SQLite's `snippet()` picks them, each found marked: on one

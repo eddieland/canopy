@@ -105,7 +105,7 @@ def test_a_path_shown_from_the_workspace_root_joins_metas_root_back_to_the_journ
     run = c.get(f"/api/runs/{run_id}").json()
     assert root.is_absolute()
     assert not Path(run["log_path"]).is_absolute()
-    assert root / run["log_path"] == Path(stored["log_path"])
+    assert root / run["log_path"] == Path(stored.log_path)
     assert [(w["repo"], root / w["path"], w["absolute"]) for w in run["worktrees"]] == [("repo", slot, str(slot))]
 
 
@@ -167,7 +167,7 @@ def test_a_runs_page_carries_each_stretch_it_pushed_after_its_list_with_the_diff
     )
     answers = (Answer("api", "newspaper", ItemAnswer.FIXED), Answer("web", "no-any", ItemAnswer.PASSED))
     checklist_answers.record(ctx.conn, run_id, Checked(answers=answers, pushes=stretches))
-    log_path = present(db.get_run(ctx.conn, run_id))["log_path"]
+    log_path = present(db.get_run(ctx.conn, run_id)).log_path
     kept = checklist_answers.diff_path(log_path, "api", shown[0])
     kept.parent.mkdir(parents=True, exist_ok=True)
     review_diff.keep(kept, STRETCH)
@@ -219,7 +219,7 @@ def test_a_runs_stretches_are_read_within_a_reviews_bounds_and_the_page_is_sent_
     shas = [f"{n:02x}" * 20 for n in range(7)]
     pushes = tuple(Pushed("api", sha, "ff" * 20) for sha in shas)
     checklist_answers.record(ctx.conn, run_id, Checked(answers=(Answer("api", "x", ItemAnswer.FIXED),), pushes=pushes))
-    log_path = present(db.get_run(ctx.conn, run_id))["log_path"]
+    log_path = present(db.get_run(ctx.conn, run_id)).log_path
     for sha in shas:
         kept = checklist_answers.diff_path(log_path, "api", sha)
         kept.parent.mkdir(parents=True, exist_ok=True)
@@ -442,13 +442,13 @@ def test_stop_now_from_the_web_ends_the_run_as_canopy_stop_now_does(ctx: Context
     graceful = c.post(f"/api/tickets/{KEY}/stop", json={"now": False}, headers=headers).json()
     assert graceful == {"already": False, "running_run": run_id, "ended": False}
     run = present(db.get_run(ctx.conn, run_id))
-    assert run["status"] == "running"
+    assert run.status is RunStatus.RUNNING
 
     now = c.post(f"/api/tickets/{KEY}/stop", json={"now": True}, headers=headers).json()
     assert now == {"already": True, "running_run": run_id, "ended": True}
     run = present(db.get_run(ctx.conn, run_id))
-    assert run["status"] == "stopped"
-    assert "canopy stop --now" in str(run["result_json"])
+    assert run.status is RunStatus.STOPPED
+    assert "canopy stop --now" in str(run.result_json)
 
 
 def test_a_run_says_its_ticket_was_stopped_so_its_question_waits_on_nothing(ctx: Context) -> None:
@@ -1529,7 +1529,7 @@ def test_runs_since_counts_the_runs_that_ended_since_and_the_prs_none_before_the
     for at, status, result in ended:
         run = present(db.get_run(ctx.conn, running_run(ctx, KEY, private=False)))
         assert conversation.close_run(ctx.conn, ctx.config, run, status, json.dumps({"status": status, **result}))
-        ctx.conn.execute("UPDATE runs SET ended_at = ? WHERE id = ?", (db.format_time(at), run["id"]))
+        ctx.conn.execute("UPDATE runs SET ended_at = ? WHERE id = ?", (db.format_time(at), run.id))
     running_run(ctx, KEY, private=False)  # still running: it ended nothing
     ctx.conn.commit()
 

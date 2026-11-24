@@ -707,7 +707,7 @@ def proposed(conn: sqlite3.Connection, state_dir: Path, text: str = PLAN, key: s
 
 def plan_prompt(conn: sqlite3.Connection, run_id: int) -> Path:
     """Where a plan run's prompt is: beside its log, as dispatch writes it."""
-    return Path(present(db.get_run(conn, run_id))["log_path"]).with_suffix(".prompt")
+    return Path(present(db.get_run(conn, run_id)).log_path).with_suffix(".prompt")
 
 
 def prompted(conn: sqlite3.Connection, state_dir: Path, prompt: str = PLAN_PROMPT, key: str = KEY) -> int:
@@ -722,18 +722,18 @@ def prompt_of(env: CanopyEnv, run_id: int) -> str:
     return (env.state_dir / "runs" / f"{run_id}.prompt").read_text()
 
 
-def wait_for_run(conn: sqlite3.Connection, run_id: int, timeout: float = 30) -> sqlite3.Row:
+def wait_for_run(conn: sqlite3.Connection, run_id: int, timeout: float = 30) -> db.ShownRun:
     """Wait for a detached run to close its row."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         row = present(db.get_run(conn, run_id))
-        if row["status"] != "running":
+        if row.status is not RunStatus.RUNNING:
             return row
         time.sleep(0.05)
     raise AssertionError(f"run {run_id} still running after {timeout}s")
 
 
-def lifelock_left(row: sqlite3.Row | records.Row, timeout: float = 30) -> bool:
+def lifelock_left(row: records.Row, timeout: float = 30) -> bool:
     """Whether the lifelock file of a closed run is still there once its process has exited.
 
     The process closes its row, then removes the file, then exits, so the file is looked for only after the exit.
@@ -855,7 +855,7 @@ def dispatch_in_tick(conn: sqlite3.Connection, move: Called, *, runner: procs.Ru
         return Dispatched(said, decisions(conn, tick_id))
 
 
-def dispatch_and_run(conn: sqlite3.Connection, move: Called, *, runner: procs.Runner | None = None) -> sqlite3.Row:
+def dispatch_and_run(conn: sqlite3.Connection, move: Called, *, runner: procs.Runner | None = None) -> db.ShownRun:
     """Dispatch as `dispatch_in_tick` does, then do the run in this process, as the detached one would.
 
     Returns:
@@ -1228,7 +1228,7 @@ def memories(conn: sqlite3.Connection) -> list[records.Memory]:
     return records.fetch_all(conn, records.Memory, sql.frag("SELECT * FROM memories ORDER BY id"))
 
 
-def run_with(conn: sqlite3.Connection, move: Called, **fields: object) -> sqlite3.Row:
+def run_with(conn: sqlite3.Connection, move: Called, **fields: object) -> db.ShownRun:
     """Dispatch and run the dispatch `move`, its worker committing, pushing, and sending `fields`."""
     branch = f"agent/{move.arguments['key']}-work"
     line = worker_result(**fields).replace(BRANCH, branch)

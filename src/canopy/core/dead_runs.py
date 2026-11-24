@@ -8,9 +8,9 @@ messages and slots, a review or a task's run with its slot, a chore with nothing
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Final, Literal, overload
 
 from canopy.core import db
 from canopy.core.vocab import AnyRunStatus, ChoreRunStatus, ReviewRunStatus, RunStatus
@@ -19,7 +19,8 @@ from canopy.infra import procs
 if TYPE_CHECKING:
     import sqlite3
 
-    from canopy.core.db import Event, RunTable
+    from canopy.core import records
+    from canopy.core.db import AnyRun, Event, RunTable, ShownRun
     from canopy.infra import logs
 
 #: Each run table's `crashed`: what a run whose process is gone is closed as.
@@ -32,29 +33,41 @@ CRASHED: Final[Mapping[RunTable, AnyRunStatus]] = {
 }
 
 
-def find(conn: sqlite3.Connection, table: RunTable) -> list[sqlite3.Row]:
+@overload
+def find(conn: sqlite3.Connection, table: Literal["runs"]) -> list[ShownRun]: ...
+@overload
+def find(conn: sqlite3.Connection, table: Literal["chore_runs"]) -> list[records.ChoreRun]: ...
+@overload
+def find(conn: sqlite3.Connection, table: Literal["review_runs"]) -> list[records.ReviewRun]: ...
+@overload
+def find(conn: sqlite3.Connection, table: Literal["task_runs"]) -> list[records.TaskRun]: ...
+@overload
+def find(conn: sqlite3.Connection, table: Literal["epic_runs"]) -> list[records.EpicRun]: ...
+@overload
+def find(conn: sqlite3.Connection, table: RunTable) -> list[AnyRun]: ...
+def find(conn: sqlite3.Connection, table: RunTable) -> Sequence[AnyRun]:
     """Return `table`'s running runs whose own process is gone, oldest first.
 
     Returns:
         The rows, as `db.running_runs` reads them.
     """
-    return [r for r in db.running_runs(conn, table) if not procs.running(Path(r["log_path"]), r["pid"])]
+    return [r for r in db.running_runs(conn, table) if not procs.running(Path(r.log_path), r.pid)]
 
 
-def kill_agent(table: RunTable, row: sqlite3.Row, log: logs.TickAdapter, fields: Mapping[str, object]) -> None:
+def kill_agent(table: RunTable, row: AnyRun, log: logs.TickAdapter, fields: Mapping[str, object]) -> None:
     """Kill whatever is left of the agent run `row` in `table` started, logged with `fields` if there was any."""
-    pid = row[db.AGENT_PID[table]]
-    if pid is not None and procs.kill_group(int(pid)):
+    pid: int | None = getattr(row, db.AGENT_PID[table])
+    if pid is not None and procs.kill_group(pid):
         log.warning("killed the agent a gone process left behind", extra={**fields, "agent_pid": pid})
 
 
-def crash(conn: sqlite3.Connection, table: RunTable, row: sqlite3.Row, note: str, *, event: Event | None) -> bool:
+def crash(conn: sqlite3.Connection, table: RunTable, row: AnyRun, note: str, *, event: Event | None) -> bool:
     """Close run `row` in `table` `crashed` with `note`, its result, and `event`; then remove its lifelock's file.
 
     Returns:
         True if this call closed the run. False if another process closed it first, which removes the file itself.
     """
-    if not db.finish_run(conn, table, int(row["id"]), CRASHED[table], note, event=event):
+    if not db.finish_run(conn, table, row.id, CRASHED[table], note, event=event):
         return False
-    procs.drop_lifelock(Path(row["log_path"]))
+    procs.drop_lifelock(Path(row.log_path))
     return True

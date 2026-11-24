@@ -59,7 +59,7 @@ def test_a_resume_worker_reads_what_the_implement_before_it_reported(scenario: S
 
     resume = scenario.run(dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CI]))
     assert (
-        f"## Earlier runs\n\nRun {implement.id}, `implement`, ended `done` at {implement.row['ended_at']}.\n"
+        f"## Earlier runs\n\nRun {implement.id}, `implement`, ended `done` at {implement.row.ended_at}.\n"
         f"Its report:\n> Added the login form.\n> Tests pass.\n> {PR}\n\n"
     ) in resume.prompt
 

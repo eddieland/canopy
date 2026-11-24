@@ -69,10 +69,10 @@ def test_under_post_a_workers_drafts_are_stored_nowhere(scenario: Scenario) -> N
     scenario.configures("private", trust=POST)
     # A run that posts its own comments is asked for no draft, so its tool refuses a result that carries one.
     run = scenario.run(WORK, worker=sends_drafts([THREAD]))
-    assert (run.status, json.loads(run.row["result_json"])["harness"]) == (RunStatus.UNKNOWN, NO_RESULT)
+    assert (run.status, json.loads(present(run.row.result_json))["harness"]) == (RunStatus.UNKNOWN, NO_RESULT)
     assert all_drafts(conn) == []
     assert present(replies.run_replies(conn, run.id)).mode is ReplyMode.POST
-    assert "drafts" not in str(run.row["result_json"])
+    assert "drafts" not in str(run.row.result_json)
 
 
 @pytest.mark.usefixtures("git_pool")
@@ -84,11 +84,11 @@ def test_under_approve_a_runs_drafts_are_kept_unchecked_with_its_text(scenario: 
     assert (reply.run_id, reply.number, reply.ticket_key, reply.kind) == (run.id, 1, KEY, DraftKind.THREAD)
     assert (reply.repo, reply.pr_url, reply.comment_id, reply.stance) == ("repo", PR, 501, DraftStance.CHANGED)
     assert reply.status is DraftStatus.UNCHECKED
-    assert reply.basis == run.row["started_at"]
+    assert reply.basis == run.row.started_at
     assert drafts.text_of(conn, reply.id).body == REPLY
     assert (comment.number, comment.kind, comment.comment_id, comment.stance) == (2, DraftKind.PR, None, None)
     assert drafts.text_of(conn, comment.id).body == "Fixed the lint job."
-    assert "drafts" not in str(run.row["result_json"])
+    assert "drafts" not in str(run.row.result_json)
     assert refused(conn, run) == []
 
 
@@ -182,7 +182,7 @@ def test_drafts_that_are_not_a_list_are_refused(scenario: Scenario) -> None:
     scenario.configures("private", trust=APPROVE)
     # The tool takes a list alone, so a worker that never sends one reported no result.
     run = scenario.run(WORK, worker=sends_drafts({"on": "thread"}))
-    assert (run.status, json.loads(run.row["result_json"])["harness"]) == (RunStatus.UNKNOWN, NO_RESULT)
+    assert (run.status, json.loads(present(run.row.result_json))["harness"]) == (RunStatus.UNKNOWN, NO_RESULT)
     assert all_drafts(conn) == []
     # Behind the tool, the write refuses it too.
     with db.transaction(conn):

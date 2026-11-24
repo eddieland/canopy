@@ -299,12 +299,12 @@ def _render(
     # Only those the query still finds open: one a human closed will not come back from it (DESIGN §7).
     found = duties.last_queried(ctx.conn)
     since = db.format_time(now - timedelta(days=RECENTLY_DONE_DAYS))
-    recently_done = [t for t in db.recently_done(ctx.conn, since) if str(t["key"]) in found]
+    recently_done = [t for t in db.recently_done(ctx.conn, since) if str(t.key) in found]
     # A chore with no `when` is the harness's: the block names it only as a dispatch to come (DESIGN §37).
     chores = [
         c for c in chore_view.state_section(chore_view.states(ctx.conn, ctx.config, ctx.workspace), now) if c["when"]
     ]
-    shown = [*(int(r["id"]) for r in running), *(r.id for r in last_runs.values())]
+    shown = [*(int(r.id) for r in running), *(r.id for r in last_runs.values())]
     reviews = review_view.state_section(ctx.conn, ctx.config, now, taken=harness_reviews.taken(ctx.conn, tick_id))
     units = db.all_units(ctx.conn)
     # What each cursor names, so a live read of a stale subject can tell what it passed (DESIGN §35).

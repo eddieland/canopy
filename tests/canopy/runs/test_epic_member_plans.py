@@ -53,7 +53,7 @@ def test_a_members_planner_reads_its_epics_approved_plan_and_its_plan_names_it(
     assert git_pool.slots
     epic_plan_id = approved_epic(scenario, "--entry", "B1")
     run = scenario.run(PLAN, worker=planner_does(["cat", epics.EPIC_COPY], plan=TEXT))
-    assert run.status is RunStatus.DONE, Path(run.row["log_path"]).read_text()
+    assert run.status is RunStatus.DONE, Path(run.row.log_path).read_text()
     # The member's planner's command, the last: the epic's own planner ran before it.
     _, cat = commands_run(scenario.agent_log)[-1]
     assert cat["stdout"] == EPIC_PLAN
@@ -102,7 +102,7 @@ def test_a_member_is_not_planned_from_an_epic_plan_no_longer_as_approved(
     assert run.status is RunStatus.CRASHED
     assert (
         "epic:1's approved plan is no longer as the operator approved it"
-        in json.loads(run.row["result_json"])["harness"]
+        in json.loads(present(run.row.result_json))["harness"]
     )
     assert plans.history(scenario.conn, KEY) == []
 
@@ -161,7 +161,7 @@ def test_a_planner_that_departs_from_the_epic_raises_epic_drift_naming_the_membe
     assert '`drift` too, as `["R2", "C1"]`' in run.prompt
     [plan] = plans.history(scenario.conn, KEY)
     assert plan.epic_drift == "C1, R1"
-    assert json.loads(run.row["result_json"])["drift"] == ["C1", "R1"]
+    assert json.loads(present(run.row.result_json))["drift"] == ["C1", "R1"]
     assert drift_items(scenario) == {
         KEY: (
             f"plan {plan.id} of {KEY} departs from epic:1's C1, R1: approve it as written (canopy plan {KEY} "
@@ -223,7 +223,7 @@ def test_a_members_worker_reads_its_epics_approved_plan_ignored_and_gone_after(
     approved_epic(scenario, "--entry", "B1")
     looks = [["cat", epics.EPIC_COPY], ["git", "status", "--porcelain"], ["git", "check-ignore", epics.EPIC_COPY]]
     run = scenario.run(worker=worker_does(*looks, *commit_and_push(BRANCH)))
-    assert run.status is RunStatus.DONE, Path(run.row["log_path"]).read_text()
+    assert run.status is RunStatus.DONE, Path(run.row.log_path).read_text()
     *_, (cat, status, ignored, *_) = commands_run(scenario.agent_log)
     assert cat["stdout"] == EPIC_PLAN
     assert status["stdout"] == ""
@@ -259,7 +259,7 @@ def test_a_pushed_branch_holding_the_epic_copy_is_named(scenario: Scenario, git_
     approved_epic(scenario, "--entry", "B1")
     adds = ["git", "add", "--force", epics.EPIC_COPY]
     run = scenario.run(worker=worker_does(adds, *commit_and_push(BRANCH)))
-    harness = json.loads(run.row["result_json"])["harness"]
+    harness = json.loads(present(run.row.result_json))["harness"]
     assert f"the pushed {BRANCH} holds {epics.EPIC_COPY}, the epic plan's copy, committed by the worker" in harness
 
 
@@ -275,7 +275,7 @@ def test_a_member_is_not_worked_from_an_epic_plan_no_longer_as_approved(
     epics.approved_path(ctx.state_dir, 1, plan.run_id, present(plan.approved_sha256)).write_text("# Something else\n")
     run = scenario.run(worker=worker_does(*commit_and_push(BRANCH)))
     assert run.status is RunStatus.CRASHED
-    harness = json.loads(run.row["result_json"])["harness"]
+    harness = json.loads(present(run.row.result_json))["harness"]
     assert "epic:1's approved plan is no longer as the operator approved it; its agent did not start" in harness
     # Only the epic's planner ran: the worker never started.
     assert len(agent_runs(scenario.agent_log)) == 1
@@ -330,7 +330,7 @@ def test_a_trivial_member_is_implemented_on_its_epics_approval_alone(scenario: S
     )
 
     run = scenario.run(worker=worker_does(["cat", epics.EPIC_COPY], *commit_and_push(BRANCH)))
-    assert run.status is RunStatus.DONE, Path(run.row["log_path"]).read_text()
+    assert run.status is RunStatus.DONE, Path(run.row.log_path).read_text()
     assert "This ticket is a member of epic:1" in run.prompt
     assert "## The plan" not in run.prompt
     *_, (cat, *_) = commands_run(scenario.agent_log)

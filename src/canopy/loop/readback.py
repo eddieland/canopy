@@ -146,40 +146,40 @@ def read_run(ctx: Context, request: ShowRun, *, operator: bool = False) -> str:
     run = db.get_run(ctx.conn, run_id)
     if run is None:
         raise reports.Refused(f"no run {run_id}")
-    private = ", private" if run["private"] else ""
+    private = ", private" if run.private else ""
     lines = [
-        f"run:{run_id}: {run['kind']} of {named(run['ticket_key'], run['ticket_title'])}{private}, {run['status']}",
-        f"  started {run['started_at']}" + (f", ended {run['ended_at']}" if run["ended_at"] else ""),
+        f"run:{run_id}: {run.kind} of {named(run.ticket_key, run.ticket_title)}{private}, {run.status}",
+        f"  started {run.started_at}" + (f", ended {run.ended_at}" if run.ended_at else ""),
     ]
-    if run["branch"]:
-        lines.append(f"  branch {run['branch']}")
+    if run.branch:
+        lines.append(f"  branch {run.branch}")
     lines.extend(f"  {s.repo}  slot {s.slot_path}, from {s.base_branch}" for s in db.run_slots(ctx.conn, run_id))
     result = result_of(run)
     lines.extend(f"  PR {pr}" for pr in prs_of(result))
     said = one_line(str(result.get("harness") or ""))
     if said:
         lines.append(f"  harness: {said}")
-    session = f"session {run['session_id']}" if run["session_id"] else "no session reported"
-    lines.extend([f"  {session}{spent(run)}", f"  log {run['log_path']}"])
+    session = f"session {run.session_id}" if run.session_id else "no session reported"
+    lines.extend([f"  {session}{spent(run)}", f"  log {run.log_path}"])
     pushed = checklist_answers.pushes_of(ctx.conn, run_id)
-    answered = checklist_lines(checklist_answers.of_run(ctx.conn, run_id), pushed, log_path=str(run["log_path"]))
+    answered = checklist_lines(checklist_answers.of_run(ctx.conn, run_id), pushed, log_path=str(run.log_path))
     if answered:
         lines.extend(["\nChecklist:", *(f"  {line}" for line in answered)])
     changed = change_lines(
         run_changes.of_run(ctx.conn, run_id),
-        log_path=str(run["log_path"]),
+        log_path=str(run.log_path),
         commits=run_changes.commits_of(ctx.conn, run_id) if operator else None,
     )
     if changed:
         lines.extend(["\nChanged:", *(f"  {line}" for line in changed)])
     # Its agent's progress, while it runs and its last once it ends (DESIGN §41).
-    running = run["status"] == RunStatus.RUNNING
+    running = run.status == RunStatus.RUNNING
     standing = cards.of(run)
     if operator and (standing.card is not None or running):
         lines.extend(
             cards.lines(
                 standing,
-                started_at=str(run["started_at"]),
+                started_at=str(run.started_at),
                 running=running,
                 timeout_minutes=ctx.config.runtime.worker_timeout_minutes,
                 ref=f"run:{run_id}",

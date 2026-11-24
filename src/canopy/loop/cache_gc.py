@@ -198,9 +198,9 @@ def _live(conn: sqlite3.Connection, tables: Collection[RunTable]) -> list[str]:
     live: list[str] = []
     for table in tables:
         for row in db.running_runs(conn, table):
-            pid, agent = row["pid"], row[db.AGENT_PID[table]]
-            if pid is None or procs.running(Path(row["log_path"]), pid) or (agent is not None and procs.alive(agent)):
-                live.append(f"{db.RUN_NOUNS[table]} {row['id']}")
+            pid, agent = row.pid, getattr(row, db.AGENT_PID[table])
+            if pid is None or procs.running(Path(row.log_path), pid) or (agent is not None and procs.alive(agent)):
+                live.append(f"{db.RUN_NOUNS[table]} {row.id}")
     return live
 
 

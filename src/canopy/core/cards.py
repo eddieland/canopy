@@ -459,7 +459,7 @@ def replace_file(path: Path, name: str, data: Mapping[str, object]) -> bool:
     return True
 
 
-def of(row: sqlite3.Row | records.Row) -> Standing:
+def of(row: records.Row) -> Standing:
     """A run's card as its row records it, with how old it is.
 
     A card the journal holds that no longer reads as one, as after a change to its bounds, is shown as none.

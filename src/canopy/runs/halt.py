@@ -38,13 +38,13 @@ def end(ctx: Context, run: records.Run, log: logs.TickAdapter) -> bool:
     """
     # Read again first: a run that ended since the stop read it signals nothing, so no pid it held, since reused, is.
     current = db.get_run(ctx.conn, run.id)
-    if current is None or current["status"] != "running" or not db.ask_stop(ctx.conn, "runs", run.id):
+    if current is None or current.status is not RunStatus.RUNNING or not db.ask_stop(ctx.conn, "runs", run.id):
         return False
-    _kill(current["pid"])
+    _kill(current.pid)
     # Its `_run` first, so it starts no agent after this; then the worker the row names now, which may be one `_run`
     # started since the read above, such as a run asked again for its result (DESIGN §13).
     now = db.get_run(ctx.conn, run.id)
-    _kill((now if now is not None else current)["worker_pid"])
+    _kill((now if now is not None else current).worker_pid)
     reconcile.end_run(ctx, current, RunStatus.STOPPED, reconcile.STOP_NOTE, log)
     return True
 
@@ -62,7 +62,7 @@ def wrap_up(ctx: Context, run: records.Run, log: logs.TickAdapter) -> bool:
         True once asked, or False if the run had already ended: nothing changes.
     """
     current = db.get_run(ctx.conn, run.id)
-    if current is None or current["status"] != "running":
+    if current is None or current.status is not RunStatus.RUNNING:
         return False
     if not cards.ask_wrap_up(cards.answers_dir(ctx.state_dir, str(run.id))):
         return False

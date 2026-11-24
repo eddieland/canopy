@@ -105,12 +105,12 @@ def test_a_joint_implement_works_in_a_desk_and_opens_a_pr_per_repository(
         "api": (BRANCH, PRS["api"]),
         "web": (BRANCH, PRS["web"]),
     }
-    assert json.loads(run.row["result_json"])["prs"] == {"api": PRS["api"], "web": PRS["web"]}
+    assert json.loads(run.row.result_json)["prs"] == {"api": PRS["api"], "web": PRS["web"]}
     # Each PR's own title is recorded by its URL, on one line; docs's is not.
     titles = {"api": TITLES["api"], "web": "PROJ-1: call the endpoint"}
-    assert json.loads(run.row["result_json"])["pr_titles"] == titles
+    assert json.loads(run.row.result_json)["pr_titles"] == titles
     assert {r.url: r.pr_title for r in pr_list.pull_requests(conn, 10)} == {PRS[r]: t for r, t in titles.items()}
-    [(action, rationale)] = decisions(conn, int(run.row["tick_id"]))
+    [(action, rationale)] = decisions(conn, int(run.row.tick_id))
     assert action == "dispatch:implement"
     assert rationale == f"run 1: {BRANCH} in api at {slots['api']}, web at {slots['web']}; desk {desk}; label {LABEL}"
 
@@ -164,7 +164,7 @@ def test_a_joint_run_is_unpushed_if_any_repository_is(ws_scenario: Scenario, ws:
     run = ws_scenario.run(dispatches(repo=("api", "web")), worker=worker)
 
     assert run.status == "unpushed"
-    note = json.loads(run.row["result_json"])["harness"]
+    note = json.loads(run.row.result_json)["harness"]
     assert note.startswith(f"web: commits on {BRANCH} are not on origin; the push failed: ")
     assert "api" not in note.split(":", 1)[1]  # api's branch is pushed, so only web is named
     assert ws.remote_head("api", BRANCH) is not None
@@ -394,7 +394,7 @@ def test_a_killed_joint_run_is_detected_and_all_its_slots_returned(
 ) -> None:
     """M7 acceptance, against the fakes: a joint run killed mid-way is found by the next tick, every slot returned."""
     working = ws_scenario.starts(dispatches(repo=("api", "web")))
-    worker_pid = int(working.row["worker_pid"])
+    worker_pid = present(working.row.worker_pid)
     desk = ws.root / "desks" / "PROJ-1"
     assert sorted(p.name for p in desk.iterdir()) == [desks.MARKER, "api", "web"]
     # A desk some earlier run left behind, with no run of its ticket running.
@@ -404,7 +404,7 @@ def test_a_killed_joint_run_is_detected_and_all_its_slots_returned(
 
     ticked = ws_scenario.tick(*waits("PROJ-1"))
     assert ticked.actions[0] == "attention:crashed"
-    assert working.row["status"] == "crashed"
+    assert working.row.status == "crashed"
     deadline = time.monotonic() + 30
     while procs.alive(worker_pid) and time.monotonic() < deadline:
         time.sleep(0.05)
@@ -457,7 +457,7 @@ def test_a_joint_run_refuses_a_workspace_that_defines_canopys_agents(
     (ws.root / ".opencode" / "agent" / "canopy-worker.md").write_text("---\npermission:\n  bash: allow\n---\n")
     run = ws_scenario.run(dispatches(repo=("api", "web")))
     assert run.status == "crashed"
-    assert "defines one of canopy's agents" in json.loads(run.row["result_json"])["harness"]
+    assert "defines one of canopy's agents" in json.loads(run.row.result_json)["harness"]
     assert not ws_scenario.agent_log.exists()  # the worker never started
     assert pool_statuses(treehouse_state) == ["available", "available"]
     assert not (ws.root / "desks" / "PROJ-1").exists()

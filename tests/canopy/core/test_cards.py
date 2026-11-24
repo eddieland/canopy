@@ -163,7 +163,7 @@ def test_a_working_step_keeps_when_it_started_working_and_is_stuck_past_the_runs
     cards.record_call(conn, "runs", running, card("done", "working"))
     assert "step 1" not in cards.of(present(db.get_run(conn, running))).working_since
     cards.record_call(conn, "runs", running, card("done", "done"))
-    assert present(db.get_run(conn, running))["card_working_since"] is None
+    assert present(db.get_run(conn, running)).card_working_since is None
 
 
 def test_a_card_gone_too_many_tool_calls_without_an_update_is_stale(conn: sqlite3.Connection, running: int) -> None:
@@ -171,7 +171,7 @@ def test_a_card_gone_too_many_tool_calls_without_an_update_is_stale(conn: sqlite
     for _ in range(cards.STALE_CALLS - 1):
         cards.record_call(conn, "runs", running, None)
     run = present(db.get_run(conn, running))
-    started = str(run["started_at"])
+    started = str(run.started_at)
     assert not cards.is_stale(cards.of(run), started)
     cards.record_call(conn, "runs", running, None)
     standing = cards.of(present(db.get_run(conn, running)))
@@ -290,7 +290,7 @@ def test_a_question_keeps_when_it_was_asked_and_its_answer_while_the_cards_after
     assert standing().answer is None
     cards.record_call(conn, "runs", running, cards.Card.model_validate(CARD))
     assert (standing().asked_at, standing().answer) == (None, None)
-    assert present(db.get_run(conn, running))["card_asked_at"] is None
+    assert present(db.get_run(conn, running)).card_asked_at is None
 
 
 def test_an_answer_reaches_the_agent_in_the_transaction_that_records_it(

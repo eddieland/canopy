@@ -59,7 +59,7 @@ from rich.live import Live
 from rich.spinner import Spinner
 from rich.text import Text
 
-from canopy.core import config, connector_runs, db, notice, pause
+from canopy.core import config, connector_runs, db, notice, pause, records
 from canopy.core.vocab import ConnectorRunStatus
 from canopy.infra import lock, logs, procs, resources
 from canopy.loop import (
@@ -804,27 +804,27 @@ def _live_runs(conn: sqlite3.Connection) -> list[str]:
         each.
     """
     return [
-        _run_label(table, r)
+        _run_label(r)
         for table in db.RUN_TABLES
         for r in db.running_runs(conn, table)
-        if procs.running(Path(r["log_path"]), r["pid"])
+        if procs.running(Path(r.log_path), r.pid)
     ]
 
 
-def _run_label(table: db.RunTable, row: sqlite3.Row) -> str:
-    match table:
-        case "runs":
-            return f"{row['ticket_key']} {row['kind']}"
-        case "chore_runs":
-            return f"chore {row['chore']}"
-        case "review_runs":
-            return f"review {row['ticket_key'] or row['pr_url']}"
-        case "task_runs":
-            return f"task:{row['task_id']}"
-        case "epic_runs":
-            return f"epic:{row['epic_id']} plan"
+def _run_label(row: db.AnyRun) -> str:
+    match row:
+        case records.Run():
+            return f"{row.ticket_key} {row.kind}"
+        case records.ChoreRun():
+            return f"chore {row.chore}"
+        case records.ReviewRun():
+            return f"review {row.ticket_key or row.pr_url}"
+        case records.TaskRun():
+            return f"task:{row.task_id}"
+        case records.EpicRun():
+            return f"epic:{row.epic_id} plan"
         case _:
-            assert_never(table)
+            assert_never(row)
 
 
 def _tick(ctx: Context, *, dry_run: bool, woken_by: WokenBy, ui: str | None, log: logs.TickAdapter) -> tick.Outcome:

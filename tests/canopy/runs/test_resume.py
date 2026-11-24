@@ -111,7 +111,7 @@ def test_a_red_check_and_a_review_comment_in_one_tick_make_one_run(scenario: Sce
     assert (run.kind, run.status) == ("resume", "done")
     # One run, one push, for both; its reasons in the vocabulary's order, as the decision names them.
     assert run.reasons == (CI, REVIEW)
-    [(action, rationale)] = decisions(scenario.conn, int(run.row["tick_id"]))
+    [(action, rationale)] = decisions(scenario.conn, int(run.row.tick_id))
     assert action == "dispatch:resume"
     assert "for ci, review" in rationale
     assert git("log", "--format=%s", "agent/PROJ-1-work", cwd=git_pool.origin).splitlines()[0] == (
@@ -328,7 +328,7 @@ def test_the_cooldown_holds_a_resume_for_ci_alone_after_a_run_that_worked_on_ci(
 def test_an_old_fix_ci_run_starts_the_cooldown_too(scenario: Scenario) -> None:
     with_branch(scenario.conn)
     fix = present(db.get_run(scenario.conn, old_fix_ci(scenario.conn)))
-    assert scenario.refuses(resumes(CI)) == [held(db.parse_time(str(fix["ended_at"])) + timedelta(minutes=30))]
+    assert scenario.refuses(resumes(CI)) == [held(db.parse_time(str(fix.ended_at)) + timedelta(minutes=30))]
 
 
 def test_a_fix_ci_prompt_override_refuses_every_resume_and_says_so(
@@ -408,7 +408,7 @@ def test_a_resume_that_leaves_a_flaky_check_tells_the_overseer_one_bit(scenario:
     flaky = json.loads(WORKER_DONE) | {"prs": {"repo": READ_PR}, "summary": summary, "flaky": True}
     left = scenario.run(resumes(CI), worker=worker_does(result=json.dumps(flaky)))
     assert left.status == "done"  # it pushed nothing, and needed to push nothing
-    assert contract.stored_object(left.row["result_json"])["flaky"] is True
+    assert contract.stored_object(left.row.result_json)["flaky"] is True
     # The overseer reads the bit, never the worker's words: the summary stays in the run (TRUST_MODEL T1).
     scenario.tick(*waits("PROJ-1", rationale="the check waits on a rerun"))
     last = scenario.ticket_state("PROJ-1")["last_run"]

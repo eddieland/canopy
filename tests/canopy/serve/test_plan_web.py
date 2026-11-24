@@ -319,9 +319,9 @@ def test_comments_asked_for_from_the_web_reach_the_next_plans_prompt(
     assert c.get(f"/api/tickets/{KEY}/plans").json()["changes_asked"] is not None
     with planner_does(plan="# Plan, blue\n"):
         second = dispatch_and_run(conn, PLAN)
-    assert second["status"] == RunStatus.DONE
+    assert second.status is RunStatus.DONE
     assert c.get(f"/api/tickets/{KEY}/plans").json()["changes_asked"] is None
-    prompt = prompt_of(canopy_env, int(second["id"]))
+    prompt = prompt_of(canopy_env, int(second.id))
     assert '1. On "red":' in prompt
     assert "   Blue." in prompt
 

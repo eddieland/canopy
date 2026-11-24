@@ -71,11 +71,11 @@ def test_a_dispatch_starts_once_the_overseer_has_exited_in_order_with_the_harnes
             (KEY, None, "dispatch:implement", Decider.OVERSEER),
             (None, MINE, "dispatch:chore", Decider.HARNESS),
         ]
-        assert [w.row["ticket_key"] for w in ticked.working] == ["PROJ-2", KEY]
+        assert [w.row.ticket_key for w in ticked.working] == ["PROJ-2", KEY]
         for working in ticked.working:
             # Each `_run` is the tick's child, not the overseer's descendant, and runs on now the overseer is gone.
-            assert ancestors(int(working.row["pid"]))[0] == os.getpid()
-            assert procs.alive(int(working.row["pid"]))
+            assert ancestors(present(working.row.pid))[0] == os.getpid()
+            assert procs.alive(present(working.row.pid))
         assert [r.status for r in recorded_of(scenario.conn, ticked.tick.id)] == [RecordedStatus.STARTED] * 2
         assert ticked.tick.status == TickStatus.OK
         for working in ticked.working:

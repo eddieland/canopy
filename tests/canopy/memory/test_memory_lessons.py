@@ -143,7 +143,7 @@ def test_with_proposals_off_a_proposal_is_stored_nowhere(scenario: Scenario, git
     scenario.configures("private", memory=memory_modes(ticket_notes="record"))
     run = scenario.run(WORK, worker=pushes(proposals=[{"key": "api-tests", "text": LESSON}]))
     # The run is asked for notes alone, so its tool refuses a result that proposes.
-    assert (run.status, json.loads(run.row["result_json"])["harness"]) == (RunStatus.UNKNOWN, NO_RESULT)
+    assert (run.status, json.loads(present(run.row.result_json))["harness"]) == (RunStatus.UNKNOWN, NO_RESULT)
     assert memories(scenario.conn) == []
 
 
@@ -317,7 +317,7 @@ def test_while_lessons_record_a_plan_is_asked_for_no_memory_and_its_tool_refuses
     sent = {"memory_used": [lesson.id]}
     planner = planner_does(plan="# Plan\n\nDo it.\n", result={"status": "done", "summary": "planned it", **sent})
     run = scenario.run(dispatches(kind=RunKind.PLAN), worker=planner)
-    assert (run.status, json.loads(run.row["result_json"])["harness"]) == (
+    assert (run.status, json.loads(present(run.row.result_json))["harness"]) == (
         RunStatus.UNKNOWN,
         "the planner reported no result",
     )
@@ -388,7 +388,7 @@ def test_memory_lessons_counts_the_runs_that_read_a_lesson_apart_from_those_that
     quiet = scenario.run(dispatches("PROJ-2", slug="work"), worker=pushes())
     cited = present(memory.get(conn, lesson.id))
     assert cited.review_at == vouched
-    started = present(db.get_run(conn, quiet.id))["started_at"]
+    started = present(db.get_run(conn, quiet.id)).started_at
     out = scenario.operator("memory", "lessons").out
     assert f"read by 2 runs (last at {started}), cited by 1 (last at {cited.last_used_at})" in out
     [found] = json.loads(scenario.operator("memory", "lessons", "--json").out)["lessons"]

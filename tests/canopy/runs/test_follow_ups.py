@@ -55,8 +55,8 @@ def takes_runs(scenario: Scenario) -> None:
     scenario.configures(notify={"sinks": {"slack": {"cmd": "true", "events": ["runs"]}}})
 
 
-def note_of(row: sqlite3.Row) -> str:
-    return str(contract.stored_object(row["result_json"]).get("harness") or "")
+def note_of(row: records.Run) -> str:
+    return str(contract.stored_object(row.result_json).get("harness") or "")
 
 
 def test_an_implement_records_each_follow_up_it_reports_with_its_repository(
@@ -105,7 +105,7 @@ def test_each_refused_entry_is_recorded_nowhere_named_in_the_note_and_on_the_att
     assert "PROJ-16: its repository is not one in this workspace" in note
     assert "1 more entry, not named" in note
     assert "not a key!" not in note
-    assert contract.stored_object(run.row["result_json"])[follow_ups.STORED] == {
+    assert contract.stored_object(run.row.result_json)[follow_ups.STORED] == {
         "keys": [KEY, "PROJ-9", "OTHER-3", "PROJ-16"],
         "others": 1,
     }
@@ -223,7 +223,7 @@ def test_a_private_run_records_its_follow_up_which_waits_for_the_operator(
         dispatches(label=None),
         worker=private_worker_does(*commit_and_push(f"agent/{KEY}-work"), result=result),
     )
-    assert run.row["private"] == 1
+    assert run.row.private == 1
     assert recorded(scenario.conn) == [(FOLLOW_UP, KEY, run.id, "repo")]
     # Its worker was told creating it is the one thing it writes to the tracker, and that it is a request.
     assert "Creating them is the one thing you write to the tracker" in run.prompt
@@ -241,7 +241,7 @@ def test_a_private_run_records_its_follow_up_which_waits_for_the_operator(
         dispatches(FOLLOW_UP, label=None),
         worker=private_worker_does(*commit_and_push(f"agent/{FOLLOW_UP}-work"), result=DONE),
     )
-    assert (followed.status, followed.row["private"]) == ("done", 1)
+    assert (followed.status, followed.row.private) == ("done", 1)
     assert followed.prompt.startswith("# canopy private worker: implement")
     [worker] = [r for r in agent_runs(scenario.agent_log) if FOLLOW_UP in str(r["argv"])]
     assert "canopy-worker-private" in str(worker["argv"])
@@ -264,7 +264,7 @@ def test_a_run_that_rewrites_its_slots_git_records_no_follow_up(
     assert run.status == "crashed"
     assert recorded(scenario.conn) == []
     assert f"{FOLLOW_UP}: the run rewrote its slot's git" in note_of(run.row)
-    assert contract.stored_object(run.row["result_json"])[follow_ups.STORED] == {"keys": [FOLLOW_UP], "others": 0}
+    assert contract.stored_object(run.row.result_json)[follow_ups.STORED] == {"keys": [FOLLOW_UP], "others": 0}
 
 
 def test_a_key_another_run_recorded_first_is_named_as_refused(scenario: Scenario) -> None:
@@ -302,7 +302,7 @@ def test_a_key_another_run_recorded_first_is_named_as_refused(scenario: Scenario
         with db.transaction(scenario.conn):
             done = follow_ups.record(scenario.conn, checked, parent="PROJ-2", run_id=second)
     assert done == ["PROJ-15"]
-    stored = contract.stored_object(present(db.get_run(scenario.conn, second))["result_json"])
+    stored = contract.stored_object(present(db.get_run(scenario.conn, second)).result_json)
     assert stored["harness"] == f"follow-ups not recorded: {FOLLOW_UP}: another run recorded it first"
     assert stored[follow_ups.STORED] == {"keys": [FOLLOW_UP], "others": 0}
 
@@ -320,7 +320,7 @@ def test_a_worker_that_never_sends_an_object_of_keys_reported_no_result(scenario
     run = scenario.run(worker=pushes(created=[FOLLOW_UP]))
     assert (run.status, note_of(run.row)) == (RunStatus.UNKNOWN, NO_RESULT)
     assert recorded(scenario.conn) == []
-    assert follow_ups.STORED not in contract.stored_object(run.row["result_json"])
+    assert follow_ups.STORED not in contract.stored_object(run.row.result_json)
 
 
 @pytest.mark.parametrize("created", ["PROJ-14", ["PROJ-14"], 7])

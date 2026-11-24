@@ -51,7 +51,7 @@ def committed_at(when: str) -> Iterator[None]:
 
 
 def harness_note(ran: Ran) -> str:
-    return str(contract.stored_object(ran.row["result_json"]).get("harness", ""))
+    return str(contract.stored_object(ran.row.result_json).get("harness", ""))
 
 
 def takes_runs(scenario: Scenario) -> None:
@@ -73,7 +73,7 @@ def test_without_kicks_a_flaky_check_is_left_to_the_operator(scenario: Scenario,
     left = leaves_flaky(scenario)
     assert left.status == "done"
     assert git_pool.remote_head(BRANCH) == before
-    assert "kicked" not in contract.stored_object(left.row["result_json"])
+    assert "kicked" not in contract.stored_object(left.row.result_json)
 
 
 def test_a_flaky_check_is_kicked_onto_the_base_until_the_head_has_had_its_kicks(
@@ -104,7 +104,7 @@ def test_a_flaky_check_is_kicked_onto_the_base_until_the_head_has_had_its_kicks(
         main_moves(git_pool, name)
         kicked = red_again()
         assert kicked.status == "done", harness_note(kicked)
-        assert contract.stored_object(kicked.row["result_json"])["kicked"] == ["repo"]
+        assert contract.stored_object(kicked.row.result_json)["kicked"] == ["repo"]
         head = git_pool.remote_head(BRANCH)
         assert head not in heads
         heads.append(head)
@@ -159,7 +159,7 @@ def test_a_branch_that_does_not_rebase_is_left_as_it_was(scenario: Scenario, git
     assert note.startswith(f"repo: not kicked: {BRANCH} does not rebase onto main: error: could not apply"), note
     assert "\n" not in note
     assert git_pool.remote_head(BRANCH) == before
-    assert "kicked" not in contract.stored_object(left.row["result_json"])
+    assert "kicked" not in contract.stored_object(left.row.result_json)
 
 
 def test_a_rebase_that_would_drop_a_merges_own_change_is_no_kick(scenario: Scenario, git_pool: GitPool) -> None:
@@ -193,7 +193,7 @@ def test_a_kick_whose_push_fails_is_not_counted(scenario: Scenario, git_pool: Gi
     refused = leaves_flaky(scenario)
     assert harness_note(refused).startswith("repo: not kicked: the push failed: "), harness_note(refused)
     assert scenario.conn.execute("SELECT count(*) FROM flaky_kicks").fetchone()[0] == 0
-    assert "kicked" not in contract.stored_object(refused.row["result_json"])
+    assert "kicked" not in contract.stored_object(refused.row.result_json)
 
 
 def test_only_a_resume_for_ci_is_kicked(scenario: Scenario, git_pool: GitPool) -> None:
@@ -266,7 +266,7 @@ def test_the_cause_a_worker_names_reaches_the_overseer_as_a_word_and_its_line_on
     left, seen = last_run({"flaky_cause": "service", "flaky_detail": "registry.npmjs.org returned 503"})
     assert seen["flaky_cause"] == "service"
     # Its line on why is kept with the run, and told to the sinks, never to the overseer.
-    assert contract.stored_object(left.row["result_json"])["flaky_detail"] == "registry.npmjs.org returned 503"
+    assert contract.stored_object(left.row.result_json)["flaky_detail"] == "registry.npmjs.org returned 503"
     assert "registry" not in json.dumps(seen)
     [fields] = told(scenario)
     assert fields["cause"] == "service"
@@ -288,7 +288,7 @@ def test_the_cause_a_worker_names_reaches_the_overseer_as_a_word_and_its_line_on
     other, seen = last_run({"flaky_cause": "the network"})
     assert "flaky_cause" not in seen
     assert "network" not in json.dumps(seen)
-    assert contract.stored_object(other.row["result_json"])["flaky_cause_other"] == "the network"
+    assert contract.stored_object(other.row.result_json)["flaky_cause_other"] == "the network"
     assert told(scenario)[-1]["cause"] is None
     assert told(scenario)[-1]["other_cause"] == "the network"
     assert message.event_line("ci.flaky", told(scenario)[-1]).startswith(

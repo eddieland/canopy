@@ -22,7 +22,6 @@ from canopy.infra import cwds, logs, procs
 from canopy.runs import desks, dispatch, epic_runs, task_run, tasks, tidy
 
 if TYPE_CHECKING:
-    import sqlite3
     from collections.abc import Mapping, Sequence
     from collections.abc import Set as AbstractSet
 
@@ -78,11 +77,11 @@ def run(ctx: Context, log: logs.TickAdapter) -> Reconciled:
     found += _other_pools(ctx, log)
     returned = _close_dead_runs(ctx, log) | _close_dead_task_runs(ctx, log) | _close_dead_epic_runs(ctx, log)
     running = db.running_runs(ctx.conn, "runs")
-    running_slots = db.all_run_slots(ctx.conn, [int(r["id"]) for r in running])
+    running_slots = db.all_run_slots(ctx.conn, [r.id for r in running])
     held = {s.lease_id for slots in running_slots.values() for s in slots}
     # A running review holds a slot too (DESIGN §21); its own reconcile returns it if its `_review` is gone.
     reviews = db.running_runs(ctx.conn, "review_runs")
-    held |= {str(r["lease_id"]) for r in reviews if r["lease_id"]}
+    held |= {r.lease_id for r in reviews if r.lease_id}
     # So does a task's run (DESIGN §36).
     task_runs = tasks.running(ctx.conn)
     held |= {r.lease_id for r in task_runs}
@@ -93,7 +92,7 @@ def run(ctx: Context, log: logs.TickAdapter) -> Reconciled:
     for name, pool_, slots in found:
         still = _return_stale(log, name, pool_, slots, held=held, returned=returned)
         leased.setdefault(name, []).extend(still)
-    in_use = {str(r["ticket_key"]) for r in running} | {epic_runs.desk_key(r.epic_id) for r in plan_runs}
+    in_use = {r.ticket_key for r in running} | {epic_runs.desk_key(r.epic_id) for r in plan_runs}
     for desk in desks.prune(ws.root, in_use):
         log.warning("desk with no running run; removed", extra={"desk": str(desk)})
     # Every kind of run loads a snapshot, and OpenCode 2 reads its agent from it again while the run goes on, so a
@@ -158,7 +157,7 @@ def _close_dead_runs(ctx: Context, log: logs.TickAdapter) -> set[str]:
     """
     returned: set[str] = set()
     for run in dead_runs.find(ctx.conn, "runs"):
-        if run["stop_asked_at"] is not None:
+        if run.stop_asked_at is not None:
             returned |= end_run(ctx, run, RunStatus.STOPPED, STOP_NOTE, log)
         else:
             returned |= end_run(ctx, run, RunStatus.CRASHED, "the worker process is gone", log)
@@ -173,7 +172,7 @@ def _close_dead_task_runs(ctx: Context, log: logs.TickAdapter) -> set[str]:
     """
     returned: set[str] = set()
     for row in dead_runs.find(ctx.conn, "task_runs"):
-        run = tasks.get_run(ctx.conn, int(row["id"]))
+        run = tasks.get_run(ctx.conn, row.id)
         if run is not None and run.stop_asked_at is not None:
             returned |= task_run.end(ctx, run, RunStatus.STOPPED, task_run.STOP_NOTE, log)
         elif run is not None:
@@ -189,7 +188,7 @@ def _close_dead_epic_runs(ctx: Context, log: logs.TickAdapter) -> set[str]:
     """
     returned: set[str] = set()
     for row in dead_runs.find(ctx.conn, "epic_runs"):
-        run = epic_runs.get_run(ctx.conn, int(row["id"]))
+        run = epic_runs.get_run(ctx.conn, row.id)
         if run is not None and run.stop_asked_at is not None:
             returned |= epic_runs.end(ctx, run, RunStatus.STOPPED, epic_runs.STOP_NOTE, log)
         elif run is not None:
@@ -197,7 +196,7 @@ def _close_dead_epic_runs(ctx: Context, log: logs.TickAdapter) -> set[str]:
     return returned
 
 
-def end_run(ctx: Context, run: sqlite3.Row, status: RunStatus, note: str, log: logs.TickAdapter) -> set[str]:
+def end_run(ctx: Context, run: db.ShownRun, status: RunStatus, note: str, log: logs.TickAdapter) -> set[str]:
     """Close a run whose `_run` is gone, or was killed, as `status`: stop its worker, tidy and return its slots.
 
     Its desk and its object directory are removed too. Reconcile closes a crashed run this way, and `canopy stop --now`
@@ -212,21 +211,21 @@ def end_run(ctx: Context, run: sqlite3.Row, status: RunStatus, note: str, log: l
         pools.PoolError: a slot could not be returned.
     """
     returned: set[str] = set()
-    slots = db.run_slots(ctx.conn, int(run["id"]))
+    slots = db.run_slots(ctx.conn, run.id)
     fields = {
-        "run_id": run["id"],
-        "ticket": run["ticket_key"],
-        "pid": run["pid"],
+        "run_id": run.id,
+        "ticket": run.ticket_key,
+        "pid": run.pid,
         "slots": [s.slot_path for s in slots],
         "repos": [s.repo for s in slots],
     }
     # `_run` is gone, but a worker it started may not be. Stop it before its slots go back to their pools.
     dead_runs.kill_agent("runs", run, log, fields)
     conversation.close_run(ctx.conn, ctx.config, run, status, json.dumps({"harness": note}))
-    procs.drop_lifelock(Path(run["log_path"]))
+    procs.drop_lifelock(Path(run.log_path))
     outcomes: list[str] = []
-    cards.remove_answers(cards.answers_dir(ctx.state_dir, str(run["id"])))
-    objects = tidy.objects_dir(dispatch.runs_dir(ctx), int(run["id"]))
+    cards.remove_answers(cards.answers_dir(ctx.state_dir, str(run.id)))
+    objects = tidy.objects_dir(dispatch.runs_dir(ctx), run.id)
     tidied = True
     for slot in slots:
         where = {**fields, "slot": slot.slot_path, "repo": slot.repo}
@@ -253,8 +252,8 @@ def end_run(ctx: Context, run: sqlite3.Row, status: RunStatus, note: str, log: l
         outcomes.append(outcome.value)
     if tidied:
         tidy.remove_objects(objects, log)
-    if dispatch.in_desk(str(run["kind"]), slots):
-        desks.remove(desks.path(ctx.workspace.root, str(run["ticket_key"])))
+    if dispatch.in_desk(run.kind, slots):
+        desks.remove(desks.path(ctx.workspace.root, run.ticket_key))
     log.warning("run closed without its `_run`", extra={**fields, "status": status, "note": note, "returned": outcomes})
     return returned
 

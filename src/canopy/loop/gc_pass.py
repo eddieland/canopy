@@ -9,10 +9,11 @@ not stop the loop that would free it.
 from __future__ import annotations
 
 import stat
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Final
 
-from canopy.core import db, gc_passes, memory_manage, sql
+from canopy.core import db, gc_passes, memory_manage, records, sql
 from canopy.infra import logs, metrics, tracing
 from canopy.loop import gc
 
@@ -79,12 +80,23 @@ def checkpoint(conn: sqlite3.Connection, log: logs.TickAdapter) -> bool:
         Whether the WAL was emptied.
     """
     try:
-        busy, frames, copied = sql.execute(conn, sql.frag("PRAGMA wal_checkpoint(TRUNCATE)")).fetchone()
+        [done] = records.fetch_all(conn, _Checkpoint, sql.frag("PRAGMA wal_checkpoint(TRUNCATE)"))
     except Exception as e:
         log.exception("journal not checkpointed", extra={"error": str(e)})
         return False
-    log.info("journal checkpointed", extra={"busy": bool(busy), "frames": frames, "copied": copied})
-    return not busy
+    log.info("journal checkpointed", extra={"busy": bool(done.busy), "frames": done.log, "copied": done.checkpointed})
+    return not done.busy
+
+
+@dataclass(frozen=True)
+class _Checkpoint(records.View):
+    """What `PRAGMA wal_checkpoint` reports."""
+
+    #: 0 when it completed; 1 when a reader or a writer held it back.
+    busy: int
+    #: The frames in the log, and how many of them it copied into the journal; -1 for a journal with no log.
+    log: int
+    checkpointed: int
 
 
 def _pass(ctx: Context, tick_id: int, now: datetime, log: logs.TickAdapter) -> int:

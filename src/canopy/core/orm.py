@@ -20,7 +20,8 @@ its query, selecting the view's fields by name, or the columns written out where
     units = records.view(Unit).from_("ticket_units").where("ticket_key = ?", key).all(conn)
     phases = records.view(InPhase, "phase, count(*) AS tickets").from_("tickets").group_by("phase").all(conn)
 
-A query built elsewhere reads a view through `fetch_all` or `fetch_one`, as it does a row type.
+A query built elsewhere reads a view through `fetch_all` or `fetch_one`, as it does a row type, and `fetch_each` reads
+either a row at a time, for a read that stops before the last.
 
 A query read for less than a record ends in a typed read too, so no caller indexes a bare row:
 
@@ -50,7 +51,7 @@ import functools
 import sqlite3
 import types
 import typing
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
 from dataclasses import Field, asdict, dataclass, fields
 from enum import StrEnum
 from typing import Any, ClassVar, Final, LiteralString, Self, override
@@ -185,6 +186,24 @@ def fetch_one[R: Record](conn: sqlite3.Connection, record_type: type[R], query: 
     return None if first is None else _made(record_type, reading.names, reading.values(first))
 
 
+def fetch_each[R: Record](conn: sqlite3.Connection, record_type: type[R], query: sql.Composable) -> Generator[R]:
+    """Run `query`, a statement built with `sql`, and build its rows as `record_type` one at a time, as each is asked.
+
+    For a read that stops before the query's last row: the rest are never read. Closing the generator, as
+    `contextlib.closing` does, ends the statement, so one left early does not hold its read open in autocommit.
+
+    Yields:
+        Each row, in the order the query returns them.
+    """
+    cur = _cursor(conn, query)
+    try:
+        reading = _reading(record_type, _names(cur))
+        for row in cur:
+            yield _made(record_type, reading.names, reading.values(row))
+    finally:
+        cur.close()
+
+
 def fetch_value[T](conn: sqlite3.Connection, value_type: type[T], query: sql.Composable) -> T | None:
     """Run `query`, a statement of one column, and read its first row's value as `value_type`.
 
@@ -232,16 +251,16 @@ def count(conn: sqlite3.Connection, query: sql.Composable) -> int:
     return int(rows)
 
 
-def columns(row: sqlite3.Row | Record) -> sqlite3.Row | dict[str, Any]:
-    """A row of a table with a row type or one still read as `sqlite3.Row`, either way read by column name.
+def columns(row: Record) -> dict[str, Any]:
+    """A record's fields by column name.
 
-    For a helper that reads the same columns, such as a run's cost, from rows of several tables, while some of those
-    tables have no row type yet.
+    For a helper that reads the same columns, such as a run's cost, from rows of several tables, whose row types
+    share no base that names them.
 
     Returns:
-        A typed row's fields by name, or the `sqlite3.Row` itself.
+        The record's fields by name.
     """
-    return asdict(row) if isinstance(row, Record) else row
+    return asdict(row)
 
 
 @dataclass(frozen=True, kw_only=True)

@@ -152,8 +152,19 @@ def _scrub(conn: sqlite3.Connection, where: sql.Composable, *, why: sql.Arg) -> 
             sql.execute(conn, sql.insert("memories_fts", memories_fts=sql.frag("'optimize'")))  # noqa: TID251
     finally:
         sql.execute(conn, _SECURE_DELETE[before])
-    busy = int(sql.execute(conn, sql.frag("PRAGMA wal_checkpoint(TRUNCATE)")).fetchone()[0])
-    return Scrubbed(count=count, checkpointed=busy == 0)
+    [log] = records.fetch_all(conn, _Checkpoint, sql.frag("PRAGMA wal_checkpoint(TRUNCATE)"))
+    return Scrubbed(count=count, checkpointed=log.busy == 0)
+
+
+@dataclass(frozen=True)
+class _Checkpoint(records.View):
+    """What `PRAGMA wal_checkpoint` reports."""
+
+    #: 0 when it completed; 1 when a reader or a writer held it back.
+    busy: int
+    #: The frames in the log, and how many of them it copied into the journal; -1 for a journal with no log.
+    log: int
+    checkpointed: int
 
 
 @dataclass(frozen=True)
@@ -260,7 +271,7 @@ def from_private_run(conn: sqlite3.Connection, found: records.Memory) -> bool:
         True for a note or a proposal a private run wrote; False for a lesson, which no run writes.
     """
     run = db.get_run(conn, found.run_id) if found.run_id is not None else None
-    return run is not None and bool(run["private"])
+    return run is not None and run.private
 
 
 def reject(conn: sqlite3.Connection, config: Config, proposal_id: int) -> records.Memory:

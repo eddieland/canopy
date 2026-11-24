@@ -228,7 +228,7 @@ def test_a_task_runs_transcript_is_read_back_from_its_log(backend: Backend) -> N
         mock_run = present(db.get_run(ctx.conn, 39))
         ctx.conn.execute(
             "UPDATE task_runs SET log_path = ?, session_id = ? WHERE id = ?",
-            (mock_run["log_path"], mock_run["session_id"], run_id),
+            (mock_run.log_path, mock_run.session_id, run_id),
         )
     found = c.get(path).json()
     assert found["status"] == "read"

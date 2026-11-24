@@ -72,7 +72,7 @@ def edited(changed: str) -> str:
 def planned(scenario: Scenario) -> int:
     """Run a planner that writes TEXT; returns the plan's run id."""
     run = scenario.run(dispatches(kind=RunKind.PLAN), worker=planner_does(plan=TEXT))
-    assert run.status == RunStatus.DONE, Path(run.row["log_path"]).read_text()
+    assert run.status == RunStatus.DONE, Path(run.row.log_path).read_text()
     return run.id
 
 

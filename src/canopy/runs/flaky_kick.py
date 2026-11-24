@@ -19,9 +19,9 @@ from canopy.core.vocab import ResumeReason, RunKind, RunStatus
 from canopy.runs import checkpoint, flaky_kicks
 
 if TYPE_CHECKING:
-    import sqlite3
     from collections.abc import Mapping, Sequence
 
+    from canopy.core import records
     from canopy.core.context import Context
     from canopy.infra import logs
 
@@ -42,7 +42,7 @@ class Kicks:
 
 def after_run(
     ctx: Context,
-    run: sqlite3.Row,
+    run: records.Run,
     status: RunStatus,
     *,
     flaky: bool,
@@ -59,16 +59,16 @@ def after_run(
         Whether the run left a check flaky, the repositories kicked, and a note for each slot not kicked, saying why;
         nothing kicked and no notes without `trust.max_flaky_kicks`.
     """
-    run_id = int(run["id"])
-    if not (flaky and status is RunStatus.DONE and run["kind"] == RunKind.RESUME):
+    run_id = run.id
+    if not (flaky and status is RunStatus.DONE and run.kind is RunKind.RESUME):
         return Kicks()
     if ResumeReason.CI not in db.run_reasons(ctx.conn, [run_id]).get(run_id, ()):
         return Kicks()
     limit = ctx.config.trust.max_flaky_kicks
     if not limit:
         return Kicks(flaky=True)
-    branch = str(run["branch"])
-    key = str(run["ticket_key"])
+    branch = run.branch
+    key = run.ticket_key
     kicked: list[str] = []
     notes: list[str] = []
     for git, base, start in places:

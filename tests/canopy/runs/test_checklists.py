@@ -106,7 +106,7 @@ def test_a_runs_answers_are_recorded_and_shown(scenario: Scenario, git_pool: Git
             None,
         ),
     ]
-    note = contract.stored_note(contract.stored_object(run.row["result_json"]))
+    note = contract.stored_note(contract.stored_object(run.row.result_json))
     assert note == "checklist answers dropped: 'other': no list of the run's; repo 'made-up': not an item of its list"
     shown = scenario.operator("show", f"run:{run.id}").out
     # The reason is the worker's text: printed under its item, made printable as a message is.

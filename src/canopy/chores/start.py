@@ -267,9 +267,9 @@ def _guard(
     if chore is None:
         raise Refusal("unknown_chore", f"no chore named {name!r} is configured for this workspace")
     running = db.running_runs(ctx.conn, "chore_runs")
-    mine = next((r for r in running if r["chore"] == name), None)
+    mine = next((r for r in running if r.chore == name), None)
     if mine is not None:
-        raise Refusal("running", f"chore run {mine['id']} of {name} is running")
+        raise Refusal("running", f"chore run {mine.id} of {name} is running")
     held = [r for r in recorded_runs.holding(ctx.conn, but=spawning) if r.kind is RecordedKind.CHORE]
     waiting = next((r for r in held if r.chore == name), None)
     if waiting is not None:

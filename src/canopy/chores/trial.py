@@ -107,9 +107,9 @@ def record(ctx: Context, prepared: Prepared) -> Recorded:
     """
     name = prepared.name
     with lock.hold(ctx.dispatch_lock_path, wait=True):
-        running = next((r for r in db.running_runs(ctx.conn, "chore_runs") if r["chore"] == name), None)
+        running = next((r for r in db.running_runs(ctx.conn, "chore_runs") if r.chore == name), None)
         if running is not None:
-            raise RunningError(f"chore run {running['id']} of {name} is running")
+            raise RunningError(f"chore run {running.id} of {name} is running")
         state = view.state_of(ctx.conn, name, prepared.chore)
         run_id = chore_runs.insert_chore_run(
             ctx.conn,
@@ -163,9 +163,9 @@ def detach(ctx: Context, prepared: Prepared) -> start.Started:
     """
     name = prepared.name
     with lock.hold(ctx.dispatch_lock_path, wait=True):
-        running = next((r for r in db.running_runs(ctx.conn, "chore_runs") if r["chore"] == name), None)
+        running = next((r for r in db.running_runs(ctx.conn, "chore_runs") if r.chore == name), None)
         if running is not None:
-            raise RunningError(f"chore run {running['id']} of {name} is running")
+            raise RunningError(f"chore run {running.id} of {name} is running")
         state = view.state_of(ctx.conn, name, prepared.chore)
         try:
             return start.launch(ctx, tick_id=None, state=state, body=prepared.body, context=prepared.context)

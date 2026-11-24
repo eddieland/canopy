@@ -164,12 +164,12 @@ def holders(conn: sqlite3.Connection) -> dict[str, str]:
         How each holder is named, such as `run:12 of PROJ-1`, by the lease id it holds.
     """
     held: dict[str, str] = {}
-    running = {int(r["id"]): str(r["ticket_key"]) for r in db.running_runs(conn, "runs")}
+    running = {int(r.id): str(r.ticket_key) for r in db.running_runs(conn, "runs")}
     for run_id, slots in db.all_run_slots(conn, list(running)).items():
         held |= {s.lease_id: f"run:{run_id} of {running[run_id]}" for s in slots}
     for review in db.running_runs(conn, "review_runs"):
-        if review["lease_id"]:
-            held[str(review["lease_id"])] = f"review:{review['id']} of {review['pr_url']}"
+        if review.lease_id:
+            held[str(review.lease_id)] = f"review:{review.id} of {review.pr_url}"
     for run in tasks.running(conn):
         held[run.lease_id] = f"task:{run.task_id}#{run.id}"
     return held

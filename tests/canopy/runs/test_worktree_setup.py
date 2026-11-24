@@ -109,7 +109,7 @@ def test_a_failing_setup_crashes_the_run_before_its_worker_and_returns_the_slot(
     run = scenario.run(dispatches(slug="work"))
 
     assert run.status == "crashed"
-    assert json.loads(run.row["result_json"]) == {"harness": "repo: setup exited 3; see the run log"}
+    assert json.loads(run.row.result_json) == {"harness": "repo: setup exited 3; see the run log"}
     assert "cannot fetch" in run.printed.out
     assert agent_runs(scenario.agent_log) == []  # the worker never ran
     assert all(s["status"] == "available" for s in pool(treehouse_state))
@@ -120,7 +120,7 @@ def test_a_setup_that_times_out_crashes_the_run(scenario: Scenario, git_pool: Gi
     run = scenario.run(dispatches(slug="work"), runner=SetupTimesOut())
 
     assert run.status == "crashed"
-    assert json.loads(run.row["result_json"]) == {"harness": "repo: setup timed out after 5 minutes; see the run log"}
+    assert json.loads(run.row.result_json) == {"harness": "repo: setup timed out after 5 minutes; see the run log"}
     assert agent_runs(scenario.agent_log) == []
     assert all(s["status"] == "available" for s in pool(treehouse_state))
 
@@ -130,7 +130,7 @@ def test_a_setup_that_cannot_start_crashes_the_run(scenario: Scenario, git_pool:
     run = scenario.run(dispatches(slug="work"))
 
     assert run.status == "crashed"
-    assert json.loads(run.row["result_json"])["harness"].startswith("repo: setup could not start: ")
+    assert json.loads(run.row.result_json)["harness"].startswith("repo: setup could not start: ")
     assert agent_runs(scenario.agent_log) == []
 
 

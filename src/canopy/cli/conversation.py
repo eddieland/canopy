@@ -1148,10 +1148,10 @@ def _show_runs(ctx: Context, key: str) -> None:
     runs = db.runs_of(ctx.conn, key, SHOW_RUNS)
     click.echo(f"\nRecent runs ({len(runs)}):")
     for r in runs:
-        when = f"started {attention.age(str(r['started_at']))} ago"
-        if r["ended_at"]:
-            when = f"ended {attention.age(str(r['ended_at']))} ago"
-        click.echo(f"  run:{r['id']}  {r['kind']}  {r['status']}  {when}")
+        when = f"started {attention.age(str(r.started_at))} ago"
+        if r.ended_at:
+            when = f"ended {attention.age(str(r.ended_at))} ago"
+        click.echo(f"  run:{r.id}  {r.kind}  {r.status}  {when}")
     if not runs:
         click.echo("  none")
 
@@ -1186,7 +1186,7 @@ def _show_run_diff(ctx: Context, run_id: int) -> None:
     run = db.get_run(ctx.conn, run_id)
     if run is None:
         raise CliError(f"no run {run_id}")
-    changes_cli.echo(run_changes.of_run(ctx.conn, run_id), log_path=str(run["log_path"]), ref=f"run:{run_id}")
+    changes_cli.echo(run_changes.of_run(ctx.conn, run_id), log_path=str(run.log_path), ref=f"run:{run_id}")
 
 
 def _show_chore(ctx: Context, name: str) -> None:

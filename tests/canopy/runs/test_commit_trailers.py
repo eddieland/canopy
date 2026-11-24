@@ -34,7 +34,7 @@ def test_git_adds_canopys_trailer_to_each_commit_a_worker_makes(scenario: Scenar
     assert run.status == "done"
     assert trailers_on(git_pool.origin, BRANCH) == [[TRAILER], [TRAILER]]
     assert git("log", "-1", "--format=%B", BRANCH, cwd=git_pool.origin) == f"PROJ-1: two\n\nWhy.\n\n{TRAILER}"
-    assert "harness" not in json.loads(run.row["result_json"])
+    assert "harness" not in json.loads(run.row.result_json)
 
 
 def test_a_trailer_the_worker_wrote_itself_is_not_added_again(scenario: Scenario, git_pool: GitPool) -> None:
@@ -48,7 +48,7 @@ def test_a_commit_with_trailers_of_its_own_is_not_named(scenario: Scenario, git_
     run = scenario.run(worker=pushes(message="PROJ-1: the change\n\nSigned-off-by: someone <someone@example.test>"))
     assert run.status == "done"
     assert trailers_on(git_pool.origin, BRANCH) == [["Signed-off-by: someone <someone@example.test>", TRAILER]]
-    assert "harness" not in json.loads(run.row["result_json"])
+    assert "harness" not in json.loads(run.row.result_json)
 
 
 def test_a_commit_made_around_the_hooks_is_named_and_left_as_it_is(scenario: Scenario, git_pool: GitPool) -> None:
@@ -56,7 +56,7 @@ def test_a_commit_made_around_the_hooks_is_named_and_left_as_it_is(scenario: Sce
     run = scenario.run(worker=worker_does(around, *commit_and_push(BRANCH)))
     assert run.status == "done"
     assert trailers_on(git_pool.origin, BRANCH) == [[TRAILER], []]
-    note = json.loads(run.row["result_json"])["harness"]
+    note = json.loads(run.row.result_json)["harness"]
     named = f"repo: 1 commit pushed to {BRANCH} lacks canopy's trailer: "
     assert note.startswith(named)
     assert git("rev-parse", f"{BRANCH}~1", cwd=git_pool.origin).startswith(note.removeprefix(named))
@@ -121,7 +121,7 @@ def test_with_canopys_trailer_off_git_adds_none(scenario: Scenario, git_pool: Gi
     run = scenario.run(worker=pushes())
     assert run.status == "done"
     assert trailers_on(git_pool.origin, BRANCH) == [[]]
-    assert "harness" not in json.loads(run.row["result_json"])
+    assert "harness" not in json.loads(run.row.result_json)
 
 
 def test_git_puts_the_prefix_before_each_subject_but_a_fixups(scenario: Scenario, git_pool: GitPool) -> None:
@@ -140,7 +140,7 @@ def test_git_puts_the_prefix_before_each_subject_but_a_fixups(scenario: Scenario
     subjects = git("log", "--format=%s", BRANCH, "^main", cwd=git_pool.origin).splitlines()
     assert subjects == ["fixup! [PROJ-1] add the button", "[PROJ-1] style it", "[PROJ-1] add the button"]
     assert trailers_on(git_pool.origin, BRANCH) == [[TRAILER]] * 3
-    assert "harness" not in json.loads(run.row["result_json"])
+    assert "harness" not in json.loads(run.row.result_json)
     assert "git starts each commit's subject with `[PROJ-1] `" in run.prompt
 
 
@@ -153,7 +153,7 @@ def test_a_commit_without_the_prefix_is_named_and_left_as_it_is(scenario: Scenar
         "PROJ-1: the change",
         "around",
     ]
-    note = json.loads(run.row["result_json"])["harness"]
+    note = json.loads(run.row.result_json)["harness"]
     trailer, prefix = note.split("; ")
     assert trailer.startswith(f"repo: 1 commit pushed to {BRANCH} lacks canopy's trailer: ")
     assert prefix.startswith(f"repo: 1 commit pushed to {BRANCH} lacks the prefix `PROJ-1: `: ")

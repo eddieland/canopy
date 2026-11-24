@@ -538,20 +538,20 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
     if run is None:
         raise WorkerError(f"no run {run_id}")
     if not db.claim_run(ctx.conn, "runs", run_id, os.getpid()):
-        raise WorkerError(f"run {run_id} is not waiting to start: it is {run['status']} or another process has it")
+        raise WorkerError(f"run {run_id} is not waiting to start: it is {run.status} or another process has it")
     slots = [_Slot.of(ctx, row) for row in db.run_slots(ctx.conn, run_id)]
     for slot in slots:
         # Before any git step: reconcile checks it for a `_run` that dies before putting a changed link back.
         db.set_slot_link(ctx.conn, run_id, slot.repo, slot.link)
-    log = logs.for_tick(int(run["tick_id"]))
-    fields = {"run_id": run_id, "ticket": run["ticket_key"], "kind": run["kind"]}
+    log = logs.for_tick(run.tick_id)
+    fields = {"run_id": run_id, "ticket": run.ticket_key, "kind": run.kind}
     where = {"slots": [str(s.path) for s in slots], "repos": [s.repo for s in slots]}
-    log.info("run started", extra={**fields, **where, "branch": run["branch"]})
+    log.info("run started", extra={**fields, **where, "branch": run.branch})
 
     outcome = Outcome(RunStatus.CRASHED, None, "the run stopped before the worker finished")
     with stopping.StopOnSignal() as stop:
         try:
-            kind = RunKind(run["kind"])
+            kind = run.kind
             if not slots:
                 raise SetupError(f"run {run_id} has no slots")  # noqa: TRY301  (the same handling as git failures)
             tidy.make_objects(_objects(ctx, run))
@@ -571,7 +571,7 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
         finally:
             # From here on a signal is ignored: returning the slots and closing the row must not be interrupted.
             stop.armed = False
-            if outcome.status is RunStatus.CRASHED and not outcome.changes and changes.recorded(str(run["kind"])):
+            if outcome.status is RunStatus.CRASHED and not outcome.changes and changes.recorded(run.kind):
                 # No git ran in its slots, or none past a step that failed: the journal says it kept nothing (§45).
                 outcome = replace(outcome, changes=run_changes.crashed(s.repo for s in slots))
             _release(ctx, run, slots, log)
@@ -580,14 +580,14 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
             remember = functools.partial(_record_reported, ctx, run, outcome)
             if not conversation.close_run(ctx.conn, ctx.config, run, outcome.status, stored, then=remember):
                 log.warning("run was already closed; its outcome is not recorded", extra=fields)
-            procs.drop_lifelock(Path(run["log_path"]))
+            procs.drop_lifelock(Path(run.log_path))
             log.info("run finished", extra={**fields, "status": outcome.status})
             _check_drafts(ctx, run_id, stop, log)
             run_models.read_ended(ctx, "runs", run_id, log)
     return outcome
 
 
-def _write_checklists(ctx: Context, run: sqlite3.Row, kind: RunKind, slots: Iterable[_Slot]) -> None:
+def _write_checklists(ctx: Context, run: db.ShownRun, kind: RunKind, slots: Iterable[_Slot]) -> None:
     """Write the lists of the run's repositories to its answers directory, where canopy's `pre-push` reads them (§42).
 
     A run that pushes nothing, or none of whose repositories has a list, gets no file and is never held.
@@ -621,7 +621,7 @@ def _check_drafts(ctx: Context, run_id: int, stop: stopping.StopOnSignal, log: l
         stop.armed = False
 
 
-def _record_reported(ctx: Context, run: sqlite3.Row, outcome: Outcome) -> None:
+def _record_reported(ctx: Context, run: db.ShownRun, outcome: Outcome) -> None:
     """Write what the run reported beside its result, in the transaction that closes it.
 
     That is its memory (§28), drafts (§29), and the follow-ups it filed (§18), with the event that tells the sinks of
@@ -631,7 +631,7 @@ def _record_reported(ctx: Context, run: sqlite3.Row, outcome: Outcome) -> None:
     it was given and did not answer is counted unanswered. So is what it changed in each slot, as the harness read it
     (§45).
     """
-    run_id = int(run["id"])
+    run_id = run.id
     memory.record_run(ctx.conn, run_id, outcome.memory, head=outcome.head)
     drafts.record_run(ctx.conn, run_id, outcome.drafts)
     checklist_answers.record(ctx.conn, run_id, outcome.checklist)
@@ -639,9 +639,9 @@ def _record_reported(ctx: Context, run: sqlite3.Row, outcome: Outcome) -> None:
     if outcome.status in (RunStatus.DONE, RunStatus.BLOCKED):
         review_answers.record(ctx.conn, run_id, outcome.answers)
     if outcome.follow_ups is not None and outcome.follow_ups.recorded:
-        key = str(run["ticket_key"])
+        key = run.ticket_key
         recorded = follow_ups.record(ctx.conn, outcome.follow_ups, parent=key, run_id=run_id)
-        log = logs.for_tick(int(run["tick_id"]))
+        log = logs.for_tick(run.tick_id)
         log.info("follow-ups recorded", extra={"run_id": run_id, "ticket": key, "follow_ups": recorded})
         filed = {k: outcome.follow_ups.recorded[k] for k in recorded}
         event = outbox.follow_ups_filed(ctx.config, key=key, run_id=run_id, filed=filed)
@@ -650,7 +650,7 @@ def _record_reported(ctx: Context, run: sqlite3.Row, outcome: Outcome) -> None:
     if outcome.kicks.flaky and isinstance(outcome.result, WorkerResult):
         flaky = outbox.ci_flaky(
             ctx.config,
-            key=str(run["ticket_key"]),
+            key=run.ticket_key,
             run_id=run_id,
             prs=[pr for pr in (outcome.result.prs or {}).values() if pr],
             kicked=outcome.kicks.kicked,
@@ -663,7 +663,7 @@ def _record_reported(ctx: Context, run: sqlite3.Row, outcome: Outcome) -> None:
             db.record_event(ctx.conn, flaky)
 
 
-type _Doer = Callable[[Context, sqlite3.Row, Sequence[_Slot], TextIO, logs.TickAdapter], Outcome]
+type _Doer = Callable[[Context, db.ShownRun, Sequence[_Slot], TextIO, logs.TickAdapter], Outcome]
 
 
 def _doer(kind: RunKind) -> _Doer:
@@ -771,7 +771,7 @@ def session_title(conn: sqlite3.Connection, key: str, kind: str) -> str:
 
 def _run_agent(
     ctx: Context,
-    run: sqlite3.Row,
+    run: db.ShownRun,
     slots: Sequence[_Slot],
     out: TextIO,
     log: logs.TickAdapter,
@@ -804,15 +804,15 @@ def _run_agent(
         SetupError: a place the agent reads config from shadows canopy's definitions, or, for a private run or a
             plan, names one of the tracker server's tools.
     """
-    prompt = dispatch.prompt_file(ctx, int(run["id"])).read_text(encoding="utf-8")
-    desked = dispatch.in_desk(str(run["kind"]), slots)
+    prompt = dispatch.prompt_file(ctx, run.id).read_text(encoding="utf-8")
+    desked = dispatch.in_desk(run.kind, slots)
     trees = [(s.repo, s.path) for s in slots]
     # Checked on the branch the worker will run on: the runtime reads the worktree's config too (D044). A worker in a
     # desk starts in no repository, so the runtime may look above it: the directories above it are checked.
     desk_parents = [ctx.workspace.root / DESKS_DIR, ctx.workspace.root] if desked else []
     places = [path for _, path in trees] + desk_parents
     tools = ctx.config.tracker.tools()
-    read_only = run["private"] or run["kind"] in (policy.PLAN, policy.FEEDBACK_PLAN)
+    read_only = run.private or run.kind in (policy.PLAN, policy.FEEDBACK_PLAN)
     refused = project_config.refusal(
         places,
         version=ctx.config.runtime.version,
@@ -821,16 +821,16 @@ def _run_agent(
     if refused is not None:
         raise SetupError(refused)
     # The model the run recorded, which its ticket's override may have chosen in place of config's (DESIGN §13).
-    models = agent_models.of_run(ctx.config, template, run["model"])
+    models = agent_models.of_run(ctx.config, template, run.model)
     # The prompt's fixed instructions are its agent's body, in a snapshot every run of its kind shares (DESIGN §13).
     bodies, message = definitions.run_prompt(prompt, template)
     snapshot = definitions.ensure(ctx.state_dir, ctx.config, models, bodies)
     command = ctx.config.runtime.worker_template(template)
-    title = session_title(ctx.conn, str(run["ticket_key"]), str(run["kind"]))
+    title = session_title(ctx.conn, run.ticket_key, run.kind)
     rendered = render_command(command, message, snapshot, title)
     argv = sandboxing.wrap(ctx.config.runtime, [s.repo for s in slots], "worker", rendered.argv, snapshot)
     if desked:
-        cwd = desks.make(ctx.workspace.root, str(run["ticket_key"]), trees)
+        cwd = desks.make(ctx.workspace.root, run.ticket_key, trees)
         for name, text in (desk_files or {}).items():
             try:
                 # The attachments' copies are in a directory of their own, an epic's inside it (`_place_attachments`).
@@ -843,9 +843,9 @@ def _run_agent(
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
     log.info(
         "running worker",
-        extra={"run_id": run["id"], "cmd": argv[0], "cwd": str(cwd), "timeout_minutes": timeout_minutes},
+        extra={"run_id": run.id, "cmd": argv[0], "cwd": str(cwd), "timeout_minutes": timeout_minutes},
     )
-    run_id = int(run["id"])
+    run_id = run.id
     out.write("--- worker stdout ---\n")
     out.flush()
     # The operator's commands refuse inside canopy's own runs (DESIGN §22). A sandbox wrapper points git at the object
@@ -863,10 +863,10 @@ def _run_agent(
     # A public worker that may publish names its ticket to the store through canopy, not its own word (DESIGN §38).
     publishing = ctx.config.artifacts.publishing()
     if not read_only and publishing is not None and agents.WORKER in publishing.agents:
-        env |= artifact_feed.origin_env(ctx.workspace.name, str(run["ticket_key"]), run_id)
+        env |= artifact_feed.origin_env(ctx.workspace.name, run.ticket_key, run_id)
     # Every run here says where its work stands through canopy's `status` tool, which writes nothing (DESIGN §41).
     served: dict[str, Sequence[str]] = {cards.SERVER: cards.SERVER_COMMAND}
-    if run["kind"] in (policy.PLAN, policy.FEEDBACK_PLAN):
+    if run.kind in (policy.PLAN, policy.FEEDBACK_PLAN):
         served[git_tools.SERVER] = git_tools.command({s.repo: s.path for s in slots})
     env |= (
         servers.env(
@@ -1030,7 +1030,7 @@ class _Progress:
             self.log.info("worker session started", extra={"run_id": self.run_id, "session_id": change.session_id})
 
 
-def _plan(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, log: logs.TickAdapter) -> Outcome:
+def _plan(ctx: Context, run: db.ShownRun, slots: Sequence[_Slot], out: TextIO, log: logs.TickAdapter) -> Outcome:
     """Run the planner in a desk of worktrees at their bases, and write and record the plan it wrote (DESIGN §25).
 
     The desk holds a copy of the plan this one replaces, the ticket's current plan, if its file still reads as a plan,
@@ -1048,11 +1048,11 @@ def _plan(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     """
     stopped = _stopped(ctx, run)
     if stopped:
-        log.info("run not started", extra={"run_id": run["id"], "reason": stopped})
+        log.info("run not started", extra={"run_id": run.id, "reason": stopped})
         return Outcome(RunStatus.STOPPED, None, stopped)
     for slot in slots:
         checkpoint.check_out(slot.git, slot.base, fetched=slot.fetched)
-    key = str(run["ticket_key"])
+    key = run.ticket_key
     replaced = plans.current(ctx.conn, key)
     copy = plans.read(plans.path_for(ctx.state_dir, key, replaced.run_id)).text if replaced is not None else None
     # The plan's file starts as the plan it replaces, which the planner edits: a first plan's starts with none.
@@ -1075,7 +1075,7 @@ def _plan(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
         return Outcome(RunStatus.TIMEOUT, parsed, note, memory=cited)
     if parsed is None:
         return Outcome(RunStatus.UNKNOWN, None, f"the planner {run_result.MISSING}")
-    parsed = parsed.model_copy(update={"drift": tuple(_drift(parsed, epic_text, log, run_id=int(run["id"])))})
+    parsed = parsed.model_copy(update={"drift": tuple(_drift(parsed, epic_text, log, run_id=run.id))})
     if parsed.status != "done":
         return Outcome(RunStatus(parsed.status), parsed, memory=cited)
     written = _written_plan(ctx, run, parsed, replaced, copy)
@@ -1111,7 +1111,7 @@ def _drift(parsed: PlanResult, epic_text: str | None, log: logs.TickAdapter, *, 
 
 def _written_plan(
     ctx: Context,
-    run: sqlite3.Row,
+    run: db.ShownRun,
     parsed: PlanResult,
     replaced: plans.Replaced | None,
     seed: str | None,
@@ -1124,14 +1124,14 @@ def _written_plan(
     Returns:
         The plan's text, or the `unknown` outcome that records no plan, saying why.
     """
-    key = str(run["ticket_key"])
+    key = run.ticket_key
     written = plans.read(desks.path(ctx.workspace.root, key) / plans.WRITTEN)
     if written.text is None:
         note = f"the planner reported done, but its {plans.WRITTEN} is {written.problem}; no plan was recorded"
         return Outcome(RunStatus.UNKNOWN, parsed, note)
     if replaced is not None and seed is not None:
         subject = conversation.Ref(conversation.TICKET, key)
-        started_at = str(run["started_at"])
+        started_at = run.started_at
         if plans.unrevised(ctx.conn, subject, replaced, seed=seed, text=written.text, started_at=started_at):
             return Outcome(RunStatus.UNKNOWN, parsed, plans.UNREVISED)
     return written.text
@@ -1152,7 +1152,7 @@ def _epic_copy(ctx: Context, member: epics.MemberEpic) -> str:
 
 def _record_plan(
     ctx: Context,
-    run: sqlite3.Row,
+    run: db.ShownRun,
     parsed: PlanResult,
     text: str,
     log: logs.TickAdapter,
@@ -1165,8 +1165,8 @@ def _record_plan(
         `done` once it is recorded, or `crashed` when its file could not be written, its name taken included, and
         nothing is recorded.
     """
-    key = str(run["ticket_key"])
-    run_id = int(run["id"])
+    key = run.ticket_key
+    run_id = run.id
     try:
         written = plans.write(ctx.state_dir, key, run_id, text)
     except (plans.PlanFileError, OSError) as e:
@@ -1195,7 +1195,7 @@ def _record_plan(
 
 def _feedback_plan(
     ctx: Context,
-    run: sqlite3.Row,
+    run: db.ShownRun,
     slots: Sequence[_Slot],
     out: TextIO,
     log: logs.TickAdapter,
@@ -1220,11 +1220,11 @@ def _feedback_plan(
     """
     stopped = _stopped(ctx, run)
     if stopped:
-        log.info("run not started", extra={"run_id": run["id"], "reason": stopped})
+        log.info("run not started", extra={"run_id": run.id, "reason": stopped})
         return Outcome(RunStatus.STOPPED, None, stopped)
-    key = str(run["ticket_key"])
+    key = run.ticket_key
     for slot in slots:
-        checkpoint.check_out(slot.git, slot.base, str(run["branch"]), fetched=slot.fetched)
+        checkpoint.check_out(slot.git, slot.base, run.branch, fetched=slot.fetched)
     units = {str(u.repo): str(u.pr_url) for u in db.units(ctx.conn, key) if u.pr_url}
     prs = [units[s.repo] for s in slots if s.repo in units]
     read = observe.read(ctx.conn, ctx.config, ctx.runner, prs, log)
@@ -1289,7 +1289,7 @@ def _feedback_desk(ctx: Context, key: str, offered: Sequence[feedback_items.Item
 
 def _record_feedback_plan(
     ctx: Context,
-    run: sqlite3.Row,
+    run: db.ShownRun,
     parsed: FeedbackPlanResult,
     text: str,
     *,
@@ -1303,8 +1303,8 @@ def _record_feedback_plan(
         `done` once it is recorded, with a note naming the items refused, or `crashed` when its file could not be
         written, and nothing is recorded.
     """
-    key = str(run["ticket_key"])
-    run_id = int(run["id"])
+    key = run.ticket_key
+    run_id = run.id
     try:
         file = plans.write(ctx.state_dir, key, run_id, text)
     except (plans.PlanFileError, OSError) as e:
@@ -1333,12 +1333,12 @@ def _record_feedback_plan(
     return Outcome(RunStatus.DONE, parsed, matched.note())
 
 
-def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, log: logs.TickAdapter) -> Outcome:
+def _work(ctx: Context, run: db.ShownRun, slots: Sequence[_Slot], out: TextIO, log: logs.TickAdapter) -> Outcome:
     stopped = _stopped(ctx, run)
     if stopped:
-        log.info("run not started", extra={"run_id": run["id"], "reason": stopped})
+        log.info("run not started", extra={"run_id": run.id, "reason": stopped})
         return Outcome(RunStatus.STOPPED, None, stopped)
-    branch = str(run["branch"])
+    branch = run.branch
     starts = [checkpoint.check_out(slot.git, slot.base, branch, fetched=slot.fetched) for slot in slots]
     for slot in slots:
         _run_setup(ctx, run, slot, out, log)
@@ -1347,10 +1347,10 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     attached = _attachment_copies(ctx, run)
     desk_files = _place_copies(run, slots, copies) | _place_attachments(run, slots, attached)
     runtime = ctx.config.runtime
-    template = runtime.private_worker_cmd if run["private"] else runtime.worker_cmd
+    template = runtime.private_worker_cmd if run.private else runtime.worker_cmd
     # As the prompt names them: the run's model, and its planner's when it follows a plan (DESIGN §25).
-    planner = plan_guards.planner_model(ctx, run["plan_id"], run["feedback_plan_id"])
-    marks = commit_hooks.marks(ctx.config, key=str(run["ticket_key"]), model=run["model"], planner_model=planner)
+    planner = plan_guards.planner_model(ctx, run.plan_id, run.feedback_plan_id)
+    marks = commit_hooks.marks(ctx.config, key=run.ticket_key, model=run.model, planner_model=planner)
     result, text = _run_agent(
         ctx,
         run,
@@ -1449,33 +1449,33 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     )
 
 
-def _work_groups(ctx: Context, run: sqlite3.Row, slots: Iterable[_Slot]) -> list[str]:
+def _work_groups(ctx: Context, run: db.ShownRun, slots: Iterable[_Slot]) -> list[str]:
     """The groups of its result's fields an `implement` or a `resume` is asked for, as its prompt was rendered.
 
     Returns:
         The follow-ups it may file, a resume's answers to its review and what it says of a flaky check, its answers to
         the lists it was given, the drafts it writes under `approve`, and what memory's tiers ask of it.
     """
-    run_id, key = int(run["id"]), str(run["ticket_key"])
+    run_id, key = run.id, run.ticket_key
     groups = [*_memory_groups(ctx, run_id, writes=True), *replies.asked_group(replies.run_replies(ctx.conn, run_id))]
     if follow_ups.may_file(ctx.conn, key, limit=ctx.config.policy.max_follow_ups):
         groups.append(follow_ups.GROUP)
-    if run["kind"] == RunKind.RESUME:
+    if run.kind == RunKind.RESUME:
         groups += [review_answers.GROUP, FLAKY_GROUP]
-    if checklists.reminded(run["kind"]) and checklists.given(_answers(ctx, run), [s.repo for s in slots]):
+    if checklists.reminded(run.kind) and checklists.given(_answers(ctx, run), [s.repo for s in slots]):
         groups.append(checklist_answers.GROUP)
     return groups
 
 
-def _plan_groups(ctx: Context, run: sqlite3.Row) -> list[str]:
+def _plan_groups(ctx: Context, run: db.ShownRun) -> list[str]:
     """The groups of its result's fields a planner is asked for, as its prompt was rendered (DESIGN §25).
 
     Returns:
         The memories it cites, and whether its plan needs the operator's review, where its word may stand for their
         approval.
     """
-    key, kind = str(run["ticket_key"]), str(run["kind"])
-    groups = _memory_groups(ctx, int(run["id"]), writes=False)
+    key, kind = run.ticket_key, run.kind
+    groups = _memory_groups(ctx, run.id, writes=False)
     if ctx.config.policy.planner_approves() and plan_guards.planner_may_approve(ctx, key, kind):
         groups.append(PLAN_REVIEW_GROUP)
     return groups
@@ -1489,7 +1489,7 @@ def _memory_groups(ctx: Context, run_id: int, *, writes: bool) -> list[str]:
     return memory.asked_groups(memory.Modes(rendered.ticket_notes, rendered.proposals), writes=writes)
 
 
-def _check_follow_ups(ctx: Context, run: sqlite3.Row, created: object) -> follow_ups.Checked:
+def _check_follow_ups(ctx: Context, run: db.ShownRun, created: object) -> follow_ups.Checked:
     """Check the tickets a worker reported it created against the journal, the workspace, and the policy (§18).
 
     Returns:
@@ -1498,26 +1498,26 @@ def _check_follow_ups(ctx: Context, run: sqlite3.Row, created: object) -> follow
     return follow_ups.check(
         ctx.conn,
         created,
-        parent=str(run["ticket_key"]),
+        parent=run.ticket_key,
         repos={r.name for r in ctx.workspace.repos},
         limit=ctx.config.policy.max_follow_ups,
     )
 
 
-def _check_answers(ctx: Context, run: sqlite3.Row, text: str) -> review_answers.Checked | None:
+def _check_answers(ctx: Context, run: db.ShownRun, text: str) -> review_answers.Checked | None:
     """Check the answers a worker gave to the review findings it was handed, which only a resume is (DESIGN §21).
 
     Returns:
         The answers to record when the run is closed, and those refused; None for a run of another kind.
     """
-    if run["kind"] != RunKind.RESUME:
+    if run.kind != RunKind.RESUME:
         return None
-    return review_answers.check(ctx.conn, review_answers.parse(text), key=str(run["ticket_key"]))
+    return review_answers.check(ctx.conn, review_answers.parse(text), key=run.ticket_key)
 
 
 def _check_checklist(
     ctx: Context,
-    run: sqlite3.Row,
+    run: db.ShownRun,
     slots: Iterable[_Slot],
     text: str,
 ) -> checklist_answers.Checked | None:
@@ -1528,7 +1528,7 @@ def _check_checklist(
     Returns:
         An answer for every item of every list it was given; None for a run given none.
     """
-    if not checklists.reminded(run["kind"]):
+    if not checklists.reminded(run.kind):
         return None
     lists = checklists.given(_answers(ctx, run), [s.repo for s in slots])
     if not lists:
@@ -1537,7 +1537,7 @@ def _check_checklist(
 
 
 def _keep_checklist_pushes(
-    run: sqlite3.Row,
+    run: db.ShownRun,
     slots: Iterable[_Slot],
     branch: str,
     listed: checklist_answers.Checked | None,
@@ -1559,15 +1559,15 @@ def _keep_checklist_pushes(
             slot.git,
             repo=slot.repo,
             branch=branch,
-            run_id=str(run["id"]),
-            log_path=str(run["log_path"]),
+            run_id=str(run.id),
+            log_path=run.log_path,
             log=log,
         )
     )
 
 
 def _keep_changes(
-    run: sqlite3.Row,
+    run: db.ShownRun,
     slots: Sequence[_Slot],
     starts: Sequence[checkpoint.Start],
     checked: Sequence[checkpoint.Pushed],
@@ -1589,11 +1589,11 @@ def _keep_changes(
             slot.git,
             repo=slot.repo,
             base=slot.base,
-            branch=str(run["branch"]),
+            branch=run.branch,
             start=start,
             pushed=found,
             marks=marks,
-            log_path=str(run["log_path"]),
+            log_path=run.log_path,
             log=log,
         )
         for slot, start, found in zip(slots, starts, checked, strict=True)
@@ -1616,7 +1616,7 @@ def _heads(slots: Sequence[_Slot], log: logs.TickAdapter) -> str | None:
     return " ".join(f"{repo}@{commit}" for repo, commit in found)
 
 
-def _plan_copy(ctx: Context, run: sqlite3.Row) -> str | None:
+def _plan_copy(ctx: Context, run: db.ShownRun) -> str | None:
     """Return the approved plan the run follows, the one its prompt names, read again from its file (DESIGN §25).
 
     Dispatch recorded the plan and checked its file against the approved hash; this checks both again, so the worker
@@ -1628,17 +1628,17 @@ def _plan_copy(ctx: Context, run: sqlite3.Row) -> str | None:
     Raises:
         SetupError: the plan was superseded or approved again since the dispatch, or its file changed or is gone.
     """
-    if run["feedback_plan_id"] is not None:
-        return _feedback_plan_copy(ctx, run)
-    if run["plan_id"] is None:
+    if run.feedback_plan_id is not None:
+        return _feedback_plan_copy(ctx, run, run.feedback_plan_id)
+    if run.plan_id is None:
         return None
-    approved = plans.approved_of(ctx.conn, str(run["ticket_key"]))
+    approved = plans.approved_of(ctx.conn, run.ticket_key)
     # Approving again keeps the plan's id, but may approve another text than the one the prompt's outline is of.
-    again = approved is not None and str(approved.approved_at) > str(run["started_at"])
-    if approved is None or approved.id != run["plan_id"] or again:
+    again = approved is not None and str(approved.approved_at) > run.started_at
+    if approved is None or approved.id != run.plan_id or again:
         raise SetupError(
-            f"plan {run['plan_id']}, which the worker's prompt names, is no longer the plan approved for "
-            f"{run['ticket_key']} when the run was dispatched; the worker did not start",
+            f"plan {run.plan_id}, which the worker's prompt names, is no longer the plan approved for "
+            f"{run.ticket_key} when the run was dispatched; the worker did not start",
         )
     text = plans.approved_text(ctx.state_dir, approved)
     if text is None:
@@ -1649,7 +1649,7 @@ def _plan_copy(ctx: Context, run: sqlite3.Row) -> str | None:
     return text
 
 
-def _work_epic_copy(ctx: Context, run: sqlite3.Row) -> str | None:
+def _work_epic_copy(ctx: Context, run: db.ShownRun) -> str | None:
     """Return the approved plan of the epic the run's ticket is a member of, for the worker to work within (§43).
 
     Read as the run starts, as its planner's is: the prompt named the copy if the ticket was a member at the dispatch.
@@ -1660,11 +1660,11 @@ def _work_epic_copy(ctx: Context, run: sqlite3.Row) -> str | None:
     Raises:
         SetupError: the copy is missing or not what the operator approved: the worker is never run without it.
     """
-    member = epics.member_epic(ctx.conn, ctx.state_dir, str(run["ticket_key"]))
+    member = epics.member_epic(ctx.conn, ctx.state_dir, run.ticket_key)
     return _epic_copy(ctx, member) if member is not None else None
 
 
-def _feedback_plan_copy(ctx: Context, run: sqlite3.Row) -> str:
+def _feedback_plan_copy(ctx: Context, run: db.ShownRun, plan_id: int) -> str:
     """Return the approved feedback plan a `resume` follows, which it spent, read again from its file (DESIGN §32).
 
     Returns:
@@ -1673,11 +1673,11 @@ def _feedback_plan_copy(ctx: Context, run: sqlite3.Row) -> str:
     Raises:
         SetupError: the plan was superseded since the dispatch, is not the one this run spent, or its file changed.
     """
-    plan = feedback_plans.get(ctx.conn, int(run["feedback_plan_id"]))
-    if plan is None or plan.spent_run_id != run["id"] or feedback_plans.current(ctx.conn, plan.ticket_key) != plan:
+    plan = feedback_plans.get(ctx.conn, plan_id)
+    if plan is None or plan.spent_run_id != run.id or feedback_plans.current(ctx.conn, plan.ticket_key) != plan:
         raise SetupError(
-            f"feedback plan {run['feedback_plan_id']}, which the worker's prompt names, is no longer the one approved "
-            f"for {run['ticket_key']} when the run was dispatched; the worker did not start",
+            f"feedback plan {plan_id}, which the worker's prompt names, is no longer the one approved "
+            f"for {run.ticket_key} when the run was dispatched; the worker did not start",
         )
     text = feedback_plans.approved_text(ctx.state_dir, plan)
     if text is None:
@@ -1689,7 +1689,7 @@ def _feedback_plan_copy(ctx: Context, run: sqlite3.Row) -> str:
     return text
 
 
-def _place_copies(run: sqlite3.Row, slots: Sequence[_Slot], copies: Mapping[str, str | None]) -> dict[str, str]:
+def _place_copies(run: db.ShownRun, slots: Sequence[_Slot], copies: Mapping[str, str | None]) -> dict[str, str]:
     """Put the worker's copies of its plans, each by its file's name, where it starts (DESIGN §25, §43).
 
     That is in its desk, or at its one worktree's root. A plan of None is one the run does not follow.
@@ -1698,7 +1698,7 @@ def _place_copies(run: sqlite3.Row, slots: Sequence[_Slot], copies: Mapping[str,
         The files `_run_agent` writes into the desk: the copies for a run in a desk, else none.
     """
     found = {name: text for name, text in copies.items() if text is not None}
-    if dispatch.in_desk(str(run["kind"]), slots):
+    if dispatch.in_desk(run.kind, slots):
         return found
     for name, text in found.items():
         _write_copy(slots[0], name, text)
@@ -1735,7 +1735,7 @@ def _committed_copy(slot: _Slot, branch: str, name: str) -> str:
     return f"{slot.git.where}the pushed {branch} holds {name}, {what}, committed by the worker"
 
 
-def _attachment_copies(ctx: Context, run: sqlite3.Row) -> list[attachments.Copy]:
+def _attachment_copies(ctx: Context, run: db.ShownRun) -> list[attachments.Copy]:
     """Return the attachments the run's prompt names and their subject still holds, read again (DESIGN §22, §43).
 
     The ticket's, and its epic's, for a member.
@@ -1747,12 +1747,12 @@ def _attachment_copies(ctx: Context, run: sqlite3.Row) -> list[attachments.Copy]
         SetupError: an attachment's file is gone or changed since it was attached, so the worker gets none of them.
     """
     try:
-        return attachments.ticket_copies(ctx.conn, ctx.state_dir, str(run["ticket_key"]), str(run["started_at"]))
+        return attachments.ticket_copies(ctx.conn, ctx.state_dir, run.ticket_key, run.started_at)
     except attachments.AttachmentFileError as e:
         raise SetupError(f"{e}; the worker did not start") from e
 
 
-def _place_attachments(run: sqlite3.Row, slots: Sequence[_Slot], found: Sequence[attachments.Copy]) -> dict[str, str]:
+def _place_attachments(run: db.ShownRun, slots: Sequence[_Slot], found: Sequence[attachments.Copy]) -> dict[str, str]:
     """Put the run's copies of its attachments where it starts: in its desk, or in its one worktree (§22, §43).
 
     In a worktree they are in a directory at its root that git ignores, made afresh.
@@ -1766,7 +1766,7 @@ def _place_attachments(run: sqlite3.Row, slots: Sequence[_Slot], found: Sequence
     """
     if not found:
         return {}
-    if dispatch.in_desk(str(run["kind"]), slots):
+    if dispatch.in_desk(run.kind, slots):
         return {f"{attachments.RUN_DIR}/{c.name}": c.text for c in found}
     slot = slots[0]
     checkpoint.ignore(slot.git, attachments.RUN_DIR)
@@ -1791,21 +1791,21 @@ def _committed_attachments(slot: _Slot, branch: str) -> str:
     return f"{slot.git.where}the pushed {branch} holds {attachments.RUN_DIR}, the attachments' copies"
 
 
-def _stopped(ctx: Context, run: sqlite3.Row) -> str:
+def _stopped(ctx: Context, run: db.ShownRun) -> str:
     """Return why the run must not start its worker, read again from the ticket's start record, or "" (DESIGN §22).
 
     A private run's ticket may have been stopped since the dispatch. A public run's may have been started privately
     since: its worker would write to the tracker, which a started ticket never has.
     """
-    record = conversation.start_of(ctx.conn, str(run["ticket_key"]))
-    if run["private"] and not conversation.is_started(record):
+    record = conversation.start_of(ctx.conn, run.ticket_key)
+    if run.private and not conversation.is_started(record):
         return "the operator stopped the ticket before its worker started"
-    if not run["private"] and record is not None:
+    if not run.private and record is not None:
         return "the operator started the ticket privately after this public run was dispatched"
     return ""
 
 
-def _run_setup(ctx: Context, run: sqlite3.Row, slot: _Slot, out: TextIO, log: logs.TickAdapter) -> None:
+def _run_setup(ctx: Context, run: db.ShownRun, slot: _Slot, out: TextIO, log: logs.TickAdapter) -> None:
     """Run the operator's `setup_cmd` in the slot, at the run's branch, and fail the run if it fails (DESIGN §8).
 
     Unlike treehouse's `post_create`, which runs on the base before the branch is checked out and whose failure leaves
@@ -1818,7 +1818,7 @@ def _run_setup(ctx: Context, run: sqlite3.Row, slot: _Slot, out: TextIO, log: lo
     if not argv:
         return
     argv = sandboxing.wrap(ctx.config.runtime, [slot.repo], "setup", argv)
-    run_id = int(run["id"])
+    run_id = run.id
     timeout_minutes = ctx.config.runtime.setup_timeout_minutes
     log.info("running setup", extra={"run_id": run_id, "cmd": argv[0], "cwd": str(slot.path), "repo": slot.repo})
     try:
@@ -1829,7 +1829,7 @@ def _run_setup(ctx: Context, run: sqlite3.Row, slot: _Slot, out: TextIO, log: lo
             env={
                 conversation.RUN_ID_ENV: str(run_id),
                 SETUP_REPO_ENV: slot.repo,
-                SETUP_BRANCH_ENV: str(run["branch"]),
+                SETUP_BRANCH_ENV: run.branch,
                 tidy.OBJECTS_ENV: str(_objects(ctx, run)),
             },
             timeout=timeout_minutes * 60,
@@ -1845,18 +1845,18 @@ def _run_setup(ctx: Context, run: sqlite3.Row, slot: _Slot, out: TextIO, log: lo
         raise SetupError(f"{slot.git.where}setup exited {result.returncode}; see the run log")
 
 
-def _release(ctx: Context, run: sqlite3.Row, slots: Collection[_Slot], log: logs.TickAdapter) -> None:
+def _release(ctx: Context, run: db.ShownRun, slots: Collection[_Slot], log: logs.TickAdapter) -> None:
     """Remove the run's answers directory and a joint run's desk, tidy and return each slot, and remove its objects.
 
     A slot that could not be tidied is not returned, and the object directory is kept, so its objects can still be read.
     """
-    if dispatch.in_desk(str(run["kind"]), slots):
-        _remove_desk(ctx, str(run["ticket_key"]), log)
+    if dispatch.in_desk(run.kind, slots):
+        _remove_desk(ctx, run.ticket_key, log)
     cards.remove_answers(_answers(ctx, run))
     objects = _objects(ctx, run)
     tidied = True
     for slot in slots:
-        fields = {"run_id": run["id"], "slot": str(slot.path), "repo": slot.repo}
+        fields = {"run_id": run.id, "slot": str(slot.path), "repo": slot.repo}
         ok = tidy.tidy(ctx.runner, slot.path, link=slot.link, base=slot.base, objects=objects, log=log, fields=fields)
         if ok:
             _return_slot(ctx, run, slot, log)
@@ -1866,20 +1866,20 @@ def _release(ctx: Context, run: sqlite3.Row, slots: Collection[_Slot], log: logs
 
 
 # The role a run's agent is, as config names it: a plan's is the planner's (DESIGN §25).
-def _role(run: sqlite3.Row) -> agent_models.Role:
-    return "planner" if run["kind"] in (policy.PLAN, policy.FEEDBACK_PLAN) else "worker"
+def _role(run: db.ShownRun) -> agent_models.Role:
+    return "planner" if run.kind in (policy.PLAN, policy.FEEDBACK_PLAN) else "worker"
 
 
-def _objects(ctx: Context, run: sqlite3.Row) -> Path:
-    return tidy.objects_dir(dispatch.runs_dir(ctx), int(run["id"]))
+def _objects(ctx: Context, run: db.ShownRun) -> Path:
+    return tidy.objects_dir(dispatch.runs_dir(ctx), run.id)
 
 
-def _answers(ctx: Context, run: sqlite3.Row) -> Path:
-    return cards.answers_dir(ctx.state_dir, str(run["id"]))
+def _answers(ctx: Context, run: db.ShownRun) -> Path:
+    return cards.answers_dir(ctx.state_dir, str(run.id))
 
 
-def _return_slot(ctx: Context, run: sqlite3.Row, slot: _Slot, log: logs.TickAdapter) -> None:
-    fields = {"run_id": run["id"], "slot": str(slot.path), "lease_id": slot.lease_id, "repo": slot.repo}
+def _return_slot(ctx: Context, run: db.ShownRun, slot: _Slot, log: logs.TickAdapter) -> None:
+    fields = {"run_id": run.id, "slot": str(slot.path), "lease_id": slot.lease_id, "repo": slot.repo}
     try:
         outcome = ctx.pool_of(slot.pool, slot.repo).return_slot(
             slot.path,
@@ -1905,13 +1905,13 @@ def _remove_desk(ctx: Context, key: str, log: logs.TickAdapter) -> None:
         log.error("desk not removed", extra={"desk": str(desk), "error": str(e)})  # noqa: TRY400
 
 
-def _record_prs(ctx: Context, run: sqlite3.Row, outcome: Outcome) -> None:
+def _record_prs(ctx: Context, run: db.ShownRun, outcome: Outcome) -> None:
     """Record each PR the worker reported as its unit's, for display and the next worker's prompt, and its title."""
     if not isinstance(outcome.result, WorkerResult) or not outcome.result.prs:
         return
     titles = outcome.result.pr_titles or {}
     for repo, url in outcome.result.prs.items():
         if url and contract.plain_url(url, MAX_PR_URL):
-            db.set_unit(ctx.conn, str(run["ticket_key"]), ctx.repo, repo, pr_url=url)
+            db.set_unit(ctx.conn, run.ticket_key, ctx.repo, repo, pr_url=url)
             if title := titles.get(repo):
                 db.set_pr_title(ctx.conn, url, title)

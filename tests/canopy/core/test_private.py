@@ -63,8 +63,8 @@ def test_a_started_ticket_is_worked_privately_from_question_to_reply(scenario: S
         dispatches(label=None),
         worker=private_worker_does(*commit_and_push(BRANCH), result=blocked_result()),
     )
-    assert run.row["private"] == 1
-    [(_, rationale)] = decisions(conn, int(run.row["tick_id"]))
+    assert run.row.private == 1
+    [(_, rationale)] = decisions(conn, int(run.row.tick_id))
     assert "private: started by the operator" in rationale
     [worker] = agent_runs(scenario.agent_log)
     argv = worker["argv"]
@@ -130,7 +130,7 @@ def test_a_started_ticket_is_worked_privately_from_question_to_reply(scenario: S
         # Woken at once, but no sooner than a minute after the first tick began, not after 15 minutes.
         assert sum(time.slept) == pytest.approx(60)  # loop.min_gap_minutes, by default
         resumed = scenario.ran(wait_for_run(conn, int(last_run(conn)["id"])))
-        assert (resumed.kind, resumed.row["private"], resumed.status) == ("resume", 1, "done")
+        assert (resumed.kind, resumed.row.private, resumed.status) == ("resume", 1, "done")
         assert reply in resumed.prompt
         assert "the operator's reply to message" in resumed.prompt
         ticket = present(db.get_ticket(conn, KEY))
@@ -298,9 +298,9 @@ def test_with_tracker_private_a_labeled_tickets_first_dispatch_starts_it_private
     connector_state.unlink()  # the tracker reads it labeled again
 
     run = scenario.run(worker=private_worker_does(*commit_and_push(BRANCH), result=blocked_result()))
-    [(_, rationale)] = decisions(conn, int(run.row["tick_id"]))
+    [(_, rationale)] = decisions(conn, int(run.row.tick_id))
     assert "label agent-ready-tester; starts it privately (tracker.private)" in rationale
-    assert run.row["private"] == 1
+    assert run.row.private == 1
     record = present(conversation.start_of(conn, KEY))
     assert (record.status, record.channel) == (StartStatus.STARTED, conversation.LABEL)
     [worker] = agent_runs(scenario.agent_log)
@@ -316,7 +316,7 @@ def test_with_tracker_private_a_labeled_tickets_first_dispatch_starts_it_private
         dispatches(kind=RunKind.RESUME, label=None, reasons=[ResumeReason.REPLY]),
         worker=private_worker_does(result={**blocked_result(), "status": "done", "question": None}),
     )
-    assert resume.row["private"] == 1
+    assert resume.row.private == 1
     scenario.operator("stop", KEY)
     [(action, _)] = scenario.refuses(dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REPLY]))
     assert action == "refused:stopped"
@@ -326,7 +326,7 @@ def test_tracker_private_leaves_a_ticket_already_worked_in_public_public(scenari
     scenario.run(worker=fails())
     scenario.configures(tracker={"private": True})
     # Its conversation is already on the tracker, so it stays there.
-    assert scenario.run().row["private"] == 0
+    assert scenario.run().row.private == 0
     assert db.starts(scenario.conn) == []
 
 
@@ -355,27 +355,27 @@ def test_stop_now_ends_the_running_run_and_returns_its_slot(
     conn = scenario.conn
     scenario.operator("start", KEY)
     working = scenario.starts(dispatches(label=None))
-    run_pid, worker_pid = int(working.row["pid"]), int(working.row["worker_pid"])
+    run_pid, worker_pid = present(working.row.pid), present(working.row.worker_pid)
     assert {s["status"] for s in pool(treehouse_state)} == {"available", "leased"}
 
     assert "will finish; --now ends it" in scenario.operator("stop", KEY).out
-    assert working.row["status"] == "running"
+    assert working.row.status == "running"
     assert "was ended and its slots returned" in scenario.operator("stop", KEY, "--now").out
 
     run = working.row
-    assert run["status"] == "stopped"
+    assert run.status == "stopped"
     assert not procs.alive(run_pid)
     assert not procs.alive(worker_pid)
     assert {s["status"] for s in pool(treehouse_state)} == {"available"}
     assert attention.from_runs(conn) == []
-    [report] = db.run_messages(conn, int(run["id"]))
+    [report] = db.run_messages(conn, int(run.id))
     assert "canopy stop --now" in report.body
 
 
 def test_stop_wrap_up_asks_the_running_run_to_end_and_leaves_it_running(scenario: Scenario, git_pool: GitPool) -> None:
     scenario.operator("start", KEY)
     working = scenario.starts(dispatches(label=None))
-    run_id = int(working.row["id"])
+    run_id = int(working.row.id)
     asks = cards.answers_dir(scenario.env.state_dir, str(run_id)) / cards.WRAP_UP_FILE
     assert not asks.exists()
 
@@ -384,8 +384,8 @@ def test_stop_wrap_up_asks_the_running_run_to_end_and_leaves_it_running(scenario
     assert "nothing dispatches it now" in said
     # The plugin tells the agent; canopy kills nothing, and the run ends on its own.
     assert db.parse_time(json.loads(asks.read_text())["asked"])
-    assert working.row["status"] == "running"
-    assert procs.alive(int(working.row["worker_pid"]))
+    assert working.row.status == "running"
+    assert procs.alive(int(working.row.worker_pid))
     assert conversation.stopped(scenario.conn) == [KEY]
 
     assert working.finishes().status == "done"
@@ -409,7 +409,7 @@ def test_a_private_run_refuses_a_worktree_config_that_names_the_trackers_tools(
     scenario.operator("start", KEY)
     run = scenario.run(dispatches(label=None))
     assert run.status == "crashed"
-    assert "names tools of the tracker's MCP server 'atlassian'" in run.row["result_json"]
+    assert "names tools of the tracker's MCP server 'atlassian'" in present(run.row.result_json)
     assert not scenario.agent_log.exists()
 
 

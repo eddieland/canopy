@@ -265,9 +265,9 @@ def test_a_report_keeps_the_first_call_and_the_snapshot_only_with_what_the_runti
     usage = Usage(0.25, 10, 2, 0, 400, 50, peak_context=900, first_call=460, first_cache_write=50, first_cache_read=400)
     tick = db.start_tick(conn, dry_run=True)
     db.set_tick_report(conn, tick, "ses_o1", usage, digest="0123456789abcdef")
-    row = conn.execute("SELECT * FROM ticks WHERE id = ?", (tick,)).fetchone()
+    row = present(db.get_tick(conn, tick))
     assert db.usage_of(row) == usage
-    assert row["definitions_digest"] == "0123456789abcdef"
+    assert row.definitions_digest == "0123456789abcdef"
 
     # A plain-text overseer reported nothing: no agent canopy can tell loaded the snapshot.
     db.set_tick_report(conn, tick, None, None, digest="0123456789abcdef")
@@ -277,7 +277,7 @@ def test_a_report_keeps_the_first_call_and_the_snapshot_only_with_what_the_runti
 
     # A cost recorded before the first call was kept reads it as unknown.
     db.set_tick_report(conn, tick, "ses_o1", Usage(0.25, 10, 2, 0, 400, 50, peak_context=900))
-    usage = present(db.usage_of(conn.execute("SELECT * FROM ticks WHERE id = ?", (tick,)).fetchone()))
+    usage = present(db.usage_of(present(db.get_tick(conn, tick))))
     assert (usage.first_call, usage.first_cache_write, usage.first_cache_read) == (None, None, None)
 
 
@@ -411,13 +411,13 @@ def test_a_ticket_is_active_when_it_changes_not_when_a_tick_sets_what_it_already
     def active() -> tuple[str, str, str]:
         [ticket] = db.recent_tickets(conn, 5)
         [pr] = pr_list.pull_requests(conn, 5)
-        return ticket["last_seen_at"], ticket["active_at"], pr.active_at
+        return ticket.last_seen_at, ticket.active_at, pr.active_at
 
     with mock.patch.object(db, "now", autospec=True, return_value=at(0)):
         db.set_ticket(conn, "PROJ-1", "/repo", phase=Phase.CI_RED, title="Sign in")
         db.set_unit(conn, "PROJ-1", "/repo", "api", phase=Phase.CI_RED, pr_url=url)
     with mock.patch.object(db, "now", autospec=True, return_value=at(10)):
-        db.set_ticket(conn, "PROJ-1", "/repo", phase=Phase.CI_RED, title="Sign in", cursors={"comment": "c-1"})
+        db.set_ticket(conn, "PROJ-1", "/repo", phase=Phase.CI_RED, title="Sign in", cursors={"comment": "101"})
         db.set_unit(conn, "PROJ-1", "/repo", "api", phase=Phase.CI_RED, pr_url=url, cursors={"ci": "run-1"})
     assert active() == (at(10), at(0), at(0))
 

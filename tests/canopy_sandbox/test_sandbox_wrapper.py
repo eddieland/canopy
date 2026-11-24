@@ -1130,7 +1130,7 @@ def test_canopys_sandboxed_worker_commits_through_the_wrapper_and_is_pushed(
         assert main(["_run", str(run_id)], runner=runner) == 0
 
     run = present(db.get_run(conn, run_id))
-    assert run["status"] == "done"
+    assert run.status == "done"
     call = sandbox.only_call()
     definitions = call["argv"][call["argv"].index("--") + 2].removeprefix("OPENCODE_CONFIG_DIR=")
     assert definitions in call["settings"]["filesystem"]["allowRead"]
@@ -1198,7 +1198,7 @@ def test_a_sandboxed_repositorys_worker_and_setup_run_in_the_wrapper_canopy_adds
         run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
         assert main(["_run", str(run_id)], runner=runner) == 0
 
-    assert present(db.get_run(conn, run_id))["status"] == "done"
+    assert present(db.get_run(conn, run_id)).status == "done"
     setup, worker = [json.loads(line) for line in sandbox.log.read_text().splitlines()]
     slot = Path(slot_of(conn, run_id).slot_path)
     assert (setup["argv"][-2:], setup["cwd"]) == (["-c", "true"], str(slot))
@@ -1228,7 +1228,7 @@ def test_a_repository_sandbox_repos_does_not_name_runs_unwrapped(
         run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
         assert main(["_run", str(run_id)], runner=runner) == 0
 
-    assert present(db.get_run(conn, run_id))["status"] == "done"
+    assert present(db.get_run(conn, run_id)).status == "done"
     assert not sandbox.log.exists()
 
 

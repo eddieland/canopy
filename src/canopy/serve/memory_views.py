@@ -243,9 +243,9 @@ def _proposal(ctx: Context, p: records.Memory, seconds: Iterable[records.Proposa
     ticket = db.get_ticket(ctx.conn, p.ticket_key) if p.ticket_key is not None else None
     return MemoryProposal(
         entry=entry(ctx, p),
-        run_kind=str(run["kind"]) if run is not None else None,
-        run_status=str(run["status"]) if run is not None else None,
-        private=bool(run["private"]) if run is not None else False,
+        run_kind=str(run.kind) if run is not None else None,
+        run_status=str(run.status) if run is not None else None,
+        private=bool(run.private) if run is not None else False,
         ticket_done=bool(ticket.done) if ticket is not None else False,
         expires_at=db.parse_time(p.created_at) + timedelta(days=memory.PROPOSAL_DAYS),
         seconds=[MemorySecond(ticket_key=s.ticket_key, run_id=s.run_id) for s in seconds],

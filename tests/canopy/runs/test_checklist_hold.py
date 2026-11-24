@@ -113,7 +113,7 @@ def test_what_a_run_pushes_after_its_list_is_shown_is_kept_with_its_diff(
     shown = git("rev-parse", f"{head}^", cwd=git_pool.origin)
     [pushed] = checklist_answers.pushes_of(scenario.conn, run.id)
     assert pushed == records.ChecklistPush(run.id, None, "repo", shown, head)
-    diff = checklist_answers.diff_path(run.row["log_path"], "repo", shown).read_text()
+    diff = checklist_answers.diff_path(run.row.log_path, "repo", shown).read_text()
     assert diff.startswith("diff --git a/fix.py b/fix.py\n")
     assert "+def f(xs: Iterable[str]): ...\n" in diff
     # The notes are taken: the slot outlives the run, and the next run in it starts with none.
@@ -133,7 +133,7 @@ def test_a_run_that_never_pushes_after_its_list_is_kept_to_what_it_left_on_origi
     assert head is not None
     [pushed] = checklist_answers.pushes_of(scenario.conn, run.id)
     assert (pushed.shown_sha, pushed.pushed_sha) == (git("rev-parse", f"{head}^", cwd=git_pool.origin), head)
-    assert "fix.py" in checklist_answers.diff_path(run.row["log_path"], "repo", pushed.shown_sha).read_text()
+    assert "fix.py" in checklist_answers.diff_path(run.row.log_path, "repo", pushed.shown_sha).read_text()
 
 
 def test_a_run_never_shown_its_list_keeps_no_push(scenario: Scenario, git_pool: GitPool) -> None:

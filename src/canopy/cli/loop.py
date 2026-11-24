@@ -50,8 +50,6 @@ from canopy.runs import drafted, tasks
 from canopy.runtime.implementation import deprecation
 
 if TYPE_CHECKING:
-    import sqlite3
-
     from canopy.core.context import Context
 
 #: `canopy status` lists this many runs that ended.
@@ -356,25 +354,25 @@ def _print_review_requests(ctx: Context) -> None:
 
 def _print_workers(ctx: Context) -> None:
     running = db.running_runs(ctx.conn, "runs")
-    slots = db.all_run_slots(ctx.conn, [int(r["id"]) for r in running])
+    slots = db.all_run_slots(ctx.conn, [int(r.id) for r in running])
     busy = db.busy_workers(ctx.conn)
     click.echo(f"\nRunning workers ({busy}/{ctx.config.capacity.max_workers}):")
     for r in running:
         # A joint run holds a slot in each of its repositories.
-        where = ", ".join(f"{s.repo} {s.slot_path}" for s in slots[int(r["id"])])
+        where = ", ".join(f"{s.repo} {s.slot_path}" for s in slots[int(r.id)])
         click.echo(
-            f"  {named(r['ticket_key'], r['ticket_title'])}  {run_kind(r)}  {attention.age(r['started_at'])}  {where}"
+            f"  {named(r.ticket_key, r.ticket_title)}  {run_kind(r)}  {attention.age(r.started_at)}  {where}"
             f"{persona_of(r)}{model_of(r)}",
         )
         # What its worker reported so far (DESIGN §8): nothing until its first event, or ever without `--format json`.
-        if r["session_id"]:
-            click.echo(f"    session {r['session_id']}{spent(r)}{_doing(r)}")
-        _print_card(r, f"run:{r['id']}")
+        if r.session_id:
+            click.echo(f"    session {r.session_id}{spent(r)}{_doing(r)}")
+        _print_card(r, f"run:{r.id}")
     # A review holds a slot and counts toward max_workers (DESIGN §21).
     for r in db.running_runs(ctx.conn, "review_runs"):
-        where = f"  {r['slot_path']}" if r["slot_path"] else ""
-        click.echo(f"  review  {r['pr_url']}  {attention.age(r['started_at'])}{where}{persona_of(r)}")
-        _print_card(r, f"review:{r['id']}")
+        where = f"  {r.slot_path}" if r.slot_path else ""
+        click.echo(f"  review  {r.pr_url}  {attention.age(r.started_at)}{where}{persona_of(r)}")
+        _print_card(r, f"review:{r.id}")
     # So does a task's run (DESIGN §36).
     for t in tasks.running(ctx.conn):
         click.echo(f"  task:{t.task_id}  run {t.id}  {attention.age(t.started_at)}  {t.slot_path}")
@@ -383,7 +381,7 @@ def _print_workers(ctx: Context) -> None:
         click.echo("  none")
 
 
-def _print_card(run: sqlite3.Row | records.TaskRun, ref: str) -> None:
+def _print_card(run: db.ShownRun | records.ReviewRun | records.TaskRun, ref: str) -> None:
     """What a running run's progress says it does now, and when it last updated it (DESIGN §41), and what it asks you.
 
     A run's progress is the operator's alone: nothing inside one of canopy's ticks or runs. Nothing before its update is
@@ -392,19 +390,18 @@ def _print_card(run: sqlite3.Row | records.TaskRun, ref: str) -> None:
     if not conversation.is_operator():
         return
     standing = cards.of(run)
-    for line in (cards.doing(standing, str(records.columns(run)["started_at"])), cards.asking(standing, ref)):
+    for line in (cards.doing(standing, run.started_at), cards.asking(standing, ref)):
         if line is not None:
             click.echo(f"    {line}")
 
 
-def _doing(run: sqlite3.Row | records.Tick) -> str:
+def _doing(run: records.Run | records.Tick) -> str:
     """A running run's or tick's latest tool call, as `  last bash: make check 12s ago`, or empty before its first.
 
     Returns:
         The tool, what it did, and how long ago, fit for the end of a line; empty when no call is recorded.
     """
-    values = records.columns(run)
-    tool, what, at = values["activity_tool"], values["activity"], values["activity_at"]
+    tool, what, at = run.activity_tool, run.activity, run.activity_at
     if tool is None or at is None:
         return ""
     did = f"{tool}: {what}" if what else str(tool)
@@ -417,19 +414,19 @@ def _print_recent_runs(ctx: Context) -> None:
     The third names its session, cost, persona, the model canopy asked for, and the models its session says served it.
     """
     runs = db.recent_runs(ctx.conn, RECENT_RUNS)
-    served = run_models.of_runs(ctx.conn, "runs", [int(r["id"]) for r in runs])
+    served = run_models.of_runs(ctx.conn, "runs", [int(r.id) for r in runs])
     click.echo(f"\nRecent runs ({len(runs)}):")
     for r in runs:
         result = result_of(r)
-        ended = f"{attention.age(str(r['ended_at']))} ago"
+        ended = f"{attention.age(str(r.ended_at))} ago"
         prs = "".join(f"  {pr}" for pr in prs_of(result))
-        click.echo(f"  {named(r['ticket_key'], r['ticket_title'])}  {run_kind(r)}  {r['status']}  {ended}{prs}")
+        click.echo(f"  {named(r.ticket_key, r.ticket_title)}  {run_kind(r)}  {r.status}  {ended}{prs}")
         said = one_line(contract.stored_note(result))
         if said:
             click.echo(f"    {said}")
-        session = f"session {r['session_id']}" if r["session_id"] else "no session reported"
-        models = f"{model_of(r)}{run_models.served_of(served[int(r['id'])])}"
-        click.echo(f"    {session}{spent(r)}{persona_of(r)}{models}  log {r['log_path']}")
+        session = f"session {r.session_id}" if r.session_id else "no session reported"
+        models = f"{model_of(r)}{run_models.served_of(served[int(r.id)])}"
+        click.echo(f"    {session}{spent(r)}{persona_of(r)}{models}  log {r.log_path}")
     if not runs:
         click.echo("  none")
 

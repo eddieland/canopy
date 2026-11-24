@@ -235,7 +235,7 @@ def test_a_shell_call_the_agent_named_bash_counts_as_its_program(
 def test_a_log_past_the_bound_is_read_to_it_and_marked(tmp_path: Path, journals: Journals, runtime: Version) -> None:
     conn = journals.open(tmp_path / "canopy.db")
     run_id = worker(conn, tmp_path / "long.log", NOW - timedelta(hours=1), FIRST, runtime)
-    log = present(db.get_run(conn, run_id))["log_path"]
+    log = present(db.get_run(conn, run_id)).log_path
     # Room for the first two events of the log, its first call and its model call, and no more.
     bound = sum(len(line) + 1 for line in Path(log).read_text().splitlines()[:2])
     with mock.patch.object(transcript, "MAX_BYTES", bound):

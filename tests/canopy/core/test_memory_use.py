@@ -47,14 +47,14 @@ def test_a_note_reaches_its_tickets_next_run_and_no_other_tickets(
     with_memory(canopy_env, ticket_notes="use")
     first = run_with(conn, WORK, notes=[{"key": "lint", "text": NOTE}])
     # A ticket with no note in force gets no section.
-    assert HEADING not in prompt_of(canopy_env, int(first["id"]))
+    assert HEADING not in prompt_of(canopy_env, int(first.id))
     [note] = memories(conn)
 
     assert not dispatch_in_tick(conn, FIX_CI).said.error
     run_id = int(last_run(conn)["id"])
     text = prompt_of(canopy_env, run_id)
     assert (
-        f"Note {note.id}, `lint`, from run {first['id']} (`implement`, ended `done`), 1 run before this one, "
+        f"Note {note.id}, `lint`, from run {first.id} (`implement`, ended `done`), 1 run before this one, "
         f"against `{note.head}`:\n> {NOTE}"
     ) in text
     # Shown its ticket's notes, the run is asked which it drops and which it relied on or found wrong.
@@ -140,9 +140,9 @@ def test_a_memory_names_the_latest_runs_that_relied_on_it_newest_first(
     with_memory(canopy_env, ticket_notes="use")
     run_with(conn, WORK, notes=[{"key": "lint", "text": NOTE}])
     [note] = memories(conn)
-    relied = [int(run_with(conn, FOR_REVIEW, memory_used=[note.id])["id"]) for _ in range(3)]
+    relied = [int(run_with(conn, FOR_REVIEW, memory_used=[note.id]).id) for _ in range(3)]
     # Shown it, and cited it in neither list: read, but not among those that relied on it.
-    quiet = int(run_with(conn, FOR_REVIEW)["id"])
+    quiet = int(run_with(conn, FOR_REVIEW).id)
     assert memory.citations(conn, quiet) == {}
     assert memory.used_by(conn, note.id) == relied[::-1]
     assert memory.used_by(conn, note.id, limit=2) == relied[:0:-1]
@@ -188,7 +188,7 @@ def test_memory_list_says_the_digest_is_served_and_what_a_run_read(
     out = capsys.readouterr().out
     assert out.startswith("ticket notes: In use. A ticket's later runs read its notes.\n")
     assert f"{KEY}'s notes, served to its next run:" in out
-    assert main(["memory", "list", "--run", str(second["id"])]) == 0
+    assert main(["memory", "list", "--run", str(second.id)]) == 0
     out = capsys.readouterr().out
     assert "Read:\n" in out
     assert "read by 1 run (last at " in out
@@ -207,12 +207,12 @@ def test_the_listings_count_the_runs_that_read_a_note_apart_from_those_that_cite
     # Shown it and silent on it: a worker may rely on a note and leave `memory_used` unsaid, so these count as reads.
     quiet = [run_with(conn, FOR_REVIEW) for _ in range(2)]
     [cited] = memories(conn)
-    use = f"read by 3 runs (last at {quiet[-1]['started_at']}), cited by 1 (last at {cited.last_used_at})"
+    use = f"read by 3 runs (last at {quiet[-1].started_at}), cited by 1 (last at {cited.last_used_at})"
     capsys.readouterr()
     for args in (
         ["memory", "list"],
         ["memory", "history", str(note.id)],
-        ["memory", "list", "--run", str(quiet[0]["id"])],
+        ["memory", "list", "--run", str(quiet[0].id)],
     ):
         assert main(args) == 0
         assert use in capsys.readouterr().out
@@ -220,7 +220,7 @@ def test_the_listings_count_the_runs_that_read_a_note_apart_from_those_that_cite
     [found] = json.loads(capsys.readouterr().out)["notes"]
     assert {k: found[k] for k in ("read_count", "last_read_at", "use_count", "last_used_at")} == {
         "read_count": 3,
-        "last_read_at": quiet[-1]["started_at"],
+        "last_read_at": quiet[-1].started_at,
         "use_count": 1,
         "last_used_at": cited.last_used_at,
     }
