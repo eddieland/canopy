@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 
 /**
  * A ticket key that opens the ticket's page, then, when `tracker.ticket_url` is set, a small icon opening it in the
- * tracker: the key goes in, the icon out, as a PR's link does. A key cut to fit its cell is whole on hover.
+ * tracker: the key goes in, the icon out, as a PR's link does. Hovered or focused, a card shows the ticket at a glance.
  */
 export function TicketLink({ ticketKey, className }: { ticketKey: string; className?: string }) {
     const tracker = useTicketUrl(ticketKey)

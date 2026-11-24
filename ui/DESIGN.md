@@ -695,17 +695,18 @@ reader, so no table repeats them.
   a stop inside a control would be a control in a control. What the operator acts on is in the text, never only in a
   tip. What a report's column or figure counts is a tip too, on its name (`Hinted`), with a muted dotted underline
   saying there is one. A `title` that explains rather than informs, a button's hint, stays a `title`.
-- **A link's page at a glance is a hover card** (`Glance`): more than a tip holds, a few rows of what the page it
-  opens shows, as each header readout shows its page. It opens on hover after half a second, and on the keyboard's
-  focus, and stays while the pointer moves onto it; a tap follows the link. Like a tip it is on `surface` with no
-  motion. Nothing in it is found only there: it is a preview of the page, never a place to act, so it holds no link
-  and no control. **Every reference has one** (`src/components/ref-glances.tsx`): a run, a ticket, a tick, a task, a
-  review, an epic, a chore, a run of a task or a chore, and a PR, wherever its link names it. The card leads with the
-  reference whole, so one cut to fit its cell is read there, after the dot of its state, with where it stands in a
+- **A link's page at a glance is a hover card** (`Glance`): more than a tip holds, a few rows of what the page it opens
+  shows, as each header readout shows its page. It opens on hover after half a second, and on the keyboard's focus, and
+  stays while the pointer moves onto it; a tap follows the link. Like a tip it is on `surface` with no motion. Nothing
+  in it is found only there: it is a preview of the page, never a place to act, so it holds no link and no control. **A
+  reference named in a page has one** (`src/components/ref-glances.tsx`): a run, a ticket, a tick, a task, a review, an
+  epic, a chore, a run of a task or a chore, and a PR, through its link (`RunLink`, `TicketLink`, and the rest). A row
+  that is one link whole, as the rail's are, says where its subject stands in itself and has none. The card leads with
+  the reference whole, so one cut to fit its cell is read there, after the dot of its state, with where it stands in a
   word in that state's color at the right; then its name, a line or three of what it said, and its rows. It reads what
   its page reads, and only once it opens, so a list of links reads nothing and the page behind a card is read by the
-  time the link is followed. Before the read lands it shows its reference over placeholders, and a failed read says
-  why. A link inside a card opens no card of its own.
+  time the link is followed. Before the read lands it shows its reference over placeholders, and a failed read says why.
+  A link inside a card opens no card of its own.
 - **A list in time can be flipped**, oldest first or newest first, from its panel's header (`OrderToggle`): a ghost
   button before the count, an up-down arrow and the order it is in, in words (`newest first`). A list sorted by each
   row's latest activity rather than by when it began says so (`recently updated`, after GitHub's sorts): its first row

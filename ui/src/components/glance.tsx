@@ -69,9 +69,11 @@ export function GlanceCard({
         <div className="flex flex-col gap-2.5 text-xs">
             <div className="flex flex-col gap-1">
                 <div className="flex min-w-0 items-baseline justify-between gap-3">
-                    <span className="flex min-w-0 items-center gap-1.5 font-medium">
+                    <span className="flex min-w-0 items-baseline gap-1.5 font-medium">
                         {state !== undefined && <RunDot state={state} />}
-                        <span className={cn('truncate', (mono || state !== undefined) && 'readout')}>{title}</span>
+                        <span className={cn('min-w-0 wrap-anywhere', (mono || state !== undefined) && 'readout')}>
+                            {title}
+                        </span>
                     </span>
                     {aside !== undefined && <span className="shrink-0 readout text-muted-foreground">{aside}</span>}
                 </div>

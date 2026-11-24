@@ -47,12 +47,12 @@ describe('a reference’s hover card', () => {
         focus('run:41')
         const card = await waitFor(() => screen.getByTestId('run-card'))
         expect(card.textContent).toContain('run:41')
-        expect(card.textContent).toContain('running')
+        expect(card.textContent).toContain('run:41running')
         expect(card.textContent).toContain('Sign in with SSO')
         expect(card.textContent).toContain('ABC-101')
         expect(card.textContent).toContain('implement')
         // A preview, never a place to act: it holds no link and no control.
-        expect(card.querySelector('a, button')).toBeNull()
+        expect(card.querySelector('a, button, input, select, textarea, [role], [tabindex]')).toBeNull()
     })
 
     it('reads nothing until its card opens, then reads what its page reads', async () => {

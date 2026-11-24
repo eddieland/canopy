@@ -5,7 +5,10 @@ import { ChoreGlance, ChoreRunGlance } from '@/components/ref-glances'
 import { choreRef, choreRunRef } from '@/lib/refs'
 import { cn } from '@/lib/utils'
 
-/** A chore's name, as `chore:NAME`, that opens its page. Cut to fit its cell, it is whole on hover. */
+/**
+ * A chore's name, as `chore:NAME`, that opens its page. Hovered or focused, a card shows it at a glance, its
+ * reference whole.
+ */
 export function ChoreLink({ name, className }: { name: string; className?: string }) {
     return (
         <Glance card={<ChoreGlance name={name} />} testId="chore-card" align="start">

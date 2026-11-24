@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
 /**
  * `review:N`, opening the review's page: its findings on the diff, the shadow PR review canopy keeps (D114). With
  * `children`, those in its place, where a name says more than the id would (a persona among a request's reviews).
- * Cut to fit its cell, the id is whole on hover.
+ * Hovered or focused, a card shows it at a glance, its reference whole.
  */
 export function ReviewLink({ id, className, children }: { id: number; className?: string; children?: ReactNode }) {
     return (

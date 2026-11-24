@@ -390,11 +390,16 @@ export function EpicCard({ detail }: { detail: EpicDetail }) {
     )
 }
 
-/** A chore at a glance: whether it runs, how its last run ended, its open findings, when it may start, its spend. */
+/**
+ * A chore at a glance: whether it runs, how its last run ended and what it said, its open findings, when it may
+ * start, and its spend.
+ */
 export function ChoreCard({ detail }: { detail: ChoreDetail }) {
     const { chore } = detail
     const now = useNow()
     const run = chore.running ?? chore.latest
+    // A running run has said nothing yet: what the chore last said is its latest ended run's.
+    const said = chore.latest?.summary ?? null
     return (
         <GlanceCard
             title={choreRef(chore.name)}
@@ -403,6 +408,7 @@ export function ChoreCard({ detail }: { detail: ChoreDetail }) {
             name={chore.title}
             foot={null}
         >
+            {said !== null && said !== '' && <CardWords>{said}</CardWords>}
             <CardRows>
                 <CardRow label="Stands">{choreLine(chore, now)}</CardRow>
                 <CardRow label="Findings">{findingsText(chore.findings, chore.more_findings)}</CardRow>
@@ -532,12 +538,9 @@ function Ran({ started, ended }: { started: string; ended: string | null }) {
 
 // What an agent run cost, and the tokens it took in or wrote anew when the runtime reported them.
 function Spent({ usd, tokens }: { usd: number | null; tokens: number | null }) {
-    if (usd === null) {
-        return 'no cost reported'
-    }
     return (
         <>
-            <span className="readout">{costText(usd)}</span>
+            {usd === null ? 'no cost reported' : <span className="readout">{costText(usd)}</span>}
             {tokens !== null && `, ${tokenCount(tokens)} tokens`}
         </>
     )

@@ -21,8 +21,8 @@ export function TaskLink({ id, className }: { id: number; className?: string }) 
 }
 
 /**
- * One run of a task, as `task:N#M`, opening its page: how it ended, the whole of what it said, and its session. Cut to
- * fit its cell, it is whole on hover.
+ * One run of a task, as `task:N#M`, opening its page: how it ended, the whole of what it said, and its session. Hovered
+ * or focused, a card shows it at a glance, its reference whole.
  */
 export function TaskRunLink({ task, run, className }: { task: number; run: number; className?: string }) {
     return (
