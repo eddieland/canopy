@@ -85,7 +85,8 @@ A reference canopy names in a page has a card behind its link: `run:41`, a ticke
 `review:6`, `epic:2`, `chore:deps`, a PR. Hover the link, or Tab to it, and the card says where the thing stands, in
 its state's color, with its title, the gist of what it last said, and a few facts such as when it started and what it
 cost. It's the page in miniature, so you can tell whether `run:38` is the one you're after without opening four tabs
-to find out. There's nothing to click in a card; the link under it still goes to the page.
+to find out. There's nothing to click in a card; the link under it still goes to the page. The rows of what's working in
+the rail have cards as well, opening beside the rail.
 
 ## The header
 

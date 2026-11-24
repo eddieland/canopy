@@ -5,7 +5,9 @@ import type { ReactNode } from 'react'
 
 import { hostProcessesQuery } from '@/api/queries'
 import type { HostProcess, HostProcesses, ProcessWork } from '@/api/types'
+import { Glance } from '@/components/glance'
 import { Empty, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
+import { ChoreRunGlance, EpicGlance, ReviewGlance, RunGlance, TaskRunGlance } from '@/components/ref-glances'
 import { Button } from '@/components/ui/button'
 import { Toggle } from '@/components/ui/toggle'
 import { bytesText } from '@/lib/host'
@@ -341,46 +343,58 @@ function WorkChip({ work }: { work: ProcessWork }) {
     switch (work.kind) {
         case 'run': {
             return (
-                <Link to="/workspace/runs/$id" params={{ id }} className={link} data-testid="process-work">
-                    {runRef(work.id)} <span className="text-foreground">{work.ticket_key}</span>
-                </Link>
+                <Glance card={<RunGlance id={work.id} />} align="start">
+                    <Link to="/workspace/runs/$id" params={{ id }} className={link} data-testid="process-work">
+                        {runRef(work.id)} <span className="text-foreground">{work.ticket_key}</span>
+                    </Link>
+                </Glance>
             )
         }
         case 'review': {
             return (
-                <Link to="/pull-requests/reviews/$id" params={{ id }} className={link} data-testid="process-work">
-                    {reviewRef(work.id)}
-                    {work.pr_url !== null && <span className="text-foreground"> {pullRequestLabel(work.pr_url)}</span>}
-                </Link>
+                <Glance card={<ReviewGlance id={work.id} />} align="start">
+                    <Link to="/pull-requests/reviews/$id" params={{ id }} className={link} data-testid="process-work">
+                        {reviewRef(work.id)}
+                        {work.pr_url !== null && (
+                            <span className="text-foreground"> {pullRequestLabel(work.pr_url)}</span>
+                        )}
+                    </Link>
+                </Glance>
             )
         }
         case 'chore': {
             const name = work.chore ?? ''
             return (
-                <Link to="/chores/$name/runs/$id" params={{ name, id }} className={link} data-testid="process-work">
-                    {choreRunRef(name, work.id)}
-                </Link>
+                <Glance card={<ChoreRunGlance name={name} id={work.id} />} align="start">
+                    <Link to="/chores/$name/runs/$id" params={{ name, id }} className={link} data-testid="process-work">
+                        {choreRunRef(name, work.id)}
+                    </Link>
+                </Glance>
             )
         }
         case 'task': {
             const task = String(work.task_id ?? 0)
             return (
-                <Link
-                    to="/tasks/$id/runs/$run"
-                    params={{ id: task, run: id }}
-                    className={link}
-                    data-testid="process-work"
-                >
-                    {taskRunRef(task, work.id)}
-                </Link>
+                <Glance card={<TaskRunGlance task={work.task_id ?? 0} run={work.id} />} align="start">
+                    <Link
+                        to="/tasks/$id/runs/$run"
+                        params={{ id: task, run: id }}
+                        className={link}
+                        data-testid="process-work"
+                    >
+                        {taskRunRef(task, work.id)}
+                    </Link>
+                </Glance>
             )
         }
         case 'epic': {
             const epic = String(work.epic_id ?? 0)
             return (
-                <Link to="/epics/$id" params={{ id: epic }} className={link} data-testid="process-work">
-                    {epicRunRef(epic, work.id)}
-                </Link>
+                <Glance card={<EpicGlance id={work.epic_id ?? 0} />} align="start">
+                    <Link to="/epics/$id" params={{ id: epic }} className={link} data-testid="process-work">
+                        {epicRunRef(epic, work.id)}
+                    </Link>
+                </Glance>
             )
         }
     }

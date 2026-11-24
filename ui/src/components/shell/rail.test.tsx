@@ -1,5 +1,5 @@
 import { QueryClient } from '@tanstack/react-query'
-import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { mockChores, mockReviews, mockRuns, mockTasks, mockAttachmentLimits } from '@/api/mocks'
@@ -86,7 +86,7 @@ describe('RailWorking', () => {
     it('lists the runs running before those waiting on the operator, each opening its page', async () => {
         const { router } = await renderRouted(<RailWorking />, { client: rail([BLOCKED, RUNNING]) })
         const rows = within(screen.getByRole('region', { name: 'Working' })).getAllByRole('link')
-        expect(rows.map((row) => row.title)).toEqual(['run:41 implement', 'run:42 implement'])
+        expect(rows.map((row) => row.getAttribute('href'))).toEqual(['/workspace/runs/41', '/workspace/runs/42'])
         const [first, second] = rows as [HTMLElement, HTMLElement]
         expect(within(first).getByText('ABC-101')).toBeDefined()
         expect(within(first).getByText('Sign in with SSO')).toBeDefined()
@@ -96,6 +96,17 @@ describe('RailWorking', () => {
 
         await follow(second)
         expect(router.state.location.pathname).toBe('/workspace/runs/42')
+    })
+
+    it("shows a row's run at a glance in a card when the row has the focus, from the run it holds", async () => {
+        await renderRouted(<RailWorking />, { client: rail([RUNNING]) })
+        act(() => {
+            screen.getByTestId('rail-run-41').focus()
+        })
+        const card = await waitFor(() => screen.getByTestId('run-card'))
+        expect(card.textContent).toContain('run:41running')
+        expect(card.textContent).toContain('Sign in with SSO')
+        expect(card.textContent).toContain('implement')
     })
 
     it('lists a review of a PR and a chore run running among the runs, each opening its page', async () => {
@@ -110,7 +121,11 @@ describe('RailWorking', () => {
         })
         const region = screen.getByRole('region', { name: 'Working' })
         const rows = within(region).getAllByRole('link')
-        expect(rows.map((row) => row.title)).toEqual(['chore:deps#3', 'run:41 implement', 'review:5 of acme/web#91'])
+        expect(rows.map((row) => row.getAttribute('href'))).toEqual([
+            '/chores/deps/runs/3',
+            '/workspace/runs/41',
+            '/pull-requests/reviews/5',
+        ])
         expect(within(region).getByText('3')).toBeDefined()
         const [first, , third] = rows as [HTMLElement, HTMLElement, HTMLElement]
         expect(within(first).getByText('deps')).toBeDefined()
@@ -174,7 +189,7 @@ describe('RailWorking', () => {
         const { router } = await renderRouted(<RailWorking />, { client: rail([RUNNING], [], [], mockTasks) })
         const region = screen.getByRole('region', { name: 'Working' })
         const rows = within(region).getAllByRole('link')
-        expect(rows.map((row) => row.title)).toEqual(['task:6#8', 'run:41 implement'])
+        expect(rows.map((row) => row.getAttribute('href'))).toEqual(['/tasks/6/runs/8', '/workspace/runs/41'])
         expect(within(region).getByText('2')).toBeDefined()
         const [first] = rows as [HTMLElement]
         expect(within(first).getByText('task:6#8')).toBeDefined()

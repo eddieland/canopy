@@ -7,7 +7,9 @@ import { choresQuery, metaQuery, reviewsQuery, runsQuery, spendQuery, tasksQuery
 import type { Run, RunState, Spend, SpendWindow } from '@/api/types'
 import { Age } from '@/components/age'
 import { Cost } from '@/components/cost'
-import { ProgressMeter } from '@/components/run-progress'
+import { Glance } from '@/components/glance'
+import { ProgressMeter } from '@/components/progress-meter'
+import { ChoreRunGlance, ReviewGlance, RunCard, TaskRunGlance } from '@/components/ref-glances'
 import { RunDot } from '@/components/status'
 import { TicketTitle } from '@/components/ticket-title'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -15,7 +17,7 @@ import { useLoopDown } from '@/hooks/use-loop-down'
 import { useClock } from '@/lib/clock'
 import type { Clock } from '@/lib/clock'
 import { pullRequestLabel } from '@/lib/pull-request-label'
-import { choreRunRef, reviewRef, runRef, taskRunRef } from '@/lib/refs'
+import { reviewRef, taskRunRef } from '@/lib/refs'
 import { runPhase, useQuips } from '@/lib/run-phase'
 import { asksYou, railWork } from '@/lib/run-state'
 import type { RailItem } from '@/lib/run-state'
@@ -110,7 +112,7 @@ function itemKey(item: RailItem): string {
  * answered reads `asks you` in place of its age, its dot and tint those of what waits on you, though it runs on. A
  * worker run adds what it is doing, `planning`, on a line of its own, and while it runs, its steps' meter when its
  * progress names any; a task's run has no kind or reasons to name a phase by, and its first line is the operator's own
- * words.
+ * words. Hovered or focused, a row shows its run at a glance in a card beside the rail.
  */
 function WorkingRow({ item }: { item: RailItem }) {
     switch (item.kind) {
@@ -118,20 +120,24 @@ function WorkingRow({ item }: { item: RailItem }) {
             const { run } = item
             const asks = asksYou(run)
             return (
-                <Link
-                    to="/workspace/runs/$id"
-                    params={{ id: String(run.id) }}
-                    title={`${runRef(run.id)} ${run.kind}`}
-                    className={row(asks ? 'blocked' : run.state)}
-                    data-testid={`rail-run-${run.id}`}
-                >
-                    <RowHead state={run.state} subject={run.ticket_key} started={run.started_at} asks={asks} />
-                    <TicketTitle title={run.ticket_title} className="pl-4 text-xs font-normal text-muted-foreground" />
-                    <PhaseLine run={run} />
-                    {run.state === 'running' && run.card !== null && run.card.steps.length > 0 && (
-                        <ProgressMeter card={run.card} running className="mt-0.5 ml-4" />
-                    )}
-                </Link>
+                <Glance card={<RunCard run={run} />} testId="run-card" side="right" align="start">
+                    <Link
+                        to="/workspace/runs/$id"
+                        params={{ id: String(run.id) }}
+                        className={row(asks ? 'blocked' : run.state)}
+                        data-testid={`rail-run-${run.id}`}
+                    >
+                        <RowHead state={run.state} subject={run.ticket_key} started={run.started_at} asks={asks} />
+                        <TicketTitle
+                            title={run.ticket_title}
+                            className="pl-4 text-xs font-normal text-muted-foreground"
+                        />
+                        <PhaseLine run={run} />
+                        {run.state === 'running' && run.card !== null && run.card.steps.length > 0 && (
+                            <ProgressMeter card={run.card} running className="mt-0.5 ml-4" />
+                        )}
+                    </Link>
+                </Glance>
             )
         }
         case 'review': {
@@ -139,53 +145,66 @@ function WorkingRow({ item }: { item: RailItem }) {
             const pr = pullRequestLabel(review.pr_url)
             const asks = review.state === 'running' && review.asks_you
             return (
-                <Link
-                    to="/pull-requests/reviews/$id"
-                    params={{ id: String(review.id) }}
-                    title={`${reviewRef(review.id)} of ${pr}`}
-                    className={row(asks ? 'blocked' : review.state)}
-                    data-testid={`rail-review-${review.id}`}
-                >
-                    <RowHead state={review.state} subject={pr} started={review.started_at} asks={asks} />
-                    <Under>
-                        {review.ticket_key === null
-                            ? reviewRef(review.id)
-                            : `${reviewRef(review.id)} · ${review.ticket_key}`}
-                    </Under>
-                </Link>
+                <Glance card={<ReviewGlance id={review.id} />} testId="review-card" side="right" align="start">
+                    <Link
+                        to="/pull-requests/reviews/$id"
+                        params={{ id: String(review.id) }}
+                        className={row(asks ? 'blocked' : review.state)}
+                        data-testid={`rail-review-${review.id}`}
+                    >
+                        <RowHead state={review.state} subject={pr} started={review.started_at} asks={asks} />
+                        <Under>
+                            {review.ticket_key === null
+                                ? reviewRef(review.id)
+                                : `${reviewRef(review.id)} · ${review.ticket_key}`}
+                        </Under>
+                    </Link>
+                </Glance>
             )
         }
         case 'chore': {
             const { chore, run } = item
             return (
-                <Link
-                    to="/chores/$name/runs/$id"
-                    params={{ name: chore, id: String(run.id) }}
-                    title={choreRunRef(chore, run.id)}
-                    className={row(run.state)}
-                    data-testid={`rail-chore-${chore}`}
+                <Glance
+                    card={<ChoreRunGlance name={chore} id={run.id} />}
+                    testId="chore-run-card"
+                    side="right"
+                    align="start"
                 >
-                    <RowHead state={run.state} subject={chore} started={run.started_at} />
-                    <Under>{`chore run #${run.id}`}</Under>
-                </Link>
+                    <Link
+                        to="/chores/$name/runs/$id"
+                        params={{ name: chore, id: String(run.id) }}
+                        className={row(run.state)}
+                        data-testid={`rail-chore-${chore}`}
+                    >
+                        <RowHead state={run.state} subject={chore} started={run.started_at} />
+                        <Under>{`chore run #${run.id}`}</Under>
+                    </Link>
+                </Glance>
             )
         }
         case 'task': {
             const { task, run } = item
             return (
-                <Link
-                    to="/tasks/$id/runs/$run"
-                    params={{ id: String(task.id), run: String(run.id) }}
-                    title={taskRunRef(task.id, run.id)}
-                    className={row(run.state)}
-                    data-testid={`rail-task-${task.id}`}
+                <Glance
+                    card={<TaskRunGlance task={task.id} run={run.id} />}
+                    testId="task-run-card"
+                    side="right"
+                    align="start"
                 >
-                    <RowHead state={run.state} subject={taskRunRef(task.id, run.id)} started={run.started_at} />
-                    <TicketTitle
-                        title={taskTitle(task.text)}
-                        className="pl-4 text-xs font-normal text-muted-foreground"
-                    />
-                </Link>
+                    <Link
+                        to="/tasks/$id/runs/$run"
+                        params={{ id: String(task.id), run: String(run.id) }}
+                        className={row(run.state)}
+                        data-testid={`rail-task-${task.id}`}
+                    >
+                        <RowHead state={run.state} subject={taskRunRef(task.id, run.id)} started={run.started_at} />
+                        <TicketTitle
+                            title={taskTitle(task.text)}
+                            className="pl-4 text-xs font-normal text-muted-foreground"
+                        />
+                    </Link>
+                </Glance>
             )
         }
     }

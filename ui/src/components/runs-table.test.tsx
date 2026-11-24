@@ -356,8 +356,6 @@ describe('SubjectRunsTable', () => {
         const row = within(screen.getByTestId('chore-run-deps-3'))
         const number = row.getByRole('link', { name: '#3' })
         expect(number.getAttribute('href')).toBe('/chores/deps/runs/3')
-        // The number and its chore read as its reference, which its hover gives whole.
-        expect(number.getAttribute('title')).toBe('chore:deps#3')
         expect(row.getByRole('link', { name: 'chore:deps' }).getAttribute('href')).toBe('/chores/deps')
         expect(row.getByText('chore')).toBeDefined()
         expect(row.getByText('Dependency advisories')).toBeDefined()

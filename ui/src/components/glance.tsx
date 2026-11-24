@@ -14,17 +14,20 @@ const InGlance = createContext(false)
  * A link with its page at a glance in a hover card (ui/DESIGN.md, "A link's page at a glance is a hover card"):
  * `children` is the link, or what holds it, and `card` what the card shows, a `GlanceCard`, made only once the card
  * opens, so a card that reads its data reads nothing until then. Hovered or focused, the card opens; a click still
- * follows the link, and so does a click on a link the card covers. Inside another card it is its link alone.
+ * follows the link, and so does a click on a link the card covers. It opens under the link, or on `side`, as the rail's
+ * rows open theirs beside them, over the page. Inside another card it is its link alone.
  */
 export function Glance({
     card,
     testId,
     align,
+    side,
     children,
 }: {
     card: ReactNode
     testId?: string
     align?: 'start' | 'center' | 'end'
+    side?: 'top' | 'right' | 'bottom' | 'left'
     children: ReactElement
 }) {
     const nested = use(InGlance)
@@ -36,7 +39,7 @@ export function Glance({
             <HoverCardTrigger asChild>{children}</HoverCardTrigger>
             {/* It holds nothing to point at, so the pointer passes through it: leaving the link closes it, and a
                 link it covers still takes its click. */}
-            <HoverCardContent data-testid={testId} align={align} className="pointer-events-none">
+            <HoverCardContent data-testid={testId} align={align} side={side} className="pointer-events-none">
                 <InGlance value>{card}</InGlance>
             </HoverCardContent>
         </HoverCard>
@@ -46,7 +49,8 @@ export function Glance({
 /**
  * A hover card's content, as the host's sets the pattern: what it is about, after its state's dot when it has a
  * state, in monospace when it is a reference (`mono`, and whenever it has a state), and, at the right, a word or two
- * more; under them `name`, what the journal calls it, when it has a name beside its reference; then `children`, its
+ * more; under them `name`, what the journal calls it, when it has a name beside its reference, and `chips`, a line of
+ * what kind of thing it is; then `children`, its
  * rows (`CardRows`) and anything over them, and at its foot a pointer to the page its link opens, or `foot` for a card
  * whose trigger opens none, null for no foot: a reference's card, whose link names its page already.
  */
@@ -56,6 +60,7 @@ export function GlanceCard({
     state,
     aside,
     name,
+    chips,
     foot = 'Open it for the rest.',
     children,
 }: {
@@ -64,6 +69,7 @@ export function GlanceCard({
     state?: RunState
     aside?: ReactNode
     name?: ReactNode
+    chips?: ReactNode
     foot?: ReactNode
     children?: ReactNode
 }) {
@@ -82,6 +88,7 @@ export function GlanceCard({
                 {name !== undefined && name !== null && (
                     <p className="line-clamp-2 text-sm font-medium wrap-break-word">{name}</p>
                 )}
+                {chips !== undefined && <div className="mt-0.5 flex flex-wrap items-center gap-1">{chips}</div>}
             </div>
             {children}
             {foot !== null && <span className="text-muted-foreground">{foot}</span>}
@@ -94,9 +101,10 @@ export function CardWords({ children }: { children: ReactNode }) {
     return <p className="line-clamp-3 wrap-break-word whitespace-pre-line text-muted-foreground">{children}</p>
 }
 
-/** A card's rows, each a `CardRow`: labels in a column, their values beside them. */
+/** A card's rows, each a `CardRow`: labels in a column, their values beside them, under a hairline that sets the
+ * facts apart from what the card is about. */
 export function CardRows({ children }: { children: ReactNode }) {
-    return <dl className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-3 gap-y-1">{children}</dl>
+    return <dl className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-3 gap-y-1 border-t pt-2.5">{children}</dl>
 }
 
 /** One row of a card: a label, and its value. */

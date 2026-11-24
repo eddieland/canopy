@@ -8,9 +8,11 @@ import { ChoreLink } from '@/components/chore-link'
 import { Copyable } from '@/components/copy-button'
 import { Cost } from '@/components/cost'
 import { Disclosure } from '@/components/disclosure'
+import { Glance } from '@/components/glance'
 import { LinkedText } from '@/components/linked-text'
 import { None } from '@/components/none'
 import { PullRequestLink } from '@/components/pull-request-link'
+import { ChoreRunGlance } from '@/components/ref-glances'
 import { ReviewLink } from '@/components/review-link'
 import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { ListRow, RowLine, RowList } from '@/components/rows'
@@ -27,7 +29,6 @@ import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { useRouters } from '@/hooks/use-routers'
 import { costText } from '@/lib/cost-total'
 import { insteadMark, isUnread, modelNames, runModelIds, sameModel, UNREAD, unservedReason } from '@/lib/models'
-import { choreRunRef } from '@/lib/refs'
 import { shortSha, verdictText, verdictTone } from '@/lib/reviews'
 import { ROW_SUBGRID, rowLineFrom } from '@/lib/rows'
 import { commitsLeftOutText, diffAnchor, linesText, rangeSpan, rangeTitle } from '@/lib/run-changes'
@@ -379,18 +380,19 @@ function TaskRunBody({ task, run }: { task: TaskSummary; run: TaskRun }) {
 
 /**
  * A chore run's number, `#2`, opening its page: its chore is named in the next column, so the two read as its
- * reference, `chore:deps#2`, which its hover gives whole.
+ * reference, `chore:deps#2`, which its card leads with, on its hover or focus.
  */
 function ChoreRunNumber({ chore, id }: { chore: string; id: number }) {
     return (
-        <Link
-            to="/chores/$name/runs/$id"
-            params={{ name: chore, id: String(id) }}
-            title={choreRunRef(chore, id)}
-            className="readout text-xs text-accent underline-offset-4 hover:underline"
-        >
-            #{id}
-        </Link>
+        <Glance card={<ChoreRunGlance name={chore} id={id} />} testId="chore-run-card" align="start">
+            <Link
+                to="/chores/$name/runs/$id"
+                params={{ name: chore, id: String(id) }}
+                className="readout text-xs text-accent underline-offset-4 hover:underline"
+            >
+                #{id}
+            </Link>
+        </Glance>
     )
 }
 
