@@ -193,6 +193,10 @@ guess which: **Pace**, how often the loop ticks and asks the tracker and the con
 it holds off after a red build, for feedback to go quiet or its checks to finish, and for a PR's head to settle before
 its review; and **Timeouts**, how long a run or a slot's setup may take before canopy stops it.
 
+Two rows in those bands aren't counts. Under Capacity, a switch says whether the loop's own PRs get a review before a
+person is asked; it goes either way, and what it spends stays under your reviews a day. Under Pace, the shortest gap
+between [plan archives](plans) says how often your archive's remote hears from canopy.
+
 **Upkeep** is the housekeeping a tick does in each pool. The first row turns git's own maintenance of a repository's
 clone on or off, and the next three say when it runs: past how many packs or loose objects, and how many hours pass
 between looks. It only ever runs while no run holds a slot of that pool, so it costs you nothing but a quieter disk.
@@ -203,14 +207,19 @@ machine is an edit to the file.
 **Retention & budget** says how many days canopy keeps a run's files, a tick's, the journal's old rows, and a retired
 note's text before a tick removes them. Lengthen them as you like, or set 0 to keep that kind forever; shortening stops
 at a floor (a week of run files, a month of journal), since the transcript a shorter one would delete is the one that
-shows what a run did. If you want last Tuesday gone, the file still takes 1. Below them sits the monthly budget the
+shows what a run did. If you want last Tuesday gone, the file still takes 1. The log's rotation sits with them: the
+size `canopy.log` rotates at and how many rotated files stay. The page will keep more log than stock, or all of it at
+0, but never less, since the log is where each save made here is written down. Below them sits the monthly budget the
 [spend page](reports#the-spend-page) tracks, with any alerts short of or past it. You can add and drop alerts freely:
 the 100% one isn't in the list, so dropping everything still leaves it.
 
 **Guardrails** holds the settings that only get stricter from here. You can make tickets wait on a plan you approve, or
 take a planner's say over its own plan away, but not the reverse. You can drop a trusted reviewer or an authorized
 replier, never add one, have workers draft their review replies for you instead of posting them, turn `trust.rebase` off
-but not on, and cut the reruns of flaky checks but not raise them. A stolen session that could add a replier would keep
+but not on, and cut the reruns of flaky checks but not raise them. The same goes for what canopy remembers and sends:
+a memory tier steps from `use` to `record` to `off`, session search from `text` to `titles` to `off`, an artifact
+author or a publishing agent can be dropped, and the plan archive can stop taking prompts, conversations, or your
+comments, each never the other way. A stolen session that could add a replier would keep
 steering your workers after you changed the secret, so adding one stays an edit to the file. The band says that once,
 with a lock, and a setting already as strict as it goes shows its value beside a lock rather than a row of greyed-out
 buttons, which looked broken and wasn't. Unchecking an authorized replier, or a list's last name, asks first: if that

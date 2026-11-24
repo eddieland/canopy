@@ -9,7 +9,8 @@ moves only toward stricter: a config write outlives the listener secret, so a re
 would go on steering workers after a new secret ended it (TRUST_MODEL T8): a list only loses entries, a switch or a
 choice moves only to a stricter side, and a count only goes down. The budget's alerts are set whole, to anything the
 loader takes: none of their values silences the 100% alert, which is always sent. So is the switch for a pool's git
-maintenance, which runs only git's own upkeep and guards nothing.
+maintenance, which runs only git's own upkeep and guards nothing, and the one for reviews of the loop's own PRs, whose
+spend the daily count caps.
 
 A save writes the workspace's private file only (M49), never the workspace file (TRUST_MODEL T7) nor the user file,
 which serves every workspace. A key whose value comes from the user file is written to the private file, where it
@@ -94,6 +95,8 @@ EDITABLE: Final[tuple[Editable, ...]] = (
     _limit("capacity.max_chores"),
     _limit("capacity.max_reviews"),
     _limit("capacity.max_reviews_per_day"),
+    # Free: on, it spends reviews the daily count already caps; off, a person still reviews the PR.
+    Editable("review.agent_prs", "free"),
     _limit("capacity.max_tasks"),
     _limit("loop.min_free_disk_mib"),
     _limit("capacity.slots_per_repo"),
@@ -118,6 +121,8 @@ EDITABLE: Final[tuple[Editable, ...]] = (
     _limit("loop.idle_max_minutes"),
     _limit("loop.min_gap_minutes"),
     _limit("tracker.query_every_minutes"),
+    # How often the operator's own remote is pushed to: a pace, as the others are.
+    _limit("paths.plan_archive_every_minutes"),
     _limit("connect.every_minutes"),
     _limit("connect.max_age_minutes"),
     _limit("runtime.worker_timeout_minutes"),
@@ -133,11 +138,15 @@ EDITABLE: Final[tuple[Editable, ...]] = (
     _limit("pools.idle_after_days"),
     _limit("pools.idle_timeout_minutes"),
     # Shorter removes history sooner, the transcripts that show what a run did among it: a floor, and 0, forever,
-    # always (TRUST_MODEL T8). The log's rotation is not here: its files hold the same lines the journal does.
+    # always (TRUST_MODEL T8).
     _keep("retention.run_files_days", 7),
     _keep("retention.tick_files_days", 1),
     _keep("retention.journal_days", 30),
     _keep("retention.memory_days", 7),
+    # The log names each change the page made, so its rotation's floors are the defaults: the page keeps more of
+    # it, or all of it at 0, never less than a stock install does.
+    _keep("retention.log_max_mib", 50),
+    _keep("retention.log_keep", 3),
     _limit("spend.monthly_budget_usd"),
     # Free: an alert dropped is a warning less, but the 100% alert is always sent, whatever the list holds.
     Editable("spend.budget_alerts", "free"),
@@ -152,6 +161,18 @@ EDITABLE: Final[tuple[Editable, ...]] = (
     # Each kick rebases a PR's branch and pushes it with a lease: only fewer from the page.
     Editable("trust.max_flaky_kicks", "stricter"),
     Editable("trust.commit_trailer", "stricter"),
+    # What agents write into later prompts: toward recording only, then off.
+    _choice("memory.ticket_notes", "use", "record", "off"),
+    _choice("memory.proposals", "use", "record", "off"),
+    # Whose comments in the artifact store steer a worker, and which agents may publish there: only fewer.
+    Editable("artifacts.authorized_authors", "stricter"),
+    Editable("artifacts.publish_roles", "stricter"),
+    # What the page itself serves of the operator's sessions: toward less.
+    _choice("sessions.search", "text", "titles", "off"),
+    # What the plan archive sends to the operator's remote beside the plans: only less.
+    Editable("paths.plan_archive_prompts", "stricter"),
+    Editable("paths.plan_archive_conversations", "stricter"),
+    Editable("paths.plan_archive_comments", "stricter"),
 )
 BY_NAME: Final = {e.name: e for e in EDITABLE}
 #: The file as it was before the latest save, beside it: `config.toml.bak`. None when the save made the file.
@@ -160,7 +181,13 @@ REPO_SLOTS: Final = "capacity.repo_slots"
 #: A private file the save makes: the operator's alone, as `config.load` requires of it.
 NEW_FILE_MODE: Final = 0o600
 #: The trust switches, and the value each may move to from the page: the stricter one.
-_STRICTER_BOOL: Final = {"trust.rebase": False, "trust.commit_trailer": True}
+_STRICTER_BOOL: Final = {
+    "trust.rebase": False,
+    "trust.commit_trailer": True,
+    "paths.plan_archive_prompts": False,
+    "paths.plan_archive_conversations": False,
+    "paths.plan_archive_comments": False,
+}
 
 
 @dataclass(frozen=True)

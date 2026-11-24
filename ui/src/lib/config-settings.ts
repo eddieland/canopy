@@ -64,13 +64,23 @@ export function settingsLine(keys: ConfigKey[]): string {
 }
 
 /** The trust switches, and the side the page may move each to: the stricter one (TRUST_MODEL T8). */
-export const STRICTER_ON: Record<string, boolean> = { 'trust.rebase': false, 'trust.commit_trailer': true }
+export const STRICTER_ON: Record<string, boolean> = {
+    'trust.rebase': false,
+    'trust.commit_trailer': true,
+    'paths.plan_archive_prompts': false,
+    'paths.plan_archive_conversations': false,
+    'paths.plan_archive_comments': false,
+}
 
 /** What each switch turns on, named for its checkbox: the behavior, never `on`. */
 export const SWITCH_NAME: Record<string, string> = {
     'trust.rebase': 'rebase',
     'trust.commit_trailer': 'add trailer',
     'pools.git_maintenance': 'maintain',
+    'review.agent_prs': 'review',
+    'paths.plan_archive_prompts': 'archive',
+    'paths.plan_archive_conversations': 'archive',
+    'paths.plan_archive_comments': 'archive',
 }
 
 /**
@@ -501,6 +511,7 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
             { name: 'capacity.max_reviews', label: 'Review runs at once' },
             { name: 'capacity.max_tasks', label: 'Task runs at once' },
             { name: 'capacity.max_reviews_per_day', label: 'Reviews a day' },
+            { name: 'review.agent_prs', label: "Review the loop's own PRs before a person is asked" },
             { name: 'loop.min_free_disk_mib', label: 'Free disk a tick needs to dispatch', unit: 'MiB' },
             { name: 'capacity.slots_per_repo', label: 'Slots per repository' },
             { name: REPO_SLOTS, label: 'Repositories with a count of their own' },
@@ -533,6 +544,7 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
             { name: 'tracker.query_every_minutes', label: 'Shortest gap between tracker queries', unit: 'min' },
             { name: 'connect.every_minutes', label: 'Time between connector polls', unit: 'min' },
             { name: 'connect.max_age_minutes', label: 'Age at which an observation is stale', unit: 'min' },
+            { name: 'paths.plan_archive_every_minutes', label: 'Shortest gap between plan archives', unit: 'min' },
             {
                 name: 'policy.ci_cooldown_minutes',
                 label: 'Wait after red CI before a resume',
@@ -568,13 +580,15 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
             { name: 'retention.tick_files_days', label: "Keep a tick's log and prompt", unit: 'days' },
             { name: 'retention.journal_days', label: "Keep the journal's old rows", unit: 'days' },
             { name: 'retention.memory_days', label: 'Keep a retired note or proposal', unit: 'days' },
+            { name: 'retention.log_max_mib', label: 'Rotate canopy.log past this size', unit: 'MiB' },
+            { name: 'retention.log_keep', label: 'Rotated logs kept' },
             { name: 'spend.monthly_budget_usd', label: 'Monthly budget', unit: '$' },
             { name: 'spend.budget_alerts', label: 'Also alert at these shares of the budget', unit: '%' },
         ],
     },
     {
         title: 'Guardrails',
-        blurb: 'Which work waits on a plan you approve, and whose words workers act on.',
+        blurb: 'Which work waits on a plan, whose words workers act on, and what canopy remembers and sends.',
         oneWay: true,
         keys: [
             { name: 'policy.plan', label: 'Before a ticket is implemented' },
@@ -587,6 +601,14 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
             { name: 'trust.rebase', label: 'Workers rebase and push with a lease' },
             { name: 'trust.max_flaky_kicks', label: 'Reruns of checks judged flaky, per pushed head' },
             { name: 'trust.commit_trailer', label: 'Workers add a Co-authored-by trailer' },
+            { name: 'memory.ticket_notes', label: "Notes a ticket's runs keep for its later runs" },
+            { name: 'memory.proposals', label: 'Lessons workers propose for every run' },
+            { name: 'artifacts.authorized_authors', label: 'Whose comments on an artifact a worker acts on' },
+            { name: 'artifacts.publish_roles', label: 'Which agents may publish artifacts' },
+            { name: 'sessions.search', label: "How much of your runtime's sessions canopy lists and searches" },
+            { name: 'paths.plan_archive_prompts', label: "The plan archive takes each planner's prompt" },
+            { name: 'paths.plan_archive_conversations', label: "The plan archive takes each ticket's conversation" },
+            { name: 'paths.plan_archive_comments', label: 'The plan archive takes your comments on plans' },
         ],
     },
 ]

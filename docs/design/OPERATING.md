@@ -156,7 +156,9 @@ secret, and a replier added through a stolen session would go on steering worker
 | the counts in `capacity`, `loop.min_free_disk_mib`, and `policy`'s attempt, follow-up, epic, and attachment limits | anything the loader takes |
 | the paces and waits in `loop`, `policy`, `tracker`, `connect`, and `review`, and `runtime`'s timeouts | anything the loader takes |
 | `pools`' upkeep: `git_maintenance`, its thresholds and spacing, and an idle slot's age and timeout | anything the loader takes |
+| `review.agent_prs`, `paths.plan_archive_every_minutes` | anything the loader takes |
 | `retention.run_files_days`, `retention.tick_files_days`, `retention.journal_days`, `retention.memory_days` | at least 7, 1, 30, 7, or 0 (forever) |
+| `retention.log_max_mib`, `retention.log_keep` | at least 50, 3, or 0 (forever) |
 | `spend.monthly_budget_usd` | anything the loader takes |
 | `spend.budget_alerts` | any list the loader takes; the 100% alert is sent whatever it holds |
 | `policy.stacking` | to `"never"` only |
@@ -164,6 +166,10 @@ secret, and a replier added through a stolen session would go on steering worker
 | `policy.planner_may_approve` | toward `"off"` only: `lenient`, `normal`, `strict`, `off` |
 | `trust.authorized_repliers`, `trust.trusted_reviewers` | entries removed, never added |
 | `trust.review_replies` | to `"approve"` only |
+| `memory.ticket_notes`, `memory.proposals` | toward `"off"` only: `use`, `record`, `off` |
+| `sessions.search` | toward `"off"` only: `text`, `titles`, `off` |
+| `artifacts.authorized_authors`, `artifacts.publish_roles` | entries removed, never added |
+| `paths.plan_archive_prompts`, `paths.plan_archive_conversations`, `paths.plan_archive_comments` | to false only |
 | `trust.rebase` | to `false` only |
 | `trust.max_flaky_kicks` | lowered only |
 | `trust.commit_trailer` | to `true` only |

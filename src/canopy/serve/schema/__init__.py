@@ -1096,7 +1096,7 @@ class ConfigKey(Model):
     """`limit`: raised or lowered to anything the config loader takes, a retention no shorter than `bound`.
     `stricter`: only made stricter (a list only loses entries, a count only goes down, a choice only moves later in
     `choices`). `free`: set whole to anything the config loader takes: a list (`spend.budget_alerts`, beside the 100%
-    alert always sent) or a switch that may go either way (`pools.git_maintenance`)."""
+    alert always sent) or a switch that may go either way (`pools.git_maintenance`, `review.agent_prs`)."""
     bound: int | None
     """A retention's floor from the page, in days: the shortest it may be made. The file can set any. None for
     every other key."""

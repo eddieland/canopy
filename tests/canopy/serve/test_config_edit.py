@@ -344,6 +344,8 @@ def test_each_choice_lists_every_value_the_loader_takes() -> None:
         if not editable.choices:
             continue
         annotation = config.SPECS[editable.name].field.annotation
+        # A `type` alias of a Literal, as `sessions.search`'s is, names its values a step down.
+        annotation = getattr(annotation, "__value__", annotation)
         if isinstance(annotation, type) and issubclass(annotation, enum.Enum):
             values = {str(member.value) for member in annotation}
         else:
@@ -463,6 +465,75 @@ def test_a_pool_s_upkeep_is_saved_in_its_own_table_and_its_switch_goes_either_wa
     # The loader's own rules still hold, and no other key of the table is the page's to set.
     assert refused(save(c, headers, {"pools.git_every_hours": 0})).startswith("config_invalid: ")
     assert refused(save(c, headers, {"pools.backend": "canopy"})).startswith("not_editable: ")
+
+
+def test_what_canopy_remembers_and_sends_only_gets_stricter(ctx: Context, canopy_env: CanopyEnv) -> None:
+    """A memory tier, session search, an artifact list, and the plan archive's extras each move one way."""
+    canopy_env.write_private(
+        COMMENTED
+        + '\n[memory]\nticket_notes = "use"\n\n[sessions]\nsearch = "text"\n'
+        + '\n[artifacts]\nauthorized_authors = ["me", "you"]\n',
+    )
+    c, headers = signed_in_client(ctx)
+    assert key(settings(c), "memory.ticket_notes")["choices"] == ["use", "record", "off"]
+
+    saved = save(
+        c,
+        headers,
+        {
+            "memory.ticket_notes": "record",
+            "sessions.search": "titles",
+            "artifacts.authorized_authors": ["me"],
+            "paths.plan_archive_prompts": False,
+        },
+    )
+
+    assert saved.status_code == 200, saved.text
+    text = canopy_env.private_file.read_text()
+    assert 'ticket_notes = "record"' in text
+    assert 'authorized_authors = ["me"]' in text
+    assert "plan_archive_prompts = false" in text
+    for changes in (
+        {"memory.ticket_notes": "use"},
+        {"memory.proposals": "record"},
+        {"sessions.search": "text"},
+        {"artifacts.authorized_authors": ["me", "you"]},
+        {"artifacts.publish_roles": ["worker"]},
+        {"paths.plan_archive_prompts": True},
+        {"paths.plan_archive_conversations": True},
+    ):
+        assert refused(save(c, headers, changes)).startswith("not_stricter: "), changes
+    assert save(c, headers, {"memory.ticket_notes": "off", "sessions.search": "off"}).status_code == 200
+
+
+def test_the_log_s_rotation_keeps_its_defaults_as_floors_and_the_other_switches_and_paces_move_freely(
+    ctx: Context,
+    canopy_env: CanopyEnv,
+) -> None:
+    """The page keeps more log, or all of it, never less than stock; a review switch and the archive's pace move."""
+    canopy_env.write_private(COMMENTED)
+    c, headers = signed_in_client(ctx)
+    assert key(settings(c), "retention.log_keep")["bound"] == 3
+
+    assert refused(save(c, headers, {"retention.log_max_mib": 10})).startswith("past_bound: ")
+    assert refused(save(c, headers, {"retention.log_keep": 1})).startswith("past_bound: ")
+    saved = save(
+        c,
+        headers,
+        {
+            "retention.log_max_mib": 200,
+            "retention.log_keep": 0,
+            "review.agent_prs": True,
+            "paths.plan_archive_every_minutes": 30,
+        },
+    )
+
+    assert saved.status_code == 200, saved.text
+    found = settings(c)
+    assert key(found, "retention.log_keep")["value"] == 0
+    assert key(found, "paths.plan_archive_every_minutes")["value"] == 30
+    assert save(c, headers, {"review.agent_prs": False}).status_code == 200
+    assert key(settings(c), "review.agent_prs")["value"] is False
 
 
 def test_a_monthly_budget_may_be_set_raised_and_lowered(ctx: Context, canopy_env: CanopyEnv) -> None:

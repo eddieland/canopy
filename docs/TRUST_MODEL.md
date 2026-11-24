@@ -162,7 +162,8 @@ Controls:
   refused recording one (`raised`), so a steered overseer can neither drop such
   an item nor raise a false one; a guard that refuses it a run past a limit still records the item. Residual: a
   derivation's mistake raises or ends an item wrongly until a fresh read corrects it.
-- The overseer's own three items (`needs_author`, `multi_repo`, `notice_rerun`) are recorded once and held by the harness
+  - The overseer's own three items (`needs_author`, `multi_repo`, `notice_rerun`) are recorded once and held by the
+  harness
   until what each names ends it, or its ticket is done or stopped (DESIGN §37): a steered overseer cannot drop one by
   leaving it out, only by moving a cursor past the item a `needs_author` names, as it could always decline to record
   one. No coworker's comment ends one: only the operator's own message, a cursor, or a newer run of the held check.
@@ -724,7 +725,8 @@ Controls now:
   run whose repositories disagree. Under the shipped templates a sandboxed run reads, under
   `$HOME`, only its worktrees and their git directories, canopy's agent definitions, and the runtime's and toolchains'
   files: not `~/.ssh`, other repositories, `~/.config/canopy`, the workspace's `.canopy/`, or the operator's OpenCode
-  data. It writes only its worktrees, its slot's own HEAD, index, reflog, and checklist marker and notes, a per-run object
+  data. It writes only its worktrees, its slot's own HEAD, index, reflog, and checklist marker and notes, a per-run
+  object
   directory and temp directory, and its role's own cache and data directories: no ref another slot shares, no hook,
   git config, `.git` link, or `commondir` that git on the host later reads, and none of the operator's caches or
   OpenCode data, which the host's OpenCode, the overseer's included, acts on. Its OpenCode starts with a copy of the
@@ -755,7 +757,8 @@ Controls now:
   commits for their ids, subjects, and trailers, bounded, as the marks' check already read them. Nothing new is read
   from a slot, and nothing there is fetched, pushed, or moved.
 - The sandbox canary (`tests/canopy_sandbox/test_sandbox_canary.py`, HOST_ISOLATION §6) runs a plain script, no model,
-  through the real prefix and the shipped templates, and checks every sandbox denial above on the host, with positive controls
+  through the real prefix and the shipped templates, and checks every sandbox denial above on the host, with positive
+  controls
   so that a sandbox that refuses everything fails. CI runs it on Linux.
 - The runtime's record, which the index of sessions' words reads (DESIGN §13), is what runs write: an unsandboxed
   run's the operator's own, a sandboxed one's its role's. It is opened as the spend's read opens it, read-only,
@@ -1051,7 +1054,8 @@ worktree and before any agent starts. If it could set the runtime commands, the 
 refused, prompt paths, capacity, queue labels, authorized repliers, agent memory's tiers, the agents' personas or
 models, the checklists, which agents publish artifacts and whose comments on them count, or which of the runtime's
 sessions canopy lists by title, one commit would be enough
-to run commands on operators' machines, raise their spend, send what workers read off the machine, or pick who steers their
+  to run commands on operators' machines, raise their spend, send what workers read off the machine, or pick who steers
+  their
 workers.
 
 The workspace file also holds the map: repository names, one-line summaries, and clone URLs. Names and summaries are
@@ -1287,16 +1291,24 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   spacing, the connectors' poll and stale age, a review's settle time, the worker's, reviewer's, overseer's, and
   setup's timeouts in `runtime`, a pool's upkeep in `pools` (git maintenance on or off, its thresholds and spacing, and
   how long a slot sits idle before its idle command runs and how long that may take, never the command or the
-  backend), and `spend.monthly_budget_usd`, which spends nothing but, raised, silences the sink
+  backend), whether the loop's own PRs are reviewed (`review.agent_prs`, whose spend `capacity.max_reviews_per_day`
+  caps), how often the plan archive is pushed, and `spend.monthly_budget_usd`, which spends nothing but, raised,
+  silences the sink
   that hears the month reached it. The day counts in `retention` may be lengthened, set to 0 (forever), or shortened to
   a floor, never past it: a shorter one removes the transcripts that show what a run did, and a removal outlives a new
-  secret. `spend.budget_alerts` is set whole, to any list the loader takes: none silences the 100% alert. Trust
+  secret. The log's rotation (`retention.log_max_mib`, `retention.log_keep`) is held the same way, to its defaults as
+  floors, since the log names each change the page made. `spend.budget_alerts` is set whole, to any list the loader
+  takes: none silences the 100% alert. Trust
   settings move only toward stricter: `policy.stacking` to `"never"`, `policy.plan` and `policy.feedback_plan` to
   `"approve"`, `policy.planner_may_approve` toward `"off"`, an entry removed from `trust.authorized_repliers` or
   `trust.trusted_reviewers` (never added), `trust.review_replies` to `"approve"`, `trust.rebase` to false,
-  `trust.max_flaky_kicks` lowered, and `trust.commit_trailer` to true. Nothing that runs a command, chooses a prompt,
-  is read as words, or moves the listener: no other `runtime.*`, `review.*`, `tracker.*`, `connect.*`, `pools.*`, or
-  `retention.*`, no `notify.*`, `chores`, `paths.*`, `memory.*`, or `serve.*`, and no comment mark or trailer name.
+  `trust.max_flaky_kicks` lowered, `trust.commit_trailer` to true, a `memory` tier toward `"off"` (`use`, `record`,
+  `off`), `sessions.search` toward `"off"` (`text`, `titles`, `off`), an entry removed from
+  `artifacts.authorized_authors` or `artifacts.publish_roles` (never added), and the plan archive's prompts,
+  conversations, and comments each to false. Nothing that runs a command, chooses a prompt,
+  is read as words, or moves the listener: no other `runtime.*`, `review.*`, `tracker.*`, `connect.*`, `pools.*`,
+  `paths.*`, `artifacts.*`, or `sessions.*`, no `notify.*`, `chores`, `telemetry.*`, or `serve.*`, and no comment mark
+  or trailer name.
   A config write outlives the secret, which is why trust only tightens: a replier added through a stolen session would
   go on steering workers after a new secret ended it. It writes the workspace's private file alone (M49), never the
   workspace file (T7) nor the user file, which serves every workspace: a key from the user file is written to the
@@ -1319,7 +1331,8 @@ outlives a new secret; the banner on every page and `canopy status` show it whil
 in force. A lesson promoted that way reaches every worker's prompt while `memory.proposals` is `use`, as such a notice
 does, with no lapse: it outlives a new secret until the operator forgets it, and `canopy memory lessons` and the
 memory page list it, with where it came from. It can also edit a run's draft into text and a reaction of its choosing
-and send it, which posts them on GitHub as the operator, unmarked, on a PR or a ticket a run drafted for; the journal records
+  and send it, which posts them on GitHub as the operator, unmarked, on a PR or a ticket a run drafted for; the journal
+  records
 the edit, the send, and the channel. Likewise it can edit a review's draft into a review of its choosing and publish it,
 which posts it as the operator, unmarked, as a comment review on any PR canopy reviewed and the loop does not own, a
 coworker's included; the journal records each version, who wrote it, the channel, and what was posted. A note it
