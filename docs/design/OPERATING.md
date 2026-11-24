@@ -533,7 +533,9 @@ it never holds what one was sent, the journal's text rendered, which the journal
 keeping it is bounded in time, never in a tick, a dry run, or a pause: what changed since the last read, then, until the
 first build is done, older sessions newest first; once a day it drops the sessions the runtime no longer keeps. Each
 message and session is indexed up to a bound, and a hit past one says so. A session is found when its title and one
-message hold every word between them, each matched as a word, so no query is an error; a word in a title weighs more.
+message hold every word between them, each matched as a word, so no query is an error; a word in a title weighs more,
+and words close together more than the same words apart. A name is found however it is written: `ValidationManager` by
+`validation manager`, and by `validation_manager`, which asks for the two next to each other.
 Under OpenCode 1, or a SQLite too old to delete from an index of no text, `text` searches titles and says why.
 
 ### The operator's skill

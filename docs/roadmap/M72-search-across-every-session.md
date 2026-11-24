@@ -197,4 +197,7 @@ index's progress, and a search's panel one while the index may miss a session; w
 search that finds no session while the index may miss one shows a panel with that line alone (2026-11-18). At the
 operator's ask (2026-11-18), the Sessions page has a field of its own, kept in `?q=`, that finds among the sessions its
 filters list, where the search page's panels hold 20 of each and take no filter; each of those panels links to it.
+At the operator's ask (2026-11-24), the index holds a name written as one word by its parts too, so
+`ValidationManager` and `validation manager` find each other, and words close together rank above the same words
+apart; the index's shape changed, so it is built again once.
 Left of stage 2: the live checks of the Accept, the operator's.

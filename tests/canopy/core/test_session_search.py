@@ -128,6 +128,47 @@ def test_hits_are_ranked_a_word_in_a_title_weighing_more_and_say_how_many_more_m
     assert found[1].hit.more == 1
 
 
+def test_a_name_is_found_however_it_is_written_and_marked_whole(ctx: Context) -> None:
+    kept(
+        ctx,
+        Kept("ses_camel", "/home/me", messages=[sent("class ValidationManager: pass")], updated=NOON_MS),
+        Kept("ses_lower", "/home/me", messages=[sent("call validationManager.run() now")], updated=NOON_MS + 1),
+        Kept("ses_kebab", "/home/me", messages=[sent("open validation-manager.ts")], updated=NOON_MS + 2),
+        Kept("ses_snake", "/home/me", messages=[sent("in validation_manager.py")], updated=NOON_MS + 3),
+        Kept("ses_prose", "/home/me", messages=[sent("the validation manager failed")], updated=NOON_MS + 4),
+        Kept("ses_apart", "/home/me", messages=[sent("a manager asked for validation")], updated=NOON_MS + 5),
+        Kept("ses_title", "/home/me", title="HTTPServerError", messages=[sent("unrelated")], updated=NOON_MS + 6),
+    )
+    names = {"ses_camel", "ses_lower", "ses_kebab", "ses_snake", "ses_prose"}
+
+    assert {s.session_id for s in hits(ctx, "validation manager")} == names | {"ses_apart"}
+    # A name asked for is its parts next to each other, never the two words apart.
+    for query in ("ValidationManager", "validation_manager", "validationManager", "VALIDATION_MANAGER"):
+        assert {s.session_id for s in hits(ctx, query)} == names, query
+    assert [s.session_id for s in hits(ctx, "http server")] == ["ses_title"]
+    found = hits(ctx, "managers validation")
+    by_id = dict(zip([s.session_id for s in found], snippets(found), strict=True))
+    assert by_id["ses_camel"] == "class *ValidationManager*: pass"
+    assert by_id["ses_lower"] == "call *validationManager*.run() now"
+    [camel] = [s for s in hits(ctx, "ValidationManager") if s.session_id == "ses_prose"]
+    assert snippets([camel]) == ["the *validation manager* failed"]
+
+
+def test_words_close_together_rank_above_the_same_words_apart_and_next_to_each_other_first(ctx: Context) -> None:
+    filler = " and then nothing else of note was said here at all" * 3
+    kept(
+        ctx,
+        # The oldest holds them next to each other, and the newest apart, so the order is the rank's, not the date's.
+        Kept("ses_phrase", "/home/me", messages=[sent(f"the curlew survey ran late{filler}")], updated=NOON_MS),
+        Kept("ses_near", "/home/me", messages=[sent(f"a survey of one curlew ran late{filler}")], updated=NOON_MS + 1),
+        Kept("ses_far", "/home/me", messages=[sent(f"the curlew left{filler} before the survey")], updated=NOON_MS + 2),
+    )
+
+    assert [s.session_id for s in hits(ctx, "curlew survey")] == ["ses_phrase", "ses_near", "ses_far"]
+    # Asking for them close finds no session the words alone do not.
+    assert hits(ctx, "curlew gannet") == []
+
+
 def test_a_snippet_is_read_from_the_record_and_there_is_none_for_a_session_it_no_longer_keeps(ctx: Context) -> None:
     kept(
         ctx,
