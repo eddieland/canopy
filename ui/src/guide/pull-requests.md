@@ -267,6 +267,11 @@ on a loop PR send a worker back to address them, and the PR's phase is `review f
 as `untrusted review` on your attention list until you say which to act on. Untrusted is the default, and a sound
 one: the reviewer is wrong often enough that you'll want to read a few before it spends runs on its own say-so.
 
+There's a middle setting for a reviewer that's right about the big things and chatty about the small ones.
+`review.min_severity` is the least severity that counts as feedback on a loop PR: set it to `major` or `blocking`,
+and canopy holds anything lesser for you. A held finding wakes no worker and puts nothing on your attention list. It
+stays on the review, marked **held for you**, and you can still send it to a worker when one turns out to matter.
+
 ## Asking for a review
 
 To have canopy review a PR the loop doesn't own, such as a coworker's, paste its URL into **Review a PR** on the

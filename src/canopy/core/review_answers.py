@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr
 
 from canopy.core import contract, records, review_runs
 from canopy.core import review_result as result
-from canopy.core.vocab import FindingAnswer, ReviewRunStatus
+from canopy.core.vocab import FindingAnswer, HoldKind, ReviewRunStatus
 
 if TYPE_CHECKING:
     import sqlite3
@@ -218,7 +218,7 @@ def hold_rebuttals(conn: sqlite3.Connection, run: records.ReviewRun, stored: res
     for number, rebuts in claimed:
         answer = answers.get(rebuts)
         if answer is not None and answer.answer is FindingAnswer.DECLINED:
-            review_runs.hold(conn, run.id, number, rebuts=(earlier.id, rebuts))
+            review_runs.hold(conn, run.id, number, HoldKind.REBUTTAL, rebuts=(earlier.id, rebuts))
             held.append(number)
     return held
 

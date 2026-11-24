@@ -509,6 +509,8 @@ class HoldKind(StrEnum):
     REBUTTAL = "rebuttal"
     #: A later review's finding on a line unchanged since the PR's first reviewed commit, which the first review read.
     LATE = "late"
+    #: A finding less severe than `review.min_severity`: the operator reads it when they read the PR, and no item asks.
+    SEVERITY = "severity"
 
 
 class Reaction(StrEnum):

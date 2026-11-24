@@ -34,7 +34,7 @@ REBUTTAL_REASON: Final = "review_rebuttal"
 LATE_REASON: Final = "review_late"
 #: All four, which the harness records and the overseer does not.
 REASONS: Final = frozenset({WAITING_REASON, UNSETTLED_REASON, REBUTTAL_REASON, LATE_REASON})
-#: The reason each kind of hold raises.
+#: The reason each kind of hold raises; one held for its severity raises none.
 _HELD_REASONS: Final[Mapping[HoldKind, str]] = {HoldKind.REBUTTAL: REBUTTAL_REASON, HoldKind.LATE: LATE_REASON}
 #: What the operator may do with a held finding of each kind, closing its item's detail.
 _HELD_ASK: Final[Mapping[HoldKind, str]] = {
@@ -199,6 +199,8 @@ def _unsettled_detail(draft: records.ReviewDraft) -> str:
 def _held(conn: sqlite3.Connection) -> list[Item]:
     """A `review_rebuttal` and a `review_late` item for each ticket whose open PR has findings canopy holds of the kind.
 
+    A finding held for its severity raises none: the operator set `review.min_severity` not to be asked about it.
+
     Returns:
         The items, rebuttals first, each by ticket, each naming every finding held of its kind.
     """
@@ -209,7 +211,7 @@ def _held(conn: sqlite3.Connection) -> list[Item]:
             "h.review_run_id, h.finding, h.kind, h.rebuts_run_id, h.rebuts_finding, r.pr_url, r.ticket_key",
         )
         .from_("review_holds h CROSS JOIN review_runs r ON r.id = h.review_run_id")
-        .where("h.released_at IS NULL")
+        .where("h.released_at IS NULL AND h.kind != ?", HoldKind.SEVERITY)
         .where("r.status = ? AND r.ticket_key IS NOT NULL", ReviewRunStatus.DONE)
         .where(
             "NOT EXISTS (SELECT 1 FROM review_dismissals d WHERE d.review_run_id = h.review_run_id "
@@ -228,7 +230,7 @@ def _held(conn: sqlite3.Connection) -> list[Item]:
         held = f"review:{h.review_run_id} finding {h.finding}"
         prs.setdefault((h.ticket_key, h.kind), h.pr_url)
         by_item[h.ticket_key, h.kind].append(_held_detail(held, h.kind, h.rebuts_run_id, h.rebuts_finding))
-    order = list(HoldKind)
+    order = list(_HELD_REASONS)
     return [
         Item(prs[ticket, kind], _HELD_REASONS[kind], f"{'; '.join(held)}. {_HELD_ASK[kind]}", ticket=ticket)
         for (ticket, kind), held in sorted(by_item.items(), key=lambda i: (order.index(i[0][1]), i[0][0]))
@@ -256,5 +258,8 @@ def _held_detail(held: str, kind: HoldKind, rebuts_run_id: object, rebuts_findin
             return f"{held} rebuts the worker's decline of review:{rebuts_run_id} finding {rebuts_finding}"
         case HoldKind.LATE:
             return f"{held} is on code unchanged since the PR's first reviewed commit"
+        case HoldKind.SEVERITY:
+            # Never asked of the operator, so `_held` reads none; said for the type checker's sake.
+            return f"{held} is less severe than `review.min_severity`"
         case _:
             assert_never(kind)

@@ -1099,6 +1099,10 @@ class Review(Section):
     # How long a PR's head commit must have been seen before it is reviewed; a new push starts over. 0 reviews at once.
     # At most a week: a longer wait is a reason to turn the review off, and the clock's arithmetic stays in range.
     settle_minutes: Annotated[StrictInt, Field(ge=0, le=MAX_SETTLE_MINUTES), Scope.PRIVATE] = 0
+    #: The least severity at which a finding on one of the loop's own PRs is feedback: it sends a worker back where
+    #: `canopy:review` is trusted, and waits as `untrusted_review` where it is not. canopy holds a lesser finding for
+    #: the operator, with no worker and no item, until they send it. `minor` holds none.
+    min_severity: Annotated[Literal["blocking", "major", "minor"], Scope.PRIVATE] = "minor"
 
 
 class Memory(Section):

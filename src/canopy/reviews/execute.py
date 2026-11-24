@@ -48,8 +48,9 @@ from canopy.core import (
     sandboxing,
 )
 from canopy.core import review_result as result
+from canopy.core.checklists import SEVERITIES
 from canopy.core.config import render_command
-from canopy.core.vocab import ReviewRunStatus
+from canopy.core.vocab import HoldKind, ReviewRunStatus
 from canopy.infra import logs, procs, stopping
 from canopy.reviews import impact, late, start
 from canopy.runtime import project_config, servers, stdout
@@ -169,20 +170,40 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
 
 
 def _hold(ctx: Context, run: records.ReviewRun, outcome: Outcome, log: logs.TickAdapter) -> None:
-    """Hold for the operator a `done` review's rebuttals of a worker's declines, then its late findings (§21).
+    """Hold for the operator a `done` review's rebuttals of a worker's declines, then its lesser and its late findings.
 
-    A late finding that is also a rebuttal keeps the rebuttal's hold. Called as the run closes, in its transaction.
+    A finding that is also a rebuttal keeps the rebuttal's hold, and a late one less severe than `review.min_severity`
+    is held for that, which asks nothing of the operator. Called as the run closes, in its transaction.
     """
     if outcome.status is not ReviewRunStatus.DONE or not isinstance(outcome.result, result.ReviewResult):
         return
     rebuttals = review_answers.hold_rebuttals(ctx.conn, run, outcome.result)
     if rebuttals:
         log.info("rebuttals held for the operator", extra={"review_run_id": run.id, "findings": rebuttals})
-    held = [n for n in outcome.late if n not in rebuttals]
+    lesser = [n for n in _lesser(ctx, run, outcome.result) if n not in rebuttals]
+    for number in lesser:
+        review_runs.hold(ctx.conn, run.id, number, HoldKind.SEVERITY)
+    if lesser:
+        log.info("lesser findings held for the operator", extra={"review_run_id": run.id, "findings": lesser})
+    held = [n for n in outcome.late if n not in rebuttals and n not in lesser]
     for number in held:
-        review_runs.hold(ctx.conn, run.id, number, rebuts=None)
+        review_runs.hold(ctx.conn, run.id, number, HoldKind.LATE)
     if held:
         log.info("late findings held for the operator", extra={"review_run_id": run.id, "findings": held})
+
+
+def _lesser(ctx: Context, run: records.ReviewRun, stored: result.ReviewResult) -> list[int]:
+    """The findings of `run` less severe than `review.min_severity`, where a finding could start a `resume` (§21).
+
+    Only a review of one of the loop's own PRs has any: another PR's findings make its draft, and a revision's none.
+
+    Returns:
+        Their numbers, from 1, in order.
+    """
+    if run.ticket_key is None or run.revises is not None:
+        return []
+    least = SEVERITIES.index(ctx.config.review.min_severity)
+    return [n for n, f in enumerate(stored.findings, 1) if SEVERITIES.index(f.severity) > least]
 
 
 def judged(ctx: Context, parsed: result.ReviewResult, changed: Collection[str] | None, repo: str | None) -> Outcome:
