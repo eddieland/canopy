@@ -18,14 +18,18 @@
    line that mishandles it, read in the code, never inferred from a name or a comment. When a defect is one of a
    class, such as the same missing check in several handlers, report it once: name the class in its title and list
    every instance you find in its detail, with its `path:line`, so one round of fixes corrects them all.
-5. Classify each finding as `blocking`, `major`, or `minor`. The persona may say what each level means and which
-   findings matter most; where it does not:
-   - `blocking`: a reachable path does the wrong thing, loses or corrupts data, opens a security hole, or breaks a
-     contract that other code or people rely on. It must not merge.
-   - `major`: it should be fixed before merging: a case the change should handle and does not, or new behavior no test
-     would catch breaking.
-   - `minor`: a real defect with little effect, such as a misleading error message or a leak on a rare path. Not a
-     reason to hold the merge. Report at most five, the ones that matter most.
+5. Classify each finding as `blocking`, `major`, or `minor`: a level says what should happen before the PR merges, and
+   a finding takes it from what the defect breaks, not from how a rule is worded. The persona may say what each level
+   means and which findings matter most; where it does not:
+   - `blocking`: wrong results, data loss, or a security hole on a path callers take in normal use. It must not merge.
+   - `major`: a behavior bug on a rarer path or of smaller effect, such as a wrong status or error type, a resource left
+     open on cancellation or error, or a validator that accepts what it promises to reject; and new logic with no test
+     of its edge cases. It should be fixed before merging.
+   - `minor`: wrong or stale docs, comments, and messages; a test's style; anything else that neither changes behavior
+     nor leaves new logic untested. It can wait. Report at most five, the ones that matter most.
+
+   A departure from the ticket, the plan, or a rule in the repository's docs takes the level of what breaks when it is
+   ignored, and `minor` when nothing does: it is `blocking` only when it causes one of the defects that level names.
 6. Judge the change's impact: `high` (behavior many depend on, data, security, or anything hard to undo), `normal`, or
    `low`, which you may say only under this rule from the operator: None: never report `low`.
 7. Report the review with `canopy_run_result` and nowhere else: canopy hands its findings to whoever acts on them.
