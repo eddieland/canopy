@@ -7,7 +7,9 @@ merge base of the one it diffs with the base as the slot last fetched it. It kee
 run's own change, from the commit it started from, and the branch against its base, with the commit it was taken at;
 and it counts each file's lines in the run's own change, which a run's page and its ticket's runs list name. A run that
 brought its base in, by a rebase or a merge, started from a commit that lacks what the base brought, so its own change
-is read against that commit with the base merged in (`_own_from`), and holds none of the base's changes. It logs
+is read against that commit with the base merged in (`_own_from`), and holds none of the base's changes; one whose
+start is no longer in its branch's history, as a rebase leaves it, is recorded as having rewritten it. A run that
+started where its branch leaves the base keeps the one diff for both, since the two are the same. It logs
 the commits in the run's range too, bounded, each with canopy's marks on it (TRUST_MODEL T5) and whether the push
 check's own push, not the worker, put it on origin, so who put what on a branch can be told after a kick rewrites it.
 Each is kept then or never: the slot is returned, a kick may rewrite the branch, and the run's objects are deleted with
@@ -31,6 +33,7 @@ from canopy.core.vocab import RunKind
 from canopy.runs import checkpoint
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from pathlib import Path
 
     from canopy.core import commit_hooks
@@ -89,11 +92,14 @@ def keep(
         fork, against = None, _cut(str(e))
     else:
         against = _keep(git, fork, head, review_diff.run_path_for(log_path, repo), at=head)
+    rebased = _rebased(git, start.commit, head, log=log, fields=fields)
     own_from = _own_from(git, base, start.commit, head, fork)
     if isinstance(own_from, _Unmerged):
         log.warning("run's change read from its start, the base's changes with it", extra={**fields, **own_from.why})
         own_from = start.commit
-    change = _keep(git, own_from, head, run_changes.change_path(log_path, repo))
+    # A run that started where its branch leaves the base has the branch's diff as its own, kept once
+    # (`run_changes.own_path`).
+    change = against if start.commit == fork else _keep(git, own_from, head, run_changes.change_path(log_path, repo))
     if change is not None:
         log.warning("run's change not kept", extra={**fields, "error": change})
     counted = _count(git, own_from, head)
@@ -113,6 +119,7 @@ def keep(
     return replace(
         found,
         merge_base=fork,
+        rebased=rebased,
         change_kept=change is None,
         branch_kept=against is None,
         missing="; ".join(missing) or None,
@@ -260,6 +267,32 @@ def _merge_base(git: checkpoint.Git, base: str, head: str) -> str:
     if found.returncode == 1 and not said:
         raise checkpoint.SetupError(f"no merge base of {head[:12]} with {base} in its slot")
     raise checkpoint.SetupError(f"git merge-base exited {found.returncode}: {said or fork}")
+
+
+def _rebased(
+    git: checkpoint.Git,
+    start: str,
+    head: str,
+    *,
+    log: logs.TickAdapter,
+    fields: Mapping[str, str],
+) -> bool | None:
+    """Return whether the run rewrote its branch: `start` is not an ancestor of `head`, as a rebase leaves it.
+
+    Returns:
+        True when it is not, False when it is; None, logged, when git could not tell.
+    """
+    try:
+        found = git.result("merge-base", "--is-ancestor", start, head)
+    except checkpoint.SetupError as e:
+        error = str(e)
+    else:
+        # git exits 0 for an ancestor and 1 for none; anything else is a failure to look.
+        if found.returncode in {0, 1}:
+            return found.returncode == 1
+        error = f"git merge-base --is-ancestor exited {found.returncode}: {found.stderr.strip()}"
+    log.warning("whether the run rewrote its branch not read", extra={**fields, "error": _cut(error)})
+    return None
 
 
 @dataclass(frozen=True)

@@ -15,16 +15,18 @@ its summary.
 
 As a worker's or a task's run ends, after its push and before a flaky kick rewrites the branch (§8 step 5), the harness
 records, per slot: the commit origin's branch held when the run started, or the base's commit the run started from when
-origin had no branch yet; the commit the run left on origin, or none, for a run that left no branch there; and the merge
-base with its base branch as the slot last fetched it, since nothing here fetches. A joint run (§18) records one per
-repository. The commits are the harness's own reads of origin and of the slot, never the agent's word. The rows are
+origin had no branch yet; the commit the run left on origin, or none, for a run that left no branch there; the merge
+base with its base branch as the slot last fetched it, since nothing here fetches; and whether the run rewrote the
+branch, its start no longer in the history of the commit it left, as a rebase leaves it. A joint run (§18) records one
+per repository. The commits are the harness's own reads of origin and of the slot, never the agent's word. The rows are
 never removed (§26): a later run, a kick, or the operator tells by them which commits were whose.
 
 ### The kept diffs
 
 Beside the run's log, the harness keeps two diffs per slot, as a review keeps its one (§21, The diff): the run's own
 change, from the commit it started from to the one it left, and the branch against its base, which §29 keeps for its
-threads and which every run now keeps, with or without drafts. A run that brought its base in, by a rebase or a merge,
+threads and which every run now keeps, with or without drafts; a run that started where its branch leaves the base
+changed nothing else, so the two are the same diff, kept once. A run that brought its base in, by a rebase or a merge,
 keeps none of the base's changes as its own, and a conflict with the base as the run resolved it. A slot the run left
 unpushed keeps the diff of the last commit the run made there, found as the push check finds what a push left behind,
 marked as work not on origin, so what it did can be read though its commits go with it, and a joint run's slot that

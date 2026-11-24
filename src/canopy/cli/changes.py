@@ -35,7 +35,7 @@ def echo(changes: Sequence[records.RunChange], *, log_path: str, ref: str) -> No
         raise CliError(f"canopy recorded nothing of what {ref} changed: it ran no worker, or was closed without it")
     printed = 0
     for c in changes:
-        found = review_diff.text(run_changes.change_path(log_path, c.repo)) if c.change_kept else None
+        found = review_diff.text(run_changes.own_path(log_path, c)) if c.change_kept else None
         if found is None:
             why = one_line(c.missing or "") if not c.change_kept else "its file is gone, removed with the run's others"
             click.echo(f"canopy: {ref} kept no diff of its change to {c.repo}: {why}", err=True)
@@ -57,7 +57,7 @@ def kept(changes: Iterable[records.RunChange], *, log_path: str) -> bool:
     Returns:
         True when a repository's own change was kept and its file not yet removed.
     """
-    return any(c.change_kept and run_changes.change_path(log_path, c.repo).is_file() for c in changes)
+    return any(c.change_kept and run_changes.own_path(log_path, c).is_file() for c in changes)
 
 
 def _span(change: records.RunChange) -> str:

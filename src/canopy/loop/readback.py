@@ -232,10 +232,11 @@ def change_lines(
 
     `canopy show run:ID` prints them under a heading, and `canopy show task:N` under each of its runs. A range is from
     the commit the run started from to the one it left on origin, or, for a slot it left unpushed, to the last commit it
-    made there, marked as not on origin. A diff that was not kept is said to be missing, with why; one kept and since
-    removed with the run's other files (§26) is said to be removed. Then the range's commits, by repository in
-    `commits`, oldest first, each with the marks it lacks and whether canopy's own push put it on origin; their count
-    alone when `commits` is None, as for an agent, which is given no worker's subject (§45).
+    made there, marked as not on origin, and a run that rewrote its branch, as a rebase does, is marked rebased. A diff
+    that was not kept is said to be missing, with why; one kept and since removed with the run's other files (§26) is
+    said to be removed. Then the range's commits, by repository in `commits`, oldest first, each with the marks it
+    lacks and whether canopy's own push put it on origin; their count alone when `commits` is None, as for an agent,
+    which is given no worker's subject (§45).
 
     Returns:
         The lines, unindented: a repository's range, then a line for each diff kept, then why one was not, then its
@@ -251,10 +252,11 @@ def change_lines(
         span = f"{start}..{head[:_SHORT]}" if head is not None else f"from {start}, no branch on origin"
         base = ", from its base" if c.start_on_base else ""
         fork = f", merge base {c.merge_base_sha[:_SHORT]}" if c.merge_base_sha is not None else ""
+        rebased = ", rebased" if c.rebased else ""
         left = "; not on origin: the run left it unpushed" if c.unpushed_sha is not None else ""
-        lines.append(f"{c.repo}  {span}{base}{fork}{left}")
+        lines.append(f"{c.repo}  {span}{base}{rebased}{fork}{left}")
         if c.change_kept:
-            lines.append(f"  its change {_kept(run_changes.change_path(log_path, c.repo))}")
+            lines.append(f"  its change {_kept(run_changes.own_path(log_path, c))}")
         if c.branch_kept:
             lines.append(f"  against its base {_kept(review_diff.run_path_for(log_path, c.repo))}")
         if c.missing is not None:

@@ -25,6 +25,7 @@ def change(
     kept: tuple[bool, bool] = (True, True),
     missing: str | None = None,
     commit_count: int | None = None,
+    rebased: bool | None = False,
 ) -> records.RunChange:
     """A row of run 7's: its range, whether each diff was kept, and why one was not."""
     return records.RunChange(
@@ -43,6 +44,7 @@ def change(
         None,
         None,
         commit_count,
+        rebased,
     )
 
 
@@ -62,6 +64,25 @@ def test_each_repositorys_range_and_kept_diffs_are_printed(tmp_path: Path, snaps
     ]
     lines = readback.change_lines(rows, log_path=str(log))
     assert "\n".join(lines).replace(str(tmp_path), "<state>") == snapshot
+
+
+def test_a_run_that_rewrote_its_branch_is_marked_rebased(tmp_path: Path) -> None:
+    """A rebase leaves the run's start out of its branch's history, which the range says."""
+    log = tmp_path / "runs" / "7.log"
+    [line, *_] = readback.change_lines([change("api", rebased=True)], log_path=str(log))
+    assert line == f"api  {START[:12]}..{END[:12]}, rebased, merge base {FORK[:12]}"
+    [line, *_] = readback.change_lines([change("api")], log_path=str(log))
+    assert "rebased" not in line
+
+
+def test_a_run_that_started_where_its_branch_leaves_the_base_names_its_one_diff_for_both(tmp_path: Path) -> None:
+    """An `implement` on a base that has not moved keeps the branch's diff as its own change too."""
+    log = tmp_path / "runs" / "7.log"
+    log.parent.mkdir()
+    branch = review_diff.run_path_for(log, "api")
+    branch.write_text("")
+    lines = readback.change_lines([change("api", start=FORK, on_base=True)], log_path=str(log))
+    assert lines[1:3] == [f"  its change {branch}", f"  against its base {branch}"]
 
 
 def commit(  # noqa: PLR0913: a row's every mark, each named where the test sets it.

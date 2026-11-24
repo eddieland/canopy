@@ -246,6 +246,9 @@ class RunChange(Row):
     lines_removed: int | None
     #: How many commits its range held, those past `run_changes.MAX_COMMITS` included; None when canopy read none.
     commit_count: int | None
+    #: Whether the run rewrote its branch: `start_sha` is not an ancestor of the commit its diffs are of, as a rebase
+    #: leaves it; None when canopy could not tell, or recorded before it read this.
+    rebased: bool | None
 
 
 @dataclass(frozen=True)

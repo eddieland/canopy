@@ -131,7 +131,10 @@ history. Chosen conservatively, for the operator to change: another co-author is
 did not form, since canopy knows no runtime's; a commit counts as canopy's push when the push check pushed it, never a
 kick's copy, which the kick's line names. The mock's runs 39 and 45 and task 1's run carry commits, so the screenshots
 of `workspace/runs/39`, `tasks/1/runs/1`, and PR 88's page are to be taken again. Stage 4, the files against the
-plan, was dropped 2026-11-12 (Rejected, above). Live check next: this milestone's Accept, stage 3's line included.
+plan, was dropped 2026-11-12 (Rejected, above). 2026-11-24 (#2499): a run whose start the commit it left no longer
+holds, as a rebase leaves it, is recorded as rebased (migration 0026) and `canopy show run:ID` says so, its own change
+read without the base's as #2438 reads it; an `implement` on a base that has not moved keeps one diff for both.
+Live check next: this milestone's Accept, stage 3's line included.
 Measured 2026-11-10 (MEASUREMENTS "2026-11-10: M69, the disk canopy's files take"): the journal's diff tables take about
 160 KiB for the 78 runs with changes recorded since 2026-11-09, and garbage collection does not count the kept diff
 files apart from the run's others. The operator's word (2026-11-10): a run's Diff page did replace GitHub's compare view
