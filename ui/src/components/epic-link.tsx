@@ -1,13 +1,14 @@
 import { Link } from '@tanstack/react-router'
 
-import { Tip } from '@/components/tip'
+import { Glance } from '@/components/glance'
+import { EpicGlance } from '@/components/ref-glances'
 import { epicRef } from '@/lib/refs'
 import { cn } from '@/lib/utils'
 
 /** `epic:N`, opening the epic's page: its breakdown beside its members, its conversation, and its plan runs. */
 export function EpicLink({ id, className }: { id: number; className?: string }) {
     return (
-        <Tip fact={epicRef(id)} mono whenCut>
+        <Glance card={<EpicGlance id={id} />} testId="epic-card" align="start">
             <Link
                 to="/epics/$id"
                 params={{ id: String(id) }}
@@ -15,6 +16,6 @@ export function EpicLink({ id, className }: { id: number; className?: string }) 
             >
                 {epicRef(id)}
             </Link>
-        </Tip>
+        </Glance>
     )
 }

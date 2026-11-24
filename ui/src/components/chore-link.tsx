@@ -1,13 +1,17 @@
 import { Link } from '@tanstack/react-router'
 
-import { Tip } from '@/components/tip'
+import { Glance } from '@/components/glance'
+import { ChoreGlance, ChoreRunGlance } from '@/components/ref-glances'
 import { choreRef, choreRunRef } from '@/lib/refs'
 import { cn } from '@/lib/utils'
 
-/** A chore's name, as `chore:NAME`, that opens its page. Cut to fit its cell, it is whole on hover. */
+/**
+ * A chore's name, as `chore:NAME`, that opens its page. Hovered or focused, a card shows it at a glance, its
+ * reference whole.
+ */
 export function ChoreLink({ name, className }: { name: string; className?: string }) {
     return (
-        <Tip fact={choreRef(name)} mono whenCut>
+        <Glance card={<ChoreGlance name={name} />} testId="chore-card" align="start">
             <Link
                 to="/chores/$name"
                 params={{ name }}
@@ -15,14 +19,14 @@ export function ChoreLink({ name, className }: { name: string; className?: strin
             >
                 {choreRef(name)}
             </Link>
-        </Tip>
+        </Glance>
     )
 }
 
 /** One run of a chore, as `chore:NAME#N`, that opens its page: what it checked, its findings, and its session. */
 export function ChoreRunLink({ name, id, className }: { name: string; id: number; className?: string }) {
     return (
-        <Tip fact={choreRunRef(name, id)} mono whenCut>
+        <Glance card={<ChoreRunGlance name={name} id={id} />} testId="chore-run-card" align="start">
             <Link
                 to="/chores/$name/runs/$id"
                 params={{ name, id: String(id) }}
@@ -30,6 +34,6 @@ export function ChoreRunLink({ name, id, className }: { name: string; id: number
             >
                 {choreRunRef(name, id)}
             </Link>
-        </Tip>
+        </Glance>
     )
 }

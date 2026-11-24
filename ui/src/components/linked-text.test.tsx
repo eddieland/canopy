@@ -54,7 +54,6 @@ describe('LinkedText', () => {
         await renderRouted(<LinkedText text={`See ${thread}.`} pullRequests />)
         const name = screen.getByRole('link', { name: 'acme/web#88' })
         expect(name.getAttribute('href')).toBe(`/pull-requests/pr?url=${encodeURIComponent(PR)}`)
-        expect(name.getAttribute('title')).toBe(thread)
         expect(screen.getByRole('link', { name: 'acme/web#88 on GitHub' }).getAttribute('href')).toBe(thread)
     })
 

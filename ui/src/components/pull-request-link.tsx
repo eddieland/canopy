@@ -1,6 +1,8 @@
 import { Link } from '@tanstack/react-router'
 
+import { Glance } from '@/components/glance'
 import { LinkOut } from '@/components/link-out-icon'
+import { PullRequestGlance } from '@/components/ref-glances'
 import { onGitHub } from '@/lib/links'
 import { pullRequestLabel, pullRequestUrl } from '@/lib/pull-request-label'
 import { cn } from '@/lib/utils'
@@ -14,14 +16,19 @@ export function PullRequestLink({ url, className }: { url: string; className?: s
     const label = pullRequestLabel(url)
     return (
         <span className={cn('inline-flex min-w-0 items-center gap-1 font-mono text-xs', className)}>
-            <Link
-                to="/pull-requests/pr"
-                search={{ url: pullRequestUrl(url) ?? url }}
-                title={url}
-                className="truncate text-accent underline-offset-4 hover:underline"
+            <Glance
+                card={<PullRequestGlance url={pullRequestUrl(url) ?? url} />}
+                testId="pull-request-card"
+                align="start"
             >
-                {label}
-            </Link>
+                <Link
+                    to="/pull-requests/pr"
+                    search={{ url: pullRequestUrl(url) ?? url }}
+                    className="truncate text-accent underline-offset-4 hover:underline"
+                >
+                    {label}
+                </Link>
+            </Glance>
             <LinkOut href={url} label={`${label} on ${onGitHub(url) ? 'GitHub' : 'its host'}`} />
         </span>
     )
