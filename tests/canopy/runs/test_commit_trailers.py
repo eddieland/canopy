@@ -144,6 +144,34 @@ def test_git_puts_the_prefix_before_each_subject_but_a_fixups(scenario: Scenario
     assert "git starts each commit's subject with `[PROJ-1] `" in run.prompt
 
 
+def test_a_fixup_of_a_fixup_keeps_one_marker(scenario: Scenario, git_pool: GitPool) -> None:
+    """A fixup of a fixup, which git names `fixup! fixup! <subject>`, is left one marker, which folds it the same."""
+    run = scenario.run(
+        worker=worker_does(
+            ["git", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: add the button", "-m", "Why."],
+            ["git", "commit", "--quiet", "--allow-empty", "--fixup", "HEAD"],
+            ["git", "commit", "--quiet", "--allow-empty", "--fixup", "HEAD"],
+            # The first marker is the one kept, as it says what --autosquash does with the commit.
+            ["git", "commit", "--quiet", "--allow-empty", "--squash", "HEAD", "-m", "And why."],
+            # An amend's body is its commit's new message, so it is left as git wrote it.
+            ["git", "-c", "core.editor=true", "commit", "--quiet", "--allow-empty", "--fixup", "amend:HEAD~1"],
+            ["git", "push", "--quiet", "origin", f"HEAD:refs/heads/{BRANCH}"],
+        ),
+    )
+    assert run.status == "done"
+    assert git("log", "--format=%s", BRANCH, "^main", cwd=git_pool.origin).splitlines() == [
+        "amend! fixup! PROJ-1: add the button",
+        "squash! PROJ-1: add the button",
+        "fixup! PROJ-1: add the button",
+        "fixup! PROJ-1: add the button",
+        "PROJ-1: add the button",
+    ]
+    # Only the subject changed: the squash keeps the message it would add, and each commit its trailer.
+    assert "And why." in git("log", "-1", "--format=%b", f"{BRANCH}~1", cwd=git_pool.origin)
+    assert trailers_on(git_pool.origin, BRANCH) == [[TRAILER]] * 5
+    assert "harness" not in json.loads(run.row.result_json)
+
+
 def test_a_commit_without_the_prefix_is_named_and_left_as_it_is(scenario: Scenario, git_pool: GitPool) -> None:
     scenario.configures(trust={"commit_prefix": "{key}: "})
     around = ["git", "-c", "core.hooksPath=/dev/null", "commit", "--quiet", "--allow-empty", "-m", "around"]
