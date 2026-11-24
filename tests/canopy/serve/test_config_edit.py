@@ -532,6 +532,7 @@ def test_the_log_s_rotation_keeps_its_defaults_as_floors_and_the_other_switches_
     found = settings(c)
     assert key(found, "retention.log_keep")["value"] == 0
     assert key(found, "paths.plan_archive_every_minutes")["value"] == 30
+    assert key(found, "review.agent_prs")["value"] is True
     assert save(c, headers, {"review.agent_prs": False}).status_code == 200
     assert key(settings(c), "review.agent_prs")["value"] is False
 

@@ -44,7 +44,7 @@ export const SOURCES_HELP = `Each row's chip says where its value comes from: ${
 export const LIMITS_HELP =
     "What the loop runs, spends, polls, and keeps, and whose words it acts on. A save writes this workspace's own " +
     'config, keeping its comments, with the old file beside it as config.toml.bak, then reloads the loop; your user ' +
-    'config is never changed. Limits move freely and retentions down to a floor; trust settings only get stricter; ' +
+    'config is never changed. Limits move freely and retentions down to a floor; guardrails only get stricter; ' +
     `anything else is an edit to the file. ${SOURCES_HELP}`
 
 /**

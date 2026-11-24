@@ -1098,11 +1098,11 @@ class ConfigKey(Model):
     `choices`). `free`: set whole to anything the config loader takes: a list (`spend.budget_alerts`, beside the 100%
     alert always sent) or a switch that may go either way (`pools.git_maintenance`, `review.agent_prs`)."""
     bound: int | None
-    """A retention's floor from the page, in days: the shortest it may be made. The file can set any. None for
-    every other key."""
+    """A retention's floor from the page, in the key's own unit (days; MiB and files for the log's rotation): the
+    least it may be made. The file can set any. None for every other key."""
     forever_at_zero: bool
     """Whether 0 keeps that kind forever, as a `retention.*` key's does: the page may always set 0, and from 0 any
-    count of days is shorter."""
+    other value is shorter."""
     choices: list[str]
     """A `stricter` choice's values, loosest first: the page may move it only later in the list. Empty for any other
     key."""

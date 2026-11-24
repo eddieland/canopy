@@ -67,7 +67,8 @@ class Editable:
     #: toward stricter. `free`: set whole to anything the loader takes, for a key no value of which loosens a guard: a
     #: list, or a switch that may go either way.
     kind: Literal["limit", "stricter", "free"]
-    #: A retention's floor from the page, in days: the shortest it may be made. None for every other key.
+    #: A retention's floor from the page, in the key's own unit, days or, for the log's rotation, MiB and files: the
+    #: least it may be made. None for every other key.
     bound: int | None = None
     #: A stricter choice's values, loosest first: the page may move it only later in the list.
     choices: Sequence[str] = ()
@@ -278,7 +279,8 @@ def save(root: Path, user_file: Path, expected: str, changes: Mapping[str, objec
             (D053), or whose backup cannot be written; `not_roundtrip` for one tomlkit would not write back byte for
             byte; `stale` when the file's hash is not `expected`; `config_invalid` for a value of None, for a
             workspace with no state directory, or when the files, before or after, do not load; `past_bound` for a
-            retention shortened past its floor; `not_stricter` for a trust key loosened.
+            retention shortened past its floor; `not_stricter` for a key that only
+            gets stricter loosened.
     """
     conversation.check_operator()
     target = config.private_config_path(root)
