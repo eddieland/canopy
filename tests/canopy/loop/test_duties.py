@@ -9,7 +9,18 @@ import pytest
 from canopy.core import db
 from canopy.core.vocab import Decider, Phase, TickStatus
 from canopy.loop import attention, duties, phases
-from tests.canopy.helpers import LABEL, calls, chore_toml, chore_waits, decides, in_tick, raises, seen, waits
+from tests.canopy.helpers import (
+    LABEL,
+    calls,
+    chore_toml,
+    chore_waits,
+    decides,
+    in_tick,
+    raises,
+    seen,
+    ticket_sets,
+    waits,
+)
 from tests.canopy.scenario_helpers import Scenario, sets_phase
 from tests.conftest import TRACKER_SOURCE, CanopyEnv
 
@@ -229,6 +240,21 @@ def test_stopped_and_recently_done_tickets_are_owed_nothing(
         "PROJ-1",
         "PROJ-2",
     ]
+
+
+def test_a_ticket_marked_done_with_no_done_decision_is_owed_nothing(scenario: Scenario, connector_state: Path) -> None:
+    # The overseer marks a merged ticket done with `ticket set` alone, and the tracker shows it open until a human
+    # closes it: listed in `recently_done`, it is owed no decision the block gives nothing to make (DESIGN §7).
+    connector_state.write_text(json.dumps({TRACKER_SOURCE: {"query": ["PROJ-2"]}}))
+    scenario.tick(*waits("PROJ-2"))
+    failed = scenario.tick(ticket_sets("PROJ-2", done=True), code=1)
+    assert failed.tick.summary == "overseer left duties undone: no decision for PROJ-2"
+    # Another ticket to decide, so the overseer runs and is shown the block.
+    scenario.seen("PROJ-1")
+    ticked = scenario.tick(*waits("PROJ-1"))
+    assert ticked.tick.status == TickStatus.OK
+    state = scenario.state()
+    assert (state["recently_done"], [t["key"] for t in state["tickets"]]) == (["PROJ-2"], ["PROJ-1"])
 
 
 def test_a_done_ticket_the_last_query_left_out_is_owed_a_decision_once_found(
