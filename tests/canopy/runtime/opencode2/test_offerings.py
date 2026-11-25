@@ -10,14 +10,19 @@ from unittest import mock
 
 import pytest
 
+from canopy.core import config, definitions
 from canopy.infra import procs
+from canopy.runtime import definitions as runtime_definitions
 from canopy.runtime.agents import AgentOffer, ServerOffer, SkillFile
 from canopy.runtime.opencode2 import offerings, servers
 from canopy.runtime.opencode2 import serve as server
 from canopy.runtime.opencode2.offerings import matches
+from tests.canopy.helpers import permission_rules
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+
+    from tests.conftest import CanopyEnv
 
 URL: Final = "http://127.0.0.1:41234"
 #: `config.get`: canopy's definitions directory, a project file with a secret, and inline config, as OpenCode normalized
@@ -300,6 +305,31 @@ def test_a_tool_is_kept_from_an_agent_only_by_a_deny_of_every_resource() -> None
     assert "shell" in worker.tools
     assert "webfetch" in worker.tools
     assert not {"edit", "write"} & set(worker.tools)
+
+
+#: OpenCode 2's names for the actions canopy's definitions write in OpenCode 1's (`opencode2.definitions`).
+RENAMED: Final = {"bash": "shell", "task": "subagent", "write": "edit", "patch": "edit"}
+#: The built-in tools decided for each of canopy's agents. OpenCode sends an agent every tool no rule denies whole, so
+#: one it adds reaches every agent until someone decides, as `question` did, which waits on a person no run has: a
+#: tool added to canopy's list of them fails here until each agent's line says whether it is sent.
+SENT: Final = {
+    "canopy-chore": ("glob", "grep", "read", "skill"),
+    "canopy-overseer": ("glob", "grep", "read"),
+    "canopy-planner": ("edit", "glob", "grep", "read", "skill", "write"),
+    "canopy-reviewer": ("glob", "grep", "read", "skill"),
+    "canopy-worker": ("edit", "glob", "grep", "read", "shell", "skill", "write"),
+    "canopy-worker-private": ("edit", "glob", "grep", "read", "shell", "skill", "write"),
+}
+
+
+@pytest.mark.parametrize("agent", runtime_definitions.agent_names())
+def test_each_of_canopys_agents_is_sent_the_built_in_tools_decided_for_it(canopy_env: CanopyEnv, agent: str) -> None:
+    rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[f"agents/{agent}.md"].decode()
+    rules = [
+        rule(RENAMED.get(action, action), effect, resource) for action, resource, effect in permission_rules(rendered)
+    ]
+    [offer] = offered(Serve({agent: [*DEFAULTS, *rules]}), agent).agents
+    assert offer.tools == SENT[agent]
 
 
 def test_a_server_in_code_mode_is_reached_through_execute_alone() -> None:

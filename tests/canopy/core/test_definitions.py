@@ -33,7 +33,7 @@ from canopy.runtime import agents, servers
 from canopy.runtime import definitions as runtime_definitions
 from canopy.runtime.implementation import Version
 from canopy.runtime.opencode import definitions as opencode_definitions
-from tests.canopy.helpers import APPROVE, TRACKER_POSTS
+from tests.canopy.helpers import APPROVE, OPERATOR_HOME, TRACKER_POSTS, permission_rules
 from tests.conftest import CanopyEnv
 
 PROMPT_MARKER: Final = "<!-- canopy: overseer prompt -->\n"
@@ -787,7 +787,7 @@ def test_a_store_no_role_publishes_to_is_denied_to_every_agent(canopy_env: Canop
 def test_without_a_store_no_definition_names_one_and_none_may_load_its_skill(canopy_env: CanopyEnv, agent: str) -> None:
     rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[f"agents/{agent}.md"].decode()
     assert "louvre" not in rendered
-    assert _opencode_action(_opencode_ruleset(rendered), "skill", STORE_SKILL) == "deny"
+    assert _opencode_action(permission_rules(rendered), "skill", STORE_SKILL) == "deny"
 
 
 @pytest.mark.parametrize("agent", sorted(CHORE_AGENTS))
@@ -824,7 +824,7 @@ def test_the_planner_may_edit_only_its_plan_file(canopy_env: CanopyEnv, path: st
     # Evaluated as OpenCode 1.19 does: every key matches the permission's name as a wildcard, so `*edit*` is an edit
     # rule too, and the last rule matching both the name and the path wins (D021).
     rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[f"agents/{agents.PLANNER}.md"]
-    ruleset = _opencode_ruleset(rendered.decode())
+    ruleset = permission_rules(rendered.decode())
     assert _opencode_action(ruleset, "edit", path) == ("allow" if allowed else "deny")
 
 
@@ -832,7 +832,7 @@ def test_the_planner_keeps_its_edit_tool_and_loses_its_shell(canopy_env: CanopyE
     # OpenCode leaves a tool out of the model's toolset when the last rule for its permission denies `*`
     # (`Permission.disabled`): a `*edit*` after the edit rules would take away the only way to write the plan.
     rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[f"agents/{agents.PLANNER}.md"]
-    ruleset = _opencode_ruleset(rendered.decode())
+    ruleset = permission_rules(rendered.decode())
     assert not _opencode_disabled(ruleset, "edit")
     # The file `_run` reads the plan from is the one the definition lets the planner write.
     assert _opencode_action(ruleset, "edit", f"desks/PROJ-1/{plans.WRITTEN}") == "allow"
@@ -840,40 +840,8 @@ def test_the_planner_keeps_its_edit_tool_and_loses_its_shell(canopy_env: CanopyE
         assert _opencode_disabled(ruleset, permission)
 
 
-#: The operator's home, where `_opencode_ruleset` expands a pattern's `~/`.
-HOME: Final = "/home/op"
-
-
-def _opencode_ruleset(definition: str) -> list[tuple[str, str, str]]:
-    """The definition's permission rules as OpenCode's `Permission.fromConfig` makes them, in order.
-
-    Each is (permission, path pattern, action): a scalar is its permission's rule for `*`, and a table one rule per
-    pattern, with a leading `~/` expanded to `HOME`, as OpenCode expands it to the operator's home. Only the
-    frontmatter's two levels canopy writes are read, not YAML in general.
-    """
-    frontmatter = definition.split("---")[1]
-    rules: list[tuple[str, str, str]] = []
-    section = ""
-    inside = False
-    for line in frontmatter.splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-        if line.startswith("permission:"):
-            inside = True
-            continue
-        if not inside or not line.startswith("  "):
-            inside = inside and line.startswith("  ")
-            continue
-        key, _, value = stripped.rpartition(":") if stripped.startswith('"') else stripped.partition(":")
-        key, value = key.strip().strip('"'), value.strip()
-        if line.startswith("    "):
-            rules.append((section, HOME + key.removeprefix("~") if key.startswith("~/") else key, value))
-        elif value:
-            rules.append((key, "*", value))
-        else:
-            section = key
-    return rules
+#: The operator's home, where a pattern's `~/` is expanded.
+HOME: Final = OPERATOR_HOME
 
 
 def _opencode_action(ruleset: Iterable[tuple[str, str, str]], permission: str, path: str) -> str:
@@ -916,7 +884,7 @@ def test_an_agent_that_writes_nothing_reads_beside_the_operators_skills_and_nowh
 ) -> None:
     """A skill in the operator's home may keep references and scripts beside its SKILL.md (REQUIREMENTS R7)."""
     if agent in CHORE_AGENTS:
-        ruleset = _opencode_ruleset((resources.example_chores_dir() / "agents" / f"{agent}.md").read_text())
+        ruleset = permission_rules((resources.example_chores_dir() / "agents" / f"{agent}.md").read_text())
     else:
         ruleset = _ruleset(canopy_env, agent)
     assert [d for d in BESIDE_SKILLS if _opencode_action(ruleset, "external_directory", d) != "allow"] == []
@@ -1051,7 +1019,7 @@ def test_the_planner_may_run_the_tracker_reads_config_allows_it_and_no_more(cano
     canopy_env.configure(canopy_env.user_file, {"runtime": {"allow_bash": {"planner": list(JIRA_CLI_READS)}}})
     cfg = config.load(canopy_env.root, canopy_env.user_file)
     rendered = definitions.sources(cfg)
-    ruleset = _opencode_ruleset(rendered[f"agents/{agents.PLANNER}.md"].decode())
+    ruleset = permission_rules(rendered[f"agents/{agents.PLANNER}.md"].decode())
     rules = _rules_in(rendered[f"agents/{agents.PLANNER}.md"].decode(), "bash")
     assert rules == [("*", "deny"), *((pattern, "allow") for pattern in JIRA_CLI_READS)]
     assert not _opencode_disabled(ruleset, "bash")
@@ -1164,7 +1132,7 @@ GITHUB_ISSUE_READS: Final = {"github_issue_read", "github_list_issues", "github_
 
 def _ruleset(canopy_env: CanopyEnv, agent: str) -> list[tuple[str, str, str]]:
     rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[f"agents/{agent}.md"]
-    return _opencode_ruleset(rendered.decode())
+    return permission_rules(rendered.decode())
 
 
 #: The overseer's tools, as the runtime names them to it: `canopy_dispatch`, ... (DESIGN §27).
@@ -1304,7 +1272,7 @@ def test_the_reviewer_is_sent_githubs_issue_reads_only_when_they_are_the_tickets
     # On a GitHub tracker that server is the PR's too, so its GitHub tools stay as shipped.
     _set_provider(canopy_env, provider)
     sent = {tool for tool in GITHUB_TOOLS if not _opencode_disabled(_ruleset(canopy_env, agents.REVIEWER), tool)}
-    shipped = _opencode_ruleset((resources.agents_dir() / f"{agents.REVIEWER}.md").read_text())
+    shipped = permission_rules((resources.agents_dir() / f"{agents.REVIEWER}.md").read_text())
     expected = {tool for tool in GITHUB_TOOLS if not _opencode_disabled(shipped, tool)}
     assert sent == (expected if issues else expected - GITHUB_ISSUE_READS)
     assert {"github_pull_request_read", "github_get_commit", "github_list_commits"} <= sent
@@ -1329,7 +1297,7 @@ def test_the_reviewer_keeps_a_trackers_reads_and_no_write_its_read_tools_name(to
     # reopens none they close, and the tracker's writes canopy knows are left out of the allows.
     bundled = (resources.agents_dir() / f"{agents.REVIEWER}.md").read_text()
     linear = agents.McpTools("linear", ("list_issues", "get_issue", "create_issue", "add_comment"), ("create_issue",))
-    ruleset = _opencode_ruleset(opencode_definitions.render_reviewer_reads(bundled, linear, "linear"))
+    ruleset = permission_rules(opencode_definitions.render_reviewer_reads(bundled, linear, "linear"))
     assert _opencode_disabled(ruleset, tool) is not allowed
 
 
@@ -1354,7 +1322,7 @@ def test_the_chore_is_sent_githubs_reads_whatever_the_tracker(canopy_env: Canopy
     # Its prompt is the operator's, which may read GitHub's issues even when they are not the tickets.
     _set_provider(canopy_env, provider)
     sent = {tool for tool in GITHUB_TOOLS if not _opencode_disabled(_ruleset(canopy_env, agents.CHORE), tool)}
-    shipped = _opencode_ruleset((resources.agents_dir() / f"{agents.CHORE}.md").read_text())
+    shipped = permission_rules((resources.agents_dir() / f"{agents.CHORE}.md").read_text())
     assert sent == {tool for tool in GITHUB_TOOLS if not _opencode_disabled(shipped, tool)}
     assert sent >= GITHUB_ISSUE_READS
 
@@ -1383,8 +1351,8 @@ def test_workers_and_the_planner_lose_githubs_issue_tools_off_a_github_tracker_a
     rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[f"agents/{agent}.md"].decode()
     head, marker, tail = rendered.partition(ISSUES_MARKER)
     denials, _, rest = tail.partition("  # ")
-    without = _opencode_ruleset(f"{head}{marker}  # {rest}")
-    ruleset = _opencode_ruleset(rendered)
+    without = permission_rules(f"{head}{marker}  # {rest}")
+    ruleset = permission_rules(rendered)
     jira = config.DEFAULT_TRACKER_TOOLS["jira"]
     tools = (*GITHUB_TOOLS, *(f"{jira.server}_{tool}" for tool in (*jira.allowed, *JIRA_WRITES)), *GIT_TOOLS)
     sent = {tool for tool in tools if not _opencode_disabled(ruleset, tool)}
@@ -1496,7 +1464,7 @@ def test_an_operators_read_tools_leave_the_private_worker_its_pr_tools(canopy_en
 def test_the_overseer_has_no_todo_list_and_no_skill_tool() -> None:
     # It reads no tracker, so it has no skill to load (DESIGN §39).
     bundled = (resources.agents_dir() / f"{agents.OVERSEER}.md").read_text()
-    ruleset = _opencode_ruleset(opencode_definitions.render_overseer(bundled, "Decide.\n"))
+    ruleset = permission_rules(opencode_definitions.render_overseer(bundled, "Decide.\n"))
     assert _opencode_disabled(ruleset, "todowrite")
     assert _opencode_disabled(ruleset, "skill")
 

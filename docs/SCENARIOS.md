@@ -53,6 +53,12 @@ any OpenCode upgrade, and before relying on a permission they check.
   transcript to show none of the tools its role keeps out and its first prompt not waiting on them. Their tools
   offered means the runtime no longer takes the entry canopy turns a server off with: under 1, `enabled` false alone,
   merged into the operator's; under 2, a disabled definition of its own, which replaces theirs.
+- **S85. No question tool of the runtime's own** (taken on request 2026-11-25, #2525). Not confirmed in OpenCode's
+  source or in a run: canopy's own model of its rules says the deny holds. Give a worker a toy ticket that leaves a
+  choice open, one its prompt would ask about. Expect its transcript to show no call of OpenCode's `question` tool,
+  refused or not, and the question in its card or its `blocked` result. A refused call means the tool is still sent,
+  so `question: deny` no longer takes it away whole; a worker that asks in plain text and ends with no result means
+  the prompts need to say where a question goes.
 - **S3. The private worker's wildcard deny** (M18). Confirmed in OpenCode's source (1.18.35), not in a run. Start a
   ticket privately and check that its worker can call the tracker's `tracker.read_tools` and is refused every other
   tool of the tracker's server, and the tracker CLIs in bash.
