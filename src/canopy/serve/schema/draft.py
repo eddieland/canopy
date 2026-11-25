@@ -256,3 +256,5 @@ class DraftsSent(Model):
     """The drafts whose post ended without saying whether it submitted, until a read of the PR settles them."""
     staged: list[Draft]
     """The drafts a stage put in a pending review, for the operator to submit on GitHub."""
+    joined: list[str] = []
+    """The PRs whose staged drafts went into the operator's own pending review there, keeping what it held."""

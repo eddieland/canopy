@@ -81,6 +81,12 @@ submitted, dropped if its reply was taken out first, waiting again if the review
 operator's from the start, so the loop never reads their words as feedback. While a PR holds one, canopy posts nothing
 else on it.
 
+GitHub keeps one pending review a person on a PR. Where the operator has one there already, a stage adds to it instead
+of opening another: its comments and body stay, canopy's body goes below theirs, and a reply or comment it holds
+already, as a stage GitHub refused part of left it, is not added twice. canopy deletes only a pending review it opened,
+known by the node id it keeps for that one alone, so it never submits or deletes the operator's. A review whose
+comments sit on another commit, or a send that would submit it, is refused with nothing added.
+
 ### Reactions
 
 A thread's draft may stage a reaction, one of the eight GitHub offers, on the review comment it names, beside its reply

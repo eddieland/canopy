@@ -344,6 +344,8 @@ class ReviewDraftPublished(Model):
     """The version it posted, or tried to."""
     failed: str | None = None
     """Why nothing was posted, in the harness's words; None when it posted, staged, or may have."""
+    joined: bool = False
+    """Whether it was staged into the operator's own pending review on the PR, keeping what that held."""
 
 
 class ReviewDetail(Model):

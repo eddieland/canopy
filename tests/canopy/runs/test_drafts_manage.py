@@ -525,6 +525,57 @@ def test_a_reply_taken_out_of_the_staged_review_before_it_is_submitted_is_droppe
     assert drafts.sent_by_pr(conn)[PR]["comments"] == [second.sent_comment_id]
 
 
+def own_pending(state: Path, **keys: object) -> None:
+    """Give the operator a pending review of their own on the PR, opened on GitHub, with `keys` set in the state."""
+    found = state_of(state)
+    found["prs"][PR]["reviews"].append(
+        {
+            "item": "review",
+            "id": 77,
+            "author": "me",
+            "bot": False,
+            "state": "pending",
+            "time": OLD,
+            "body": "Mine.",
+            "url": f"{PR}#pullrequestreview-77",
+        },
+    )
+    state.write_text(json.dumps({**found, **keys}))
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_staging_where_the_operator_has_a_pending_review_adds_to_it_and_never_names_it_to_delete(
+    scenario: Scenario,
+    github_state: Path,
+    ctx: Context,
+) -> None:
+    conn = scenario.conn
+    entries = [thread(501), thread(502, "answered", "Because."), {"on": "pr", "pr": PR, "text": "Done."}]
+    run_id = drafted_run(scenario, github_state, entries)
+    own_pending(github_state, post="joined_partial")
+    wanted = [hashed(conn, run_id, n) for n in (1, 2, 3)]
+    failed = scenario.operator("draft", "stage", f"run:{run_id}", *wanted, code=1).out
+    assert "GitHub refused part of it: 1 of its 2 replies are in your pending review on GitHub" in failed
+    assert {(d.status, d.pending_review) for d in all_drafts(conn)} == {(DraftStatus.WAITING, None)}
+    found = state_of(github_state)
+    del found["post"]
+    github_state.write_text(json.dumps(found))
+    staged = scenario.operator("draft", "stage", f"run:{run_id}", *wanted)
+    assert f"Added run {run_id}'s drafts 1, 2, 3 to your pending review on {PR}, keeping what it held" in staged.out
+    assert [r["delete_pending"] for r in reads(github_state, "post")] == [None, None]
+    lines = state_of(github_state)["prs"][PR]["reviews"]
+    assert sorted(line["body"] for line in lines if line.get("review") == 77) == ["Because.", "Renamed."]
+    assert next(line for line in lines if line["id"] == 77)["body"] == "Mine.\n\nDone."
+    first, second, body = all_drafts(conn)
+    assert {d.status for d in (first, second, body)} == {DraftStatus.STAGED}
+    assert {(d.pending_review, d.pending_review_id) for d in (first, second, body)} == {(None, 77)}
+    tick_reads(ctx)
+    assert {d.status for d in all_drafts(conn)} == {DraftStatus.STAGED}
+    on_github(github_state, 77, then="submit")
+    tick_reads(ctx)
+    assert {d.status for d in all_drafts(conn)} == {DraftStatus.SENT}
+
+
 @pytest.mark.usefixtures("git_pool")
 def test_nothing_else_is_sent_or_staged_on_a_pr_while_it_holds_a_staged_review(
     scenario: Scenario,

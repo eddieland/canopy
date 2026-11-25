@@ -344,6 +344,122 @@ def test_a_staged_review_deleted_on_github_is_publishable_again(
     assert draft_of(scenario, reviewed).status is ReviewDraftStatus.PUBLISHED
 
 
+#: The operator's own pending review on `THEIRS`, opened on GitHub before canopy staged anything there.
+OWN: Final = {
+    "item": "review",
+    "id": 77,
+    "author": "me",
+    "bot": False,
+    "state": "pending",
+    "time": "2026-10-18T11:00:00Z",
+    "body": "Mine.",
+    "url": f"{THEIRS}#pullrequestreview-77",
+}
+
+
+def own_pending(github_state: Path, **state: object) -> None:
+    """Give the operator a pending review of their own on `THEIRS`, with `state`'s keys beside it."""
+    github_state.write_text(json.dumps({"prs": {THEIRS: {"reviews": [OWN]}}, **state}))
+
+
+def own_review(github_state: Path) -> dict[str, Any]:
+    """The operator's own review of `THEIRS`, as the state holds it now.
+
+    Returns:
+        Its line.
+    """
+    found: dict[str, Any] = next(r for r in github(github_state)["prs"][THEIRS]["reviews"] if r.get("id") == OWN["id"])
+    return found
+
+
+def test_staging_on_a_pr_where_the_operator_has_a_pending_review_adds_to_it_and_never_deletes_it(
+    scenario: Scenario,
+    reviewed: int,
+    github_state: Path,
+    ctx: Context,
+) -> None:
+    own_pending(github_state)
+    version = newest(scenario, reviewed).hash
+    out = scenario.operator("review", "publish", str(reviewed), version).out
+    assert out == (
+        f"Added version 1 of review run {reviewed}'s draft to your pending review on {THEIRS}, keeping what it held; "
+        f"submit or delete it at {THEIRS}/files\n"
+    )
+    assert own_review(github_state)["body"] == f"Mine.\n\n{OFF_DIFF}"
+    draft = draft_of(scenario, reviewed)
+    # Known by its id alone, which a read settles it by; never by the node id a later post would delete.
+    assert (draft.status, draft.pending_review, draft.pending_review_id) == (ReviewDraftStatus.STAGED, None, 77)
+    tick_reads(ctx)
+    assert draft_of(scenario, reviewed).status is ReviewDraftStatus.STAGED
+    state = github(github_state)
+    state["prs"][THEIRS]["reviews"][0]["state"] = "commented"
+    github_state.write_text(json.dumps(state))
+    tick_reads(ctx)
+    settled = draft_of(scenario, reviewed)
+    assert (settled.status, settled.published_review_id) == (ReviewDraftStatus.PUBLISHED, 77)
+
+
+def test_a_stage_into_the_operators_review_that_stops_part_way_says_so_and_staging_again_adds_the_rest(
+    scenario: Scenario,
+    reviewed: int,
+    github_state: Path,
+) -> None:
+    scenario.operator("review", "edit", str(reviewed), "--add", "retry.py:2", "--text", "Call what?")
+    own_pending(github_state, post="joined_partial")
+    version = newest(scenario, reviewed).hash
+    failed = scenario.operator("review", "publish", str(reviewed), version, code=1).out
+    assert "GitHub refused part of it: 1 of its 2 comments are in your pending review on GitHub" in failed
+    draft = draft_of(scenario, reviewed)
+    assert (draft.status, draft.pending_review, draft.pending_review_id) == (ReviewDraftStatus.WAITING, None, None)
+    assert "staging again adds only what is missing" in present(draft.why)
+    state = github(github_state)
+    del state["post"]
+    github_state.write_text(json.dumps(state))
+    out = scenario.operator("review", "publish", str(reviewed), version).out
+    assert "to your pending review on" in out
+    # The operator's review is never handed to the poster to delete.
+    assert [r["delete_pending"] for r in posted(github_state)] == [None, None]
+    held = [r for r in github(github_state)["prs"][THEIRS]["reviews"] if r.get("review") == OWN["id"]]
+    assert sorted(r["body"] for r in held) == sorted([ON_LINE.text, "Call what?"])
+    assert own_review(github_state)["state"] == "pending"
+    assert draft_of(scenario, reviewed).status is ReviewDraftStatus.STAGED
+
+
+def test_a_stage_into_the_operators_review_of_unknown_outcome_never_names_it_to_delete(
+    scenario: Scenario,
+    reviewed: int,
+    github_state: Path,
+    ctx: Context,
+) -> None:
+    own_pending(github_state, post="unknown")
+    version = newest(scenario, reviewed).hash
+    scenario.operator("review", "publish", str(reviewed), version, code=1)
+    draft = draft_of(scenario, reviewed)
+    assert (draft.status, draft.pending_review, draft.pending_review_id) == (ReviewDraftStatus.UNCONFIRMED, None, 77)
+    tick_reads(ctx)
+    draft = draft_of(scenario, reviewed)
+    assert (draft.status, draft.pending_review) == (ReviewDraftStatus.WAITING, None)
+    state = github(github_state)
+    del state["post"]
+    github_state.write_text(json.dumps(state))
+    scenario.operator("review", "publish", str(reviewed), version)
+    assert [r["delete_pending"] for r in posted(github_state)] == [None, None]
+    assert own_review(github_state)["state"] == "pending"
+
+
+def test_submitting_while_the_operator_has_a_pending_review_posts_nothing(
+    scenario: Scenario,
+    reviewed: int,
+    github_state: Path,
+) -> None:
+    own_pending(github_state)
+    version = newest(scenario, reviewed).hash
+    failed = scenario.operator("review", "publish", str(reviewed), version, "--submit", code=1).out
+    assert "submitting would submit it too" in failed
+    assert draft_of(scenario, reviewed).status is ReviewDraftStatus.WAITING
+    assert own_review(github_state) == OWN
+
+
 @pytest.mark.parametrize(("landed", "after"), [(False, ReviewDraftStatus.WAITING), (True, ReviewDraftStatus.PUBLISHED)])
 def test_a_post_of_unknown_outcome_posts_nothing_more_until_a_read_settles_it(
     scenario: Scenario,
