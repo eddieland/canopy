@@ -431,6 +431,33 @@ describe('applyStreamEvent', () => {
         expect(client.getQueryState(keys.tickTranscript(2))?.isInvalidated).toBe(false)
     })
 
+    it('keeps the run the stream sent over an older read of it still on its way', async () => {
+        const [first] = mockRuns
+        if (!first) {
+            throw new Error('fixtures are empty')
+        }
+        const client = new QueryClient()
+        client.setQueryData(keys.run(first.id), first)
+        // A card opens on the run and reads it again; the server's answer, the run as it was, is slow to come.
+        const answered: { with?: (run: Run) => void } = {}
+        const answer = new Promise<Run>((resolve) => {
+            answered.with = resolve
+        })
+        const read = client.query({ queryKey: keys.run(first.id), queryFn: () => answer, staleTime: 0 })
+        const cut = read.then(
+            () => null,
+            (error: unknown) => error,
+        )
+        await Promise.resolve()
+
+        applyStreamEvent(client, { type: 'runs.updated', runs: [{ ...first, cost_usd: 9 }] })
+        answered.with?.(first)
+        await cut
+
+        expect(client.getQueryData<Run>(keys.run(first.id))?.cost_usd).toBe(9)
+        expect(client.getQueryState(keys.run(first.id))?.fetchStatus).toBe('idle')
+    })
+
     it('marks the worktrees stale when a run starts or ends, not when its cost moves', () => {
         const client = new QueryClient()
         const [first] = mockRuns
