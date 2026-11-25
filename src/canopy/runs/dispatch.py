@@ -836,7 +836,14 @@ def _check_model(ctx: Context, key: str, kind: str, *, private: bool) -> str | N
     else:
         chosen = "in runtime.models"
     try:
-        agent_models.check(ctx.runner, ctx.workspace.root, model, version=ctx.config.runtime.version, chosen=chosen)
+        agent_models.check(
+            ctx.runner,
+            ctx.workspace.root,
+            model,
+            version=ctx.config.runtime.version,
+            chosen=chosen,
+            conn=ctx.conn,
+        )
     except agent_models.ModelError as e:
         raise Refusal(e.guard, e.reason, attention=e.guard) from e
     return model.name

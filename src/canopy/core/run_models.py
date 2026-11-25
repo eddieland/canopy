@@ -3,8 +3,10 @@
 The runtime prints no event naming the model a call went to, so a run's session is read once the run has ended: by the
 process that ran it, as it closes the run (`read_ended`), and for a run that leaves it unread, by the loop while it
 waits between ticks (`canopy.loop.models`). What a read found is recorded here: each model's replies and their cost
-(`run_models`), the model of each reply of a run more than one model served (`run_reply_models`), and how the read
-ended (`run_model_reads`). `due` is what to read next: runs never read, the newest first, then failed ones again.
+(`run_models`), with the window each model was last listed with (`canopy.core.model_limits`), the model of each reply
+of a run more than one model served (`run_reply_models`), and how the read ended, with how many times the runtime
+compacted the session (`run_model_reads`). `due` is what to read next: runs never read, the newest first, then
+failed ones again.
 """
 
 from __future__ import annotations
@@ -14,7 +16,7 @@ from datetime import UTC, datetime, timedelta
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Final, Literal
 
-from canopy.core import db, records, sql
+from canopy.core import db, model_limits, records, sql
 from canopy.core.vocab import ModelsRead
 from canopy.runtime import session_models
 
@@ -115,6 +117,7 @@ def read(ctx: Context, run: Due, log: logs.TickAdapter) -> ModelsRead:
         error=found.error,
         replies=found.replies,
         runtime_version=found.runtime_version,
+        compactions=found.compactions,
     )
     if status is ModelsRead.FAILED:
         log.warning(
@@ -133,23 +136,25 @@ def record(
     error: str | None = None,
     replies: Mapping[str, str] = _NO_REPLIES,
     runtime_version: str | None = None,
+    compactions: int | None = None,
 ) -> None:
     """Record how reading `run`'s session ended, and the models it found, in place of any read before.
 
-    `replies` is the model of each reply, by its message, of a session more than one model served, and
-    `runtime_version` the runtime's version its record names.
+    `replies` is the model of each reply, by its message, of a session more than one model served, `runtime_version`
+    the runtime's version its record names, and `compactions` how many times the runtime compacted it, None where its
+    record does not say. Each model takes the window it was last listed with (`model_limits.of_models`).
 
     A run that recorded no cost of its own takes the models' total as its cost, so what it spent is counted wherever a
     run's cost is (`canopy.core.spend`).
 
     Only a read that found the session replaces the models a read before found, and their replies'. One that finds it
     missing keeps them, as found, since the runtime dropped what canopy read; one that fails keeps them till a read
-    again finds it. The runtime's version is kept as the models are.
+    again finds it. The runtime's version and the compactions are kept as the models are.
     """
     with db.transaction(conn):
         kept = status is not ModelsRead.FOUND and bool(of_run(conn, run.run_table, run.run_id))
         if status is not ModelsRead.FOUND:
-            runtime_version = _runtime_version(conn, run)
+            runtime_version, compactions = _kept_read(conn, run)
         if kept and status is ModelsRead.MISSING:
             status = ModelsRead.FOUND
         if not kept:
@@ -159,9 +164,14 @@ def record(
                     run.run_table,
                     run.run_id,
                 ).run(conn)
-            records.insert_rows(records.RunModel, ("run_table", "run_id", "model", "replies", "cost_usd")).many(
+            limits = model_limits.of_models(conn, [m.model for m in models])
+            columns = ("run_table", "run_id", "model", "replies", "cost_usd", "input_limit", "context_limit")
+            records.insert_rows(records.RunModel, columns).many(
                 conn,
-                [(run.run_table, run.run_id, m.model, m.replies, m.cost_usd) for m in models],
+                [
+                    (run.run_table, run.run_id, m.model, m.replies, m.cost_usd, *_window(limits.get(m.model)))
+                    for m in models
+                ],
             )
             records.insert_rows(records.RunReplyModel, ("run_table", "run_id", "message", "model")).many(
                 conn,
@@ -186,15 +196,21 @@ def record(
             attempts=run.attempts + 1,
             read_at=db.now(),
             runtime_version=runtime_version,
+            compactions=compactions,
         ).or_replace().run(conn)
 
 
-# The runtime's version a read before this one kept for `run`, or None.
-def _runtime_version(conn: sqlite3.Connection, run: Due) -> str | None:
+# The runtime's version and the compactions a read before this one kept for `run`, or None for each.
+def _kept_read(conn: sqlite3.Connection, run: Due) -> tuple[str | None, int | None]:
     before = (
         records.select(records.RunModelRead).where("run_table = ? AND run_id = ?", run.run_table, run.run_id).one(conn)
     )
-    return before.runtime_version if before is not None else None
+    return (before.runtime_version, before.compactions) if before is not None else (None, None)
+
+
+# A model's input and context limits, as `run_models` records them, or None for each where it has no window.
+def _window(limits: records.ModelLimit | None) -> tuple[int | None, int | None]:
+    return (limits.input_limit, limits.context_limit) if limits is not None else (None, None)
 
 
 def of_run(conn: sqlite3.Connection, table: RunTable, run_id: int) -> list[records.RunModel]:

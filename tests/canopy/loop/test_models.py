@@ -107,6 +107,32 @@ def test_an_opencode_2_tick_its_events_left_unpriced_costs_what_its_session_says
     assert scenario.conn.execute("SELECT cost_usd FROM ticks WHERE id = ?", (ticked.tick.id,)).fetchone()[0] == 0.75
 
 
+def test_an_opencode_2_run_records_its_compactions_and_the_window_its_model_was_listed_with(
+    scenario: Scenario,
+    opencode_state: Path,
+) -> None:
+    """The peak of a run reads against the window it ran in, and its compactions, each a query on the journal (§13)."""
+    with_events(scenario.env, "canopy-overseer")
+    scenario.configures(runtime={"version": 2, "models": {"overseer": "github-copilot/auto"}})
+    opencode_state.write_text(
+        json.dumps(
+            {
+                "sessions": {SESSION: [("github-copilot", "auto", 0.25)]},
+                "compactions": {SESSION: 2},
+                "models": ["github-copilot/auto", "anthropic/claude-x"],
+                "limits": {"github-copilot/auto": {"context": 128000, "input": 64000, "output": 16000}},
+            },
+        ),
+    )
+    ticked = scenario.tick(*waits(KEY))
+    window = scenario.conn.execute(
+        "SELECT m.model, m.input_limit, m.context_limit, r.compactions FROM run_models m "
+        "JOIN run_model_reads r USING (run_table, run_id) WHERE m.run_table = 'ticks' AND m.run_id = ?",
+        (ticked.tick.id,),
+    ).fetchall()
+    assert [tuple(row) for row in window] == [("github-copilot/auto", 64000, 128000, 2)]
+
+
 def test_a_dry_run_reads_no_session(scenario: Scenario, opencode_state: Path) -> None:
     with_events(scenario.env, "canopy-overseer")
     scenario.tick(dry_run=True)

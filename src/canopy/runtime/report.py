@@ -179,6 +179,9 @@ class SessionModels:
     replies: Mapping[str, str] = field(default_factory=dict)
     #: The runtime's version the session's record names, as `runtime_version` keeps it; None where it names none.
     runtime_version: str | None = None
+    #: How many times the runtime compacted the session, its summary taking the place of what it had said; None unless
+    #: `found`, and where the runtime's record does not say.
+    compactions: int | None = None
 
 
 def runtime_version(named: str | None) -> str | None:
@@ -390,6 +393,19 @@ class ModelList:
     variants: Mapping[str, Sequence[str]] = field(default_factory=dict)
     #: Why the list could not be read, in canopy's words, never what the runtime printed; None when it was read.
     error: str | None = None
+    #: The window of each model the runtime lists one for, by model, whether or not variants were asked for; empty
+    #: where the runtime's list says none.
+    limits: Mapping[str, ModelLimits] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class ModelLimits:
+    """A model's window as the runtime lists it, in tokens: what a call may send it, and its whole context."""
+
+    #: The input a call may send; None where the runtime lists only the whole context.
+    input: int | None
+    #: The context, input and output together; None where the runtime lists none.
+    context: int | None
 
 
 @dataclass(frozen=True)

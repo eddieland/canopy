@@ -30,12 +30,14 @@ from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, Literal
 
+from canopy.core import model_limits
 from canopy.runtime import agents, invocation
 from canopy.runtime import models as runtime_models
 from canopy.runtime.agents import Model
 from canopy.runtime.definitions import AGENTS_SUBDIR, MODEL_RE, VARIANT_RE
 
 if TYPE_CHECKING:
+    import sqlite3
     from collections.abc import Iterable, Mapping
 
     from canopy.core.config import Chore, Config
@@ -232,12 +234,15 @@ def check(
     *,
     version: Version,
     chosen: str = "in runtime.models",
+    conn: sqlite3.Connection | None = None,
 ) -> None:
     """Refuse `model` unless the runtime, started in the workspace root `root`, lists it, and its variant if it has one.
 
     The runtime is the one `version` runs.
 
     `chosen` says where the model was chosen, to name it in a refusal: in `runtime.models`, or by a ticket's override.
+    With `conn`, the journal, the window of each model the list gives one for is kept there (`model_limits`), so the
+    run records the one its model was listed with.
 
     Raises:
         ModelError: (`MISSING`) the runtime does not list the model or its variant, or (`LIST_FAILED`) its list could
@@ -256,6 +261,8 @@ def check(
             f"could not look up the model {model.name} chosen {chosen}: {found.error}. Nothing ran on another "
             "model; the work resumes once the list can be read",
         )
+    if conn is not None:
+        model_limits.keep(conn, found)
     if model.id not in found.models:
         raise ModelError(
             MISSING,

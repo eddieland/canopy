@@ -35,6 +35,10 @@ Keys of the state besides `sessions`, each optional, each read by both versions 
     variants  each model's variants by its line: 1's `models --verbose` prints them in the model's JSON after its
             line, indented as OpenCode indents it, `{"id": ..., "variants": {NAME: {...}}}`, and 2's `model.list`
             lists them with it. Default none.
+    limits  OpenCode 2's only: each model's `limit` by its line, `{"context": N, "input": N}`, which `model.list`
+            lists with it. Default none.
+    compactions  OpenCode 2's only: how many `compaction` messages each session's export holds, by its id, after its
+            replies. Default none.
 
 2's `serve` says where it listens, then waits to be stopped; `api --server URL` answers `agent.list`, `skill.list`,
 `config.get`, and `model.list` from the state, and `plugin.list` with one plugin, loaded. An export, and what 2's
@@ -194,12 +198,14 @@ def api(operation: str) -> int:
             printed = {"data": [{"id": "canopy", "state": {"status": "active"}}]}
         case "model.list":
             variants = state.get("variants", {})
+            limits = state.get("limits", {})
             printed = {
                 "data": [
                     {
                         "providerID": line.partition("/")[0],
                         "id": line.partition("/")[2],
                         "variants": [{"id": name} for name in variants.get(line, [])],
+                        **({"limit": limits[line]} if line in limits else {}),
                     }
                     for line in state.get("models", [])
                     if "/" in line and " " not in line
@@ -245,6 +251,8 @@ def session_export(session_id: str) -> int:
     for i, (provider, model, cost) in enumerate(calls, start=1):
         ref = {"id": model, "providerID": provider}
         messages.append({"id": f"msg_{i}", "type": "assistant", "model": ref, "content": [], "cost": cost})
+    compacted = range(state.get("compactions", {}).get(session_id, 0))
+    messages.extend({"id": f"cmp_{n}", "type": "compaction", "summary": "[redacted:text]"} for n in compacted)
     write(json.dumps({"info": session_info(state, session_id), "messages": messages}, indent=2) + "\n")
     return 0
 

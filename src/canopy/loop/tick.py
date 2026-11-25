@@ -197,6 +197,7 @@ def on_model(ctx: Context, model: str) -> Context:
             agent_models.parse(model),
             version=runtime.version,
             chosen="by --model",
+            conn=ctx.conn,
         )
     except agent_models.ModelError as e:
         raise ModelRefused(f"{e.guard}: {e.reason}") from e
@@ -1137,7 +1138,7 @@ def _check_model(ctx: Context, log: logs.TickAdapter) -> tuple[TickStatus, str] 
     if model is None:
         return None
     try:
-        agent_models.check(ctx.runner, ctx.workspace.root, model, version=ctx.config.runtime.version)
+        agent_models.check(ctx.runner, ctx.workspace.root, model, version=ctx.config.runtime.version, conn=ctx.conn)
     except agent_models.ModelError as e:
         refused = e
     else:

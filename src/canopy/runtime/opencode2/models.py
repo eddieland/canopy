@@ -15,8 +15,13 @@ not `opencode api --standalone`, whose server answers once and is gone: `plugin.
 `model.list` until the answer has held still for `SETTLE_SECONDS`, or, asked about one model, until the list holds it,
 at most `WANTED_SECONDS`. A run waits the same way before its first prompt (the plugin's `listedModel`, DESIGN §33).
 
-Only `providerID`, `id`, and the variants' `id` are read: a model's `settings` and `headers` may hold a provider's key,
-so no failure quotes what was printed. An entry that does not name a model canopy renders is passed over.
+Each model's `limit` holds its window in tokens: `context`, the whole of it, and, where the provider says, `input`, what
+a call may send, which may be less than the context. Both are kept (`ModelLimits`), so a run's peak reads against the
+window it ran in rather than a later listing's.
+
+Only `providerID`, `id`, the variants' `id`, and the limits are read: a model's `settings` and `headers` may hold a
+provider's key, so no failure quotes what was printed. An entry that does not name a model canopy renders is passed
+over, and a limit that is not a positive whole number, or past any model's, is read as none.
 
 OpenCode 2.1.2 ran a primary agent on the default model, whatever its definition named; 2.1.4 runs it on the
 definition's model and variant, so a model chosen in config needs 2.1.4 or later.
@@ -25,13 +30,14 @@ definition's model and variant, so a model chosen in config needs 2.1.4 or later
 from __future__ import annotations
 
 import time
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
 from pydantic import BaseModel, ConfigDict, Field, StrictStr
 
 from canopy.runtime.opencode2.definitions import MODEL_RE
 from canopy.runtime.opencode2.serve import OPENCODE, Client, FailedError, Serve, read
-from canopy.runtime.report import ModelList
+from canopy.runtime.report import ModelLimits, ModelList
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -46,6 +52,8 @@ SETTLE_SECONDS: Final = 3.0
 #: How long a list that lacks the model asked about is read again: a provider's fetch of its own models, which
 #: OpenCode itself gives up on after seconds.
 WANTED_SECONDS: Final = 15
+#: The largest limit kept, in tokens: far past any model's, and within what the journal's integers hold.
+MAX_TOKENS: Final = 10**12
 
 
 class _Variant(BaseModel):
@@ -60,6 +68,8 @@ class _Model(BaseModel):
     provider: StrictStr = Field(alias="providerID")
     id: StrictStr
     variants: tuple[_Variant, ...] = ()
+    # Read by `_limits`, so a limit canopy cannot read fails no read of the list.
+    limit: object = None
 
 
 class _Models(BaseModel):
@@ -89,14 +99,26 @@ def listed(runner: procs.Runner, *, cwd: Path, variants: bool = False, wanted: s
         found = Serve(runner, OPENCODE, cwd, {}).ask(lambda client: _whole(client, wanted))
     except FailedError as e:
         return ModelList(error=str(e))
-    return ModelList(frozenset(found), found if variants else {})
+    return ModelList(
+        frozenset(found),
+        {name: listed.variants for name, listed in found.items()} if variants else {},
+        limits={name: listed.limits for name, listed in found.items() if listed.limits is not None},
+    )
 
 
-def _whole(client: Client, wanted: str | None) -> dict[str, tuple[str, ...]]:
+@dataclass(frozen=True)
+class _Listed:
+    """One model as the list names it: its variants, and its window where it names one."""
+
+    variants: tuple[str, ...]
+    limits: ModelLimits | None
+
+
+def _whole(client: Client, wanted: str | None) -> dict[str, _Listed]:
     """Ask the server its models once its plugins have loaded, until the list is whole as far as canopy can tell.
 
     Returns:
-        Each model canopy renders, by its name, with its variants.
+        Each model canopy renders, by its name, with its variants and its window.
 
     Raises:
         FailedError: An answer could not be read, or no plugin had loaded within `LOADED_SECONDS`.
@@ -121,10 +143,23 @@ def _whole(client: Client, wanted: str | None) -> dict[str, tuple[str, ...]]:
             found, since = again, time.monotonic()
 
 
-def _models(client: Client) -> dict[str, tuple[str, ...]]:
+def _models(client: Client) -> dict[str, _Listed]:
     printed = read(client.get("model.list"), _Models.model_validate_json, "model.list")
     return {
-        name: tuple(v.id for v in model.variants)
+        name: _Listed(tuple(v.id for v in model.variants), _limits(model.limit))
         for model in printed.data
         if MODEL_RE.fullmatch(name := f"{model.provider}/{model.id}")
     }
+
+
+# The window a model's `limit` names, or None where it names neither its input nor its context.
+def _limits(limit: object) -> ModelLimits | None:
+    if not isinstance(limit, dict):
+        return None
+    found = ModelLimits(input=_tokens(limit.get("input")), context=_tokens(limit.get("context")))
+    return found if found.input is not None or found.context is not None else None
+
+
+# A limit as canopy keeps it: a positive whole number of tokens, at most `MAX_TOKENS`, or None.
+def _tokens(value: object) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) and 0 < value <= MAX_TOKENS else None

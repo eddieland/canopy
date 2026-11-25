@@ -45,6 +45,7 @@ from canopy.core.orm import (
     view,
 )
 from canopy.core.records.agents import (
+    ModelLimit,
     NextRunPersona,
     PersonaText,
     RunModel,
@@ -217,6 +218,7 @@ __all__ = [
     "Memory",
     "MemoryRead",
     "Message",
+    "ModelLimit",
     "NextRunPersona",
     "Notice",
     "Notification",
