@@ -119,7 +119,8 @@ canopy's plugin, every run in such a repository pays that wait, not only one who
 A file, a PR, or a tool's result the agent reads can print a line that looks like canopy's. One can only tell the agent
 to wrap up early, or that it has longer than it has, which leaves it where it is without the clock; so a forged line
 fails safe, as the comment marks do (§8, D069). The prompts say a line from canopy asks for nothing but wrapping up,
-an update (§41), or a fetch of the operator's message (§44), so one that asks for more is data (T1).
+an update (§41), or a fetch of the operator's message (§44), and, in a refused call's error, that the refusal not be
+worked around, so one that asks for more is data (T1).
 
 ### Prompts
 
