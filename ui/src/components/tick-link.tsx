@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils'
  */
 export function TickLink({ id, className }: { id: number; className?: string }) {
     return (
-        <Glance card={<TickGlance id={id} />} testId="tick-glance" align="start">
+        <Glance card={<TickGlance id={id} />} testId="tick-glance" align="start" side="right">
             <Link
                 to="/workspace/ticks/$id"
                 params={{ id: String(id) }}

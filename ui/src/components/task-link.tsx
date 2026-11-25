@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 /** `task:N`, opening the task's page: its instruction and conversation, its report, and what it left. */
 export function TaskLink({ id, className }: { id: number; className?: string }) {
     return (
-        <Glance card={<TaskGlance id={id} />} testId="task-card" align="start">
+        <Glance card={<TaskGlance id={id} />} testId="task-card" align="start" side="right">
             <Link
                 to="/tasks/$id"
                 params={{ id: String(id) }}
@@ -26,7 +26,7 @@ export function TaskLink({ id, className }: { id: number; className?: string }) 
  */
 export function TaskRunLink({ task, run, className }: { task: number; run: number; className?: string }) {
     return (
-        <Glance card={<TaskRunGlance task={task} run={run} />} testId="task-run-card" align="start">
+        <Glance card={<TaskRunGlance task={task} run={run} />} testId="task-run-card" align="start" side="right">
             <Link
                 to="/tasks/$id/runs/$run"
                 params={{ id: String(task), run: String(run) }}

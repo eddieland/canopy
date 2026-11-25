@@ -670,18 +670,42 @@ test("a reference's card never takes a click: a link it covers still opens its p
     await main.getByRole('link', { name: 'run:41', exact: true }).first().hover()
     const card = page.getByTestId('run-card')
     await expect(card).toContainText('Sign in with SSO')
-    const under = main.getByRole('link', { name: 'run:43', exact: true }).first()
-    const [over, link] = await Promise.all([card.boundingBox(), under.boundingBox()])
-    // The card lies over the link: its left edge and its line are inside the card's box.
-    const covered =
-        over !== null &&
-        link !== null &&
-        link.x >= over.x &&
-        link.y >= over.y &&
-        link.y + link.height <= over.y + over.height
-    expect(covered).toBe(true)
-    await under.click()
-    await expect(page).toHaveURL(/\/workspace\/runs\/43$/u)
+    // A link of the page the card lies over: its box is inside the card's.
+    const covered = await card.evaluate((over) => {
+        const box = over.getBoundingClientRect()
+        const inside = (link: Element) => {
+            const at = link.getBoundingClientRect()
+            return at.left >= box.left && at.right <= box.right && at.top >= box.top && at.bottom <= box.bottom
+        }
+        const link = [...document.querySelectorAll('main a[href]')].find((candidate) => inside(candidate))
+        return link?.getAttribute('href') ?? null
+    })
+    expect(covered).not.toBeNull()
+    await main.locator(`a[href="${covered}"]`).first().click()
+    await expect(page).toHaveURL(new RegExp(`${covered}$`, 'u'))
+})
+
+test("a reference's card stays open while the pointer is on it, and closes once it leaves", async ({ page }) => {
+    await page.goto('workspace/runs')
+    await settled(page)
+    const link = page.getByRole('main').getByRole('link', { name: 'run:41', exact: true }).first()
+    await link.hover()
+    const card = page.getByTestId('run-card')
+    await expect(card).toContainText('Sign in with SSO')
+    const box = await card.boundingBox()
+    expect(box).not.toBeNull()
+    const [x, y] = box === null ? [0, 0] : [box.x + box.width / 2, box.y + box.height / 2]
+    // Onto the card, in steps as a hand moves, and across it: it is still there to read.
+    await page.mouse.move(x, y, { steps: 8 })
+    await page.mouse.move(x + 40, y + 20, { steps: 4 })
+    // Past the moment a card closes after the pointer leaves its link, it is still open.
+    const left = await page.evaluate(() => performance.now())
+    await page.waitForFunction((since) => performance.now() - since > 600, left)
+    await expect(card).toBeVisible()
+    await expect(link).toHaveAttribute('data-state', 'open')
+    // Off the card and its link: it closes.
+    await page.mouse.move(8, 8, { steps: 4 })
+    await expect(card).toBeHidden()
 })
 
 test("the header's tick opens its decisions, each about its subject, the overseer's text shown as text", async ({

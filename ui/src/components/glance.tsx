@@ -1,4 +1,4 @@
-import { createContext, use } from 'react'
+import { createContext, use, useEffect, useRef, useState } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 
 import type { RunState } from '@/api/types'
@@ -13,9 +13,10 @@ const InGlance = createContext(false)
 /**
  * A link with its page at a glance in a hover card (ui/DESIGN.md, "A link's page at a glance is a hover card"):
  * `children` is the link, or what holds it, and `card` what the card shows, a `GlanceCard`, made only once the card
- * opens, so a card that reads its data reads nothing until then. Hovered or focused, the card opens; a click still
- * follows the link, and so does a click on a link the card covers. It opens under the link, or on `side`, as the rail's
- * rows open theirs beside them, over the page. Inside another card it is its link alone.
+ * opens, so a card that reads its data reads nothing until then. Hovered or focused, the card opens, and stays open
+ * while the pointer is on the link or on the card, so it can be read at leisure; a click still follows the link, and so
+ * does a click on a link the card covers, since the pointer passes through it. It opens under the link, or on `side`,
+ * as a reference's opens beside it, clear of the rows below. Inside another card it is its link alone.
  */
 export function Glance({
     card,
@@ -31,18 +32,86 @@ export function Glance({
     children: ReactElement
 }) {
     const nested = use(InGlance)
+    const [open, setOpen] = useState(false)
+    const link = useRef<HTMLAnchorElement | null>(null)
+    const content = useRef<HTMLDivElement | null>(null)
+    // Where the pointer last was, and whether the card stays open for it: it does while the pointer is over the card.
+    const pointer = useRef<{ x: number; y: number } | null>(null)
+    const held = useRef(false)
+    useEffect(() => {
+        if (!open) {
+            return
+        }
+        const moved = (event: PointerEvent) => {
+            pointer.current = { x: event.clientX, y: event.clientY }
+            // Held, it closes once the pointer is on neither the card nor its link.
+            if (held.current && !over(content.current, pointer.current) && !over(link.current, pointer.current)) {
+                held.current = false
+                setOpen(false)
+            }
+        }
+        // Escape closes it wherever the pointer is.
+        const pressed = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                held.current = false
+                setOpen(false)
+            }
+        }
+        document.addEventListener('pointermove', moved)
+        document.addEventListener('keydown', pressed)
+        return () => {
+            document.removeEventListener('pointermove', moved)
+            document.removeEventListener('keydown', pressed)
+        }
+    }, [open])
     if (nested) {
         return children
     }
     return (
-        <HoverCard>
-            <HoverCardTrigger asChild>{children}</HoverCardTrigger>
-            {/* It holds nothing to point at, so the pointer passes through it: leaving the link closes it, and a
-                link it covers still takes its click. */}
-            <HoverCardContent data-testid={testId} align={align} side={side} className="pointer-events-none">
+        <HoverCard
+            open={open}
+            onOpenChange={(next) => {
+                // The pointer left the link for the card: the card stays, to be read, until the pointer leaves it too.
+                if (!next && over(content.current, pointer.current)) {
+                    held.current = true
+                    return
+                }
+                held.current = false
+                setOpen(next)
+            }}
+        >
+            <HoverCardTrigger asChild ref={link}>
+                {children}
+            </HoverCardTrigger>
+            {/* It holds nothing to point at, so the pointer passes through it: a link it covers still takes its
+                click. It is held open by where the pointer is, not by the pointer's events on it. */}
+            <HoverCardContent
+                ref={content}
+                data-testid={testId}
+                align={align}
+                side={side}
+                className="pointer-events-none"
+            >
                 <InGlance value>{card}</InGlance>
             </HoverCardContent>
         </HoverCard>
+    )
+}
+
+// How far past a card's edge still counts as on it: the gap between it and its link, so crossing the gap holds it.
+const REACH_PX = 8
+
+// Whether `point` is on `element`, or within the gap around it.
+function over(element: HTMLElement | null, point: { x: number; y: number } | null): boolean {
+    if (element === null || point === null) {
+        return false
+    }
+    const box = element.getBoundingClientRect()
+    return (
+        point.x >= box.left - REACH_PX &&
+        point.x <= box.right + REACH_PX &&
+        point.y >= box.top - REACH_PX &&
+        point.y <= box.bottom + REACH_PX
     )
 }
 
