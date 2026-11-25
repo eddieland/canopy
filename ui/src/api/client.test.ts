@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
-import { ApiError, TOKEN_HEADER, unwrap, writeToken } from './client'
+import { ApiError, TOKEN_HEADER, unwrap, withReadDeadline, writeToken } from './client'
 
 function run(method: string, token: string | null): Request {
     const request = new Request('http://127.0.0.1/api/x', { method })
@@ -15,6 +15,55 @@ describe('writeToken', () => {
         expect(run('DELETE', 'tok').headers.get(TOKEN_HEADER)).toBe('tok')
         expect(run('GET', 'tok').headers.get(TOKEN_HEADER)).toBeNull()
         expect(run('POST', null).headers.get(TOKEN_HEADER)).toBeNull()
+    })
+})
+
+// A server that takes the request and never answers: it settles only when the request is given up.
+const silent: typeof fetch = (input) =>
+    new Promise((_resolve, reject) => {
+        const { signal } = input as Request
+        signal.addEventListener('abort', () => {
+            reject(signal.reason as Error)
+        })
+    })
+
+describe('withReadDeadline', () => {
+    it('fails a read the server never answers, once its deadline passes', async () => {
+        vi.useFakeTimers()
+        try {
+            const read = withReadDeadline(silent, 1000)('http://127.0.0.1/api/x')
+            const failure = read.then(
+                () => null,
+                (error: unknown) => error,
+            )
+            await vi.advanceTimersByTimeAsync(1000)
+            expect(await failure).toMatchObject({ name: 'TimeoutError' })
+        } finally {
+            vi.useRealTimers()
+        }
+    })
+
+    it('gives a write no deadline, since one cut short may have been done', async () => {
+        vi.useFakeTimers()
+        try {
+            let settled = false
+            const write = withReadDeadline(silent, 1000)('http://127.0.0.1/api/x', { method: 'POST' })
+            void write.then(
+                () => (settled = true),
+                () => (settled = true),
+            )
+            await vi.advanceTimersByTimeAsync(60_000)
+            expect(settled).toBe(false)
+        } finally {
+            vi.useRealTimers()
+        }
+    })
+
+    it('still gives up a read when the page does, before the deadline', async () => {
+        const page = new AbortController()
+        const read = withReadDeadline(silent, 60_000)('http://127.0.0.1/api/x', { signal: page.signal })
+        page.abort()
+        await expect(read).rejects.toMatchObject({ name: 'AbortError' })
     })
 })
 

@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils'
  */
 export function RunLink({ id, className }: { id: number; className?: string }) {
     return (
-        <Glance card={<RunGlance id={id} />} testId="run-card" align="start">
+        <Glance card={<RunGlance id={id} />} testId="run-card" align="start" side="right">
             <Link
                 to="/workspace/runs/$id"
                 params={{ id: String(id) }}

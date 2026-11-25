@@ -180,7 +180,7 @@ function Canopy() {
 function TickLine({ tick }: { tick: Tick }) {
     const shown = tick.status === 'ok' || tick.ended_at === null ? null : tick.status
     return (
-        <Glance card={<TickCard tick={tick} />} testId="tick-glance" align="start">
+        <Glance card={<TickCard tick={tick} />} testId="tick-glance" align="start" side="right">
             <Link
                 to="/workspace/ticks/$id"
                 params={{ id: String(tick.id) }}

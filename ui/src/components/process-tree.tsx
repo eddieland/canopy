@@ -343,7 +343,7 @@ function WorkChip({ work }: { work: ProcessWork }) {
     switch (work.kind) {
         case 'run': {
             return (
-                <Glance card={<RunGlance id={work.id} />} align="start">
+                <Glance card={<RunGlance id={work.id} />} align="start" side="right">
                     <Link to="/workspace/runs/$id" params={{ id }} className={link} data-testid="process-work">
                         {runRef(work.id)} <span className="text-foreground">{work.ticket_key}</span>
                     </Link>
@@ -352,7 +352,7 @@ function WorkChip({ work }: { work: ProcessWork }) {
         }
         case 'review': {
             return (
-                <Glance card={<ReviewGlance id={work.id} />} align="start">
+                <Glance card={<ReviewGlance id={work.id} />} align="start" side="right">
                     <Link to="/pull-requests/reviews/$id" params={{ id }} className={link} data-testid="process-work">
                         {reviewRef(work.id)}
                         {work.pr_url !== null && (
@@ -365,7 +365,7 @@ function WorkChip({ work }: { work: ProcessWork }) {
         case 'chore': {
             const name = work.chore ?? ''
             return (
-                <Glance card={<ChoreRunGlance name={name} id={work.id} />} align="start">
+                <Glance card={<ChoreRunGlance name={name} id={work.id} />} align="start" side="right">
                     <Link to="/chores/$name/runs/$id" params={{ name, id }} className={link} data-testid="process-work">
                         {choreRunRef(name, work.id)}
                     </Link>
@@ -375,7 +375,7 @@ function WorkChip({ work }: { work: ProcessWork }) {
         case 'task': {
             const task = String(work.task_id ?? 0)
             return (
-                <Glance card={<TaskRunGlance task={work.task_id ?? 0} run={work.id} />} align="start">
+                <Glance card={<TaskRunGlance task={work.task_id ?? 0} run={work.id} />} align="start" side="right">
                     <Link
                         to="/tasks/$id/runs/$run"
                         params={{ id: task, run: id }}
@@ -390,7 +390,7 @@ function WorkChip({ work }: { work: ProcessWork }) {
         case 'epic': {
             const epic = String(work.epic_id ?? 0)
             return (
-                <Glance card={<EpicGlance id={work.epic_id ?? 0} />} align="start">
+                <Glance card={<EpicGlance id={work.epic_id ?? 0} />} align="start" side="right">
                     <Link to="/epics/$id" params={{ id: epic }} className={link} data-testid="process-work">
                         {epicRunRef(epic, work.id)}
                     </Link>

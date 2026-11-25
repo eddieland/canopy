@@ -14,7 +14,7 @@ export function TicketLink({ ticketKey, className }: { ticketKey: string; classN
     const tracker = useTicketUrl(ticketKey)
     return (
         <span className={cn('inline-flex min-w-0 items-center gap-1 font-mono text-xs', className)}>
-            <Glance card={<TicketGlance ticketKey={ticketKey} />} testId="ticket-card" align="start">
+            <Glance card={<TicketGlance ticketKey={ticketKey} />} testId="ticket-card" align="start" side="right">
                 <Link
                     to="/tickets/$key"
                     params={{ key: ticketKey }}

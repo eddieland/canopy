@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils'
  */
 export function ReviewLink({ id, className, children }: { id: number; className?: string; children?: ReactNode }) {
     return (
-        <Glance card={<ReviewGlance id={id} />} testId="review-card" align="start">
+        <Glance card={<ReviewGlance id={id} />} testId="review-card" align="start" side="right">
             <Link
                 to="/pull-requests/reviews/$id"
                 params={{ id: String(id) }}

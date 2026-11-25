@@ -37,11 +37,18 @@ export function createQueryClient(): QueryClient {
                 gcTime: 10 * 60_000,
                 refetchOnWindowFocus: false,
                 refetchOnReconnect: false,
-                // A refusal or a missing session will not change on a retry.
-                retry: (failures, error) => failures < 1 && !(error instanceof ApiError && error.status < 500),
+                // A refusal or a missing session will not change on a retry, and a read that met its deadline has
+                // been waited on long enough: a second wait would double it before the page says so.
+                retry: (failures, error) =>
+                    failures < 1 && !(error instanceof ApiError && error.status < 500) && !isDeadline(error),
                 placeholderData: keepPreviousData,
             },
         },
     })
     return client
+}
+
+// Whether a read failed by meeting its deadline (`withReadDeadline`), not by an answer or a dropped connection.
+function isDeadline(error: unknown): boolean {
+    return error instanceof DOMException && error.name === 'TimeoutError'
 }

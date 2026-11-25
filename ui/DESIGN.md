@@ -697,19 +697,20 @@ reader, so no table repeats them.
   saying there is one. A `title` that explains rather than informs, a button's hint, stays a `title`.
 - **A link's page at a glance is a hover card** (`Glance`): more than a tip holds, a few rows of what the page it opens
   shows, as each header readout shows its page. It opens on hover after half a second, and on the keyboard's focus, and
-  closes when the pointer leaves the link: it holds nothing to point at, so the pointer passes through it and a link it
-  covers still takes its click. A tap follows the link. Like a tip it is on `surface` with no motion. Nothing in it is
-  found only there: it is a preview of the page, never a place to act, so it holds no link and no control. **A reference
-  named in a page has one** (`src/components/ref-glances.tsx`): a run, a ticket, a tick, a task, a review, an epic, a
-  chore, a run of a task or a chore, and a PR, through its link (`RunLink`, `TicketLink`, and the rest). A row that is
-  one link whole has its subject's card too, as the rail's working rows do, theirs opening beside the rail so it covers
-  no row of it. The card leads with the reference whole, so one cut to fit its cell is read there, after the dot of its
-  state, with where it stands in a word in that state's color at the right; then its name, a line of chips saying what
-  kind of thing it is (a run's kind and persona, a review's impact and draft), a line or three of what it said, a
-  running run's steps as the meter the rail draws, and under a hairline its rows. It reads what its page reads, and only
-  once it opens, so a list of links reads nothing and the page behind a card is read by the time the link is followed.
-  Before the read lands it shows its reference over placeholders, and a failed read says why. A link inside a card opens
-  no card of its own.
+  stays while the pointer is on the link or on the card, so it can be read at leisure. It holds nothing to point at, so
+  the pointer passes through it and a link it covers still takes its click. A reference's card opens beside its link,
+  not under it, so the rows below stay in sight and a pointer going down a list leaves it. A tap follows the link. Like
+  a tip it is on `surface` with no motion. Nothing in it is found only there: it is a preview of the page, never a place
+  to act, so it holds no link and no control. **A reference named in a page has one**
+  (`src/components/ref-glances.tsx`): a run, a ticket, a tick, a task, a review, an epic, a chore, a run of a task or a
+  chore, and a PR, through its link (`RunLink`, `TicketLink`, and the rest). A row that is one link whole has its
+  subject's card too, as the rail's working rows do. The card leads with the reference whole, so one cut to fit its cell
+  is read there, after the dot of its state, with where it stands in a word in that state's color at the right; then its
+  name, a line of chips saying what kind of thing it is (a run's kind and persona, a review's impact and draft), a line
+  or three of what it said, a running run's steps as the meter the rail draws, and under a hairline its rows. It reads
+  what its page reads, and only once it opens, so a list of links reads nothing and the page behind a card is read by
+  the time the link is followed. Before the read lands it shows its reference over placeholders, and a failed read says
+  why. A link inside a card opens no card of its own.
 - **A list in time can be flipped**, oldest first or newest first, from its panel's header (`OrderToggle`): a ghost
   button before the count, an up-down arrow and the order it is in, in words (`newest first`). A list sorted by each
   row's latest activity rather than by when it began says so (`recently updated`, after GitHub's sorts): its first row

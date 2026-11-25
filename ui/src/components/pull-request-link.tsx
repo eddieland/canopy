@@ -20,6 +20,7 @@ export function PullRequestLink({ url, className }: { url: string; className?: s
                 card={<PullRequestGlance url={pullRequestUrl(url) ?? url} />}
                 testId="pull-request-card"
                 align="start"
+                side="right"
             >
                 <Link
                     to="/pull-requests/pr"

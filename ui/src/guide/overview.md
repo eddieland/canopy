@@ -81,12 +81,13 @@ word as the CLI spells it, `needs_human` for `needs human`. A tip opens when you
 about, and when you tap that on a touch screen. Tab stops only where a tip has something to say, so a title that
 fits costs you no keystroke.
 
-A reference canopy names in a page has a card behind its link: `run:41`, a ticket's key, `tick:2`, `task:4`,
-`review:6`, `epic:2`, `chore:deps`, a PR. Hover the link, or Tab to it, and the card says where the thing stands, in
-its state's color, with its title, the gist of what it last said, and a few facts such as when it started and what it
-cost. It's the page in miniature, so you can tell whether `run:38` is the one you're after without opening four tabs
-to find out. There's nothing to click in a card; the link under it still goes to the page. The rows of what's working in
-the rail have cards as well, opening beside the rail.
+A reference canopy names in a page has a card behind its link: `run:41`, a ticket's key, `tick:2`, `task:4`, `review:6`,
+`epic:2`, `chore:deps`, a PR. Hover the link, or Tab to it, and the card says where the thing stands, in its state's
+color, with its title, the gist of what it last said, and a few facts such as when it started and what it cost. It's the
+page in miniature, so you can tell whether `run:38` is the one you're after without opening four tabs to find out. A
+card opens beside its link and stays while your pointer is on either, so you can move onto it and read. There's nothing
+to click in a card; a click goes through it to whatever is underneath. The rows of what's working in the rail have cards
+as well, opening beside the rail.
 
 ## The header
 

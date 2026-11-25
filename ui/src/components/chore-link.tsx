@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils'
  */
 export function ChoreLink({ name, className }: { name: string; className?: string }) {
     return (
-        <Glance card={<ChoreGlance name={name} />} testId="chore-card" align="start">
+        <Glance card={<ChoreGlance name={name} />} testId="chore-card" align="start" side="right">
             <Link
                 to="/chores/$name"
                 params={{ name }}
@@ -26,7 +26,7 @@ export function ChoreLink({ name, className }: { name: string; className?: strin
 /** One run of a chore, as `chore:NAME#N`, that opens its page: what it checked, its findings, and its session. */
 export function ChoreRunLink({ name, id, className }: { name: string; id: number; className?: string }) {
     return (
-        <Glance card={<ChoreRunGlance name={name} id={id} />} testId="chore-run-card" align="start">
+        <Glance card={<ChoreRunGlance name={name} id={id} />} testId="chore-run-card" align="start" side="right">
             <Link
                 to="/chores/$name/runs/$id"
                 params={{ name, id: String(id) }}

@@ -54,6 +54,12 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
                 // What only its page carries, the list sends empty: the plan it wrote, its checklist's answers and
                 // what it pushed after them, what it changed, and once it ends the worktrees it worked in stay as the
                 // page read them.
+                // A read of it still on its way was asked before this row was sent: left to land, it would put the
+                // older run back over this one. What only its page carries is kept below, and a run that ended is
+                // read again further down.
+                if (client.getQueryState(keys.run(run.id))?.fetchStatus === 'fetching') {
+                    void client.cancelQueries({ queryKey: keys.run(run.id), exact: true }, { revert: false })
+                }
                 client.setQueryData(keys.run(run.id), {
                     ...run,
                     feedback_plan: shown.feedback_plan,

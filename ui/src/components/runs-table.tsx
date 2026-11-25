@@ -384,7 +384,7 @@ function TaskRunBody({ task, run }: { task: TaskSummary; run: TaskRun }) {
  */
 function ChoreRunNumber({ chore, id }: { chore: string; id: number }) {
     return (
-        <Glance card={<ChoreRunGlance name={chore} id={id} />} testId="chore-run-card" align="start">
+        <Glance card={<ChoreRunGlance name={chore} id={id} />} testId="chore-run-card" align="start" side="right">
             <Link
                 to="/chores/$name/runs/$id"
                 params={{ name: chore, id: String(id) }}
