@@ -156,7 +156,8 @@ describe('ReviewDraftPanel', () => {
         expect(within(found).getByTestId('draft-posts').textContent).toBe(
             "Publish posts the body and 1 comment as your comment review, unmarked, on carol's PR, at a61f7c0: it " +
                 'approves nothing. A review started on GitHub holds the same, seen by you alone until you submit it ' +
-                'there.',
+                'there; if you have a pending review on the PR already, it goes into that one, which keeps what it ' +
+                'holds.',
         )
         cleanup()
         const unread = await panel(reviewDraft({ body: '', pr_author: null }))

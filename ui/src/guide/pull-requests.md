@@ -145,6 +145,13 @@ button. canopy's next read of the PR settles them: sent once you submit, dropped
 again if you deleted the review. Until then nothing else is sent on that PR, because GitHub gives each person one
 pending review per PR and canopy isn't about to delete yours.
 
+That rule cuts the other way too. If you already have a pending review open on the PR, half-written on GitHub, staging
+doesn't fight it: the drafts go into that review, next to your own comments, and canopy's body lands below yours after
+a blank line. Nothing you wrote there is changed, and canopy never submits or deletes a review it didn't open. If
+GitHub refuses part of it, what got in stays, the card says how much, and staging again adds only what's missing, so
+your review doesn't sprout duplicates. Sending, which submits, is refused while you have one: it would submit your
+half-written thoughts along with canopy's.
+
 canopy is careful about what it posts. A send carries the hash of the text you saw, so if the draft changed in another
 tab, it's refused `stale` rather than sending words you never read. If a coworker commented on the thread since the
 run, the send is refused `thread_changed` and the page shows the new comment: read it, then send again if your reply
@@ -518,7 +525,9 @@ revision did when you next read it; it doesn't follow the run as it goes, so rel
 Two buttons sit at the foot, as they do under a PR's thread drafts. **Publish version N** posts the version on the page,
 word for word, on the commit the review read, and submits it. **Start the review on GitHub**, beside it, posts the same
 as a pending review instead: only you can see it until you submit it, or delete it, on GitHub, and canopy's next read
-of the PR records which. The line beside them says exactly what goes out, the body and how many comments, on whose PR
+of the PR records which. If you have a pending review of your own on the PR already, it goes into that one, keeping
+your comments and body, and the toast says so; one on another commit than the review read is left alone, and the
+publish says why. The line beside them says exactly what goes out, the body and how many comments, on whose PR
 and which commit, so there's no guessing what your name is about to be attached to. Either way it is one comment review
 that approves nothing and requests no change, and it's `canopy review publish RUN HASH`, with `--submit` for the
 first. A toast says what went and where; the panel keeps a line linking to it on GitHub, and a published one drops a

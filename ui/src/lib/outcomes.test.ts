@@ -283,6 +283,7 @@ describe('outcomes', () => {
                 failed: [{ draft: draft({ number: 3 }), why: 'the post failed: 502' }],
                 unconfirmed: [draft({ number: 4, status: 'unconfirmed' })],
                 staged: [draft({ number: 5, status: 'staged' })],
+                joined: [],
             }),
         ).toBe(
             `Sent run 45's draft 1: ${url}. Run 45's draft 2 was sent already. ` +
@@ -293,7 +294,7 @@ describe('outcomes', () => {
     })
 
     it('say what a stage did: each draft in the review, and each reaction that went on its comment now', () => {
-        const none = { posted: [], already: [], failed: [], unconfirmed: [], staged: [] }
+        const none = { posted: [], already: [], failed: [], unconfirmed: [], staged: [], joined: [] }
         expect(
             draftsStagedText({
                 ...none,
@@ -311,7 +312,7 @@ describe('outcomes', () => {
 
     it('toast a stage: how many drafts wait in the review, where to finish it, and the reactions added now', () => {
         const pr = 'https://github.com/acme/web/pull/88'
-        const none = { posted: [], already: [], failed: [], unconfirmed: [], staged: [] }
+        const none = { posted: [], already: [], failed: [], unconfirmed: [], staged: [], joined: [] }
         const two = [draft({ status: 'staged' }), draft({ number: 2, status: 'staged' })]
         expect(draftsStagedToast({ ...none, staged: two }, pr)).toEqual({
             title: 'Staged 2 drafts in a review on GitHub',
@@ -324,6 +325,14 @@ describe('outcomes', () => {
             detail: `${pr}/files`,
             tone: 'done',
         })
+        expect(draftsStagedToast({ ...none, staged: two, joined: [pr] }, pr)).toEqual({
+            title: 'Added 2 drafts to your pending review on GitHub',
+            detail: `${pr}/files`,
+            tone: 'done',
+        })
+        expect(draftsStagedText({ ...none, staged: [draft({ status: 'staged' })], joined: [pr] })).toBe(
+            "Added run 45's draft 1 to your pending review on GitHub, for you to submit there.",
+        )
         expect(draftsStagedToast({ ...none, posted: [alone] }, pr)).toEqual({
             title: 'Added 1 reaction now',
             tone: 'done',
@@ -336,7 +345,7 @@ describe('outcomes', () => {
 
     it("toast a send: the one draft's fate, or how many of several reached the PR, and where they went", () => {
         const url = 'https://github.com/acme/web/pull/88#pullrequestreview-1'
-        const none = { posted: [], already: [], failed: [], unconfirmed: [], staged: [] }
+        const none = { posted: [], already: [], failed: [], unconfirmed: [], staged: [], joined: [] }
         expect(draftsSentToast({ ...none, posted: [draft({ status: 'sent', sent_url: url })] })).toEqual({
             title: "Sent run 45's draft 1",
             detail: url,
@@ -548,6 +557,7 @@ describe('reviewDraftPublishedToast', () => {
         draft: reviewDraft({ status, published_url: status === 'published' ? `${pr}#pullrequestreview-9` : null }),
         published: 2,
         failed: null,
+        joined: false,
     })
 
     it('says where a publish went, and crosses one whose outcome a read of the PR settles', () => {
@@ -559,6 +569,20 @@ describe('reviewDraftPublishedToast', () => {
         expect(reviewDraftPublishedToast(5, pr, published('unconfirmed'))).toEqual({
             title: "Version 2 of review run 5's draft may have been posted",
             tone: 'failed',
+        })
+    })
+
+    it('says a stage went into your own pending review on GitHub when it joined one', () => {
+        const staged = { draft: reviewDraft({ status: 'staged' }), published: 2, failed: null }
+        expect(reviewDraftPublishedToast(5, pr, { ...staged, joined: false })).toEqual({
+            title: "Staged version 2 of review run 5's draft in a review on GitHub",
+            detail: `${pr}/files`,
+            tone: 'done',
+        })
+        expect(reviewDraftPublishedToast(5, pr, { ...staged, joined: true })).toEqual({
+            title: "Added version 2 of review run 5's draft to your pending review on GitHub, keeping what it held",
+            detail: `${pr}/files`,
+            tone: 'done',
         })
     })
 
