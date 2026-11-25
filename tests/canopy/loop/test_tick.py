@@ -247,10 +247,12 @@ def test_the_state_block_names_the_tickets_marked_done_lately(scenario: Scenario
     with db.transaction(conn):
         db.forget_ticket(conn, "PROJ-7", channel="cli", branch=None, prs=[])
     db.set_ticket(conn, "PROJ-7", repo, done=True)
-    # Time passes for these two tickets alone, which `time_passes` cannot say.
+    # Time passes for these tickets alone, which `time_passes` cannot say.
     long_ago = db.format_time(datetime.now(UTC) - timedelta(days=tick.RECENTLY_DONE_DAYS + 1))
     with db.transaction(conn):
         conn.execute("UPDATE decisions SET created_at = ? WHERE ticket_key = 'PROJ-2'", (long_ago,))
+        # Too old to list it, so only the row's change since the forget can.
+        conn.execute("UPDATE decisions SET created_at = ? WHERE ticket_key = 'PROJ-7'", (long_ago,))
         # Its newest `done` decision is the one that counts.
         conn.execute("UPDATE decisions SET created_at = ? WHERE ticket_key = 'PROJ-3'", (long_ago,))
     with in_tick(conn) as tick_id:

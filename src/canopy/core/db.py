@@ -699,6 +699,9 @@ def recently_done(conn: sqlite3.Connection, since: str) -> list[DoneTicket]:
     would otherwise owe a decision on a ticket the block does not list. Not one whose newest `done` decision says
     `closed`, since the tracker reports a closed ticket closed, and leaving it out lets the query find it again once it
     is reopened.
+
+    Returns:
+        Each such ticket's key and that time.
     """
     # Each done ticket's newest decision by `decisions_ticket`, not a scan of every decision ever recorded.
     newest_done = sql.select("max(id)").from_("decisions").where("ticket_key = t.key AND action = 'done'")
