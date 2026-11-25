@@ -687,25 +687,33 @@ class DoneTicket(records.View):
     """A ticket marked done, and when."""
 
     key: str
-    #: The time of its newest `done` decision.
+    #: The time of its newest `done` decision, or of its row's last change when it has none since it was forgotten.
     done_at: str
 
 
 def recently_done(conn: sqlite3.Connection, since: str) -> list[DoneTicket]:
-    """Return the tickets marked done whose newest `done` decision is at or after `since`, by key (DESIGN §7).
+    """Return the tickets marked done at or after `since`, by key (DESIGN §7).
 
-    Not one: a ticket marked done with no `done` decision since
-    the operator last forgot it, or whose newest one says `closed`, since the tracker reports a closed ticket closed,
-    and leaving it out lets the query find it again once it is reopened.
+    A ticket's time is its newest `done` decision's since the operator last forgot it, or, with none, its row's last
+    change: the overseer can mark a ticket done with `ticket set` and decide nothing, and the query, still finding it,
+    would otherwise owe a decision on a ticket the block does not list. Not one whose newest `done` decision says
+    `closed`, since the tracker reports a closed ticket closed, and leaving it out lets the query find it again once it
+    is reopened.
+
+    Returns:
+        Each such ticket's key and that time.
     """
     # Each done ticket's newest decision by `decisions_ticket`, not a scan of every decision ever recorded.
     newest_done = sql.select("max(id)").from_("decisions").where("ticket_key = t.key AND action = 'done'")
     query = (
-        records.view(DoneTicket, "t.key, d.created_at AS done_at")
+        records.view(DoneTicket, "t.key, coalesce(d.created_at, t.changed_at) AS done_at")
         .from_("tickets t")
-        .join("decisions d ON d.id = ({})", newest_done)
-        .where("t.done = 1 AND d.created_at >= ? AND d.rationale != ?", since, CLOSED_RATIONALE)
-        .where("t.forgotten_at IS NULL OR d.created_at > t.forgotten_at")
+        .left_join(
+            "decisions d ON d.id = ({}) AND (t.forgotten_at IS NULL OR d.created_at > t.forgotten_at)",
+            newest_done,
+        )
+        .where("t.done = 1 AND coalesce(d.created_at, t.changed_at) >= ?", since)
+        .where("d.id IS NULL OR d.rationale != ?", CLOSED_RATIONALE)
         .order_by("t.key")
     )
     return query.all(conn)

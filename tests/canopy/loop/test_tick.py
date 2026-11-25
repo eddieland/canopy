@@ -254,14 +254,17 @@ def test_the_state_block_names_the_tickets_marked_done_lately(scenario: Scenario
         db.set_ticket(conn, "PROJ-6", repo, done=True)
         db.record_decision(conn, tick_id, "PROJ-6", "done", db.CLOSED_RATIONALE)
         db.finish_tick(conn, tick_id, TickStatus.OK, "")
-    # Forgotten, then marked done again with no decision of its own: the earlier one does not count.
+    # Forgotten, then marked done again with no decision of its own: the earlier one does not count, and the row's
+    # change is when, as for PROJ-4.
     with db.transaction(conn):
         db.forget_ticket(conn, "PROJ-7", channel="cli", branch=None, prs=[])
     db.set_ticket(conn, "PROJ-7", repo, done=True)
-    # Time passes for these two tickets alone, which `time_passes` cannot say.
+    # Time passes for these tickets alone, which `time_passes` cannot say.
     long_ago = db.format_time(datetime.now(UTC) - timedelta(days=tick.RECENTLY_DONE_DAYS + 1))
     with db.transaction(conn):
         conn.execute("UPDATE decisions SET created_at = ? WHERE ticket_key = 'PROJ-2'", (long_ago,))
+        # Too old to list it, so only the row's change since the forget can.
+        conn.execute("UPDATE decisions SET created_at = ? WHERE ticket_key = 'PROJ-7'", (long_ago,))
         # Its newest `done` decision is the one that counts.
         conn.execute("UPDATE decisions SET created_at = ? WHERE ticket_key = 'PROJ-3'", (long_ago,))
     with in_tick(conn) as tick_id:
@@ -269,9 +272,9 @@ def test_the_state_block_names_the_tickets_marked_done_lately(scenario: Scenario
         db.finish_tick(conn, tick_id, TickStatus.OK, "")
     scenario.tick(*waits("PROJ-5", rationale="checks pending"), dry_run=True)
     state = scenario.state()
-    # Not PROJ-2, done too long ago; not PROJ-4, with no `done` decision; not PROJ-5, which is not marked done; not
-    # PROJ-6, closed; not PROJ-7, whose decision came before it was forgotten; not PROJ-8, which the query left out.
-    assert state["recently_done"] == ["PROJ-1", "PROJ-3"]
+    # PROJ-4 and PROJ-7 too, marked done with no `done` decision since. Not PROJ-2, done too long ago; not PROJ-5,
+    # which is not marked done; not PROJ-6, closed; not PROJ-8, which the query left out.
+    assert state["recently_done"] == ["PROJ-1", "PROJ-3", "PROJ-4", "PROJ-7"]
     assert [t["key"] for t in state["tickets"]] == ["PROJ-5"]
 
 
