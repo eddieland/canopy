@@ -15,6 +15,9 @@ permission:
   external_directory: deny
   # Subagents run with their own, wider permissions; the worker must not reach them.
   task: deny
+  # Nor OpenCode's own question tool, which waits on a person at the session: a run has none, so the call never
+  # returns an answer. What an agent asks the operator goes through canopy, as its prompt says.
+  question: deny
   # The operator's own `canopy` skill (`canopy skill --install`) is for their sessions, not canopy's agents.
   skill:
     "canopy": deny
