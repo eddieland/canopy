@@ -131,6 +131,7 @@ describe('DraftCard', () => {
                 failed: [],
                 unconfirmed: [],
                 staged: [],
+                joined: [],
             }),
         )
         expect((await screen.findByRole('status')).textContent).toBe(`Sent run 45's draft 1: ${PR}#discussion_r9.`)
@@ -361,6 +362,7 @@ describe('ReviewThreads', () => {
             failed: [],
             unconfirmed: [],
             staged: held,
+            joined: [],
         }
         answer = (path) => Response.json(path === '/api/drafts/stage' ? staged : threads)
         await renderRouted(toasting(<ReviewThreads url={PR} />))

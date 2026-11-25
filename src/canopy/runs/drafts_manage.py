@@ -13,7 +13,9 @@ Staging is sending without the submit: one PR's drafts go into a pending review,
 finish there, and stay `staged` until a whole read finds that review submitted, when they are sent, or gone, when they
 wait again. GitHub has no pending reaction, so a stage adds its reactions at once, as a send does, and a draft that is a
 reaction alone is sent. While a PR holds a staged review, nothing else is sent or staged on it, since GitHub keeps one
-pending review a person.
+pending review a person. Where the operator has a pending review of their own on the PR already, the poster adds the
+drafts to it, keeping what it holds (`joined`). canopy deletes a pending review only by the node id it keeps for one it
+opened, so it never keeps a joined review's: it knows that one by its id alone, which a read settles the drafts by.
 """
 
 from __future__ import annotations
@@ -218,6 +220,8 @@ class Sent:
     failed: list[tuple[records.Draft, str]] = field(default_factory=list)
     unconfirmed: list[records.Draft] = field(default_factory=list)
     staged: list[records.Draft] = field(default_factory=list)
+    #: The PRs whose drafts went into the operator's own pending review there, rather than one canopy opened.
+    joined: list[str] = field(default_factory=list)
 
 
 def send(
@@ -575,7 +579,9 @@ def _post(
         else:
             _unconfirmed(conn, group, pending, outcome)
     elif end is not None:
-        _back(conn, group, outcome, f"nothing was posted: {said or 'the post command refused'}", end)
+        # Nothing was posted; or a stage stopped part way into the operator's own pending review, left as it was.
+        why = f"nothing was posted: {said or 'the post command refused'}"
+        _back(conn, group, outcome, _stopped_in_joined(group, lines, said) if end.get("joined") is True else why, end)
     elif key.pr is not None and pending is None:
         # It opened no review, so it posted nothing. A ticket's comment has no review: without an end it may be posted.
         _back(conn, group, outcome, f"nothing was posted: {said or 'the post command failed'}", None)
@@ -589,6 +595,27 @@ def _post(
             "staged": bool(end and end.get("staged")),
             "stderr": said,
         },
+    )
+
+
+def _stopped_in_joined(group: Sequence[records.Draft], lines: Mapping[str, Mapping[str, object]], said: str) -> str:
+    """Why a stage into the operator's own pending review stopped part way, by the replies the post says it holds.
+
+    Returns:
+        The reason, as each draft's `why` says it.
+    """
+    refused = said or "the post command refused"
+    replies = [d for d in group if d.kind is DraftKind.THREAD]
+    held = sum(1 for d in replies if f"comment:{d.comment_id}" in lines)
+    if not held:
+        # Counted by its replies alone: whether GitHub took the body before it stopped is not known, so not said.
+        return (
+            f"none of its replies are in your pending review on GitHub, which canopy left as it was, and staging again "
+            f"adds only what is missing: {refused}"
+        )
+    return (
+        f"GitHub refused part of it: {held} of its {len(replies)} replies are in your pending review on GitHub, which "
+        f"canopy left as it was, and staging again adds only what is missing: {refused}"
     )
 
 
@@ -745,7 +772,7 @@ def _staged(
     outcome: Sent,
 ) -> None:
     """A stage that holds every draft in its pending review: each is `staged`, a reply known by its comment's id."""
-    node, review_id = _str(pending.get("review")), _int(pending.get("id"))
+    node, review_id = _opened(pending), _int(pending.get("id"))
     with db.transaction(conn):
         for d in group:
             # A thread's line names the comment it answered; the PR's own draft is the review's body.
@@ -766,6 +793,20 @@ def _staged(
                 .run(conn)
             )
     outcome.staged.extend(d for d in (drafts.get(conn, d.id) for d in group) if d is not None)
+    pr = group[0].pr_url if group else None
+    if pending.get("joined") is True and pr is not None:
+        outcome.joined.append(pr)
+
+
+def _opened(pending: Mapping[str, object]) -> str | None:
+    """The node id of the pending review the poster's `pending` line names, kept only for one canopy opened.
+
+    A later post deletes the pending review by that id, so a review the poster joined, the operator's own, keeps none.
+
+    Returns:
+        The node id, or None.
+    """
+    return None if pending.get("joined") is True else _str(pending.get("review"))
 
 
 def _back(
@@ -800,7 +841,7 @@ def _unconfirmed(
     outcome: Sent,
 ) -> None:
     """A post that may have posted: its drafts are unconfirmed until a read, or the operator, settles them."""
-    node = _str(pending.get("review")) if pending is not None else None
+    node = _opened(pending) if pending is not None else None
     review_id = _int(pending.get("id")) if pending is not None else None
     with db.transaction(conn):
         (

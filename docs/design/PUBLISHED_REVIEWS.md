@@ -80,7 +80,8 @@ the page says which. The journal records the version, the channel, when, and the
 A post that ends without saying whether it submitted is of unknown outcome, and nothing is posted for the draft until a
 whole read of the PR through the `vcs` source (§30) settles it, as §29's sends are. In place of publishing, after the
 same checks, the operator may stage the version: canopy opens a pending review holding it and never submits it; the
-operator does, on GitHub, or deletes it. A whole read settles a staged draft as §29's: published once its review is
+operator does, on GitHub, or deletes it. Where they have a pending review there already, as §29's stage does, canopy
+adds the version to it. A whole read settles a staged draft as §29's: published once its review is
 submitted, publishable again if it is gone. Staging is the default, so submitting stays the operator's click on GitHub
 unless they ask canopy to submit; the CLI's `--submit` does. A draft is publishable while the diff its review kept is,
 so not after garbage collection deletes it (§26). A published review is not followed onto the next commit, and the

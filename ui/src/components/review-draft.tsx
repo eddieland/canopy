@@ -63,9 +63,11 @@ const INTRO = [
     " that approves nothing. The reviewer wrote it from the PR's text, so read it before you publish it.",
 ] as const
 
-// The end of the line by the publish buttons: what the review is not, and what the other button does.
+// The end of the line by the publish buttons: what the review is not, and what the other button does, and where: GitHub
+// keeps one pending review a person, so one you have open on the PR already takes it, and keeps what it holds.
 const POSTS_STAGED =
-    ': it approves nothing. A review started on GitHub holds the same, seen by you alone until you submit it there.'
+    ': it approves nothing. A review started on GitHub holds the same, seen by you alone until you submit it there; ' +
+    'if you have a pending review on the PR already, it goes into that one, which keeps what it holds.'
 
 // A finding's card's one control, while the draft waits: leaving it out of the review is dismissing it, which drops
 // its comment or its part of the body, and putting it back is taking that back, which restores the reviewer's words.

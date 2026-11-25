@@ -126,6 +126,7 @@ def sent(conn: sqlite3.Connection, outcome: drafts_manage.Sent) -> DraftsSent:
         failed=failed,
         unconfirmed=now(outcome.unconfirmed),
         staged=now(outcome.staged),
+        joined=outcome.joined,
     )
 
 

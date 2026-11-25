@@ -328,7 +328,8 @@ function RepliesPanel({
                             </Button>
                             <span className="text-xs text-muted-foreground">
                                 Send posts one comment review, in your name: it approves nothing and resolves no thread.
-                                A review started on GitHub holds the same words, for you to add to and submit there
+                                A review started on GitHub holds the same words, for you to add to and submit there:
+                                your own, if you have a pending review on the PR already, which keeps what it holds
                                 {sendable.some((d) => d.reaction !== null) &&
                                     "; its reactions go on their comments now, since GitHub can't keep one pending"}
                                 .

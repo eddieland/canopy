@@ -21,7 +21,9 @@ State keys, each optional:
     hang        PATH: the reader creates PATH, then sleeps a minute before it reads, as a reader GitHub never answers.
     login       who the poster posts as. Default `me`.
     post        how the next post ends: `ok` (the default), `refused` (nothing posted, `"submitted": false`),
-                `pending_left` (nothing posted, and its pending review left), or `unknown` (no `end` line). With
+                `pending_left` (nothing posted, and its pending review left), `unknown` (no `end` line), or, for a
+                stage that joins the poster's own pending review, `joined_partial` (GitHub refuses all but its first
+                reply and first comment) or `joined_none` (GitHub refuses its first reply or comment). With
                 `unknown`, `posted: true` makes it post all the same, as a submit that reached GitHub would.
     issues      [{"url": URL, "body": TEXT, "id": N}]: the comments the poster made on issues, appended as it posts.
     reactions   [{"pr": URL, "comment": ID, "reaction": NAME, "by": LOGIN}]: the reactions the poster added, appended
@@ -34,7 +36,10 @@ A post adds its reactions first, then, unless its replies are all reactions alon
 adds each reply's text to the state as a `comment` review line by the poster, on the thread of the comment it answers,
 each of a review's `comments` as one on a thread of its own at its path and line, and the review as a `review` line,
 with the `commit` it names, so the next read sees them. A post with `"submit": false` stages its review instead: the
-review line is `pending`, as GitHub shows it to its author, until a test submits or deletes it in the state.
+review line is `pending`, as GitHub shows it to its author, until a test submits or deletes it in the state. A stage
+on a PR whose reviews hold a `pending` one by the poster, other than the one `delete_pending` names, joins it, as the
+real poster does: it adds the replies and comments that review does not hold already, by their words, puts the body
+below the review's own, and prints `"joined": true` on its `pending` and `end` lines; a post that submits is refused.
 
 Stdlib only, no canopy imports: this runs as a separate process under whatever python3 is on PATH.
 """
@@ -150,6 +155,29 @@ def post_pr(state: dict[str, Any], request: dict[str, Any], login: str, outcome:
     if not replies and not comments and request.get("body") is None:
         emit({"kind": "end", "submitted": True})
         return 0
+    reviews = state.setdefault("prs", {}).setdefault(url, {}).setdefault("reviews", [])
+    own = next(
+        (
+            r
+            for r in reviews
+            if r.get("item") == "review"
+            and r.get("state") == "pending"
+            and r.get("author") == login
+            and f"PRR_fake_{r['id']}" != request.get("delete_pending")
+        ),
+        None,
+    )
+    if own is not None:
+        return join(state, request, login, outcome, own)
+    return open_review(state, request, login, outcome)
+
+
+def open_review(state: dict[str, Any], request: Mapping[str, Any], login: str, outcome: str) -> int:
+    """Open a pending review holding the post, and submit it unless the post stages it."""
+    url = request["pr"]
+    reviews = state["prs"][url]["reviews"]
+    replies = [r for r in request.get("replies", []) if "text" in r]
+    comments = request.get("comments", [])
     pending_id = next_id(state)
     pending = f"PRR_fake_{pending_id}"
     emit({"kind": "pending", "review": pending, "id": pending_id})
@@ -159,7 +187,6 @@ def post_pr(state: dict[str, Any], request: dict[str, Any], login: str, outcome:
         return 1
     if outcome == "unknown" and not state.get("posted"):
         return 1
-    reviews = state.setdefault("prs", {}).setdefault(url, {}).setdefault("reviews", [])
     review_id = pending_id
     lines = add_comments(state, url, login, review_id, replies, comments)
     review_url = f"{url}#pullrequestreview-{review_id}"
@@ -185,6 +212,62 @@ def post_pr(state: dict[str, Any], request: dict[str, Any], login: str, outcome:
         emit({"kind": "review", "id": review_id, "url": review_url})
     emit({"kind": "end", "submitted": False, "staged": True} if staged else {"kind": "end", "submitted": True})
     return 0
+
+
+def join(state: dict[str, Any], request: Mapping[str, Any], login: str, outcome: str, own: dict[str, Any]) -> int:
+    """Add a stage to the poster's own pending review `own`, keeping what it holds, as the real poster joins one."""
+    if request.get("submit") is not False:
+        print("canopy-post-github: you have a pending review; submitting would submit it too", file=sys.stderr)
+        emit({"kind": "end", "submitted": False})
+        return 1
+    url = request["pr"]
+    emit({"kind": "pending", "review": f"PRR_fake_{own['id']}", "id": own["id"], "joined": True})
+    held = {
+        r["body"]: r for r in state["prs"][url]["reviews"] if r.get("item") == "comment" and r["review"] == own["id"]
+    }
+    replies = [r for r in request.get("replies", []) if "text" in r]
+    comments = request.get("comments", [])
+    partial = outcome in {"joined_partial", "joined_none"}
+    if partial:
+        kept = 1 if outcome == "joined_partial" else 0
+        replies, comments = replies[:kept], comments[:kept]
+    if outcome == "unknown":
+        return 1
+    for line in add_missing(state, url, login, own["id"], held, replies, comments):
+        emit(line)
+    if partial:
+        print("canopy-post-github: GitHub refused comment 2", file=sys.stderr)
+        emit({"kind": "end", "submitted": False, "joined": True})
+        return 1
+    body = request.get("body")
+    if body and body not in own["body"]:
+        own["body"] = f"{own['body']}\n\n{body}" if own["body"] else body
+    emit({"kind": "end", "submitted": False, "staged": True, "joined": True})
+    return 0
+
+
+def add_missing(
+    state: dict[str, Any],
+    url: str,
+    login: str,
+    review_id: int,
+    held: Mapping[str, dict[str, Any]],
+    replies: Iterable[dict[str, Any]],
+    comments: Iterable[dict[str, Any]],
+) -> list[dict[str, object]]:
+    """Add each reply and comment review `review_id` does not hold already, by its words; return the lines to print."""
+    lines: list[dict[str, object]] = []
+    for reply in replies:
+        found = held.get(reply["text"])
+        if found is None:
+            lines.extend(add_comments(state, url, login, review_id, [reply], []))
+        else:
+            lines.append({"kind": "comment", "comment": reply["comment"], "id": found["id"], "url": found["url"]})
+    for index, new in enumerate(comments, 1):
+        found = held.get(new["text"])
+        added = [found] if found is not None else add_comments(state, url, login, review_id, [], [new])
+        lines.extend({"kind": "comment", "index": index, "id": a["id"], "url": a["url"]} for a in added)
+    return lines
 
 
 def refuses_a_comment(state: Mapping[str, Any], comments: Iterable[dict[str, Any]]) -> bool:

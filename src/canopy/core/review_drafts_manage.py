@@ -17,7 +17,10 @@ draft's newest version. Notes are the reviser's only instructions, so only the o
 the draft's revision limit, or while a revision runs, is refused; the operator grants a draft more revisions.
 
 Staging is publishing without the submit: the version waits in a pending review for the operator to submit on GitHub,
-and is `staged` until a whole read finds that review submitted, or gone.
+and is `staged` until a whole read finds that review submitted, or gone. Where the operator has a pending review of
+their own on the PR already, the poster adds the version to it, keeping what it holds (`joined`). canopy deletes a
+pending review only by the node id it keeps for one it opened, so it never keeps a joined review's: it knows that one
+by its id alone, which a read settles the draft by.
 
 Discarding is the operator's word that a waiting draft is seen and will not post: it is `discarded`, past every other
 verb, and posts nothing.
@@ -346,6 +349,8 @@ class Published:
     version: Version
     #: Why nothing was posted, in the harness's words with the poster's; None when it posted, staged, or may have.
     failed: str | None = None
+    #: Whether it went into the operator's own pending review on the PR, rather than one canopy opened.
+    joined: bool = False
 
 
 def publish(
@@ -550,20 +555,43 @@ def _post(
     lines, comments = _lines(result.stdout)
     said = result.stderr.strip()[-_MAX_STDERR:]
     end, pending = lines.get("end"), lines.get("pending")
-    fields = {"review_draft": draft.id, "version": version.number, "submit": submit, "stderr": said}
+    joined = pending is not None and pending.get("joined") is True
+    fields = {"review_draft": draft.id, "version": version.number, "submit": submit, "joined": joined, "stderr": said}
     if end is not None and end.get("submitted") is True:
         log.info("review published", extra=fields)
         return _published(conn, draft, version, lines.get("review", {}), comments)
     if end is not None and end.get("staged") is True and pending is not None and _int(pending.get("id")) is not None:
         log.info("review staged", extra=fields)
-        return _staged(conn, draft, version, pending)
+        return _staged(conn, draft, version, pending, joined=joined)
     if (end is not None and end.get("staged") is not True) or pending is None:
-        # It said nothing was posted, or it opened no review, so it posted nothing.
+        # It said nothing was posted, or it opened no review, so it posted nothing; or it stopped part way into the
+        # operator's own pending review, which it left as it was.
         log.warning("review not published", extra=fields)
         why = f"nothing was posted: {said or 'the post command refused'}"
+        if end is not None and end.get("joined") is True:
+            why = _stopped_in_joined(len(comments), len(version.comments), said)
         return _back(conn, draft, version, why, end)
     log.warning("review of unknown outcome", extra=fields)
-    return _unconfirmed(conn, draft, version, pending)
+    return _unconfirmed(conn, draft, version, pending, joined=joined)
+
+
+def _stopped_in_joined(held: int, comments: int, said: str) -> str:
+    """Why a stage into the operator's own pending review stopped part way, with `held` of its `comments` in it.
+
+    Returns:
+        The reason, as the draft's `why` says it.
+    """
+    refused = said or "the post command refused"
+    if not held:
+        # Counted by its comments alone: whether GitHub took the body before it stopped is not known, so not said.
+        return (
+            f"none of its comments are in your pending review on GitHub, which canopy left as it was, and staging "
+            f"again adds only what is missing: {refused}"
+        )
+    return (
+        f"GitHub refused part of it: {held} of its {comments} comments are in your pending review on GitHub, which "
+        f"canopy left as it was, and staging again adds only what is missing: {refused}"
+    )
 
 
 def _pending_seen(conn: sqlite3.Connection, draft_id: int, line: str) -> None:
@@ -577,10 +605,21 @@ def _pending_seen(conn: sqlite3.Connection, draft_id: int, line: str) -> None:
     with db.transaction(conn):
         (
             records.update(records.ReviewDraft)
-            .set(pending_review=_str(raw.get("review")), pending_review_id=_int(raw.get("id")))
+            .set(pending_review=_opened(raw), pending_review_id=_int(raw.get("id")))
             .where("id = ?", draft_id)
             .run(conn)
         )
+
+
+def _opened(pending: Mapping[str, object]) -> str | None:
+    """The node id of the pending review the poster's `pending` line names, kept only for one canopy opened.
+
+    A later post deletes the pending review by that id, so a review the poster joined, the operator's own, keeps none.
+
+    Returns:
+        The node id, or None.
+    """
+    return None if pending.get("joined") is True else _str(pending.get("review"))
 
 
 def _lost(conn: sqlite3.Connection, draft_id: int) -> None:
@@ -659,6 +698,8 @@ def _staged(
     draft: records.ReviewDraft,
     version: Version,
     pending: Mapping[str, object],
+    *,
+    joined: bool,
 ) -> Published:
     with db.transaction(conn):
         (
@@ -666,13 +707,13 @@ def _staged(
             .set(
                 status=ReviewDraftStatus.STAGED,
                 why=None,
-                pending_review=_str(pending.get("review")),
+                pending_review=_opened(pending),
                 pending_review_id=_int(pending.get("id")),
             )
             .where("id = ?", draft.id)
             .run(conn)
         )
-    return Published(_present(conn, draft), version)
+    return Published(_present(conn, draft), version, joined=joined)
 
 
 def _back(
@@ -715,6 +756,8 @@ def _unconfirmed(
     draft: records.ReviewDraft,
     version: Version,
     pending: Mapping[str, object],
+    *,
+    joined: bool,
 ) -> Published:
     """A post that may have posted: the draft is unconfirmed until a whole read of its PR settles it.
 
@@ -727,13 +770,13 @@ def _unconfirmed(
             .set(
                 status=ReviewDraftStatus.UNCONFIRMED,
                 why="the post ended without saying whether it submitted",
-                pending_review=_str(pending.get("review")),
+                pending_review=_opened(pending),
                 pending_review_id=_int(pending.get("id")),
             )
             .where("id = ?", draft.id)
             .run(conn)
         )
-    return Published(_present(conn, draft), version)
+    return Published(_present(conn, draft), version, joined=joined)
 
 
 def _present(conn: sqlite3.Connection, draft: records.ReviewDraft) -> records.ReviewDraft:

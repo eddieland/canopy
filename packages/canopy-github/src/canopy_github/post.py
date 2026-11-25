@@ -9,38 +9,50 @@ its comments, `"comments": [{"path": PATH, "line": N, "text": TEXT}, ...]`: the 
 commit, and each comment starts a thread of its own on line N of PATH, on the commit's side, before the submit. A
 PR's drafts with `"submit": false` are staged instead: the pending review is opened with the body as its own and each
 reply and comment added, and left for the operator to submit on GitHub. `delete_pending` names a pending review an
-earlier post left, which is deleted first, and only if it is still pending, on that PR, and the poster's own. A reply's
-`reaction`, one of `+1`, `-1`, `laugh`, `confused`, `heart`, `hooray`, `rocket`, and `eyes`, is added to the comment it
-names before the review is opened, staged or not, since GitHub has no pending reaction; a reply with a reaction and no
-text adds the reaction alone, and a PR's drafts that are all such open no review.
+earlier post left, which is deleted first, and only if it is still pending, on that PR, and the poster's own.
+
+GitHub keeps one pending review a person on a PR, so a stage on a PR where the poster already has one adds to that one
+instead, joining it: its own comments and body stay as they are, and it is neither submitted nor deleted. A reply or a
+comment it already holds, word for word on the same thread or line, as an earlier stage that stopped part way left, is
+not added again. The body goes in as the review's own when it has none, and below it, after a blank line, when it has
+one that does not already hold it, so neither text is lost. A review whose comments sit on another commit than the
+request's, or whose body and the request's together are longer than GitHub takes, is refused, and nothing is added. A
+post that submits is refused on such a PR, since submitting would submit what the review already holds. A pending
+review that turns up between the look and the opening is joined as well.
+
+A reply's `reaction`, one of `+1`, `-1`, `laugh`, `confused`, `heart`, `hooray`, `rocket`, and `eyes`, is added to the
+comment it names before the review is opened, staged or not, since GitHub has no pending reaction; a reply with a
+reaction and no text adds the reaction alone, and a PR's drafts that are all such open no review.
 
 On stdout, one JSON line each: `as`, the login it posts as; for a PR, `reaction` for each reaction added (the comment,
-the reaction, and the comment's URL), then `pending`, the pending review's node id and its id, once it has one; once it
-is submitted, `comment` for each reply (the comment it answered, the new comment's id and URL), and for each of
-`comments` (its `index` there, from 1, and the new comment's id and URL), and `review` (its id and URL); once a staged
-review holds every reply and comment, their `comment` lines; for an issue, `comment`; last, `end`, saying whether it
-submitted: `"submitted": true` once the review or the issue comment is submitted, or once every reaction is added
-when there is nothing else to post; `"submitted": false, "staged": true` once a staged review holds every reply.
-Otherwise `"submitted": false` is printed only when nothing but the reactions its `reaction` lines name was posted,
-with `pending` naming a pending review it could not delete; a pending review GitHub may have opened without saying so
-is looked for and deleted. No `end` line
+the reaction, and the comment's URL), then `pending`, the pending review's node id and its id, once it has one, with
+`"joined": true` for one it joined; once it is submitted, `comment` for each reply (the comment it answered, the new
+comment's id and URL), and for each of `comments` (its `index` there, from 1, and the new comment's id and URL), and
+`review` (its id and URL); once a staged review holds every reply and comment, their `comment` lines; for an issue,
+`comment`; last, `end`, saying whether it submitted: `"submitted": true` once the review or the issue comment is
+submitted, or once every reaction is added when there is nothing else to post; `"submitted": false, "staged": true`
+once a staged review holds every reply, with `"joined": true` for one it joined. A joined review GitHub refused part of
+is left as it is, never deleted: the `comment` lines name each reply and comment it now holds, and `end` says
+`"submitted": false, "joined": true`, so a later stage adds only the rest. Otherwise `"submitted": false` is printed
+only when nothing but the reactions its `reaction` lines name was posted, with `pending` naming a pending review it
+could not delete; a pending review GitHub may have opened without saying so is looked for and deleted. No `end` line
 means the outcome is unknown: the submit may have reached GitHub. A reaction GitHub already holds is not added twice, so
 a reaction whose outcome is unknown is one to send again, never one that can post twice.
 
 It never approves, requests changes, resolves a thread, or deletes a review but the pending one it is handed, or one it
-opened and could not fill.
+opened and could not fill; never one it joined.
 
 Exit codes: 0 posted; 1 GitHub refused, or the outcome is unknown, as the `end` line says; 2 stdin or the command line
 is not usable, `gh` holds no token for the host, or a reply names a comment the PR has no thread for, and nothing was
-posted. A comment GitHub refuses, as on a line its diff of the PR does not show, posts nothing of the review, and the
-error names it.
+posted. A comment GitHub refuses, as on a line its diff of the PR does not show, posts nothing of a review the poster
+opened, and the error names it.
 """
 
 from __future__ import annotations
 
 import re
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final, TextIO
 
@@ -84,6 +96,10 @@ MAX_COMMENTS: Final = 100
 _COMMIT: Final = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 #: A key a GitHub Issues tracker gives a ticket: letters, a hyphen, the issue's number (DESIGN §17).
 _KEY: Final = re.compile(r"[A-Za-z][A-Za-z0-9_]*-([1-9][0-9]{0,9})")
+#: How many pages of a joined review's comments are read to find those already in it: 100 to a page.
+_MAX_HELD_PAGES: Final = 20
+#: What GitHub's refusal to open a second pending review a person says.
+_ONE_PENDING: Final = "one pending review"
 
 _VIEWER: Final = "query Viewer { viewer { login } }"
 _PR_ID: Final = """
@@ -99,7 +115,24 @@ query IssueId($owner: String!, $name: String!, $number: Int!) {
 _PENDING: Final = """
 query PendingReviews($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
-    pullRequest(number: $number) { reviews(states: [PENDING], first: 10) { nodes { id author { login } } } }
+    pullRequest(number: $number) {
+      reviews(states: [PENDING], first: 10) {
+        nodes { id fullDatabaseId author { login } body comments { totalCount } }
+      }
+    }
+  }
+}
+"""
+_HELD: Final = """
+query PendingReview($id: ID!, $after: String) {
+  node(id: $id) {
+    ... on PullRequestReview {
+      state body commit { oid }
+      comments(first: 100, after: $after) {
+        nodes { fullDatabaseId url body path line originalLine replyTo { fullDatabaseId } }
+        pageInfo { hasNextPage endCursor }
+      }
+    }
   }
 }
 """
@@ -138,6 +171,11 @@ mutation Submit($review: ID!, $body: String) {
   submitPullRequestReview(input: {pullRequestReviewId: $review, event: COMMENT, body: $body}) {
     pullRequestReview { fullDatabaseId url state }
   }
+}
+"""
+_UPDATE: Final = """
+mutation UpdateReview($review: ID!, $body: String!) {
+  updatePullRequestReview(input: {pullRequestReviewId: $review, body: $body}) { pullRequestReview { id } }
 }
 """
 _DELETE: Final = """
@@ -198,6 +236,19 @@ class IssueComment:
 
     issue: Ref
     body: str
+
+
+@dataclass(frozen=True)
+class Pending:
+    """The poster's own pending review on a PR, as read before a stage adds to it."""
+
+    node: str
+    id: int | None
+    body: str
+    #: The commit it is opened on, if GitHub names one.
+    commit: str | None
+    #: Each comment it holds, as GitHub's `comments` of the review lists them.
+    comments: tuple[Mapping[str, object], ...]
 
 
 class UnknownOutcomeError(GitHubError):
@@ -354,9 +405,12 @@ def _text(value: object, what: str) -> str:
 def post_review(client: Client, review: Review, login: str, out: Out) -> None:
     """Post `review`'s drafts as one comment review, or stage them as a pending one, printing as the module says.
 
+    A stage on a PR where the poster has a pending review already adds to that one (`_join`).
+
     Raises:
         InputError: A reply names a comment the PR has no thread for, or the pending review to delete is not one.
-        GitHubError: GitHub refused a reaction, which opened no review; or as `_submit` raises it.
+        GitHubError: GitHub refused a reaction, which opened no review; the poster's own pending review cannot take
+            this one, and nothing was posted; or as `_submit` and `_join` raise it.
     """
     pr = review.pr
     found = {line.get("id"): (thread.id, line) for thread in threads(client, pr) for line in thread.comments}
@@ -367,16 +421,225 @@ def post_review(client: Client, review: Review, login: str, out: Out) -> None:
     pr_id = _id(obj(_repository(client, _PR_ID, variables).get("pullRequest"), "pullRequest").get("id"), "PR's id")
     if review.delete_pending is not None:
         _delete_left(client, review.delete_pending, pr_id, login)
+    replies = [(r.comment, found[r.comment][0], r.text) for r in review.replies if r.text is not None]
+    opens = review.body is not None or bool(replies) or bool(review.comments)
+    # Looked for before anything is added, so a review that cannot take this one is refused with nothing posted.
+    own = _own_pending(client, pr, login) if opens else None
+    if own is not None:
+        _check_joinable(own, review)
     # First, since GitHub adds a reaction once however often it is asked: one added before a review that then fails
     # stays added, and sending again adds nothing more.
     for reply in review.replies:
         if reply.reaction is not None:
             _react(client, reply.comment, found[reply.comment][1], reply.reaction, out)
-    replies = [(r.comment, found[r.comment][0], r.text) for r in review.replies if r.text is not None]
-    if review.body is None and not replies and not review.comments:
+    if not opens:
         out.line({"kind": "end", "submitted": True})
         return
-    _submit(client, pr, pr_id, review, replies, login, out)
+    joining = _Joining(replies=replies, thread_of={c: t for c, (t, _) in found.items() if isinstance(c, int)})
+    if own is not None:
+        _join(client, own, review, joining, out)
+        return
+    _submit(client, pr, pr_id, review, joining, login, out)
+
+
+@dataclass(frozen=True)
+class _Joining:
+    """What a review adds as replies, and the thread each comment of the PR's is on, to know one already added."""
+
+    #: Each reply: the comment answered, its thread's node id, and the text.
+    replies: Sequence[tuple[int, str, str]]
+    #: Each review comment of the PR's threads, by its id, to its thread's node id.
+    thread_of: Mapping[int, str]
+
+
+def _own_pending(client: Client, pr: Ref, login: str) -> Pending | None:
+    """The poster's own pending review on `pr`, if it has one, read whole: GitHub keeps one a person.
+
+    Returns:
+        It, or None.
+
+    Raises:
+        GitHubError: GitHub refused to look, or the review was submitted or deleted while it was read.
+    """
+    variables = {"owner": pr.owner, "name": pr.name, "number": pr.number}
+    found = obj(_repository(client, _PENDING, variables).get("pullRequest"), "pullRequest")
+    for node in items(obj(found.get("reviews"), "reviews").get("nodes")):
+        review = text(node.get("id"))
+        if _author(node) == login and review:
+            return _held(client, review, number(node.get("fullDatabaseId")))
+    return None
+
+
+def _held(client: Client, review: str, review_id: int | None) -> Pending:
+    """Pending review `review`, whose id is `review_id`, with every comment it holds.
+
+    Returns:
+        It.
+
+    Raises:
+        GitHubError: It is no longer pending, it holds more comments than are read, or GitHub refused a page.
+    """
+    comments: list[Mapping[str, object]] = []
+    after: str | None = None
+    for _ in range(_MAX_HELD_PAGES):
+        node = obj(client.query(_HELD, {"id": review, "after": after}).get("node"), "pending review")
+        if node.get("state") != "PENDING":
+            raise GitHubError(f"your pending review {review} was submitted or deleted meanwhile", certain=True)
+        connection = obj(node.get("comments"), "comments")
+        comments.extend(items(connection.get("nodes")))
+        info = obj(connection.get("pageInfo"), "pageInfo")
+        after = text(info.get("endCursor"))
+        if info.get("hasNextPage") is not True or after is None:
+            commit = node.get("commit")
+            return Pending(
+                node=review,
+                id=review_id,
+                body=text(node.get("body")) or "",
+                commit=text(commit.get("oid")) if isinstance(commit, dict) else None,
+                comments=tuple(comments),
+            )
+    raise GitHubError(f"your pending review {review} holds too many comments to check which are added", certain=True)
+
+
+def _check_joinable(own: Pending, review: Review) -> None:
+    """Refuse to add `review` to the poster's own pending review `own` when it cannot take it as it is.
+
+    Raises:
+        GitHubError: `review` submits, which would submit what `own` holds too; its comments sit on another commit
+            than `own`; or the two bodies together are longer than GitHub takes. Nothing is added.
+    """
+    where = f"you have a pending review on {review.pr.url}"
+    if review.submit:
+        raise GitHubError(
+            f"{where}, and GitHub keeps one pending review a person: submitting would submit what it holds too, so "
+            "canopy added nothing. Submit or delete it on GitHub, or stage this instead, which adds to it",
+            certain=True,
+        )
+    if review.comments and own.commit != review.commit:
+        raise GitHubError(
+            f"{where} on commit {own.commit or 'unknown'}, and these comments are on lines of {review.commit}, so "
+            "canopy added nothing to it. Submit or delete it on GitHub, then stage this again",
+            certain=True,
+        )
+    body = _joined_body(own.body, review.body)
+    if body is not None and len(body) > MAX_TEXT:
+        raise GitHubError(
+            f"{where}, and its body with this one below it would be longer than GitHub's {MAX_TEXT} characters, so "
+            "canopy added nothing to it",
+            certain=True,
+        )
+
+
+def _joined_body(held: str, body: str | None) -> str | None:
+    """The body of a joined review that holds `held`, with `body` added; None when it needs no change.
+
+    `body` goes in as the review's own when it has none, and below `held`, after a blank line, when `held` does not
+    already end with it, as an earlier stage that stopped part way may have left it: neither text is lost. Only the
+    whole of `held`, or its last block after a blank line, counts as holding it, so a short body such as "LGTM" that
+    the operator's own words happen to contain is still added.
+
+    Returns:
+        The body to set, or None.
+    """
+    if body is None:
+        return None
+    mine, theirs = _plain(body), _plain(held)
+    if theirs == mine or theirs.endswith(f"\n\n{mine}"):
+        return None
+    if not held.strip():
+        return body
+    return f"{held.rstrip()}\n\n{body}"
+
+
+def _plain(words: str) -> str:
+    return words.replace("\r\n", "\n").strip()
+
+
+def _join(client: Client, own: Pending, review: Review, joining: _Joining, out: Out) -> None:
+    """Add `review`'s replies, comments, and body to the poster's own pending review `own`, which stays pending.
+
+    A reply or a comment `own` holds already, word for word on the same thread or line, is not added again: it is
+    named as though it were. Nothing of `own` is removed, and `own` is never deleted.
+
+    Raises:
+        GitHubError: GitHub refused one, or may have; what `own` holds of the request is printed first, and `end`.
+    """
+    out.line({"kind": "pending", "review": own.node, "id": own.id, "joined": True})
+    held = list(own.comments)
+    posted: list[Mapping[str, object]] = []
+    try:
+        for answered, thread, words in joining.replies:
+            same = _take(held, lambda c, t=thread, w=words: _reply_to(c, joining.thread_of) == t and _same(c, w))
+            added = _named(same) if same is not None else _add_reply(client, own.node, thread, words)
+            posted.append({"comment": answered, **added})
+        for index, new in enumerate(review.comments, 1):
+            same = _take(held, lambda c, n=new: _starts(c, n))
+            added = _named(same) if same is not None else _thread(client, own.node, index, new)
+            posted.append({"index": index, **added})
+        body = _joined_body(own.body, review.body)
+        if body is not None:
+            client.query(_UPDATE, {"review": own.node, "body": body})
+    except GitHubError:
+        # The review is the operator's: what was added stays, and a later stage adds only what is missing. So even an
+        # outcome GitHub left unknown ends `joined` and returns the draft to waiting: staging again is safe because a
+        # comment `own` already holds is matched by its words, and the body only by its last block, never added twice.
+        # A change to either match must keep that.
+        for line in posted:
+            out.line({"kind": "comment", **line})
+        out.line({"kind": "end", "submitted": False, "joined": True})
+        raise
+    for line in posted:
+        out.line({"kind": "comment", **line})
+    out.line({"kind": "end", "submitted": False, "staged": True, "joined": True})
+
+
+def _take(
+    held: list[Mapping[str, object]],
+    matches: Callable[[Mapping[str, object]], bool],
+) -> Mapping[str, object] | None:
+    """Take the first of `held` that `matches` out of it, so two requests alike need two comments.
+
+    Returns:
+        It, or None.
+    """
+    for i, comment in enumerate(held):
+        if matches(comment):
+            return held.pop(i)
+    return None
+
+
+def _reply_to(comment: Mapping[str, object], thread_of: Mapping[int, str]) -> str | None:
+    """The thread a pending review's `comment` answers, by its node id; None for one that starts a thread.
+
+    Returns:
+        The thread's node id, or None.
+    """
+    answered = comment.get("replyTo")
+    found = number(answered.get("fullDatabaseId")) if isinstance(answered, dict) else None
+    return None if found is None else thread_of.get(found)
+
+
+def _same(comment: Mapping[str, object], words: str) -> bool:
+    return _plain(text(comment.get("body")) or "") == _plain(words)
+
+
+def _starts(comment: Mapping[str, object], new: NewComment) -> bool:
+    """Whether a pending review's `comment` is `new`: a thread's start on its file and line, in its words.
+
+    Returns:
+        True when it is.
+    """
+    on = new.line in {number(comment.get("line")), number(comment.get("originalLine"))}
+    return comment.get("replyTo") is None and comment.get("path") == new.path and on and _same(comment, new.text)
+
+
+def _named(comment: Mapping[str, object]) -> dict[str, object]:
+    return {"id": number(comment.get("fullDatabaseId")), "url": comment.get("url")}
+
+
+def _author(node: Mapping[str, object]) -> str | None:
+    author = node.get("author")
+    return text(author.get("login")) if isinstance(author, dict) else None
 
 
 def _submit(  # noqa: PLR0917  (what one review is posted from)
@@ -384,33 +647,40 @@ def _submit(  # noqa: PLR0917  (what one review is posted from)
     pr: Ref,
     pr_id: str,
     review: Review,
-    replies: Sequence[tuple[int, str, str]],
+    joining: _Joining,
     login: str,
     out: Out,
 ) -> None:
-    """Post `review`'s body and `replies`, each a comment answered, its thread's node id, and the text, as one review.
+    """Post `review`'s body and `joining`'s replies as one review.
 
     The review is opened on `review.commit`, if it names one, and its comments added after the replies. It is
-    submitted as a comment, or, for `review.submit` false, left pending with the body as its own.
+    submitted as a comment, or, for `review.submit` false, left pending with the body as its own. A stage that GitHub
+    refuses to open one for, since a pending review of the poster's turned up after it looked, joins that one.
 
     Raises:
         UnknownOutcomeError: The submit may have reached GitHub.
         GitHubError: GitHub refused before anything of it could be seen; the pending review is deleted, or named.
     """
     # A staged review keeps its body from the start, since the operator submits it on GitHub, not canopy.
-    opening = {"pr": pr_id, "body": None if review.submit else review.body, "commit": review.commit}
+    body = None if review.submit else review.body
+    opening = {"pr": pr_id, "body": body, "commit": review.commit}
     try:
         added = obj(client.query(_ADD_REVIEW, opening).get("addPullRequestReview"), "addPullRequestReview")
         opened = obj(added.get("pullRequestReview"), "pullRequestReview")
         pending = _id(opened.get("id"), "pending review's id")
     except GitHubError as e:
+        own = _own_pending(client, pr, login) if e.certain and _ONE_PENDING in str(e).lower() else None
+        if own is not None:
+            _check_joinable(own, review)
+            _join(client, own, review, joining, out)
+            return
         if not e.certain:
             # GitHub may have opened it, and the next post could open no other while it stands.
-            _abandon_unseen(client, pr, login, out)
+            _abandon_unseen(client, pr, login, body, out)
         raise
     out.line({"kind": "pending", "review": pending, "id": number(opened.get("fullDatabaseId"))})
     try:
-        posted = _fill(client, pending, replies, review.comments)
+        posted = _fill(client, pending, joining.replies, review.comments)
     except GitHubError:
         # Nobody else sees a pending review or its replies, so a reply that failed posted nothing.
         _abandon(client, pending, out)
@@ -448,14 +718,26 @@ def _fill(
     Raises:
         GitHubError: GitHub refused one, or may have.
     """
-    posted: list[Mapping[str, object]] = []
-    for answered, thread, words in replies:
-        variables = {"review": pending, "thread": thread, "body": words}
-        data = obj(client.query(_REPLY, variables).get("addPullRequestReviewThreadReply"), "reply")
-        comment = obj(data.get("comment"), "comment")
-        posted.append({"comment": answered, "id": number(comment.get("fullDatabaseId")), "url": comment.get("url")})
+    posted: list[Mapping[str, object]] = [
+        {"comment": answered, **_add_reply(client, pending, thread, words)} for answered, thread, words in replies
+    ]
     posted.extend({"index": index, **_thread(client, pending, index, new)} for index, new in enumerate(comments, 1))
     return posted
+
+
+def _add_reply(client: Client, pending: str, thread: str, words: str) -> dict[str, object]:
+    """Add `words` to pending review `pending` as a reply on thread `thread`.
+
+    Returns:
+        The new comment's id and URL.
+
+    Raises:
+        GitHubError: GitHub refused it, or may have.
+    """
+    variables = {"review": pending, "thread": thread, "body": words}
+    data = obj(client.query(_REPLY, variables).get("addPullRequestReviewThreadReply"), "reply")
+    comment = obj(data.get("comment"), "comment")
+    return {"id": number(comment.get("fullDatabaseId")), "url": comment.get("url")}
 
 
 def _thread(client: Client, pending: str, index: int, comment: NewComment) -> dict[str, object]:
@@ -525,29 +807,33 @@ def _delete_left(client: Client, review_id: str, pr_id: str, login: str) -> None
         return
     found = obj(node, "review")
     on = text(obj(found.get("pullRequest"), "pullRequest").get("id"))
-    author = found.get("author")
-    by = text(obj(author, "author").get("login")) if isinstance(author, dict) else None
-    if on != pr_id or by != login:
+    if on != pr_id or _author(found) != login:
         raise InputError(f"review {review_id} is not a review of this PR by {login}")
     if found.get("state") != "PENDING":
         raise InputError(f"review {review_id} was submitted, so what it held is posted")
     client.query(_DELETE, {"review": review_id})
 
 
-def _abandon_unseen(client: Client, pr: Ref, login: str, out: Out) -> None:
-    """Delete the poster's own pending review on `pr`, which GitHub may have opened without saying so."""
+def _abandon_unseen(client: Client, pr: Ref, login: str, body: str | None, out: Out) -> None:
+    """Delete the poster's own pending review on `pr`, which GitHub may have opened, with `body`, without saying so.
+
+    There was none when the post looked, so one found now is the post's, unless the operator opened one meanwhile: only
+    one that holds no comment, and no body but `body`, is deleted.
+    """
     variables = {"owner": pr.owner, "name": pr.name, "number": pr.number}
     try:
         found = obj(_repository(client, _PENDING, variables).get("pullRequest"), "pullRequest")
     except GitHubError:
         return
     for node in items(obj(found.get("reviews"), "reviews").get("nodes")):
-        author = node.get("author")
-        by = text(author.get("login")) if isinstance(author, dict) else None
         pending = text(node.get("id"))
-        if by == login and pending:
+        if _author(node) != login or not pending:
+            continue
+        comments = node.get("comments")
+        empty = isinstance(comments, dict) and comments.get("totalCount") == 0
+        if empty and (text(node.get("body")) or "") in {"", body or ""}:
             _abandon(client, pending, out)
-            return
+        return
 
 
 def _abandon(client: Client, pending: str, out: Out) -> None:

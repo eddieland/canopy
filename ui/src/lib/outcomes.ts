@@ -385,8 +385,8 @@ export function reviewDraftPublishedText(run: number, published: ReviewDraftPubl
 
 /**
  * The toast a publish shows, in the words `canopy review publish` starts with: published, with where it is; staged,
- * with the PR's files page, where GitHub's own submit is; perhaps posted; or not published. A check only for the
- * first two.
+ * with the PR's files page, where GitHub's own submit is, and whether it went into the operator's own pending review
+ * there; perhaps posted; or not published. A check only for the first two.
  */
 export function reviewDraftPublishedToast(run: number, prUrl: string, published: ReviewDraftPublished): NewToast {
     const { draft } = published
@@ -396,7 +396,10 @@ export function reviewDraftPublishedToast(run: number, prUrl: string, published:
             return { title: `Published ${version}`, detail: draft.published_url ?? prUrl, tone: 'done' }
         }
         case 'staged': {
-            return { title: `Staged ${version} in a review on GitHub`, detail: `${prUrl}/files`, tone: 'done' }
+            const title = published.joined
+                ? `Added ${version} to your pending review on GitHub, keeping what it held`
+                : `Staged ${version} in a review on GitHub`
+            return { title, detail: `${prUrl}/files`, tone: 'done' }
         }
         case 'unconfirmed': {
             return { title: `${capitalized(version)} may have been posted`, tone: 'failed' }
@@ -447,13 +450,18 @@ export function draftsSentText(sent: DraftsSent): string {
 }
 
 /**
- * What a stage did, as `canopy draft stage` says it: each draft in the review, each reaction that went on its comment
- * at once, since GitHub can't keep one pending, and whatever a send would say of the rest.
+ * What a stage did, as `canopy draft stage` says it: each draft in the review, the operator's own where it joined
+ * theirs, each reaction that went on its comment at once, since GitHub can't keep one pending, and whatever a send
+ * would say of the rest.
  */
 export function draftsStagedText(sent: DraftsSent): string {
     const reacted = [...sent.posted, ...sent.staged].flatMap((d) => (d.reacted === null ? [] : [{ d, r: d.reacted }]))
     return [
-        ...sent.staged.map((d) => `Staged run ${d.run}'s draft ${d.number} in a review for you to submit on GitHub.`),
+        ...sent.staged.map((d) =>
+            sent.joined.length > 0
+                ? `Added run ${d.run}'s draft ${d.number} to your pending review on GitHub, for you to submit there.`
+                : `Staged run ${d.run}'s draft ${d.number} in a review for you to submit on GitHub.`,
+        ),
         ...reacted.map(
             ({ d, r }) =>
                 `Run ${d.run}'s draft ${d.number} put ${REACTION_LOOKS[r].label.toLowerCase()} on its comment now, ` +
@@ -466,16 +474,21 @@ export function draftsStagedText(sent: DraftsSent): string {
 }
 
 /**
- * The toast a stage shows: how many drafts wait in the pending review, with where to finish it, `url`'s files page,
- * where GitHub's own submit is, and how many reactions went on GitHub at once. A check only when every draft is in
- * the review or, a reaction alone, on its comment.
+ * The toast a stage shows: how many drafts wait in the pending review, and whether it is the operator's own, with
+ * where to finish it, `url`'s files page, where GitHub's own submit is, and how many reactions went on GitHub at once.
+ * A check only when every draft is in the review or, a reaction alone, on its comment.
  */
 export function draftsStagedToast(sent: DraftsSent, url: string): NewToast {
     const total =
         sent.staged.length + sent.posted.length + sent.already.length + sent.failed.length + sent.unconfirmed.length
     const n = sent.staged.length
     const k = [...sent.posted, ...sent.staged].filter((d) => d.reacted !== null).length
-    const staged = n === 1 ? 'Staged 1 draft in a review on GitHub' : `Staged ${n} drafts in a review on GitHub`
+    const drafts = n === 1 ? '1 draft' : `${n} drafts`
+    // A stage into the operator's own pending review says so: it holds their words as well as these.
+    const staged =
+        sent.joined.length > 0
+            ? `Added ${drafts} to your pending review on GitHub`
+            : `Staged ${drafts} in a review on GitHub`
     const reactions = k === 1 ? '1 reaction' : `${k} reactions`
     let title = 'Staged nothing'
     if (n > 0) {

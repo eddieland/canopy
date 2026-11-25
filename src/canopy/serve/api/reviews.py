@@ -338,10 +338,11 @@ def draft_publish(run_id: ReviewId, body: ReviewDraftPublishRequest, backend: Ba
 
     It goes word for word, unmarked, as one comment review on the commit the review read, its comments on their lines;
     it approves nothing and requests no change. Left pending on GitHub for the operator to submit there, unless
-    `submit`. Every check runs before anything posts: refused `no_draft`, `not_ours` for a PR a ticket holds now, a
-    status that cannot publish (`published`, `staged`, `unconfirmed`, `publishing`), `revising` while a revision of the
-    draft runs, `stale` for a version the page no longer shows, `empty`, `no_diff`, `staged` for a PR holding a review
-    the operator staged, and `no_post`.
+    `submit`; staged, it is added to the operator's own pending review on the PR if they have one (`joined`), which
+    keeps what it held. Every check runs before anything posts: refused `no_draft`, `not_ours` for a PR a ticket holds
+    now, a status that cannot publish (`published`, `staged`, `unconfirmed`, `publishing`), `revising` while a revision
+    of the draft runs, `stale` for a version the page no longer shows, `empty`, `no_diff`, `staged` for a PR holding a
+    review the operator staged, and `no_post`.
     """
     with backend.open() as ctx:
         try:
@@ -369,7 +370,12 @@ def draft_publish(run_id: ReviewId, body: ReviewDraftPublishRequest, backend: Ba
                 "channel": WEB,
             },
         )
-        return ReviewDraftPublished(draft=_draft(ctx, run_id), published=done.version.number, failed=done.failed)
+        return ReviewDraftPublished(
+            draft=_draft(ctx, run_id),
+            published=done.version.number,
+            failed=done.failed,
+            joined=done.joined,
+        )
 
 
 @router.post(

@@ -249,8 +249,10 @@ def cmd_review_publish(click_ctx: click.Context, run_id: int, version_hash: str,
 
     It goes word for word, unmarked, as one comment review on the commit the review read, its comments on their lines;
     it approves nothing and requests no change. By default it waits on GitHub as a pending review, which only you see
-    until you submit it there; with --submit, canopy submits it. A draft publishes once. A post that ends without
-    saying whether it submitted leaves the draft unconfirmed until a read of the PR says.
+    until you submit it there; where you have a pending review on the PR already, it is added to that one, which keeps
+    its own comments and body, yours above canopy's. With --submit, canopy submits it, and refuses while you have one.
+    A draft publishes once. A post that ends without saying whether it submitted leaves the draft unconfirmed until a
+    read of the PR says.
     """
     try:
         conversation.check_operator()
@@ -272,6 +274,11 @@ def cmd_review_publish(click_ctx: click.Context, run_id: int, version_hash: str,
     match draft.status:
         case ReviewDraftStatus.PUBLISHED:
             click.echo(f"Published version {number} of review run {run_id}'s draft: {draft.published_url}")
+        case ReviewDraftStatus.STAGED if done.joined:
+            click.echo(
+                f"Added version {number} of review run {run_id}'s draft to your pending review on {draft.pr_url}, "
+                f"keeping what it held; submit or delete it at {draft.pr_url}/files",
+            )
         case ReviewDraftStatus.STAGED:
             click.echo(
                 f"Staged version {number} of review run {run_id}'s draft in a pending review on {draft.pr_url}; "
@@ -329,7 +336,8 @@ def _print_draft(conn: sqlite3.Connection, draft: records.ReviewDraft) -> None:
         click.echo(f"  {v.number}  {v.hash}  {_by(v)}: {v.change}")
     if draft.status is ReviewDraftStatus.WAITING:
         click.echo(
-            f"\nTo leave it pending on GitHub for you to submit: canopy review publish {run_id} {current.hash}"
+            "\nTo leave it pending on GitHub for you to submit, added to your own pending review there if you have "
+            f"one: canopy review publish {run_id} {current.hash}"
             "\nTo submit it now, add --submit."
             f"\nTo post nothing and stop it waiting on you: canopy review discard {run_id}",
         )
