@@ -92,9 +92,9 @@ class Git:
                 max_stdout=max_stdout,
             )
         except procs.ProcError as e:
-            raise SetupError(f"{self.where}git {args[0]}: {e}") from e
+            raise SetupError(f"{self.where}git {_step(args)}: {e}") from e
         if result.timed_out:
-            raise SetupError(f"{self.where}git {args[0]} timed out")
+            raise SetupError(f"{self.where}git {_step(args)} timed out")
         return result
 
     def ok(self, *args: str) -> bool:
@@ -117,7 +117,7 @@ class Git:
         result = self.result(*args)
         if not result.ok:
             detail = (result.stderr.strip() or result.stdout.strip())[:500]
-            raise SetupError(f"{self.where}git {args[0]} exited {result.returncode}: {detail}")
+            raise SetupError(f"{self.where}git {_step(args)} exited {result.returncode}: {detail}")
         return result.stdout.strip()
 
 
@@ -236,7 +236,7 @@ def rebase_for_kick(git: Git, branch: str, base: str, head: str) -> str:
         raise SetupError(f"{git.where}could not check out {branch}: {_detail(checked_out)}")
     onto = f"refs/remotes/origin/{base}"
     try:
-        rebased = git.result("rebase", "--quiet", "--no-autostash", "--force-rebase", onto)
+        rebased = git.result(*hostgit.UNSIGNED, "rebase", "--quiet", "--no-autostash", "--force-rebase", onto)
     except SetupError:
         git.result("rebase", "--abort")
         raise
@@ -352,6 +352,11 @@ def _detail(result: procs.Result) -> str:
     """Return the first line a git step that failed said, cut for a note: the rest is hints."""
     said = result.stderr.strip() or result.stdout.strip()
     return said.splitlines()[0][:500] if said else f"exit {result.returncode}"
+
+
+def _step(args: Sequence[str]) -> str:
+    """Return the subcommand git's `args` run, after any options before it, such as `hostgit.UNSIGNED`, for an error."""
+    return procs.named((hostgit.PROGRAM, *args))[1] or args[0]
 
 
 def _drop_local_branch(git: Git, branch: str, target: str) -> None:

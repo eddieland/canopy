@@ -18,7 +18,7 @@ from canopy.runtime.opencode import session_models
 from canopy.runtime.report import MAX_MODELS, MAX_REPLIES, OTHER_MODELS, ModelUse, SessionModels
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator, Mapping, Sequence
+    from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 
 #: The columns of OpenCode 1.19.3's tables that a sandbox role's database is read by.
 SCHEMA: Final = """
@@ -90,6 +90,7 @@ class Export:
         on_line: Callable[[str], None] | None = None,  # noqa: ARG002
         stdout_to_file: bool = False,
         max_stdout: int | None = None,  # noqa: ARG002
+        unset: Iterable[str] = (),  # noqa: ARG002
     ) -> procs.Result:
         self.ran.append((tuple(args), cwd, timeout, stdout_to_file))
         return self.result(args)

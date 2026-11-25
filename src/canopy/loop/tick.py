@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import os
 import shutil
 import time
 from collections import Counter
@@ -23,6 +24,7 @@ import canopy_mcp
 
 from canopy.chores import reconcile as chore_reconcile
 from canopy.core import (
+    agent_env,
     agent_models,
     chore_view,
     commit_hooks,
@@ -1227,7 +1229,8 @@ def _run_overseer(
             fields={},
             version=ctx.config.runtime.version,
         )
-        env = {TICK_ID_ENV: str(tick_id), **served}
+        # It runs without a prompt or the operator's editor and terminal, as every agent does (TRUST_MODEL T4).
+        env = {**agent_env.ENV, TICK_ID_ENV: str(tick_id), **served}
         try:
             with run_offers.probing(
                 ctx.conn,
@@ -1246,6 +1249,7 @@ def _run_overseer(
                     env=env,
                     stdin=command.stdin,
                     timeout=timeout_minutes * 60,
+                    unset=agent_env.unset(os.environ),
                     on_line=watch,
                 )
         except procs.ProcError as e:

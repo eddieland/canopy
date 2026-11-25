@@ -15,7 +15,7 @@ from canopy.runtime.opencode import offerings
 from canopy.runtime.opencode.offerings import matches
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping, Sequence
+    from collections.abc import Callable, Iterable, Mapping, Sequence
 
 #: `opencode debug config` with two servers, one turned off, and a secret OpenCode redacts.
 CONFIG: Final = {
@@ -77,6 +77,7 @@ class Debug:
         on_line: Callable[[str], None] | None = None,  # noqa: ARG002
         stdout_to_file: bool = False,
         max_stdout: int | None = None,  # noqa: ARG002
+        unset: Iterable[str] = (),  # noqa: ARG002
     ) -> procs.Result:
         self.ran.append((tuple(args), cwd, env))
         failed = self.fail(args)

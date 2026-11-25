@@ -11,6 +11,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Final
+from unittest import mock
 
 import pytest
 
@@ -21,6 +22,7 @@ from canopy.core.vocab import UpkeepKind, UpkeepStatus
 from canopy.infra import lock, logs, procs
 from canopy.loop import attention, upkeep
 from tests.canopy.conftest import Ws, seed_pools
+from tests.canopy.helpers import AS_AN_AGENT, EDITORS_TERMINAL, saw, writes_env
 from tests.canopy.scenario_helpers import Scenario
 from tests.conftest import CanopyEnv, executable, git
 
@@ -235,6 +237,23 @@ def test_idle_cmd_runs_once_in_a_slot_long_idle(
 
     assert noted.read_text() == f"api {slot}\n"
     assert runs(ctx) == [("idle", "api", str(slot), "done")]
+
+
+def test_idle_cmd_runs_with_no_prompt_and_none_of_the_operators_editor_or_terminal(
+    ws: Ws,
+    treehouse_state: Path,
+    make_ctx: ContextMaker,
+    tmp_path: Path,
+) -> None:
+    seed_pools(ws, treehouse_state)
+    idle_slot(ws, "api")
+    seen = tmp_path / "idle-env.json"
+    ctx = make_ctx(git_maintenance=False, idle_cmd={"api": writes_env(seen)})
+
+    with mock.patch.dict(os.environ, EDITORS_TERMINAL):
+        tick(ctx)
+
+    assert saw(seen.read_text()) == AS_AN_AGENT
 
 
 def test_idle_cmd_waits_for_a_slot_changed_or_leased_lately(

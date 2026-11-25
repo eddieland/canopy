@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final, TextIO
 
 from canopy.core import (
+    agent_env,
     agent_models,
     cards,
     conversation,
@@ -335,7 +336,9 @@ def reviewer(
     # through canopy's read-only git tools, over that checkout alone, named as its link is (DESIGN §27), and says
     # where its review stands through the `status` tool (§41).
     served = {git_tools.SERVER: git_tools.command({start.CHECKOUT_LINK: slot}), cards.SERVER: cards.SERVER_COMMAND}
+    # It runs without a prompt or the operator's editor and terminal, as every agent does (TRUST_MODEL T4).
     env = {
+        **agent_env.ENV,
         conversation.RUN_ID_ENV: run,
         **servers.env(
             served,
@@ -443,6 +446,7 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
             env=env,
             stdin=process.stdin,
             timeout=timeout_minutes * 60,
+            unset=agent_env.unset(os.environ),
             on_start=lambda pid: db.set_agent_pid(ctx.conn, "review_runs", run_id, pid),
             # Each line reaches the run log as the reviewer prints it, so a running review's transcript is what it did
             # so far.

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 import zlib
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, override
@@ -270,6 +270,7 @@ class GitHub(procs.SubprocessRunner):
         on_line: Callable[[str], None] | None = None,
         stdout_to_file: bool = False,
         max_stdout: int | None = None,
+        unset: Iterable[str] = (),
     ) -> procs.Result:
         """Answer for `canopy-connect-github` and `canopy-post-github`; run anything else. See `procs.Runner.run`.
 
@@ -293,6 +294,7 @@ class GitHub(procs.SubprocessRunner):
             on_line=on_line,
             stdout_to_file=stdout_to_file,
             max_stdout=max_stdout,
+            unset=unset,
         )
 
     def _hold_staged(self, request: Mapping[str, object], printed: str) -> None:

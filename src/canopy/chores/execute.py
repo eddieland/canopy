@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, TextIO
 
 from canopy.chores import history, install, start
 from canopy.core import (
+    agent_env,
     agent_models,
     chore_runs,
     db,
@@ -228,6 +229,7 @@ def _work(ctx: Context, run: records.ChoreRun, out: TextIO, log: logs.TickAdapte
             env=env,
             stdin=command.stdin,
             timeout=chore.timeout_minutes * 60,
+            unset=agent_env.unset(os.environ),
             on_start=lambda pid: db.set_agent_pid(ctx.conn, "chore_runs", run_id, pid),
             # Each line reaches the run log as the agent prints it, so a running chore's transcript is what it did so
             # far.

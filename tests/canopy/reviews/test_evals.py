@@ -19,7 +19,17 @@ from canopy.core import records, sql
 from canopy.core.context import Context
 from canopy.infra import resources
 from canopy.reviews import evals
-from tests.canopy.helpers import agent_runs, listed, personas_dir, pool_statuses, told
+from tests.canopy.helpers import (
+    AS_AN_AGENT,
+    EDITORS_TERMINAL,
+    PRINTS_ENV,
+    agent_runs,
+    listed,
+    personas_dir,
+    pool_statuses,
+    saw,
+    told,
+)
 from tests.canopy.review_helpers import CLEAN, PR, REPORT, THEIRS, feature_commit, head, reviewer_reports
 from tests.canopy.scenario_helpers import Scenario
 from tests.conftest import CanopyEnv, GitPool
@@ -138,6 +148,20 @@ def test_a_bug_is_found_by_a_finding_within_a_few_lines_of_a_confirmed_one(
     with reviewer_reports(REPORT):
         scenario.operator("review", "eval")
     assert saved(scenario.env)["recall"] == {"found": int(found), "of": 1}
+
+
+def test_an_evals_reviewer_runs_with_no_prompt_and_none_of_the_operators_editor_or_terminal(
+    scenario: Scenario,
+    commits: tuple[str, str],
+    agent_log: Path,
+) -> None:
+    sha, base = commits
+    cases(scenario, case("sound", sha, base, pr=THEIRS))
+    with mock.patch.dict(os.environ, EDITORS_TERMINAL), reviewer_reports(REPORT, PRINTS_ENV):
+        scenario.operator("review", "eval")
+    [run] = agent_runs(agent_log)
+    [printed] = run["commands"]
+    assert saw(printed["stdout"]) == AS_AN_AGENT
 
 
 def test_a_review_that_ends_any_way_but_done_is_not_scored(scenario: Scenario, commits: tuple[str, str]) -> None:

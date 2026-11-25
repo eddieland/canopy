@@ -10,7 +10,9 @@ from unittest import mock
 
 from canopy.core import contract
 from canopy.core.vocab import ResumeReason, RunKind
+from canopy.infra.procs import SubprocessRunner
 from canopy.notify import message
+from canopy.runs import checkpoint
 from tests.canopy.helpers import KEY, READ_PR, WORKER_DONE, Called, main_moves, messages, raises, waits, worker_does
 from tests.canopy.scenario_helpers import Ran, Scenario, dispatches, pushes
 from tests.conftest import GitPool, git
@@ -364,3 +366,27 @@ def test_a_batching_sink_hears_of_a_forced_push_at_once(
     scenario.tick(raises("PROJ-9", "flaky_rerun"), *waits(KEY))
     [_, sent] = [json.loads(m) for m in messages(out)]
     assert [e["kind"] for e in sent["events"]] == ["ci.kicked"]
+
+
+def test_a_kicks_rebase_signs_nothing_and_moves_no_other_branch(worktree_pool: tuple[Path, list[Path]]) -> None:
+    primary, [slot, _] = worktree_pool
+    # The operator's own config: every commit signed, by a program that fails here as a pinentry nobody answers would
+    # hang, and a rebase moving the branches that point into what it rewrites, which in a pool are other slots'.
+    for key, value in (("commit.gpgsign", "true"), ("gpg.program", "false"), ("rebase.updateRefs", "true")):
+        git("config", key, value, cwd=primary)
+    git("checkout", "--quiet", "--detach", "origin/main", cwd=slot)
+    with committed_at("@1700000000 +0000"):
+        for name in ("a", "b"):
+            (slot / f"{name}.txt").write_text(f"{name}\n")
+            git("add", f"{name}.txt", cwd=slot)
+            git("-c", "commit.gpgsign=false", "commit", "--quiet", "-m", f"PROJ-1: {name}", cwd=slot)
+            if name == "a":
+                git("branch", "another-slots", cwd=slot)
+    head = git("rev-parse", "HEAD", cwd=slot)
+    theirs = git("rev-parse", "another-slots", cwd=slot)
+
+    made = checkpoint.rebase_for_kick(checkpoint.Git(SubprocessRunner(), slot), BRANCH, "main", head)
+
+    assert made not in {head, theirs}
+    assert git("log", "--format=%G?", "origin/main..HEAD", cwd=slot).split() == ["N", "N"]
+    assert git("rev-parse", "another-slots", cwd=slot) == theirs

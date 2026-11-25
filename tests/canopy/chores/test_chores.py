@@ -27,7 +27,10 @@ from canopy.infra import lock, procs
 from canopy.loop import attention
 from canopy.runtime import servers
 from tests.canopy.helpers import (
+    AS_AN_AGENT,
+    EDITORS_TERMINAL,
     KEY,
+    PRINTS_ENV,
     Called,
     InlineRunner,
     Said,
@@ -50,6 +53,7 @@ from tests.canopy.helpers import (
     overseer_calls,
     overseer_does,
     present,
+    saw,
     scripted,
     state_block,
     tick_starts,
@@ -911,6 +915,20 @@ def test_try_runs_a_chore_in_the_foreground_and_records_it(
     # It sees what a run starting now would: the latest run and its open findings.
     assert run["previous_run"]["run_id"] == 1
     assert [f["id"] for f in run["open_findings"]] == [FINDING["id"]]
+
+
+@pytest.mark.parametrize("record", [(), ("--no-record",)], ids=["recorded", "not recorded"])
+def test_a_chores_agent_runs_with_no_prompt_and_none_of_the_operators_editor_or_terminal(
+    canopy_env: CanopyEnv,
+    chores: Path,
+    agent_log: Path,
+    record: tuple[str, ...],
+) -> None:
+    with mock.patch.dict(os.environ, EDITORS_TERMINAL), chore_reports(OK, PRINTS_ENV):
+        assert main(["chore", "try", "build-health", *record]) == 0
+    [agent] = agent_runs(agent_log)
+    [printed] = agent["commands"]
+    assert saw(printed["stdout"]) == AS_AN_AGENT
 
 
 def test_try_with_no_record_records_nothing(

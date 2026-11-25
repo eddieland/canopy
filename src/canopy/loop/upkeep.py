@@ -19,12 +19,13 @@ raises `upkeep_failed` (`failed_items`) until a newer run in its clone or slot d
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, assert_never
 
-from canopy.core import db, pools, sandboxing, upkeep_runs
+from canopy.core import agent_env, db, pools, sandboxing, upkeep_runs
 from canopy.core.config import setup_words
 from canopy.core.vocab import UpkeepKind, UpkeepStatus
 from canopy.infra import lock, procs
@@ -231,7 +232,14 @@ def _run_idle(ctx: Context, tick_id: int, repo: str, path: Path, *, now: datetim
         status, detail = UpkeepStatus.SKIPPED, "pools.idle_cmd is empty"
     else:
         try:
-            result = ctx.runner.run(argv, cwd=path, env={worker.SETUP_REPO_ENV: repo}, timeout=minutes * 60)
+            # It runs as `setup_cmd` does, without a prompt or the operator's editor and terminal (TRUST_MODEL T4).
+            result = ctx.runner.run(
+                argv,
+                cwd=path,
+                env={**agent_env.ENV, worker.SETUP_REPO_ENV: repo},
+                timeout=minutes * 60,
+                unset=agent_env.unset(os.environ),
+            )
         except procs.ProcError as e:
             detail = f"it could not start: {e}"
         else:

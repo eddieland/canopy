@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from canopy.chores import execute, history, start
-from canopy.core import chore_runs, conversation, db, notice, outbox, prompts
+from canopy.core import agent_env, chore_runs, conversation, db, notice, outbox, prompts
 from canopy.core import chore_view as view
 from canopy.core.vocab import ChoreRunStatus
 from canopy.infra import lock, logs, procs
@@ -208,6 +208,7 @@ def run_unrecorded(ctx: Context, prepared: Prepared) -> execute.Outcome:
         # chore, whose history it reads with no run row to find it from. A recorded try's is `chore-<run id>`.
         env=history.run_env(ctx, f"{history.TRY_PREFIX}{prepared.name}"),
         timeout=prepared.chore.timeout_minutes * 60,
+        unset=agent_env.unset(os.environ),
     )
     output = stdout.read(done.stdout, version=ctx.config.runtime.version)
     return execute.outcome_of(done, output, prepared.chore, reported=execute.reported(ctx, done))

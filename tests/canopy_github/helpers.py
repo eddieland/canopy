@@ -2,7 +2,7 @@
 
 import contextlib
 import threading
-from collections.abc import Callable, Generator, Mapping, Sequence
+from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -45,8 +45,9 @@ class InProcess:
         on_line: Callable[[str], None] | None = None,
         stdout_to_file: bool = False,
         max_stdout: int | None = None,
+        unset: Iterable[str] = (),
     ) -> procs.Result:
-        del cwd, env, timeout, on_start, stdout_to_file, max_stdout
+        del cwd, env, timeout, on_start, stdout_to_file, max_stdout, unset
         assert args[0] == "canopy-connect-github"
         result = invoke(connect.main, args[1:], stdin=stdin or "", obj=Hosts(lambda _: self.url, lambda _: "t"))
         for line in result.stdout.splitlines(keepends=True):

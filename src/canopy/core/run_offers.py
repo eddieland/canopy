@@ -8,15 +8,17 @@ used or not. So each run's own is recorded beside its tools, by `probing` the ru
 from __future__ import annotations
 
 import contextlib
+import os
 import sqlite3
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final
 
-from canopy.core import db, records
+from canopy.core import agent_env, db, records
 from canopy.runtime import offerings
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping, Sequence
+    from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+    from collections.abc import Set as AbstractSet
     from pathlib import Path
 
     from canopy.core.run_models import RunTable
@@ -61,9 +63,10 @@ def probing(
     The runtime `version` runs is asked on a thread of its own, started as `argv` starts it, in `cwd` with `env`, so
     the agent does not wait on it. Leaving the block, also by raising, waits for the answer at most `WAIT_SECONDS` and
     records it on the run. The record is the run's least concern: a journal write that fails is logged, never raised
-    over the run's own outcome.
+    over the run's own outcome. Every process the question starts goes without what an agent goes without
+    (`agent_env.unset`), as the agent itself does.
     """
-    probe = offerings.Probe(runner, argv, version=version, cwd=cwd, env=env)
+    probe = offerings.Probe(_Unsetting(runner, agent_env.unset(os.environ)), argv, version=version, cwd=cwd, env=env)
     try:
         yield
     finally:
@@ -137,3 +140,51 @@ def of_run(conn: sqlite3.Connection, table: RunTable, run_id: int) -> Offered | 
         skills.all(conn),
         tools.all(conn),
     )
+
+
+@dataclass(frozen=True)
+class _Unsetting:
+    """`runner`, removing `names` from each child's environment besides what a call removes."""
+
+    runner: procs.Runner
+    names: AbstractSet[str]
+
+    def run(
+        self,
+        args: Sequence[str],
+        *,
+        cwd: Path | None = None,
+        env: Mapping[str, str] | None = None,
+        stdin: str | None = None,
+        timeout: float | None = None,
+        on_start: Callable[[int], None] | None = None,
+        on_line: Callable[[str], None] | None = None,
+        stdout_to_file: bool = False,
+        max_stdout: int | None = None,
+        unset: Iterable[str] = (),
+    ) -> procs.Result:
+        """Run `args` as `runner` would, without `names` too.
+
+        Returns:
+            What `runner` returned.
+        """
+        return self.runner.run(
+            args,
+            cwd=cwd,
+            env=env,
+            stdin=stdin,
+            timeout=timeout,
+            on_start=on_start,
+            on_line=on_line,
+            stdout_to_file=stdout_to_file,
+            max_stdout=max_stdout,
+            unset=self.names | set(unset),
+        )
+
+    def spawn(self, args: Sequence[str], *, cwd: Path, log_path: Path) -> int:
+        """Start `args` detached as `runner` would; a question asks nothing detached.
+
+        Returns:
+            The child's pid.
+        """
+        return self.runner.spawn(args, cwd=cwd, log_path=log_path)

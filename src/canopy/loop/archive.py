@@ -179,7 +179,7 @@ def _catch_up(git: _Git, log: logs.TickAdapter, refused: procs.Result) -> str | 
     if not fetched.ok or not git.behind():
         return git.failed("push", refused)
     # Never the operator's autostash: changes of theirs in the clone refuse the rebase, rather than being set aside.
-    rebased = git.run("rebase", "--quiet", "--no-autostash", "@{upstream}")
+    rebased = git.run(*hostgit.UNSIGNED, "rebase", "--quiet", "--no-autostash", "@{upstream}")
     if not rebased.ok:
         log.warning("plan archive not rebased", extra={"error": rebased.stderr.strip()[:_MAX_ERROR]})
         if git.rebasing():
@@ -234,7 +234,7 @@ def _commit(git: _Git, place: _Place, paths: Sequence[str]) -> str | None:
     if others.returncode not in {0, 1}:
         return git.failed("diff", others)
     named = ("--", *paths) if others.returncode == 1 else ()
-    committed = git.run("commit", "--quiet", "-m", _message(git, place, paths), *named)
+    committed = git.run(*hostgit.UNSIGNED, "commit", "--quiet", "-m", _message(git, place, paths), *named)
     return None if committed.ok else git.failed("commit", committed)
 
 

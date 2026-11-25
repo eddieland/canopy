@@ -17,8 +17,8 @@ from typing import TYPE_CHECKING, Annotated, Final, Self
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictInt, model_validator
 
+from canopy.core import agent_env, chore_runs, config, contract, conversation, reports, run_models
 from canopy.core import chore_result as result
-from canopy.core import chore_runs, config, contract, conversation, reports, run_models
 from canopy.core.memory_text import visible
 from canopy.infra import logs
 from canopy.infra.text import one_line
@@ -138,13 +138,14 @@ def run_env(ctx: Context, run_id: str) -> dict[str, str]:
     The operator's commands refuse inside it (DESIGN §22). It names the workspace, whose journal holds the chore's
     history wherever the agent's `cwd` is, and gives the agent the server of its history tool and the server of
     canopy's read-only reports (`core.reports`), each run from that workspace, and says what it reports with the
-    history server's `result` tool.
+    history server's `result` tool. Beneath them, what keeps it from prompting or starting an editor (`agent_env.ENV`).
 
     Returns:
         The variables to set on the agent's process.
     """
     root = ctx.ws.root.absolute()
     return {
+        **agent_env.ENV,
         conversation.RUN_ID_ENV: run_id,
         WORKSPACE_ENV: str(root),
         **servers.env(

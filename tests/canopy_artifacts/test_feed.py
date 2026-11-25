@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
@@ -186,8 +186,9 @@ class InProcess:
         on_line: Callable[[str], None] | None = None,
         stdout_to_file: bool = False,
         max_stdout: int | None = None,
+        unset: Iterable[str] = (),
     ) -> procs.Result:
-        del cwd, env, timeout, on_start, stdout_to_file, max_stdout
+        del cwd, env, timeout, on_start, stdout_to_file, max_stdout, unset
         assert args[0] == "canopy-artifacts"
         result = invoke(cli.main, args[1:], stdin=stdin or "")
         for line in result.stdout.splitlines(keepends=True):
