@@ -5,13 +5,35 @@ import { basePath } from '@/lib/base'
 
 import type { paths } from './schema.gen'
 
+const READS = new Set(['GET', 'HEAD'])
+
+/** How long a read may go unanswered before it fails: longer than any read takes, shorter than a wait worth having. */
+export const READ_DEADLINE_MS = 30_000
+
+/**
+ * `fetcher`, with a deadline on every read: one the server took and never answered fails after `ms`, as a read no
+ * server took does, so what waits on it says why and reads again rather than showing its placeholders for good. A
+ * write has none: one cut short may have been done, and the page could not say which.
+ */
+export function withReadDeadline(fetcher: typeof fetch, ms: number = READ_DEADLINE_MS): typeof fetch {
+    return (input, init) => {
+        const request = new Request(input, init)
+        if (!READS.has(request.method)) {
+            return fetcher(request)
+        }
+        return fetcher(new Request(request, { signal: AbortSignal.any([request.signal, AbortSignal.timeout(ms)]) }))
+    }
+}
+
 /** The typed API client. Paths and bodies are checked against canopy.serve's OpenAPI schema. */
-export const api = createClient<paths>({ baseUrl: basePath })
+export const api = createClient<paths>({
+    baseUrl: basePath,
+    // The page's `fetch` as it stands when the request is made, so a test that stands in for it is the one called.
+    fetch: withReadDeadline((input, init) => globalThis.fetch(input, init)),
+})
 
 /** The header a write carries its session's token in (canopy/serve/auth.py). */
 export const TOKEN_HEADER = 'x-canopy-token'
-
-const READS = new Set(['GET', 'HEAD'])
 
 /**
  * Adds the session's token to every write. `token` reads it when the request is made, from the session query, so a
