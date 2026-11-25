@@ -189,6 +189,42 @@ PRIVATE_PROMPT_VALUES: Final = {
 # Ticks and the journal
 
 
+#: The operator's home, where `permission_rules` expands a pattern's `~/`.
+OPERATOR_HOME: Final = "/home/op"
+
+
+def permission_rules(definition: str) -> list[tuple[str, str, str]]:
+    """The definition's permission rules as OpenCode's `Permission.fromConfig` makes them, in order.
+
+    Each is (permission, path pattern, action): a scalar is its permission's rule for `*`, and a table one rule per
+    pattern, with a leading `~/` expanded to `OPERATOR_HOME`, as OpenCode expands it to the operator's home. Only the
+    frontmatter's two levels canopy writes are read, not YAML in general.
+    """
+    frontmatter = definition.split("---")[1]
+    rules: list[tuple[str, str, str]] = []
+    section = ""
+    inside = False
+    for line in frontmatter.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if line.startswith("permission:"):
+            inside = True
+            continue
+        if not inside or not line.startswith("  "):
+            inside = inside and line.startswith("  ")
+            continue
+        key, _, value = stripped.rpartition(":") if stripped.startswith('"') else stripped.partition(":")
+        key, value = key.strip().strip('"'), value.strip()
+        if line.startswith("    "):
+            rules.append((section, OPERATOR_HOME + key.removeprefix("~") if key.startswith("~/") else key, value))
+        elif value:
+            rules.append((key, "*", value))
+        else:
+            section = key
+    return rules
+
+
 def present[T](value: T | None) -> T:
     """`value`, failing the test if it is None: what a lookup returns when the test knows the row is there."""
     assert value is not None
