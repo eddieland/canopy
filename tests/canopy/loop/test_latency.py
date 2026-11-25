@@ -1,8 +1,9 @@
 """How long an external event waits for the tick that acts on it, over a journal written by hand (ROADMAP M39).
 
-A comment, a review, a review comment, and a check run each wait for the first live tick that decided about their
-ticket after canopy observed them, the harness's decision as much as the overseer's; a cursor the harness moved and a
-refusal decide nothing; an item no tick acted on is counted apart; and the window is by the item's source time.
+A comment, a review, a review comment, a check run, and a commit status's run each wait for the first live tick that
+decided about their ticket after canopy observed them, the harness's decision as much as the overseer's; a cursor the
+harness moved and a refusal decide nothing; an item no tick acted on, and one a connector backfilled, are counted apart;
+the window is by the item's source time; and the report splits by local day or hour, and gives each item as data.
 """
 
 from __future__ import annotations
@@ -10,6 +11,8 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Final
+
+import pytest
 
 from canopy.cli import latency as latency_cli
 from canopy.cli.main import main
@@ -22,12 +25,20 @@ if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Mapping
 
-    import pytest
-
     from tests.conftest import CanopyEnv
 
 NOW: Final = datetime(2026, 10, 8, 12, tzinfo=UTC)
 PR: Final = "https://github.com/acme/api/pull/7"
+#: A PR of another ticket, whose items show that canopy read each kind long before the tests' own.
+EARLIER_PR: Final = "https://github.com/acme/api/pull/1"
+
+
+@pytest.fixture(autouse=True)
+def kinds_read(conn: sqlite3.Connection) -> None:
+    """Canopy observed an item of each kind a year before, so no test's item is the first it ever read of its kind."""
+    for kind in NumberedItem:
+        subject = "PROJ-0" if kind is NumberedItem.COMMENT else EARLIER_PR
+        item_numbers.take(conn, kind, subject, "earlier", at=at(NOW, -365 * 24 * 60))
 
 
 def at(moment: datetime, minutes: float) -> str:
@@ -59,12 +70,19 @@ def commented(conn: sqlite3.Connection, key: str, ident: str, source_at: str, ob
     ).run(conn)
 
 
-def reviewed(conn: sqlite3.Connection, item: ReviewItem, ident: int, source_at: str, observed_at: str) -> None:
-    """A review item of `PR` at `source_at`, first observed at `observed_at` and last read a day later."""
+def reviewed(
+    conn: sqlite3.Connection,
+    item: ReviewItem,
+    ident: int,
+    source_at: str,
+    observed_at: str,
+    pr: str = PR,
+) -> None:
+    """A review item of `pr` at `source_at`, first observed at `observed_at` and last read a day later."""
     kind = item_numbers.of_review(item)
     records.insert(
         records.ObservedReview,
-        pr_url=PR,
+        pr_url=pr,
         item=item,
         id=ident,
         bot=0,
@@ -73,7 +91,7 @@ def reviewed(conn: sqlite3.Connection, item: ReviewItem, ident: int, source_at: 
         thread_id="PRRT_1" if item is ReviewItem.COMMENT else None,
         # A later read replaces the row's `observed_at`: its number keeps the first.
         observed_at=at(db.parse_time(observed_at), 24 * 60),
-        number=item_numbers.take(conn, kind, PR, ident, at=observed_at),
+        number=item_numbers.take(conn, kind, pr, ident, at=observed_at),
     ).run(conn)
 
 
@@ -88,6 +106,18 @@ def check_completed(conn: sqlite3.Connection, run_id: int, observed_at: str) -> 
         conclusion=CheckConclusion.FAILURE,
         observed_at=observed_at,
         number=item_numbers.take(conn, NumberedItem.CHECK_RUN, PR, run_id, at=observed_at),
+    ).run(conn)
+
+
+def status_ended(conn: sqlite3.Connection, observed_at: str, conclusion: CheckConclusion | None) -> None:
+    """A commit status run of `PR` a source first observed ended at `observed_at`; running, with no conclusion."""
+    records.insert(
+        records.ObservedStatusRun,
+        pr_url=PR,
+        name="ci/jenkins",
+        head_sha="a" * 40,
+        conclusion=conclusion,
+        observed_at=observed_at,
     ).run(conn)
 
 
@@ -145,6 +175,7 @@ def test_each_kind_waits_for_the_first_live_tick_after_it_was_observed(conn: sql
         "pr_comment": (1, 1, 1, 0, 90.0, 90.0, 60.0),
         # No source time: only canopy's own part of its wait.
         "check_run": (1, 1, 1, 0, None, None, 30.0),
+        "status_run": (0, 0, 0, 0, None, None, None),
         "all": (5, 5, 5, 0, 90.0, 120.0, 60.0),
     }
 
@@ -201,6 +232,84 @@ def test_the_window_is_by_the_items_source_time(conn: sqlite3.Connection) -> Non
     assert (day["comment"][0], day["check_run"][0]) == (1, 0)
 
 
+def test_status_runs_count_from_when_a_source_first_observed_them_ended(conn: sqlite3.Connection) -> None:
+    """A commit status's run counts as a check run does, from when first observed ended; one still running does not."""
+    ticket(conn, "PROJ-1", PR)
+    base = NOW - timedelta(hours=2)
+    status_ended(conn, at(base, 1), CheckConclusion.FAILURE)
+    status_ended(conn, at(base, 1.5), None)
+    ticked(conn, at(base, 2), {"PROJ-1": "wait"})
+    found = rows(latency.measure(conn, NOW, 7))
+    assert found["status_run"] == (1, 1, 0, 0, None, None, 60.0)
+    assert found["all"] == (1, 1, 0, 0, None, None, 60.0)
+
+
+def test_an_item_a_connector_backfilled_is_counted_apart(conn: sqlite3.Connection) -> None:
+    """A PR comment made before canopy read any, in the first read of its kind on its PR, waits for no tick of the loop.
+
+    A later one on that PR is a wait, and so is a PR's first review or first PR comment, once canopy reads their kind.
+    """
+    # Canopy begins to read PR comments, at `base`.
+    records.delete(records.ItemNumber).where("kind = ?", NumberedItem.PR_COMMENT).run(conn)
+    other = "https://github.com/acme/api/pull/8"
+    ticket(conn, "PROJ-7", PR)
+    ticket(conn, "PROJ-8", other)
+    base = NOW - timedelta(days=1)
+    reviewed(conn, ReviewItem.PR_COMMENT, 31, at(base, -3 * 24 * 60), at(base, 0))
+    reviewed(conn, ReviewItem.PR_COMMENT, 32, at(base, -3 * 24 * 60 + 5), at(base, 0))
+    reviewed(conn, ReviewItem.REVIEW, 41, at(base, 30), at(base, 31), pr=other)
+    reviewed(conn, ReviewItem.PR_COMMENT, 42, at(base, 40), at(base, 41), pr=other)
+    reviewed(conn, ReviewItem.PR_COMMENT, 33, at(base, 60), at(base, 61))
+    ticked(conn, at(base, 62), {"PROJ-7": "wait", "PROJ-8": "wait"})
+    found = latency.measure(conn, NOW, 7)
+    by_kind = {k.kind: k for k in found.kinds}
+    assert (by_kind["pr_comment"].items, by_kind["pr_comment"].backfilled) == (2, 2)
+    assert (by_kind["pr_comment"].median, by_kind["pr_comment"].p90) == (720.0, 1320.0)
+    assert (by_kind["review"].items, by_kind["review"].backfilled, by_kind["review"].median) == (1, 0, 1920.0)
+    assert (found.total.items, found.total.backfilled) == (3, 2)
+    # Each item is still measured, as data, and marked.
+    assert [(i.kind, i.backfilled, i.latency) for i in found.items] == [
+        (latency.Kind.PR_COMMENT, True, (3 * 24 * 60 + 62) * 60.0),
+        (latency.Kind.PR_COMMENT, True, (3 * 24 * 60 + 57) * 60.0),
+        (latency.Kind.REVIEW, False, 1920.0),
+        (latency.Kind.PR_COMMENT, False, 1320.0),
+        (latency.Kind.PR_COMMENT, False, 120.0),
+    ]
+
+
+def test_the_items_split_by_local_day_or_hour(conn: sqlite3.Connection) -> None:
+    """Each day of the window, or each hour of the day, has a row of every kind together, by the item's local time."""
+    ticket(conn, "PROJ-1")
+    late = datetime(2026, 10, 7, 23, 30, tzinfo=UTC)
+    early = datetime(2026, 10, 8, 3, tzinfo=UTC)
+    commented(conn, "PROJ-1", "c1", at(late, 0), at(late, 1))
+    ticked(conn, at(late, 2), {"PROJ-1": "wait"})
+    commented(conn, "PROJ-1", "c2", at(early, 0), at(early, 1))
+    ticked(conn, at(early, 3), {"PROJ-1": "wait"})
+
+    def counted(found: latency.Latencies) -> dict[str, tuple[int, float | None]]:
+        return {b.at: (b.total.items, b.total.median) for b in found.buckets if b.total.items}
+
+    with in_zone("UTC"):
+        by_day = latency.measure(conn, NOW, 2, "day")
+        by_hour = latency.measure(conn, NOW, 2, "hour")
+        lines = latency_cli.render(by_day)
+    assert [b.at for b in by_day.buckets] == ["2026-10-07", "2026-10-08"]
+    assert counted(by_day) == {"2026-10-07": (1, 120.0), "2026-10-08": (1, 180.0)}
+    assert len(by_hour.buckets) == 24
+    assert counted(by_hour) == {"03": (1, 180.0), "23": (1, 120.0)}
+    assert lines[10:14] == [
+        "",
+        "local day   items  acted  by poll  not acted  backfilled  median    p90  from observed",
+        "2026-10-07      1      1        0          0           0   2m00s  2m00s          1m00s",
+        "2026-10-08      1      1        0          0           0   3m00s  3m00s          2m00s",
+    ]
+    # Nine hours ahead, both fall on the morning of the 8th.
+    with in_zone("Asia/Tokyo"):
+        assert counted(latency.measure(conn, NOW, 2, "day")) == {"2026-10-08": (2, 150.0)}
+        assert counted(latency.measure(conn, NOW, 2, "hour")) == {"08": (1, 120.0), "12": (1, 180.0)}
+
+
 def test_the_report_is_printed_as_a_table(conn: sqlite3.Connection) -> None:
     """A row per kind and the total, each duration to the second, `-` where none is known."""
     ticket(conn, "PROJ-1", PR)
@@ -208,6 +317,7 @@ def test_the_report_is_printed_as_a_table(conn: sqlite3.Connection) -> None:
     commented(conn, "PROJ-1", "c1", at(base, 0), at(base, 1))
     commented(conn, "PROJ-1", "c2", at(base, 0), at(base, 1))
     check_completed(conn, 21, at(base, 1.5))
+    status_ended(conn, at(base, 1.5), CheckConclusion.SUCCESS)
     ticked(conn, at(base, 2.25), {"PROJ-1": "wait"}, woken_by=latency.POLL)
     commented(conn, "PROJ-1", "c3", at(base, 60), at(base, 61))
     with in_zone("UTC"):
@@ -215,28 +325,31 @@ def test_the_report_is_printed_as_a_table(conn: sqlite3.Connection) -> None:
     assert lines == [
         "External events over 7 days, since 2026-10-02 UTC: how long each waited for a tick to act.",
         "",
-        "kind            items  acted  by poll  not acted  median    p90  from observed",
-        "comment             3      2        2          1   2m15s  2m15s          1m15s",
-        "review              0      0        0          0       -      -              -",
-        "review comment      0      0        0          0       -      -              -",
-        "PR comment          0      0        0          0       -      -              -",
-        "check run           1      1        1          0       -      -            45s",
-        "all                 4      3        3          1   2m15s  2m15s          1m15s",
+        "kind            items  acted  by poll  not acted  backfilled  median    p90  from observed",
+        "comment             3      2        2          1           0   2m15s  2m15s          1m15s",
+        "review              0      0        0          0           0       -      -              -",
+        "review comment      0      0        0          0           0       -      -              -",
+        "PR comment          0      0        0          0           0       -      -              -",
+        "check run           1      1        1          0           0       -      -            45s",
+        "status run          1      1        1          0           0       -      -            45s",
+        "all                 5      4        4          1           0   2m15s  2m15s          1m00s",
         "",
         "Latency runs from the item's time at its source; from observed, from when canopy first observed it.",
-        "A check run has no source time: its latency is unknown, and the total's reads the other kinds.",
+        "A check or status run has no source time: its latency is unknown, and the total's reads the other kinds.",
+        "Backfilled: made before canopy read its kind, and first observed by its first read; in no other column.",
     ]
 
 
 def test_canopy_latency_prints_the_last_days(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
-    """`--json` prints it as data, in seconds; `--days` takes at least one day."""
+    """`--json` prints it as data, in seconds, each item too; `--by` splits it; `--days` takes at least one day."""
     conn = canopy_env.journal()
     now = datetime.now(UTC)
     ticket(conn, "PROJ-1")
     commented(conn, "PROJ-1", "c1", at(now, -10), at(now, -9))
     ticked(conn, at(now, -8), {"PROJ-1": "wait"}, woken_by=latency.POLL)
     assert main(["latency"]) == 0
-    assert capsys.readouterr().out.splitlines()[3].split() == ["comment", "1", "1", "1", "0", "2m00s", "2m00s", "1m00s"]
+    line = ["comment", "1", "1", "1", "0", "0", "2m00s", "2m00s", "1m00s"]
+    assert capsys.readouterr().out.splitlines()[3].split() == line
     assert main(["latency", "--days", "2", "--json"]) == 0
     found = json.loads(capsys.readouterr().out)
     assert found["days"] == 2
@@ -246,10 +359,40 @@ def test_canopy_latency_prints_the_last_days(canopy_env: CanopyEnv, capsys: pyte
         "acted": 1,
         "by_poll": 1,
         "not_acted": 0,
+        "backfilled": 0,
         "median_s": 120.0,
         "p90_s": 120.0,
         "observed_median_s": 60.0,
     }
-    assert [k["kind"] for k in found["kinds"]] == ["comment", "review", "review_comment", "pr_comment", "check_run"]
+    assert [k["kind"] for k in found["kinds"]] == [
+        "comment",
+        "review",
+        "review_comment",
+        "pr_comment",
+        "check_run",
+        "status_run",
+    ]
     assert found["total"]["items"] == 1
+    assert "by" not in found
+    assert found["items"] == [
+        {
+            "kind": "comment",
+            "ticket": "PROJ-1",
+            "source_at": at(now, -10),
+            "observed_at": at(now, -9),
+            "backfilled": False,
+            "acted_at": at(now, -8),
+            "by_poll": True,
+            "latency_s": 120.0,
+            "observed_s": 60.0,
+        },
+    ]
+    assert main(["latency", "--by", "hour", "--json"]) == 0
+    found = json.loads(capsys.readouterr().out)
+    assert found["by"] == "hour"
+    assert [b["at"] for b in found["buckets"]] == [f"{hour:02d}" for hour in range(24)]
+    assert sum(b["items"] for b in found["buckets"]) == 1
+    assert main(["latency", "--by", "day"]) == 0
+    assert "local day" in capsys.readouterr().out
     assert main(["latency", "--days", "0"]) == 2
+    assert main(["latency", "--by", "week"]) == 2
