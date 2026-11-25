@@ -544,6 +544,24 @@ def own_pending(state: Path, **keys: object) -> None:
 
 
 @pytest.mark.usefixtures("git_pool")
+def test_a_stage_into_the_operators_review_github_refused_at_once_claims_nothing_of_its_body(
+    scenario: Scenario,
+    github_state: Path,
+) -> None:
+    """Counted by its replies, none of which landed: the body GitHub may have taken is not said to be missing."""
+    conn = scenario.conn
+    entries = [thread(501), {"on": "pr", "pr": PR, "text": "Done."}]
+    run_id = drafted_run(scenario, github_state, entries)
+    own_pending(github_state, post="joined_none")
+    wanted = [hashed(conn, run_id, n) for n in (1, 2)]
+    failed = scenario.operator("draft", "stage", f"run:{run_id}", *wanted, code=1).out
+    assert "none of its replies are in your pending review on GitHub" in failed
+    assert "staging again adds only what is missing" in failed
+    assert "nothing was added" not in failed
+    assert {(d.status, d.pending_review) for d in all_drafts(conn)} == {(DraftStatus.WAITING, None)}
+
+
+@pytest.mark.usefixtures("git_pool")
 def test_staging_where_the_operator_has_a_pending_review_adds_to_it_and_never_names_it_to_delete(
     scenario: Scenario,
     github_state: Path,

@@ -583,7 +583,11 @@ def _stopped_in_joined(held: int, comments: int, said: str) -> str:
     """
     refused = said or "the post command refused"
     if not held:
-        return f"nothing was added to your pending review on GitHub, which canopy left as it was: {refused}"
+        # Counted by its comments alone: whether GitHub took the body before it stopped is not known, so not said.
+        return (
+            f"none of its comments are in your pending review on GitHub, which canopy left as it was, and staging "
+            f"again adds only what is missing: {refused}"
+        )
     return (
         f"GitHub refused part of it: {held} of its {comments} comments are in your pending review on GitHub, which "
         f"canopy left as it was, and staging again adds only what is missing: {refused}"

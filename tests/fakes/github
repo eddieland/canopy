@@ -23,8 +23,8 @@ State keys, each optional:
     post        how the next post ends: `ok` (the default), `refused` (nothing posted, `"submitted": false`),
                 `pending_left` (nothing posted, and its pending review left), `unknown` (no `end` line), or, for a
                 stage that joins the poster's own pending review, `joined_partial` (GitHub refuses all but its first
-                reply and first comment). With `unknown`, `posted: true` makes it post all the same, as a submit that
-                reached GitHub would.
+                reply and first comment) or `joined_none` (GitHub refuses its first reply or comment). With
+                `unknown`, `posted: true` makes it post all the same, as a submit that reached GitHub would.
     issues      [{"url": URL, "body": TEXT, "id": N}]: the comments the poster made on issues, appended as it posts.
     reactions   [{"pr": URL, "comment": ID, "reaction": NAME, "by": LOGIN}]: the reactions the poster added, appended
                 as it adds them, once each, as GitHub keeps them.
@@ -227,9 +227,10 @@ def join(state: dict[str, Any], request: Mapping[str, Any], login: str, outcome:
     }
     replies = [r for r in request.get("replies", []) if "text" in r]
     comments = request.get("comments", [])
-    partial = outcome == "joined_partial"
+    partial = outcome in {"joined_partial", "joined_none"}
     if partial:
-        replies, comments = replies[:1], comments[:1]
+        kept = 1 if outcome == "joined_partial" else 0
+        replies, comments = replies[:kept], comments[:kept]
     if outcome == "unknown":
         return 1
     for line in add_missing(state, url, login, own["id"], held, replies, comments):

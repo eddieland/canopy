@@ -608,7 +608,11 @@ def _stopped_in_joined(group: Sequence[records.Draft], lines: Mapping[str, Mappi
     replies = [d for d in group if d.kind is DraftKind.THREAD]
     held = sum(1 for d in replies if f"comment:{d.comment_id}" in lines)
     if not held:
-        return f"nothing was added to your pending review on GitHub, which canopy left as it was: {refused}"
+        # Counted by its replies alone: whether GitHub took the body before it stopped is not known, so not said.
+        return (
+            f"none of its replies are in your pending review on GitHub, which canopy left as it was, and staging again "
+            f"adds only what is missing: {refused}"
+        )
     return (
         f"GitHub refused part of it: {held} of its {len(replies)} replies are in your pending review on GitHub, which "
         f"canopy left as it was, and staging again adds only what is missing: {refused}"
