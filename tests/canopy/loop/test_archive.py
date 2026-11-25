@@ -404,6 +404,28 @@ def test_a_push_the_upstream_refuses_for_its_own_commits_goes_on_top_of_them(
     assert git("rev-parse", "HEAD", cwd=clone) == git("rev-parse", "main", cwd=upstream)
 
 
+def test_the_archive_commits_and_rebases_unsigned_whatever_the_clones_config_says(
+    scenario: Scenario,
+    clone: Path,
+    upstream: Path,
+    tmp_path: Path,
+) -> None:
+    # A signature could ask a pinentry nobody is there to answer; this signing program fails at once instead.
+    git("config", "commit.gpgsign", "true", cwd=clone)
+    git("config", "gpg.program", "false", cwd=clone)
+    proposed(scenario.conn, scenario.env.state_dir)
+    scenario.tick(*waits(KEY))
+    pushed_from_another_clone(upstream, tmp_path, "other/README.md", "Another workspace's plans.\n")
+    proposed(scenario.conn, scenario.env.state_dir, key="PROJ-2")
+
+    scenario.tick(*waits(KEY, "PROJ-2"))
+
+    # Committed, and rebased onto what the other clone pushed.
+    assert unpushed(scenario) is None
+    assert git("rev-list", "--count", "main", cwd=upstream) == "3"
+    assert git("log", "--format=%G?", "main", cwd=upstream).split() == ["N", "N", "N"]
+
+
 def test_a_rebase_that_conflicts_is_aborted_and_stays_an_item(
     scenario: Scenario,
     clone: Path,

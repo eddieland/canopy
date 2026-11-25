@@ -4,9 +4,10 @@ Every slot of a pool shares one git directory with the others and with the prima
 git the harness runs there afterwards runs on the host, outside any worker: in `_run` after the worker, in the next run
 or review on the pool, or in a sync. So every git the harness runs goes through `argv`, which turns off what git would
 otherwise run from that directory unasked: hooks and the filesystem monitor. Submodule fetches and the `ext::` transport
-are off too, as a URL from that directory's config could name either. A command the config names for a filter driver
-or a transport (`remote.<name>.uploadpack`) still runs; only a git directory the worker cannot write closes that
-(DESIGN §24).
+are off too, as a URL from that directory's config could name either, and so is a rebase moving the other branches that
+point into what it rewrites (`rebase.updateRefs`), which in that shared directory are other slots'. A command the
+config names for a filter driver or a transport (`remote.<name>.uploadpack`) still runs; only a git directory the
+worker cannot write closes that (DESIGN §24). `ENV` keeps git from asking anyone for credentials.
 
 `argv` also turns off git's automatic maintenance, which a fetch or a commit otherwise starts in the background on that
 shared directory while other slots' runs use it. The flags cover only the harness's own git; `canopy workspace sync`
@@ -49,6 +50,8 @@ SAFE_FLAGS: Final = (
     "fetch.recurseSubmodules=false",
     "-c",
     "protocol.ext.allow=never",
+    "-c",
+    "rebase.updateRefs=false",
 )
 #: git's automatic maintenance, as config keys and values: `maintenance.auto` for what a fetch or a commit starts, and
 #: `gc.auto` for `gc --auto`, which older git runs instead. Run in the background on a pool's shared git directory, it
@@ -56,8 +59,13 @@ SAFE_FLAGS: Final = (
 #: locked. Maintenance an operator runs on purpose is unaffected.
 AUTO_MAINTENANCE_OFF: Final = (("maintenance.auto", "false"), ("gc.auto", "0"))
 _MAINTENANCE_FLAGS: Final = tuple(arg for key, value in AUTO_MAINTENANCE_OFF for arg in ("-c", f"{key}={value}"))
-#: Never let git wait for credentials on a terminal nobody is watching.
-ENV: Final = {"GIT_TERMINAL_PROMPT": "0"}
+#: Never let git wait for credentials: not on a terminal nobody is watching, nor through an askpass, such as an
+#: editor's, that asks the operator in a window of theirs. `false` as the askpass fails at once, as the disabled prompt
+#: then does.
+ENV: Final = {"GIT_TERMINAL_PROMPT": "0", "GIT_ASKPASS": "false", "SSH_ASKPASS_REQUIRE": "never"}
+#: Flags before a subcommand that makes commits, for one the harness makes unsigned whatever the operator's config says,
+#: as a signature could ask a pinentry nobody is there to answer.
+UNSIGNED: Final = ("-c", "commit.gpgsign=false")
 LINK: Final = ".git"
 COMMONDIR: Final = "commondir"
 #: What `git worktree add` writes in `commondir`: the common directory is the one that holds `worktrees/<slot>/`.
@@ -81,7 +89,7 @@ class Merge:
 
 
 def argv(*args: str) -> list[str]:
-    """Return the command line for `git <args>` with hooks, fsmonitor, submodule fetches, and maintenance off."""
+    """Return the command line for `git <args>` with hooks, fsmonitor, submodule fetches, update-refs, upkeep off."""
     return [PROGRAM, *SAFE_FLAGS, *_MAINTENANCE_FLAGS, *args]
 
 
