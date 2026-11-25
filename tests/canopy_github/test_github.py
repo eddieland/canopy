@@ -1733,8 +1733,9 @@ def test_a_stage_adds_to_the_posters_own_pending_review_and_keeps_what_it_holds(
         ("My notes.", "My notes.\n\nTwo things."),
         ("My notes.\n\nTwo things.", "My notes.\n\nTwo things."),
         ("Two things.", "Two things."),
+        ("Two things. Fix them.", "Two things. Fix them.\n\nTwo things."),
     ],
-    ids=["none", "its-own", "both-already", "same"],
+    ids=["none", "its-own", "both-already", "same", "inside-its-own"],
 )
 def test_a_joined_reviews_body_keeps_its_own_with_the_stages_below(
     github: tuple[Fake, str],

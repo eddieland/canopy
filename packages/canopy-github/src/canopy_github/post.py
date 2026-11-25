@@ -534,12 +534,17 @@ def _joined_body(held: str, body: str | None) -> str | None:
     """The body of a joined review that holds `held`, with `body` added; None when it needs no change.
 
     `body` goes in as the review's own when it has none, and below `held`, after a blank line, when `held` does not
-    already hold it, as an earlier stage that stopped part way may have left it: neither text is lost.
+    already end with it, as an earlier stage that stopped part way may have left it: neither text is lost. Only the
+    whole of `held`, or its last block after a blank line, counts as holding it, so a short body such as "LGTM" that
+    the operator's own words happen to contain is still added.
 
     Returns:
         The body to set, or None.
     """
-    if body is None or _plain(body) in _plain(held):
+    if body is None:
+        return None
+    mine, theirs = _plain(body), _plain(held)
+    if theirs == mine or theirs.endswith(f"\n\n{mine}"):
         return None
     if not held.strip():
         return body
@@ -575,7 +580,10 @@ def _join(client: Client, own: Pending, review: Review, joining: _Joining, out: 
         if body is not None:
             client.query(_UPDATE, {"review": own.node, "body": body})
     except GitHubError:
-        # The review is the operator's: what was added stays, and a later stage adds only what is missing.
+        # The review is the operator's: what was added stays, and a later stage adds only what is missing. So even an
+        # outcome GitHub left unknown ends `joined` and returns the draft to waiting: staging again is safe because a
+        # comment `own` already holds is matched by its words, and the body only by its last block, never added twice.
+        # A change to either match must keep that.
         for line in posted:
             out.line({"kind": "comment", **line})
         out.line({"kind": "end", "submitted": False, "joined": True})

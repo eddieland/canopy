@@ -192,6 +192,11 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
   commit, and its new version to follow the note. Publish it, then publish it again: expect the second refused. On a
   second PR, stage the draft: expect a pending review under your login holding that version on its lines, and
   `review_unsettled` on the attention list, until you submit it on GitHub and the next read records it published.
+- **S85. A draft staged into your own pending review** (#2495). On a PR where you hold a pending review of your own,
+  with a comment on a line, a reply on a thread, and a body, stage a canopy draft with a comment, a reply, and a body.
+  Expect your one pending review to hold its earlier comments and body, with canopy's body below yours, and canopy's
+  comment and reply added. Stage again: expect nothing added twice. This is the fakes' stand-in checked against
+  GitHub: that a pending comment reads back its `line` or `originalLine`, and a pending reply its `replyTo`.
 
 ### Notifications and notices
 
