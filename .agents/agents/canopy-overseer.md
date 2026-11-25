@@ -25,6 +25,9 @@ permission:
   execute: deny
   # Subagents run with their own, wider permissions; the overseer must not reach them.
   task: deny
+  # Nor OpenCode's own question tool, which waits on a person at the session: a run has none, so the call never
+  # returns an answer. What an agent asks the operator goes through canopy, as its prompt says.
+  question: deny
   # No shell of its own: the overseer acts through canopy's tools alone (DESIGN §27), and reads the pool from its state
   # block. Only the commands the operator names in `runtime.allow_bash` follow the deny.
   bash:

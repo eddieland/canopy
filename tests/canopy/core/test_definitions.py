@@ -111,6 +111,14 @@ def test_no_agent_has_web_tools(name: str) -> None:
 
 
 @pytest.mark.parametrize("name", runtime_definitions.agent_names())
+def test_no_agent_is_sent_the_runtimes_question_tool(canopy_env: CanopyEnv, name: str) -> None:
+    # It waits on a person at the session, and a run has none: an agent asks the operator through canopy.
+    frontmatter = (resources.agents_dir() / f"{name}.md").read_text().split("---")[1]
+    assert "\n  question: deny\n" in frontmatter
+    assert _opencode_disabled(_ruleset(canopy_env, name), "question")
+
+
+@pytest.mark.parametrize("name", runtime_definitions.agent_names())
 def test_no_bundled_agent_sets_a_temperature(name: str) -> None:
     # An agent runs on whatever model its command names, and some, such as OpenAI's reasoning models, refuse a request
     # that sets one. The overseer's and the reviewer's come from `runtime`, rendered into the snapshot rather than set
