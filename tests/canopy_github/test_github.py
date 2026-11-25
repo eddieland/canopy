@@ -151,6 +151,8 @@ class Fake:
     too_heavy: set[int] = field(default_factory=set)
     seen: list[tuple[str, str, dict[str, Any]]] = field(default_factory=list)
     next_id: int = 9000
+    #: A pending review of the viewer's that turns up on its PR as the next review is opened, before GitHub opens it.
+    appears: Review | None = None
 
     def ops(self) -> list[str]:
         return [op for op, _, _ in self.seen]
@@ -223,11 +225,34 @@ class Fake:
             pull = self.pulls[variables["owner"], variables["name"], variables["number"]]
             # GitHub shows a pending review to its author alone.
             nodes = [
-                {"id": r.node, "author": {"login": r.author}}
+                {
+                    "id": r.node,
+                    "fullDatabaseId": str(r.id),
+                    "author": {"login": r.author},
+                    "body": r.body,
+                    "comments": {"totalCount": len(self.held(pull, r))},
+                }
                 for r in pull.reviews
                 if r.state == "PENDING" and r.author == self.viewer
             ]
             return {"data": {"repository": {"pullRequest": {"reviews": {"nodes": nodes}}}}}
+        if op == "PendingReview":
+            found = self.review_by_node(variables["id"])
+            if found is None:
+                return {"data": {"node": None}, "errors": [{"type": "NOT_FOUND", "message": "no node"}]}
+            pull, review = found
+            node = {
+                "state": review.state,
+                "body": review.body,
+                "commit": None if review.commit is None else {"oid": review.commit},
+                "comments": page(self.held(pull, review), variables["after"]),
+            }
+            return {"data": {"node": node}}
+        if op == "UpdateReview":
+            found = self.review_by_node(variables["review"])
+            assert found is not None
+            found[1].body = variables["body"]
+            return {"data": {"updatePullRequestReview": {"pullRequestReview": {"id": found[1].node}}}}
         if op == "IssueId":
             node = self.issues.get((variables["owner"], variables["name"], variables["number"]))
             return {"data": {"repository": {"issue": None if node is None else {"id": node}}}}
@@ -240,6 +265,9 @@ class Fake:
             return {"data": {"node": node}}
         if op == "AddReview":
             pull = self.pull_by_node(variables["pr"])
+            if self.appears is not None:
+                pull.reviews.append(self.appears)
+                self.appears = None
             if any(r.author == self.viewer and r.state == "PENDING" for r in pull.reviews):
                 return {"errors": [{"message": "User can only have one pending review per pull request"}]}
             review = Review(
@@ -324,6 +352,23 @@ class Fake:
                 errors.append({"type": "NOT_FOUND", "path": [f"p{i}", "pullRequest"], "message": "no such PR"})
             i += 1
         return {"data": data, **({"errors": errors} if errors else {})}
+
+    def held(self, pull: Pull, review: Review) -> list[dict[str, Any]]:
+        """The comments `review` holds, as a review's `comments` lists them: a reply names its thread's first."""
+        return [
+            {
+                "fullDatabaseId": str(c.id),
+                "url": f"{PR}#discussion_r{c.id}",
+                "body": c.body,
+                "path": t.path,
+                "line": t.line,
+                "originalLine": t.line,
+                "replyTo": None if i == 0 else {"fullDatabaseId": str(t.comments[0].id)},
+            }
+            for t in pull.threads
+            for i, c in enumerate(t.comments)
+            if c.review == review.id
+        ]
 
     def pr_node(self, pull: Pull) -> dict[str, Any]:
         rollup = None if pull.contexts is None else {"contexts": page(pull.contexts, None)}
@@ -1625,6 +1670,191 @@ def test_only_the_posters_own_pending_review_is_deleted(github: tuple[Fake, str]
     assert "Delete" not in fake.ops()
     assert "AddReview" not in fake.ops()
     assert lines[-1] == {"kind": "end", "submitted": False}
+
+
+def own_pending(fake: Fake, body: str = "My notes.", commit: str | None = SHA) -> Review:
+    """Give the viewer a pending review of their own on the PR, holding a reply and a thread of their own.
+
+    Returns:
+        It.
+    """
+    pull = fake.pulls["acme", "api", 7]
+    review = Review(node="PRR_9", id=109, author="me", state="PENDING", body=body, at=None, commit=commit)
+    pull.reviews.append(review)
+    pull.threads[0].comments.append(Comment(id=601, body="Mine.", author="me", review=109))
+    pull.threads.append(Thread("PRRT_9", "src/x.py", 5, [Comment(id=602, body="My own.", author="me", review=109)]))
+    return review
+
+
+#: A stage of a review of a commit, with a reply, a body, and two comments that start threads.
+STAGE: Final = {
+    "pr": PR,
+    "submit": False,
+    "commit": SHA,
+    "body": "Two things.",
+    "replies": [{"comment": 503, "text": "Kept it."}],
+    "comments": NEW,
+}
+
+
+def mine(fake: Fake, review: Review) -> list[tuple[str, int | None, str]]:
+    """What `review` holds: each comment's file, line, and words, in the threads' order."""
+    pull = fake.pulls["acme", "api", 7]
+    return [(t.path, t.line, c.body) for t in pull.threads for c in t.comments if c.review == review.id]
+
+
+def test_a_stage_adds_to_the_posters_own_pending_review_and_keeps_what_it_holds(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    review = own_pending(fake)
+    code, lines, _ = send(url, STAGE)
+    assert code == 0
+    pull = fake.pulls["acme", "api", 7]
+    assert [(r.node, r.state) for r in pull.reviews] == [("PRR_1", "COMMENTED"), ("PRR_9", "PENDING")]
+    assert review.body == "My notes.\n\nTwo things."
+    assert mine(fake, review) == [
+        ("src/app.py", 12, "Mine."),
+        ("src/db.py", None, "Kept it."),
+        ("src/x.py", 5, "My own."),
+        ("src/retry.py", 2, "This loops forever."),
+        ("README.md", 1, "?"),
+    ]
+    assert not {"AddReview", "Submit", "Delete"} & set(fake.ops())
+    assert [line["kind"] for line in lines] == ["as", "pending", "comment", "comment", "comment", "end"]
+    assert lines[1] == {"kind": "pending", "review": "PRR_9", "id": 109, "joined": True}
+    assert lines[2]["comment"] == 503
+    assert [line.get("index") for line in lines[3:5]] == [1, 2]
+    assert lines[-1] == {"kind": "end", "submitted": False, "staged": True, "joined": True}
+
+
+@pytest.mark.parametrize(
+    ("held", "body"),
+    [
+        ("", "Two things."),
+        ("My notes.", "My notes.\n\nTwo things."),
+        ("My notes.\n\nTwo things.", "My notes.\n\nTwo things."),
+        ("Two things.", "Two things."),
+    ],
+    ids=["none", "its-own", "both-already", "same"],
+)
+def test_a_joined_reviews_body_keeps_its_own_with_the_stages_below(
+    github: tuple[Fake, str],
+    held: str,
+    body: str,
+) -> None:
+    fake, url = github
+    review = own_pending(fake, body=held)
+    code, _, _ = send(url, {"pr": PR, "submit": False, "body": "Two things."})
+    assert code == 0
+    assert review.body == body
+    assert ("UpdateReview" in fake.ops()) == (held != body)
+
+
+@pytest.mark.parametrize("failure", ["refuse", "lost"])
+def test_a_joined_review_github_refuses_part_of_is_kept_and_staging_again_adds_only_the_rest(
+    github: tuple[Fake, str],
+    failure: str,
+) -> None:
+    fake, url = github
+    review = own_pending(fake)
+    fake.fail["Thread"] = failure
+    code, lines, err = send(url, STAGE)
+    assert code == 1
+    assert "comment 1, on src/retry.py:2" in err
+    # The operator's review stays pending, with what it held and what was added before GitHub refused.
+    assert [(r.node, r.state) for r in fake.pulls["acme", "api", 7].reviews] == [
+        ("PRR_1", "COMMENTED"),
+        ("PRR_9", "PENDING"),
+    ]
+    assert "Delete" not in fake.ops()
+    assert review.body == "My notes."
+    assert [line["kind"] for line in lines] == ["as", "pending", "comment", "end"]
+    reply = lines[2]
+    assert reply["comment"] == 503
+    assert lines[-1] == {"kind": "end", "submitted": False, "joined": True}
+    del fake.fail["Thread"]
+    code, lines, _ = send(url, STAGE)
+    assert code == 0
+    assert [line for line in lines if line.get("comment") == 503] == [reply]
+    assert mine(fake, review) == [
+        ("src/app.py", 12, "Mine."),
+        ("src/db.py", None, "Kept it."),
+        ("src/x.py", 5, "My own."),
+        ("src/retry.py", 2, "This loops forever."),
+        ("README.md", 1, "?"),
+    ]
+    assert review.body == "My notes.\n\nTwo things."
+    assert lines[-1] == {"kind": "end", "submitted": False, "staged": True, "joined": True}
+
+
+def test_a_joined_review_holding_many_comments_is_read_on_every_page(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    review = own_pending(fake)
+    assert send(url, STAGE)[0] == 0
+    assert len(mine(fake, review)) > PAGE
+    code, _, _ = send(url, STAGE)
+    assert code == 0
+    assert len(mine(fake, review)) == 5
+    assert review.body == "My notes.\n\nTwo things."
+
+
+def test_a_pending_review_that_turns_up_before_the_stage_opens_its_own_is_joined(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    fake.appears = Review(node="PRR_9", id=109, author="me", state="PENDING", body="Mine.", at=None, commit=SHA)
+    code, lines, _ = send(url, STAGE)
+    assert code == 0
+    assert [(r.node, r.state) for r in fake.pulls["acme", "api", 7].reviews] == [
+        ("PRR_1", "COMMENTED"),
+        ("PRR_9", "PENDING"),
+    ]
+    assert fake.appears is None
+    assert fake.pulls["acme", "api", 7].reviews[1].body == "Mine.\n\nTwo things."
+    assert lines[1] == {"kind": "pending", "review": "PRR_9", "id": 109, "joined": True}
+    assert lines[-1] == {"kind": "end", "submitted": False, "staged": True, "joined": True}
+    assert "Delete" not in fake.ops()
+
+
+def test_a_pending_review_that_turns_up_while_the_opening_is_unknown_is_not_deleted(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    fake.appears = Review(node="PRR_9", id=109, author="me", state="PENDING", body="Mine.", at=None, commit=SHA)
+    fake.fail["AddReview"] = "lost"
+    code, lines, _ = send(url, STAGE)
+    assert code == 1
+    assert lines[-1] == {"kind": "end", "submitted": False}
+    assert "Delete" not in fake.ops()
+    assert [r.node for r in fake.pulls["acme", "api", 7].reviews] == ["PRR_1", "PRR_9"]
+
+
+@pytest.mark.parametrize(
+    ("request_", "message"),
+    [
+        ({**STAGE, "submit": True}, "submitting would submit what it holds too"),
+        ({**STAGE, "commit": "a" * 40}, "you have a pending review on https://github.com/acme/api/pull/7 on commit"),
+        ({**STAGE, "body": "x" * 65530}, "longer than GitHub's 65536 characters"),
+    ],
+    ids=["submit", "commit", "too-long"],
+)
+@pytest.mark.parametrize("when", ["before", "meanwhile"])
+def test_a_pending_review_that_cannot_take_the_post_is_left_as_it_is(
+    github: tuple[Fake, str],
+    request_: dict[str, object],
+    message: str,
+    when: str,
+) -> None:
+    fake, url = github
+    if when == "before":
+        own_pending(fake)
+    else:
+        fake.appears = Review(node="PRR_9", id=109, author="me", state="PENDING", body="My notes.", at=None, commit=SHA)
+    code, lines, err = send(url, request_)
+    assert code == 1
+    assert message in err
+    assert lines[-1] == {"kind": "end", "submitted": False}
+    assert not {"Reply", "Thread", "UpdateReview", "Submit", "Delete"} & set(fake.ops())
+    pull = fake.pulls["acme", "api", 7]
+    assert [(r.node, r.state, r.body) for r in pull.reviews] == [
+        ("PRR_1", "COMMENTED", "A few things."),
+        ("PRR_9", "PENDING", "My notes."),
+    ]
 
 
 def test_a_tickets_draft_posts_one_issue_comment(github: tuple[Fake, str]) -> None:
