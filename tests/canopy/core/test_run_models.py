@@ -7,11 +7,11 @@ from typing import Final
 
 import pytest
 
-from canopy.core import db, run_models
+from canopy.core import db, model_limits, run_models
 from canopy.core.run_models import MAX_ATTEMPTS, RETRY_AFTER, Due
 from canopy.core.vocab import ModelsRead
 from canopy.infra import resources
-from canopy.runtime.report import ModelUse
+from canopy.runtime.report import ModelLimits, ModelList, ModelUse
 from tests.conftest import Journals
 
 NOW: Final = datetime(2026, 10, 20, 12, tzinfo=UTC)
@@ -176,6 +176,43 @@ def test_a_read_keeps_the_runtime_s_version_till_one_finds_the_session_again(con
     assert version() == "1.20.0"
     run_models.record(conn, run, ModelsRead.FOUND, [ModelUse("a/x", 1, 0.1)])
     assert version() is None
+
+
+def test_a_read_keeps_the_compactions_till_one_finds_the_session_again(conn: sqlite3.Connection) -> None:
+    w = worker(conn, tick(conn, at(5), None), at(4), "ses_w")
+    run = Due("runs", w, "ses_w", 0)
+
+    def compactions() -> int | None:
+        return run_models.reads_of(conn, "runs", [w])[w].compactions
+
+    run_models.record(conn, run, ModelsRead.FOUND, [ModelUse("a/x", 1, 0.1)], compactions=2)
+    assert compactions() == 2
+    run_models.record(conn, run, ModelsRead.FAILED, error="exited 1")
+    assert compactions() == 2
+    run_models.record(conn, run, ModelsRead.MISSING)
+    assert compactions() == 2
+    run_models.record(conn, run, ModelsRead.FOUND, [ModelUse("a/x", 1, 0.1)], compactions=0)
+    assert compactions() == 0
+    # A runtime whose record does not say leaves it unknown.
+    run_models.record(conn, run, ModelsRead.FOUND, [ModelUse("a/x", 1, 0.1)])
+    assert compactions() is None
+
+
+def test_each_model_of_a_run_takes_the_window_it_was_last_listed_with(conn: sqlite3.Connection) -> None:
+    listed = {"a/x": ModelLimits(input=64000, context=128000), "a/y": ModelLimits(input=None, context=200000)}
+    model_limits.keep(conn, ModelList(frozenset(listed), limits=listed))
+    w = worker(conn, tick(conn, at(5), None), at(4), "ses_w")
+    used = [ModelUse("a/x@high", 2, 0.5), ModelUse("a/y", 1, 0.2), ModelUse("a/unlisted", 1, 0.1)]
+    run_models.record(conn, Due("runs", w, "ses_w", 0), ModelsRead.FOUND, used)
+
+    def windows() -> list[tuple[str, int | None, int | None]]:
+        return [(m.model, m.input_limit, m.context_limit) for m in run_models.of_run(conn, "runs", w)]
+
+    # A variant runs in its model's window; a model never listed with one has none.
+    assert windows() == [("a/x@high", 64000, 128000), ("a/y", None, 200000), ("a/unlisted", None, None)]
+    # A later listing changes no run's window.
+    model_limits.keep(conn, ModelList(frozenset({"a/x"}), limits={"a/x": ModelLimits(input=8000, context=8000)}))
+    assert windows()[0] == ("a/x@high", 64000, 128000)
 
 
 def test_a_tickets_cost_by_model_sums_its_runs_and_the_reviews_naming_it(conn: sqlite3.Connection) -> None:

@@ -12,7 +12,7 @@ import pytest
 
 from canopy.infra import procs
 from canopy.runtime.opencode2 import models
-from canopy.runtime.report import ModelList
+from canopy.runtime.report import ModelLimits, ModelList
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -102,6 +102,13 @@ def test_a_recorded_list_gives_each_model_by_its_provider_and_id() -> None:
     serve = Serve([RECORDED.read_text()])
     assert models.listed(serve, cwd=Path("/ws")) == ModelList(
         frozenset({"opencode/mimo-v2.6-flash-free", "github-copilot/claude-opus-4.8-fast", "stub/stub-1"}),
+        limits={
+            # The provider's own model lists the input a call may send, short of its context; the others only the
+            # context.
+            "github-copilot/claude-opus-4.8-fast": ModelLimits(input=168000, context=200000),
+            "opencode/mimo-v2.6-flash-free": ModelLimits(input=None, context=200000),
+            "stub/stub-1": ModelLimits(input=None, context=200000),
+        },
     )
     # A server started where the caller says, on loopback, and each question asked with its password, one canopy made.
     serve_argv, cwd, env = serve.ran[0]
@@ -129,6 +136,23 @@ def test_an_entry_that_names_no_model_canopy_renders_is_passed_over() -> None:
         frozenset({"anthropic/claude-x"}),
         {"anthropic/claude-x": ("high",)},
     )
+
+
+def test_a_limit_canopy_cannot_read_is_none_and_fails_no_read_of_the_list() -> None:
+    printed = listing(
+        {"providerID": "a", "id": "both", "limit": {"context": 200000, "input": 64000, "output": 16000}},
+        {"providerID": "a", "id": "input", "limit": {"input": 64000, "context": "lots"}},
+        {"providerID": "a", "id": "odd", "limit": {"context": 0, "input": True}},
+        {"providerID": "a", "id": "huge", "limit": {"context": 10**20, "input": 2.5}},
+        {"providerID": "a", "id": "listless", "limit": [1, 2]},
+        {"providerID": "a", "id": "none"},
+    )
+    found = models.listed(Serve([printed]), cwd=Path("/ws"))
+    assert found.models == frozenset({"a/both", "a/input", "a/odd", "a/huge", "a/listless", "a/none"})
+    assert found.limits == {
+        "a/both": ModelLimits(input=64000, context=200000),
+        "a/input": ModelLimits(input=64000, context=None),
+    }
 
 
 def test_an_opencode_with_no_provider_lists_no_model() -> None:

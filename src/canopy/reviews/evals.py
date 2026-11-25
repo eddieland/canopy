@@ -455,7 +455,14 @@ def _model(ctx: Context, model: str | None) -> tuple[str | None, dict[str, Model
     if chosen is None:
         return None, models
     try:
-        agent_models.check(ctx.runner, ctx.workspace.root, chosen, version=ctx.config.runtime.version, chosen=where)
+        agent_models.check(
+            ctx.runner,
+            ctx.workspace.root,
+            chosen,
+            version=ctx.config.runtime.version,
+            chosen=where,
+            conn=ctx.conn,
+        )
     except agent_models.ModelError as e:
         raise EvalError(f"{e.guard}: {e.reason}") from e
     return chosen.name, models

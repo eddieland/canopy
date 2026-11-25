@@ -106,6 +106,7 @@ def test_each_model_s_replies_and_cost_are_summed_the_most_costly_first_on_a_pri
             "msg_4": "anthropic/claude-haiku",
             "msg_5": "local/free",
         },
+        compactions=0,
     )
     # Sanitized, on a server of its own rather than the shared service, and its stdout read from a file.
     export.run.assert_called_once_with(
@@ -132,6 +133,7 @@ def test_each_variant_of_a_model_is_counted_on_its_own_as_canopy_spells_it() -> 
             "msg_3": "anthropic/claude-opus",
             "msg_4": "anthropic/claude-opus@high",
         },
+        compactions=0,
     )
 
 
@@ -157,10 +159,29 @@ def test_each_reply_names_its_model_by_its_message_once_more_than_one_model_serv
 def test_the_version_of_opencode_that_made_the_session_is_read_where_the_export_names_it() -> None:
     session = {"id": "ses_1", "version": "2.1.2"}
     export = runner(json.dumps({"info": session, "messages": [assistant("a", "x", 0.5)]}))
-    assert read(export) == SessionModels("found", (ModelUse("a/x", 1, 0.5),), runtime_version="2.1.2")
+    expected = SessionModels("found", (ModelUse("a/x", 1, 0.5),), runtime_version="2.1.2", compactions=0)
+    assert read(export) == expected
     assert read(runner(exported(assistant("a", "x", 0.5)))).runtime_version is None
     export = runner(json.dumps({"info": {**session, "version": {"major": 2}}, "messages": [assistant("a", "x", 0.5)]}))
-    assert read(export) == SessionModels("found", (ModelUse("a/x", 1, 0.5),))
+    assert read(export) == SessionModels("found", (ModelUse("a/x", 1, 0.5),), compactions=0)
+
+
+def test_each_compaction_of_the_session_is_counted() -> None:
+    """OpenCode leaves a `compaction` message each time it sums the session up in place of what it said."""
+    compaction = {"id": "msg_c", "type": "compaction", "status": "completed", "reason": "auto", "summary": "[redacted]"}
+    export = runner(
+        exported(
+            *OTHERS,
+            assistant("a", "x", 0.5, message="msg_2"),
+            compaction,
+            assistant("a", "x", 0.5, message="msg_3"),
+            {**compaction, "id": "msg_d"},
+        ),
+    )
+    found = read(export)
+    assert found.compactions == 2
+    assert found.models == (ModelUse("a/x", 2, 1.0),)
+    assert read(runner(exported(assistant("a", "x", 0.5)))).compactions == 0
 
 
 def test_a_session_opencode_does_not_have_is_missing() -> None:
@@ -186,7 +207,11 @@ def test_a_read_that_cannot_be_trusted_fails_in_canopy_s_words(export: procs.Run
 def test_the_export_is_read_from_among_what_else_was_printed() -> None:
     pretty = json.dumps(json.loads(exported(assistant("anthropic", "claude-haiku", 0.5))), indent=2)
     stdout = f'{{"level": "info", "msg": "corp-plugin up"}}\n{pretty}\n{{"messages": "not these"}}\n'
-    assert read(runner(stdout)) == SessionModels("found", (ModelUse("anthropic/claude-haiku", 1, 0.5),))
+    assert read(runner(stdout)) == SessionModels(
+        "found",
+        (ModelUse("anthropic/claude-haiku", 1, 0.5),),
+        compactions=0,
+    )
 
 
 def test_opencode_missing_from_path_fails() -> None:
@@ -227,6 +252,8 @@ def test_a_sandboxed_runs_session_is_read_from_its_roles_database(data_home: Pat
         ("msg_6", "assistant", {"model": {"providerID": "openai", "id": "x" * 2_000}, "cost": 1}),
         # An id longer than canopy keeps names no reply, and its model and cost still count.
         ("m" * 101, "assistant", {"model": {"providerID": "openai", "id": "gpt-5"}, "cost": 0.25}),
+        # A compaction names no model, and is counted.
+        ("msg_7", "compaction", {"status": "completed", "reason": "auto", "summary": "so far"}),
     ]
     with contextlib.closing(sqlite3.connect(path)) as conn, conn:
         conn.executescript(SCHEMA)
@@ -243,4 +270,5 @@ def test_a_sandboxed_runs_session_is_read_from_its_roles_database(data_home: Pat
         (ModelUse("openai/gpt-5", 3, 0.75), ModelUse("anthropic/claude-opus", 1, 0.5)),
         replies={"msg_2": "anthropic/claude-opus", "msg_4": "openai/gpt-5", "msg_5": "openai/gpt-5"},
         runtime_version="2.1.4",
+        compactions=1,
     )

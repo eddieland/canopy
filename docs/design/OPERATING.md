@@ -459,7 +459,9 @@ promises:
   from the runtime's own record once the run ends: the process that ran it reads it as it closes the run, and the wait
   after a live tick reads the rest, one at a time, never-read runs the newest first, past ones among them. A read
   records each model that wrote a run's replies, a variant other than its default named with it, and what they cost;
-  for a run more than one model served, also which wrote each reply, keyed as the log's events key each call.
+  for a run more than one model served, also which wrote each reply, keyed as the log's events key each call. It
+  records how many times the runtime compacted the session, and each model's window as the list a run's model is
+  checked against last gave it, so a run's peak reads against the window it ran in, not a later listing's.
   `canopy spend` breaks each kind's cost down by model, and the web UI names each run's models on its page, and a
   split run's on its transcript, at each call where the model changed. One read of that breakdown narrows to a
   ticket, beside the workspace's, so a model tried on one ticket's workers reads against what it costs elsewhere. A

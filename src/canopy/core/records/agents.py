@@ -96,6 +96,9 @@ class RunModelRead(Row):
     read_at: str
     #: The runtime's version the session's record names, kept from the last read that found it; None where none did.
     runtime_version: str | None
+    #: How many times the runtime compacted the session, kept as `runtime_version` is; None where its record does not
+    #: say, and for a run read before canopy counted them.
+    compactions: int | None
 
 
 @dataclass(frozen=True)
@@ -110,6 +113,26 @@ class RunModel(Row):
     model: str
     replies: int
     cost_usd: float
+    #: The model's input limit in tokens, as `model_limits` held it when the run's models were recorded; None where it
+    #: held none.
+    input_limit: int | None
+    #: Its whole context in tokens, kept as `input_limit` is.
+    context_limit: int | None
+
+
+@dataclass(frozen=True)
+class ModelLimit(Row):
+    """A model's window as the runtime last listed it, when canopy checked a run's model against the list (§13)."""
+
+    TABLE: ClassVar[LiteralString] = "model_limits"
+
+    #: As `provider/model`, with no variant.
+    model: str
+    #: The input a call may send, in tokens; None where the runtime lists only the context.
+    input_limit: int | None
+    #: The context, input and output together, in tokens; None where the runtime lists none.
+    context_limit: int | None
+    listed_at: str
 
 
 @dataclass(frozen=True)

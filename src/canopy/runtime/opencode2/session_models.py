@@ -7,8 +7,9 @@ message's `id`, and the session's `version` where it names the OpenCode that mad
 is named as canopy's config spells it, `anthropic/claude-opus@high`, not as OpenCode 2 does, `#high`, so each variant
 counts on its own and reads as the one asked for, under either runtime (`canopy.runtime.opencode2.sessions`). A
 reply's `id` is the `messageID` its call's events name (`canopy.runtime.opencode2.transcript`), so a session more than
-one model served says which wrote each call. OpenCode looks a session up by its id alone, in the one database that
-holds every project's sessions, so any directory finds it. One it does not have it names on stderr, `Session not
+one model served says which wrote each call. Each time OpenCode compacted the session, a `compaction` message took the
+place of what it had said, so those are counted too. OpenCode looks a session up by its id alone, in the one database
+that holds every project's sessions, so any directory finds it. One it does not have it names on stderr, `Session not
 found: ID`, and exits 1.
 
 A sandboxed run's session is not there but in its role's own database (DESIGN §24), which the export is never pointed
@@ -57,6 +58,8 @@ TIMEOUT_SECONDS: Final = 60
 COMMAND: Final = "opencode session export --sanitize"
 #: What OpenCode prints on stderr for a session it does not have.
 NOT_FOUND: Final = "Session not found"
+#: The type of the message a compaction of the session leaves.
+COMPACTION: Final = "compaction"
 #: In a sandbox role's database, the version of OpenCode that made a session, by its id.
 SESSION_SQL: Final = "SELECT version FROM session_v2 WHERE id = ?"
 #: Its messages, by its id and at most how many, in the order OpenCode wrote them: each one's id and type, and of its
@@ -139,7 +142,7 @@ def read(runner: procs.Runner, *, cwd: Path, session_id: str) -> SessionModels:
         return SessionModels("failed", error=f"`{COMMAND}` printed what canopy cannot read")
     named = exported.info.version if exported.info is not None else None
     version = runtime_version(named if isinstance(named, str) else None)
-    return _found(exported.messages, version)
+    return _found(exported.messages, version, sum(m.type == COMPACTION for m in exported.messages))
 
 
 class _FailedError(Exception):
@@ -154,13 +157,22 @@ def _from_sandbox(session_id: str) -> SessionModels:
         return SessionModels("missing")
     named, rows = found
     messages = tuple(m for row in rows if (m := _message(row)) is not None)
-    return _found(messages, runtime_version(named if isinstance(named, str) else None))
+    # Counted from the rows, as a compaction names no model and so is no message `_message` reads.
+    compactions = sum(row[1] == COMPACTION for row in rows)
+    return _found(messages, runtime_version(named if isinstance(named, str) else None), compactions)
 
 
-# The models that wrote `messages`, and, when more than one did, which wrote each reply, as OpenCode 1's reader says.
-def _found(messages: tuple[_Message, ...], version: str | None) -> SessionModels:
+# The models that wrote `messages`, and, when more than one did, which wrote each reply, as OpenCode 1's reader says,
+# with the session's `compactions`.
+def _found(messages: tuple[_Message, ...], version: str | None, compactions: int) -> SessionModels:
     models, replies = _models(messages)
-    return SessionModels("found", models, replies=replies if len(models) > 1 else {}, runtime_version=version)
+    return SessionModels(
+        "found",
+        models,
+        replies=replies if len(models) > 1 else {},
+        runtime_version=version,
+        compactions=compactions,
+    )
 
 
 # A message's row, its id, type, and data as JSON, as the export prints the message; None for one canopy cannot read.

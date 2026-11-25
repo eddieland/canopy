@@ -323,7 +323,14 @@ def _check_model(ctx: Context, name: str, chore: Chore) -> None:
     where = f"in chores.{name}.model" if chosen.source == "chore" else "in runtime.models"
     try:
         version = ctx.config.runtime.version
-        agent_models.check(ctx.runner, ctx.workspace.root, chosen.model, version=version, chosen=where)
+        agent_models.check(
+            ctx.runner,
+            ctx.workspace.root,
+            chosen.model,
+            version=version,
+            chosen=where,
+            conn=ctx.conn,
+        )
     except agent_models.ModelError as e:
         raise Refusal(e.guard, e.reason, attention=e.guard) from e
 

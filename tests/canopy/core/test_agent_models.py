@@ -7,14 +7,14 @@ from typing import Final
 
 import pytest
 
-from canopy.core import agent_models, config
+from canopy.core import agent_models, config, db, model_limits
 from canopy.core.config import ConfigError
-from canopy.infra import procs
+from canopy.infra import procs, resources
 from canopy.runtime import agents
 from canopy.runtime.agents import Model
 from canopy.runtime.implementation import Version
 from canopy.runtime.report import ModelList
-from tests.conftest import CanopyEnv
+from tests.conftest import CanopyEnv, Journals
 
 MODEL: Final = "acme/fake-model-1"
 OTHER: Final = "acme/fake-model-2"
@@ -181,6 +181,28 @@ def test_a_template_asks_for_the_model_of_the_agent_it_runs(template: str, model
 def test_a_listed_model_passes_the_check(opencode_state: Path, tmp_path: Path) -> None:
     opencode_state.write_text(json.dumps({"models": [MODEL]}))
     agent_models.check(procs.SubprocessRunner(), tmp_path, Model(MODEL), version=Version.ONE)
+
+
+def test_a_check_keeps_the_window_of_each_model_the_list_gives_one_for(
+    opencode_state: Path,
+    tmp_path: Path,
+    journals: Journals,
+) -> None:
+    """A run records the window its model was listed with, not a later listing's (DESIGN §13)."""
+    conn = journals.open(tmp_path / db.DB_FILE_NAME)
+    db.migrate(conn, resources.migrations_dir())
+    limits = {MODEL: {"context": 128000, "input": 64000, "output": 16000}, OTHER: {"context": 200000}}
+    opencode_state.write_text(json.dumps({"models": [MODEL, OTHER, "acme/limitless"], "limits": limits}))
+    agent_models.check(procs.SubprocessRunner(), tmp_path, Model(MODEL), version=Version.TWO, conn=conn)
+    kept = model_limits.of_models(conn, [MODEL, OTHER, "acme/limitless"])
+    assert {m: (k.input_limit, k.context_limit) for m, k in kept.items()} == {
+        MODEL: (64000, 128000),
+        OTHER: (None, 200000),
+    }
+    # With no journal, as a check outside a workspace runs, nothing is kept.
+    opencode_state.write_text(json.dumps({"models": [MODEL], "limits": {MODEL: {"context": 8000}}}))
+    agent_models.check(procs.SubprocessRunner(), tmp_path, Model(MODEL), version=Version.TWO)
+    assert model_limits.of_models(conn, [MODEL])[MODEL].context_limit == 128000
 
 
 def test_a_variant_is_looked_up_among_its_models_variants(opencode_state: Path, tmp_path: Path) -> None:
