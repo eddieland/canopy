@@ -5,21 +5,28 @@ the run before its worker starts. `paths.worktree_include` reaches every `treeho
 """
 
 import json
-from collections.abc import Callable, Mapping, Sequence
+import os
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Final, override
+from unittest import mock
 
 import pytest
 
 from canopy.core import config
 from canopy.infra import procs
 from tests.canopy.helpers import (
+    AS_AN_AGENT,
     BRANCH,
+    EDITORS_TERMINAL,
+    PRINTS_ENV,
     InlineRunner,
     agent_runs,
     pool,
+    saw,
     slot_of,
     worker_does,
+    writes_env,
 )
 from tests.canopy.scenario_helpers import Scenario, dispatches
 from tests.conftest import CanopyEnv, GitPool, git, user_toml
@@ -60,6 +67,7 @@ class SetupTimesOut(InlineRunner):
         on_line: Callable[[str], None] | None = None,
         stdout_to_file: bool = False,
         max_stdout: int | None = None,
+        unset: Iterable[str] = (),
     ) -> procs.Result:
         if args[0] == "sh":
             return procs.Result(tuple(args), -9, "installing\n", "", timed_out=True)
@@ -73,6 +81,7 @@ class SetupTimesOut(InlineRunner):
             on_line=on_line,
             stdout_to_file=stdout_to_file,
             max_stdout=max_stdout,
+            unset=unset,
         )
 
 
@@ -98,6 +107,24 @@ def test_setup_runs_in_the_slot_on_the_runs_branch_before_the_worker(scenario: S
     assert isinstance(commands, list)
     assert commands[0]["returncode"] == 0  # the worker found what setup left
     assert w["cwd"] == slot_of(scenario.conn, run.id).slot_path
+
+
+def test_setup_and_the_worker_run_with_no_prompt_and_none_of_the_operators_editor_or_terminal(
+    scenario: Scenario,
+    git_pool: GitPool,
+    tmp_path: Path,
+) -> None:
+    """A loop started from an editor's terminal hands neither its askpass, socket, terminal, nor editor on (T4)."""
+    seen = tmp_path / "setup-env.json"
+    scenario.configures(runtime={"setup_cmd": writes_env(seen)})
+    with mock.patch.dict(os.environ, EDITORS_TERMINAL):
+        run = scenario.run(dispatches(slug="work"), worker=worker_does(PRINTS_ENV))
+
+    assert run.status == "done"
+    assert saw(seen.read_text()) == AS_AN_AGENT
+    [w] = agent_runs(scenario.agent_log)
+    [printed] = w["commands"]
+    assert saw(printed["stdout"]) == AS_AN_AGENT
 
 
 def test_a_failing_setup_crashes_the_run_before_its_worker_and_returns_the_slot(

@@ -1,6 +1,7 @@
 """An epic's plan run, started by the tick in code and kept only when canopy can read its plan (DESIGN §43)."""
 
 import json
+import os
 from pathlib import Path
 from typing import Final
 from unittest import mock
@@ -16,6 +17,9 @@ from canopy.infra import logs, procs
 from canopy.loop import attention
 from canopy.runs import ending, epic_runs, epic_starts, reconcile, tidy
 from tests.canopy.helpers import (
+    AS_AN_AGENT,
+    EDITORS_TERMINAL,
+    PRINTS_ENV,
     InlineRunner,
     agent_runs,
     commands_run,
@@ -29,6 +33,7 @@ from tests.canopy.helpers import (
     pool_statuses,
     present,
     running_run,
+    saw,
 )
 from tests.canopy.scenario_helpers import Scenario, dispatches
 from tests.conftest import CanopyEnv, GitPool
@@ -119,6 +124,19 @@ def test_a_submitted_epic_is_planned_once_and_its_plan_proposed(
     shown = capsys.readouterr().out
     assert f"  {run.id}  done" in shown
     assert "Plan: proposed, written" in shown
+
+
+def test_a_planner_runs_with_no_prompt_and_none_of_the_operators_editor_or_terminal(
+    inline: Context,
+    agent_log: Path,
+) -> None:
+    assert operator("epic", "submit", GOAL) == 0
+    [started] = start(inline)
+    with mock.patch.dict(os.environ, EDITORS_TERMINAL), planner_does(PRINTS_ENV, plan=PLAN):
+        run_plan(started.run_id)
+    [planner] = agent_runs(agent_log)
+    *_, printed = planner["commands"]
+    assert saw(printed["stdout"]) == AS_AN_AGENT
 
 
 @pytest.mark.parametrize(

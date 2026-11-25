@@ -12,7 +12,7 @@ import re
 import signal
 import sys
 from collections import Counter
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import override
@@ -62,6 +62,7 @@ class RaisingRunner:
         on_line: Callable[[str], None] | None = None,
         stdout_to_file: bool = False,
         max_stdout: int | None = None,
+        unset: Iterable[str] = (),
     ) -> procs.Result:
         if self.raises:
             self.raises -= 1
@@ -76,6 +77,7 @@ class RaisingRunner:
             on_line=on_line,
             stdout_to_file=stdout_to_file,
             max_stdout=max_stdout,
+            unset=unset,
         )
 
     def spawn(self, args: Sequence[str], *, cwd: Path, log_path: Path) -> int:

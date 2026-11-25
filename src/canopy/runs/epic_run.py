@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Annotated, Final, Literal, TextIO
 from pydantic import BaseModel, ConfigDict, Field, StrictStr
 
 from canopy.core import (
+    agent_env,
     agent_models,
     ask_again,
     cards,
@@ -327,7 +328,9 @@ def _run_agent(
     )
     out.write("--- planner stdout ---\n")
     out.flush()
+    # It runs without a prompt or the operator's editor and terminal, as every agent does (TRUST_MODEL T4).
     env = {
+        **agent_env.ENV,
         conversation.RUN_ID_ENV: f"{RUN_ID_PREFIX}{run.id}",
         tidy.OBJECTS_ENV: str(epic_runs.objects_dir(Path(run.log_path))),
     }
@@ -353,6 +356,7 @@ def _run_agent(
             env=env,
             stdin=stdin,
             timeout=again.seconds if again is not None else timeout_minutes * 60,
+            unset=agent_env.unset(os.environ),
             on_start=lambda pid: db.set_agent_pid(ctx.conn, "epic_runs", run.id, pid),
             on_line=lambda line: _echo(out, line),
         )

@@ -437,6 +437,19 @@ def test_a_removed_variable_reaches_no_child_whatever_gives_it(tmp_path: Path) -
     assert "CANOPY_GONE=inherited" in kept.splitlines()
 
 
+def test_a_variable_one_run_removes_reaches_that_child_alone() -> None:
+    runner = SubprocessRunner(unset={"CANOPY_GONE"})
+    inherited = {"CANOPY_GONE": "inherited", "CANOPY_ONCE": "inherited", "CANOPY_KEPT": "1"}
+    with mock.patch.dict(os.environ, inherited):
+        once = runner.run(["env"], env={"CANOPY_SET": "1"}, unset=["CANOPY_ONCE"])
+        after = runner.run(["env"])
+    # Removed beside what the runner removes from every child, and `env` still set.
+    assert {"CANOPY_KEPT=1", "CANOPY_SET=1"} <= set(once.stdout.splitlines())
+    assert not [line for line in once.stdout.splitlines() if line.startswith(("CANOPY_GONE=", "CANOPY_ONCE="))]
+    # The next run inherits it as ever.
+    assert "CANOPY_ONCE=inherited" in after.stdout.splitlines()
+
+
 @pytest.mark.parametrize("on_line", [None, print], ids=["captured", "streamed"])
 def test_a_child_with_a_timeout_learns_its_deadline_from_the_clock_that_kills_it(
     on_line: Callable[[str], None] | None,

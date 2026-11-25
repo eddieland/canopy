@@ -2,6 +2,7 @@
 
 import io
 import json
+import os
 import sqlite3
 import sys
 import time
@@ -38,8 +39,11 @@ from canopy.loop import attention
 from canopy.notify import message
 from canopy.runs import ending, reconcile, task_run, task_starts, task_tickets, tasks, tidy
 from tests.canopy.helpers import (
+    AS_AN_AGENT,
     DEAD_PID,
+    EDITORS_TERMINAL,
     KEY,
+    PRINTS_ENV,
     InlineRunner,
     agent_runs,
     calls,
@@ -58,6 +62,7 @@ from tests.canopy.helpers import (
     present,
     private_worker_does,
     running_run,
+    saw,
     told,
     tools_of,
     trailers_on,
@@ -289,6 +294,19 @@ def test_the_worker_is_the_private_one_and_its_prompt_carries_the_text(inline: C
     assert "Push only to your branch" in prompt
     assert worker["env"]["CANOPY_RUN_ID"] == f"task-{started.run_id}"
     assert "`Co-authored-by: canopy worker <noreply@canopy.invalid>`" in prompt
+
+
+def test_a_tasks_worker_runs_with_no_prompt_and_none_of_the_operators_editor_or_terminal(
+    inline: Context,
+    agent_log: Path,
+) -> None:
+    submit()
+    [started] = start(inline)
+    with mock.patch.dict(os.environ, EDITORS_TERMINAL), private_worker_does(PRINTS_ENV, result=DONE):
+        run_task(inline, started.run_id)
+    [worker] = agent_runs(agent_log)
+    [printed] = worker["commands"]
+    assert saw(printed["stdout"]) == AS_AN_AGENT
 
 
 def test_two_tasks_in_one_project_share_their_workers_body_and_are_sent_only_their_own(

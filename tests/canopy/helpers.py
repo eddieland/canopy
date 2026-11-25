@@ -9,6 +9,7 @@ import itertools
 import json
 import os
 import re
+import shlex
 import sqlite3
 import sys
 import time
@@ -24,6 +25,7 @@ from rich.console import Console
 
 from canopy.cli.main import main
 from canopy.core import (
+    agent_env,
     checklist_answers,
     config,
     connector_runs,
@@ -909,6 +911,7 @@ class InlineRunner:
         on_line: Callable[[str], None] | None = None,
         stdout_to_file: bool = False,
         max_stdout: int | None = None,
+        unset: Iterable[str] = (),
     ) -> procs.Result:
         if self.timeout_agent and "agent" in args[:3]:
             # As the real runner does, each line goes to `on_line` as it is printed.
@@ -926,6 +929,7 @@ class InlineRunner:
             on_line=on_line,
             stdout_to_file=stdout_to_file,
             max_stdout=max_stdout,
+            unset=unset,
         )
 
     def spawn(self, args: Sequence[str], *, cwd: Path, log_path: Path) -> int:  # noqa: ARG002  (starts nothing)
@@ -1489,6 +1493,47 @@ def overseer_titles(agent_log: Path) -> list[str]:
 def commands_run(agent_log: Path) -> list[list[dict[str, Any]]]:
     """The commands each fake agent run ran, in order: each one's argv, exit code, stdout, and stderr."""
     return [run["commands"] for run in agent_runs(agent_log)]
+
+
+#: What a loop started from an editor's integrated terminal hands each process it starts (TRUST_MODEL T4): the editor's
+#: askpass and sockets, the operator's terminal and display, and their editor and pager.
+EDITORS_TERMINAL: Final = {
+    "GIT_ASKPASS": "/editor/askpass.sh",
+    "SSH_ASKPASS": "/editor/ssh-askpass.sh",
+    "VSCODE_GIT_IPC_HANDLE": "/run/user/1000/vscode-git.sock",
+    "VSCODE_IPC_HOOK_CLI": "/run/user/1000/vscode-ipc.sock",
+    "TERM_PROGRAM": "vscode",
+    "TERM_PROGRAM_VERSION": "1.99.0",
+    "TERM": "xterm-256color",
+    "COLORTERM": "truecolor",
+    "GPG_TTY": "/dev/pts/3",
+    "DISPLAY": ":0",
+    "WAYLAND_DISPLAY": "wayland-0",
+    "EDITOR": "vi",
+    "PAGER": "less",
+}
+#: What `saw` gives for a process canopy starts, as an agent or as the operator's command in a slot, in a loop started
+#: with `EDITORS_TERMINAL`: canopy's variables that keep it from prompting, paging, or starting an editor, and none of
+#: the editor's, the terminal's, or the display's. `EDITOR` stays, which git reads only after `GIT_EDITOR`.
+AS_AN_AGENT: Final[Mapping[str, str | None]] = {**dict.fromkeys(EDITORS_TERMINAL), "EDITOR": "vi", **agent_env.ENV}
+#: A command that prints the whole environment it runs with, as one line of JSON, for `saw`.
+PRINTS_ENV: Final = ["python3", "-c", "import json, os; print(json.dumps(dict(os.environ)))"]
+
+
+def writes_env(path: Path) -> str:
+    """A command line, for config, that writes the whole environment it runs with to `path`, as JSON, for `saw`."""
+    script = "import json, os, pathlib, sys; pathlib.Path(sys.argv[1]).write_text(json.dumps(dict(os.environ)))"
+    return shlex.join(["python3", "-c", script, str(path)])
+
+
+def saw(printed: str) -> dict[str, str | None]:
+    """What a process saw of the variables `AS_AN_AGENT` names, from what `PRINTS_ENV` or `writes_env` gave of it.
+
+    Returns:
+        Each variable's value, None for one it did not have.
+    """
+    environ: dict[str, str] = json.loads(printed.strip().splitlines()[-1])
+    return {name: environ.get(name) for name in AS_AN_AGENT}
 
 
 def state_block(agent_log: Path) -> dict[str, Any]:

@@ -15,7 +15,7 @@ from canopy.runtime.opencode2 import models
 from canopy.runtime.report import ModelList
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator, Mapping, Sequence
+    from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 
 #: What OpenCode 2.1.4 listed in a workspace whose config adds a provider, `stub`, cut to three of its models: one of
 #: its own with no variants, one whose `id` is not its `modelID`, and the config's, its key in its `settings`.
@@ -60,6 +60,7 @@ class Serve:
         on_line: Callable[[str], None] | None = None,
         stdout_to_file: bool = False,
         max_stdout: int | None = None,  # noqa: ARG002
+        unset: Iterable[str] = (),  # noqa: ARG002
     ) -> procs.Result:
         self.ran.append((tuple(args), cwd, dict(env or {})))
         failed = self.fail(args)

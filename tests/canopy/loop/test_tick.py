@@ -6,7 +6,7 @@ import json
 import os
 import re
 import time
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -22,8 +22,11 @@ from canopy.infra import lock, logs, procs
 from canopy.loop import attention, duties, mcp, tick
 from canopy.runtime.implementation import Version
 from tests.canopy.helpers import (
+    AS_AN_AGENT,
+    EDITORS_TERMINAL,
     KEY,
     LABEL,
+    PRINTS_ENV,
     agent_runs,
     calls,
     canopy,
@@ -38,6 +41,7 @@ from tests.canopy.helpers import (
     present,
     reads_items,
     review_comment,
+    saw,
     ticket_sets,
     titled_overseer,
     tools_of,
@@ -155,6 +159,14 @@ def _acted_through_its_tools(run: Mapping[str, object]) -> None:
     # A refusal is a tool error naming the field, and the overseer goes on: nothing recorded it.
     assert [c["error"] for c in made] == [False] * 4 + [True], made
     assert made[-1]["text"].startswith("decisions.0.key: invalid ticket key 'PROJ-4;rm'")
+
+
+def test_the_overseer_runs_with_no_prompt_and_none_of_the_operators_editor_or_terminal(scenario: Scenario) -> None:
+    with mock.patch.dict(os.environ, EDITORS_TERMINAL):
+        scenario.tick(*waits(KEY), PRINTS_ENV, dry_run=True)
+    [overseer] = agent_runs(scenario.agent_log)
+    [printed] = overseer["commands"]
+    assert saw(printed["stdout"]) == AS_AN_AGENT
 
 
 def test_a_tick_records_its_overseers_latest_tool_call_from_the_events_it_prints(scenario: Scenario) -> None:
@@ -500,6 +512,7 @@ class TimingOutAgent:
         on_line: Callable[[str], None] | None = None,
         stdout_to_file: bool = False,
         max_stdout: int | None = None,
+        unset: Iterable[str] = (),
     ) -> procs.Result:
         if "agent" in args[:3]:
             assert timeout == 15 * 60
@@ -514,6 +527,7 @@ class TimingOutAgent:
             on_line=on_line,
             stdout_to_file=stdout_to_file,
             max_stdout=max_stdout,
+            unset=unset,
         )
 
     def spawn(self, args: Sequence[str], *, cwd: Path, log_path: Path) -> int:

@@ -89,6 +89,7 @@ class Runner(Protocol):
         on_line: Callable[[str], None] | None = None,
         stdout_to_file: bool = False,
         max_stdout: int | None = None,
+        unset: Iterable[str] = (),
     ) -> Result:
         """Run `args` to completion and capture its output.
 
@@ -109,6 +110,8 @@ class Runner(Protocol):
             max_stdout: Keep at most this many characters of stdout; the rest is read and dropped as the child writes
                 it, so the child runs to its end and canopy holds no more than this. Not with `on_line` or
                 `stdout_to_file`.
+            unset: Variables removed from the child's environment, beside any the runner removes from every child's,
+                whatever the inherited environment or `env` holds.
 
         Returns:
             The exit code and captured output. `timed_out` is set when `timeout` expired.
@@ -166,6 +169,7 @@ class SubprocessRunner:
         on_line: Callable[[str], None] | None = None,
         stdout_to_file: bool = False,
         max_stdout: int | None = None,
+        unset: Iterable[str] = (),
     ) -> Result:
         """Run `args` to completion and capture its output. See `Runner.run`.
 
@@ -196,6 +200,7 @@ class SubprocessRunner:
                 on_line=on_line,
                 stdout_to_file=stdout_to_file,
                 max_stdout=max_stdout,
+                unset=self.unset | frozenset(unset),
             )
             traced.set_standard({"process.exit.code": result.returncode})
             traced.set(timed_out=result.timed_out)
@@ -215,8 +220,9 @@ class SubprocessRunner:
         on_line: Callable[[str], None] | None,
         stdout_to_file: bool,
         max_stdout: int | None,
+        unset: AbstractSet[str],
     ) -> Result:
-        """Run `argv` as `run` does, its stdout through a temporary file when `stdout_to_file`.
+        """Run `argv` as `run` does, its stdout through a temporary file when `stdout_to_file`, without `unset`.
 
         Returns:
             The exit code and captured output.
@@ -233,6 +239,7 @@ class SubprocessRunner:
                 on_line=on_line,
                 out=out,
                 max_stdout=max_stdout,
+                unset=unset,
             )
             if out is None:
                 return result
@@ -251,6 +258,7 @@ class SubprocessRunner:
         on_line: Callable[[str], None] | None,
         out: IO[str] | None,
         max_stdout: int | None,
+        unset: AbstractSet[str],
     ) -> Result:
         """Run `argv` as `run` does, its stdout to `out` when given, where the result's `stdout` is then empty.
 
@@ -264,7 +272,7 @@ class SubprocessRunner:
         """
         # Taken as the clock `timeout` counts on starts, so the child's deadline is never later than its kill.
         deadline = None if timeout is None else time.time() + timeout
-        full_env = _child_env(cwd, env, self.unset, deadline)
+        full_env = _child_env(cwd, env, unset, deadline)
         try:
             proc = subprocess.Popen(
                 argv,

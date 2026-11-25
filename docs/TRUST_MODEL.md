@@ -697,6 +697,14 @@ Controls now:
   checkout whose code a worker may have written, as the slot's build tool reads it; it is private (T7), and with the
   sandbox below it runs in one under the `setup` role. The loop's git maintenance in an idle clone runs only
   `canopy gc --git`'s steps, which prune nothing a slot reads (§18).
+- Every agent canopy starts, the overseer, a worker, a task's, a plan run's, a chore's, and a reviewer, an eval's
+  included, and the operator's `setup_cmd` and `idle_cmd`, runs without a prompt or the operator's editor and terminal,
+  whatever the shell the loop was started from held. Over the environment it inherits, git and `gh` never prompt, call
+  an askpass, start an editor, or page, and nothing has a terminal to colour or draw on (`TERM=dumb`, `NO_COLOR`). Every
+  `VSCODE_*` and `TERM_PROGRAM*` variable, `COLORTERM`, `GPG_TTY`, `DISPLAY`, `WAYLAND_DISPLAY`, and `SSH_ASKPASS` are
+  removed, so no run acts in the operator's editor window or shows a prompt on their terminal or screen. The harness's
+  own git reaches no askpass either, moves no branch a rebase did not name (`rebase.updateRefs` off), and the commits it
+  makes or rewrites, the plan archive's and a flaky kick's, are unsigned, so none waits on a pinentry.
 - A review checks out code the loop did not write. The harness runs nothing from it, and the reviewer's working
   directory is a directory of canopy's outside the checkout, holding one link to it, so the runtime loads no
   configuration from the checkout. The shipped `canopy-reviewer` cannot run commands or edit, and reads only through
@@ -772,7 +780,9 @@ steered one can write any row there, as an unsandboxed one can (T5). Every proce
 for a login the operator has, or a bad one, so that the operator's OpenCode works as that account or fails until they
 log in again; it runs no code on the host. A filter
 driver the operator's own git config defines still runs on whatever a branch's `.gitattributes` selects, on a slot's
-return as on any checkout. A template the operator edits can allow anything; canopy checks only that it denies some
+return as on any checkout. So does a `textconv` the operator's global config defines for a diff driver, in a worker's
+own `git diff` or `log -p`, whose output reaches the model and the run log: canopy cannot turn off a driver it cannot
+name. A template the operator edits can allow anything; canopy checks only that it denies some
 reads and lists an allowlist.
 
 ### T5. Attribution and audit

@@ -40,6 +40,7 @@ from pydantic import (
 )
 
 from canopy.core import (
+    agent_env,
     agent_models,
     ask_again,
     cards,
@@ -852,8 +853,10 @@ def _run_agent(
     # directory; an unsandboxed worker ignores it (DESIGN §8). A planner, which has no shell, reads its worktrees'
     # history through canopy's read-only git tools, over those worktrees alone, each named for its repository (§27).
     # The operator's answer to a question its card asks reaches it in its answers directory, through canopy's plugin
-    # (DESIGN §41).
+    # (DESIGN §41). It runs without a prompt or the operator's editor and terminal, as every agent does (TRUST_MODEL
+    # T4).
     env = {
+        **agent_env.ENV,
         conversation.RUN_ID_ENV: str(run_id),
         tidy.OBJECTS_ENV: str(_objects(ctx, run)),
         cards.ANSWERS_ENV: str(_answers(ctx, run)),
@@ -975,6 +978,7 @@ class _Start:
             env=self.env,
             stdin=run.stdin,
             timeout=again.seconds if again is not None else self.seconds,
+            unset=agent_env.unset(os.environ),
             on_start=lambda pid: db.set_agent_pid(self.ctx.conn, "runs", self.run_id, pid),
             on_line=self.progress,
         )
@@ -1826,13 +1830,16 @@ def _run_setup(ctx: Context, run: db.ShownRun, slot: _Slot, out: TextIO, log: lo
             argv,
             cwd=slot.path,
             # The run's id, as the worker gets it: the operator's commands refuse inside canopy's runs (DESIGN §22).
+            # It runs as the worker does, without a prompt or the operator's editor and terminal (TRUST_MODEL T4).
             env={
+                **agent_env.ENV,
                 conversation.RUN_ID_ENV: str(run_id),
                 SETUP_REPO_ENV: slot.repo,
                 SETUP_BRANCH_ENV: run.branch,
                 tidy.OBJECTS_ENV: str(_objects(ctx, run)),
             },
             timeout=timeout_minutes * 60,
+            unset=agent_env.unset(os.environ),
         )
     except procs.ProcError as e:
         raise SetupError(f"{slot.git.where}setup could not start: {e}") from e

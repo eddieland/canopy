@@ -13,7 +13,7 @@ from canopy.runtime.opencode import models
 from canopy.runtime.report import ModelList
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping, Sequence
+    from collections.abc import Callable, Iterable, Mapping, Sequence
 
 
 @dataclass
@@ -35,6 +35,7 @@ class Models:
         on_line: Callable[[str], None] | None = None,  # noqa: ARG002
         stdout_to_file: bool = False,
         max_stdout: int | None = None,  # noqa: ARG002
+        unset: Iterable[str] = (),  # noqa: ARG002
     ) -> procs.Result:
         self.ran.append((tuple(args), cwd, timeout, stdout_to_file))
         return self.result(args)

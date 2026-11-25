@@ -33,7 +33,7 @@ from typing import TYPE_CHECKING, Final
 
 from pydantic import BaseModel, ConfigDict, StrictInt, StrictStr, ValidationError
 
-from canopy.core import agent_models, config, definitions, hostgit, personas, pools, prompts
+from canopy.core import agent_env, agent_models, config, definitions, hostgit, personas, pools, prompts
 from canopy.core import review_result as result
 from canopy.core.vocab import ReviewRunStatus
 from canopy.infra import lock, logs, procs, resources
@@ -624,6 +624,7 @@ def _reviewed(
                 env=process.env,
                 stdin=process.stdin,
                 timeout=ctx.config.runtime.review_timeout_minutes * 60,
+                unset=agent_env.unset(os.environ),
                 on_line=lambda line: print(line, end="", file=out),
             )
             out.write(f"\n--- reviewer stderr ---\n{done.stderr}\n")

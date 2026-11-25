@@ -17,7 +17,7 @@ from canopy.runtime.opencode2 import serve as server
 from canopy.runtime.opencode2.offerings import matches
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator, Mapping, Sequence
+    from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 
 URL: Final = "http://127.0.0.1:41234"
 #: `config.get`: canopy's definitions directory, a project file with a secret, and inline config, as OpenCode normalized
@@ -111,6 +111,7 @@ class Serve:
         on_line: Callable[[str], None] | None = None,
         stdout_to_file: bool = False,
         max_stdout: int | None = None,  # noqa: ARG002
+        unset: Iterable[str] = (),  # noqa: ARG002
     ) -> procs.Result:
         self.ran.append((tuple(args), cwd, dict(env or {})))
         failed = self.fail(args)

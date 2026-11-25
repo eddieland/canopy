@@ -7,7 +7,7 @@ comment review on the commit the review read.
 
 import json
 import os
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final, override
@@ -387,6 +387,7 @@ class Stops(procs.SubprocessRunner):
         on_line: Callable[[str], None] | None = None,
         stdout_to_file: bool = False,
         max_stdout: int | None = None,
+        unset: Iterable[str] = (),
     ) -> procs.Result:
         if self.posts:
             super().run(
@@ -399,6 +400,7 @@ class Stops(procs.SubprocessRunner):
                 on_line=on_line,
                 stdout_to_file=stdout_to_file,
                 max_stdout=max_stdout,
+                unset=unset,
             )
         raise self.error
 

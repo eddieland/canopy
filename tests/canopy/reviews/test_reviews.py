@@ -35,6 +35,9 @@ from canopy.loop import attention
 from canopy.reviews import grants, waiting
 from canopy.serve import pr_list
 from tests.canopy.helpers import (
+    AS_AN_AGENT,
+    EDITORS_TERMINAL,
+    PRINTS_ENV,
     Called,
     InlineRunner,
     agent_runs,
@@ -54,6 +57,7 @@ from tests.canopy.helpers import (
     pool_statuses,
     present,
     raises,
+    saw,
     tick_starts,
     ticket_sets,
     told,
@@ -153,6 +157,18 @@ def test_a_review_hears_the_notice_in_force(reviewing: CanopyEnv, scenario: Scen
     scenario.operator("notice", "CI is down.")
     reviewed = scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(CLEAN))
     assert "## Notice from the operator\n\nCI is down.\n" in reviewed.prompt
+
+
+def test_a_reviewer_runs_with_no_prompt_and_none_of_the_operators_editor_or_terminal(
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    with mock.patch.dict(os.environ, EDITORS_TERMINAL):
+        scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(CLEAN, PRINTS_ENV))
+    [reviewer] = agent_runs(scenario.agent_log)
+    [printed] = reviewer["commands"]
+    assert saw(printed["stdout"]) == AS_AN_AGENT
 
 
 def reviewer_instructions(scenario: Scenario, text: str | None) -> Path:
