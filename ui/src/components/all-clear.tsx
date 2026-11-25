@@ -13,7 +13,9 @@ import {
 } from '@/api/queries'
 import type { Tick } from '@/api/types'
 import { Age } from '@/components/age'
+import { Glance } from '@/components/glance'
 import { Empty, Panel, PanelSkeleton } from '@/components/panel'
+import { TickCard } from '@/components/ref-glances'
 import { Word } from '@/components/status'
 import { TickNow } from '@/components/tick-now'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -178,28 +180,30 @@ function Canopy() {
 function TickLine({ tick }: { tick: Tick }) {
     const shown = tick.status === 'ok' || tick.ended_at === null ? null : tick.status
     return (
-        <Link
-            to="/workspace/ticks/$id"
-            params={{ id: String(tick.id) }}
-            className={cn('underline-offset-4 hover:underline', TICK_TONE[tick.status])}
-            data-testid="all-clear-tick"
-        >
-            {tick.ended_at === null ? (
-                <>
-                    Tick running <Age variant="span" started={tick.started_at} ended={null} className={AGE} />
-                </>
-            ) : (
-                <>
-                    {tick.dry_run ? 'Last dry run' : 'Last tick'}
-                    {shown !== null && (
-                        <>
-                            {' '}
-                            <Word word={shown} />
-                        </>
-                    )}{' '}
-                    <Age at={tick.ended_at} variant="ago" className={AGE} />
-                </>
-            )}
-        </Link>
+        <Glance card={<TickCard tick={tick} />} testId="tick-glance" align="start">
+            <Link
+                to="/workspace/ticks/$id"
+                params={{ id: String(tick.id) }}
+                className={cn('underline-offset-4 hover:underline', TICK_TONE[tick.status])}
+                data-testid="all-clear-tick"
+            >
+                {tick.ended_at === null ? (
+                    <>
+                        Tick running <Age variant="span" started={tick.started_at} ended={null} className={AGE} />
+                    </>
+                ) : (
+                    <>
+                        {tick.dry_run ? 'Last dry run' : 'Last tick'}
+                        {shown !== null && (
+                            <>
+                                {' '}
+                                <Word word={shown} />
+                            </>
+                        )}{' '}
+                        <Age at={tick.ended_at} variant="ago" className={AGE} />
+                    </>
+                )}
+            </Link>
+        </Glance>
     )
 }

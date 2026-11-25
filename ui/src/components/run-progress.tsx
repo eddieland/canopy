@@ -11,11 +11,14 @@ import { LetteredOption } from '@/components/lettered-option'
 import { LinkedText } from '@/components/linked-text'
 import { Notice } from '@/components/notice'
 import { Panel, PanelHeader } from '@/components/panel'
+import { ProgressMeter } from '@/components/progress-meter'
 import { RunDot } from '@/components/status'
 import { Clipped } from '@/components/tip'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { LETTERS, OPTION_HOVER, OPTION_ROW } from '@/lib/lettered-options'
 import { answeredText } from '@/lib/outcomes'
+import { checklist, isStale } from '@/lib/progress'
+import type { Item, ItemStatus } from '@/lib/progress'
 import { useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
@@ -154,98 +157,6 @@ export function RunProgressLine({ card, className }: { card: RunCard; className?
             </span>
         </span>
     )
-}
-
-/**
- * A run's steps as a bar of segments, one each, in its status's color. Only a done step fills its segment, in
- * `status-done`, so the filled segments are the count beside the meter; working fills half of the track in
- * `status-running`, a barber pole sweeping across its segment while the run runs, blocked or stuck half in
- * `muted-foreground`, to do is the bare track, skipped the track fainter still. Drawn, so its words are its label.
- */
-export function ProgressMeter({ card, running, className }: { card: RunCard; running: boolean; className?: string }) {
-    const items = checklist(card, useNow())
-    const done = items.filter((i) => i.status === 'done').length
-    const counted = items.filter((i) => i.status !== 'skipped').length
-    return (
-        <span className={cn('flex h-1.5 min-w-0 gap-0.5', className)} data-testid="progress-meter">
-            <span className="sr-only">{`${done} of ${counted} steps done`}</span>
-            {items.map((item, i) => (
-                <span
-                    key={`${i}-${item.title}`}
-                    aria-hidden
-                    className={cn('h-full min-w-1 flex-1 overflow-hidden rounded-xs', SEGMENT[item.status])}
-                >
-                    {HALF[item.status] !== undefined && (
-                        <span
-                            className={cn(
-                                'block h-full w-1/2',
-                                HALF[item.status],
-                                running && item.status === 'working' && 'animate-barber',
-                            )}
-                        />
-                    )}
-                </span>
-            ))}
-        </span>
-    )
-}
-
-/** Whether a running run's progress is stale at `now`: too many tool calls since its last update, as the server says,
- * or its time to go stale has come. An ended run's never is. */
-function isStale(card: RunCard, now: number): boolean {
-    return card.stale || (card.stale_at !== null && now >= Date.parse(card.stale_at))
-}
-
-/** Where one entry of the checklist stands: a step's status, with `stuck` for a working step past its time. */
-type ItemStatus = RunCard['steps'][number]['status'] | 'stuck'
-
-/** One entry of the checklist: a step, or one of what is done, what it does now, and what is next. */
-interface Item {
-    /** What it is, in the agent's words. */
-    title: string
-    /** Where it stands. */
-    status: ItemStatus
-    /** The stage it belongs to, for a step that names one. */
-    stage: string | null
-    /** The proof of a done entry, for one taken from what is done. */
-    proof: string | null
-}
-
-/** Each status's segment: done filled, the rest the track, fainter for skipped. */
-const SEGMENT: Record<ItemStatus, string> = {
-    done: 'bg-status-done',
-    working: 'bg-border',
-    stuck: 'bg-border',
-    blocked: 'bg-border',
-    not_started: 'bg-border',
-    skipped: 'bg-border/40',
-}
-
-/** The half of the track a step under way fills, so it never reads as done. */
-const HALF: Partial<Record<ItemStatus, string>> = {
-    working: 'bg-status-running',
-    stuck: 'bg-muted-foreground',
-    blocked: 'bg-muted-foreground',
-}
-
-/**
- * The work as one list: its steps when it named any, a working step past its `stuck_at` marked stuck at `now`; else
- * what is done, what it does now, and what is next, in that order, as if each were a step.
- */
-function checklist(card: RunCard, now: number): Item[] {
-    if (card.steps.length > 0) {
-        return card.steps.map((step) => ({
-            title: step.title,
-            status: step.stuck_at !== null && now >= Date.parse(step.stuck_at) ? 'stuck' : step.status,
-            stage: step.stage ?? null,
-            proof: null,
-        }))
-    }
-    return [
-        ...card.done.map((d) => ({ title: d.step, status: 'done' as const, stage: null, proof: d.proof })),
-        { title: card.now, status: 'working' as const, stage: null, proof: null },
-        ...card.next.map((n) => ({ title: n, status: 'not_started' as const, stage: null, proof: null })),
-    ]
 }
 
 /** How many steps are done of those counted, as `2/4`. */

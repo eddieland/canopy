@@ -1,5 +1,5 @@
 import { QueryClient } from '@tanstack/react-query'
-import { act, cleanup, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, screen, waitFor, within } from '@testing-library/react'
 import type { Middleware } from 'openapi-fetch'
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -53,6 +53,22 @@ describe('a reference’s hover card', () => {
         expect(card.textContent).toContain('implement')
         // A preview, never a place to act: it holds no link and no control.
         expect(card.querySelector('a, button, input, select, textarea, [role], [tabindex]')).toBeNull()
+    })
+
+    it("says what kind of run it is in chips, and draws a running run's steps as a meter", async () => {
+        const steps = [
+            { title: 'add the SSO callback', status: 'done' as const, stage: null, stuck_at: null },
+            { title: 'wire the login button', status: 'working' as const, stage: null, stuck_at: null },
+        ]
+        const client = new QueryClient()
+        client.setQueryData(keys.run(41), { ...RUN, private: true, card: RUN.card && { ...RUN.card, steps } })
+        await renderRouted(<RunLink id={41} />, { client })
+        focus('run:41')
+        const card = within(await waitFor(() => screen.getByTestId('run-card')))
+        expect(card.getByText('implement')).toBeDefined()
+        expect(card.getByText('canopy')).toBeDefined()
+        expect(card.getByText('private')).toBeDefined()
+        expect(card.getByTestId('progress-meter').textContent).toBe('1 of 2 steps done')
     })
 
     it('reads nothing until its card opens, then reads what its page reads', async () => {

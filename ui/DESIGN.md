@@ -702,12 +702,14 @@ reader, so no table repeats them.
   found only there: it is a preview of the page, never a place to act, so it holds no link and no control. **A reference
   named in a page has one** (`src/components/ref-glances.tsx`): a run, a ticket, a tick, a task, a review, an epic, a
   chore, a run of a task or a chore, and a PR, through its link (`RunLink`, `TicketLink`, and the rest). A row that is
-  one link whole, as the rail's are, says where its subject stands in itself and has none. The card leads with the
-  reference whole, so one cut to fit its cell is read there, after the dot of its state, with where it stands in a word
-  in that state's color at the right; then its name, a line or three of what it said, and its rows. It reads what its
-  page reads, and only once it opens, so a list of links reads nothing and the page behind a card is read by the time
-  the link is followed. Before the read lands it shows its reference over placeholders, and a failed read says why. A
-  link inside a card opens no card of its own.
+  one link whole has its subject's card too, as the rail's working rows do, theirs opening beside the rail so it covers
+  no row of it. The card leads with the reference whole, so one cut to fit its cell is read there, after the dot of its
+  state, with where it stands in a word in that state's color at the right; then its name, a line of chips saying what
+  kind of thing it is (a run's kind and persona, a review's impact and draft), a line or three of what it said, a
+  running run's steps as the meter the rail draws, and under a hairline its rows. It reads what its page reads, and only
+  once it opens, so a list of links reads nothing and the page behind a card is read by the time the link is followed.
+  Before the read lands it shows its reference over placeholders, and a failed read says why. A link inside a card opens
+  no card of its own.
 - **A list in time can be flipped**, oldest first or newest first, from its panel's header (`OrderToggle`): a ghost
   button before the count, an up-down arrow and the order it is in, in words (`newest first`). A list sorted by each
   row's latest activity rather than by when it began says so (`recently updated`, after GitHub's sorts): its first row

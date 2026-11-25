@@ -30,7 +30,8 @@ import type {
     TicketDetail,
 } from '@/api/types'
 import { CardRow, CardRows, CardWords, GlanceCard } from '@/components/glance'
-import { Word } from '@/components/status'
+import { ProgressMeter } from '@/components/progress-meter'
+import { Chip, Word } from '@/components/status'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cadenceText, choreLine, findingsText, windowText } from '@/lib/chores'
 import { useClock } from '@/lib/clock'
@@ -41,6 +42,7 @@ import { phaseLabel } from '@/lib/phase'
 import { pullRequestLabel } from '@/lib/pull-request-label'
 import { readFailure } from '@/lib/read-failure'
 import { choreRef, choreRunRef, epicRef, reviewRef, runRef, taskRef, taskRunRef, tickRef } from '@/lib/refs'
+import { REVIEW_DRAFT_TONE, REVIEW_DRAFT_WORD } from '@/lib/review-drafts'
 import { shortSha, verdictText, verdictTone } from '@/lib/reviews'
 import { RUN_TEXT, asksYou } from '@/lib/run-state'
 import { TASK_LOOK, taskTitle } from '@/lib/tasks'
@@ -152,15 +154,22 @@ export function RunCard({ run }: { run: Run }) {
                 )
             }
             name={run.ticket_title}
+            chips={
+                <>
+                    <Chip>{runKind(run)}</Chip>
+                    {run.persona !== null && <Chip>{run.persona}</Chip>}
+                    {run.private && <Chip>private</Chip>}
+                </>
+            }
             foot={null}
         >
             {words !== null && words !== '' && <CardWords>{words}</CardWords>}
+            {run.state === 'running' && run.card !== null && run.card.steps.length > 0 && (
+                <ProgressMeter card={run.card} running />
+            )}
             <CardRows>
                 <CardRow label="Ticket">
                     <span className="font-mono">{run.ticket_key}</span>
-                </CardRow>
-                <CardRow label="Kind">
-                    <span className="font-mono">{runKind(run)}</span>
                 </CardRow>
                 <CardRow label="Started">
                     <Ran started={run.started_at} ended={run.ended_at} />
@@ -192,6 +201,7 @@ export function TicketCard({ detail }: { detail: TicketDetail }) {
             state={state}
             aside={<span className={RUN_TEXT[state]}>{word}</span>}
             name={ticket.title}
+            chips={ticket.private ? <Chip>private</Chip> : undefined}
             foot={null}
         >
             <CardRows>
@@ -242,8 +252,15 @@ export function TickCard({ tick, foot = null }: { tick: Tick; foot?: ReactNode }
             aside={
                 <span className={TICK_TONE[tick.status] ?? undefined}>
                     <Word word={tick.status} />
-                    {tick.dry_run ? ' · dry run' : ''}
                 </span>
+            }
+            chips={
+                tick.dry_run || tick.idle === true ? (
+                    <>
+                        {tick.dry_run && <Chip>dry run</Chip>}
+                        {tick.idle === true && <Chip>idle</Chip>}
+                    </>
+                ) : undefined
             }
             foot={foot}
         >
@@ -334,6 +351,17 @@ export function ReviewCard({ detail }: { detail: ReviewDetail }) {
             state={review.state}
             aside={<span className={verdictTone(review) || undefined}>{verdictText(review)}</span>}
             name={review.title}
+            chips={
+                review.persona !== null || review.impact !== null || review.draft !== null ? (
+                    <>
+                        {review.persona !== null && <Chip>{review.persona}</Chip>}
+                        {review.impact !== null && <Chip>{review.impact} impact</Chip>}
+                        {review.draft !== null && (
+                            <Chip tone={REVIEW_DRAFT_TONE[review.draft]}>{REVIEW_DRAFT_WORD[review.draft]}</Chip>
+                        )}
+                    </>
+                ) : undefined
+            }
             foot={null}
         >
             {detail.summary !== null && detail.summary !== '' && <CardWords>{detail.summary}</CardWords>}
@@ -345,8 +373,6 @@ export function ReviewCard({ detail }: { detail: ReviewDetail }) {
                 <CardRow label="Commit">
                     <span className="font-mono">{shortSha(review.sha)}</span>
                 </CardRow>
-                {review.persona !== null && <CardRow label="Persona">{review.persona}</CardRow>}
-                {review.draft !== null && <CardRow label="Draft">{review.draft}</CardRow>}
                 <CardRow label="Started">
                     <Ran started={review.started_at} ended={review.ended_at} />
                 </CardRow>
