@@ -8,6 +8,21 @@ import { createQueryClient } from './query-client'
 const unauthorized = () => Promise.reject(new ApiError(401, 'sign in with the listener secret'))
 
 describe('createQueryClient', () => {
+    it('does not ask again for a read that met its deadline', async () => {
+        const client = createQueryClient()
+        let asked = 0
+        await client
+            .query({
+                queryKey: ['slow'],
+                queryFn: () => {
+                    asked += 1
+                    return Promise.reject(new DOMException('The operation timed out.', 'TimeoutError'))
+                },
+            })
+            .catch(() => {})
+        expect(asked).toBe(1)
+    })
+
     it('signs the page out when a request finds no session', async () => {
         const client = createQueryClient()
         client.setQueryData(keys.session, { signed_in: true, token: 't' })

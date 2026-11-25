@@ -4,6 +4,7 @@ import type { ReactElement, ReactNode } from 'react'
 import type { RunState } from '@/api/types'
 import { RunDot } from '@/components/status'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
+import { isOver, pointerAt } from '@/lib/pointer'
 import { cn } from '@/lib/utils'
 
 // Whether what renders is inside an open card already: a link there opens no card of its own, so one card never
@@ -35,17 +36,16 @@ export function Glance({
     const [open, setOpen] = useState(false)
     const link = useRef<HTMLAnchorElement | null>(null)
     const content = useRef<HTMLDivElement | null>(null)
-    // Where the pointer last was, and whether the card stays open for it: it does while the pointer is over the card.
-    const pointer = useRef<{ x: number; y: number } | null>(null)
+    // Whether the card stays open for the pointer: it does while the pointer is over the card.
     const held = useRef(false)
     useEffect(() => {
         if (!open) {
             return
         }
         const moved = (event: PointerEvent) => {
-            pointer.current = { x: event.clientX, y: event.clientY }
+            const at = { x: event.clientX, y: event.clientY }
             // Held, it closes once the pointer is on neither the card nor its link.
-            if (held.current && !over(content.current, pointer.current) && !over(link.current, pointer.current)) {
+            if (held.current && !isOver(content.current, at, REACH_PX) && !isOver(link.current, at, REACH_PX)) {
                 held.current = false
                 setOpen(false)
             }
@@ -72,7 +72,7 @@ export function Glance({
             open={open}
             onOpenChange={(next) => {
                 // The pointer left the link for the card: the card stays, to be read, until the pointer leaves it too.
-                if (!next && over(content.current, pointer.current)) {
+                if (!next && isOver(content.current, pointerAt(), REACH_PX)) {
                     held.current = true
                     return
                 }
@@ -100,20 +100,6 @@ export function Glance({
 
 // How far past a card's edge still counts as on it: the gap between it and its link, so crossing the gap holds it.
 const REACH_PX = 8
-
-// Whether `point` is on `element`, or within the gap around it.
-function over(element: HTMLElement | null, point: { x: number; y: number } | null): boolean {
-    if (element === null || point === null) {
-        return false
-    }
-    const box = element.getBoundingClientRect()
-    return (
-        point.x >= box.left - REACH_PX &&
-        point.x <= box.right + REACH_PX &&
-        point.y >= box.top - REACH_PX &&
-        point.y <= box.bottom + REACH_PX
-    )
-}
 
 /**
  * A hover card's content, as the host's sets the pattern: what it is about, after its state's dot when it has a
