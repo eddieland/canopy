@@ -2,6 +2,7 @@
 
 import contextlib
 import json
+import os
 import sqlite3
 import threading
 from collections.abc import Iterator, Sequence
@@ -15,6 +16,7 @@ from canopy.core.run_models import RunTable
 from canopy.infra import logs, procs
 from canopy.runtime.agents import AgentOffer, ServerOffer
 from canopy.runtime.implementation import Version
+from tests.canopy.helpers import EDITORS_TERMINAL
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
 
 
@@ -92,6 +94,19 @@ def test_a_run_that_ends_before_the_runtime_answers_waits_only_so_long(conn: sql
     finally:
         answer.set()
     assert offered(conn, "runs", 1) == (None, "the runtime had not answered 0.01 seconds after the run ended", (), ())
+
+
+def test_the_question_goes_without_the_operators_editor_and_terminal_as_the_agent_does(
+    conn: sqlite3.Connection,
+) -> None:
+    """Every process asking the runtime what a run is offered drops what the run's agent drops (TRUST_MODEL T4)."""
+    runner = mock.create_autospec(procs.SubprocessRunner, instance=True, spec_set=True)
+    runner.run.return_value = procs.Result(("opencode",), 1, "", "")
+    with mock.patch.dict(os.environ, EDITORS_TERMINAL), probing(conn, runner, ["opencode", "run", "--agent=x"]):
+        pass
+    assert runner.run.call_args_list
+    for call in runner.run.call_args_list:
+        assert {"VSCODE_IPC_HOOK_CLI", "TERM_PROGRAM", "GPG_TTY", "DISPLAY", "SSH_ASKPASS"} <= set(call.kwargs["unset"])
 
 
 def test_a_journal_that_refuses_the_record_leaves_the_run_its_own_outcome(

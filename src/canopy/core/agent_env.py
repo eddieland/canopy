@@ -26,8 +26,11 @@ if TYPE_CHECKING:
 #: kept what it was given, no pager, no advice, and no terminal to colour or draw on.
 ENV: Final = {
     **hostgit.ENV,
-    "GCM_INTERACTIVE": "never",
     "GIT_EDITOR": "true",
+    # Any other program's editor, `gh`'s among them, answered the same way.
+    "EDITOR": "true",
+    "VISUAL": "true",
+    "GH_EDITOR": "true",
     "GIT_SEQUENCE_EDITOR": "true",
     "GIT_MERGE_AUTOEDIT": "no",
     "GIT_PAGER": "cat",

@@ -699,8 +699,9 @@ Controls now:
   `canopy gc --git`'s steps, which prune nothing a slot reads (§18).
 - Every agent canopy starts, the overseer, a worker, a task's, a plan run's, a chore's, and a reviewer, an eval's
   included, and the operator's `setup_cmd` and `idle_cmd`, runs without a prompt or the operator's editor and terminal,
-  whatever the shell the loop was started from held. Over the environment it inherits, git and `gh` never prompt, call
-  an askpass, start an editor, or page, and nothing has a terminal to colour or draw on (`TERM=dumb`, `NO_COLOR`). Every
+  whatever the shell the loop was started from held. Over the environment it inherits, git and `gh` never prompt on a
+  terminal, call an askpass or Git Credential Manager's window, start an editor, or page, and nothing has a terminal to
+  colour or draw on (`TERM=dumb`, `NO_COLOR`); another credential helper the operator configured runs as it would. Every
   `VSCODE_*` and `TERM_PROGRAM*` variable, `COLORTERM`, `GPG_TTY`, `DISPLAY`, `WAYLAND_DISPLAY`, and `SSH_ASKPASS` are
   removed, so no run acts in the operator's editor window or shows a prompt on their terminal or screen. The harness's
   own git reaches no askpass either, moves no branch a rebase did not name (`rebase.updateRefs` off), and the commits it

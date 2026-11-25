@@ -1514,8 +1514,8 @@ EDITORS_TERMINAL: Final = {
 }
 #: What `saw` gives for a process canopy starts, as an agent or as the operator's command in a slot, in a loop started
 #: with `EDITORS_TERMINAL`: canopy's variables that keep it from prompting, paging, or starting an editor, and none of
-#: the editor's, the terminal's, or the display's. `EDITOR` stays, which git reads only after `GIT_EDITOR`.
-AS_AN_AGENT: Final[Mapping[str, str | None]] = {**dict.fromkeys(EDITORS_TERMINAL), "EDITOR": "vi", **agent_env.ENV}
+#: the editor's, the terminal's, or the display's. The operator's `EDITOR` is answered as any other editor is.
+AS_AN_AGENT: Final[Mapping[str, str | None]] = {**dict.fromkeys(EDITORS_TERMINAL), **agent_env.ENV}
 #: A command that prints the whole environment it runs with, as one line of JSON, for `saw`.
 PRINTS_ENV: Final = ["python3", "-c", "import json, os; print(json.dumps(dict(os.environ)))"]
 

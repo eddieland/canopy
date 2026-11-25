@@ -60,9 +60,15 @@ SAFE_FLAGS: Final = (
 AUTO_MAINTENANCE_OFF: Final = (("maintenance.auto", "false"), ("gc.auto", "0"))
 _MAINTENANCE_FLAGS: Final = tuple(arg for key, value in AUTO_MAINTENANCE_OFF for arg in ("-c", f"{key}={value}"))
 #: Never let git wait for credentials: not on a terminal nobody is watching, nor through an askpass, such as an
-#: editor's, that asks the operator in a window of theirs. `false` as the askpass fails at once, as the disabled prompt
-#: then does.
-ENV: Final = {"GIT_TERMINAL_PROMPT": "0", "GIT_ASKPASS": "false", "SSH_ASKPASS_REQUIRE": "never"}
+#: editor's, or Git Credential Manager's window, that asks the operator in a window of theirs. `false` as the askpass
+#: fails at once, as the disabled prompt then does. Another credential helper the operator configured still runs as it
+#: would: canopy cannot know what one shows.
+ENV: Final = {
+    "GIT_TERMINAL_PROMPT": "0",
+    "GIT_ASKPASS": "false",
+    "SSH_ASKPASS_REQUIRE": "never",
+    "GCM_INTERACTIVE": "never",
+}
 #: Flags before a subcommand that makes commits, for one the harness makes unsigned whatever the operator's config says,
 #: as a signature could ask a pinentry nobody is there to answer.
 UNSIGNED: Final = ("-c", "commit.gpgsign=false")
